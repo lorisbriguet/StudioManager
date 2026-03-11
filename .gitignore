@@ -1,15 +1,16 @@
 # Dependencies
 node_modules/
 
-# Build
+# Build output
 dist/
 src-tauri/target/
+src-tauri/gen/schemas
 
 # Environment
 .env
 .env.*
 
-# OS
+# OS files
 .DS_Store
 Thumbs.db
 
@@ -20,5 +21,12 @@ Thumbs.db
 *.swo
 
 # Tauri debug
-src-tauri/target/debug/
 src-tauri/WixTools/
+
+# Database (local data)
+*.db
+*.db-journal
+
+# Logs
+*.log
+npm-debug.log*
