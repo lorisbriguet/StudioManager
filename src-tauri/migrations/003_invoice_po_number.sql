@@ -1,0 +1,1 @@
+ALTER TABLE invoices ADD COLUMN po_number TEXT DEFAULT NULL;

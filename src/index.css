@@ -1,0 +1,239 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-sidebar: #f8f8f8;
+  --color-sidebar-border: #e5e5e5;
+  --color-accent: #2563eb;
+  --color-accent-hover: color-mix(in srgb, var(--color-accent) 85%, black);
+  --color-accent-light: #dbeafe;
+  --color-muted: #6b7280;
+  --color-danger: #dc2626;
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: #ffffff;
+  color: #111827;
+  overflow: hidden;
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
+}
+
+[cmdk-group-heading] {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+  padding: 6px 8px;
+}
+
+/* ─── Dark mode ─── */
+.dark {
+  color-scheme: dark;
+
+  --color-gray-50: #1a1a1a;
+  --color-gray-100: #252525;
+  --color-gray-200: #333333;
+  --color-gray-300: #484848;
+  --color-gray-400: #5c5c5c;
+  --color-gray-500: #7a7a7a;
+  --color-gray-600: #a8a8a8;
+  --color-gray-700: #d4d4d4;
+  --color-gray-800: #e5e5e5;
+  --color-gray-900: #f5f5f5;
+  --color-gray-950: #fafafa;
+
+  --color-sidebar: #161616;
+  --color-sidebar-border: #333333;
+  --color-accent-light: var(--color-accent-dark-light, #172554);
+  --color-muted: #a8a8a8;
+}
+
+.dark body {
+  background: #111111;
+  color: #e5e5e5;
+}
+
+.dark input,
+.dark select:not(.appearance-none),
+.dark textarea {
+  background-color: #1a1a1a;
+  color: #e5e5e5;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #525252;
+}
+
+/* ─── FullCalendar overrides ─── */
+.fc-studio .fc {
+  --fc-border-color: #e5e5e5;
+  --fc-today-bg-color: color-mix(in srgb, var(--color-accent) 6%, transparent);
+  --fc-now-indicator-color: #dc2626;
+  --fc-event-border-color: transparent;
+  --fc-event-bg-color: color-mix(in srgb, var(--color-accent) 15%, white);
+  --fc-event-text-color: var(--color-accent);
+  font-size: 13px;
+}
+
+.fc-studio .fc .fc-button {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  text-transform: capitalize;
+  font-weight: 500;
+  box-shadow: none !important;
+}
+
+.fc-studio .fc .fc-button-primary {
+  background: transparent;
+  border: 1px solid #e5e5e5;
+  color: #6b7280;
+}
+
+.fc-studio .fc .fc-button-primary:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.fc-studio .fc .fc-button-primary.fc-button-active,
+.fc-studio .fc .fc-button-primary:active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+}
+
+.fc-studio .fc .fc-toolbar-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.fc-studio .fc .fc-col-header-cell {
+  padding: 8px 0;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.fc-studio .fc .fc-daygrid-day-number {
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.fc-studio .fc .fc-event {
+  border-radius: 4px;
+  cursor: grab;
+  border: none;
+  padding: 1px 4px;
+}
+
+.fc-studio .fc .fc-event.fc-event-dragging,
+.fc-studio .fc .fc-event.fc-event-resizing {
+  cursor: grabbing;
+}
+
+/* Keep correct cursor everywhere while dragging or resizing */
+.fc-studio .fc.fc-event-dragging,
+.fc-studio .fc.fc-event-dragging * {
+  cursor: grabbing !important;
+}
+
+.fc-studio .fc.fc-event-resizing,
+.fc-studio .fc.fc-event-resizing * {
+  cursor: ns-resize !important;
+}
+
+.fc-studio .fc .fc-event.fc-priority-high {
+  --fc-event-bg-color: #fef2f2;
+  --fc-event-text-color: #dc2626;
+}
+
+.fc-studio .fc .fc-event.fc-priority-medium {
+  --fc-event-bg-color: #fefce8;
+  --fc-event-text-color: #ca8a04;
+}
+
+.fc-studio .fc .fc-event.fc-done {
+  --fc-event-bg-color: #f0fdf4;
+  --fc-event-text-color: #16a34a;
+}
+
+.fc-studio .fc .fc-event.fc-deadline {
+  --fc-event-bg-color: #fef2f2;
+  --fc-event-text-color: #b91c1c;
+}
+
+.fc-studio .fc .fc-timegrid-slot {
+  height: 32px;
+}
+
+.fc-studio .fc .fc-daygrid-more-link {
+  font-size: 10px;
+  color: #6b7280;
+}
+
+/* Dark mode */
+.dark .fc-studio .fc {
+  --fc-border-color: #333333;
+  --fc-today-bg-color: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  --fc-page-bg-color: #111111;
+  --fc-neutral-bg-color: #1a1a1a;
+  --fc-event-bg-color: color-mix(in srgb, var(--color-accent) 25%, #1a1a1a);
+  --fc-event-text-color: color-mix(in srgb, var(--color-accent) 60%, white);
+}
+
+.dark .fc-studio .fc .fc-button-primary {
+  background: transparent;
+  border-color: #333333;
+  color: #a8a8a8;
+}
+
+.dark .fc-studio .fc .fc-button-primary:hover {
+  background: #252525;
+  border-color: #484848;
+  color: #d4d4d4;
+}
+
+.dark .fc-studio .fc .fc-button-primary.fc-button-active,
+.dark .fc-studio .fc .fc-button-primary:active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+}
+
+.dark .fc-studio .fc .fc-col-header-cell {
+  color: #a3a3a3;
+}
+
+.dark .fc-studio .fc .fc-event.fc-priority-high {
+  --fc-event-bg-color: #451a1a;
+  --fc-event-text-color: #fca5a5;
+}
+
+.dark .fc-studio .fc .fc-event.fc-priority-medium {
+  --fc-event-bg-color: #422006;
+  --fc-event-text-color: #fde68a;
+}
+
+.dark .fc-studio .fc .fc-event.fc-done {
+  --fc-event-bg-color: #052e16;
+  --fc-event-text-color: #86efac;
+}
+
+.dark .fc-studio .fc .fc-event.fc-deadline {
+  --fc-event-bg-color: #451a1a;
+  --fc-event-text-color: #fca5a5;
+}

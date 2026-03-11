@@ -1,0 +1,323 @@
+import { useState, useMemo } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Plus, Search, X } from "lucide-react";
+import { toast } from "sonner";
+import { useProjects, useCreateProject } from "../db/hooks/useProjects";
+import { useClients } from "../db/hooks/useClients";
+import { useAllTasks } from "../db/hooks/useTasks";
+import { useAppStore } from "../stores/app-store";
+import { formatDisplayDate } from "../utils/formatDate";
+import { ProjectDetailContent } from "../components/ProjectDetailContent";
+import type { ProjectStatus } from "../types/project";
+import { effectivePriority, type TaskPriority } from "../types/task";
+import { useT } from "../i18n/useT";
+import type { UIKey } from "../i18n/ui";
+
+const statusColors: Record<ProjectStatus, string> = {
+  active: "bg-accent-light text-accent",
+  completed: "bg-green-100 text-green-700",
+  on_hold: "bg-yellow-100 text-yellow-700",
+  cancelled: "bg-gray-200 text-gray-500",
+};
+
+const statusKeys: Record<ProjectStatus, UIKey> = {
+  active: "active",
+  completed: "completed",
+  on_hold: "on_hold",
+  cancelled: "cancelled",
+};
+
+export function ProjectsPage() {
+  const { data: projects, isLoading } = useProjects();
+  const { data: clients } = useClients();
+  const { data: allTasks } = useAllTasks();
+  const createProject = useCreateProject();
+  const navigate = useNavigate();
+  const projectOpenMode = useAppStore((s) => s.projectOpenMode);
+  const [showForm, setShowForm] = useState(false);
+  const [filter, setFilter] = useState<ProjectStatus | "all">("active");
+  const [search, setSearch] = useState("");
+  const [peekId, setPeekId] = useState<number | null>(null);
+  const t = useT();
+
+  const clientName = (clientId: string) =>
+    clients?.find((c) => c.id === clientId)?.name ?? clientId;
+
+  const priorityRank: Record<TaskPriority, number> = { low: 0, medium: 1, high: 2 };
+
+  const taskStats = useMemo(() => {
+    const map: Record<number, { total: number; done: number; maxPriority: TaskPriority }> = {};
+    for (const tk of allTasks ?? []) {
+      if (!map[tk.project_id]) map[tk.project_id] = { total: 0, done: 0, maxPriority: "low" };
+      map[tk.project_id].total++;
+      if (tk.status === "done") map[tk.project_id].done++;
+      if (tk.status !== "done") {
+        const eff = effectivePriority(tk.priority, tk.due_date);
+        if (priorityRank[eff] > priorityRank[map[tk.project_id].maxPriority]) {
+          map[tk.project_id].maxPriority = eff;
+        }
+      }
+    }
+    return map;
+  }, [allTasks]);
+
+  const filtered = useMemo(() => {
+    let rows = projects ?? [];
+    if (filter !== "all") rows = rows.filter((p) => p.status === filter);
+    const q = search.toLowerCase();
+    if (q) {
+      rows = rows.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          clientName(p.client_id).toLowerCase().includes(q)
+      );
+    }
+    return rows;
+  }, [projects, clients, filter, search]);
+
+  const handleProjectClick = (projectId: number) => {
+    if (projectOpenMode === "peek") {
+      setPeekId(projectId);
+    } else {
+      navigate(`/projects/${projectId}`);
+    }
+  };
+
+  const filterLabels: Record<ProjectStatus | "all", string> = {
+    all: t.all,
+    active: t.active,
+    completed: t.completed,
+    on_hold: t.on_hold,
+    cancelled: t.cancelled,
+  };
+
+  if (isLoading) return <div className="text-muted text-sm">{t.loading}</div>;
+
+  return (
+    <div className="flex h-full">
+      <div className={`min-w-0 ${peekId !== null ? "flex-1" : "w-full"}`}>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-xl font-semibold">{t.projects}</h1>
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover"
+          >
+            <Plus size={16} /> {t.new_project}
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <div className="flex flex-wrap gap-2">
+            {(["all", "active", "completed", "on_hold", "cancelled"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setFilter(s)}
+                className={`px-3 py-1 text-xs rounded-full border ${
+                  filter === s
+                    ? "bg-accent text-white border-accent"
+                    : "border-gray-200 text-muted hover:bg-gray-50"
+                }`}
+              >
+                {filterLabels[s]}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <Search size={16} className="text-muted shrink-0" />
+            <input
+              placeholder={t.search_projects}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="border border-gray-200 rounded-md px-3 py-1.5 text-sm w-48"
+            />
+          </div>
+        </div>
+
+        {showForm && (
+          <NewProjectForm
+            clients={clients ?? []}
+            onSave={(data) => {
+              createProject.mutate(data, {
+                onSuccess: () => {
+                  toast.success(t.toast_project_created);
+                  setShowForm(false);
+                },
+              });
+            }}
+            onCancel={() => setShowForm(false)}
+          />
+        )}
+
+        <div className={`grid gap-4 ${peekId !== null ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"}`}>
+          {filtered.map((p) => {
+            const stats = taskStats[p.id] ?? { total: 0, done: 0, maxPriority: "low" as TaskPriority };
+            const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
+
+            return (
+              <div
+                key={p.id}
+                onClick={() => handleProjectClick(p.id)}
+                className={`block border rounded-lg p-4 hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer ${
+                  peekId === p.id
+                    ? "border-accent bg-accent-light/30"
+                    : "border-gray-200"
+                }`}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <h3 className="text-sm font-medium leading-tight">{p.name}</h3>
+                  <span
+                    className={`text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 ml-2 ${statusColors[p.status]}`}
+                  >
+                    {t[statusKeys[p.status]]}
+                  </span>
+                </div>
+
+                <div className="text-xs text-muted mb-3">{clientName(p.client_id)}</div>
+
+                {stats.total > 0 && (
+                  <div className="mb-3">
+                    <div className="flex justify-between text-[11px] text-muted mb-1">
+                      <span>{stats.done}/{stats.total} {t.tasks.toLowerCase()}</span>
+                      <span>{pct}%</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-accent rounded-full transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {stats.total === 0 && (
+                  <div className="text-[11px] text-muted mb-3">{t.no_tasks}</div>
+                )}
+
+                <div className="flex items-center justify-between text-[11px] text-muted">
+                  <span>{p.deadline ? formatDisplayDate(p.deadline) : t.no_deadline}</span>
+                  {stats.total > 0 && stats.maxPriority !== "low" && (
+                    <span className={stats.maxPriority === "high" ? "text-red-600" : "text-yellow-600"}>
+                      {stats.maxPriority === "high" ? "!!!" : "!!"}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {filtered.length === 0 && (
+            <div className="col-span-full text-sm text-muted py-8 text-center">
+              {search ? t.no_matching_projects : t.no_projects}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Side Peek Panel */}
+      {peekId !== null && (
+        <div className="w-1/2 shrink-0 border-l border-gray-200 ml-4 pl-4 overflow-y-auto h-[calc(100vh-6rem)]">
+          <div className="flex items-center justify-between mb-4">
+            <Link
+              to={`/projects/${peekId}`}
+              className="text-xs text-accent hover:underline"
+            >
+              {t.open_full_page}
+            </Link>
+            <button
+              onClick={() => setPeekId(null)}
+              className="text-muted hover:text-gray-700"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <ProjectDetailContent projectId={peekId} compact />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NewProjectForm({
+  clients,
+  onSave,
+  onCancel,
+}: {
+  clients: { id: string; name: string }[];
+  onSave: (data: {
+    client_id: string;
+    name: string;
+    description: string;
+    status: ProjectStatus;
+    start_date: string | null;
+    deadline: string | null;
+    notes: string;
+  }) => void;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = useState({
+    client_id: clients[0]?.id ?? "",
+    name: "",
+    description: "",
+    status: "active" as ProjectStatus,
+    start_date: "",
+    deadline: "",
+    notes: "",
+  });
+  const t = useT();
+
+  return (
+    <div className="border border-gray-200 rounded-lg p-4 mb-6 space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <input
+          placeholder={`${t.project_name} *`}
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
+        />
+        <select
+          value={form.client_id}
+          onChange={(e) => setForm({ ...form, client_id: e.target.value })}
+          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
+        >
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+        <input
+          type="date"
+          value={form.start_date}
+          onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
+        />
+        <input
+          type="date"
+          value={form.deadline}
+          onChange={(e) => setForm({ ...form, deadline: e.target.value })}
+          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
+        />
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={() => {
+            if (!form.name.trim()) return toast.error(t.toast_name_required);
+            if (!form.client_id) return toast.error(t.toast_select_client);
+            onSave({
+              ...form,
+              start_date: form.start_date || null,
+              deadline: form.deadline || null,
+            });
+          }}
+          className="px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover"
+        >
+          {t.save}
+        </button>
+        <button
+          onClick={onCancel}
+          className="px-3 py-1.5 border border-gray-200 text-sm rounded-md hover:bg-gray-50"
+        >
+          {t.cancel}
+        </button>
+      </div>
+    </div>
+  );
+}
