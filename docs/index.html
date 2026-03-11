@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StudioManager — Freelance Studio Management for macOS</title>
+  <meta name="description" content="A lightweight desktop app for freelance designers to manage clients, projects, invoices, and finances. Built with Tauri, offline-first, Swiss QR-bill support.">
+  <meta property="og:title" content="StudioManager">
+  <meta property="og:description" content="Freelance studio management for macOS. Clients, projects, invoices, expenses — all in one native app.">
+  <meta property="og:image" content="https://lorisbriguet.github.io/StudioManager/icon.png">
+  <meta property="og:type" content="website">
+  <link rel="icon" type="image/png" href="icon-128.png">
+  <style>
+    :root {
+      --accent: #2563eb;
+      --accent-light: #dbeafe;
+      --bg: #fafafa;
+      --bg-card: #ffffff;
+      --text: #1a1a1a;
+      --text-muted: #6b7280;
+      --border: #e5e7eb;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f0f0f;
+        --bg-card: #1a1a1a;
+        --text: #f0f0f0;
+        --text-muted: #9ca3af;
+        --border: #2a2a2a;
+        --accent-light: #172554;
+      }
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding: 80px 0 60px;
+    }
+
+    .hero-icon {
+      width: 96px;
+      height: 96px;
+      border-radius: 20px;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 {
+      font-size: 48px;
+      font-weight: 700;
+      letter-spacing: -1.5px;
+      margin-bottom: 12px;
+    }
+
+    .hero p {
+      font-size: 20px;
+      color: var(--text-muted);
+      max-width: 560px;
+      margin: 0 auto 32px;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 28px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.15s;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: var(--bg-card);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* Features */
+    .features {
+      padding: 60px 0;
+    }
+
+    .features h2 {
+      text-align: center;
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 48px;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    .feature-card h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .feature-card p {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .feature-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--accent-light);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+      color: var(--accent);
+    }
+
+    /* Tech */
+    .tech {
+      padding: 60px 0;
+      text-align: center;
+    }
+
+    .tech h2 {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 12px;
+    }
+
+    .tech p {
+      color: var(--text-muted);
+      margin-bottom: 32px;
+    }
+
+    .tech-badges {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .tech-badge {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    /* Swiss */
+    .swiss {
+      padding: 60px 0;
+    }
+
+    .swiss-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .swiss-card h2 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .swiss-card p {
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto 24px;
+    }
+
+    .swiss-features {
+      display: flex;
+      gap: 32px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .swiss-feature {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .swiss-feature strong {
+      color: var(--text);
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 40px 0;
+      color: var(--text-muted);
+      font-size: 14px;
+      border-top: 1px solid var(--border);
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* Screenshot placeholder */
+    .screenshot {
+      padding: 40px 0;
+      text-align: center;
+    }
+
+    .screenshot-placeholder {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 80px 40px;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 640px) {
+      .hero h1 { font-size: 32px; }
+      .hero p { font-size: 17px; }
+      .features h2, .tech h2, .swiss-card h2 { font-size: 24px; }
+      .swiss-card { padding: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Hero -->
+    <section class="hero">
+      <img src="icon.png" alt="StudioManager" class="hero-icon">
+      <h1>StudioManager</h1>
+      <p>A lightweight desktop app for freelance designers to manage clients, projects, invoices, and finances.</p>
+      <div class="hero-buttons">
+        <a href="https://github.com/lorisbriguet/StudioManager/releases/latest" class="btn btn-primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download for macOS
+        </a>
+        <a href="https://github.com/lorisbriguet/StudioManager" class="btn btn-secondary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          View on GitHub
+        </a>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features">
+      <h2>Everything you need, nothing you don't</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <h3>Client Management</h3>
+          <p>Full client database with contacts, per-client language and discount settings. Everything linked to their projects and invoices.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
+          </div>
+          <h3>Project Tracking</h3>
+          <p>Organize projects by client with hierarchical tasks and subtasks. Inline editing, due dates, drag-and-drop reordering.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
+          </div>
+          <h3>Calendar</h3>
+          <p>Month and week views with tasks on their due dates. One-directional iCloud Calendar sync on macOS.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
+          </div>
+          <h3>Invoicing with QR-Bill</h3>
+          <p>Generate professional PDF invoices with Swiss QR payment slips. Automatic numbering, overdue detection, and status tracking.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></svg>
+          </div>
+          <h3>Expense Tracking</h3>
+          <p>Categorized expenses with receipt upload. Drag-and-drop PDFs, supplier autocomplete with smart autofill.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg>
+          </div>
+          <h3>Finance Overview</h3>
+          <p>Real-time P&L with charts. Revenue, expenses, and net result following Swiss tax declaration format.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tech Stack -->
+    <section class="tech">
+      <h2>Built to be fast and lightweight</h2>
+      <p>Native performance with Tauri v2. No cloud, no subscriptions, no bloat.</p>
+      <div class="tech-badges">
+        <span class="tech-badge">Tauri v2</span>
+        <span class="tech-badge">React 19</span>
+        <span class="tech-badge">TypeScript</span>
+        <span class="tech-badge">SQLite</span>
+        <span class="tech-badge">Tailwind CSS</span>
+        <span class="tech-badge">Rust</span>
+      </div>
+    </section>
+
+    <!-- Swiss -->
+    <section class="swiss">
+      <div class="swiss-card">
+        <h2>Made for Swiss freelancers</h2>
+        <p>Purpose-built for independent workers in Switzerland, with features that match how you actually work and file taxes.</p>
+        <div class="swiss-features">
+          <div class="swiss-feature"><strong>QR-Rechnung</strong><br>on every invoice</div>
+          <div class="swiss-feature"><strong>CHF</strong><br>currency</div>
+          <div class="swiss-feature"><strong>Tax-ready P&L</strong><br>Swiss format</div>
+          <div class="swiss-feature"><strong>FR / EN</strong><br>bilingual</div>
+          <div class="swiss-feature"><strong>Offline-first</strong><br>local data</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <div class="container">
+      Made in Switzerland by <a href="https://lorisbriguet.ch">Loris Briguet</a>
+    </div>
+  </footer>
+
+</body>
+</html>

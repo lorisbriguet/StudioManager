@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/version-1.0.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="Platform">
-  <img src="https://img.shields.io/badge/license-proprietary-orange" alt="License">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
 
 ---
@@ -73,6 +73,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Revenue, operating expenses, social charges breakdown
 - Charts and yearly comparison
 - Follows Swiss independent worker tax format
+- Year-end export: P&L PDF, invoice list, expense list with receipts — ready for your trustee
 
 ### Additional Features
 - **Command Palette** (Cmd+K) — quick search and actions
@@ -126,7 +127,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 
 All your data is stored locally at:
 ```
-~/Library/Application Support/ch.lorisbriguet.studiomanager/
+~/Library/Application Support/ch.studiomanager.app/
 ```
 
 This includes your database (`studiomanager.db`), invoice PDFs, and expense receipts. This folder persists across app updates.
@@ -221,7 +222,6 @@ StudioManager is designed for Swiss freelancers:
 
 - [ ] Windows support
 - [ ] Auto-updater (Tauri updater plugin)
-- [ ] Year-end document export (ZIP for trustee/accountant)
 - [ ] Multi-currency support
 - [ ] Receipt OCR auto-detection
 
@@ -229,7 +229,7 @@ StudioManager is designed for Swiss freelancers:
 
 ## License
 
-This software is proprietary. All rights reserved.
+This project is licensed under the [MIT License](LICENSE).
 
 ---
 
