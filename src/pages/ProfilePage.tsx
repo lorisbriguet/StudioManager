@@ -1,10 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   useBusinessProfile,
   useUpdateBusinessProfile,
 } from "../db/hooks/useBusinessProfile";
+import { parseActivities } from "../types/business-profile";
 import type { BusinessProfile } from "../types/business-profile";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
@@ -31,28 +33,54 @@ const bankFields: { key: keyof FormData; labelKey: UIKey }[] = [
   { key: "bic_swift", labelKey: "bic_swift" },
 ];
 
-const invoiceFields: { key: keyof FormData; labelKey: UIKey; type?: string }[] = [
-  { key: "default_activity", labelKey: "default_activity" },
-  { key: "default_payment_terms_days", labelKey: "payment_terms_days", type: "number" },
-];
-
 export function ProfilePage() {
   const { data: profile, isLoading } = useBusinessProfile();
   const updateProfile = useUpdateBusinessProfile();
   const { register, handleSubmit, reset } = useForm<FormData>();
   const t = useT();
 
+  const [activities, setActivities] = useState<string[]>([]);
+  const [newActivity, setNewActivity] = useState("");
+
   useEffect(() => {
     if (profile) {
       reset(profile);
+      setActivities(parseActivities(profile.default_activity));
     }
   }, [profile, reset]);
 
   const onSubmit = (data: FormData) => {
-    updateProfile.mutate(data, {
-      onSuccess: () => toast.success(t.toast_profile_saved),
-      onError: () => toast.error(t.failed_save_profile),
-    });
+    updateProfile.mutate(
+      {
+        ...data,
+        default_activity: JSON.stringify(activities),
+        vat_exempt: data.vat_exempt ? 1 : 0,
+      },
+      {
+        onSuccess: () => toast.success(t.toast_profile_saved),
+        onError: (err) => toast.error(`${t.failed_save_profile}: ${String(err)}`),
+      }
+    );
+  };
+
+  const saveActivities = (next: string[]) => {
+    setActivities(next);
+    updateProfile.mutate({ default_activity: JSON.stringify(next) });
+  };
+
+  const addActivity = () => {
+    const val = newActivity.trim();
+    if (!val) return;
+    if (activities.includes(val)) {
+      toast.error(t.activity_exists);
+      return;
+    }
+    saveActivities([...activities, val]);
+    setNewActivity("");
+  };
+
+  const removeActivity = (idx: number) => {
+    saveActivities(activities.filter((_, i) => i !== idx));
   };
 
   if (isLoading) return <div className="text-muted text-sm">{t.loading}</div>;
@@ -109,18 +137,63 @@ export function ProfilePage() {
           {t.invoice_defaults}
         </h2>
         <div className="space-y-4 max-w-lg">
-          {invoiceFields.map(({ key, labelKey, type }) => (
-            <div key={key}>
-              <label className="block text-xs font-medium text-muted mb-1">
-                {t[labelKey]}
-              </label>
-              <input
-                {...register(key, { valueAsNumber: type === "number" })}
-                type={type ?? "text"}
-                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
-              />
+          {/* Activities list */}
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">
+              {t.activities}
+            </label>
+            <div className="space-y-1.5 mb-2">
+              {activities.map((a, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-2 border border-gray-200 rounded-md px-3 py-1.5 text-sm"
+                >
+                  <span className="flex-1">{a}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeActivity(i)}
+                    className="text-muted hover:text-red-600"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
             </div>
-          ))}
+            <div className="flex gap-2">
+              <input
+                value={newActivity}
+                onChange={(e) => setNewActivity(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addActivity();
+                  }
+                }}
+                placeholder={t.add_activity}
+                className="flex-1 border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+              <button
+                type="button"
+                onClick={addActivity}
+                className="p-2 text-muted hover:text-accent"
+              >
+                <Plus size={16} />
+              </button>
+            </div>
+          </div>
+
+          {/* Payment terms */}
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">
+              {t.payment_terms_days}
+            </label>
+            <input
+              {...register("default_payment_terms_days", { valueAsNumber: true })}
+              type="number"
+              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+          </div>
+
           <div className="flex items-center gap-2">
             <input
               type="checkbox"

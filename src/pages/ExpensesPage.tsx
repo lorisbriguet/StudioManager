@@ -142,7 +142,7 @@ export function ExpensesPage() {
     };
   }, [handleDroppedFile]);
 
-  const attachReceipt = async (expenseId: number, reference: string) => {
+  const attachReceipt = async (expenseId: number, reference: string, supplier: string) => {
     try {
       const selected = await open({
         multiple: false,
@@ -157,7 +157,8 @@ export function ExpensesPage() {
         await mkdir(receiptsDir, { recursive: true });
       }
       const safeRef = reference.replace(/[/\\]/g, "_").replace(/\.\./g, "_");
-      const destPath = `${receiptsDir}/${safeRef}.${ext}`;
+      const safeSup = supplier.replace(/[/\\]/g, "_").replace(/\.\./g, "_");
+      const destPath = `${receiptsDir}/${safeRef}_${safeSup}.${ext}`;
       await copyFile(filePath, destPath);
       updateExpense.mutate(
         { id: expenseId, data: { receipt_path: destPath } },
@@ -225,7 +226,8 @@ export function ExpensesPage() {
                   await mkdir(receiptsDir, { recursive: true });
                 }
                 const safeRef = reference.replace(/[/\\]/g, "_").replace(/\.\./g, "_");
-                const destPath = `${receiptsDir}/${safeRef}.${ext}`;
+                const safeSup = (data.supplier || "").replace(/[/\\]/g, "_").replace(/\.\./g, "_");
+                const destPath = `${receiptsDir}/${safeRef}_${safeSup}.${ext}`;
                 await copyFile(prefill.receiptPath, destPath);
                 receiptPath = destPath;
               } catch (e) {
@@ -303,24 +305,41 @@ export function ExpensesPage() {
                           CHF {exp.amount.toFixed(2)}
                         </td>
                         <td className="px-4 py-2">
-                          {exp.paid_date ? (
-                            <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">{formatDisplayDate(exp.paid_date)}</span>
-                          ) : (
-                            <button
-                              onClick={() =>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="date"
+                              value={exp.paid_date ?? ""}
+                              onChange={(e) =>
                                 updateExpense.mutate(
                                   {
                                     id: exp.id,
-                                    data: { paid_date: format(new Date(), "yyyy-MM-dd") },
+                                    data: { paid_date: e.target.value || null },
                                   },
-                                  { onSuccess: () => toast.success("Marked as paid") }
+                                  { onSuccess: () => toast.success(e.target.value ? "Paid date updated" : "Marked as unpaid") }
                                 )
                               }
-                              className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60"
-                            >
-                              Unpaid
-                            </button>
-                          )}
+                              className={`border border-gray-200 rounded px-1.5 py-0.5 text-xs w-[110px] ${
+                                exp.paid_date ? "text-green-700 dark:text-green-300" : "text-red-600 dark:text-red-300"
+                              }`}
+                            />
+                            {!exp.paid_date && (
+                              <button
+                                onClick={() =>
+                                  updateExpense.mutate(
+                                    {
+                                      id: exp.id,
+                                      data: { paid_date: format(new Date(), "yyyy-MM-dd") },
+                                    },
+                                    { onSuccess: () => toast.success("Marked as paid") }
+                                  )
+                                }
+                                className="px-1.5 py-0.5 text-[10px] rounded bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 shrink-0"
+                                title="Mark as paid today"
+                              >
+                                {t.today ?? "Today"}
+                              </button>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-2">
                           {exp.receipt_path ? (
@@ -338,7 +357,7 @@ export function ExpensesPage() {
                             </div>
                           ) : (
                             <button
-                              onClick={() => attachReceipt(exp.id, exp.reference)}
+                              onClick={() => attachReceipt(exp.id, exp.reference, exp.supplier)}
                               className="text-xs text-accent hover:underline flex items-center gap-1"
                             >
                               <Paperclip size={12} /> Attach

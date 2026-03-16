@@ -137,38 +137,4 @@ async function ensureSchema(db: Database) {
   await db.execute("CREATE INDEX IF NOT EXISTS idx_quotes_client_id ON quotes(client_id)");
   await db.execute("CREATE INDEX IF NOT EXISTS idx_invoice_line_items_invoice_id ON invoice_line_items(invoice_id)");
   await db.execute("CREATE INDEX IF NOT EXISTS idx_client_contacts_client_id ON client_contacts(client_id)");
-
-  // Reassign client IDs sequentially (no gaps) — runs once if needed
-  const allClients = await db.select<{ id: string }[]>(
-    "SELECT id FROM clients ORDER BY id"
-  );
-  const needsReindex = allClients.some((c, i) => {
-    const expected = `C-${String(i + 1).padStart(3, "0")}`;
-    return c.id !== expected;
-  });
-  if (needsReindex) {
-    await db.execute("PRAGMA foreign_keys = OFF");
-    try {
-      for (let i = 0; i < allClients.length; i++) {
-        const tmpId = `TMP-${String(i + 1).padStart(3, "0")}`;
-        const oldId = allClients[i].id;
-        await db.execute("UPDATE clients SET id = $1 WHERE id = $2", [tmpId, oldId]);
-        await db.execute("UPDATE projects SET client_id = $1 WHERE client_id = $2", [tmpId, oldId]);
-        await db.execute("UPDATE invoices SET client_id = $1 WHERE client_id = $2", [tmpId, oldId]);
-        await db.execute("UPDATE quotes SET client_id = $1 WHERE client_id = $2", [tmpId, oldId]);
-        await db.execute("UPDATE client_contacts SET client_id = $1 WHERE client_id = $2", [tmpId, oldId]);
-      }
-      for (let i = 0; i < allClients.length; i++) {
-        const tmpId = `TMP-${String(i + 1).padStart(3, "0")}`;
-        const newId = `C-${String(i + 1).padStart(3, "0")}`;
-        await db.execute("UPDATE clients SET id = $1 WHERE id = $2", [newId, tmpId]);
-        await db.execute("UPDATE projects SET client_id = $1 WHERE client_id = $2", [newId, tmpId]);
-        await db.execute("UPDATE invoices SET client_id = $1 WHERE client_id = $2", [newId, tmpId]);
-        await db.execute("UPDATE quotes SET client_id = $1 WHERE client_id = $2", [newId, tmpId]);
-        await db.execute("UPDATE client_contacts SET client_id = $1 WHERE client_id = $2", [newId, tmpId]);
-      }
-    } finally {
-      await db.execute("PRAGMA foreign_keys = ON");
-    }
-  }
 }

@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Eye, Pencil } from "lucide-react";
 import { undoable } from "../lib/undo";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db/index";
@@ -103,6 +103,7 @@ export function QuotesPage() {
               <SortHeader label={t.date} sortKey="quote_date" current={sort} onSort={setSort} />
               <SortHeader label={t.status} sortKey="status" current={sort} onSort={setSort} />
               <SortHeader label={t.amount} sortKey="total" current={sort} onSort={setSort} align="right" />
+              <th className="px-4 py-2 text-right text-xs font-medium text-muted" />
             </tr>
           </thead>
           <tbody>
@@ -139,11 +140,31 @@ export function QuotesPage() {
                 <td className="px-4 py-2 text-right font-medium">
                   CHF {q.total.toFixed(2)}
                 </td>
+                <td className="px-4 py-2 text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <Link
+                      to={`/quotes/${q.id}/preview`}
+                      className="p-1 text-muted hover:text-accent"
+                      title={t.preview}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Eye size={14} />
+                    </Link>
+                    <Link
+                      to={`/quotes/${q.id}/edit`}
+                      className="p-1 text-muted hover:text-accent"
+                      title={t.edit}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Pencil size={14} />
+                    </Link>
+                  </div>
+                </td>
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted">
+                <td colSpan={6} className="px-4 py-8 text-center text-muted">
                   {search ? t.no_matching_quotes : t.no_quotes_yet}
                 </td>
               </tr>

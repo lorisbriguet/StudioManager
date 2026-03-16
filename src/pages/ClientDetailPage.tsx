@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Save, Plus, Trash2, Eye, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import {
   useClient,
   useUpdateClient,
+  useDeleteClient,
   useClientContacts,
   useCreateClientContact,
   useUpdateClientContact,
@@ -23,10 +24,13 @@ export function ClientDetailPage() {
   const { data: invoices } = useInvoicesByClient(id!);
   const { data: contacts } = useClientContacts(id!);
   const updateClient = useUpdateClient();
+  const deleteClient = useDeleteClient();
+  const navigate = useNavigate();
   const t = useT();
 
   const [form, setForm] = useState<Partial<Client>>({});
   const [dirty, setDirty] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (client) setForm(client);
@@ -70,14 +74,48 @@ export function ClientDetailPage() {
           <ArrowLeft size={18} />
         </Link>
         <h1 className="text-xl font-semibold">{client.name}</h1>
-        {dirty && (
-          <button
-            onClick={save}
-            className="flex items-center gap-1.5 ml-auto px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover"
-          >
-            <Save size={14} /> {t.save}
-          </button>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {dirty && (
+            <button
+              onClick={save}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover"
+            >
+              <Save size={14} /> {t.save}
+            </button>
+          )}
+          {confirmDelete ? (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-red-600">{t.confirm_delete_client}</span>
+              <button
+                onClick={() => {
+                  deleteClient.mutate(id!, {
+                    onSuccess: () => {
+                      toast.success(t.toast_client_deleted);
+                      navigate("/clients");
+                    },
+                  });
+                }}
+                className="px-2 py-1 bg-red-600 text-white rounded-md text-xs hover:bg-red-700"
+              >
+                {t.delete}
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="px-2 py-1 border border-gray-200 rounded-md text-xs hover:bg-gray-50"
+              >
+                {t.cancel}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="p-1.5 text-muted hover:text-red-600"
+              title={t.delete}
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-6">

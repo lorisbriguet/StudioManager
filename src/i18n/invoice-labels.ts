@@ -25,6 +25,10 @@ export const invoiceLabels = {
     affiliate_number: "N° affilié",
     client: "Client",
     page: "Page",
+    quote_date: "Date de l'offre",
+    valid_until: "Valable jusqu'au",
+    validity: "Validité",
+    valid_30_days: "30 jours dès la date de l'offre",
   },
   EN: {
     invoice_title: "Invoice",
@@ -52,6 +56,10 @@ export const invoiceLabels = {
     affiliate_number: "Affiliate No.",
     client: "Client",
     page: "Page",
+    quote_date: "Quote Date",
+    valid_until: "Valid Until",
+    validity: "Validity",
+    valid_30_days: "30 days from quote date",
   },
 } as const;
 

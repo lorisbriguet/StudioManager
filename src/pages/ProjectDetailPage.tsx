@@ -1,10 +1,18 @@
-import { useParams, Link } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { useState } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { ArrowLeft, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { ProjectDetailContent } from "../components/ProjectDetailContent";
+import { useDeleteProject } from "../db/hooks/useProjects";
+import { useT } from "../i18n/useT";
 
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const projectId = Number(id);
+  const deleteProject = useDeleteProject();
+  const navigate = useNavigate();
+  const t = useT();
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
     <div>
@@ -12,6 +20,40 @@ export function ProjectDetailPage() {
         <Link to="/projects" className="text-muted hover:text-gray-900">
           <ArrowLeft size={18} />
         </Link>
+        <div className="ml-auto flex items-center gap-2">
+          {confirmDelete ? (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-red-600">{t.confirm_delete_project}</span>
+              <button
+                onClick={() => {
+                  deleteProject.mutate(projectId, {
+                    onSuccess: () => {
+                      toast.success(t.toast_project_deleted);
+                      navigate("/projects");
+                    },
+                  });
+                }}
+                className="px-2 py-1 bg-red-600 text-white rounded-md text-xs hover:bg-red-700"
+              >
+                {t.delete}
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="px-2 py-1 border border-gray-200 rounded-md text-xs hover:bg-gray-50"
+              >
+                {t.cancel}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="p-1.5 text-muted hover:text-red-600"
+              title={t.delete}
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+        </div>
       </div>
       <ProjectDetailContent projectId={projectId} />
     </div>

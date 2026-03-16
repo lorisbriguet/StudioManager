@@ -45,7 +45,8 @@ export async function generateAndStoreInvoicePdf(
 
     // Sanitize reference to prevent path traversal
     const safeRef = invoice.reference.replace(/[/\\]/g, "_").replace(/\.\./g, "_").replace(/^\.+/, "");
-    const filePath = `${invoicesDir}/${safeRef || `invoice-${invoiceId}`}.pdf`;
+    const safeName = client.name.replace(/[/\\]/g, "_").replace(/\.\./g, "_").replace(/^\.+/, "");
+    const filePath = `${invoicesDir}/${safeRef}_${safeName || `invoice-${invoiceId}`}.pdf`;
     await writeFile(filePath, bytes);
 
     // Update invoice record with stored path

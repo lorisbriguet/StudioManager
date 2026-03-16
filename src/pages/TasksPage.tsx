@@ -1,8 +1,8 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Search, ChevronRight, Plus, ArrowUp, ArrowDown } from "lucide-react";
+import { Search, ChevronRight, Plus, ArrowUp, ArrowDown, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { useAllTasks, useUpdateTask, useCreateTask, useCreateSubtask, useUpdateSubtask } from "../db/hooks/useTasks";
+import { useAllTasks, useUpdateTask, useCreateTask, useDeleteTask, useCreateSubtask, useUpdateSubtask, useDeleteSubtask } from "../db/hooks/useTasks";
 import { getAllSubtasks } from "../db/queries/tasks";
 import { useQuery } from "@tanstack/react-query";
 import { useProjects } from "../db/hooks/useProjects";
@@ -24,8 +24,10 @@ export function TasksPage() {
   const { data: subtasks } = useQuery({ queryKey: ["subtasks"], queryFn: getAllSubtasks });
   const updateTask = useUpdateTask();
   const createTask = useCreateTask();
+  const deleteTask = useDeleteTask();
   const createSubtask = useCreateSubtask();
   const updateSubtask = useUpdateSubtask();
+  const deleteSubtask = useDeleteSubtask();
   const [filter, setFilter] = useState<TaskStatus | "all">("todo");
   const [search, setSearch] = useState("");
   const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
@@ -191,12 +193,13 @@ export function TasksPage() {
             {!collapsedProjects.has(g.projectId) && <div className="divide-y divide-gray-100">
               {g.tasks.map((tk) => {
                 const taskSubs = subtasks?.filter((s) => s.task_id === tk.id) ?? [];
+                const filteredSubs = filter === "all" ? taskSubs : taskSubs.filter((s) => s.status === filter);
                 const isExpanded = expandedTasks.has(tk.id);
                 const doneSubtasks = taskSubs.filter((s) => s.status === "done").length;
 
                 return (
                   <div key={tk.id}>
-                    <div className="flex items-center gap-3 px-4 py-2.5">
+                    <div className="flex items-center gap-3 px-4 py-2.5 group/task">
                       <button
                         onClick={() => {
                           const next = new Set(expandedTasks);
@@ -275,11 +278,20 @@ export function TasksPage() {
                         onChange={(vals) => updateTask.mutate({ id: tk.id, data: vals })}
                         compact
                       />
+                      <button
+                        onClick={() => deleteTask.mutate(tk.id, {
+                          onSuccess: () => toast.success(t.toast_task_deleted),
+                        })}
+                        className="opacity-0 group-hover/task:opacity-100 text-muted hover:text-red-600 transition-opacity p-0.5"
+                        title={t.delete}
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                     {isExpanded && (
                       <div className="ml-12 mr-4 border-l border-gray-200 pl-3 pb-2 mb-1">
-                        {taskSubs.map((s) => (
-                          <div key={s.id} className="flex items-center gap-2 py-1">
+                        {filteredSubs.map((s) => (
+                          <div key={s.id} className="flex items-center gap-2 py-1 group/sub">
                             <input
                               type="checkbox"
                               checked={s.status === "done"}
@@ -327,6 +339,15 @@ export function TasksPage() {
                               onChange={(vals) => updateSubtask.mutate({ id: s.id, data: vals })}
                               compact
                             />
+                            <button
+                              onClick={() => deleteSubtask.mutate(s.id, {
+                                onSuccess: () => toast.success(t.toast_subtask_deleted),
+                              })}
+                              className="opacity-0 group-hover/sub:opacity-100 text-muted hover:text-red-600 transition-opacity p-0.5"
+                              title={t.delete}
+                            >
+                              <Trash2 size={14} />
+                            </button>
                           </div>
                         ))}
                         <div className="flex gap-1.5 mt-1">

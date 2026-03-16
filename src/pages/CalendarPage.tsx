@@ -51,6 +51,7 @@ export function CalendarPage() {
 
   const [quickCreate, setQuickCreate] = useState<QuickCreateState | null>(null);
   const [peekId, setPeekId] = useState<number | null>(null);
+  const lastClickRef = useRef<{ time: number; date: string }>({ time: 0, date: "" });
 
   const events = useMemo<EventInput[]>(() => {
     const items: EventInput[] = [];
@@ -158,23 +159,33 @@ export function CalendarPage() {
   const handleDateClick = useCallback((info: DateClickArg) => {
     const d = info.date;
     const dateStr = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-    const startTime = !info.allDay ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}` : null;
-    const endHour = d.getHours() + 1;
-    const endTime = !info.allDay ? `${pad2(endHour)}:${pad2(d.getMinutes())}` : null;
+    const now = Date.now();
+    const last = lastClickRef.current;
 
-    const rect = info.dayEl.getBoundingClientRect();
-    const top = info.jsEvent.clientY;
-    let left = rect.left + rect.width / 2;
-    if (left + 150 > window.innerWidth) left = window.innerWidth - 160;
-    if (left < 160) left = 160;
+    if (now - last.time < 400 && last.date === dateStr) {
+      // Double-click detected — open quick create
+      lastClickRef.current = { time: 0, date: "" };
 
-    setQuickCreate({
-      date: dateStr,
-      startTime,
-      endTime,
-      allDay: info.allDay,
-      pos: { top, left },
-    });
+      const startTime = !info.allDay ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}` : null;
+      const endHour = d.getHours() + 1;
+      const endTime = !info.allDay ? `${pad2(endHour)}:${pad2(d.getMinutes())}` : null;
+
+      const rect = info.dayEl.getBoundingClientRect();
+      const top = info.jsEvent.clientY;
+      let left = rect.left + rect.width / 2;
+      if (left + 150 > window.innerWidth) left = window.innerWidth - 160;
+      if (left < 160) left = 160;
+
+      setQuickCreate({
+        date: dateStr,
+        startTime,
+        endTime,
+        allDay: info.allDay,
+        pos: { top, left },
+      });
+    } else {
+      lastClickRef.current = { time: now, date: dateStr };
+    }
   }, []);
 
   const createSubtask = useCreateSubtask();

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Plus, ChevronRight } from "lucide-react";
+import { Plus, ChevronRight, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useProject, useUpdateProject } from "../db/hooks/useProjects";
 import { useClient } from "../db/hooks/useClients";
@@ -11,6 +11,8 @@ import {
   useSubtasksByProject,
   useCreateSubtask,
   useUpdateSubtask,
+  useDeleteTask,
+  useDeleteSubtask,
 } from "../db/hooks/useTasks";
 import { TaskDatePicker } from "./TaskDatePicker";
 import type { ProjectStatus } from "../types/project";
@@ -32,6 +34,8 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
   const { data: allSubtasks } = useSubtasksByProject(projectId);
   const createSubtask = useCreateSubtask();
   const updateSubtask = useUpdateSubtask();
+  const deleteTask = useDeleteTask();
+  const deleteSubtask = useDeleteSubtask();
 
   const [status, setStatus] = useState<ProjectStatus>("active");
   const [newTask, setNewTask] = useState("");
@@ -39,7 +43,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
   const [newSubtaskText, setNewSubtaskText] = useState<Record<number, string>>({});
   const [editingTask, setEditingTask] = useState<number | null>(null);
   const [editingSubtask, setEditingSubtask] = useState<number | null>(null);
-  const [taskFilter, setTaskFilter] = useState<"todo" | "done">("todo");
+  const [taskFilter, setTaskFilter] = useState<"todo" | "done" | "all">("todo");
   const t = useT();
 
   useEffect(() => {
@@ -49,8 +53,23 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
   if (isLoading) return <div className="text-muted text-sm">{t.loading}</div>;
   if (!project) return <div className="text-muted text-sm">{t.no_projects}</div>;
 
-  const doneCount = tasks?.filter((tk) => tk.status === "done").length ?? 0;
   const totalCount = tasks?.length ?? 0;
+  // Weighted progress: each task = 1/totalTasks weight, subdivided by subtasks
+  const progress = (() => {
+    if (!tasks || tasks.length === 0) return 0;
+    const weight = 1 / tasks.length;
+    let sum = 0;
+    for (const tk of tasks) {
+      const subs = allSubtasks?.filter((s) => s.task_id === tk.id) ?? [];
+      if (subs.length === 0) {
+        if (tk.status === "done") sum += weight;
+      } else {
+        const doneSubs = subs.filter((s) => s.status === "done").length;
+        sum += weight * (doneSubs / subs.length);
+      }
+    }
+    return Math.round(sum * 100);
+  })();
 
   const addTask = () => {
     if (!newTask.trim()) return;
@@ -142,14 +161,12 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
         <div className="mb-4">
           <div className="flex justify-between text-xs text-muted mb-1">
             <span>{t.progress}</span>
-            <span>
-              {doneCount}/{totalCount} ({totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0}%)
-            </span>
+            <span>{progress}%</span>
           </div>
           <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
             <div
               className="h-full bg-accent rounded-full transition-all"
-              style={{ width: `${totalCount > 0 ? (doneCount / totalCount) * 100 : 0}%` }}
+              style={{ width: `${progress}%` }}
             />
           </div>
         </div>
@@ -174,7 +191,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-medium">{t.tasks}</h3>
           <div className="flex gap-1">
-            {(["todo", "done"] as const).map((f) => (
+            {(["todo", "done", "all"] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setTaskFilter(f)}
@@ -184,7 +201,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                     : "border-gray-200 text-muted hover:bg-gray-50"
                 }`}
               >
-                {f === "todo" ? t.todo : t.done}
+                {f === "todo" ? t.todo : f === "done" ? t.done : t.all}
               </button>
             ))}
           </div>
@@ -206,14 +223,15 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
         </div>
 
         <div className="space-y-0.5">
-          {tasks?.filter((tk) => taskFilter === "done" ? tk.status === "done" : tk.status !== "done").map((tk) => {
+          {tasks?.filter((tk) => taskFilter === "all" ? true : taskFilter === "done" ? tk.status === "done" : tk.status !== "done").map((tk) => {
             const subtasks = allSubtasks?.filter((s) => s.task_id === tk.id) ?? [];
+            const filteredSubtasks = taskFilter === "all" ? subtasks : subtasks.filter((s) => taskFilter === "done" ? s.status === "done" : s.status !== "done");
             const isExpanded = expandedTasks.has(tk.id);
             const doneSubtasks = subtasks.filter((s) => s.status === "done").length;
 
             return (
               <div key={tk.id}>
-                <div className="flex items-center gap-2 py-1.5">
+                <div className="flex items-center gap-2 py-1.5 group/task">
                   <button
                     onClick={() => {
                       const next = new Set(expandedTasks);
@@ -286,11 +304,20 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                     onChange={(vals) => updateTask.mutate({ id: tk.id, data: vals })}
                     compact
                   />
+                  <button
+                    onClick={() => deleteTask.mutate(tk.id, {
+                      onSuccess: () => toast.success(t.toast_task_deleted),
+                    })}
+                    className="opacity-0 group-hover/task:opacity-100 text-muted hover:text-red-600 transition-opacity p-0.5"
+                    title={t.delete}
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
                 {isExpanded && (
                   <div className="ml-9 border-l border-gray-200 pl-3 pb-1">
-                    {subtasks.map((s) => (
-                      <div key={s.id} className="flex items-center gap-2 py-1">
+                    {filteredSubtasks.map((s) => (
+                      <div key={s.id} className="flex items-center gap-2 py-1 group/sub">
                         <input
                           type="checkbox"
                           checked={s.status === "done"}
@@ -338,6 +365,15 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                           onChange={(vals) => updateSubtask.mutate({ id: s.id, data: vals })}
                           compact
                         />
+                        <button
+                          onClick={() => deleteSubtask.mutate(s.id, {
+                            onSuccess: () => toast.success(t.toast_subtask_deleted),
+                          })}
+                          className="opacity-0 group-hover/sub:opacity-100 text-muted hover:text-red-600 transition-opacity p-0.5"
+                          title={t.delete}
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     ))}
                     <div className="flex gap-1.5 mt-1">

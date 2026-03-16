@@ -137,6 +137,7 @@ const ui = {
 
     // Notifications
     mark_all_read: "Mark all read",
+    mark_read: "Mark as read",
     no_notifications: "No notifications yet",
 
     // Calendar
@@ -220,6 +221,9 @@ const ui = {
     clearing: "Clearing",
     bic_swift: "BIC / SWIFT",
     default_activity: "Default Activity",
+    activities: "Activities",
+    add_activity: "Add activity...",
+    activity_exists: "Activity already exists",
     payment_terms_days: "Payment Terms (days)",
     vat_exempt: "VAT Exempt",
     saving: "Saving...",
@@ -232,9 +236,16 @@ const ui = {
     toast_name_required: "Name is required",
     toast_select_client: "Select a client",
     toast_backup_dir_first: "Set a backup directory first",
+    auto_backup_completed: "Auto-backup completed",
     toast_select_calendar: "Select a target calendar first",
     toast_failed_sync: "Failed to sync existing events",
     toast_failed_calendars: "Failed to list calendars",
+    toast_client_deleted: "Client deleted",
+    toast_project_deleted: "Project deleted",
+    toast_task_deleted: "Task deleted",
+    toast_subtask_deleted: "Subtask deleted",
+    confirm_delete_client: "Delete this client and all its projects, invoices, and quotes?",
+    confirm_delete_project: "Delete this project and all its tasks?",
 
     // Command palette
     search_or_jump: "Search or jump to...",
@@ -274,6 +285,7 @@ const ui = {
     update_quote: "Update Quote",
     download_pdf: "Download PDF",
     invoice_not_found: "Invoice not found",
+    quote_not_found: "Quote not found",
     client_not_found: "Client not found",
     client_updated: "Client updated",
     contact_added: "Contact added",
@@ -282,6 +294,8 @@ const ui = {
     unread: "unread",
     send_test: "Send test",
     clear_all: "Clear all",
+    copy: "Copy",
+    copied: "Copied",
     failed_save_profile: "Failed to save profile",
     invoice_created: "Invoice created",
     invoice_updated: "Invoice updated",
@@ -428,6 +442,7 @@ const ui = {
 
     // Notifications
     mark_all_read: "Tout marquer comme lu",
+    mark_read: "Marquer comme lu",
     no_notifications: "Aucune notification",
 
     // Calendar
@@ -511,6 +526,9 @@ const ui = {
     clearing: "Clearing",
     bic_swift: "BIC / SWIFT",
     default_activity: "Activite par defaut",
+    activities: "Activites",
+    add_activity: "Ajouter une activite...",
+    activity_exists: "Activite deja existante",
     payment_terms_days: "Delai de paiement (jours)",
     vat_exempt: "Exempte de TVA",
     saving: "Enregistrement...",
@@ -523,9 +541,16 @@ const ui = {
     toast_name_required: "Le nom est requis",
     toast_select_client: "Selectionnez un client",
     toast_backup_dir_first: "Definissez d'abord un dossier de sauvegarde",
+    auto_backup_completed: "Sauvegarde automatique terminee",
     toast_select_calendar: "Selectionnez d'abord un calendrier cible",
     toast_failed_sync: "Echec de la synchronisation",
     toast_failed_calendars: "Echec du chargement des calendriers",
+    toast_client_deleted: "Client supprime",
+    toast_project_deleted: "Projet supprime",
+    toast_task_deleted: "Tache supprimee",
+    toast_subtask_deleted: "Sous-tache supprimee",
+    confirm_delete_client: "Supprimer ce client et tous ses projets, factures et devis ?",
+    confirm_delete_project: "Supprimer ce projet et toutes ses taches ?",
 
     // Command palette
     search_or_jump: "Rechercher ou naviguer...",
@@ -565,6 +590,7 @@ const ui = {
     update_quote: "Mettre a jour l'offre",
     download_pdf: "Telecharger le PDF",
     invoice_not_found: "Facture introuvable",
+    quote_not_found: "Offre introuvable",
     client_not_found: "Client introuvable",
     client_updated: "Client mis a jour",
     contact_added: "Contact ajoute",
@@ -573,6 +599,8 @@ const ui = {
     unread: "non lu(s)",
     send_test: "Envoyer un test",
     clear_all: "Tout effacer",
+    copy: "Copier",
+    copied: "Copie",
     failed_save_profile: "Echec de l'enregistrement du profil",
     invoice_created: "Facture creee",
     invoice_updated: "Facture mise a jour",

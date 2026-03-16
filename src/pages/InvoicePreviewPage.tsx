@@ -58,7 +58,7 @@ export function InvoicePreviewPage() {
       if (storedPdfUrl) {
         const a = document.createElement("a");
         a.href = storedPdfUrl;
-        a.download = `${invoice.reference}.pdf`;
+        a.download = `${invoice.reference}_${client.name}.pdf`;
         a.click();
         toast.success("PDF downloaded");
         return;
@@ -67,7 +67,7 @@ export function InvoicePreviewPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${invoice.reference}.pdf`;
+      a.download = `${invoice.reference}_${client.name}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success("PDF downloaded");

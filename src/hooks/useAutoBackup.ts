@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useAppStore } from "../stores/app-store";
 import { createBackup } from "../lib/backup";
+import { createNotification } from "../db/queries/notifications";
 
 export function useAutoBackup() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -37,7 +38,18 @@ export function useAutoBackup() {
               }
             }
             setLastAutoBackup(Date.now());
-            toast.success(`Auto-backup: ${path.split("/").pop()}`);
+            const fileName = path.split("/").pop() ?? "backup";
+            toast.success(`Auto-backup: ${fileName}`);
+            await createNotification({
+              type: "info",
+              title: "Auto-backup",
+              message: fileName,
+              read: 0,
+              link: null,
+            });
+            // Lazy import to avoid circular dependency with App.tsx
+            const { queryClient } = await import("../App");
+            queryClient.invalidateQueries({ queryKey: ["notifications"] });
           })
           .catch((e) => {
             console.error("Auto-backup failed:", e);
