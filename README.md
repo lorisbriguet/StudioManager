@@ -113,7 +113,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 
 ### macOS (Apple Silicon)
 
-> Coming soon — check the [Releases](../../releases) page for the latest `.dmg` download.
+Download the latest `.dmg` from the [Releases](../../releases) page.
 
 ### Requirements
 - macOS 12.0 (Monterey) or later
