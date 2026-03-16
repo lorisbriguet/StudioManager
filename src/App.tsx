@@ -17,6 +17,7 @@ import { QuoteFormPage } from "./pages/QuoteFormPage";
 import { ExpensesPage } from "./pages/ExpensesPage";
 import { FinancesPage } from "./pages/FinancesPage";
 import { InvoicePreviewPage } from "./pages/InvoicePreviewPage";
+import { QuotePreviewPage } from "./pages/QuotePreviewPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { NotificationsPage } from "./pages/NotificationsPage";
@@ -26,7 +27,7 @@ import { useAutoBackup } from "./hooks/useAutoBackup";
 import { useErrorNotifications } from "./hooks/useErrorNotifications";
 import { useUndoStore } from "./stores/undo-store";
 
-const queryClient = new QueryClient({
+export const queryClient = new QueryClient({
   defaultOptions: {
     queries: { retry: 1, refetchOnWindowFocus: false },
   },
@@ -84,6 +85,7 @@ export default function App() {
             <Route path="quotes" element={<QuotesPage />} />
             <Route path="quotes/new" element={<QuoteFormPage />} />
             <Route path="quotes/:id/edit" element={<QuoteFormPage />} />
+            <Route path="quotes/:id/preview" element={<QuotePreviewPage />} />
             <Route path="expenses" element={<ExpensesPage />} />
             <Route path="finances" element={<FinancesPage />} />
             <Route path="notifications" element={<NotificationsPage />} />

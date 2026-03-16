@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Plus, Trash2, ArrowLeft, ListTodo } from "lucide-react";
 import { toast } from "sonner";
@@ -9,6 +9,8 @@ import { useClients } from "../db/hooks/useClients";
 import { useProjectsByClient } from "../db/hooks/useProjects";
 import { useTasksByProject } from "../db/hooks/useTasks";
 import { getNextInvoiceReference, getInvoiceLineItems } from "../db/queries/invoices";
+import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
+import { parseActivities } from "../types/business-profile";
 
 
 interface LineItem {
@@ -28,6 +30,8 @@ export function InvoiceFormPage() {
   const t = useT();
   const { data: existingInvoice } = useInvoice(isEdit ? invoiceId : 0);
   const { data: clients } = useClients();
+  const { data: profile } = useBusinessProfile();
+  const profileActivities = useMemo(() => parseActivities(profile?.default_activity), [profile?.default_activity]);
   const createInvoice = useCreateInvoice();
   const updateInvoice = useUpdateInvoice();
   const deleteInvoice = useDeleteInvoice();
@@ -36,7 +40,7 @@ export function InvoiceFormPage() {
   const [clientId, setClientId] = useState("");
   const [projectId, setProjectId] = useState<number | null>(null);
   const [invoiceDate, setInvoiceDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [activity, setActivity] = useState("Graphisme");
+  const [activity, setActivity] = useState("");
   const [assignment, setAssignment] = useState("");
   const [poNumber, setPoNumber] = useState("");
   const [notes, setNotes] = useState("");
@@ -68,6 +72,13 @@ export function InvoiceFormPage() {
       }).catch((e) => console.error("Failed to load line items:", e));
     }
   }, [existingInvoice, invoiceId]);
+
+  // Default activity from profile for new invoices
+  useEffect(() => {
+    if (!isEdit && !activity && profileActivities.length > 0) {
+      setActivity(profileActivities[0]);
+    }
+  }, [profileActivities, isEdit]);
 
   const selectedClient = clients?.find((c) => c.id === clientId);
   const discountRate = selectedClient?.has_discount ? selectedClient.discount_rate : 0;
@@ -229,11 +240,18 @@ export function InvoiceFormPage() {
           </div>
           <div>
             <label className="block text-xs font-medium text-muted mb-1">{t.activity}</label>
-            <input
+            <select
               value={activity}
               onChange={(e) => setActivity(e.target.value)}
               className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
-            />
+            >
+              {profileActivities.map((a) => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+              {activity && !profileActivities.includes(activity) && (
+                <option value={activity}>{activity}</option>
+              )}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-muted mb-1">{t.assignment}</label>

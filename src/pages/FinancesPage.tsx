@@ -89,7 +89,7 @@ export function FinancesPage() {
             const lineItems = await getInvoiceLineItems(inv.id);
             const doc = createElement(InvoicePDF, { invoice: inv, lineItems, client, profile });
             const blob = await pdf(doc as never).toBlob();
-            await writeFile(`${basePath}/factures/justificatifs/${inv.reference}.pdf`, new Uint8Array(await blob.arrayBuffer()));
+            await writeFile(`${basePath}/factures/justificatifs/${inv.reference}_${client.name}.pdf`, new Uint8Array(await blob.arrayBuffer()));
           }
         } catch {
           // PDF generation may fail for some invoices
@@ -109,7 +109,7 @@ export function FinancesPage() {
         if (exp.receipt_path) {
           try {
             const ext = exp.receipt_path.split(".").pop() ?? "pdf";
-            await copyFile(exp.receipt_path, `${basePath}/depenses/justificatifs/${exp.reference}.${ext}`);
+            await copyFile(exp.receipt_path, `${basePath}/depenses/justificatifs/${exp.reference}_${exp.supplier}.${ext}`);
           } catch {
             // receipt file may not exist
           }
@@ -170,7 +170,7 @@ export function FinancesPage() {
               contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid", borderColor: dark ? "#2d2d2d" : "#e5e5e5", backgroundColor: dark ? "#1e1e1e" : "#fff", color: dark ? "#e5e5e5" : undefined }}
               cursor={{ fill: dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)" }}
             />
-            <Bar dataKey="revenue" fill="#2563eb" radius={[3, 3, 0, 0]} name="Revenue" />
+            <Bar dataKey="revenue" fill="#16a34a" radius={[3, 3, 0, 0]} name="Revenue" />
             <Bar dataKey="expenses" fill="#dc2626" radius={[3, 3, 0, 0]} name="Expenses" />
           </BarChart>
         </ResponsiveContainer>

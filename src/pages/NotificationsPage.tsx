@@ -1,4 +1,5 @@
-import { Bell, Check, CheckCheck, Trash2, AlertTriangle, Info, AlertCircle } from "lucide-react";
+import { Bell, Check, CheckCheck, Trash2, AlertTriangle, Info, AlertCircle, Copy } from "lucide-react";
+import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import {
   useNotifications,
@@ -125,6 +126,17 @@ export function NotificationsPage() {
                   </p>
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const text = `${n.title}${n.message ? ` — ${n.message}` : ""}`;
+                      navigator.clipboard.writeText(text).then(() => toast.success(t.copied));
+                    }}
+                    className="p-1 rounded hover:bg-gray-200"
+                    title={t.copy}
+                  >
+                    <Copy size={14} />
+                  </button>
                   {!n.read && (
                     <button
                       onClick={(e) => {
@@ -132,7 +144,7 @@ export function NotificationsPage() {
                         markRead.mutate(n.id);
                       }}
                       className="p-1 rounded hover:bg-gray-200"
-                      title={t.mark_all_read}
+                      title={t.mark_read}
                     >
                       <Check size={14} />
                     </button>

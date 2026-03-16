@@ -1,12 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Plus, Trash2, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { addDays, format } from "date-fns";
 import { useQuote, useCreateQuote, useUpdateQuote } from "../db/hooks/useQuotes";
 import { useClients } from "../db/hooks/useClients";
 import { useProjects } from "../db/hooks/useProjects";
 import { getNextQuoteReference, getQuoteLineItems } from "../db/queries/quotes";
+import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
+import { parseActivities } from "../types/business-profile";
 import { useT } from "../i18n/useT";
 
 interface LineItem {
@@ -27,13 +29,15 @@ export function QuoteFormPage() {
   const { data: existingQuote } = useQuote(isEdit ? quoteId : 0);
   const { data: clients } = useClients();
   const { data: projects } = useProjects();
+  const { data: profile } = useBusinessProfile();
+  const profileActivities = useMemo(() => parseActivities(profile?.default_activity), [profile?.default_activity]);
   const createQuote = useCreateQuote();
   const updateQuote = useUpdateQuote();
 
   const [clientId, setClientId] = useState("");
   const [projectId, setProjectId] = useState<number | null>(null);
   const [quoteDate, setQuoteDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [activity, setActivity] = useState("Graphisme");
+  const [activity, setActivity] = useState("");
   const [assignment, setAssignment] = useState("");
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState<LineItem[]>([
@@ -63,6 +67,13 @@ export function QuoteFormPage() {
       }).catch((e) => console.error("Failed to load line items:", e));
     }
   }, [existingQuote, quoteId]);
+
+  // Default activity from profile for new quotes
+  useEffect(() => {
+    if (!isEdit && !activity && profileActivities.length > 0) {
+      setActivity(profileActivities[0]);
+    }
+  }, [profileActivities, isEdit]);
 
   const selectedClient = clients?.find((c) => c.id === clientId);
   const discountRate = selectedClient?.has_discount ? selectedClient.discount_rate : 0;
@@ -214,11 +225,18 @@ export function QuoteFormPage() {
           </div>
           <div>
             <label className="block text-xs font-medium text-muted mb-1">{t.activity}</label>
-            <input
+            <select
               value={activity}
               onChange={(e) => setActivity(e.target.value)}
               className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
-            />
+            >
+              {profileActivities.map((a) => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+              {activity && !profileActivities.includes(activity) && (
+                <option value={activity}>{activity}</option>
+              )}
+            </select>
           </div>
           <div className="col-span-2">
             <label className="block text-xs font-medium text-muted mb-1">{t.assignment}</label>
@@ -332,6 +350,14 @@ export function QuoteFormPage() {
           >
             {isEdit ? t.update_quote : t.create_quote}
           </button>
+          {isEdit && (
+            <button
+              onClick={() => navigate(`/quotes/${quoteId}/preview`)}
+              className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 text-sm rounded-md hover:bg-gray-50"
+            >
+              <Eye size={14} /> {t.preview}
+            </button>
+          )}
           <button
             onClick={() => navigate("/quotes")}
             className="px-4 py-2 border border-gray-200 text-sm rounded-md hover:bg-gray-50"

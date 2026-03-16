@@ -5,6 +5,9 @@ import { toast } from "sonner";
 import { useProjects, useCreateProject } from "../db/hooks/useProjects";
 import { useClients } from "../db/hooks/useClients";
 import { useAllTasks } from "../db/hooks/useTasks";
+import { getAllSubtasks } from "../db/queries/tasks";
+import { useQuery } from "@tanstack/react-query";
+import type { Subtask } from "../types/task";
 import { useAppStore } from "../stores/app-store";
 import { formatDisplayDate } from "../utils/formatDate";
 import { ProjectDetailContent } from "../components/ProjectDetailContent";
@@ -31,6 +34,7 @@ export function ProjectsPage() {
   const { data: projects, isLoading } = useProjects();
   const { data: clients } = useClients();
   const { data: allTasks } = useAllTasks();
+  const { data: allSubtasks } = useQuery({ queryKey: ["subtasks"], queryFn: getAllSubtasks });
   const createProject = useCreateProject();
   const navigate = useNavigate();
   const projectOpenMode = useAppStore((s) => s.projectOpenMode);
@@ -45,12 +49,23 @@ export function ProjectsPage() {
 
   const priorityRank: Record<TaskPriority, number> = { low: 0, medium: 1, high: 2 };
 
+  // Group subtasks by task_id
+  const subtasksByTask = useMemo(() => {
+    const map: Record<number, Subtask[]> = {};
+    for (const s of allSubtasks ?? []) {
+      (map[s.task_id] ??= []).push(s);
+    }
+    return map;
+  }, [allSubtasks]);
+
   const taskStats = useMemo(() => {
-    const map: Record<number, { total: number; done: number; maxPriority: TaskPriority }> = {};
+    const map: Record<number, { total: number; pct: number; maxPriority: TaskPriority }> = {};
+    // Group tasks by project
+    const byProject: Record<number, typeof allTasks> = {};
     for (const tk of allTasks ?? []) {
-      if (!map[tk.project_id]) map[tk.project_id] = { total: 0, done: 0, maxPriority: "low" };
+      (byProject[tk.project_id] ??= []).push(tk);
+      if (!map[tk.project_id]) map[tk.project_id] = { total: 0, pct: 0, maxPriority: "low" };
       map[tk.project_id].total++;
-      if (tk.status === "done") map[tk.project_id].done++;
       if (tk.status !== "done") {
         const eff = effectivePriority(tk.priority, tk.due_date);
         if (priorityRank[eff] > priorityRank[map[tk.project_id].maxPriority]) {
@@ -58,8 +73,25 @@ export function ProjectsPage() {
         }
       }
     }
+    // Compute weighted progress per project
+    for (const [pid, tasks] of Object.entries(byProject)) {
+      const projectId = Number(pid);
+      if (!tasks || tasks.length === 0) continue;
+      const weight = 1 / tasks.length;
+      let sum = 0;
+      for (const tk of tasks) {
+        const subs = subtasksByTask[tk.id];
+        if (!subs || subs.length === 0) {
+          if (tk.status === "done") sum += weight;
+        } else {
+          const doneSubs = subs.filter((s) => s.status === "done").length;
+          sum += weight * (doneSubs / subs.length);
+        }
+      }
+      map[projectId].pct = Math.round(sum * 100);
+    }
     return map;
-  }, [allTasks]);
+  }, [allTasks, subtasksByTask]);
 
   const filtered = useMemo(() => {
     let rows = projects ?? [];
@@ -72,8 +104,12 @@ export function ProjectsPage() {
           clientName(p.client_id).toLowerCase().includes(q)
       );
     }
-    return rows;
-  }, [projects, clients, filter, search]);
+    return [...rows].sort((a, b) => {
+      const pa = priorityRank[taskStats[a.id]?.maxPriority ?? "low"];
+      const pb = priorityRank[taskStats[b.id]?.maxPriority ?? "low"];
+      return pb - pa;
+    });
+  }, [projects, clients, filter, search, taskStats]);
 
   const handleProjectClick = (projectId: number) => {
     if (projectOpenMode === "peek") {
@@ -94,8 +130,8 @@ export function ProjectsPage() {
   if (isLoading) return <div className="text-muted text-sm">{t.loading}</div>;
 
   return (
-    <div className="flex h-full">
-      <div className={`min-w-0 ${peekId !== null ? "flex-1" : "w-full"}`}>
+    <div className="flex flex-1 min-h-0">
+      <div className={`min-w-0 overflow-y-auto ${peekId !== null ? "flex-1" : "w-full"}`}>
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-xl font-semibold">{t.projects}</h1>
           <button
@@ -150,8 +186,8 @@ export function ProjectsPage() {
 
         <div className={`grid gap-4 ${peekId !== null ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"}`}>
           {filtered.map((p) => {
-            const stats = taskStats[p.id] ?? { total: 0, done: 0, maxPriority: "low" as TaskPriority };
-            const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
+            const stats = taskStats[p.id] ?? { total: 0, pct: 0, maxPriority: "low" as TaskPriority };
+            const pct = stats.pct;
 
             return (
               <div
@@ -177,7 +213,7 @@ export function ProjectsPage() {
                 {stats.total > 0 && (
                   <div className="mb-3">
                     <div className="flex justify-between text-[11px] text-muted mb-1">
-                      <span>{stats.done}/{stats.total} {t.tasks.toLowerCase()}</span>
+                      <span>{stats.total} {t.tasks.toLowerCase()}</span>
                       <span>{pct}%</span>
                     </div>
                     <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -213,7 +249,7 @@ export function ProjectsPage() {
 
       {/* Side Peek Panel */}
       {peekId !== null && (
-        <div className="w-1/2 shrink-0 border-l border-gray-200 ml-4 pl-4 overflow-y-auto h-[calc(100vh-6rem)]">
+        <div className="w-1/2 shrink-0 border-l border-gray-200 ml-4 pl-4 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between mb-4">
             <Link
               to={`/projects/${peekId}`}
@@ -228,7 +264,7 @@ export function ProjectsPage() {
               <X size={16} />
             </button>
           </div>
-          <ProjectDetailContent projectId={peekId} compact />
+          <ProjectDetailContent key={peekId} projectId={peekId} compact />
         </div>
       )}
     </div>

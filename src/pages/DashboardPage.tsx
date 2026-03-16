@@ -153,7 +153,7 @@ export function DashboardPage() {
                 contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid", borderColor: dark ? "#2d2d2d" : "#e5e5e5", backgroundColor: dark ? "#1e1e1e" : "#fff", color: dark ? "#e5e5e5" : undefined }}
                 cursor={{ fill: dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)" }}
               />
-              <Bar dataKey="revenue" fill="#2563eb" radius={[3, 3, 0, 0]} name={t.revenue} />
+              <Bar dataKey="revenue" fill="#16a34a" radius={[3, 3, 0, 0]} name={t.revenue} />
               <Bar dataKey="expenses" fill="#dc2626" radius={[3, 3, 0, 0]} name={t.expenses} />
             </BarChart>
           </ResponsiveContainer>
