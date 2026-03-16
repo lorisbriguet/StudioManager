@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.1.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="Platform">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
@@ -42,12 +42,14 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Hierarchical tasks and subtasks with inline editing
 - Due dates, priorities, drag-and-drop reordering
 - Side peek panel for quick project overview without leaving the page
+- Weighted progress calculation (tasks + subtasks)
+- Task filters: todo, done, all — applied globally
 
 ### Calendar
 - Monthly and weekly calendar views
 - Tasks and subtasks displayed on their due dates
 - One-directional sync with iCloud Calendar (macOS)
-- Click events to peek into project details
+- Double-click to create events, click to peek into project details
 
 ### Invoicing
 - Professional invoice generation with automatic reference numbering
@@ -59,6 +61,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 
 ### Quotes
 - Quote creation mirroring the invoice workflow
+- PDF preview and export with client/supplier name in filename
 - Convert accepted quotes to invoices with one click
 - Status tracking: draft, sent, accepted, rejected, expired
 
@@ -66,6 +69,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Categorized expenses following Swiss tax declaration structure
 - Drag-and-drop receipt upload (PDF, PNG, JPG)
 - Supplier autocomplete with smart autofill (category + amount)
+- Inline editable paid date
 - Receipt preview inline
 
 ### Finance & P&L
@@ -80,8 +84,9 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - **Undo System** (Cmd+Z) — undo any action with full state restoration
 - **Dark Mode** — full dark theme with automatic color adaptation
 - **19 Accent Colors** — customize the app appearance
-- **Notifications** — persistent in-app notifications with unread badges
-- **Backup System** — automatic and manual backups with configurable paths
+- **Notifications** — persistent in-app notifications with unread badges and copy-to-clipboard
+- **Backup System** — automatic and manual backups with configurable paths and backup notifications
+- **Multiple Activities** — define a list of activities in your profile, select per invoice/quote
 - **Bilingual UI** — English and French interface
 - **Offline-first** — all data stored locally in SQLite, no internet required
 
