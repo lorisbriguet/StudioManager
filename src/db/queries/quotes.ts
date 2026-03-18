@@ -19,9 +19,8 @@ export async function getNextQuoteReference(year: number): Promise<string> {
   const db = await getDb();
   const prefix = `D-${year}-`;
   const rows = await db.select<{ max_num: number | null }[]>(
-    `SELECT MAX(CAST(SUBSTR(reference, ${prefix.length + 1}) AS INTEGER)) as max_num
-     FROM quotes WHERE reference LIKE $1`,
-    [`${prefix}%`]
+    "SELECT MAX(CAST(SUBSTR(reference, $1) AS INTEGER)) as max_num FROM quotes WHERE reference LIKE $2",
+    [prefix.length + 1, `${prefix}%`]
   );
   const next = (rows[0]?.max_num ?? 0) + 1;
   return `${prefix}${String(next).padStart(3, "0")}`;
@@ -52,7 +51,7 @@ export async function createQuote(
       data.notes,
     ]
   );
-  return result.lastInsertId as number;
+  return result.lastInsertId ?? 0;
 }
 
 export async function updateQuote(
@@ -83,12 +82,19 @@ export async function setQuoteLineItems(
   items: Omit<QuoteLineItem, "id" | "quote_id">[]
 ): Promise<void> {
   const db = await getDb();
-  await db.execute("DELETE FROM quote_line_items WHERE quote_id = $1", [quoteId]);
-  for (const item of items) {
-    await db.execute(
-      `INSERT INTO quote_line_items (quote_id, designation, rate, unit, quantity, amount, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [quoteId, item.designation, item.rate, item.unit, item.quantity, item.amount, item.sort_order]
-    );
+  await db.execute("BEGIN");
+  try {
+    await db.execute("DELETE FROM quote_line_items WHERE quote_id = $1", [quoteId]);
+    for (const item of items) {
+      await db.execute(
+        `INSERT INTO quote_line_items (quote_id, designation, rate, unit, quantity, amount, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [quoteId, item.designation, item.rate, item.unit, item.quantity, item.amount, item.sort_order]
+      );
+    }
+    await db.execute("COMMIT");
+  } catch (e) {
+    await db.execute("ROLLBACK");
+    throw e;
   }
 }

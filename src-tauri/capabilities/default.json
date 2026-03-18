@@ -39,11 +39,6 @@
           "name": "osascript-jxa",
           "cmd": "osascript",
           "args": ["-l", "JavaScript", "-e", { "validator": "[\\s\\S]+" }]
-        },
-        {
-          "name": "python3",
-          "cmd": "python3",
-          "args": ["-c", { "validator": "[\\s\\S]+" }]
         }
       ]
     }

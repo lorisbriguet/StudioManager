@@ -1,4 +1,4 @@
-import { getDb } from "../db/index";
+import { getDb, validateFields } from "../db/index";
 import {
   writeFile,
   mkdir,
@@ -42,6 +42,9 @@ function escapeCsv(val: unknown): string {
 }
 
 async function exportTableCsv(tableName: string): Promise<string> {
+  if (!TABLES.includes(tableName)) {
+    throw new Error(`Invalid table name: ${tableName}`);
+  }
   const db = await getDb();
   const rows = await db.select<Record<string, unknown>[]>(
     `SELECT * FROM ${tableName}`
@@ -228,8 +231,8 @@ const DELETE_ORDER = [
   "expenses",
   "invoices",
   "quotes",
-  "tasks",
   "subtasks",
+  "tasks",
   "projects",
   "client_contacts",
   "clients",
@@ -280,6 +283,7 @@ export async function restoreFromBackup(backupPath: string): Promise<void> {
       if (rows.length === 0) continue;
 
       const columns = Object.keys(rows[0]);
+      validateFields(columns);
       const placeholders = columns.map((_, i) => `$${i + 1}`).join(", ");
       const sql = `INSERT INTO ${table} (${columns.join(", ")}) VALUES (${placeholders})`;
 
