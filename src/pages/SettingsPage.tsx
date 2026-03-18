@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import { toast } from "sonner";
 import { Moon, Sun, Monitor, FolderOpen, HardDrive, ChevronDown, RotateCcw } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -46,6 +47,8 @@ export function SettingsPage() {
   const [availableCalendars, setAvailableCalendars] = useState<string[]>([]);
   const [loadingCalendars, setLoadingCalendars] = useState(false);
   const t = useT();
+  const [appVersion, setAppVersion] = useState("");
+  useEffect(() => { getVersion().then(setAppVersion).catch(() => {}); }, []);
 
   const handleCalendarToggle = async () => {
     const enabling = !calendarSync;
@@ -366,6 +369,9 @@ export function SettingsPage() {
         </h2>
         <UpdateChecker />
       </section>
+
+      {/* Version */}
+      {appVersion && <p className="text-xs text-muted">StudioManager v{appVersion}</p>}
 
       {/* Backup */}
       <section>
