@@ -67,7 +67,7 @@ export function ProjectsPage() {
       if (!map[tk.project_id]) map[tk.project_id] = { total: 0, pct: 0, maxPriority: "low" };
       map[tk.project_id].total++;
       if (tk.status !== "done") {
-        const eff = effectivePriority(tk.priority, tk.due_date);
+        const eff = effectivePriority(tk.priority, tk.due_date, tk.end_date);
         if (priorityRank[eff] > priorityRank[map[tk.project_id].maxPriority]) {
           map[tk.project_id].maxPriority = eff;
         }

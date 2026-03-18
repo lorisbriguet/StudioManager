@@ -91,7 +91,7 @@ export function DashboardPage() {
             <div className="space-y-1.5">
               {todayTasks.map((t) => (
                 <Link key={`t-${t.id}`} to={`/projects/${t.project_id}`} className="flex items-center gap-2 text-sm hover:bg-gray-50 rounded px-2 py-1 -mx-2">
-                  <PriorityDot priority={effectivePriority(t.priority, t.due_date)} />
+                  <PriorityDot priority={effectivePriority(t.priority, t.due_date, t.end_date)} />
                   <span className="text-muted text-xs shrink-0">{projectName(t.project_id)}</span>
                   <span className="truncate">{t.title}</span>
                   {t.start_time && <span className="text-xs text-muted ml-auto shrink-0">{t.start_time.slice(0, 5)}</span>}

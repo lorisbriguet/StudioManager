@@ -111,6 +111,10 @@ const ui = {
     no_matching_quotes: "No matching quotes",
     no_quotes_yet: "No quotes yet",
 
+    convert_to_invoice: "Convert to Invoice",
+    already_converted: "Already converted",
+    quote_converted: "Quote converted to invoice",
+
     // Expenses
     new_expense: "New Expense",
     supplier: "Supplier",
@@ -203,6 +207,18 @@ const ui = {
     app_language: "App Language",
     export_language: "PDF / Export Language",
     backup_directory_2: "Secondary Backup Directory",
+
+    // Updates
+    updates: "Updates",
+    checking_for_updates: "Checking for updates...",
+    up_to_date: "You're up to date",
+    check_again: "Check again",
+    update_check_failed: "Update check failed",
+    update_available: "Update available",
+    download_and_install: "Download & Install",
+    downloading_update: "Downloading update...",
+    update_ready: "Update installed. Restart to apply.",
+    restart_now: "Restart now",
 
     // Profile
     business_profile: "Business Profile",
@@ -416,6 +432,10 @@ const ui = {
     no_matching_quotes: "Aucune offre correspondante",
     no_quotes_yet: "Aucune offre",
 
+    convert_to_invoice: "Convertir en facture",
+    already_converted: "Deja convertie",
+    quote_converted: "Offre convertie en facture",
+
     // Expenses
     new_expense: "Nouvelle depense",
     supplier: "Fournisseur",
@@ -508,6 +528,18 @@ const ui = {
     app_language: "Langue de l'application",
     export_language: "Langue PDF / Exports",
     backup_directory_2: "Dossier de sauvegarde secondaire",
+
+    // Updates
+    updates: "Mises a jour",
+    checking_for_updates: "Verification des mises a jour...",
+    up_to_date: "Vous etes a jour",
+    check_again: "Reverifier",
+    update_check_failed: "Echec de la verification",
+    update_available: "Mise a jour disponible",
+    download_and_install: "Telecharger et installer",
+    downloading_update: "Telechargement en cours...",
+    update_ready: "Mise a jour installee. Redemarrez pour appliquer.",
+    restart_now: "Redemarrer maintenant",
 
     // Profile
     business_profile: "Profil entreprise",

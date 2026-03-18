@@ -24,6 +24,8 @@
       "identifier": "fs:scope",
       "allow": ["$HOME/**/*"]
     },
+    "updater:default",
+    "process:default",
     "shell:default",
     {
       "identifier": "shell:allow-execute",
