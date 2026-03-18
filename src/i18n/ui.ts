@@ -161,6 +161,10 @@ const ui = {
     day_1_before: "1 day before",
     none: "None",
 
+    // Settings categories
+    general: "General",
+    behavior: "Behavior",
+
     // Settings
     appearance: "Appearance",
     light: "Light",
@@ -481,6 +485,10 @@ const ui = {
     hour_1_before: "1 heure avant",
     day_1_before: "1 jour avant",
     none: "Aucun",
+
+    // Settings categories
+    general: "General",
+    behavior: "Comportement",
 
     // Settings
     appearance: "Apparence",
