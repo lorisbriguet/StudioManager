@@ -18,15 +18,34 @@ import { useQuery } from "@tanstack/react-query";
 import { effectivePriority } from "../types/task";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
+function toDateStr(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
+
+/** FullCalendar all-day end is exclusive — return the day after the given date string */
+function nextDay(dateStr: string): string {
+  const d = new Date(dateStr + "T12:00:00");
+  d.setDate(d.getDate() + 1);
+  return toDateStr(d);
+}
 
 function extractEventData(event: EventDropArg["event"]) {
   const start = event.start;
   const end = event.end;
   const allDay = event.allDay;
-  const date = start ? `${start.getFullYear()}-${pad2(start.getMonth() + 1)}-${pad2(start.getDate())}` : null;
+  const date = start ? toDateStr(start) : null;
   const startTime = !allDay && start ? `${pad2(start.getHours())}:${pad2(start.getMinutes())}` : null;
   const endTime = !allDay && end ? `${pad2(end.getHours())}:${pad2(end.getMinutes())}` : null;
-  return { due_date: date, start_time: startTime, end_time: endTime };
+  // For multi-day all-day events, FullCalendar end is exclusive — subtract one day
+  let endDate: string | null = null;
+  if (allDay && end && start) {
+    const endD = new Date(end.getTime());
+    endD.setDate(endD.getDate() - 1);
+    const endStr = toDateStr(endD);
+    endDate = endStr !== date ? endStr : null;
+  } else if (!allDay && end && start) {
+    const endStr = toDateStr(end);
+    endDate = endStr !== date ? endStr : null;
+  }
+  return { due_date: date, end_date: endDate, start_time: startTime, end_time: endTime };
 }
 
 interface QuickCreateState {
@@ -59,14 +78,14 @@ export function CalendarPage() {
     for (const t of tasks ?? []) {
       if (!t.due_date) continue;
       const projectName = projects?.find((p) => p.id === t.project_id)?.name ?? "";
-      const prio = effectivePriority(t.priority, t.due_date);
+      const prio = effectivePriority(t.priority, t.due_date, t.end_date);
       const prioClass = `fc-priority-${prio}`;
       if (t.start_time) {
         items.push({
           id: `t-${t.id}`,
           title: `${projectName}: ${t.title}`,
           start: `${t.due_date}T${t.start_time}`,
-          end: t.end_time ? `${t.due_date}T${t.end_time}` : undefined,
+          end: t.end_time ? `${(t.end_date || t.due_date)}T${t.end_time}` : undefined,
           allDay: false,
           extendedProps: { type: "task", itemId: t.id, projectId: t.project_id, status: t.status, isSubtask: false },
           classNames: t.status === "done" ? ["fc-done"] : [prioClass],
@@ -76,6 +95,7 @@ export function CalendarPage() {
           id: `t-${t.id}`,
           title: `${projectName}: ${t.title}`,
           start: t.due_date,
+          end: t.end_date ? nextDay(t.end_date) : undefined,
           allDay: true,
           extendedProps: { type: "task", itemId: t.id, projectId: t.project_id, status: t.status, isSubtask: false },
           classNames: t.status === "done" ? ["fc-done"] : [prioClass],
@@ -87,14 +107,14 @@ export function CalendarPage() {
       if (!s.due_date) continue;
       const parentProjectId = (s as { project_id?: number }).project_id;
       const projectName = parentProjectId ? projects?.find((p) => p.id === parentProjectId)?.name ?? "" : "";
-      const prio = effectivePriority("low", s.due_date);
+      const prio = effectivePriority("low", s.due_date, s.end_date);
       const prioClass = `fc-priority-${prio}`;
       if (s.start_time) {
         items.push({
           id: `s-${s.id}`,
           title: `${projectName}: ${s.title}`,
           start: `${s.due_date}T${s.start_time}`,
-          end: s.end_time ? `${s.due_date}T${s.end_time}` : undefined,
+          end: s.end_time ? `${(s.end_date || s.due_date)}T${s.end_time}` : undefined,
           allDay: false,
           extendedProps: { type: "subtask", itemId: s.id, projectId: parentProjectId, status: s.status, isSubtask: true },
           classNames: s.status === "done" ? ["fc-done"] : [prioClass],
@@ -104,6 +124,7 @@ export function CalendarPage() {
           id: `s-${s.id}`,
           title: `${projectName}: ${s.title}`,
           start: s.due_date,
+          end: s.end_date ? nextDay(s.end_date) : undefined,
           allDay: true,
           extendedProps: { type: "subtask", itemId: s.id, projectId: parentProjectId, status: s.status, isSubtask: true },
           classNames: s.status === "done" ? ["fc-done"] : [prioClass],
@@ -210,7 +231,7 @@ export function CalendarPage() {
         title,
         description: "",
         status: "todo",
-        priority: "medium",
+        priority: "low",
         due_date: quickCreate.date,
         end_date: null,
         start_time: quickCreate.startTime,

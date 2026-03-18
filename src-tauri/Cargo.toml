@@ -1,6 +1,6 @@
 [package]
 name = "studiomanager"
-version = "1.1.0"
+version = "1.2.0"
 description = "Freelance studio management app"
 authors = ["Loris Briguet"]
 edition = "2021"
@@ -23,3 +23,5 @@ tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-shell = "2.3.5"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"

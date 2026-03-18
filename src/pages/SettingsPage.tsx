@@ -7,6 +7,7 @@ import { createBackup, listBackups, restoreFromBackup } from "../lib/backup";
 import { useAppStore, ACCENT_PRESETS, type DateFormatOption, type AccentPreset, type ProjectOpenMode } from "../stores/app-store";
 import { useT } from "../i18n/useT";
 import type { AppLanguage } from "../i18n/ui";
+import { UpdateChecker } from "../components/UpdateChecker";
 
 export function SettingsPage() {
   const darkMode = useAppStore((s) => s.darkMode);
@@ -356,6 +357,14 @@ export function SettingsPage() {
           </div>
           <span className="text-sm">{t.show_tasks_page_desc}</span>
         </label>
+      </section>
+
+      {/* Updates */}
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted mb-4">
+          {t.updates}
+        </h2>
+        <UpdateChecker />
       </section>
 
       {/* Backup */}

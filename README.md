@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.1.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.2.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="Platform">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
@@ -47,6 +47,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 
 ### Calendar
 - Monthly and weekly calendar views
+- Multi-day event spanning across dates
 - Tasks and subtasks displayed on their due dates
 - One-directional sync with iCloud Calendar (macOS)
 - Double-click to create events, click to peek into project details
@@ -88,6 +89,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - **Backup System** — automatic and manual backups with configurable paths and backup notifications
 - **Multiple Activities** — define a list of activities in your profile, select per invoice/quote
 - **Bilingual UI** — English and French interface
+- **Auto-Updater** — check for updates and install from within the app
 - **Offline-first** — all data stored locally in SQLite, no internet required
 
 ---
@@ -226,7 +228,7 @@ StudioManager is designed for Swiss freelancers:
 ## Roadmap
 
 - [ ] Windows support
-- [ ] Auto-updater (Tauri updater plugin)
+- [x] Auto-updater (Tauri updater plugin)
 - [ ] Multi-currency support
 - [ ] Receipt OCR auto-detection
 

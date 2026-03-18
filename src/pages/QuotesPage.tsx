@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Search, Eye, Pencil } from "lucide-react";
+import { Plus, Search, Eye, Pencil, FileOutput, Check } from "lucide-react";
 import { undoable } from "../lib/undo";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db/index";
@@ -78,7 +78,7 @@ export function QuotesPage() {
         <h1 className="text-xl font-semibold">{t.quotes}</h1>
         <Link
           to="/quotes/new"
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover"
+          className="flex items-center gap-1.5 px-3 py-2 bg-accent text-white text-sm rounded-md hover:bg-accent-hover"
         >
           <Plus size={16} /> {t.new_quote}
         </Link>
@@ -90,7 +90,7 @@ export function QuotesPage() {
           placeholder={t.search_quotes}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="border border-gray-200 rounded-md px-3 py-1.5 text-sm w-64"
+          className="border border-gray-200 rounded-md px-3 py-2 text-sm w-64"
         />
       </div>
 
@@ -109,7 +109,17 @@ export function QuotesPage() {
           <tbody>
             {filtered.map((q) => (
               <tr key={q.id} className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="px-4 py-2 font-medium">{q.reference}</td>
+                <td className="px-4 py-2">
+                  <Link
+                    to={`/quotes/${q.id}/edit`}
+                    className="text-muted hover:text-accent align-middle"
+                    title={t.edit}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Pencil size={13} className="inline" />
+                  </Link>
+                  <span className="font-medium ml-1.5 align-middle">{q.reference}</span>
+                </td>
                 <td className="px-4 py-2">{q.client_name}</td>
                 <td className="px-4 py-2 text-muted">{formatDisplayDate(q.quote_date)}</td>
                 <td className="px-4 py-2">
@@ -141,24 +151,28 @@ export function QuotesPage() {
                   CHF {q.total.toFixed(2)}
                 </td>
                 <td className="px-4 py-2 text-right">
-                  <div className="flex items-center justify-end gap-1">
+                  <Link
+                    to={`/quotes/${q.id}/preview`}
+                    className="text-muted hover:text-accent align-middle"
+                    title={t.preview}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Eye size={14} className="inline" />
+                  </Link>
+                  {q.converted_to_invoice_id ? (
+                    <span className="inline ml-2 text-green-500 align-middle" title={t.already_converted}>
+                      <Check size={14} className="inline" />
+                    </span>
+                  ) : (
                     <Link
-                      to={`/quotes/${q.id}/preview`}
-                      className="p-1 text-muted hover:text-accent"
-                      title={t.preview}
+                      to={`/invoices/new?from_quote=${q.id}`}
+                      className="text-muted hover:text-accent align-middle ml-2"
+                      title={t.convert_to_invoice}
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <Eye size={14} />
+                      <FileOutput size={14} className="inline" />
                     </Link>
-                    <Link
-                      to={`/quotes/${q.id}/edit`}
-                      className="p-1 text-muted hover:text-accent"
-                      title={t.edit}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Pencil size={14} />
-                    </Link>
-                  </div>
+                  )}
                 </td>
               </tr>
             ))}

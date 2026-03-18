@@ -79,7 +79,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
         title: newTask.trim(),
         description: "",
         status: "todo",
-        priority: "medium",
+        priority: "low",
         due_date: null,
         end_date: null,
         start_time: null,
@@ -289,7 +289,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                     </span>
                   )}
                   <PriorityBadge
-                    priority={effectivePriority(tk.priority, tk.due_date)}
+                    priority={effectivePriority(tk.priority, tk.due_date, tk.end_date)}
                     onClick={() => {
                       const next = PRIORITY_CYCLE[(PRIORITY_CYCLE.indexOf(tk.priority) + 1) % PRIORITY_CYCLE.length];
                       updateTask.mutate({ id: tk.id, data: { priority: next } });

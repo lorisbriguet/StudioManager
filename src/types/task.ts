@@ -4,12 +4,14 @@ export type TaskPriority = "low" | "medium" | "high";
 const PRIORITY_RANK: Record<TaskPriority, number> = { low: 0, medium: 1, high: 2 };
 const RANK_TO_PRIORITY: TaskPriority[] = ["low", "medium", "high"];
 
-/** Returns the effective priority: due today/past → high, due tomorrow → medium, otherwise stored value (whichever is higher). */
-export function effectivePriority(stored: TaskPriority, dueDate: string | null): TaskPriority {
-  if (!dueDate) return stored;
+/** Returns the effective priority based on the deadline (end_date if set, otherwise due_date).
+ *  Due today/past → high, due tomorrow → medium, otherwise stored value (whichever is higher). */
+export function effectivePriority(stored: TaskPriority, dueDate: string | null, endDate?: string | null): TaskPriority {
+  const deadline = endDate || dueDate;
+  if (!deadline) return stored;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const due = new Date(dueDate + "T00:00:00");
+  const due = new Date(deadline + "T00:00:00");
   const diffDays = Math.floor((due.getTime() - today.getTime()) / 86400000);
   let datePriority: TaskPriority = "low";
   if (diffDays <= 0) datePriority = "high";

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Eye, Search, ChevronRight } from "lucide-react";
+import { Plus, Eye, Search, ChevronRight, Pencil } from "lucide-react";
 import { undoable } from "../lib/undo";
 import { useInvoices, useUpdateInvoice } from "../db/hooks/useInvoices";
 import { useClients } from "../db/hooks/useClients";
@@ -137,10 +137,12 @@ export function InvoicesPage() {
                         <td className="px-4 py-2">
                           <Link
                             to={`/invoices/${inv.id}/edit`}
-                            className="text-accent hover:underline"
+                            className="inline-flex items-center gap-1.5 text-muted hover:text-accent"
+                            title="Edit"
                           >
-                            {inv.reference}
+                            <Pencil size={13} />
                           </Link>
+                          <span className="ml-1.5">{inv.reference}</span>
                         </td>
                         <td className="px-4 py-2">{inv.client_name}</td>
                         <td className="px-4 py-2 text-muted">{formatDisplayDate(inv.invoice_date)}</td>

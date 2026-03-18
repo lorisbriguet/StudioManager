@@ -1,16 +1,18 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, Trash2, ArrowLeft, ListTodo } from "lucide-react";
 import { toast } from "sonner";
 import { addDays, format } from "date-fns";
 import { useT } from "../i18n/useT";
 import { useInvoice, useCreateInvoice, useUpdateInvoice, useDeleteInvoice } from "../db/hooks/useInvoices";
+import { useQueryClient } from "@tanstack/react-query";
 import { useClients } from "../db/hooks/useClients";
 import { useProjectsByClient } from "../db/hooks/useProjects";
 import { useTasksByProject } from "../db/hooks/useTasks";
 import { getNextInvoiceReference, getInvoiceLineItems } from "../db/queries/invoices";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { parseActivities } from "../types/business-profile";
+import { getQuote, getQuoteLineItems, updateQuote } from "../db/queries/quotes";
 
 
 interface LineItem {
@@ -26,6 +28,8 @@ export function InvoiceFormPage() {
   const isEdit = !!id;
   const invoiceId = Number(id);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const fromQuoteId = Number(searchParams.get("from_quote")) || null;
 
   const t = useT();
   const { data: existingInvoice } = useInvoice(isEdit ? invoiceId : 0);
@@ -35,6 +39,7 @@ export function InvoiceFormPage() {
   const createInvoice = useCreateInvoice();
   const updateInvoice = useUpdateInvoice();
   const deleteInvoice = useDeleteInvoice();
+  const queryClient = useQueryClient();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const [clientId, setClientId] = useState("");
@@ -75,10 +80,36 @@ export function InvoiceFormPage() {
 
   // Default activity from profile for new invoices
   useEffect(() => {
-    if (!isEdit && !activity && profileActivities.length > 0) {
+    if (!isEdit && !activity && !fromQuoteId && profileActivities.length > 0) {
       setActivity(profileActivities[0]);
     }
-  }, [profileActivities, isEdit]);
+  }, [profileActivities, isEdit, fromQuoteId]);
+
+  // Pre-fill from quote when converting
+  useEffect(() => {
+    if (!fromQuoteId || isEdit) return;
+    (async () => {
+      const quote = await getQuote(fromQuoteId);
+      if (!quote) return;
+      setClientId(quote.client_id);
+      setProjectId(quote.project_id);
+      setActivity(quote.activity);
+      setAssignment(quote.assignment);
+      setNotes(quote.notes);
+      const lineItems = await getQuoteLineItems(fromQuoteId);
+      if (lineItems.length > 0) {
+        setItems(
+          lineItems.map((li) => ({
+            designation: li.designation,
+            rate: li.rate,
+            unit: li.unit,
+            quantity: li.quantity,
+            amount: li.amount,
+          }))
+        );
+      }
+    })().catch((e) => console.error("Failed to load quote:", e));
+  }, [fromQuoteId, isEdit]);
 
   const selectedClient = clients?.find((c) => c.id === clientId);
   const discountRate = selectedClient?.has_discount ? selectedClient.discount_rate : 0;
@@ -166,14 +197,18 @@ export function InvoiceFormPage() {
               po_number: poNumber || null,
               paid_date: null,
               pdf_path: null,
-              from_quote_id: null,
+              from_quote_id: fromQuoteId,
               notes,
             },
             lineItems,
           },
           {
-            onSuccess: () => {
-              toast.success(t.invoice_created);
+            onSuccess: async (invoiceId) => {
+              if (fromQuoteId) {
+                await updateQuote(fromQuoteId, { converted_to_invoice_id: invoiceId });
+                queryClient.invalidateQueries({ queryKey: ["quotes"] });
+              }
+              toast.success(fromQuoteId ? t.quote_converted : t.invoice_created);
               navigate("/invoices");
             },
             onError: (e) => toast.error(String(e)),
