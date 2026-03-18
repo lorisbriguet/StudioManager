@@ -116,14 +116,21 @@ async function reindexInvoiceReferences(year: string): Promise<void> {
     "SELECT id, reference FROM invoices WHERE reference LIKE $1 ORDER BY CAST(SUBSTR(reference, $2) AS INTEGER)",
     [`${year}-%`, year.length + 2]
   );
-  for (let i = 0; i < invoices.length; i++) {
-    const newRef = `${year}-${String(i + 1).padStart(3, "0")}`;
-    if (invoices[i].reference !== newRef) {
-      await db.execute(
-        "UPDATE invoices SET reference = $1, updated_at = datetime('now') WHERE id = $2",
-        [newRef, invoices[i].id]
-      );
+  await db.execute("BEGIN");
+  try {
+    for (let i = 0; i < invoices.length; i++) {
+      const newRef = `${year}-${String(i + 1).padStart(3, "0")}`;
+      if (invoices[i].reference !== newRef) {
+        await db.execute(
+          "UPDATE invoices SET reference = $1, updated_at = datetime('now') WHERE id = $2",
+          [newRef, invoices[i].id]
+        );
+      }
     }
+    await db.execute("COMMIT");
+  } catch (e) {
+    await db.execute("ROLLBACK");
+    throw e;
   }
 }
 
@@ -142,22 +149,29 @@ export async function setInvoiceLineItems(
   items: Omit<InvoiceLineItem, "id" | "invoice_id">[]
 ): Promise<void> {
   const db = await getDb();
-  await db.execute("DELETE FROM invoice_line_items WHERE invoice_id = $1", [
-    invoiceId,
-  ]);
-  for (const item of items) {
-    await db.execute(
-      `INSERT INTO invoice_line_items (invoice_id, designation, rate, unit, quantity, amount, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [
-        invoiceId,
-        item.designation,
-        item.rate,
-        item.unit,
-        item.quantity,
-        item.amount,
-        item.sort_order,
-      ]
-    );
+  await db.execute("BEGIN");
+  try {
+    await db.execute("DELETE FROM invoice_line_items WHERE invoice_id = $1", [
+      invoiceId,
+    ]);
+    for (const item of items) {
+      await db.execute(
+        `INSERT INTO invoice_line_items (invoice_id, designation, rate, unit, quantity, amount, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          invoiceId,
+          item.designation,
+          item.rate,
+          item.unit,
+          item.quantity,
+          item.amount,
+          item.sort_order,
+        ]
+      );
+    }
+    await db.execute("COMMIT");
+  } catch (e) {
+    await db.execute("ROLLBACK");
+    throw e;
   }
 }

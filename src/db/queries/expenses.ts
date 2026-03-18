@@ -18,12 +18,13 @@ export async function getExpenseCategories(): Promise<ExpenseCategory[]> {
 export async function getNextExpenseReference(year: number): Promise<string> {
   const db = await getDb();
   const shortYear = String(year).slice(-2);
-  const rows = await db.select<{ count: number }[]>(
-    "SELECT COUNT(*) as count FROM expenses WHERE reference LIKE $1",
-    [`F-${shortYear}-%`]
+  const prefix = `F-${shortYear}-`;
+  const rows = await db.select<{ max_num: number | null }[]>(
+    "SELECT MAX(CAST(SUBSTR(reference, $1) AS INTEGER)) as max_num FROM expenses WHERE reference LIKE $2",
+    [prefix.length + 1, `${prefix}%`]
   );
-  const next = (rows[0]?.count ?? 0) + 1;
-  return `F-${shortYear}-${String(next).padStart(3, "0")}`;
+  const next = (rows[0]?.max_num ?? 0) + 1;
+  return `${prefix}${String(next).padStart(3, "0")}`;
 }
 
 export async function createExpense(

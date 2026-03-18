@@ -11,14 +11,19 @@ export function validateFields(fields: string[]): void {
   }
 }
 
-let db: Database | null = null;
+let dbPromise: Promise<Database> | null = null;
 
 export async function getDb(): Promise<Database> {
-  if (!db) {
-    db = await Database.load("sqlite:studiomanager.db");
-    await ensureSchema(db);
+  if (!dbPromise) {
+    dbPromise = (async () => {
+      const database = await Database.load("sqlite:studiomanager.db");
+      await ensureSchema(database);
+      return database;
+    })();
+    // Clear cached promise on failure so next call retries
+    dbPromise.catch(() => { dbPromise = null; });
   }
-  return db;
+  return dbPromise;
 }
 
 async function ensureSchema(db: Database) {

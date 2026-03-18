@@ -43,7 +43,6 @@ export function useErrorNotifications() {
         link: null,
       }).then(() => {
         qc.invalidateQueries({ queryKey: ["notifications"] });
-        qc.invalidateQueries({ queryKey: ["unread-notification-count"] });
       }).catch(() => {
         // Don't recurse if notification creation itself fails
       });
