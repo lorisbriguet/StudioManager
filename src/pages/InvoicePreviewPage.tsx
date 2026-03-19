@@ -4,7 +4,7 @@ import { ArrowLeft, Download } from "lucide-react";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useInvoice, useInvoiceLineItems } from "../db/hooks/useInvoices";
-import { useClient } from "../db/hooks/useClients";
+import { useClient, useClientContacts } from "../db/hooks/useClients";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { InvoicePDF } from "../components/invoice/InvoicePDF";
 import { toast } from "sonner";
@@ -18,7 +18,14 @@ export function InvoicePreviewPage() {
   const { data: invoice, isLoading: loadingInvoice } = useInvoice(invoiceId);
   const { data: lineItems, isLoading: loadingItems } = useInvoiceLineItems(invoiceId);
   const { data: client } = useClient(invoice?.client_id ?? "");
+  const { data: contacts } = useClientContacts(invoice?.client_id ?? "");
   const { data: profile } = useBusinessProfile();
+  const selectedContact = invoice?.contact_id
+    ? contacts?.find((c) => c.id === invoice.contact_id)
+    : null;
+  const contactName = selectedContact
+    ? `${selectedContact.first_name} ${selectedContact.last_name}`.trim()
+    : undefined;
   const [storedPdfUrl, setStoredPdfUrl] = useState<string | null>(null);
   const t = useT();
 
@@ -50,6 +57,7 @@ export function InvoicePreviewPage() {
       lineItems={lineItems}
       client={client}
       profile={profile}
+      contactName={contactName}
     />
   );
 

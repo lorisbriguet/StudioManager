@@ -82,19 +82,12 @@ export async function setQuoteLineItems(
   items: Omit<QuoteLineItem, "id" | "quote_id">[]
 ): Promise<void> {
   const db = await getDb();
-  await db.execute("BEGIN");
-  try {
-    await db.execute("DELETE FROM quote_line_items WHERE quote_id = $1", [quoteId]);
-    for (const item of items) {
-      await db.execute(
-        `INSERT INTO quote_line_items (quote_id, designation, rate, unit, quantity, amount, sort_order)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [quoteId, item.designation, item.rate, item.unit, item.quantity, item.amount, item.sort_order]
-      );
-    }
-    await db.execute("COMMIT");
-  } catch (e) {
-    await db.execute("ROLLBACK");
-    throw e;
+  await db.execute("DELETE FROM quote_line_items WHERE quote_id = $1", [quoteId]);
+  for (const item of items) {
+    await db.execute(
+      `INSERT INTO quote_line_items (quote_id, designation, rate, unit, quantity, amount, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [quoteId, item.designation, item.rate, item.unit, item.quantity, item.amount, item.sort_order]
+    );
   }
 }

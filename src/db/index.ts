@@ -135,6 +135,14 @@ async function ensureSchema(db: Database) {
     );
   }
 
+  // Add contact_id to invoices if missing
+  const invoiceCols = await db.select<{ name: string }[]>(
+    "SELECT name FROM pragma_table_info('invoices')"
+  );
+  if (!invoiceCols.some((c) => c.name === "contact_id")) {
+    await db.execute("ALTER TABLE invoices ADD COLUMN contact_id INTEGER REFERENCES client_contacts(id) ON DELETE SET NULL");
+  }
+
   // Indexes on foreign keys for query performance
   await db.execute("CREATE INDEX IF NOT EXISTS idx_subtasks_task_id ON subtasks(task_id)");
   await db.execute("CREATE INDEX IF NOT EXISTS idx_projects_client_id ON projects(client_id)");

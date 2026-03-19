@@ -4,7 +4,7 @@ import { writeFile, mkdir, exists } from "@tauri-apps/plugin-fs";
 import { appDataDir } from "@tauri-apps/api/path";
 import { InvoicePDF } from "../components/invoice/InvoicePDF";
 import { getInvoice, getInvoiceLineItems, updateInvoice } from "../db/queries/invoices";
-import { getClient } from "../db/queries/clients";
+import { getClient, getClientContact } from "../db/queries/clients";
 import { getBusinessProfile } from "../db/queries/business-profile";
 
 /**
@@ -27,11 +27,20 @@ export async function generateAndStoreInvoicePdf(
 
     const lineItems = await getInvoiceLineItems(invoiceId);
 
+    let contactName: string | undefined;
+    if (invoice.contact_id) {
+      const contact = await getClientContact(invoice.contact_id);
+      if (contact) {
+        contactName = `${contact.first_name} ${contact.last_name}`.trim();
+      }
+    }
+
     const doc = createElement(InvoicePDF, {
       invoice,
       lineItems,
       client,
       profile,
+      contactName,
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const blob = await pdf(doc as any).toBlob();

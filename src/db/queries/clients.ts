@@ -65,23 +65,27 @@ export async function updateClient(
 
 export async function deleteClient(id: string): Promise<void> {
   const db = await getDb();
-  await db.execute("BEGIN");
-  try {
-    // Manually cascade to tables that lack ON DELETE CASCADE in schema
-    await db.execute("DELETE FROM invoice_line_items WHERE invoice_id IN (SELECT id FROM invoices WHERE client_id = $1)", [id]);
-    await db.execute("DELETE FROM quote_line_items WHERE quote_id IN (SELECT id FROM quotes WHERE client_id = $1)", [id]);
-    await db.execute("DELETE FROM invoices WHERE client_id = $1", [id]);
-    await db.execute("DELETE FROM quotes WHERE client_id = $1", [id]);
-    await db.execute("DELETE FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1))", [id]);
-    await db.execute("DELETE FROM tasks WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1)", [id]);
-    await db.execute("DELETE FROM projects WHERE client_id = $1", [id]);
-    await db.execute("DELETE FROM client_contacts WHERE client_id = $1", [id]);
-    await db.execute("DELETE FROM clients WHERE id = $1", [id]);
-    await db.execute("COMMIT");
-  } catch (e) {
-    await db.execute("ROLLBACK");
-    throw e;
-  }
+  // Manually cascade to tables that lack ON DELETE CASCADE in schema
+  await db.execute("DELETE FROM invoice_line_items WHERE invoice_id IN (SELECT id FROM invoices WHERE client_id = $1)", [id]);
+  await db.execute("DELETE FROM quote_line_items WHERE quote_id IN (SELECT id FROM quotes WHERE client_id = $1)", [id]);
+  await db.execute("DELETE FROM invoices WHERE client_id = $1", [id]);
+  await db.execute("DELETE FROM quotes WHERE client_id = $1", [id]);
+  await db.execute("DELETE FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1))", [id]);
+  await db.execute("DELETE FROM tasks WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1)", [id]);
+  await db.execute("DELETE FROM projects WHERE client_id = $1", [id]);
+  await db.execute("DELETE FROM client_contacts WHERE client_id = $1", [id]);
+  await db.execute("DELETE FROM clients WHERE id = $1", [id]);
+}
+
+export async function getClientContact(
+  id: number
+): Promise<ClientContact | null> {
+  const db = await getDb();
+  const rows = await db.select<ClientContact[]>(
+    "SELECT * FROM client_contacts WHERE id = $1",
+    [id]
+  );
+  return rows[0] ?? null;
 }
 
 export async function getClientContacts(
