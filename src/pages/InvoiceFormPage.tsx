@@ -6,7 +6,7 @@ import { addDays, format } from "date-fns";
 import { useT } from "../i18n/useT";
 import { useInvoice, useCreateInvoice, useUpdateInvoice, useDeleteInvoice } from "../db/hooks/useInvoices";
 import { useQueryClient } from "@tanstack/react-query";
-import { useClients } from "../db/hooks/useClients";
+import { useClients, useClientContacts } from "../db/hooks/useClients";
 import { useProjectsByClient } from "../db/hooks/useProjects";
 import { useTasksByProject } from "../db/hooks/useTasks";
 import { getNextInvoiceReference, getInvoiceLineItems } from "../db/queries/invoices";
@@ -43,6 +43,7 @@ export function InvoiceFormPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const [clientId, setClientId] = useState("");
+  const [contactId, setContactId] = useState<number | null>(null);
   const [projectId, setProjectId] = useState<number | null>(null);
   const [invoiceDate, setInvoiceDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [activity, setActivity] = useState("");
@@ -56,6 +57,7 @@ export function InvoiceFormPage() {
   useEffect(() => {
     if (existingInvoice) {
       setClientId(existingInvoice.client_id);
+      setContactId(existingInvoice.contact_id);
       setProjectId(existingInvoice.project_id);
       setInvoiceDate(existingInvoice.invoice_date);
       setActivity(existingInvoice.activity);
@@ -117,6 +119,7 @@ export function InvoiceFormPage() {
   const discountAmount = subtotal * discountRate;
   const total = subtotal - discountAmount;
 
+  const { data: clientContacts } = useClientContacts(clientId);
   const { data: clientProjects } = useProjectsByClient(clientId);
   const { data: projectTasks } = useTasksByProject(projectId ?? 0);
 
@@ -151,6 +154,7 @@ export function InvoiceFormPage() {
             data: {
               client_id: clientId,
               project_id: projectId,
+              contact_id: contactId,
               language: selectedClient?.language ?? "FR",
               activity,
               assignment,
@@ -182,6 +186,7 @@ export function InvoiceFormPage() {
               reference,
               client_id: clientId,
               project_id: projectId,
+              contact_id: contactId,
               status: "draft",
               language: selectedClient?.language ?? "FR",
               activity,
@@ -241,6 +246,7 @@ export function InvoiceFormPage() {
               value={clientId}
               onChange={(e) => {
                 setClientId(e.target.value);
+                setContactId(null);
                 setProjectId(null);
               }}
               className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
@@ -248,6 +254,21 @@ export function InvoiceFormPage() {
               <option value="">{t.select_client}</option>
               {clients?.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">{t.intended_for}</label>
+            <select
+              value={contactId ?? ""}
+              onChange={(e) => setContactId(e.target.value ? Number(e.target.value) : null)}
+              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+            >
+              <option value="">{t.none}</option>
+              {clientContacts?.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.first_name} {c.last_name}{c.role ? ` — ${c.role}` : ""}
+                </option>
               ))}
             </select>
           </div>

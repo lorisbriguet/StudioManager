@@ -18,6 +18,7 @@ export interface Invoice {
   discount_label: string;
   total: number;
   paid_date: string | null;
+  contact_id: number | null;
   po_number: string | null;
   pdf_path: string | null;
   from_quote_id: number | null;

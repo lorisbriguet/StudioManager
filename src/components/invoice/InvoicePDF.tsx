@@ -18,6 +18,7 @@ interface InvoicePDFProps {
   lineItems: InvoiceLineItem[];
   client: Client;
   profile: BusinessProfile;
+  contactName?: string;
 }
 
 // A4: 595.28 x 841.89pt — QR bill: 210x105mm = 595.28x297.64pt
@@ -190,6 +191,7 @@ export function InvoicePDF({
   lineItems,
   client,
   profile,
+  contactName,
 }: InvoicePDFProps) {
   const lang = (invoice.language as InvoiceLanguage) || "FR";
   const t = invoiceLabels[lang];
@@ -216,6 +218,7 @@ export function InvoicePDF({
               <Text>{profile.phone}</Text>
             </View>
             <View style={s.clientBlock}>
+              {contactName && <Text>{contactName}</Text>}
               <Text style={s.clientName}>{client.name}</Text>
               {client.address_line1 && <Text>{client.address_line1}</Text>}
               {client.address_line2 && <Text>{client.address_line2}</Text>}
