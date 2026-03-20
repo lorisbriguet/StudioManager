@@ -41,8 +41,7 @@ export function useCreateInvoice() {
       data: Omit<Invoice, "id" | "created_at" | "updated_at">;
       lineItems: Omit<InvoiceLineItem, "id" | "invoice_id">[];
     }) => {
-      const id = await q.createInvoice(data);
-      await q.setInvoiceLineItems(id, lineItems);
+      const id = await q.createInvoiceWithLineItems(data, lineItems);
       useUndoStore.getState().push({
         label: `Create invoice "${data.reference}"`,
         execute: async () => {
@@ -69,10 +68,7 @@ export function useUpdateInvoice() {
       lineItems?: Omit<InvoiceLineItem, "id" | "invoice_id">[];
     }) => {
       const prev = await q.getInvoice(id);
-      await q.updateInvoice(id, data);
-      if (lineItems) {
-        await q.setInvoiceLineItems(id, lineItems);
-      }
+      await q.updateInvoiceWithLineItems(id, data, lineItems);
 
       // Auto-generate PDF when status changes to "sent"
       if (data.status === "sent" && prev?.status !== "sent") {
@@ -96,7 +92,7 @@ export function useUpdateInvoice() {
         useUndoStore.getState().push({
           label: `Update invoice "${prev.reference}"`,
           execute: async () => {
-            await q.updateInvoice(id, prevData as Partial<Omit<Invoice, "id" | "created_at" | "updated_at">>);
+            await q.updateInvoiceWithLineItems(id, prevData as Partial<Omit<Invoice, "id" | "created_at" | "updated_at">>);
             qc.invalidateQueries({ queryKey: ["invoices"] });
           },
         });
