@@ -443,7 +443,7 @@ function QuickCreatePopup({
           setSubtaskTitle("");
           setTitle("");
         }}
-        className="w-full border border-gray-200 rounded px-2 py-1.5 text-xs mb-2"
+        className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-xs mb-2"
       >
         <option value="">{t.select_project}</option>
         {projects.map((p) => (
@@ -454,7 +454,7 @@ function QuickCreatePopup({
       {/* Task name with autocomplete */}
       <div className="relative mb-2">
         {selectedTask ? (
-          <div className="flex items-center gap-1 border border-accent/30 bg-accent-light rounded px-2 py-1.5">
+          <div className="flex items-center gap-1 border border-accent/30 bg-accent-light rounded-md px-2 py-1.5">
             <span className="text-xs flex-1 truncate">{selectedTask.title}</span>
             <button
               onClick={handleClearTask}
@@ -480,7 +480,7 @@ function QuickCreatePopup({
               }
             }}
             placeholder={t.new_task}
-            className="w-full border border-gray-200 rounded px-2 py-1.5 text-xs"
+            className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-xs"
           />
         )}
         {!selectedTask && showSuggestions && suggestions.length > 0 && (
@@ -509,7 +509,7 @@ function QuickCreatePopup({
             if (e.key === "Enter") handleSubmit();
           }}
           placeholder={t.new_subtask}
-          className="w-full border border-gray-200 rounded px-2 py-1.5 text-xs mb-2"
+          className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-xs mb-2"
         />
       )}
 

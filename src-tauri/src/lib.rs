@@ -27,6 +27,12 @@ pub fn run() {
             sql: include_str!("../migrations/004_subtasks.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 5,
+            description: "consolidate_schema",
+            sql: include_str!("../migrations/005_consolidate_schema.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
@@ -40,6 +46,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_window_state::Builder::new().build())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(

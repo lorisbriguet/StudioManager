@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Trash2, ArrowLeft, ListTodo } from "lucide-react";
+import { ListTodo, Trash2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { addDays, format } from "date-fns";
 import { useT } from "../i18n/useT";
@@ -13,15 +13,9 @@ import { getNextInvoiceReference, getInvoiceLineItems } from "../db/queries/invo
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { parseActivities } from "../types/business-profile";
 import { getQuote, getQuoteLineItems, updateQuote } from "../db/queries/quotes";
-
-
-interface LineItem {
-  designation: string;
-  rate: number | null;
-  unit: string | null;
-  quantity: number;
-  amount: number;
-}
+import { logError } from "../lib/log";
+import { makeLineItem, useLineItemForm, toPersistedLineItems } from "../lib/lineItems";
+import { LineItemsTable } from "../components/shared/LineItemsTable";
 
 export function InvoiceFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -50,9 +44,11 @@ export function InvoiceFormPage() {
   const [assignment, setAssignment] = useState("");
   const [poNumber, setPoNumber] = useState("");
   const [notes, setNotes] = useState("");
-  const [items, setItems] = useState<LineItem[]>([
-    { designation: "", rate: null, unit: null, quantity: 1, amount: 0 },
-  ]);
+
+  const {
+    items, setItems, sensors, lineItemIds, handleDragEnd,
+    addItem, removeItem, updateItem,
+  } = useLineItemForm();
 
   useEffect(() => {
     if (existingInvoice) {
@@ -67,7 +63,7 @@ export function InvoiceFormPage() {
       getInvoiceLineItems(invoiceId).then((lineItems) => {
         if (lineItems.length > 0) {
           setItems(
-            lineItems.map((li) => ({
+            lineItems.map((li) => makeLineItem({
               designation: li.designation,
               rate: li.rate,
               unit: li.unit,
@@ -76,7 +72,10 @@ export function InvoiceFormPage() {
             }))
           );
         }
-      }).catch((e) => console.error("Failed to load line items:", e));
+      }).catch((e) => {
+        logError("Failed to load line items:", e);
+        toast.error(t.failed_load_line_items);
+      });
     }
   }, [existingInvoice, invoiceId]);
 
@@ -101,7 +100,7 @@ export function InvoiceFormPage() {
       const lineItems = await getQuoteLineItems(fromQuoteId);
       if (lineItems.length > 0) {
         setItems(
-          lineItems.map((li) => ({
+          lineItems.map((li) => makeLineItem({
             designation: li.designation,
             rate: li.rate,
             unit: li.unit,
@@ -110,7 +109,10 @@ export function InvoiceFormPage() {
           }))
         );
       }
-    })().catch((e) => console.error("Failed to load quote:", e));
+    })().catch((e) => {
+      logError("Failed to load quote:", e);
+      toast.error(t.failed_load_line_items);
+    });
   }, [fromQuoteId, isEdit]);
 
   const selectedClient = clients?.find((c) => c.id === clientId);
@@ -123,28 +125,14 @@ export function InvoiceFormPage() {
   const { data: clientProjects } = useProjectsByClient(clientId);
   const { data: projectTasks } = useTasksByProject(projectId ?? 0);
 
-  const addItem = () =>
-    setItems([...items, { designation: "", rate: null, unit: null, quantity: 1, amount: 0 }]);
-
-  const removeItem = (i: number) => setItems(items.filter((_, idx) => idx !== i));
-
-  const updateItem = (i: number, field: keyof LineItem, value: unknown) => {
-    const updated = [...items];
-    (updated[i] as unknown as Record<string, unknown>)[field] = value;
-    if (field === "rate" || field === "quantity") {
-      const rate = updated[i].rate ?? 0;
-      updated[i].amount = rate * updated[i].quantity;
-    }
-    setItems(updated);
-  };
+  const availableTasks = projectTasks ?? [];
 
   const save = async () => {
     if (!clientId) return toast.error(t.toast_select_client);
     if (items.every((i) => !i.designation.trim())) return toast.error(t.add_line_item);
 
     const dueDate = format(addDays(new Date(invoiceDate), 30), "yyyy-MM-dd");
-
-    const lineItems = items.map((item, i) => ({ ...item, sort_order: i }));
+    const lineItems = toPersistedLineItems(items);
 
     try {
       if (isEdit) {
@@ -224,8 +212,6 @@ export function InvoiceFormPage() {
       toast.error(String(e));
     }
   };
-
-  const availableTasks = projectTasks ?? [];
 
   return (
     <div>
@@ -329,115 +315,50 @@ export function InvoiceFormPage() {
           </div>
         </div>
 
-        <div className="border border-gray-200 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-medium">{t.line_items}</h2>
-            <div className="flex items-center gap-3">
-              {availableTasks.length > 0 && (
-                <button
-                  onClick={() => {
-                    const existingDesignations = new Set(items.map((i) => i.designation));
-                    const newTasks = availableTasks.filter(
-                      (t) => !existingDesignations.has(t.title)
-                    );
-                    if (newTasks.length === 0) {
-                      toast.info(t.all_tasks_added);
-                      return;
-                    }
-                    const newItems = newTasks.map((t) => ({
-                      designation: t.title,
-                      rate: null,
-                      unit: null,
-                      quantity: 1,
-                      amount: 0,
-                    }));
-                    const nonEmpty = items.filter((i) => i.designation.trim());
-                    setItems(nonEmpty.length > 0 ? [...nonEmpty, ...newItems] : newItems);
-                  }}
-                  className="flex items-center gap-1 text-xs text-accent hover:underline"
-                >
-                  <ListTodo size={14} /> {t.add_tasks}
-                </button>
-              )}
-              <button onClick={addItem} className="flex items-center gap-1 text-xs text-accent hover:underline">
-                <Plus size={14} /> {t.add_line}
+        <LineItemsTable
+          items={items}
+          lineItemIds={lineItemIds}
+          sensors={sensors}
+          onDragEnd={handleDragEnd}
+          onAdd={addItem}
+          onRemove={removeItem}
+          onUpdate={updateItem}
+          subtotal={subtotal}
+          discountRate={discountRate}
+          discountAmount={discountAmount}
+          total={total}
+          headerActions={
+            availableTasks.length > 0 ? (
+              <button
+                onClick={() => {
+                  const existingDesignations = new Set(items.map((i) => i.designation));
+                  const newTasks = availableTasks.filter(
+                    (tk) => !existingDesignations.has(tk.title)
+                  );
+                  if (newTasks.length === 0) {
+                    toast.info(t.all_tasks_added);
+                    return;
+                  }
+                  const newItems = newTasks.map((tk) => makeLineItem({
+                    designation: tk.title,
+                  }));
+                  const nonEmpty = items.filter((i) => i.designation.trim());
+                  setItems(nonEmpty.length > 0 ? [...nonEmpty, ...newItems] : newItems);
+                }}
+                className="flex items-center gap-1 text-xs text-accent hover:underline"
+              >
+                <ListTodo size={14} /> {t.add_tasks}
               </button>
-            </div>
-          </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-muted">
-                <th className="text-left pb-2">{t.designation}</th>
-                <th className="text-right pb-2 w-24">{t.rate}</th>
-                <th className="text-right pb-2 w-20">{t.qty}</th>
-                <th className="text-right pb-2 w-28">{t.amount}</th>
-                <th className="w-8"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, i) => (
-                <tr key={i}>
-                  <td className="pr-2 py-1">
-                    <DesignationInput
-                      value={item.designation}
-                      onChange={(v: string) => updateItem(i, "designation", v)}
-                      tasks={availableTasks}
-                    />
-                  </td>
-                  <td className="px-1 py-1">
-                    <input
-                      type="number"
-                      value={item.rate ?? ""}
-                      onChange={(e) => updateItem(i, "rate", e.target.value ? Number(e.target.value) : null)}
-                      className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm text-right"
-                      placeholder="0"
-                    />
-                  </td>
-                  <td className="px-1 py-1">
-                    <input
-                      type="number"
-                      value={item.quantity}
-                      onChange={(e) => updateItem(i, "quantity", Number(e.target.value))}
-                      className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm text-right"
-                    />
-                  </td>
-                  <td className="px-1 py-1">
-                    <input
-                      type="number"
-                      value={item.amount}
-                      onChange={(e) => updateItem(i, "amount", Number(e.target.value))}
-                      className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm text-right"
-                    />
-                  </td>
-                  <td className="pl-1 py-1">
-                    {items.length > 1 && (
-                      <button onClick={() => removeItem(i)} className="text-muted hover:text-danger">
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="border-t border-gray-200 mt-3 pt-3 space-y-1 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted">{t.subtotal}</span>
-              <span>CHF {subtotal.toFixed(2)}</span>
-            </div>
-            {discountRate > 0 && (
-              <div className="flex justify-between text-muted">
-                <span>{t.cultural_discount} ({(discountRate * 100).toFixed(0)}%)</span>
-                <span>- CHF {discountAmount.toFixed(2)}</span>
-              </div>
-            )}
-            <div className="flex justify-between font-semibold text-base pt-1">
-              <span>{t.total}</span>
-              <span>CHF {total.toFixed(2)}</span>
-            </div>
-          </div>
-        </div>
+            ) : undefined
+          }
+          renderDesignation={(item, i) => (
+            <DesignationInput
+              value={item.designation}
+              onChange={(v: string) => updateItem(i, "designation", v)}
+              tasks={availableTasks}
+            />
+          )}
+        />
 
         <div>
           <label className="block text-xs font-medium text-muted mb-1">{t.notes}</label>
@@ -524,7 +445,7 @@ function DesignationInput({
   }, []);
 
   const filtered = tasks.filter(
-    (t) => t.title.toLowerCase().includes(value.toLowerCase()) && t.title !== value
+    (tk) => tk.title.toLowerCase().includes(value.toLowerCase()) && tk.title !== value
   );
 
   return (
@@ -538,17 +459,17 @@ function DesignationInput({
       />
       {open && filtered.length > 0 && (
         <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white dark:bg-gray-100 border border-gray-200 rounded-md shadow-lg max-h-40 overflow-y-auto">
-          {filtered.map((t) => (
+          {filtered.map((tk, idx) => (
             <button
-              key={t.title}
+              key={`${tk.title}-${idx}`}
               type="button"
               onClick={() => {
-                onChange(t.title);
+                onChange(tk.title);
                 setOpen(false);
               }}
               className="w-full text-left px-2 py-1.5 text-sm hover:bg-gray-50"
             >
-              {t.title}
+              {tk.title}
             </button>
           ))}
         </div>

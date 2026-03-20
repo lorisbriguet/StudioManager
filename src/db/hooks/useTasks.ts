@@ -8,6 +8,7 @@ import {
   deleteCalendarEvent,
 } from "../../lib/appleCalendar";
 import { useUndoStore } from "../../stores/undo-store";
+import { logError } from "../../lib/log";
 
 // Guards against concurrent calendar syncs for the same item
 const pendingTaskSyncs = new Set<number>();
@@ -49,7 +50,7 @@ function syncTaskCalendar(id: number) {
         }
       }
     } catch (e) {
-      console.error("Calendar sync failed:", e);
+      logError("Calendar sync failed:", e);
     } finally {
       pendingTaskSyncs.delete(id);
       _qc?.invalidateQueries({ queryKey: ["tasks"] });
@@ -91,7 +92,7 @@ function syncSubtaskCalendar(id: number) {
         }
       }
     } catch (e) {
-      console.error("Calendar sync failed:", e);
+      logError("Calendar sync failed:", e);
     } finally {
       pendingSubtaskSyncs.delete(id);
       _qc?.invalidateQueries({ queryKey: ["subtasks"] });
@@ -185,7 +186,7 @@ export function useDeleteTask() {
       const calId = useAppStore.getState().calendarSync ? prev?.calendar_event_id : null;
       await q.deleteTask(id);
       if (calId) {
-        deleteCalendarEvent(calId).catch((e) => console.error("Calendar sync failed:", e));
+        deleteCalendarEvent(calId).catch((e) => logError("Calendar sync failed:", e));
       }
       if (prev) {
         useUndoStore.getState().push({
@@ -276,7 +277,7 @@ export function useDeleteSubtask() {
       const calId = useAppStore.getState().calendarSync ? prev?.calendar_event_id : null;
       await q.deleteSubtask(id);
       if (calId) {
-        deleteCalendarEvent(calId).catch((e) => console.error("Calendar sync failed:", e));
+        deleteCalendarEvent(calId).catch((e) => logError("Calendar sync failed:", e));
       }
       if (prev) {
         useUndoStore.getState().push({
@@ -290,6 +291,14 @@ export function useDeleteSubtask() {
         });
       }
     },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["subtasks"] }),
+  });
+}
+
+export function useReorderSubtasks() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: number[]) => q.reorderSubtasks(ids),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["subtasks"] }),
   });
 }

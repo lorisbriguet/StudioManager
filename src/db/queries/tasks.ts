@@ -1,4 +1,4 @@
-import { getDb, validateFields } from "../index";
+import { getDb, validateFields, withTransaction } from "../index";
 import type { Task, Subtask } from "../../types/task";
 
 export async function getProjectName(projectId: number): Promise<string> {
@@ -145,6 +145,14 @@ export async function updateSubtask(
     `UPDATE subtasks SET ${sets}, updated_at = datetime('now') WHERE id = $1`,
     values
   );
+}
+
+export async function reorderSubtasks(ids: number[]): Promise<void> {
+  await withTransaction(async (db) => {
+    for (let i = 0; i < ids.length; i++) {
+      await db.execute("UPDATE subtasks SET sort_order = $1 WHERE id = $2", [i, ids[i]]);
+    }
+  });
 }
 
 export async function deleteSubtask(id: number): Promise<void> {

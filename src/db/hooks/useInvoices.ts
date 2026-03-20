@@ -4,6 +4,7 @@ import * as q from "../queries/invoices";
 import type { Invoice, InvoiceLineItem } from "../../types/invoice";
 import { useUndoStore } from "../../stores/undo-store";
 import { generateAndStoreInvoicePdf } from "../../lib/invoicePdfStore";
+import { logError } from "../../lib/log";
 
 export function useInvoices() {
   return useQuery({ queryKey: ["invoices"], queryFn: q.getInvoices });
@@ -75,12 +76,16 @@ export function useUpdateInvoice() {
 
       // Auto-generate PDF when status changes to "sent"
       if (data.status === "sent" && prev?.status !== "sent") {
-        generateAndStoreInvoicePdf(id).then(() => {
+        const toastId = toast.loading("Generating PDF...");
+        try {
+          await generateAndStoreInvoicePdf(id);
+          toast.dismiss(toastId);
           qc.invalidateQueries({ queryKey: ["invoices"] });
-        }).catch((e) => {
-          console.error("PDF generation failed:", e);
+        } catch (e) {
+          toast.dismiss(toastId);
+          logError("PDF generation failed:", e);
           toast.error("PDF generation failed");
-        });
+        }
       }
 
       if (prev) {

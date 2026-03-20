@@ -6,7 +6,26 @@ export async function getBusinessProfile(): Promise<BusinessProfile> {
   const rows = await db.select<BusinessProfile[]>(
     "SELECT * FROM business_profile WHERE id = 1"
   );
-  return rows[0];
+  return rows[0] ?? {
+    id: 1,
+    owner_name: "",
+    address: "",
+    postal_code: "",
+    city: "",
+    country: "",
+    email: "",
+    phone: "",
+    ide_number: "",
+    affiliate_number: "",
+    bank_name: "",
+    bank_address: "",
+    iban: "",
+    clearing: "",
+    bic_swift: "",
+    default_activity: "[]",
+    vat_exempt: 0,
+    default_payment_terms_days: 30,
+  } as BusinessProfile;
 }
 
 export async function updateBusinessProfile(

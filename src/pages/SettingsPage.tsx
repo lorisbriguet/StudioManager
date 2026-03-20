@@ -4,13 +4,15 @@ import { toast } from "sonner";
 import { Moon, Sun, Monitor, FolderOpen, HardDrive, ChevronDown, RotateCcw } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { purgeAllCalendarEvents, syncAllExisting, listWritableCalendars } from "../lib/appleCalendar";
-import { createBackup, listBackups, restoreFromBackup } from "../lib/backup";
+import { createBackup, listBackups, restoreFromBackup, validateBackupPath, isBackupRunning, setBackupRunning } from "../lib/backup";
 import { useAppStore, ACCENT_PRESETS, type DateFormatOption, type AccentPreset, type ProjectOpenMode } from "../stores/app-store";
 import { useT } from "../i18n/useT";
 import type { AppLanguage } from "../i18n/ui";
 import { UpdateChecker } from "../components/UpdateChecker";
+import { WorkloadTemplateManager } from "../components/workload/WorkloadTemplateManager";
+import { logError } from "../lib/log";
 
-type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "updates" | "backup";
+type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "workload" | "updates" | "backup";
 
 export function SettingsPage() {
   const darkMode = useAppStore((s) => s.darkMode);
@@ -64,7 +66,7 @@ export function SettingsPage() {
         const count = await syncAllExisting();
         if (count > 0) toast.success(`Synced ${count} events to Apple Calendar`);
       } catch (e) {
-        console.error("Sync failed:", e);
+        logError("Sync failed:", e);
         toast.error(t.toast_failed_sync);
       } finally {
         setSyncing(false);
@@ -75,6 +77,11 @@ export function SettingsPage() {
   const browseBackupDir = async (secondary?: boolean) => {
     const dir = await open({ directory: true, title: t.backup_directory });
     if (typeof dir === "string") {
+      const writable = await validateBackupPath(dir);
+      if (!writable) {
+        toast.error(t.backup_path_not_writable);
+        return;
+      }
       if (secondary) setBackupPath2(dir);
       else setBackupPath(dir);
     }
@@ -85,7 +92,12 @@ export function SettingsPage() {
       toast.error(t.toast_backup_dir_first);
       return;
     }
+    if (isBackupRunning()) {
+      toast.error(t.backup_already_running);
+      return;
+    }
     setBacking(true);
+    setBackupRunning(true);
     try {
       const path = await createBackup(backupPath, maxBackups);
       if (backupPath2) {
@@ -96,6 +108,7 @@ export function SettingsPage() {
       toast.error(`Backup failed: ${String(e)}`);
     } finally {
       setBacking(false);
+      setBackupRunning(false);
     }
   };
 
@@ -121,7 +134,10 @@ export function SettingsPage() {
     if (!confirm(t.restore_confirm)) return;
     setRestoring(true);
     try {
-      await restoreFromBackup(`${backupPath}/${selectedBackup}`);
+      const warnings = await restoreFromBackup(`${backupPath}/${selectedBackup}`);
+      if (warnings.length > 0) {
+        toast.warning(`${t.restore_warnings} ${warnings.join(", ")}`, { duration: 8000 });
+      }
       toast.success(t.toast_restore_success);
       setTimeout(() => window.location.reload(), 1500);
     } catch (e) {
@@ -136,6 +152,7 @@ export function SettingsPage() {
     { key: "appearance", label: t.appearance },
     { key: "behavior", label: t.behavior },
     { key: "calendar", label: t.calendar_sync },
+    { key: "workload", label: t.workload_templates },
     { key: "updates", label: t.updates },
     { key: "backup", label: t.backup },
   ];
@@ -409,7 +426,19 @@ export function SettingsPage() {
                     {syncing ? t.syncing : t.sync_to_apple}
                   </span>
                 </label>
+                <p className="text-xs text-muted mt-3">
+                  {t.calendar_permission_help}
+                </p>
               </div>
+            </section>
+          )}
+
+          {activeCategory === "workload" && (
+            <section>
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted mb-4">
+                {t.workload_templates}
+              </h2>
+              <WorkloadTemplateManager />
             </section>
           )}
 

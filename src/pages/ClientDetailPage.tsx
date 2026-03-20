@@ -552,7 +552,7 @@ function MiniField({
         onBlur={() => {
           if (onBlur && local !== value) onChange(local);
         }}
-        className="w-full border border-gray-200 rounded px-2 py-1 text-sm"
+        className="w-full border border-gray-200 rounded-md px-2 py-1 text-sm"
       />
     </div>
   );

@@ -21,6 +21,13 @@ import {
 } from "lucide-react";
 import { formatDisplayDate } from "../utils/formatDate";
 import { useT } from "../i18n/useT";
+
+/** Parse a date string safely — handles both "yyyy-MM-dd" and full ISO timestamps */
+function parseLocalDate(dateStr: string): Date {
+  // If it already contains "T", it's a full timestamp — just extract the date part
+  const datePart = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr;
+  return new Date(datePart + "T00:00:00");
+}
 import type { ReminderOption } from "../types/task";
 
 interface TaskDatePickerProps {
@@ -63,7 +70,7 @@ export function TaskDatePicker({
   const t = useT();
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState(() =>
-    dueDate ? new Date(dueDate + "T00:00:00") : new Date()
+    dueDate ? parseLocalDate(dueDate) : new Date()
   );
   const [showEndDate, setShowEndDate] = useState(!!endDate);
   const [showTime, setShowTime] = useState(!!(startTime || endTime));
@@ -71,8 +78,8 @@ export function TaskDatePicker({
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const selectedDate = dueDate ? new Date(dueDate + "T00:00:00") : undefined;
-  const selectedEndDate = endDate ? new Date(endDate + "T00:00:00") : undefined;
+  const selectedDate = dueDate ? parseLocalDate(dueDate) : undefined;
+  const selectedEndDate = endDate ? parseLocalDate(endDate) : undefined;
 
   // Position popover relative to trigger
   useLayoutEffect(() => {
@@ -108,14 +115,14 @@ export function TaskDatePicker({
 
   // Sync month when date changes externally
   useEffect(() => {
-    if (dueDate) setMonth(new Date(dueDate + "T00:00:00"));
+    if (dueDate) setMonth(parseLocalDate(dueDate));
   }, [dueDate]);
 
   const handleDayClick = (day: Date) => {
     const dateStr = format(day, "yyyy-MM-dd");
     if (showEndDate && dueDate && !endDate) {
       // Second click sets end date
-      if (day >= new Date(dueDate + "T00:00:00")) {
+      if (day >= parseLocalDate(dueDate)) {
         onChange({ end_date: dateStr });
       } else {
         onChange({ due_date: dateStr, end_date: dueDate });
@@ -124,7 +131,7 @@ export function TaskDatePicker({
       onChange({ due_date: dateStr });
       if (endDate) {
         // Reset end date if new start is after current end
-        if (day > new Date(endDate + "T00:00:00")) {
+        if (day > parseLocalDate(endDate)) {
           onChange({ due_date: dateStr, end_date: null });
         }
       }

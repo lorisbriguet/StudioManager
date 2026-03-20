@@ -140,7 +140,7 @@ export function InvoicesPage() {
                             className="inline-flex items-center gap-1.5 text-muted hover:text-accent"
                             title="Edit"
                           >
-                            <Pencil size={13} />
+                            <Pencil size={14} />
                           </Link>
                           <span className="ml-1.5">{inv.reference}</span>
                         </td>
@@ -186,7 +186,7 @@ export function InvoicesPage() {
                             className="text-muted hover:text-accent"
                             title="Preview PDF"
                           >
-                            <Eye size={15} />
+                            <Eye size={14} />
                           </Link>
                         </td>
                       </tr>

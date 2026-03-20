@@ -1,7 +1,23 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Plus, ChevronRight, Trash2 } from "lucide-react";
+import { Plus, ChevronRight, ChevronDown, Trash2, GripVertical } from "lucide-react";
 import { toast } from "sonner";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  sortableKeyboardCoordinates,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useProject, useUpdateProject } from "../db/hooks/useProjects";
 import { useClient } from "../db/hooks/useClients";
 import {
@@ -13,8 +29,17 @@ import {
   useUpdateSubtask,
   useDeleteTask,
   useDeleteSubtask,
+  useReorderSubtasks,
 } from "../db/hooks/useTasks";
 import { TaskDatePicker } from "./TaskDatePicker";
+import { WorkloadTable } from "./workload/WorkloadTable";
+import { WorkloadColumnEditor } from "./workload/WorkloadColumnEditor";
+import {
+  useProjectWorkloadConfig,
+  useSetProjectWorkloadConfig,
+} from "../db/hooks/useWorkload";
+import type { WorkloadColumn } from "../types/workload";
+import { DEFAULT_WORKLOAD_COLUMNS } from "../types/workload";
 import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { useT } from "../i18n/useT";
@@ -36,6 +61,12 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
   const updateSubtask = useUpdateSubtask();
   const deleteTask = useDeleteTask();
   const deleteSubtask = useDeleteSubtask();
+  const reorderSubtasks = useReorderSubtasks();
+
+  const subtaskSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   const [status, setStatus] = useState<ProjectStatus>("active");
   const [newTask, setNewTask] = useState("");
@@ -44,7 +75,38 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
   const [editingTask, setEditingTask] = useState<number | null>(null);
   const [editingSubtask, setEditingSubtask] = useState<number | null>(null);
   const [taskFilter, setTaskFilter] = useState<"todo" | "done" | "all">("todo");
+  const [tasksOpen, setTasksOpen] = useState(true);
+  const [editingColumn, setEditingColumn] = useState<{
+    column: WorkloadColumn | null;
+    index: number;
+  } | null>(null);
+  const { data: wlConfig } = useProjectWorkloadConfig(projectId);
+  const setWlConfig = useSetProjectWorkloadConfig(projectId);
   const t = useT();
+
+  const wlColumns = wlConfig?.columns ?? DEFAULT_WORKLOAD_COLUMNS;
+  const wlTemplateId = wlConfig?.template_id ?? null;
+
+  const handleSaveColumn = useCallback(
+    (col: WorkloadColumn) => {
+      const next = [...wlColumns];
+      if (editingColumn && editingColumn.column) {
+        // Editing existing
+        next[editingColumn.index] = col;
+      } else {
+        // Adding new
+        next.push(col);
+      }
+      setWlConfig.mutate({ templateId: wlTemplateId, columns: next });
+    },
+    [wlColumns, wlTemplateId, editingColumn, setWlConfig]
+  );
+
+  const handleDeleteColumn = useCallback(() => {
+    if (editingColumn === null) return;
+    const next = wlColumns.filter((_, i) => i !== editingColumn.index);
+    setWlConfig.mutate({ templateId: wlTemplateId, columns: next });
+  }, [wlColumns, wlTemplateId, editingColumn, setWlConfig]);
 
   useEffect(() => {
     if (project) setStatus(project.status);
@@ -189,24 +251,33 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
 
       <div className="border border-gray-200 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium">{t.tasks}</h3>
-          <div className="flex gap-1">
-            {(["todo", "done", "all"] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setTaskFilter(f)}
-                className={`px-2 py-0.5 text-[11px] rounded-full border ${
-                  taskFilter === f
-                    ? "bg-accent text-white border-accent"
-                    : "border-gray-200 text-muted hover:bg-gray-50"
-                }`}
-              >
-                {f === "todo" ? t.todo : f === "done" ? t.done : t.all}
-              </button>
-            ))}
-          </div>
+          <button
+            onClick={() => setTasksOpen(!tasksOpen)}
+            className="flex items-center gap-1 text-sm font-medium hover:text-accent"
+          >
+            {tasksOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            {t.tasks}
+          </button>
+          {tasksOpen && (
+            <div className="flex gap-1">
+              {(["todo", "done", "all"] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setTaskFilter(f)}
+                  className={`px-2 py-0.5 text-[11px] rounded-full border ${
+                    taskFilter === f
+                      ? "bg-accent text-white border-accent"
+                      : "border-gray-200 text-muted hover:bg-gray-50"
+                  }`}
+                >
+                  {f === "todo" ? t.todo : f === "done" ? t.done : t.all}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
+        {tasksOpen && (<>
         <div className="flex gap-2 mb-3">
           <input
             placeholder={t.new_task}
@@ -218,7 +289,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
             className="flex-1 border border-gray-200 rounded-md px-3 py-1.5 text-sm"
           />
           <button onClick={addTask} className="p-1.5 text-muted hover:text-accent">
-            <Plus size={18} />
+            <Plus size={16} />
           </button>
         </div>
 
@@ -308,7 +379,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                     onClick={() => deleteTask.mutate(tk.id, {
                       onSuccess: () => toast.success(t.toast_task_deleted),
                     })}
-                    className="opacity-0 group-hover/task:opacity-100 text-muted hover:text-red-600 transition-opacity p-0.5"
+                    className="shrink-0 opacity-0 pointer-events-none group-hover/task:opacity-100 group-hover/task:pointer-events-auto text-muted hover:text-red-600 transition-opacity p-0.5"
                     title={t.delete}
                   >
                     <Trash2 size={14} />
@@ -316,8 +387,26 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                 </div>
                 {isExpanded && (
                   <div className="ml-9 border-l border-gray-200 pl-3 pb-1">
+                    <DndContext
+                      sensors={subtaskSensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={(event: DragEndEvent) => {
+                        const { active, over } = event;
+                        if (!over || active.id === over.id) return;
+                        if (typeof active.id !== "number" || typeof over.id !== "number") return;
+                        const ids = filteredSubtasks.map((s) => s.id);
+                        const fromIdx = ids.indexOf(active.id);
+                        const toIdx = ids.indexOf(over.id);
+                        if (fromIdx !== -1 && toIdx !== -1) {
+                          ids.splice(fromIdx, 1);
+                          ids.splice(toIdx, 0, active.id);
+                          reorderSubtasks.mutate(ids);
+                        }
+                      }}
+                    >
+                    <SortableContext items={filteredSubtasks.map((s) => s.id)} strategy={verticalListSortingStrategy}>
                     {filteredSubtasks.map((s) => (
-                      <div key={s.id} className="flex items-center gap-2 py-1 group/sub">
+                      <SortableSubtaskRow key={s.id} id={s.id}>
                         <input
                           type="checkbox"
                           checked={s.status === "done"}
@@ -369,13 +458,15 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                           onClick={() => deleteSubtask.mutate(s.id, {
                             onSuccess: () => toast.success(t.toast_subtask_deleted),
                           })}
-                          className="opacity-0 group-hover/sub:opacity-100 text-muted hover:text-red-600 transition-opacity p-0.5"
+                          className="shrink-0 opacity-0 pointer-events-none group-hover/sub:opacity-100 group-hover/sub:pointer-events-auto text-muted hover:text-red-600 transition-opacity p-0.5"
                           title={t.delete}
                         >
                           <Trash2 size={14} />
                         </button>
-                      </div>
+                      </SortableSubtaskRow>
                     ))}
+                    </SortableContext>
+                    </DndContext>
                     <div className="flex gap-1.5 mt-1">
                       <input
                         placeholder={t.new_subtask}
@@ -448,7 +539,50 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
             <div className="text-sm text-muted py-4 text-center">{t.no_tasks_yet}</div>
           )}
         </div>
+        </>)}
       </div>
+
+      {/* Workload Tracker */}
+      <div className="mt-4">
+        <WorkloadTable
+          projectId={projectId}
+          onEditColumn={(col, idx) => setEditingColumn({ column: col, index: idx })}
+        />
+      </div>
+
+      {editingColumn !== null && (
+        <WorkloadColumnEditor
+          column={editingColumn.column}
+          existingKeys={wlColumns.map((c) => c.key)}
+          onSave={handleSaveColumn}
+          onDelete={editingColumn.column ? handleDeleteColumn : undefined}
+          onClose={() => setEditingColumn(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function SortableSubtaskRow({ id, children }: { id: number; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : undefined,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center gap-2 py-1 group/sub">
+      <div
+        {...attributes}
+        {...listeners}
+        className="cursor-grab text-gray-300 hover:text-gray-600 opacity-0 group-hover/sub:opacity-100 shrink-0"
+        aria-label="Drag to reorder"
+      >
+        <GripVertical size={14} />
+      </div>
+      {children}
     </div>
   );
 }
