@@ -1,4 +1,4 @@
-import { getDb, validateFields } from "../index";
+import { getDb, validateFields, withTransaction } from "../index";
 import type { Quote, QuoteLineItem } from "../../types/quote";
 
 export async function getQuotes(): Promise<Quote[]> {
@@ -81,13 +81,14 @@ export async function setQuoteLineItems(
   quoteId: number,
   items: Omit<QuoteLineItem, "id" | "quote_id">[]
 ): Promise<void> {
-  const db = await getDb();
-  await db.execute("DELETE FROM quote_line_items WHERE quote_id = $1", [quoteId]);
-  for (const item of items) {
-    await db.execute(
-      `INSERT INTO quote_line_items (quote_id, designation, rate, unit, quantity, amount, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [quoteId, item.designation, item.rate, item.unit, item.quantity, item.amount, item.sort_order]
-    );
-  }
+  await withTransaction(async (db) => {
+    await db.execute("DELETE FROM quote_line_items WHERE quote_id = $1", [quoteId]);
+    for (const item of items) {
+      await db.execute(
+        `INSERT INTO quote_line_items (quote_id, designation, rate, unit, quantity, amount, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [quoteId, item.designation, item.rate, item.unit, item.quantity, item.amount, item.sort_order]
+      );
+    }
+  });
 }

@@ -78,7 +78,7 @@ export function QuotesPage() {
         <h1 className="text-xl font-semibold">{t.quotes}</h1>
         <Link
           to="/quotes/new"
-          className="flex items-center gap-1.5 px-3 py-2 bg-accent text-white text-sm rounded-md hover:bg-accent-hover"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover"
         >
           <Plus size={16} /> {t.new_quote}
         </Link>
@@ -90,7 +90,7 @@ export function QuotesPage() {
           placeholder={t.search_quotes}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="border border-gray-200 rounded-md px-3 py-2 text-sm w-64"
+          className="border border-gray-200 rounded-md px-3 py-1.5 text-sm w-64"
         />
       </div>
 
@@ -116,7 +116,7 @@ export function QuotesPage() {
                     title={t.edit}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <Pencil size={13} className="inline" />
+                    <Pencil size={14} className="inline" />
                   </Link>
                   <span className="font-medium ml-1.5 align-middle">{q.reference}</span>
                 </td>

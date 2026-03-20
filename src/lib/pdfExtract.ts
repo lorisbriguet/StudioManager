@@ -1,4 +1,5 @@
 import { Command } from "@tauri-apps/plugin-shell";
+import { logError } from "./log";
 
 /**
  * Extract text from a PDF using macOS built-in JXA (JavaScript for Automation)
@@ -33,7 +34,7 @@ if (!doc || doc.isNil()) { ''; } else {
   ]);
 
   if (result.code !== 0) {
-    console.error("PDF extraction failed:", result.stderr);
+    logError("PDF extraction failed:", result.stderr);
     return "";
   }
 

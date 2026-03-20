@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { useT } from "../i18n/useT";
+import { logError } from "../lib/log";
 
 export function UpdateChecker() {
   const t = useT();
@@ -20,7 +21,7 @@ export function UpdateChecker() {
         setStatus("none");
       }
     } catch (e) {
-      console.error("Update check failed:", e);
+      logError("Update check failed:", e);
       setStatus("error");
     }
   };
@@ -49,7 +50,7 @@ export function UpdateChecker() {
 
       setStatus("ready");
     } catch (e) {
-      console.error("Update download failed:", e);
+      logError("Update download failed:", e);
       setStatus("error");
     }
   };

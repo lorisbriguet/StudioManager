@@ -9,6 +9,28 @@ import {
   remove,
 } from "@tauri-apps/plugin-fs";
 import { appDataDir } from "@tauri-apps/api/path";
+import { logWarn, logInfo } from "./log";
+
+/** Shared lock to prevent concurrent backup operations (auto + manual) */
+let _backupRunning = false;
+export function isBackupRunning(): boolean {
+  return _backupRunning;
+}
+export function setBackupRunning(v: boolean): void {
+  _backupRunning = v;
+}
+
+/** Test if a directory is writable by creating and removing a temp file */
+export async function validateBackupPath(dir: string): Promise<boolean> {
+  const testPath = `${dir}/.sm-write-test-${Date.now()}`;
+  try {
+    await writeFile(testPath, new Uint8Array([0]));
+    await remove(testPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const TABLES = [
   "business_profile",
@@ -256,8 +278,9 @@ const INSERT_ORDER = [
   "notifications",
 ];
 
-/** Restore the database and files from a backup folder */
-export async function restoreFromBackup(backupPath: string): Promise<void> {
+/** Restore the database and files from a backup folder.
+ *  Returns an array of integrity warnings (empty = all good). */
+export async function restoreFromBackup(backupPath: string): Promise<string[]> {
   const db = await getDb();
   const dataDir = `${backupPath}/data`;
 
@@ -296,12 +319,38 @@ export async function restoreFromBackup(backupPath: string): Promise<void> {
         try {
           await db.execute(sql, values);
         } catch (e) {
-          console.warn(`Restore: failed to insert into ${table}:`, e);
+          logWarn(`Restore: failed to insert into ${table}:`, e);
         }
       }
     }
   } finally {
     await db.execute("PRAGMA foreign_keys = ON");
+  }
+
+  // Integrity check: compare row counts
+  const warnings: string[] = [];
+  for (const table of INSERT_ORDER) {
+    const csvPath = `${dataDir}/${table}.csv`;
+    if (!(await exists(csvPath))) continue;
+    const csv = await readTextFile(csvPath);
+    const expectedCount = parseCsv(csv).length;
+    if (expectedCount === 0) continue;
+    try {
+      const result = await db.select<{ cnt: number }[]>(
+        `SELECT COUNT(*) as cnt FROM ${table}`
+      );
+      const actualCount = result[0]?.cnt ?? 0;
+      if (actualCount < expectedCount) {
+        warnings.push(`${table}: expected ${expectedCount} rows, got ${actualCount}`);
+      }
+    } catch {
+      // table may not exist
+    }
+  }
+  if (warnings.length > 0) {
+    logWarn("Restore integrity warnings:", warnings.join("; "));
+  } else {
+    logInfo("Restore integrity check passed for all tables");
   }
 
   // Restore receipt files
@@ -340,4 +389,6 @@ export async function restoreFromBackup(backupPath: string): Promise<void> {
       // non-critical
     }
   }
+
+  return warnings;
 }

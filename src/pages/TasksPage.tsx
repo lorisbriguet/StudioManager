@@ -1,7 +1,23 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Search, ChevronRight, Plus, ArrowUp, ArrowDown, Trash2 } from "lucide-react";
+import { Search, ChevronRight, Plus, GripVertical, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  sortableKeyboardCoordinates,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useAllTasks, useUpdateTask, useCreateTask, useDeleteTask, useCreateSubtask, useUpdateSubtask, useDeleteSubtask } from "../db/hooks/useTasks";
 import { getAllSubtasks } from "../db/queries/tasks";
 import { useQuery } from "@tanstack/react-query";
@@ -91,16 +107,29 @@ export function TasksPage() {
     return result;
   }, [tasks, projects, clients, filter, search, projectOrder]);
 
-  const moveProject = (projectId: number, direction: -1 | 1) => {
-    const ids = grouped.map((g) => g.projectId);
-    const idx = ids.indexOf(projectId);
-    const newIdx = idx + direction;
-    if (newIdx < 0 || newIdx >= ids.length) return;
-    ids.splice(idx, 1);
-    ids.splice(newIdx, 0, projectId);
-    setProjectOrder(ids);
-    localStorage.setItem("tasksProjectOrder", JSON.stringify(ids));
-  };
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const projectIds = useMemo(() => grouped.map((g) => g.projectId), [grouped]);
+
+  const handleProjectDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+      if (typeof active.id !== "number" || typeof over.id !== "number") return;
+      const ids = grouped.map((g) => g.projectId);
+      const fromIdx = ids.indexOf(active.id);
+      const toIdx = ids.indexOf(over.id);
+      if (fromIdx === -1 || toIdx === -1) return;
+      ids.splice(fromIdx, 1);
+      ids.splice(toIdx, 0, active.id);
+      setProjectOrder(ids);
+      localStorage.setItem("tasksProjectOrder", JSON.stringify(ids));
+    },
+    [grouped]
+  );
 
   const statusTabs: { value: TaskStatus | "all"; label: string }[] = [
     { value: "all", label: t.all },
@@ -141,29 +170,14 @@ export function TasksPage() {
         </div>
       </div>
 
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleProjectDragEnd}>
+      <SortableContext items={projectIds} strategy={verticalListSortingStrategy}>
       <div className="space-y-4">
-        {grouped.map((g, gi) => (
-          <div
-            key={g.projectId}
-            className="border border-gray-200 rounded-lg overflow-hidden"
-          >
+        {grouped.map((g) => (
+          <SortableProjectGroup key={g.projectId} id={g.projectId}>
+            {({ attributes, listeners }) => (<>
             <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center gap-2">
-              <div className="flex flex-col shrink-0 -my-1">
-                <button
-                  onClick={(e) => { e.stopPropagation(); moveProject(g.projectId, -1); }}
-                  disabled={gi === 0}
-                  className="text-gray-300 hover:text-gray-600 disabled:opacity-20 disabled:cursor-default p-0 leading-none"
-                >
-                  <ArrowUp size={12} />
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); moveProject(g.projectId, 1); }}
-                  disabled={gi === grouped.length - 1}
-                  className="text-gray-300 hover:text-gray-600 disabled:opacity-20 disabled:cursor-default p-0 leading-none"
-                >
-                  <ArrowDown size={12} />
-                </button>
-              </div>
+              <DragHandle attributes={attributes} listeners={listeners} />
               <button
                 onClick={() => {
                   const next = new Set(collapsedProjects);
@@ -487,10 +501,11 @@ export function TasksPage() {
                 }}
                 className="p-1.5 text-muted hover:text-accent"
               >
-                <Plus size={18} />
+                <Plus size={16} />
               </button>
             </div>}
-          </div>
+            </>)}
+          </SortableProjectGroup>
         ))}
         {grouped.length === 0 && (
           <div className="text-sm text-muted text-center py-8">
@@ -498,6 +513,41 @@ export function TasksPage() {
           </div>
         )}
       </div>
+      </SortableContext>
+      </DndContext>
+    </div>
+  );
+}
+
+type SortableReturn = ReturnType<typeof useSortable>;
+
+function SortableProjectGroup({ id, children }: { id: number; children: (dragHandleProps: { attributes: SortableReturn["attributes"]; listeners: SortableReturn["listeners"] }) => React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+    zIndex: isDragging ? 50 : undefined,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="border border-gray-200 rounded-lg overflow-hidden">
+      {children({ attributes, listeners })}
+    </div>
+  );
+}
+
+function DragHandle({ attributes, listeners }: { attributes: SortableReturn["attributes"]; listeners: SortableReturn["listeners"] }) {
+  const t = useT();
+  return (
+    <div
+      {...attributes}
+      {...listeners}
+      className="cursor-grab text-gray-300 hover:text-gray-600 shrink-0 -my-1 p-0.5"
+      aria-label={t.drag_to_reorder}
+    >
+      <GripVertical size={14} />
     </div>
   );
 }

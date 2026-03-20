@@ -6,6 +6,7 @@ import { InvoicePDF } from "../components/invoice/InvoicePDF";
 import { getInvoice, getInvoiceLineItems, updateInvoice } from "../db/queries/invoices";
 import { getClient, getClientContact } from "../db/queries/clients";
 import { getBusinessProfile } from "../db/queries/business-profile";
+import { logError } from "./log";
 
 /**
  * Generate an invoice PDF and store it in the app data directory.
@@ -63,7 +64,7 @@ export async function generateAndStoreInvoicePdf(
 
     return filePath;
   } catch (e) {
-    console.error("Failed to generate/store invoice PDF:", e);
+    logError("Failed to generate/store invoice PDF:", e);
     return null;
   }
 }

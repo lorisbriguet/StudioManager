@@ -1,7 +1,9 @@
 import { useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { ErrorBoundary } from "react-error-boundary";
 import { Toaster, toast } from "sonner";
+import { ErrorFallback } from "./components/ErrorFallback";
 import { MainLayout } from "./components/layout/MainLayout";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ClientsPage } from "./pages/ClientsPage";
@@ -25,13 +27,13 @@ import { CommandPalette } from "./components/CommandPalette";
 import { useOverdueCheck } from "./hooks/useOverdueCheck";
 import { useAutoBackup } from "./hooks/useAutoBackup";
 import { useErrorNotifications } from "./hooks/useErrorNotifications";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useUndoStore } from "./stores/undo-store";
+import { logError } from "./lib/log";
 
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { retry: 1, refetchOnWindowFocus: false },
-  },
-});
+import { queryClient } from "./lib/queryClient";
+// Re-export so existing imports from "./App" still work
+export { queryClient };
 
 function StartupChecks() {
   useOverdueCheck();
@@ -51,7 +53,7 @@ function StartupChecks() {
           Promise.resolve(action.execute()).then(() => {
             toast.success(`Undo: ${action.label}`);
           }).catch((e) => {
-            console.error("Undo failed:", e);
+            logError("Undo failed:", e);
             toast.error("Undo failed");
           });
         }
@@ -69,33 +71,36 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <StartupChecks />
       <BrowserRouter>
-        <Routes>
-          <Route element={<MainLayout />}>
-            <Route index element={<DashboardPage />} />
-            <Route path="clients" element={<ClientsPage />} />
-            <Route path="clients/:id" element={<ClientDetailPage />} />
-            <Route path="projects" element={<ProjectsPage />} />
-            <Route path="projects/:id" element={<ProjectDetailPage />} />
-            <Route path="tasks" element={<TasksPage />} />
-            <Route path="calendar" element={<CalendarPage />} />
-            <Route path="invoices" element={<InvoicesPage />} />
-            <Route path="invoices/new" element={<InvoiceFormPage />} />
-            <Route path="invoices/:id/edit" element={<InvoiceFormPage />} />
-            <Route path="invoices/:id/preview" element={<InvoicePreviewPage />} />
-            <Route path="quotes" element={<QuotesPage />} />
-            <Route path="quotes/new" element={<QuoteFormPage />} />
-            <Route path="quotes/:id/edit" element={<QuoteFormPage />} />
-            <Route path="quotes/:id/preview" element={<QuotePreviewPage />} />
-            <Route path="expenses" element={<ExpensesPage />} />
-            <Route path="finances" element={<FinancesPage />} />
-            <Route path="notifications" element={<NotificationsPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="profile" element={<ProfilePage />} />
-          </Route>
-        </Routes>
-        <CommandPalette />
+        <ErrorBoundary FallbackComponent={ErrorFallback}>
+          <Routes>
+            <Route element={<MainLayout />}>
+              <Route index element={<DashboardPage />} />
+              <Route path="clients" element={<ClientsPage />} />
+              <Route path="clients/:id" element={<ClientDetailPage />} />
+              <Route path="projects" element={<ProjectsPage />} />
+              <Route path="projects/:id" element={<ProjectDetailPage />} />
+              <Route path="tasks" element={<TasksPage />} />
+              <Route path="calendar" element={<CalendarPage />} />
+              <Route path="invoices" element={<InvoicesPage />} />
+              <Route path="invoices/new" element={<InvoiceFormPage />} />
+              <Route path="invoices/:id/edit" element={<InvoiceFormPage />} />
+              <Route path="invoices/:id/preview" element={<InvoicePreviewPage />} />
+              <Route path="quotes" element={<QuotesPage />} />
+              <Route path="quotes/new" element={<QuoteFormPage />} />
+              <Route path="quotes/:id/edit" element={<QuoteFormPage />} />
+              <Route path="quotes/:id/preview" element={<QuotePreviewPage />} />
+              <Route path="expenses" element={<ExpensesPage />} />
+              <Route path="finances" element={<FinancesPage />} />
+              <Route path="notifications" element={<NotificationsPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="profile" element={<ProfilePage />} />
+            </Route>
+          </Routes>
+          <CommandPalette />
+        </ErrorBoundary>
       </BrowserRouter>
       <Toaster position="bottom-right" />
+      <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
     </QueryClientProvider>
   );
 }

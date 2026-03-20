@@ -1,16 +1,17 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useAppStore } from "../stores/app-store";
-import { createBackup } from "../lib/backup";
+import { createBackup, isBackupRunning, setBackupRunning } from "../lib/backup";
 import { createNotification } from "../db/queries/notifications";
+import { queryClient } from "../lib/queryClient";
+import { logError } from "../lib/log";
 
 export function useAutoBackup() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const runningRef = useRef(false);
 
   useEffect(() => {
     const check = () => {
-      if (runningRef.current) return;
+      if (isBackupRunning()) return;
       const {
         autoBackupInterval,
         backupPath,
@@ -27,14 +28,14 @@ export function useAutoBackup() {
       const intervalMs = autoBackupInterval * 60 * 1000;
 
       if (elapsed >= intervalMs) {
-        runningRef.current = true;
+        setBackupRunning(true);
         createBackup(backupPath, maxBackups)
           .then(async (path) => {
             if (backupPath2) {
               try {
                 await createBackup(backupPath2, maxBackups);
               } catch (e) {
-                console.error("Auto-backup (secondary) failed:", e);
+                logError("Auto-backup (secondary) failed:", e);
               }
             }
             setLastAutoBackup(Date.now());
@@ -47,15 +48,13 @@ export function useAutoBackup() {
               read: 0,
               link: null,
             });
-            // Lazy import to avoid circular dependency with App.tsx
-            const { queryClient } = await import("../App");
             queryClient.invalidateQueries({ queryKey: ["notifications"] });
           })
           .catch((e) => {
-            console.error("Auto-backup failed:", e);
+            logError("Auto-backup failed:", e);
           })
           .finally(() => {
-            runningRef.current = false;
+            setBackupRunning(false);
           });
       }
     };

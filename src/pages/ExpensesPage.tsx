@@ -19,6 +19,7 @@ import { getNextExpenseReference } from "../db/queries/expenses";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
 import { useT } from "../i18n/useT";
 import { extractPdfText, parseExpenseFromText, type ExtractedExpenseData } from "../lib/pdfExtract";
+import { logError } from "../lib/log";
 
 type SortKey = "reference" | "supplier" | "category_code" | "invoice_date" | "amount" | "paid_date";
 
@@ -104,7 +105,7 @@ export function ExpensesPage() {
       setPrefill({ ...extracted, receiptPath: filePath });
       setShowForm(true);
     } catch (e) {
-      console.error("PDF parsing failed:", e);
+      logError("PDF parsing failed:", e);
       setPrefill({ receiptPath: filePath });
       setShowForm(true);
     } finally {
@@ -134,6 +135,8 @@ export function ExpensesPage() {
     }).then((fn) => {
       if (cancelled) { fn(); return; }
       unlisten = fn;
+    }).catch(() => {
+      // Silently handle if drag-drop listener setup fails (e.g. unsupported platform)
     });
 
     return () => {
@@ -231,7 +234,7 @@ export function ExpensesPage() {
                 await copyFile(prefill.receiptPath, destPath);
                 receiptPath = destPath;
               } catch (e) {
-                console.error("Receipt copy failed:", e);
+                logError("Receipt copy failed:", e);
               }
             }
 
@@ -349,7 +352,7 @@ export function ExpensesPage() {
                                 className="text-xs text-accent hover:underline flex items-center gap-1"
                                 title="Preview receipt"
                               >
-                                <Eye size={12} /> View
+                                <Eye size={14} /> View
                               </button>
                               <span className="text-xs text-success flex items-center gap-1">
                                 <Paperclip size={12} />

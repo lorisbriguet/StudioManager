@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as q from "../queries/projects";
 import * as tq from "../queries/tasks";
+import * as wq from "../queries/workload";
 import type { Project } from "../../types/project";
 import { useUndoStore } from "../../stores/undo-store";
 
@@ -77,9 +78,11 @@ export function useDeleteProject() {
   return useMutation({
     mutationFn: async (id: number) => {
       const prev = await q.getProject(id);
-      // Snapshot tasks and subtasks before cascade delete destroys them
+      // Snapshot tasks, subtasks, and workload rows before cascade delete destroys them
       const tasks = await tq.getTasksByProject(id);
       const subtasks = await tq.getSubtasksByProject(id);
+      const workloadRows = await wq.getWorkloadRows(id);
+      const workloadConfig = await wq.getProjectWorkloadConfig(id);
       await q.deleteProject(id);
       if (prev) {
         useUndoStore.getState().push({
@@ -101,9 +104,26 @@ export function useDeleteProject() {
               const { id: _sid, created_at: _c, updated_at: _u, calendar_event_id: _cal, ...subData } = sub;
               await tq.createSubtask({ ...subData, task_id: newTaskId });
             }
+            // Restore workload config
+            if (workloadConfig.columns) {
+              await wq.setProjectWorkloadConfig(newProjectId, workloadConfig.template_id, workloadConfig.columns);
+            }
+            // Restore workload rows
+            for (const row of workloadRows) {
+              const newTaskId = row.task_id ? taskIdMap.get(row.task_id) ?? null : null;
+              await wq.createWorkloadRow({
+                project_id: newProjectId,
+                template_id: row.template_id,
+                task_id: newTaskId,
+                cells: row.cells,
+                sort_order: row.sort_order,
+              });
+            }
             qc.invalidateQueries({ queryKey: ["projects"] });
             qc.invalidateQueries({ queryKey: ["tasks"] });
             qc.invalidateQueries({ queryKey: ["subtasks"] });
+            qc.invalidateQueries({ queryKey: ["workload-rows"] });
+            qc.invalidateQueries({ queryKey: ["workload-config"] });
           },
         });
       }
@@ -112,6 +132,8 @@ export function useDeleteProject() {
       qc.invalidateQueries({ queryKey: ["projects"] });
       qc.invalidateQueries({ queryKey: ["tasks"] });
       qc.invalidateQueries({ queryKey: ["subtasks"] });
+      qc.invalidateQueries({ queryKey: ["workload-rows"] });
+      qc.invalidateQueries({ queryKey: ["workload-config"] });
     },
   });
 }

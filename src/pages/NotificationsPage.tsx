@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import {
   useNotifications,
-  useCreateNotification,
+
   useMarkNotificationRead,
   useMarkAllNotificationsRead,
   useDeleteNotification,
@@ -27,7 +27,7 @@ export function NotificationsPage() {
   const markAllRead = useMarkAllNotificationsRead();
   const deleteNotif = useDeleteNotification();
   const clearAll = useClearAllNotifications();
-  const createNotif = useCreateNotification();
+
   const navigate = useNavigate();
 
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -41,7 +41,7 @@ export function NotificationsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold">{t.notifications}</h1>
+          <h1 className="text-xl font-semibold">{t.notifications}</h1>
           {unreadCount > 0 && (
             <span className="bg-accent text-white text-xs font-medium px-2 py-0.5 rounded-full">
               {unreadCount} {t.unread}
@@ -58,20 +58,6 @@ export function NotificationsPage() {
               {t.mark_all_read}
             </button>
           )}
-          <button
-            onClick={() =>
-              createNotif.mutate({
-                type: "info",
-                title: "Test notification",
-                message: "This is a test notification to verify the system works.",
-                read: 0,
-                link: null,
-              })
-            }
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border rounded-md hover:bg-gray-50 transition-colors"
-          >
-            {t.send_test}
-          </button>
           {notifications.length > 0 && (
             <button
               onClick={() => clearAll.mutate()}

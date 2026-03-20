@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { markOverdueInvoices } from "../db/queries/invoices";
 import { createNotification } from "../db/queries/notifications";
+import { logError } from "../lib/log";
 
 export function useOverdueCheck() {
   const qc = useQueryClient();
@@ -31,7 +32,7 @@ export function useOverdueCheck() {
         qc.invalidateQueries({ queryKey: ["notifications"] });
       }
     }).catch((e) => {
-      console.error("Overdue check failed:", e);
+      logError("Overdue check failed:", e);
     });
   }, [qc]);
 }

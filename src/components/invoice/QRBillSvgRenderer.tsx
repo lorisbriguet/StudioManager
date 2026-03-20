@@ -1,6 +1,7 @@
 import { Canvas } from "@react-pdf/renderer";
 import { SwissQRBill } from "swissqrbill/pdf";
 import type { Data } from "swissqrbill/types";
+import { logError } from "../../lib/log";
 
 interface QRBillCanvasProps {
   data: Data;
@@ -118,7 +119,7 @@ export function QRBillCanvas({ data, language }: QRBillCanvasProps) {
 
           SwissQRBill.isSpaceSufficient = origCheck;
         } catch (e) {
-          console.error("QR bill render failed:", e);
+          logError("QR bill render failed:", e);
         }
         return null;
       }}

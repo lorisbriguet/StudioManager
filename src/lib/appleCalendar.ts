@@ -1,6 +1,7 @@
 import { Command } from "@tauri-apps/plugin-shell";
 import { getDb } from "../db/index";
 import { useAppStore } from "../stores/app-store";
+import { logError, logInfo } from "../lib/log";
 
 function getCalendarName(): string {
   return useAppStore.getState().calendarName || "StudioManager";
@@ -206,7 +207,7 @@ export async function purgeAllCalendarEvents(): Promise<void> {
 
 /** Sync all existing tasks, subtasks, and project deadlines that don't have a calendar_event_id yet */
 export async function syncAllExisting(): Promise<number> {
-  console.log("[CalendarSync] Starting sync...");
+  logInfo("[CalendarSync] Starting sync...");
   const db = await getDb();
   let count = 0;
 
@@ -217,7 +218,7 @@ export async function syncAllExisting(): Promise<number> {
       await db.execute("ALTER TABLE projects ADD COLUMN calendar_deadline_id TEXT DEFAULT NULL");
     }
   } catch (e) {
-    console.error("Failed to ensure calendar_deadline_id column:", e);
+    logError("Failed to ensure calendar_deadline_id column:", e);
   }
 
   // Tasks with due_date but no calendar_event_id
@@ -225,10 +226,10 @@ export async function syncAllExisting(): Promise<number> {
     const tasks = await db.select<{ id: number; title: string; due_date: string; start_time: string | null; end_time: string | null; project_id: number }[]>(
       "SELECT id, title, due_date, start_time, end_time, project_id FROM tasks WHERE due_date IS NOT NULL AND status != 'done' AND (calendar_event_id IS NULL OR calendar_event_id = '')"
     );
-    console.log(`[CalendarSync] Found ${tasks.length} tasks to sync`);
+    logInfo(`[CalendarSync] Found ${tasks.length} tasks to sync`);
     for (const t of tasks) {
       try {
-        console.log(`[CalendarSync] Syncing task ${t.id}: ${t.title}`);
+        logInfo(`[CalendarSync] Syncing task ${t.id}: ${t.title}`);
         const pRows = await db.select<{ name: string }[]>("SELECT name FROM projects WHERE id = $1", [t.project_id]);
         const projectName = pRows[0]?.name ?? "";
         const uid = await createCalendarEvent({
@@ -240,11 +241,11 @@ export async function syncAllExisting(): Promise<number> {
         await db.execute("UPDATE tasks SET calendar_event_id = $1 WHERE id = $2", [uid, t.id]);
         count++;
       } catch (e) {
-        console.error(`Failed to sync task ${t.id}:`, e);
+        logError(`Failed to sync task ${t.id}:`, e);
       }
     }
   } catch (e) {
-    console.error("Failed to query tasks for sync:", e);
+    logError("Failed to query tasks for sync:", e);
   }
 
   // Subtasks with due_date but no calendar_event_id
@@ -267,11 +268,11 @@ export async function syncAllExisting(): Promise<number> {
         await db.execute("UPDATE subtasks SET calendar_event_id = $1 WHERE id = $2", [uid, s.id]);
         count++;
       } catch (e) {
-        console.error(`Failed to sync subtask ${s.id}:`, e);
+        logError(`Failed to sync subtask ${s.id}:`, e);
       }
     }
   } catch (e) {
-    console.error("Failed to query subtasks for sync:", e);
+    logError("Failed to query subtasks for sync:", e);
   }
 
   // Project deadlines
@@ -288,11 +289,11 @@ export async function syncAllExisting(): Promise<number> {
         await db.execute("UPDATE projects SET calendar_deadline_id = $1 WHERE id = $2", [uid, p.id]);
         count++;
       } catch (e) {
-        console.error(`Failed to sync deadline for project ${p.id}:`, e);
+        logError(`Failed to sync deadline for project ${p.id}:`, e);
       }
     }
   } catch (e) {
-    console.error("Failed to query projects for sync:", e);
+    logError("Failed to query projects for sync:", e);
   }
 
   return count;
