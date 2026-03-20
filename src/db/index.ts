@@ -20,7 +20,7 @@ export async function withTransaction<T>(fn: (db: Database) => Promise<T>): Prom
     await db.execute("COMMIT");
     return result;
   } catch (e) {
-    await db.execute("ROLLBACK");
+    try { await db.execute("ROLLBACK"); } catch { /* transaction may already be aborted */ }
     throw e;
   }
 }
