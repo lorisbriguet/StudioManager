@@ -238,6 +238,7 @@ const ui = {
     bank_name: "Bank Name",
     bank_address: "Bank Address",
     iban: "IBAN",
+    qr_iban: "QR-IBAN",
     clearing: "Clearing",
     bic_swift: "BIC / SWIFT",
     default_activity: "Default Activity",
@@ -372,6 +373,7 @@ const ui = {
     failed_load_line_items: "Failed to load line items",
     backup_already_running: "A backup is already in progress",
     drag_to_reorder: "Drag to reorder",
+    pin_first_column: "Pin first column",
   },
   FR: {
     // Sidebar / Nav
@@ -610,6 +612,7 @@ const ui = {
     bank_name: "Nom de la banque",
     bank_address: "Adresse de la banque",
     iban: "IBAN",
+    qr_iban: "QR-IBAN",
     clearing: "Clearing",
     bic_swift: "BIC / SWIFT",
     default_activity: "Activite par defaut",
@@ -744,6 +747,7 @@ const ui = {
     failed_load_line_items: "Echec du chargement des lignes",
     backup_already_running: "Une sauvegarde est deja en cours",
     drag_to_reorder: "Glisser pour reorganiser",
+    pin_first_column: "Epingler la premiere colonne",
   },
 } as const;
 

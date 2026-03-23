@@ -45,7 +45,9 @@ function escapeAS(str: string): string {
     .replace(/\r\n/g, "\\n")
     .replace(/\r/g, "\\n")
     .replace(/\n/g, "\\n")
-    .replace(/\t/g, "\\t");
+    .replace(/\t/g, "\\t")
+    // Strip characters that could break AppleScript string boundaries
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, ""); // control chars except \t \n \r
 }
 
 /** Validate date string is yyyy-MM-dd format and return parsed parts, or throw */

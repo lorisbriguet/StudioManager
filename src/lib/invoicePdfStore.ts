@@ -8,6 +8,17 @@ import { getClient, getClientContact } from "../db/queries/clients";
 import { getBusinessProfile } from "../db/queries/business-profile";
 import { logError } from "./log";
 
+function sanitizeFilename(name: string): string {
+  return name
+    .replace(/[/\\]/g, "_")
+    .replace(/\.\./g, "_")
+    .replace(/^\.+/, "")
+    .replace(/\x00/g, "")                        // null bytes
+    .replace(/[\u200b\u200c\u200d\ufeff]/g, "")  // zero-width chars
+    .normalize("NFC")
+    .substring(0, 255);
+}
+
 /**
  * Generate an invoice PDF and store it in the app data directory.
  * Updates the invoice's pdf_path field.
@@ -54,8 +65,8 @@ export async function generateAndStoreInvoicePdf(
     }
 
     // Sanitize reference to prevent path traversal
-    const safeRef = invoice.reference.replace(/[/\\]/g, "_").replace(/\.\./g, "_").replace(/^\.+/, "");
-    const safeName = client.name.replace(/[/\\]/g, "_").replace(/\.\./g, "_").replace(/^\.+/, "");
+    const safeRef = sanitizeFilename(invoice.reference);
+    const safeName = sanitizeFilename(client.name);
     const filePath = `${invoicesDir}/${safeRef}_${safeName || `invoice-${invoiceId}`}.pdf`;
     await writeFile(filePath, bytes);
 

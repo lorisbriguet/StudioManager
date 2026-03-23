@@ -31,6 +31,7 @@ const bankFields: { key: keyof FormData; labelKey: UIKey }[] = [
   { key: "bank_name", labelKey: "bank_name" },
   { key: "bank_address", labelKey: "bank_address" },
   { key: "iban", labelKey: "iban" },
+  { key: "qr_iban", labelKey: "qr_iban" },
   { key: "clearing", labelKey: "clearing" },
   { key: "bic_swift", labelKey: "bic_swift" },
 ];
@@ -156,7 +157,7 @@ export function ProfilePage() {
               </h2>
               <div className="grid grid-cols-2 gap-4 max-w-lg">
                 {bankFields.map(({ key, labelKey }) => (
-                  <div key={key} className={key === "bank_address" || key === "iban" ? "col-span-2" : ""}>
+                  <div key={key} className={key === "bank_address" || key === "iban" || key === "qr_iban" ? "col-span-2" : ""}>
                     <label className="block text-xs font-medium text-muted mb-1">
                       {t[labelKey]}
                     </label>

@@ -1,4 +1,4 @@
-import { getDb, validateFields, withTransaction } from "../index";
+import { getDb, validateFields, TransactionBatch } from "../index";
 import type { Invoice, InvoiceLineItem } from "../../types/invoice";
 
 export async function getInvoices(): Promise<Invoice[]> {
@@ -42,30 +42,29 @@ export async function createInvoiceWithLineItems(
   data: Omit<Invoice, "id" | "created_at" | "updated_at">,
   lineItems: Omit<InvoiceLineItem, "id" | "invoice_id">[]
 ): Promise<number> {
-  return withTransaction(async (db) => {
-    const result = await db.execute(
-      `INSERT INTO invoices (reference, client_id, project_id, status, language, activity, assignment,
-       invoice_date, due_date, payment_terms_days, subtotal, discount_applied, discount_rate,
-       discount_label, total, paid_date, contact_id, po_number, pdf_path, from_quote_id, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
-      [
-        data.reference, data.client_id, data.project_id, data.status, data.language,
-        data.activity, data.assignment, data.invoice_date, data.due_date,
-        data.payment_terms_days, data.subtotal, data.discount_applied, data.discount_rate,
-        data.discount_label, data.total, data.paid_date, data.contact_id, data.po_number, data.pdf_path,
-        data.from_quote_id, data.notes,
-      ]
+  const batch = new TransactionBatch();
+  batch.add(
+    `INSERT INTO invoices (reference, client_id, project_id, status, language, activity, assignment,
+     invoice_date, due_date, payment_terms_days, subtotal, discount_applied, discount_rate,
+     discount_label, total, paid_date, contact_id, po_number, pdf_path, from_quote_id, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
+    [
+      data.reference, data.client_id, data.project_id, data.status, data.language,
+      data.activity, data.assignment, data.invoice_date, data.due_date,
+      data.payment_terms_days, data.subtotal, data.discount_applied, data.discount_rate,
+      data.discount_label, data.total, data.paid_date, data.contact_id, data.po_number, data.pdf_path,
+      data.from_quote_id, data.notes,
+    ]
+  );
+  for (const item of lineItems) {
+    batch.add(
+      `INSERT INTO invoice_line_items (invoice_id, designation, rate, unit, quantity, amount, sort_order)
+       VALUES ($LAST_INSERT_ID, $1, $2, $3, $4, $5, $6)`,
+      [item.designation, item.rate, item.unit, item.quantity, item.amount, item.sort_order]
     );
-    const id = result.lastInsertId ?? 0;
-    for (const item of lineItems) {
-      await db.execute(
-        `INSERT INTO invoice_line_items (invoice_id, designation, rate, unit, quantity, amount, sort_order)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [id, item.designation, item.rate, item.unit, item.quantity, item.amount, item.sort_order]
-      );
-    }
-    return id;
-  });
+  }
+  const result = await batch.commit();
+  return result.lastInsertId;
 }
 
 /** Update invoice fields only (no line items) */
@@ -89,26 +88,24 @@ export async function updateInvoiceWithLineItems(
   data: Partial<Omit<Invoice, "id" | "created_at" | "updated_at">>,
   lineItems?: Omit<InvoiceLineItem, "id" | "invoice_id">[]
 ): Promise<void> {
-  await withTransaction(async (db) => {
-    const fields = Object.keys(data);
-    validateFields(fields);
-    const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(", ");
-    const values = [id, ...fields.map((f) => data[f as keyof typeof data])];
-    await db.execute(
-      `UPDATE invoices SET ${sets}, updated_at = datetime('now') WHERE id = $1`,
-      values
-    );
-    if (lineItems) {
-      await db.execute("DELETE FROM invoice_line_items WHERE invoice_id = $1", [id]);
-      for (const item of lineItems) {
-        await db.execute(
-          `INSERT INTO invoice_line_items (invoice_id, designation, rate, unit, quantity, amount, sort_order)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [id, item.designation, item.rate, item.unit, item.quantity, item.amount, item.sort_order]
-        );
-      }
+  const fields = Object.keys(data);
+  validateFields(fields);
+  const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(", ");
+  const values = [id, ...fields.map((f) => data[f as keyof typeof data])];
+
+  const batch = new TransactionBatch();
+  batch.add(`UPDATE invoices SET ${sets}, updated_at = datetime('now') WHERE id = $1`, values);
+  if (lineItems) {
+    batch.add("DELETE FROM invoice_line_items WHERE invoice_id = $1", [id]);
+    for (const item of lineItems) {
+      batch.add(
+        `INSERT INTO invoice_line_items (invoice_id, designation, rate, unit, quantity, amount, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [id, item.designation, item.rate, item.unit, item.quantity, item.amount, item.sort_order]
+      );
     }
-  });
+  }
+  await batch.commit();
 }
 
 export async function markOverdueInvoices(): Promise<Invoice[]> {
@@ -174,4 +171,3 @@ export async function getInvoiceLineItems(
     [invoiceId]
   );
 }
-

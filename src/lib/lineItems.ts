@@ -53,8 +53,10 @@ export function useLineItemForm(initial?: LineItem[]) {
     (event: DragEndEvent) => {
       const { active, over } = event;
       if (!over || active.id === over.id) return;
-      const oldIndex = items.findIndex((i) => i._id === active.id);
-      const newIndex = items.findIndex((i) => i._id === over.id);
+      const activeId = Number(active.id);
+      const overId = Number(over.id);
+      const oldIndex = items.findIndex((i) => i._id === activeId);
+      const newIndex = items.findIndex((i) => i._id === overId);
       if (oldIndex !== -1 && newIndex !== -1) {
         setItems(arrayMove(items, oldIndex, newIndex));
       }

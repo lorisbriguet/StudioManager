@@ -118,13 +118,14 @@ export function TasksPage() {
     (event: DragEndEvent) => {
       const { active, over } = event;
       if (!over || active.id === over.id) return;
-      if (typeof active.id !== "number" || typeof over.id !== "number") return;
+      const activeId = Number(active.id);
+      const overId = Number(over.id);
       const ids = grouped.map((g) => g.projectId);
-      const fromIdx = ids.indexOf(active.id);
-      const toIdx = ids.indexOf(over.id);
+      const fromIdx = ids.indexOf(activeId);
+      const toIdx = ids.indexOf(overId);
       if (fromIdx === -1 || toIdx === -1) return;
       ids.splice(fromIdx, 1);
-      ids.splice(toIdx, 0, active.id);
+      ids.splice(toIdx, 0, activeId);
       setProjectOrder(ids);
       localStorage.setItem("tasksProjectOrder", JSON.stringify(ids));
     },

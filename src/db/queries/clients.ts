@@ -1,4 +1,4 @@
-import { getDb, validateFields, withTransaction } from "../index";
+import { getDb, validateFields, TransactionBatch } from "../index";
 import type { Client, ClientContact } from "../../types/client";
 
 export async function getClients(): Promise<Client[]> {
@@ -64,19 +64,19 @@ export async function updateClient(
 }
 
 export async function deleteClient(id: string): Promise<void> {
-  await withTransaction(async (db) => {
-    // Manually cascade to tables that lack ON DELETE CASCADE in schema
-    await db.execute("DELETE FROM invoice_line_items WHERE invoice_id IN (SELECT id FROM invoices WHERE client_id = $1)", [id]);
-    await db.execute("DELETE FROM quote_line_items WHERE quote_id IN (SELECT id FROM quotes WHERE client_id = $1)", [id]);
-    await db.execute("DELETE FROM invoices WHERE client_id = $1", [id]);
-    await db.execute("DELETE FROM quotes WHERE client_id = $1", [id]);
-    await db.execute("DELETE FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1))", [id]);
-    await db.execute("DELETE FROM tasks WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1)", [id]);
-    await db.execute("DELETE FROM workload_rows WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1)", [id]);
-    await db.execute("DELETE FROM projects WHERE client_id = $1", [id]);
-    await db.execute("DELETE FROM client_contacts WHERE client_id = $1", [id]);
-    await db.execute("DELETE FROM clients WHERE id = $1", [id]);
-  });
+  const batch = new TransactionBatch();
+  // Manually cascade to tables that lack ON DELETE CASCADE in schema
+  batch.add("DELETE FROM invoice_line_items WHERE invoice_id IN (SELECT id FROM invoices WHERE client_id = $1)", [id]);
+  batch.add("DELETE FROM quote_line_items WHERE quote_id IN (SELECT id FROM quotes WHERE client_id = $1)", [id]);
+  batch.add("DELETE FROM invoices WHERE client_id = $1", [id]);
+  batch.add("DELETE FROM quotes WHERE client_id = $1", [id]);
+  batch.add("DELETE FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1))", [id]);
+  batch.add("DELETE FROM tasks WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1)", [id]);
+  batch.add("DELETE FROM workload_rows WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1)", [id]);
+  batch.add("DELETE FROM projects WHERE client_id = $1", [id]);
+  batch.add("DELETE FROM client_contacts WHERE client_id = $1", [id]);
+  batch.add("DELETE FROM clients WHERE id = $1", [id]);
+  await batch.commit();
 }
 
 export async function getClientContact(

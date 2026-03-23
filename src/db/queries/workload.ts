@@ -1,4 +1,4 @@
-import { getDb, withTransaction } from "../index";
+import { getDb, TransactionBatch } from "../index";
 import { logError } from "../../lib/log";
 import type {
   WorkloadTemplate,
@@ -152,14 +152,11 @@ export async function updateWorkloadRow(
 export async function reorderWorkloadRows(
   orderedIds: number[]
 ): Promise<void> {
-  await withTransaction(async (db) => {
-    for (let i = 0; i < orderedIds.length; i++) {
-      await db.execute(
-        "UPDATE workload_rows SET sort_order = $1 WHERE id = $2",
-        [i, orderedIds[i]]
-      );
-    }
-  });
+  const batch = new TransactionBatch();
+  for (let i = 0; i < orderedIds.length; i++) {
+    batch.add("UPDATE workload_rows SET sort_order = $1 WHERE id = $2", [i, orderedIds[i]]);
+  }
+  await batch.commit();
 }
 
 export async function getWorkloadRow(id: number): Promise<WorkloadRow | null> {
