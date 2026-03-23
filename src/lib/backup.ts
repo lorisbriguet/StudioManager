@@ -50,7 +50,13 @@ const TABLES = [
 
 /** Sanitize a file name to prevent path traversal */
 function safeName(name: string): string | null {
-  const cleaned = name.replace(/[/\\]/g, "").replace(/\.\./g, "");
+  const cleaned = name
+    .replace(/[/\\]/g, "")
+    .replace(/\.\./g, "")
+    .replace(/\x00/g, "")                        // null bytes
+    .replace(/[\u200b\u200c\u200d\ufeff]/g, "")  // zero-width chars
+    .normalize("NFC")
+    .substring(0, 255);
   return cleaned.length > 0 ? cleaned : null;
 }
 

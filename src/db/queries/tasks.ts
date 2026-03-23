@@ -1,4 +1,4 @@
-import { getDb, validateFields, withTransaction } from "../index";
+import { getDb, validateFields, TransactionBatch } from "../index";
 import type { Task, Subtask } from "../../types/task";
 
 export async function getProjectName(projectId: number): Promise<string> {
@@ -148,11 +148,11 @@ export async function updateSubtask(
 }
 
 export async function reorderSubtasks(ids: number[]): Promise<void> {
-  await withTransaction(async (db) => {
-    for (let i = 0; i < ids.length; i++) {
-      await db.execute("UPDATE subtasks SET sort_order = $1 WHERE id = $2", [i, ids[i]]);
-    }
-  });
+  const batch = new TransactionBatch();
+  for (let i = 0; i < ids.length; i++) {
+    batch.add("UPDATE subtasks SET sort_order = $1 WHERE id = $2", [i, ids[i]]);
+  }
+  await batch.commit();
 }
 
 export async function deleteSubtask(id: number): Promise<void> {

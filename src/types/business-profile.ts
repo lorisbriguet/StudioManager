@@ -12,6 +12,7 @@ export interface BusinessProfile {
   bank_name: string;
   bank_address: string;
   iban: string;
+  qr_iban: string;
   clearing: string;
   bic_swift: string;
   /** JSON-encoded string[] of activities (e.g. '["Graphisme","Web design"]') */

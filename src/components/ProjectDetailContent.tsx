@@ -393,13 +393,15 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                       onDragEnd={(event: DragEndEvent) => {
                         const { active, over } = event;
                         if (!over || active.id === over.id) return;
-                        if (typeof active.id !== "number" || typeof over.id !== "number") return;
-                        const ids = filteredSubtasks.map((s) => s.id);
-                        const fromIdx = ids.indexOf(active.id);
-                        const toIdx = ids.indexOf(over.id);
+                        const activeId = Number(active.id);
+                        const overId = Number(over.id);
+                        // Use ALL subtasks for this task (not filtered) to preserve full ordering
+                        const ids = subtasks.map((s) => s.id);
+                        const fromIdx = ids.indexOf(activeId);
+                        const toIdx = ids.indexOf(overId);
                         if (fromIdx !== -1 && toIdx !== -1) {
                           ids.splice(fromIdx, 1);
-                          ids.splice(toIdx, 0, active.id);
+                          ids.splice(toIdx, 0, activeId);
                           reorderSubtasks.mutate(ids);
                         }
                       }}

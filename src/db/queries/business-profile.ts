@@ -20,6 +20,7 @@ export async function getBusinessProfile(): Promise<BusinessProfile> {
     bank_name: "",
     bank_address: "",
     iban: "",
+    qr_iban: "",
     clearing: "",
     bic_swift: "",
     default_activity: "[]",

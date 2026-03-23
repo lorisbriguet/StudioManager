@@ -1,4 +1,5 @@
 import Database from "@tauri-apps/plugin-sql";
+import { invoke } from "@tauri-apps/api/core";
 
 const SAFE_FIELD = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -11,7 +12,34 @@ export function validateFields(fields: string[]): void {
   }
 }
 
-/** Run a callback inside a BEGIN/COMMIT/ROLLBACK transaction */
+interface BatchStatement {
+  sql: string;
+  params: unknown[];
+}
+
+/**
+ * Collect SQL statements for batch execution in a real transaction.
+ * Uses a Rust-side command that opens its own connection and wraps
+ * all statements in BEGIN/COMMIT, avoiding the connection-pool issue
+ * with the Tauri SQL plugin where each IPC call may use a different connection.
+ */
+export class TransactionBatch {
+  private statements: BatchStatement[] = [];
+
+  /** Queue a SQL statement. Use $LAST_INSERT_ID to reference the last insert rowid. */
+  add(sql: string, params: unknown[] = []): void {
+    this.statements.push({ sql, params });
+  }
+
+  /** Execute all queued statements in a single Rust-side transaction. */
+  async commit(): Promise<{ lastInsertId: number }> {
+    return invoke<{ lastInsertId: number }>("execute_batch", {
+      statements: this.statements,
+    });
+  }
+}
+
+/** @deprecated Use TransactionBatch instead — withTransaction doesn't work reliably with the Tauri SQL plugin connection pool. */
 export async function withTransaction<T>(fn: (db: Database) => Promise<T>): Promise<T> {
   const db = await getDb();
   await db.execute("BEGIN");
@@ -85,6 +113,9 @@ async function ensureSchema(db: Database) {
     await db.execute("ALTER TABLE clients ADD COLUMN postal_city TEXT NOT NULL DEFAULT ''");
     await db.execute("UPDATE clients SET postal_city = address_line2, address_line2 = '' WHERE address_line2 IS NOT NULL AND address_line2 != ''");
   }
+
+  // ── Business profile: QR-IBAN ────────────────────────────────
+  await addColumnIfMissing("business_profile", "qr_iban", "TEXT DEFAULT ''");
 
   // ── Invoices: contact_id ───────────────────────────────────
   await addColumnIfMissing("invoices", "contact_id", "INTEGER REFERENCES client_contacts(id) ON DELETE SET NULL");

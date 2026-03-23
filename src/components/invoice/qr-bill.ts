@@ -30,7 +30,8 @@ export function buildQRBillData(
   client: Client,
   profile: BusinessProfile
 ): Data {
-  const account = profile.iban.replace(/\s/g, "");
+  const qrIban = profile.qr_iban?.replace(/\s/g, "");
+  const account = (qrIban || profile.iban).replace(/\s/g, "");
   const needsQRRef = isQRIBAN(account);
 
   return {

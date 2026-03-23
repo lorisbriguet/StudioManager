@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { Plus, Trash2, GripVertical, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Settings2, X, ChevronRight, ChevronDown, Copy, Download, Sigma } from "lucide-react";
+import { Plus, Trash2, GripVertical, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Settings2, X, ChevronRight, ChevronDown, Copy, Download, Sigma, Pin } from "lucide-react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
@@ -61,6 +61,9 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveTemplateName, setSaveTemplateName] = useState("");
   const [headerMenu, setHeaderMenu] = useState<{ ci: number; pos: { top: number; left: number } } | null>(null);
+  const [stickyFirstCol, setStickyFirstCol] = useState(() => {
+    try { return localStorage.getItem(`workload_sticky_${projectId}`) === "1"; } catch { return false; }
+  });
 
   const columns: WorkloadColumn[] = config?.columns ?? [];
   const templateId = config?.template_id ?? null;
@@ -179,9 +182,11 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
       const { active, over } = event;
       if (!over || active.id === over.id || !rows) return;
       if (sortKey) { setSortKey(null); return; }
+      const activeId = Number(active.id);
+      const overId = Number(over.id);
       const ordered = [...rows].sort((a, b) => a.sort_order - b.sort_order);
-      const fromIdx = ordered.findIndex((r) => r.id === active.id);
-      const toIdx = ordered.findIndex((r) => r.id === over.id);
+      const fromIdx = ordered.findIndex((r) => r.id === activeId);
+      const toIdx = ordered.findIndex((r) => r.id === overId);
       if (fromIdx !== -1 && toIdx !== -1) {
         const [moved] = ordered.splice(fromIdx, 1);
         ordered.splice(toIdx, 0, moved);
@@ -350,6 +355,17 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                 <option value="__save__">{t.save_as_template}</option>
               )}
             </select>
+            <button
+              onClick={() => {
+                const next = !stickyFirstCol;
+                setStickyFirstCol(next);
+                try { localStorage.setItem(`workload_sticky_${projectId}`, next ? "1" : "0"); } catch { /* */ }
+              }}
+              className={`p-1 hover:text-accent ${stickyFirstCol ? "text-accent" : "text-muted"}`}
+              title={t.pin_first_column}
+            >
+              <Pin size={16} />
+            </button>
             {sortedRows.length > 0 && (
               <button
                 onClick={handleExportCsv}
@@ -377,14 +393,14 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
           <table className="text-sm" style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}>
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
-                <th className="w-8 px-2 border-r border-gray-200 sticky left-0 z-10 bg-gray-50" />
+                <th className={`w-8 px-2 border-r border-gray-200 ${stickyFirstCol ? "sticky left-0 z-10" : ""} bg-gray-50`} />
                 {columns.map((col, ci) => {
                   const w = getColWidth(col);
                   const isFirstCol = ci === 0;
                   return (
                     <th
                       key={`${col.key}_${ci}`}
-                      className={`relative px-2 py-1.5 text-left font-medium text-muted cursor-pointer hover:text-gray-700 select-none ${ci < columns.length - 1 ? "border-r border-gray-200" : ""} ${isFirstCol ? "sticky left-8 z-10 bg-gray-50" : ""}`}
+                      className={`relative px-2 py-1.5 text-left font-medium text-muted cursor-pointer hover:text-gray-700 select-none ${ci < columns.length - 1 ? "border-r border-gray-200" : ""} ${isFirstCol && stickyFirstCol ? "sticky left-8 z-10 bg-gray-50" : ""}`}
                       style={{ width: w, minWidth: 24 }}
                       onClick={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect();
@@ -437,16 +453,17 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                   deleteRow={deleteRow}
                   tasks={tasks}
                   t={t}
+                  stickyFirstCol={stickyFirstCol}
                 />
               ))}
               {/* Summary row */}
               {summaryRow && sortedRows.length > 0 && (
                 <tr className="border-t border-gray-200 bg-gray-50 font-medium">
-                  <td className="border-r border-gray-100 sticky left-0 z-10 bg-gray-50" />
+                  <td className={`border-r border-gray-100 ${stickyFirstCol ? "sticky left-0 z-10" : ""} bg-gray-50`} />
                   {columns.map((col, ci) => (
                     <td
                       key={`${col.key}_${ci}`}
-                      className={`px-3 py-2 text-sm ${ci < columns.length - 1 ? "border-r border-gray-100" : ""} ${ci === 0 ? "sticky left-8 z-10 bg-gray-50" : ""}`}
+                      className={`px-3 py-2 text-sm ${ci < columns.length - 1 ? "border-r border-gray-100" : ""} ${ci === 0 && stickyFirstCol ? "sticky left-8 z-10 bg-gray-50" : ""}`}
                     >
                       {(col.type === "number" || col.type === "formula") && summaryRow[col.key] !== undefined ? (
                         <span className="block text-right">
@@ -564,6 +581,7 @@ function SortableRow({
   deleteRow,
   tasks,
   t,
+  stickyFirstCol,
 }: {
   row: WorkloadRow;
   columns: WorkloadColumn[];
@@ -575,6 +593,7 @@ function SortableRow({
   deleteRow: { mutate: (id: number) => void };
   tasks: Task[] | undefined;
   t: Record<string, string>;
+  stickyFirstCol: boolean;
 }) {
   const {
     attributes,
@@ -598,7 +617,7 @@ function SortableRow({
       style={style}
       className="border-b border-gray-100 hover:bg-gray-50 group/row"
     >
-      <td className="border-r border-gray-100 sticky left-0 z-10 bg-inherit">
+      <td className={`border-r border-gray-100 ${stickyFirstCol ? "sticky left-0 z-10" : ""} bg-inherit`}>
         <div
           {...attributes}
           {...listeners}
@@ -611,7 +630,7 @@ function SortableRow({
       {columns.map((col, ci) => (
         <td
           key={`${col.key}_${ci}`}
-          className={`px-3 py-1.5 ${ci < columns.length - 1 ? "border-r border-gray-100" : ""} ${ci === 0 ? "sticky left-8 z-10 bg-inherit" : ""}`}
+          className={`px-3 py-1.5 ${ci < columns.length - 1 ? "border-r border-gray-100" : ""} ${ci === 0 && stickyFirstCol ? "sticky left-8 z-10 bg-inherit" : ""}`}
           style={{ width: getColWidth(col), minWidth: 24 }}
         >
           <WorkloadCell
