@@ -1,18 +1,29 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Trash2 } from "lucide-react";
+import { Button } from "../components/ui";
 import { toast } from "sonner";
 import { ProjectDetailContent } from "../components/ProjectDetailContent";
-import { useDeleteProject } from "../db/hooks/useProjects";
+import { useProject, useDeleteProject } from "../db/hooks/useProjects";
+import { useTabStore } from "../stores/tab-store";
 import { useT } from "../i18n/useT";
 
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const projectId = Number(id);
+  const { data: project } = useProject(projectId);
   const deleteProject = useDeleteProject();
   const navigate = useNavigate();
+  const updateActiveTab = useTabStore((s) => s.updateActiveTab);
   const t = useT();
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Update tab label with actual project name once loaded
+  useEffect(() => {
+    if (project?.name) {
+      updateActiveTab(`/projects/${projectId}`, project.name);
+    }
+  }, [project?.name, projectId]);
 
   return (
     <div>
@@ -24,7 +35,9 @@ export function ProjectDetailPage() {
           {confirmDelete ? (
             <div className="flex items-center gap-2 text-sm">
               <span className="text-red-600">{t.confirm_delete_project}</span>
-              <button
+              <Button
+                variant="danger"
+                size="sm"
                 onClick={() => {
                   deleteProject.mutate(projectId, {
                     onSuccess: () => {
@@ -33,25 +46,26 @@ export function ProjectDetailPage() {
                     },
                   });
                 }}
-                className="px-2 py-1 bg-red-600 text-white rounded-md text-xs hover:bg-red-700"
               >
                 {t.delete}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setConfirmDelete(false)}
-                className="px-2 py-1 border border-gray-200 rounded-md text-xs hover:bg-gray-50"
               >
                 {t.cancel}
-              </button>
+              </Button>
             </div>
           ) : (
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Trash2 size={16} />}
               onClick={() => setConfirmDelete(true)}
               className="p-1.5 text-muted hover:text-red-600"
               title={t.delete}
-            >
-              <Trash2 size={16} />
-            </button>
+            />
           )}
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { Bell, Check, CheckCheck, Trash2, AlertTriangle, Info, AlertCircle, Copy } from "lucide-react";
+import { PageHeader, Button } from "../components/ui";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import {
@@ -39,36 +40,18 @@ export function NotificationsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold">{t.notifications}</h1>
-          {unreadCount > 0 && (
-            <span className="bg-accent text-white text-xs font-medium px-2 py-0.5 rounded-full">
-              {unreadCount} {t.unread}
-            </span>
-          )}
-        </div>
-        <div className="flex gap-2">
-          {unreadCount > 0 && (
-            <button
-              onClick={() => markAllRead.mutate()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border rounded-md hover:bg-gray-50 transition-colors"
-            >
-              <CheckCheck size={14} />
-              {t.mark_all_read}
-            </button>
-          )}
-          {notifications.length > 0 && (
-            <button
-              onClick={() => clearAll.mutate()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-200 text-red-600 rounded-md hover:bg-red-50 transition-colors"
-            >
-              <Trash2 size={14} />
-              {t.clear_all}
-            </button>
-          )}
-        </div>
-      </div>
+      <PageHeader title={`${t.notifications}${unreadCount > 0 ? ` (${unreadCount} ${t.unread})` : ""}`}>
+        {unreadCount > 0 && (
+          <Button variant="secondary" size="sm" icon={<CheckCheck size={14} />} onClick={() => markAllRead.mutate()}>
+            {t.mark_all_read}
+          </Button>
+        )}
+        {notifications.length > 0 && (
+          <Button variant="danger" size="sm" icon={<Trash2 size={14} />} onClick={() => clearAll.mutate()}>
+            {t.clear_all}
+          </Button>
+        )}
+      </PageHeader>
 
       {isLoading ? (
         <p className="text-muted text-sm">{t.loading}</p>
@@ -88,7 +71,7 @@ export function NotificationsPage() {
                 onClick={() => handleClick(n)}
                 className={`flex items-start gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer group ${
                   n.read
-                    ? "bg-transparent hover:bg-gray-50"
+                    ? "bg-transparent hover:bg-gray-50 dark:hover:bg-gray-200"
                     : "bg-accent-light/50 hover:bg-accent-light"
                 }`}
               >
@@ -112,39 +95,42 @@ export function NotificationsPage() {
                   </p>
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={<Copy size={14} />}
                     onClick={(e) => {
                       e.stopPropagation();
                       const text = `${n.title}${n.message ? ` — ${n.message}` : ""}`;
                       navigator.clipboard.writeText(text).then(() => toast.success(t.copied));
                     }}
-                    className="p-1 rounded hover:bg-gray-200"
+                    className="p-1"
                     title={t.copy}
-                  >
-                    <Copy size={14} />
-                  </button>
+                  />
                   {!n.read && (
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<Check size={14} />}
                       onClick={(e) => {
                         e.stopPropagation();
                         markRead.mutate(n.id);
                       }}
-                      className="p-1 rounded hover:bg-gray-200"
+                      className="p-1"
                       title={t.mark_read}
-                    >
-                      <Check size={14} />
-                    </button>
+                    />
                   )}
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={<Trash2 size={14} />}
                     onClick={(e) => {
                       e.stopPropagation();
                       deleteNotif.mutate(n.id);
                     }}
-                    className="p-1 rounded hover:bg-red-100 text-red-500"
+                    className="p-1 text-red-500 hover:bg-red-100"
                     title={t.delete}
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  />
                 </div>
               </div>
             );

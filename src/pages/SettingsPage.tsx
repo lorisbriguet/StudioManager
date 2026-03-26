@@ -1,10 +1,15 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { getVersion } from "@tauri-apps/api/app";
+import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
-import { Moon, Sun, Monitor, FolderOpen, HardDrive, ChevronDown, RotateCcw } from "lucide-react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { Moon, Sun, Monitor, FolderOpen, HardDrive, ChevronDown, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield } from "lucide-react";
+import { open, ask } from "@tauri-apps/plugin-dialog";
 import { purgeAllCalendarEvents, syncAllExisting, listWritableCalendars } from "../lib/appleCalendar";
 import { createBackup, listBackups, restoreFromBackup, validateBackupPath, isBackupRunning, setBackupRunning } from "../lib/backup";
+import { switchDb, resetDb } from "../db";
+import { useExpenseCategories, useCreateExpenseCategory, useUpdateExpenseCategory, useDeleteExpenseCategory, isDefaultCategory } from "../db/hooks/useExpenses";
+import { isCategoryInUse } from "../db/queries/expenses";
+import type { ExpenseCategory } from "../types/expense";
 import { useAppStore, ACCENT_PRESETS, type DateFormatOption, type AccentPreset, type ProjectOpenMode } from "../stores/app-store";
 import { useT } from "../i18n/useT";
 import type { AppLanguage } from "../i18n/ui";
@@ -12,7 +17,7 @@ import { UpdateChecker } from "../components/UpdateChecker";
 import { WorkloadTemplateManager } from "../components/workload/WorkloadTemplateManager";
 import { logError } from "../lib/log";
 
-type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "workload" | "updates" | "backup";
+type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "workload" | "categories" | "updates" | "backup" | "sandbox";
 
 export function SettingsPage() {
   const darkMode = useAppStore((s) => s.darkMode);
@@ -29,6 +34,10 @@ export function SettingsPage() {
   const setProjectOpenMode = useAppStore((s) => s.setProjectOpenMode);
   const showTasksPage = useAppStore((s) => s.showTasksPage);
   const setShowTasksPage = useAppStore((s) => s.setShowTasksPage);
+  const showIncome = useAppStore((s) => s.showIncome);
+  const setShowIncome = useAppStore((s) => s.setShowIncome);
+  const nativeNotifications = useAppStore((s) => s.nativeNotifications);
+  const setNativeNotifications = useAppStore((s) => s.setNativeNotifications);
   const backupPath = useAppStore((s) => s.backupPath);
   const setBackupPath = useAppStore((s) => s.setBackupPath);
   const backupPath2 = useAppStore((s) => s.backupPath2);
@@ -52,9 +61,80 @@ export function SettingsPage() {
   const [loadingCalendars, setLoadingCalendars] = useState(false);
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>("general");
   const [appVersion, setAppVersion] = useState("");
+  const testMode = useAppStore((s) => s.testMode);
+  const setTestMode = useAppStore((s) => s.setTestMode);
+  const [togglingTestMode, setTogglingTestMode] = useState(false);
+  const [snapshotting, setSnapshotting] = useState(false);
+  const [restoringSnapshot, setRestoringSnapshot] = useState(false);
+  const [hasSnapshotFile, setHasSnapshotFile] = useState(false);
   const t = useT();
 
   useEffect(() => { getVersion().then(setAppVersion).catch(() => {}); }, []);
+  useEffect(() => { invoke<boolean>("has_snapshot").then(setHasSnapshotFile).catch(() => {}); }, []);
+
+  const handleEnterTestMode = async () => {
+    setTogglingTestMode(true);
+    try {
+      await invoke<string>("enter_test_mode");
+      await switchDb("studiomanager_test.db");
+      setTestMode(true);
+      toast.success(t.toast_test_mode_entered);
+    } catch (e) {
+      logError("Enter test mode failed:", e);
+      toast.error(`${t.toast_test_mode_failed}: ${String(e)}`);
+    } finally {
+      setTogglingTestMode(false);
+    }
+  };
+
+  const handleExitTestMode = async () => {
+    const confirmed = await ask(t.test_mode_confirm_exit, { kind: "warning" });
+    if (!confirmed) return;
+    setTogglingTestMode(true);
+    try {
+      await invoke("exit_test_mode");
+      await switchDb("studiomanager.db");
+      setTestMode(false);
+      toast.success(t.toast_test_mode_exited);
+      setTimeout(() => window.location.reload(), 500);
+    } catch (e) {
+      logError("Exit test mode failed:", e);
+      toast.error(`${t.toast_test_mode_failed}: ${String(e)}`);
+    } finally {
+      setTogglingTestMode(false);
+    }
+  };
+
+  const handleCreateSnapshot = async () => {
+    setSnapshotting(true);
+    try {
+      await invoke<string>("snapshot_db");
+      setHasSnapshotFile(true);
+      toast.success(t.toast_snapshot_created);
+    } catch (e) {
+      logError("Snapshot failed:", e);
+      toast.error(`${t.toast_snapshot_failed}: ${String(e)}`);
+    } finally {
+      setSnapshotting(false);
+    }
+  };
+
+  const handleRestoreSnapshot = async () => {
+    const confirmed = await ask(t.restore_snapshot_confirm, { kind: "warning" });
+    if (!confirmed) return;
+    setRestoringSnapshot(true);
+    try {
+      await invoke("restore_snapshot");
+      await resetDb();
+      toast.success(t.toast_snapshot_restored);
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (e) {
+      logError("Restore snapshot failed:", e);
+      toast.error(`${t.toast_snapshot_failed}: ${String(e)}`);
+    } finally {
+      setRestoringSnapshot(false);
+    }
+  };
 
   const handleCalendarToggle = async () => {
     const enabling = !calendarSync;
@@ -131,7 +211,8 @@ export function SettingsPage() {
       toast.error(t.toast_set_backup_dir);
       return;
     }
-    if (!confirm(t.restore_confirm)) return;
+    const confirmed = await ask(t.restore_confirm, { kind: "warning" });
+    if (!confirmed) return;
     setRestoring(true);
     try {
       const warnings = await restoreFromBackup(`${backupPath}/${selectedBackup}`);
@@ -147,456 +228,359 @@ export function SettingsPage() {
     }
   };
 
-  const categories: { key: SettingsCategory; label: string }[] = [
-    { key: "general", label: t.general },
-    { key: "appearance", label: t.appearance },
-    { key: "behavior", label: t.behavior },
-    { key: "calendar", label: t.calendar_sync },
-    { key: "workload", label: t.workload_templates },
-    { key: "updates", label: t.updates },
-    { key: "backup", label: t.backup },
+  const categories: { key: SettingsCategory; label: string; icon: React.ReactNode }[] = [
+    { key: "general", label: t.general, icon: <Settings2 size={16} /> },
+    { key: "appearance", label: t.appearance, icon: <Palette size={16} /> },
+    { key: "behavior", label: t.behavior, icon: <SlidersHorizontal size={16} /> },
+    { key: "calendar", label: t.calendar_sync, icon: <CalendarDays size={16} /> },
+    { key: "workload", label: t.workload_templates, icon: <LayoutList size={16} /> },
+    { key: "categories", label: t.expense_categories, icon: <Tags size={16} /> },
+    { key: "updates", label: t.updates, icon: <Download size={16} /> },
+    { key: "backup", label: t.backup, icon: <Archive size={16} /> },
+    { key: "sandbox", label: t.test_mode, icon: <Shield size={16} /> },
   ];
+
+  // Keyboard navigation for settings sidebar
+  const handleSettingsKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if ((e.target as HTMLElement).isContentEditable) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const idx = categories.findIndex((c) => c.key === activeCategory);
+        const len = categories.length;
+        const next = e.key === "ArrowDown" ? (idx + 1) % len : (idx - 1 + len) % len;
+        setActiveCategory(categories[next].key);
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("sidebar-focus"));
+      }
+    },
+    [activeCategory, categories]
+  );
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleSettingsKeyDown);
+    return () => window.removeEventListener("keydown", handleSettingsKeyDown);
+  }, [handleSettingsKeyDown]);
 
   return (
     <div className="flex gap-0 h-full -m-8">
       {/* Category sidebar */}
-      <div className="w-56 shrink-0 border-r border-gray-200 py-6">
-        <h1 className="text-xl font-semibold px-6 mb-6">{t.settings}</h1>
-        <nav className="space-y-0.5 px-3">
+      <div className="w-48 shrink-0 border-r border-gray-200 py-5">
+        <h1 className="text-sm font-semibold px-5 mb-4 text-muted uppercase tracking-wider">{t.settings}</h1>
+        <nav className="space-y-px px-2">
           {categories.map((cat) => (
             <button
               key={cat.key}
               type="button"
               onClick={() => setActiveCategory(cat.key)}
-              className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+              className={`w-full text-left px-3 py-1.5 rounded text-[13px] transition-colors flex items-center gap-2 ${
                 activeCategory === cat.key
                   ? "bg-accent-light text-accent font-medium"
-                  : "text-muted hover:bg-gray-100 hover:text-gray-900"
+                  : "text-muted hover:bg-gray-100 dark:hover:bg-gray-200 hover:text-gray-900"
               }`}
             >
+              {cat.icon}
               {cat.label}
             </button>
           ))}
         </nav>
         {appVersion && (
-          <p className="text-[11px] text-muted px-6 mt-8">StudioManager v{appVersion}</p>
+          <p className="text-[10px] text-muted px-5 mt-6">v{appVersion}</p>
         )}
       </div>
 
       {/* Settings content */}
-      <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-2xl space-y-8">
+      <div className="flex-1 overflow-y-auto px-8 py-6">
+        <div className="max-w-xl">
           {activeCategory === "general" && (
-            <>
-              {/* Language */}
-              <section>
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted mb-4">
-                  {t.app_language}
-                </h2>
-                <div className="flex gap-3">
-                  {(["EN", "FR"] as AppLanguage[]).map((lang) => (
-                    <button
-                      key={lang}
-                      type="button"
-                      onClick={() => setLanguage(lang)}
-                      className={`px-6 py-3 rounded-lg border-2 transition-colors text-sm font-medium ${
-                        language === lang
-                          ? "border-accent bg-accent-light text-accent"
-                          : "border-gray-200 text-muted hover:border-gray-300 hover:bg-gray-50"
-                      }`}
-                    >
-                      {lang === "EN" ? "English" : "Francais"}
-                    </button>
-                  ))}
-                </div>
-              </section>
-
-              {/* Export / PDF Language */}
-              <section>
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted mb-4">
-                  {t.export_language}
-                </h2>
-                <div className="flex gap-3">
-                  {(["EN", "FR"] as AppLanguage[]).map((lang) => (
-                    <button
-                      key={lang}
-                      type="button"
-                      onClick={() => setExportLanguage(lang)}
-                      className={`px-6 py-3 rounded-lg border-2 transition-colors text-sm font-medium ${
-                        exportLanguage === lang
-                          ? "border-accent bg-accent-light text-accent"
-                          : "border-gray-200 text-muted hover:border-gray-300 hover:bg-gray-50"
-                      }`}
-                    >
-                      {lang === "EN" ? "English" : "Francais"}
-                    </button>
-                  ))}
-                </div>
-              </section>
-
-              {/* Date Format */}
-              <section>
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted mb-4">
-                  {t.date_format}
-                </h2>
-                <div className="flex gap-3">
-                  {(["dd.MM.yyyy", "dd/MM/yyyy", "MM/dd/yyyy", "yyyy-MM-dd"] as DateFormatOption[]).map(
-                    (fmt) => (
-                      <button
-                        key={fmt}
-                        type="button"
-                        onClick={() => setDateFormat(fmt)}
-                        className={`px-4 py-3 rounded-lg border-2 transition-colors text-sm font-medium ${
-                          dateFormat === fmt
-                            ? "border-accent bg-accent-light text-accent"
-                            : "border-gray-200 text-muted hover:border-gray-300 hover:bg-gray-50"
-                        }`}
-                      >
-                        {fmt === "dd.MM.yyyy" && "05.03.2026"}
-                        {fmt === "dd/MM/yyyy" && "05/03/2026"}
-                        {fmt === "MM/dd/yyyy" && "03/05/2026"}
-                        {fmt === "yyyy-MM-dd" && "2026-03-05"}
-                        <div className="text-[10px] mt-1 opacity-60">{fmt}</div>
-                      </button>
-                    )
-                  )}
-                </div>
-              </section>
-            </>
+            <div className="space-y-1">
+              <SectionHeader title={t.general} />
+              <SettingRow label={t.app_language}>
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value as AppLanguage)}
+                  className="border border-gray-200 rounded px-2 py-1 text-sm"
+                >
+                  <option value="EN">English</option>
+                  <option value="FR">Francais</option>
+                </select>
+              </SettingRow>
+              <SettingRow label={t.export_language}>
+                <select
+                  value={exportLanguage}
+                  onChange={(e) => setExportLanguage(e.target.value as AppLanguage)}
+                  className="border border-gray-200 rounded px-2 py-1 text-sm"
+                >
+                  <option value="EN">English</option>
+                  <option value="FR">Francais</option>
+                </select>
+              </SettingRow>
+              <SettingRow label={t.date_format}>
+                <select
+                  value={dateFormat}
+                  onChange={(e) => setDateFormat(e.target.value as DateFormatOption)}
+                  className="border border-gray-200 rounded px-2 py-1 text-sm"
+                >
+                  <option value="dd.MM.yyyy">05.03.2026</option>
+                  <option value="dd/MM/yyyy">05/03/2026</option>
+                  <option value="MM/dd/yyyy">03/05/2026</option>
+                  <option value="yyyy-MM-dd">2026-03-05</option>
+                </select>
+              </SettingRow>
+            </div>
           )}
 
           {activeCategory === "appearance" && (
-            <>
-              {/* Theme */}
-              <section>
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted mb-4">
-                  {t.appearance}
-                </h2>
-                <div className="flex gap-3">
-                  <ThemeOption
-                    label={t.light}
-                    icon={<Sun size={20} />}
-                    active={!darkMode}
-                    onClick={() => darkMode && toggleDarkMode()}
-                  />
-                  <ThemeOption
-                    label={t.dark}
-                    icon={<Moon size={20} />}
-                    active={darkMode}
-                    onClick={() => !darkMode && toggleDarkMode()}
-                  />
-                  <ThemeOption
-                    label={t.system}
-                    icon={<Monitor size={20} />}
-                    active={false}
-                    onClick={() => {
-                      const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-                      if (systemDark !== darkMode) toggleDarkMode();
-                      localStorage.removeItem("darkMode");
-                    }}
-                  />
+            <div className="space-y-1">
+              <SectionHeader title={t.appearance} />
+              <SettingRow label={t.appearance}>
+                <div className="flex gap-1.5">
+                  {([
+                    { key: "light", label: t.light, icon: <Sun size={14} />, active: !darkMode, action: () => darkMode && toggleDarkMode() },
+                    { key: "dark", label: t.dark, icon: <Moon size={14} />, active: darkMode, action: () => !darkMode && toggleDarkMode() },
+                    { key: "system", label: t.system, icon: <Monitor size={14} />, active: false, action: () => { const sd = window.matchMedia("(prefers-color-scheme: dark)").matches; if (sd !== darkMode) toggleDarkMode(); localStorage.removeItem("darkMode"); } },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={opt.action}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${
+                        opt.active
+                          ? "bg-accent-light text-accent font-medium"
+                          : "text-muted hover:bg-gray-100 dark:hover:bg-gray-200"
+                      }`}
+                    >
+                      {opt.icon} {opt.label}
+                    </button>
+                  ))}
                 </div>
-              </section>
-
-              {/* Accent Color */}
-              <section>
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted mb-4">
-                  {t.accent_color}
-                </h2>
+              </SettingRow>
+              <SettingRow label={t.accent_color}>
                 <AccentColorPicker
                   presets={ACCENT_PRESETS}
                   value={accentColor}
                   onChange={setAccentColor}
                 />
-              </section>
-            </>
+              </SettingRow>
+            </div>
           )}
 
           {activeCategory === "behavior" && (
-            <>
-              {/* Project Open Mode */}
-              <section>
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted mb-4">
-                  {t.project_open_mode}
-                </h2>
-                <div className="flex gap-3">
-                  {(["peek", "page"] as ProjectOpenMode[]).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setProjectOpenMode(mode)}
-                      className={`px-4 py-3 rounded-lg border-2 transition-colors text-sm font-medium ${
-                        projectOpenMode === mode
-                          ? "border-accent bg-accent-light text-accent"
-                          : "border-gray-200 text-muted hover:border-gray-300 hover:bg-gray-50"
-                      }`}
-                    >
-                      {mode === "peek" ? t.side_peek : t.full_page}
-                      <div className="text-[10px] mt-1 opacity-60">
-                        {mode === "peek" ? t.peek_desc : t.page_desc}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </section>
-
-              {/* Show Tasks Page */}
-              <section>
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted mb-4">
-                  {t.show_tasks_page}
-                </h2>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <div
-                    onClick={() => setShowTasksPage(!showTasksPage)}
-                    className={`relative w-10 h-6 rounded-full transition-colors ${
-                      showTasksPage ? "bg-accent" : "bg-gray-300"
-                    }`}
-                  >
-                    <div
-                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                        showTasksPage ? "translate-x-4" : ""
-                      }`}
-                    />
-                  </div>
-                  <span className="text-sm">{t.show_tasks_page_desc}</span>
-                </label>
-              </section>
-            </>
+            <div className="space-y-1">
+              <SectionHeader title={t.behavior} />
+              <SettingRow label={t.project_open_mode}>
+                <select
+                  value={projectOpenMode}
+                  onChange={(e) => setProjectOpenMode(e.target.value as ProjectOpenMode)}
+                  className="border border-gray-200 rounded px-2 py-1 text-sm"
+                >
+                  <option value="peek">{t.side_peek}</option>
+                  <option value="page">{t.full_page}</option>
+                </select>
+              </SettingRow>
+              <SettingRow label={t.show_tasks_page} desc={t.show_tasks_page_desc}>
+                <Toggle checked={showTasksPage} onChange={() => setShowTasksPage(!showTasksPage)} />
+              </SettingRow>
+              <SettingRow label={t.show_income} desc={t.show_income_desc}>
+                <Toggle checked={showIncome} onChange={() => setShowIncome(!showIncome)} />
+              </SettingRow>
+              <SettingRow label={t.native_notifications} desc={t.native_notifications_desc}>
+                <Toggle checked={nativeNotifications} onChange={() => setNativeNotifications(!nativeNotifications)} />
+              </SettingRow>
+            </div>
           )}
 
           {activeCategory === "calendar" && (
-            <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted mb-4">
-                {t.calendar_sync}
-              </h2>
-              <div className="space-y-3 max-w-lg">
-                <div>
-                  <label className="block text-xs font-medium text-muted mb-1">
-                    {t.target_calendar}
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={calendarName}
-                      onChange={(e) => setCalendarName(e.target.value)}
-                      onFocus={() => {
-                        if (availableCalendars.length === 0 && !loadingCalendars) {
-                          setLoadingCalendars(true);
-                          listWritableCalendars()
-                            .then(setAvailableCalendars)
-                            .catch(() => toast.error(t.toast_failed_calendars))
-                            .finally(() => setLoadingCalendars(false));
-                        }
-                      }}
-                      className="border border-gray-200 rounded-md px-3 py-2 text-sm"
-                    >
-                      <option value="">{t.select_calendar}</option>
-                      {availableCalendars.map((name) => (
-                        <option key={name} value={name}>{name}</option>
-                      ))}
-                      {calendarName && !availableCalendars.includes(calendarName) && (
-                        <option value={calendarName}>{calendarName}</option>
-                      )}
-                    </select>
-                    {loadingCalendars && <span className="text-xs text-muted">{t.loading}</span>}
-                  </div>
-                  <p className="text-xs text-muted mt-1">
-                    {t.calendar_hint}
-                  </p>
-                </div>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <div
-                    onClick={() => {
-                      if (!calendarName && !calendarSync) {
-                        toast.error(t.toast_select_calendar);
-                        return;
+            <div className="space-y-1">
+              <SectionHeader title={t.calendar_sync} desc={t.calendar_permission_help} />
+              <SettingRow label={t.target_calendar}>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={calendarName}
+                    onChange={(e) => setCalendarName(e.target.value)}
+                    onFocus={() => {
+                      if (availableCalendars.length === 0 && !loadingCalendars) {
+                        setLoadingCalendars(true);
+                        listWritableCalendars()
+                          .then(setAvailableCalendars)
+                          .catch(() => toast.error(t.toast_failed_calendars))
+                          .finally(() => setLoadingCalendars(false));
                       }
-                      handleCalendarToggle();
                     }}
-                    className={`relative w-10 h-6 rounded-full transition-colors ${
-                      calendarSync ? "bg-accent" : "bg-gray-300"
-                    } ${syncing ? "opacity-50 pointer-events-none" : ""}`}
+                    className="border border-gray-200 rounded px-2 py-1 text-sm"
                   >
-                    <div
-                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                        calendarSync ? "translate-x-4" : ""
-                      }`}
-                    />
-                  </div>
-                  <span className="text-sm">
-                    {syncing ? t.syncing : t.sync_to_apple}
-                  </span>
-                </label>
-                <p className="text-xs text-muted mt-3">
-                  {t.calendar_permission_help}
-                </p>
-              </div>
-            </section>
+                    <option value="">{t.select_calendar}</option>
+                    {availableCalendars.map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                    {calendarName && !availableCalendars.includes(calendarName) && (
+                      <option value={calendarName}>{calendarName}</option>
+                    )}
+                  </select>
+                  {loadingCalendars && <span className="text-[11px] text-muted">{t.loading}</span>}
+                </div>
+              </SettingRow>
+              <SettingRow label={t.sync_to_apple} desc={t.calendar_hint}>
+                <Toggle
+                  checked={calendarSync}
+                  disabled={syncing}
+                  onChange={() => {
+                    if (!calendarName && !calendarSync) {
+                      toast.error(t.toast_select_calendar);
+                      return;
+                    }
+                    handleCalendarToggle();
+                  }}
+                />
+              </SettingRow>
+            </div>
           )}
 
           {activeCategory === "workload" && (
-            <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted mb-4">
-                {t.workload_templates}
-              </h2>
+            <div>
+              <SectionHeader title={t.workload_templates} />
               <WorkloadTemplateManager />
-            </section>
+            </div>
+          )}
+
+          {activeCategory === "categories" && (
+            <div>
+              <SectionHeader title={t.expense_categories} desc={t.expense_categories_desc} />
+              <ExpenseCategoryManager />
+            </div>
           )}
 
           {activeCategory === "updates" && (
-            <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted mb-4">
-                {t.updates}
-              </h2>
+            <div>
+              <SectionHeader title={t.updates} />
               <UpdateChecker />
-            </section>
+            </div>
+          )}
+
+          {activeCategory === "sandbox" && (
+            <div className="space-y-1">
+              <SectionHeader title={t.test_mode} desc={t.test_mode_desc} />
+              <SettingRow label={t.test_mode}>
+                {testMode ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-amber-600 font-medium flex items-center gap-1"><FlaskConical size={12} /> {t.test_mode_active}</span>
+                    <button type="button" onClick={handleExitTestMode} disabled={togglingTestMode} className="px-2 py-1 border border-red-300 text-red-600 text-xs rounded hover:bg-red-50 disabled:opacity-50">
+                      {t.exit_test_mode}
+                    </button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={handleEnterTestMode} disabled={togglingTestMode} className="flex items-center gap-1 px-2.5 py-1 bg-amber-500 text-white text-xs rounded hover:bg-amber-600 disabled:opacity-50">
+                    <FlaskConical size={12} />
+                    {togglingTestMode ? t.loading : t.enter_test_mode}
+                  </button>
+                )}
+              </SettingRow>
+
+              <div className="border-t border-gray-200 my-3" />
+              <SectionHeader title={t.snapshot} desc={t.snapshot_desc} />
+              <SettingRow label={t.snapshot}>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={handleCreateSnapshot} disabled={snapshotting || testMode} className="flex items-center gap-1 px-2.5 py-1 bg-accent text-white text-xs rounded hover:bg-accent-hover disabled:opacity-50">
+                    <Camera size={12} /> {snapshotting ? t.loading : t.create_snapshot}
+                  </button>
+                  <button type="button" onClick={handleRestoreSnapshot} disabled={restoringSnapshot || !hasSnapshotFile || testMode} className="flex items-center gap-1 px-2.5 py-1 border border-red-300 text-red-600 text-xs rounded hover:bg-red-50 disabled:opacity-50">
+                    <RotateCcw size={12} /> {restoringSnapshot ? t.loading : t.restore_snapshot}
+                  </button>
+                  {!hasSnapshotFile && <span className="text-[11px] text-muted">{t.no_snapshot_available}</span>}
+                </div>
+              </SettingRow>
+            </div>
           )}
 
           {activeCategory === "backup" && (
-            <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted mb-4">
-                {t.backup}
-              </h2>
-              <p className="text-xs text-muted mb-3">
-                {t.backup_desc}
-              </p>
-              <div className="space-y-3 max-w-lg">
-                <div>
-                  <label className="block text-xs font-medium text-muted mb-1">
-                    {t.backup_directory}
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      value={backupPath}
-                      readOnly
-                      placeholder={t.not_set}
-                      className="flex-1 border border-gray-200 rounded-md px-3 py-2 text-sm bg-gray-50 dark:bg-gray-100"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => browseBackupDir()}
-                      className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-md text-sm hover:bg-gray-50"
-                    >
-                      <FolderOpen size={14} /> {t.browse}
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-muted mb-1">
-                    {t.backup_directory_2}
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      value={backupPath2}
-                      readOnly
-                      placeholder={t.not_set}
-                      className="flex-1 border border-gray-200 rounded-md px-3 py-2 text-sm bg-gray-50 dark:bg-gray-100"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => browseBackupDir(true)}
-                      className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-md text-sm hover:bg-gray-50"
-                    >
-                      <FolderOpen size={14} /> {t.browse}
-                    </button>
-                    {backupPath2 && (
-                      <button
-                        type="button"
-                        onClick={() => setBackupPath2("")}
-                        className="px-2 py-2 border border-gray-200 rounded-md text-sm text-muted hover:bg-gray-50"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-muted mb-1">
-                    {t.keep_last_n}
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={maxBackups}
-                    onChange={(e) => setMaxBackups(Math.max(1, Number(e.target.value) || 5))}
-                    className="w-24 border border-gray-200 rounded-md px-3 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-muted mb-1">
-                    {t.auto_backup_interval}
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={autoBackupInterval}
-                      onChange={(e) => setAutoBackupInterval(Number(e.target.value))}
-                      className="border border-gray-200 rounded-md px-3 py-2 text-sm"
-                    >
-                      <option value={0}>{t.disabled}</option>
-                      <option value={1440}>{t.daily}</option>
-                      <option value={10080}>{t.weekly}</option>
-                      <option value={20160}>{t.biweekly}</option>
-                      <option value={43200}>{t.monthly}</option>
-                    </select>
-                    {autoBackupInterval > 0 && lastAutoBackup > 0 && (
-                      <span className="text-xs text-muted">
-                        Last: {new Date(lastAutoBackup).toLocaleString()}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={runBackup}
-                    disabled={backing || !backupPath}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-accent text-white text-sm rounded-md hover:bg-accent-hover disabled:opacity-50"
-                  >
-                    <HardDrive size={14} />
-                    {backing ? t.backing_up : t.backup_now}
+            <div className="space-y-1">
+              <SectionHeader title={t.backup} desc={t.backup_desc} />
+              <SettingRow label={t.backup_directory}>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted truncate max-w-[180px]" title={backupPath}>{backupPath || t.not_set}</span>
+                  <button type="button" onClick={() => browseBackupDir()} className="flex items-center gap-1 px-2 py-1 border border-gray-200 rounded text-xs hover:bg-gray-50 dark:hover:bg-gray-200">
+                    <FolderOpen size={12} /> {t.browse}
                   </button>
                 </div>
-
-                {/* Restore from backup */}
-                <div className="pt-4 border-t border-gray-200 mt-4">
-                  <label className="block text-xs font-medium text-muted mb-2">
-                    {t.restore_from_backup}
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={selectedBackup}
-                      onChange={(e) => setSelectedBackup(e.target.value)}
-                      onFocus={() => {
-                        if (availableBackups.length === 0 && !loadingBackups) {
-                          loadBackupList();
-                        }
-                      }}
-                      disabled={!backupPath || restoring}
-                      className="flex-1 border border-gray-200 rounded-md px-3 py-2 text-sm"
-                    >
-                      {availableBackups.length === 0 && !loadingBackups && (
-                        <option value="">{backupPath ? t.select_backup : t.toast_set_backup_dir}</option>
-                      )}
-                      {loadingBackups && <option value="">{t.loading}</option>}
-                      {availableBackups.map((name) => (
-                        <option key={name} value={name}>
-                          {name.replace("backup-", "")}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={runRestore}
-                      disabled={restoring || !selectedBackup || !backupPath}
-                      className="flex items-center gap-1.5 px-4 py-2 border border-red-300 text-red-600 text-sm rounded-md hover:bg-red-50 disabled:opacity-50"
-                    >
-                      <RotateCcw size={14} />
-                      {restoring ? t.restoring : t.restore}
-                    </button>
-                  </div>
+              </SettingRow>
+              <SettingRow label={t.backup_directory_2}>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted truncate max-w-[180px]" title={backupPath2}>{backupPath2 || t.not_set}</span>
+                  <button type="button" onClick={() => browseBackupDir(true)} className="flex items-center gap-1 px-2 py-1 border border-gray-200 rounded text-xs hover:bg-gray-50 dark:hover:bg-gray-200">
+                    <FolderOpen size={12} /> {t.browse}
+                  </button>
+                  {backupPath2 && (
+                    <button type="button" onClick={() => setBackupPath2("")} className="text-muted hover:text-gray-900 text-xs">✕</button>
+                  )}
                 </div>
+              </SettingRow>
+              <SettingRow label={t.keep_last_n}>
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={maxBackups}
+                  onChange={(e) => setMaxBackups(Math.max(1, Number(e.target.value) || 5))}
+                  className="w-16 border border-gray-200 rounded px-2 py-1 text-sm"
+                />
+              </SettingRow>
+              <SettingRow label={t.auto_backup_interval}>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={autoBackupInterval}
+                    onChange={(e) => setAutoBackupInterval(Number(e.target.value))}
+                    className="border border-gray-200 rounded px-2 py-1 text-sm"
+                  >
+                    <option value={0}>{t.disabled}</option>
+                    <option value={1440}>{t.daily}</option>
+                    <option value={10080}>{t.weekly}</option>
+                    <option value={20160}>{t.biweekly}</option>
+                    <option value={43200}>{t.monthly}</option>
+                  </select>
+                  {autoBackupInterval > 0 && lastAutoBackup > 0 && (
+                    <span className="text-[11px] text-muted">
+                      Last: {new Date(lastAutoBackup).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              </SettingRow>
+              <div className="pt-3 flex items-center gap-2">
+                <button type="button" onClick={runBackup} disabled={backing || !backupPath} className="flex items-center gap-1 px-2.5 py-1 bg-accent text-white text-xs rounded hover:bg-accent-hover disabled:opacity-50">
+                  <HardDrive size={12} /> {backing ? t.backing_up : t.backup_now}
+                </button>
               </div>
-            </section>
+
+              <div className="border-t border-gray-200 my-3" />
+              <SettingRow label={t.restore_from_backup}>
+                <div className="flex items-center gap-1.5">
+                  <select
+                    value={selectedBackup}
+                    onChange={(e) => setSelectedBackup(e.target.value)}
+                    onFocus={() => {
+                      if (availableBackups.length === 0 && !loadingBackups) loadBackupList();
+                    }}
+                    disabled={!backupPath || restoring}
+                    className="border border-gray-200 rounded px-2 py-1 text-sm max-w-[180px]"
+                  >
+                    {availableBackups.length === 0 && !loadingBackups && (
+                      <option value="">{backupPath ? t.select_backup : t.toast_set_backup_dir}</option>
+                    )}
+                    {loadingBackups && <option value="">{t.loading}</option>}
+                    {availableBackups.map((name) => (
+                      <option key={name} value={name}>{name.replace("backup-", "")}</option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={runRestore} disabled={restoring || !selectedBackup || !backupPath} className="flex items-center gap-1 px-2 py-1 border border-red-300 text-red-600 text-xs rounded hover:bg-red-50 disabled:opacity-50">
+                    <RotateCcw size={12} /> {restoring ? t.restoring : t.restore}
+                  </button>
+                </div>
+              </SettingRow>
+            </div>
           )}
         </div>
       </div>
@@ -604,29 +588,45 @@ export function SettingsPage() {
   );
 }
 
-function ThemeOption({
-  label,
-  icon,
-  active,
-  onClick,
-}: {
-  label: string;
-  icon: React.ReactNode;
-  active: boolean;
-  onClick: () => void;
-}) {
+/** Compact inline row: label left, control right */
+function SettingRow({ label, desc, children }: { label: string; desc?: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between py-2.5 min-h-[36px]">
+      <div className="flex-1 min-w-0 pr-4">
+        <div className="text-sm">{label}</div>
+        {desc && <div className="text-[11px] text-muted leading-tight mt-0.5">{desc}</div>}
+      </div>
+      <div className="shrink-0">{children}</div>
+    </div>
+  );
+}
+
+/** Section header with optional description */
+function SectionHeader({ title, desc }: { title: string; desc?: string }) {
+  return (
+    <div className="pb-2 mb-1">
+      <h2 className="text-base font-medium">{title}</h2>
+      {desc && <p className="text-[11px] text-muted mt-0.5">{desc}</p>}
+    </div>
+  );
+}
+
+/** Small toggle switch */
+function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: () => void; disabled?: boolean }) {
   return (
     <button
       type="button"
-      onClick={onClick}
-      className={`flex flex-col items-center gap-2 px-6 py-4 rounded-lg border-2 transition-colors ${
-        active
-          ? "border-accent bg-accent-light text-accent"
-          : "border-gray-200 text-muted hover:border-gray-300 hover:bg-gray-50"
-      }`}
+      onClick={onChange}
+      disabled={disabled}
+      className={`relative w-8 h-[18px] rounded-full transition-colors ${
+        checked ? "bg-accent" : "bg-gray-300"
+      } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
     >
-      {icon}
-      <span className="text-xs font-medium">{label}</span>
+      <div
+        className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] bg-white dark:bg-gray-300 rounded-full shadow transition-transform ${
+          checked ? "translate-x-[14px]" : ""
+        }`}
+      />
     </button>
   );
 }
@@ -675,7 +675,7 @@ function AccentColorPicker({
                 onChange(preset);
                 setOpen(false);
               }}
-              className={`flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-gray-50 transition-colors ${
+              className={`flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-200 transition-colors ${
                 value.color === preset.color ? "bg-accent-light text-accent font-medium" : ""
               }`}
             >
@@ -687,6 +687,213 @@ function AccentColorPicker({
             </button>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+function ExpenseCategoryManager() {
+  const t = useT();
+  const { data: categories } = useExpenseCategories();
+  const cats = categories ?? [];
+  const createCategory = useCreateExpenseCategory();
+  const updateCategory = useUpdateExpenseCategory();
+  const deleteCategory = useDeleteExpenseCategory();
+  const [adding, setAdding] = useState(false);
+  const [editingCode, setEditingCode] = useState<string | null>(null);
+  const [form, setForm] = useState<ExpenseCategory>({
+    code: "",
+    name_fr: "",
+    name_en: "",
+    pl_section: "operating",
+  });
+  const [categoryUsage, setCategoryUsage] = useState<Record<string, boolean>>({});
+
+  const catCodes = cats.map((c) => c.code).join(",");
+  useEffect(() => {
+    if (!catCodes) return;
+    Promise.all(
+      cats.map(async (c) => [c.code, await isCategoryInUse(c.code)] as const)
+    ).then((results) => {
+      setCategoryUsage(Object.fromEntries(results));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catCodes]);
+
+  const handleSaveNew = async () => {
+    if (!form.code || !form.name_fr || !form.name_en) return;
+    try {
+      await createCategory.mutateAsync(form);
+      toast.success(t.toast_category_created);
+      setAdding(false);
+      setForm({ code: "", name_fr: "", name_en: "", pl_section: "operating" });
+    } catch (e) {
+      toast.error(String(e));
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingCode) return;
+    try {
+      const { code: _, ...data } = form;
+      await updateCategory.mutateAsync({ code: editingCode, data });
+      toast.success(t.toast_category_updated);
+      setEditingCode(null);
+    } catch (e) {
+      toast.error(String(e));
+    }
+  };
+
+  const handleDelete = async (code: string) => {
+    if (isDefaultCategory(code)) {
+      toast.error(t.toast_category_default);
+      return;
+    }
+    try {
+      await deleteCategory.mutateAsync(code);
+      toast.success(t.toast_category_deleted);
+    } catch (e) {
+      const msg = String(e);
+      if (msg.includes("in use")) toast.error(t.toast_category_in_use);
+      else toast.error(msg);
+    }
+  };
+
+  const startEdit = (cat: ExpenseCategory) => {
+    setEditingCode(cat.code);
+    setForm({ ...cat });
+    setAdding(false);
+  };
+
+  const inputCls = "border border-gray-200 rounded-md px-2 py-1.5 text-sm";
+
+  return (
+    <div className="max-w-3xl">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-100 text-left text-xs text-muted uppercase">
+            <th className="py-2 pr-2 w-20">{t.category_code}</th>
+            <th className="py-2 pr-2">{t.category_name_fr}</th>
+            <th className="py-2 pr-2">{t.category_name_en}</th>
+            <th className="py-2 pr-2 w-32">{t.category_pl_section}</th>
+            <th className="py-2 w-28" />
+          </tr>
+        </thead>
+        <tbody>
+          {cats.map((cat) => (
+            <tr key={cat.code} className="border-b border-gray-100">
+              {editingCode === cat.code ? (
+                <>
+                  <td className="py-2 pr-2 text-muted">{cat.code}</td>
+                  <td className="py-2 pr-2">
+                    <input
+                      className={inputCls}
+                      value={form.name_fr}
+                      onChange={(e) => setForm({ ...form, name_fr: e.target.value })}
+                    />
+                  </td>
+                  <td className="py-2 pr-2">
+                    <input
+                      className={inputCls}
+                      value={form.name_en}
+                      onChange={(e) => setForm({ ...form, name_en: e.target.value })}
+                    />
+                  </td>
+                  <td className="py-2 pr-2">
+                    <select
+                      className={inputCls}
+                      value={form.pl_section}
+                      onChange={(e) => setForm({ ...form, pl_section: e.target.value as ExpenseCategory["pl_section"] })}
+                    >
+                      <option value="operating">{t.pl_operating}</option>
+                      <option value="social_charges">{t.pl_social_charges}</option>
+                    </select>
+                  </td>
+                  <td className="py-2 flex gap-1">
+                    <button type="button" onClick={handleSaveEdit} className="px-2 py-1 bg-accent text-white text-xs rounded hover:bg-accent-hover">
+                      {t.save}
+                    </button>
+                    <button type="button" onClick={() => setEditingCode(null)} className="px-2 py-1 border border-gray-200 text-xs rounded hover:bg-gray-50 dark:hover:bg-gray-200">
+                      {t.cancel}
+                    </button>
+                  </td>
+                </>
+              ) : (
+                <>
+                  <td className="py-2 pr-2 font-mono">{cat.code}</td>
+                  <td className="py-2 pr-2">{cat.name_fr}</td>
+                  <td className="py-2 pr-2">{cat.name_en}</td>
+                  <td className="py-2 pr-2 text-muted">
+                    {cat.pl_section === "operating" ? t.pl_operating : t.pl_social_charges}
+                  </td>
+                  <td className="py-2 flex gap-1">
+                    <button type="button" onClick={() => startEdit(cat)} className="px-2 py-1 border border-gray-200 text-xs rounded hover:bg-gray-50 dark:hover:bg-gray-200">
+                      {t.edit}
+                    </button>
+                    {isDefaultCategory(cat.code) ? (
+                      <span className="px-2 py-1 text-xs text-muted">{t.default_category}</span>
+                    ) : categoryUsage[cat.code] ? (
+                      <span className="px-2 py-1 text-xs text-muted">{t.category_in_use}</span>
+                    ) : (
+                      <button type="button" onClick={() => handleDelete(cat.code)} className="px-2 py-1 border border-red-200 text-red-600 text-xs rounded hover:bg-red-50">
+                        {t.delete}
+                      </button>
+                    )}
+                  </td>
+                </>
+              )}
+            </tr>
+          ))}
+          {adding && (
+            <tr className="border-b border-gray-100">
+              <td className="py-2 pr-2">
+                <input
+                  className={`${inputCls} w-16`}
+                  placeholder="XX"
+                  maxLength={4}
+                  value={form.code}
+                  onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                />
+              </td>
+              <td className="py-2 pr-2">
+                <input className={inputCls} value={form.name_fr} onChange={(e) => setForm({ ...form, name_fr: e.target.value })} />
+              </td>
+              <td className="py-2 pr-2">
+                <input className={inputCls} value={form.name_en} onChange={(e) => setForm({ ...form, name_en: e.target.value })} />
+              </td>
+              <td className="py-2 pr-2">
+                <select
+                  className={inputCls}
+                  value={form.pl_section}
+                  onChange={(e) => setForm({ ...form, pl_section: e.target.value as ExpenseCategory["pl_section"] })}
+                >
+                  <option value="operating">{t.pl_operating}</option>
+                  <option value="social_charges">{t.pl_social_charges}</option>
+                </select>
+              </td>
+              <td className="py-2 flex gap-1">
+                <button type="button" onClick={handleSaveNew} className="px-2 py-1 bg-accent text-white text-xs rounded hover:bg-accent-hover">
+                  {t.save}
+                </button>
+                <button type="button" onClick={() => setAdding(false)} className="px-2 py-1 border border-gray-200 text-xs rounded hover:bg-gray-50 dark:hover:bg-gray-200">
+                  {t.cancel}
+                </button>
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      {!adding && !editingCode && (
+        <button
+          type="button"
+          onClick={() => {
+            setAdding(true);
+            setForm({ code: "", name_fr: "", name_en: "", pl_section: "operating" });
+          }}
+          className="mt-3 px-3 py-1.5 text-sm text-accent border border-accent rounded-md hover:bg-accent-light"
+        >
+          + {t.add_category}
+        </button>
       )}
     </div>
   );

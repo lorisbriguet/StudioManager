@@ -1,5 +1,5 @@
 import { getDb, validateFields, TransactionBatch } from "../index";
-import type { Client, ClientContact } from "../../types/client";
+import type { Client, ClientContact, ClientAddress } from "../../types/client";
 
 export async function getClients(): Promise<Client[]> {
   const db = await getDb();
@@ -75,6 +75,7 @@ export async function deleteClient(id: string): Promise<void> {
   batch.add("DELETE FROM workload_rows WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1)", [id]);
   batch.add("DELETE FROM projects WHERE client_id = $1", [id]);
   batch.add("DELETE FROM client_contacts WHERE client_id = $1", [id]);
+  batch.add("DELETE FROM client_addresses WHERE client_id = $1", [id]);
   batch.add("DELETE FROM clients WHERE id = $1", [id]);
   await batch.commit();
 }
@@ -134,4 +135,57 @@ export async function updateClientContact(
 export async function deleteClientContact(id: number): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM client_contacts WHERE id = $1", [id]);
+}
+
+// ── Client Addresses ───────────────────────────────────────
+
+export async function getClientAddresses(
+  clientId: string
+): Promise<ClientAddress[]> {
+  const db = await getDb();
+  return db.select<ClientAddress[]>(
+    "SELECT * FROM client_addresses WHERE client_id = $1 ORDER BY id",
+    [clientId]
+  );
+}
+
+export async function getClientAddress(
+  id: number
+): Promise<ClientAddress | null> {
+  const db = await getDb();
+  const rows = await db.select<ClientAddress[]>(
+    "SELECT * FROM client_addresses WHERE id = $1",
+    [id]
+  );
+  return rows[0] ?? null;
+}
+
+export async function createClientAddress(
+  data: Omit<ClientAddress, "id">
+): Promise<number> {
+  const db = await getDb();
+  const result = await db.execute(
+    `INSERT INTO client_addresses (client_id, label, billing_name, address_line1, address_line2, postal_city)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [data.client_id, data.label, data.billing_name, data.address_line1, data.address_line2, data.postal_city]
+  );
+  return result.lastInsertId ?? 0;
+}
+
+export async function updateClientAddress(
+  id: number,
+  data: Partial<Omit<ClientAddress, "id" | "client_id">>
+): Promise<void> {
+  const db = await getDb();
+  const fields = Object.keys(data);
+  if (fields.length === 0) return;
+  validateFields(fields);
+  const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(", ");
+  const values = [id, ...fields.map((f) => data[f as keyof typeof data])];
+  await db.execute(`UPDATE client_addresses SET ${sets} WHERE id = $1`, values);
+}
+
+export async function deleteClientAddress(id: number): Promise<void> {
+  const db = await getDb();
+  await db.execute("DELETE FROM client_addresses WHERE id = $1", [id]);
 }

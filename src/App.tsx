@@ -17,19 +17,23 @@ import { InvoiceFormPage } from "./pages/InvoiceFormPage";
 import { QuotesPage } from "./pages/QuotesPage";
 import { QuoteFormPage } from "./pages/QuoteFormPage";
 import { ExpensesPage } from "./pages/ExpensesPage";
+import { IncomePage } from "./pages/IncomePage";
 import { FinancesPage } from "./pages/FinancesPage";
 import { InvoicePreviewPage } from "./pages/InvoicePreviewPage";
 import { QuotePreviewPage } from "./pages/QuotePreviewPage";
+import { ResourcesPage } from "./pages/ResourcesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { CommandPalette } from "./components/CommandPalette";
 import { useOverdueCheck } from "./hooks/useOverdueCheck";
+import { useRecurringCheck } from "./hooks/useRecurringCheck";
 import { useAutoBackup } from "./hooks/useAutoBackup";
 import { useErrorNotifications } from "./hooks/useErrorNotifications";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useUndoStore } from "./stores/undo-store";
 import { logError } from "./lib/log";
+import { requestNotificationPermission } from "./lib/nativeNotification";
 
 import { queryClient } from "./lib/queryClient";
 // Re-export so existing imports from "./App" still work
@@ -37,23 +41,67 @@ export { queryClient };
 
 function StartupChecks() {
   useOverdueCheck();
+  useRecurringCheck();
   useAutoBackup();
   useErrorNotifications();
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
-        // Don't intercept if user is typing in an input
-        const tag = (e.target as HTMLElement)?.tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    requestNotificationPermission();
+  }, []);
 
-        const action = useUndoStore.getState().pop();
+  // Suppress native WebView context menu globally (Tauri renders its own).
+  // Uses bubble phase so React onContextMenu handlers fire first (on #root),
+  // then this catches any remaining right-clicks that weren't handled.
+  // Allow native menu only on inputs/textareas where users need Copy/Paste.
+  useEffect(() => {
+    const suppress = (e: MouseEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      const editable = (e.target as HTMLElement)?.isContentEditable;
+      if (tag === "INPUT" || tag === "TEXTAREA" || editable) return;
+      e.preventDefault();
+    };
+    document.addEventListener("contextmenu", suppress);
+    return () => document.removeEventListener("contextmenu", suppress);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key !== "z") return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      const store = useUndoStore.getState();
+
+      if (e.shiftKey) {
+        // Redo: Cmd+Shift+Z
+        const action = store.popRedo();
         if (action) {
           e.preventDefault();
           Promise.resolve(action.execute()).then(() => {
+            // Push reverse (undo) back onto the undo stack without clearing redo
+            if (action.redo) {
+              store.stack.unshift({ label: action.label, execute: action.redo, redo: action.execute });
+              useUndoStore.setState({ stack: store.stack.slice(0, 20) });
+            }
+            toast.success(`Redo: ${action.label}`);
+          }).catch((err) => {
+            logError("Redo failed:", err);
+            toast.error("Redo failed");
+          });
+        }
+      } else {
+        // Undo: Cmd+Z
+        const action = store.pop();
+        if (action) {
+          e.preventDefault();
+          Promise.resolve(action.execute()).then(() => {
+            // Push redo action if available
+            if (action.redo) {
+              store.pushRedo({ label: action.label, execute: action.redo, redo: action.execute });
+            }
             toast.success(`Undo: ${action.label}`);
-          }).catch((e) => {
-            logError("Undo failed:", e);
+          }).catch((err) => {
+            logError("Undo failed:", err);
             toast.error("Undo failed");
           });
         }
@@ -90,7 +138,9 @@ export default function App() {
               <Route path="quotes/:id/edit" element={<QuoteFormPage />} />
               <Route path="quotes/:id/preview" element={<QuotePreviewPage />} />
               <Route path="expenses" element={<ExpensesPage />} />
+              <Route path="income" element={<IncomePage />} />
               <Route path="finances" element={<FinancesPage />} />
+              <Route path="resources" element={<ResourcesPage />} />
               <Route path="notifications" element={<NotificationsPage />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="profile" element={<ProfilePage />} />

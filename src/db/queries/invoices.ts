@@ -1,4 +1,5 @@
 import { getDb, validateFields, TransactionBatch } from "../index";
+import { getNextReference } from "./referenceGenerator";
 import type { Invoice, InvoiceLineItem } from "../../types/invoice";
 
 export async function getInvoices(): Promise<Invoice[]> {
@@ -28,14 +29,7 @@ export async function getInvoicesByClient(
 }
 
 export async function getNextInvoiceReference(year: number): Promise<string> {
-  const db = await getDb();
-  const prefix = `${year}-`;
-  const rows = await db.select<{ max_num: number | null }[]>(
-    "SELECT MAX(CAST(SUBSTR(reference, $1) AS INTEGER)) as max_num FROM invoices WHERE reference LIKE $2",
-    [prefix.length + 1, `${prefix}%`]
-  );
-  const next = (rows[0]?.max_num ?? 0) + 1;
-  return `${year}-${String(next).padStart(3, "0")}`;
+  return getNextReference("invoices", "reference", `${year}-`);
 }
 
 export async function createInvoiceWithLineItems(
@@ -46,14 +40,17 @@ export async function createInvoiceWithLineItems(
   batch.add(
     `INSERT INTO invoices (reference, client_id, project_id, status, language, activity, assignment,
      invoice_date, due_date, payment_terms_days, subtotal, discount_applied, discount_rate,
-     discount_label, total, paid_date, contact_id, po_number, pdf_path, from_quote_id, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
+     discount_label, total, paid_date, contact_id, billing_address_id, po_number, pdf_path, from_quote_id, notes,
+     currency, exchange_rate, chf_equivalent)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)`,
     [
       data.reference, data.client_id, data.project_id, data.status, data.language,
       data.activity, data.assignment, data.invoice_date, data.due_date,
       data.payment_terms_days, data.subtotal, data.discount_applied, data.discount_rate,
-      data.discount_label, data.total, data.paid_date, data.contact_id, data.po_number, data.pdf_path,
-      data.from_quote_id, data.notes,
+      data.discount_label, data.total, data.paid_date, data.contact_id, data.billing_address_id ?? null,
+      data.po_number, data.pdf_path,
+      data.from_quote_id, data.notes, data.currency ?? "CHF", data.exchange_rate ?? 1.0,
+      data.chf_equivalent ?? data.total,
     ]
   );
   for (const item of lineItems) {
@@ -139,7 +136,7 @@ export async function deleteInvoice(id: number): Promise<void> {
   const invoice = rows[0];
   await db.execute("DELETE FROM invoices WHERE id = $1", [id]);
   // Reindex remaining invoices for the same year
-  if (invoice) {
+  if (invoice && !invoice.reference.startsWith("DRAFT")) {
     const year = invoice.reference.split("-")[0];
     await reindexInvoiceReferences(year);
   }

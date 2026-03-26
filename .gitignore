@@ -27,6 +27,11 @@ src-tauri/WixTools/
 *.db
 *.db-journal
 
+# Claude Code
+.claude/
+SUPERPOWERS.md
+V1.5.0-PLAN.md
+
 # Logs
 *.log
 npm-debug.log*

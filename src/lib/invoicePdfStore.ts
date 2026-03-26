@@ -7,6 +7,7 @@ import { getInvoice, getInvoiceLineItems, updateInvoice } from "../db/queries/in
 import { getClient, getClientContact } from "../db/queries/clients";
 import { getBusinessProfile } from "../db/queries/business-profile";
 import { logError } from "./log";
+import { postProcessInvoicePdf } from "./pdfPostProcess";
 
 function sanitizeFilename(name: string): string {
   return name
@@ -56,7 +57,12 @@ export async function generateAndStoreInvoicePdf(
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const blob = await pdf(doc as any).toBlob();
-    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let bytes = new Uint8Array(await blob.arrayBuffer());
+
+    // Post-process: VOID overlay for cancelled invoices
+    bytes = new Uint8Array(await postProcessInvoicePdf(bytes, {
+      isCancelled: invoice.status === "cancelled",
+    }));
 
     const dataDir = await appDataDir();
     const invoicesDir = `${dataDir}/invoices`;

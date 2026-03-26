@@ -1,21 +1,24 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { ListTodo, Trash2, ArrowLeft } from "lucide-react";
+import { Button } from "../components/ui";
 import { toast } from "sonner";
 import { addDays, format } from "date-fns";
 import { useT } from "../i18n/useT";
 import { useInvoice, useCreateInvoice, useUpdateInvoice, useDeleteInvoice } from "../db/hooks/useInvoices";
 import { useQueryClient } from "@tanstack/react-query";
-import { useClients, useClientContacts } from "../db/hooks/useClients";
+import { useClients, useClientContacts, useClientAddresses } from "../db/hooks/useClients";
 import { useProjectsByClient } from "../db/hooks/useProjects";
 import { useTasksByProject } from "../db/hooks/useTasks";
-import { getNextInvoiceReference, getInvoiceLineItems } from "../db/queries/invoices";
+import { getInvoiceLineItems } from "../db/queries/invoices";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { parseActivities } from "../types/business-profile";
 import { getQuote, getQuoteLineItems, updateQuote } from "../db/queries/quotes";
 import { logError } from "../lib/log";
 import { makeLineItem, useLineItemForm, toPersistedLineItems } from "../lib/lineItems";
 import { LineItemsTable } from "../components/shared/LineItemsTable";
+import { currencies, getExchangeRate, toCHF, type Currency } from "../lib/exchangeRate";
+import { useTabStore } from "../stores/tab-store";
 
 export function InvoiceFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -26,6 +29,7 @@ export function InvoiceFormPage() {
   const fromQuoteId = Number(searchParams.get("from_quote")) || null;
 
   const t = useT();
+  const updateActiveTab = useTabStore((s) => s.updateActiveTab);
   const { data: existingInvoice } = useInvoice(isEdit ? invoiceId : 0);
   const { data: clients } = useClients();
   const { data: profile } = useBusinessProfile();
@@ -38,12 +42,17 @@ export function InvoiceFormPage() {
 
   const [clientId, setClientId] = useState("");
   const [contactId, setContactId] = useState<number | null>(null);
+  const [billingAddressId, setBillingAddressId] = useState<number | null>(null);
   const [projectId, setProjectId] = useState<number | null>(null);
   const [invoiceDate, setInvoiceDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [activity, setActivity] = useState("");
   const [assignment, setAssignment] = useState("");
   const [poNumber, setPoNumber] = useState("");
   const [notes, setNotes] = useState("");
+  const [currency, setCurrency] = useState<Currency>("CHF");
+  const [exchangeRate, setExchangeRate] = useState(1);
+  const [chfManualOverride, setChfManualOverride] = useState(false);
+  const [chfEquivalent, setChfEquivalent] = useState(0);
 
   const {
     items, setItems, sensors, lineItemIds, handleDragEnd,
@@ -54,12 +63,19 @@ export function InvoiceFormPage() {
     if (existingInvoice) {
       setClientId(existingInvoice.client_id);
       setContactId(existingInvoice.contact_id);
+      setBillingAddressId(existingInvoice.billing_address_id);
       setProjectId(existingInvoice.project_id);
       setInvoiceDate(existingInvoice.invoice_date);
       setActivity(existingInvoice.activity);
       setAssignment(existingInvoice.assignment);
       setPoNumber(existingInvoice.po_number ?? "");
       setNotes(existingInvoice.notes);
+      setCurrency((existingInvoice.currency ?? "CHF") as Currency);
+      setExchangeRate(existingInvoice.exchange_rate ?? 1);
+      setChfEquivalent(existingInvoice.chf_equivalent ?? existingInvoice.total);
+      if (existingInvoice.currency && existingInvoice.currency !== "CHF") {
+        setChfManualOverride(true); // preserve user's manually set CHF equivalent
+      }
       getInvoiceLineItems(invoiceId).then((lineItems) => {
         if (lineItems.length > 0) {
           setItems(
@@ -79,6 +95,14 @@ export function InvoiceFormPage() {
     }
   }, [existingInvoice, invoiceId]);
 
+  // Update tab label with invoice reference
+  useEffect(() => {
+    if (isEdit && existingInvoice?.reference) {
+      const label = existingInvoice.reference.startsWith("DRAFT") ? t.draft : existingInvoice.reference;
+      updateActiveTab(`/invoices/${invoiceId}/edit`, label);
+    }
+  }, [existingInvoice?.reference, isEdit, invoiceId]);
+
   // Default activity from profile for new invoices
   useEffect(() => {
     if (!isEdit && !activity && !fromQuoteId && profileActivities.length > 0) {
@@ -94,6 +118,7 @@ export function InvoiceFormPage() {
       if (!quote) return;
       setClientId(quote.client_id);
       setProjectId(quote.project_id);
+      setBillingAddressId(quote.billing_address_id ?? null);
       setActivity(quote.activity);
       setAssignment(quote.assignment);
       setNotes(quote.notes);
@@ -121,8 +146,39 @@ export function InvoiceFormPage() {
   const discountAmount = subtotal * discountRate;
   const total = subtotal - discountAmount;
 
+  // Auto-fetch exchange rate when currency changes
+  useEffect(() => {
+    if (currency === "CHF") {
+      setExchangeRate(1);
+      setChfManualOverride(false);
+      return;
+    }
+    let cancelled = false;
+    getExchangeRate(currency).then((rate) => {
+      if (cancelled) return;
+      setExchangeRate(rate);
+      setChfManualOverride(false);
+    });
+    return () => { cancelled = true; };
+  }, [currency]);
+
+  // Auto-calc CHF equivalent when total or exchange rate changes (unless manually overridden)
+  useEffect(() => {
+    if (!chfManualOverride) {
+      setChfEquivalent(currency === "CHF" ? total : toCHF(total, exchangeRate));
+    }
+  }, [total, exchangeRate, currency, chfManualOverride]);
+
   const { data: clientContacts } = useClientContacts(clientId);
+  const { data: clientAddresses } = useClientAddresses(clientId);
   const { data: clientProjects } = useProjectsByClient(clientId);
+
+  // Auto-select address when client has exactly one
+  useEffect(() => {
+    if (clientAddresses && clientAddresses.length === 1 && !billingAddressId) {
+      setBillingAddressId(clientAddresses[0].id);
+    }
+  }, [clientAddresses]);
   const { data: projectTasks } = useTasksByProject(projectId ?? 0);
 
   const availableTasks = projectTasks ?? [];
@@ -143,6 +199,7 @@ export function InvoiceFormPage() {
               client_id: clientId,
               project_id: projectId,
               contact_id: contactId,
+              billing_address_id: billingAddressId,
               language: selectedClient?.language ?? "FR",
               activity,
               assignment,
@@ -155,6 +212,9 @@ export function InvoiceFormPage() {
               total,
               po_number: poNumber || null,
               notes,
+              currency,
+              exchange_rate: exchangeRate,
+              chf_equivalent: chfEquivalent,
             },
             lineItems,
           },
@@ -167,7 +227,7 @@ export function InvoiceFormPage() {
           }
         );
       } else {
-        const reference = await getNextInvoiceReference(new Date().getFullYear());
+        const reference = `DRAFT-${Date.now()}`;
         createInvoice.mutate(
           {
             data: {
@@ -175,6 +235,7 @@ export function InvoiceFormPage() {
               client_id: clientId,
               project_id: projectId,
               contact_id: contactId,
+              billing_address_id: billingAddressId,
               status: "draft",
               language: selectedClient?.language ?? "FR",
               activity,
@@ -192,6 +253,11 @@ export function InvoiceFormPage() {
               pdf_path: null,
               from_quote_id: fromQuoteId,
               notes,
+              currency,
+              exchange_rate: exchangeRate,
+              chf_equivalent: chfEquivalent,
+              reminder_count: 0,
+              last_reminder_date: null,
             },
             lineItems,
           },
@@ -216,9 +282,7 @@ export function InvoiceFormPage() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate("/invoices")} className="text-muted hover:text-gray-900">
-          <ArrowLeft size={18} />
-        </button>
+        <Button variant="ghost" size="sm" onClick={() => navigate("/invoices")} icon={<ArrowLeft size={18} />} />
         <h1 className="text-xl font-semibold">
           {isEdit ? t.edit_invoice : t.new_invoice}
         </h1>
@@ -233,6 +297,7 @@ export function InvoiceFormPage() {
               onChange={(e) => {
                 setClientId(e.target.value);
                 setContactId(null);
+                setBillingAddressId(null);
                 setProjectId(null);
               }}
               className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
@@ -258,6 +323,23 @@ export function InvoiceFormPage() {
               ))}
             </select>
           </div>
+          {clientAddresses && clientAddresses.length >= 1 && (
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">{t.billing_address}</label>
+              <select
+                value={billingAddressId ?? ""}
+                onChange={(e) => setBillingAddressId(e.target.value ? Number(e.target.value) : null)}
+                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+              >
+                <option value="">{t.none}</option>
+                {clientAddresses.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label}{a.billing_name ? ` — ${a.billing_name}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-muted mb-1">{t.project_optional}</label>
             <select
@@ -313,6 +395,33 @@ export function InvoiceFormPage() {
               placeholder="e.g. PO-12345"
             />
           </div>
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">{t.currency}</label>
+            <select
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value as Currency)}
+              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+            >
+              {currencies.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+          {currency !== "CHF" && (
+              <div>
+                <label className="block text-xs font-medium text-muted mb-1">{t.chf_equivalent}</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={chfEquivalent}
+                  onChange={(e) => {
+                    setChfEquivalent(Number(e.target.value));
+                    setChfManualOverride(true);
+                  }}
+                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+                />
+              </div>
+          )}
         </div>
 
         <LineItemsTable
@@ -327,9 +436,13 @@ export function InvoiceFormPage() {
           discountRate={discountRate}
           discountAmount={discountAmount}
           total={total}
+          currency={currency}
           headerActions={
             availableTasks.length > 0 ? (
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<ListTodo size={14} />}
                 onClick={() => {
                   const existingDesignations = new Set(items.map((i) => i.designation));
                   const newTasks = availableTasks.filter(
@@ -345,10 +458,10 @@ export function InvoiceFormPage() {
                   const nonEmpty = items.filter((i) => i.designation.trim());
                   setItems(nonEmpty.length > 0 ? [...nonEmpty, ...newItems] : newItems);
                 }}
-                className="flex items-center gap-1 text-xs text-accent hover:underline"
+                className="text-accent hover:underline"
               >
-                <ListTodo size={14} /> {t.add_tasks}
-              </button>
+                {t.add_tasks}
+              </Button>
             ) : undefined
           }
           renderDesignation={(item, i) => (
@@ -371,31 +484,36 @@ export function InvoiceFormPage() {
         </div>
 
         <div className="flex gap-2">
-          <button
+          <Button
+            size="lg"
             onClick={save}
             disabled={createInvoice.isPending || updateInvoice.isPending}
-            className="px-4 py-2 bg-accent text-white text-sm rounded-md hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isEdit ? t.update_invoice : t.create_invoice}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="secondary"
+            size="lg"
             onClick={() => navigate("/invoices")}
-            className="px-4 py-2 border border-gray-200 text-sm rounded-md hover:bg-gray-50"
           >
             {t.cancel}
-          </button>
+          </Button>
           {isEdit && existingInvoice?.status === "draft" && !showDeleteConfirm && (
-            <button
+            <Button
+              variant="secondary"
+              size="lg"
+              icon={<Trash2 size={14} />}
               onClick={() => setShowDeleteConfirm(true)}
-              className="ml-auto flex items-center gap-1.5 px-4 py-2 text-sm text-danger border border-danger/30 rounded-md hover:bg-danger/5"
+              className="ml-auto text-danger border-danger/30 hover:bg-danger/5"
             >
-              <Trash2 size={14} /> {t.delete}
-            </button>
+              {t.delete}
+            </Button>
           )}
           {showDeleteConfirm && existingInvoice && (
             <div className="ml-auto flex items-center gap-2">
               <span className="text-sm text-danger">{t.delete} {existingInvoice.reference}?</span>
-              <button
+              <Button
+                variant="danger"
                 onClick={() => {
                   deleteInvoice.mutate(invoiceId, {
                     onSuccess: () => {
@@ -405,16 +523,15 @@ export function InvoiceFormPage() {
                     onError: (e) => toast.error(String(e)),
                   });
                 }}
-                className="px-3 py-1.5 text-sm bg-danger text-white rounded-md hover:bg-danger/90"
               >
                 {t.delete}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
                 onClick={() => setShowDeleteConfirm(false)}
-                className="px-3 py-1.5 text-sm border border-gray-200 rounded-md hover:bg-gray-50"
               >
                 {t.cancel}
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -467,7 +584,7 @@ function DesignationInput({
                 onChange(tk.title);
                 setOpen(false);
               }}
-              className="w-full text-left px-2 py-1.5 text-sm hover:bg-gray-50"
+              className="w-full text-left px-2 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-200"
             >
               {tk.title}
             </button>

@@ -12,6 +12,16 @@
   --color-danger: #dc2626;
   --color-success: #16a34a;
   --color-warning: #d97706;
+  --color-chart-1: #2563eb;
+  --color-chart-2: #16a34a;
+  --color-chart-3: #d97706;
+  --color-chart-4: #dc2626;
+  --color-chart-5: #8b5cf6;
+  --color-chart-6: #06b6d4;
+  --color-chart-7: #ec4899;
+  --color-chart-8: #84cc16;
+  --color-surface: #ffffff;
+  --color-border: #e5e5e5;
 }
 
 body {
@@ -57,6 +67,16 @@ body {
   --color-sidebar-border: #333333;
   --color-accent-light: var(--color-accent-dark-light, #172554);
   --color-muted: #a8a8a8;
+  --color-chart-1: #60a5fa;
+  --color-chart-2: #4ade80;
+  --color-chart-3: #fbbf24;
+  --color-chart-4: #f87171;
+  --color-chart-5: #a78bfa;
+  --color-chart-6: #22d3ee;
+  --color-chart-7: #f472b6;
+  --color-chart-8: #a3e635;
+  --color-surface: #252525;
+  --color-border: #333333;
 }
 
 .dark body {
@@ -85,6 +105,8 @@ body {
   --fc-event-bg-color: color-mix(in srgb, var(--color-accent) 15%, white);
   --fc-event-text-color: var(--color-accent);
   font-size: 13px;
+  border-radius: 0.5rem;
+  overflow: hidden;
 }
 
 .fc-studio .fc .fc-button {
@@ -236,4 +258,46 @@ body {
 .dark .fc-studio .fc .fc-event.fc-deadline {
   --fc-event-bg-color: #451a1a;
   --fc-event-text-color: #fca5a5;
+}
+
+/* ─── Global transitions (Notion-like smooth feel) ─── */
+table tbody tr {
+  transition: background-color 150ms ease;
+}
+
+button, a, select, [role="button"] {
+  transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease, opacity 150ms ease;
+}
+
+/* ─── Animations ─── */
+@keyframes fade-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-in {
+  animation: fade-in var(--animate-duration, 150ms) ease-out;
+}
+
+/* ─── Dashboard grid overrides ─── */
+.react-grid-item.react-grid-placeholder {
+  background: var(--color-accent);
+  opacity: 0.08;
+  border-radius: 8px;
+  border: 2px dashed var(--color-accent);
+}
+
+.react-grid-item.react-draggable-dragging {
+  user-select: none;
+  opacity: 0.85;
+}
+
+/* Prevent text selection across the ENTIRE page during grid drag or resize.
+   Class added/removed by DashboardPage via onDragStart/onResizeStart callbacks. */
+body.grid-interacting,
+body.grid-interacting * {
+  user-select: none !important;
+}
+body.grid-interacting textarea,
+body.grid-interacting input {
+  user-select: text !important;
 }

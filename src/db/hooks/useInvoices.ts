@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import * as q from "../queries/invoices";
+import { getNextInvoiceReference } from "../queries/invoices";
 import type { Invoice, InvoiceLineItem } from "../../types/invoice";
 import { useUndoStore } from "../../stores/undo-store";
 import { generateAndStoreInvoicePdf } from "../../lib/invoicePdfStore";
@@ -48,6 +49,10 @@ export function useCreateInvoice() {
           await q.deleteInvoice(id);
           qc.invalidateQueries({ queryKey: ["invoices"] });
         },
+        redo: async () => {
+          await q.createInvoiceWithLineItems(data, lineItems);
+          qc.invalidateQueries({ queryKey: ["invoices"] });
+        },
       });
       return id;
     },
@@ -68,10 +73,26 @@ export function useUpdateInvoice() {
       lineItems?: Omit<InvoiceLineItem, "id" | "invoice_id">[];
     }) => {
       const prev = await q.getInvoice(id);
+      const prevLineItems = lineItems ? await q.getInvoiceLineItems(id) : undefined;
+
+      // Auto-assign reference when status changes to "sent" and ref is still DRAFT
+      if (data.status === "sent" && prev?.reference.startsWith("DRAFT")) {
+        const year = prev.invoice_date
+          ? parseInt(prev.invoice_date.substring(0, 4))
+          : new Date().getFullYear();
+        data.reference = await getNextInvoiceReference(year);
+      }
+
+      // Prevent changing back to draft once it's been set to another status
+      if (data.status === "draft" && prev && prev.status !== "draft") {
+        throw new Error("Cannot revert to draft status");
+      }
+
       await q.updateInvoiceWithLineItems(id, data, lineItems);
 
-      // Auto-generate PDF when status changes to "sent"
-      if (data.status === "sent" && prev?.status !== "sent") {
+      // Auto-generate PDF when invoice is not a draft
+      const finalStatus = data.status ?? prev?.status;
+      if (finalStatus && finalStatus !== "draft") {
         const toastId = toast.loading("Generating PDF...");
         try {
           await generateAndStoreInvoicePdf(id);
@@ -89,10 +110,19 @@ export function useUpdateInvoice() {
         for (const key of Object.keys(data)) {
           prevData[key] = (prev as unknown as Record<string, unknown>)[key];
         }
+        const prevItems = prevLineItems?.map(({ id: _iid, invoice_id, ...rest }) => rest);
         useUndoStore.getState().push({
           label: `Update invoice "${prev.reference}"`,
           execute: async () => {
-            await q.updateInvoiceWithLineItems(id, prevData as Partial<Omit<Invoice, "id" | "created_at" | "updated_at">>);
+            await q.updateInvoiceWithLineItems(
+              id,
+              prevData as Partial<Omit<Invoice, "id" | "created_at" | "updated_at">>,
+              prevItems
+            );
+            qc.invalidateQueries({ queryKey: ["invoices"] });
+          },
+          redo: async () => {
+            await q.updateInvoiceWithLineItems(id, data, lineItems);
             qc.invalidateQueries({ queryKey: ["invoices"] });
           },
         });
@@ -105,7 +135,34 @@ export function useUpdateInvoice() {
 export function useDeleteInvoice() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: q.deleteInvoice,
+    mutationFn: async (id: number) => {
+      const prev = await q.getInvoice(id);
+      const prevItems = await q.getInvoiceLineItems(id);
+      await q.deleteInvoice(id);
+      if (prev) {
+        const { id: _id, created_at, updated_at, ...data } = prev;
+        const items = prevItems.map(({ id: _iid, invoice_id, ...rest }) => rest);
+        useUndoStore.getState().push({
+          label: `Delete invoice "${prev.reference}"`,
+          execute: async () => {
+            await q.createInvoiceWithLineItems(
+              data as Omit<Invoice, "id" | "created_at" | "updated_at">,
+              items
+            );
+            qc.invalidateQueries({ queryKey: ["invoices"] });
+          },
+          redo: async () => {
+            // Re-fetch by reference since ID may differ after restore
+            const invoices = await q.getInvoices();
+            const restored = invoices.find((i) => i.reference === prev.reference);
+            if (restored) {
+              await q.deleteInvoice(restored.id);
+              qc.invalidateQueries({ queryKey: ["invoices"] });
+            }
+          },
+        });
+      }
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["invoices"] }),
   });
 }

@@ -1,7 +1,7 @@
 import { Command } from "@tauri-apps/plugin-shell";
 import { getDb } from "../db/index";
 import { useAppStore } from "../stores/app-store";
-import { logError, logInfo } from "../lib/log";
+import { logError, logInfo, logWarn } from "../lib/log";
 
 function getCalendarName(): string {
   return useAppStore.getState().calendarName || "StudioManager";
@@ -136,7 +136,7 @@ export async function createCalendarEvent(event: CalendarEvent): Promise<string>
 
 /** Update an existing calendar event by uid — deletes old and creates new */
 export async function updateCalendarEvent(uid: string, event: CalendarEvent): Promise<string> {
-  try { await deleteCalendarEvent(uid); } catch (_) { /* may already be gone */ }
+  try { await deleteCalendarEvent(uid); } catch (e) { logWarn("Calendar sync: delete old event:", e); }
   return await createCalendarEvent(event);
 }
 
@@ -168,19 +168,19 @@ export async function purgeAllCalendarEvents(): Promise<void> {
       "SELECT calendar_event_id FROM tasks WHERE calendar_event_id IS NOT NULL AND calendar_event_id != ''"
     );
     uids.push(...tasks.map((t) => t.calendar_event_id));
-  } catch (_) {}
+  } catch (e) { logWarn("Calendar sync:", e); }
   try {
     const subtasks = await db.select<{ calendar_event_id: string }[]>(
       "SELECT calendar_event_id FROM subtasks WHERE calendar_event_id IS NOT NULL AND calendar_event_id != ''"
     );
     uids.push(...subtasks.map((s) => s.calendar_event_id));
-  } catch (_) {}
+  } catch (e) { logWarn("Calendar sync: fetch subtask UIDs:", e); }
   try {
     const projects = await db.select<{ calendar_deadline_id: string }[]>(
       "SELECT calendar_deadline_id FROM projects WHERE calendar_deadline_id IS NOT NULL AND calendar_deadline_id != ''"
     );
     uids.push(...projects.map((p) => p.calendar_deadline_id));
-  } catch (_) {}
+  } catch (e) { logWarn("Calendar sync: fetch project UIDs:", e); }
 
   // Delete each tracked event by UID
   for (const uid of uids) {
@@ -196,7 +196,7 @@ export async function purgeAllCalendarEvents(): Promise<void> {
           end tell
         end tell
       `);
-    } catch (_) {}
+    } catch (e) { logWarn("Calendar sync: delete event:", e); }
   }
 
   // Clear all stored calendar IDs in DB
@@ -204,7 +204,7 @@ export async function purgeAllCalendarEvents(): Promise<void> {
   await db.execute("UPDATE subtasks SET calendar_event_id = NULL WHERE calendar_event_id IS NOT NULL");
   try {
     await db.execute("UPDATE projects SET calendar_deadline_id = NULL WHERE calendar_deadline_id IS NOT NULL");
-  } catch (_) { /* column might not exist */ }
+  } catch (e) { logWarn("Calendar sync: clear project deadline IDs:", e); }
 }
 
 /** Sync all existing tasks, subtasks, and project deadlines that don't have a calendar_event_id yet */

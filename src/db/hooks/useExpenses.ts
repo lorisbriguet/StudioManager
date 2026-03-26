@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import * as q from "../queries/expenses";
-import type { Expense } from "../../types/expense";
+import type { Expense, ExpenseCategory } from "../../types/expense";
 import { useUndoStore } from "../../stores/undo-store";
 
 export function useExpenses() {
@@ -36,6 +37,7 @@ export function useCreateExpense() {
       return id;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["expenses"] }),
+    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -66,6 +68,7 @@ export function useUpdateExpense() {
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["expenses"] }),
+    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -87,5 +90,89 @@ export function useDeleteExpense() {
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["expenses"] }),
+    onError: (e) => { toast.error(String(e)); },
   });
 }
+
+// ── Expense Category Mutations ────────────────────────────────
+
+export function useCreateExpenseCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: ExpenseCategory) => {
+      await q.createExpenseCategory(data);
+      useUndoStore.getState().push({
+        label: `Create category "${data.code}"`,
+        execute: async () => {
+          await q.deleteExpenseCategory(data.code);
+          qc.invalidateQueries({ queryKey: ["expense-categories"] });
+        },
+        redo: async () => {
+          await q.createExpenseCategory(data);
+          qc.invalidateQueries({ queryKey: ["expense-categories"] });
+        },
+      });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["expense-categories"] }),
+    onError: (e) => { toast.error(String(e)); },
+  });
+}
+
+export function useUpdateExpenseCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      code: string;
+      data: Partial<Omit<ExpenseCategory, "code">>;
+    }) => {
+      const prev = await q.getExpenseCategory(vars.code);
+      await q.updateExpenseCategory(vars.code, vars.data);
+      if (prev) {
+        const prevData: Record<string, unknown> = {};
+        for (const key of Object.keys(vars.data)) {
+          prevData[key] = (prev as unknown as Record<string, unknown>)[key];
+        }
+        useUndoStore.getState().push({
+          label: `Update category "${vars.code}"`,
+          execute: async () => {
+            await q.updateExpenseCategory(vars.code, prevData as Partial<Omit<ExpenseCategory, "code">>);
+            qc.invalidateQueries({ queryKey: ["expense-categories"] });
+          },
+          redo: async () => {
+            await q.updateExpenseCategory(vars.code, vars.data);
+            qc.invalidateQueries({ queryKey: ["expense-categories"] });
+          },
+        });
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["expense-categories"] }),
+    onError: (e) => { toast.error(String(e)); },
+  });
+}
+
+export function useDeleteExpenseCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (code: string) => {
+      const prev = await q.getExpenseCategory(code);
+      await q.deleteExpenseCategory(code);
+      if (prev) {
+        useUndoStore.getState().push({
+          label: `Delete category "${code}"`,
+          execute: async () => {
+            await q.createExpenseCategory(prev);
+            qc.invalidateQueries({ queryKey: ["expense-categories"] });
+          },
+          redo: async () => {
+            await q.deleteExpenseCategory(code);
+            qc.invalidateQueries({ queryKey: ["expense-categories"] });
+          },
+        });
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["expense-categories"] }),
+    onError: (e) => { toast.error(String(e)); },
+  });
+}
+
+export { isDefaultCategory } from "../queries/expenses";

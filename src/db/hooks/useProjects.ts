@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import * as q from "../queries/projects";
 import * as tq from "../queries/tasks";
 import * as wq from "../queries/workload";
@@ -36,10 +37,15 @@ export function useCreateProject() {
           await q.deleteProject(id);
           qc.invalidateQueries({ queryKey: ["projects"] });
         },
+        redo: async () => {
+          await q.createProject(data);
+          qc.invalidateQueries({ queryKey: ["projects"] });
+        },
       });
       return id;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
+    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -70,6 +76,7 @@ export function useUpdateProject() {
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
+    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -135,5 +142,6 @@ export function useDeleteProject() {
       qc.invalidateQueries({ queryKey: ["workload-rows"] });
       qc.invalidateQueries({ queryKey: ["workload-config"] });
     },
+    onError: (e) => { toast.error(String(e)); },
   });
 }

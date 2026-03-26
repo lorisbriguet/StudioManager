@@ -5,6 +5,7 @@ import { createBackup, isBackupRunning, setBackupRunning } from "../lib/backup";
 import { createNotification } from "../db/queries/notifications";
 import { queryClient } from "../lib/queryClient";
 import { logError } from "../lib/log";
+import { sendNativeNotification } from "../lib/nativeNotification";
 
 export function useAutoBackup() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -49,6 +50,7 @@ export function useAutoBackup() {
               link: null,
             });
             queryClient.invalidateQueries({ queryKey: ["notifications"] });
+            sendNativeNotification("Auto-backup", fileName);
           })
           .catch((e) => {
             logError("Auto-backup failed:", e);

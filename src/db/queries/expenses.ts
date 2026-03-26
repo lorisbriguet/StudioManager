@@ -1,4 +1,5 @@
 import { getDb, validateFields } from "../index";
+import { getNextReference } from "./referenceGenerator";
 import type { Expense, ExpenseCategory } from "../../types/expense";
 
 export async function getExpenses(): Promise<Expense[]> {
@@ -16,15 +17,8 @@ export async function getExpenseCategories(): Promise<ExpenseCategory[]> {
 }
 
 export async function getNextExpenseReference(year: number): Promise<string> {
-  const db = await getDb();
   const shortYear = String(year).slice(-2);
-  const prefix = `F-${shortYear}-`;
-  const rows = await db.select<{ max_num: number | null }[]>(
-    "SELECT MAX(CAST(SUBSTR(reference, $1) AS INTEGER)) as max_num FROM expenses WHERE reference LIKE $2",
-    [prefix.length + 1, `${prefix}%`]
-  );
-  const next = (rows[0]?.max_num ?? 0) + 1;
-  return `${prefix}${String(next).padStart(3, "0")}`;
+  return getNextReference("expenses", "reference", `F-${shortYear}-`);
 }
 
 export async function createExpense(
@@ -80,4 +74,71 @@ export async function getExpenseById(id: number): Promise<Expense | null> {
 export async function deleteExpense(id: number): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM expenses WHERE id = $1", [id]);
+}
+
+// ── Expense Category CRUD ─────────────────────────────────────
+
+const DEFAULT_CATEGORIES = new Set(["AM", "FA", "FD", "FR", "LO", "CS"]);
+
+export function isDefaultCategory(code: string): boolean {
+  return DEFAULT_CATEGORIES.has(code);
+}
+
+export async function getExpenseCategory(code: string): Promise<ExpenseCategory | null> {
+  const db = await getDb();
+  const rows = await db.select<ExpenseCategory[]>(
+    "SELECT * FROM expense_categories WHERE code = $1",
+    [code]
+  );
+  return rows[0] ?? null;
+}
+
+export async function createExpenseCategory(
+  data: ExpenseCategory
+): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "INSERT INTO expense_categories (code, name_fr, name_en, pl_section) VALUES ($1, $2, $3, $4)",
+    [data.code, data.name_fr, data.name_en, data.pl_section]
+  );
+}
+
+export async function updateExpenseCategory(
+  code: string,
+  data: Partial<Omit<ExpenseCategory, "code">>
+): Promise<void> {
+  const db = await getDb();
+  const fields = Object.keys(data);
+  validateFields(fields);
+  const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(", ");
+  const values = [code, ...fields.map((f) => data[f as keyof typeof data])];
+  await db.execute(
+    `UPDATE expense_categories SET ${sets} WHERE code = $1`,
+    values
+  );
+}
+
+export async function deleteExpenseCategory(code: string): Promise<void> {
+  if (DEFAULT_CATEGORIES.has(code)) {
+    throw new Error("Cannot delete a default category");
+  }
+  const db = await getDb();
+  // Check if any expense references this category
+  const refs = await db.select<{ cnt: number }[]>(
+    "SELECT COUNT(*) as cnt FROM expenses WHERE category_code = $1",
+    [code]
+  );
+  if (refs[0]?.cnt > 0) {
+    throw new Error("Category is in use by existing expenses");
+  }
+  await db.execute("DELETE FROM expense_categories WHERE code = $1", [code]);
+}
+
+export async function isCategoryInUse(code: string): Promise<boolean> {
+  const db = await getDb();
+  const rows = await db.select<{ cnt: number }[]>(
+    "SELECT COUNT(*) as cnt FROM expenses WHERE category_code = $1",
+    [code]
+  );
+  return (rows[0]?.cnt ?? 0) > 0;
 }

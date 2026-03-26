@@ -1,12 +1,15 @@
 import { useState, useMemo, useCallback } from "react";
-import { Link } from "react-router-dom";
-import { Plus, Search } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Plus, Eye, Trash2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
-import { useClients, useCreateClient, getNextClientId } from "../db/hooks/useClients";
+import { useClients, useCreateClient, useDeleteClient, getNextClientId } from "../db/hooks/useClients";
 import { useProjects } from "../db/hooks/useProjects";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
 import { useT } from "../i18n/useT";
 import { useAppStore } from "../stores/app-store";
+import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
+import { useTabStore } from "../stores/tab-store";
+import { Button, Badge, Input, PageHeader, SearchBar, PageSpinner } from "../components/ui";
 import type { Client } from "../types/client";
 
 type SortKey = "id" | "name" | "language" | "discount_rate" | "status";
@@ -15,7 +18,11 @@ export function ClientsPage() {
   const t = useT();
   const { data: clients, isLoading } = useClients();
   const { data: projects } = useProjects();
+  const navigate = useNavigate();
+  const openTab = useTabStore((s) => s.openTab);
   const createClient = useCreateClient();
+  const deleteClient = useDeleteClient();
+  const [ctxMenu, setCtxMenu] = useState<ContextMenuState<Client & { status: string }> | null>(null);
   const clientsSortKey = useAppStore((s) => s.clientsSortKey);
   const clientsSortDir = useAppStore((s) => s.clientsSortDir);
   const setClientsSortKey = useAppStore((s) => s.setClientsSortKey);
@@ -52,29 +59,17 @@ export function ClientsPage() {
     return sortRows(rows, sort.key, sort.dir);
   }, [clients, search, sort, activeClientIds]);
 
-  if (isLoading) return <div className="text-muted text-sm">{t.loading}</div>;
+  if (isLoading) return <PageSpinner />;
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold">{t.clients}</h1>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover"
-        >
-          <Plus size={16} /> {t.new_client}
-        </button>
-      </div>
+      <PageHeader title={t.clients}>
+        <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>
+          {t.new_client}
+        </Button>
+      </PageHeader>
 
-      <div className="flex items-center gap-2 mb-4">
-        <Search size={16} className="text-muted" />
-        <input
-          placeholder={t.search_clients}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="border border-gray-200 rounded-md px-3 py-1.5 text-sm w-64"
-        />
-      </div>
+      <SearchBar value={search} onChange={setSearch} placeholder={t.search_clients} className="mb-4 w-64" />
 
       {showForm && (
         <NewClientForm
@@ -94,10 +89,10 @@ export function ClientsPage() {
         />
       )}
 
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
+      <div>
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
+            <tr className="border-b border-gray-100">
               <SortHeader label="ID" sortKey="id" current={sort} onSort={setSort} />
               <SortHeader label={t.display_name} sortKey="name" current={sort} onSort={setSort} />
               <SortHeader label={t.language} sortKey="language" current={sort} onSort={setSort} />
@@ -107,7 +102,11 @@ export function ClientsPage() {
           </thead>
           <tbody>
             {filtered.map((c) => (
-              <tr key={c.id} className="border-b border-gray-100 hover:bg-gray-50">
+              <tr
+                key={c.id}
+                className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200"
+                onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: c }); }}
+              >
                 <td className="px-4 py-2 text-muted">{c.id}</td>
                 <td className="px-4 py-2">
                   <Link to={`/clients/${c.id}`} className="text-accent hover:underline">
@@ -119,13 +118,9 @@ export function ClientsPage() {
                   {c.has_discount ? `${(c.discount_rate * 100).toFixed(0)}%` : "-"}
                 </td>
                 <td className="px-4 py-2">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    c.status === "active"
-                      ? "bg-green-100 text-green-700"
-                      : "bg-gray-100 text-gray-500"
-                  }`}>
+                  <Badge variant={c.status === "active" ? "success" : "neutral"}>
                     {c.status === "active" ? t.active : t.inactive}
-                  </span>
+                  </Badge>
                 </td>
               </tr>
             ))}
@@ -139,6 +134,19 @@ export function ClientsPage() {
           </tbody>
         </table>
       </div>
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          onClose={() => setCtxMenu(null)}
+          items={[
+            { label: t.view_details, icon: <Eye size={14} />, onClick: () => navigate(`/clients/${ctxMenu.item.id}`) },
+            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/clients/${ctxMenu.item.id}`, ctxMenu.item.name) },
+            { label: "", divider: true, onClick: () => {} },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteClient.mutate(ctxMenu.item.id) },
+          ]}
+        />
+      )}
     </div>
   );
 }
@@ -166,42 +174,37 @@ function NewClientForm({
   });
 
   return (
-    <div className="border border-gray-200 rounded-lg p-4 mb-6 space-y-3">
+    <div className="border border-gray-100 rounded-lg p-4 mb-6 space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <input
+        <Input
           placeholder={`${t.display_name} *`}
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
-          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
         />
-        <input
+        <Input
           placeholder={t.billing_name}
           value={form.billing_name}
           onChange={(e) => setForm({ ...form, billing_name: e.target.value })}
-          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
         />
-        <input
+        <Input
           placeholder={t.address_line_1}
           value={form.address_line1}
           onChange={(e) => setForm({ ...form, address_line1: e.target.value })}
-          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
         />
-        <input
+        <Input
           placeholder={t.address_line_2}
           value={form.address_line2}
           onChange={(e) => setForm({ ...form, address_line2: e.target.value })}
-          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
         />
-        <input
+        <Input
           placeholder={t.postal_city}
           value={form.postal_city}
           onChange={(e) => setForm({ ...form, postal_city: e.target.value })}
-          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
         />
         <select
           value={form.language}
           onChange={(e) => setForm({ ...form, language: e.target.value as "FR" | "EN" })}
-          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
+          className="border border-gray-200 rounded-md px-3 py-2 text-sm dark:border-gray-600"
         >
           <option value="FR">French</option>
           <option value="EN">English</option>
@@ -218,21 +221,17 @@ function NewClientForm({
         </label>
       </div>
       <div className="flex gap-2">
-        <button
+        <Button
           onClick={() => {
             if (!form.name.trim()) return toast.error(t.toast_name_required);
             onSave({ ...form, billing_name: form.billing_name || form.name });
           }}
-          className="px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover"
         >
           {t.save}
-        </button>
-        <button
-          onClick={onCancel}
-          className="px-3 py-1.5 border border-gray-200 text-sm rounded-md hover:bg-gray-50"
-        >
+        </Button>
+        <Button variant="secondary" onClick={onCancel}>
           {t.cancel}
-        </button>
+        </Button>
       </div>
     </div>
   );

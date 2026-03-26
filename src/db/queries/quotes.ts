@@ -1,4 +1,5 @@
 import { getDb, validateFields, TransactionBatch } from "../index";
+import { getNextReference } from "./referenceGenerator";
 import type { Quote, QuoteLineItem } from "../../types/quote";
 
 export async function getQuotes(): Promise<Quote[]> {
@@ -16,14 +17,7 @@ export async function getQuote(id: number): Promise<Quote | null> {
 }
 
 export async function getNextQuoteReference(year: number): Promise<string> {
-  const db = await getDb();
-  const prefix = `D-${year}-`;
-  const rows = await db.select<{ max_num: number | null }[]>(
-    "SELECT MAX(CAST(SUBSTR(reference, $1) AS INTEGER)) as max_num FROM quotes WHERE reference LIKE $2",
-    [prefix.length + 1, `${prefix}%`]
-  );
-  const next = (rows[0]?.max_num ?? 0) + 1;
-  return `${prefix}${String(next).padStart(3, "0")}`;
+  return getNextReference("quotes", "reference", `D-${year}-`);
 }
 
 export async function createQuoteWithLineItems(
@@ -90,6 +84,13 @@ export async function updateQuoteWithLineItems(
       );
     }
   }
+  await batch.commit();
+}
+
+export async function deleteQuote(id: number): Promise<void> {
+  const batch = new TransactionBatch();
+  batch.add("DELETE FROM quote_line_items WHERE quote_id = $1", [id]);
+  batch.add("DELETE FROM quotes WHERE id = $1", [id]);
   await batch.commit();
 }
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Plus, ChevronRight, ChevronDown, Trash2, GripVertical } from "lucide-react";
+import { Plus, ChevronRight, ChevronDown, Trash2, GripVertical, ExternalLink, Bookmark, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -38,10 +38,18 @@ import {
   useProjectWorkloadConfig,
   useSetProjectWorkloadConfig,
 } from "../db/hooks/useWorkload";
+import {
+  useResourcesByProject,
+  useLinkResourceToProject,
+  useUnlinkResourceFromProject,
+} from "../db/hooks/useResources";
+import { getResources } from "../db/queries/resources";
 import type { WorkloadColumn } from "../types/workload";
 import { DEFAULT_WORKLOAD_COLUMNS } from "../types/workload";
 import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
+import { ContextMenu, type ContextMenuState } from "./ContextMenu";
+import { useTabStore } from "../stores/tab-store";
 import { useT } from "../i18n/useT";
 
 interface Props {
@@ -76,6 +84,8 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
   const [editingSubtask, setEditingSubtask] = useState<number | null>(null);
   const [taskFilter, setTaskFilter] = useState<"todo" | "done" | "all">("todo");
   const [tasksOpen, setTasksOpen] = useState(true);
+  const [sectionCtxMenu, setSectionCtxMenu] = useState<ContextMenuState<string> | null>(null);
+  const openTab = useTabStore((s) => s.openTab);
   const [editingColumn, setEditingColumn] = useState<{
     column: WorkloadColumn | null;
     index: number;
@@ -244,13 +254,16 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
               updateProject.mutate({ id: projectId, data: { notes: val } });
             }
           }}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-vertical min-h-[60px] max-h-[60vh] placeholder:text-muted"
+          className="w-full border border-gray-100 rounded-lg px-3 py-2 text-sm resize-vertical min-h-[60px] max-h-[60vh] placeholder:text-muted"
           style={{ fieldSizing: "content" } as React.CSSProperties}
         />
       </div>
 
-      <div className="border border-gray-200 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-3">
+      <div className="border border-gray-100 rounded-lg p-4">
+        <div
+          className="flex items-center justify-between mb-3 select-none"
+          onContextMenu={(e) => { e.preventDefault(); setSectionCtxMenu({ x: e.clientX, y: e.clientY, item: "tasks" }); }}
+        >
           <button
             onClick={() => setTasksOpen(!tasksOpen)}
             className="flex items-center gap-1 text-sm font-medium hover:text-accent"
@@ -267,7 +280,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                   className={`px-2 py-0.5 text-[11px] rounded-full border ${
                     taskFilter === f
                       ? "bg-accent text-white border-accent"
-                      : "border-gray-200 text-muted hover:bg-gray-50"
+                      : "border-gray-200 text-muted hover:bg-gray-50 dark:hover:bg-gray-200"
                   }`}
                 >
                   {f === "todo" ? t.todo : f === "done" ? t.done : t.all}
@@ -545,7 +558,16 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
       </div>
 
       {/* Workload Tracker */}
-      <div className="mt-4">
+      <div
+        className="mt-4"
+        onContextMenu={(e) => {
+          // Only fire on the workload header area, not on table cells
+          const target = e.target as HTMLElement;
+          if (target.closest("td") || target.closest("input") || target.closest("textarea")) return;
+          e.preventDefault();
+          setSectionCtxMenu({ x: e.clientX, y: e.clientY, item: "workload" });
+        }}
+      >
         <WorkloadTable
           projectId={projectId}
           onEditColumn={(col, idx) => setEditingColumn({ column: col, index: idx })}
@@ -560,6 +582,119 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
           onDelete={editingColumn.column ? handleDeleteColumn : undefined}
           onClose={() => setEditingColumn(null)}
         />
+      )}
+
+      {/* Resources */}
+      <ProjectResources projectId={projectId} />
+
+      {sectionCtxMenu && (
+        <ContextMenu
+          x={sectionCtxMenu.x}
+          y={sectionCtxMenu.y}
+          onClose={() => setSectionCtxMenu(null)}
+          items={[
+            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/projects/${projectId}`, project?.name ?? "") },
+          ]}
+        />
+      )}
+    </div>
+  );
+}
+
+function ProjectResources({ projectId }: { projectId: number }) {
+  const t = useT();
+  const { data: linked } = useResourcesByProject(projectId);
+  const linkResource = useLinkResourceToProject();
+  const unlinkResource = useUnlinkResourceFromProject();
+  const [showPicker, setShowPicker] = useState(false);
+  const [allResources, setAllResources] = useState<{ id: number; name: string; url: string }[]>([]);
+  const [collapsed, setCollapsed] = useState(true);
+
+  useEffect(() => {
+    if (showPicker) {
+      getResources().then(setAllResources);
+    }
+  }, [showPicker]);
+
+  const linkedIds = new Set((linked ?? []).map((r) => r.id));
+  const unlinked = allResources.filter((r) => !linkedIds.has(r.id));
+
+  return (
+    <div className="mt-4">
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="flex items-center gap-1.5 text-sm font-medium mb-2"
+      >
+        {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+        <Bookmark size={14} />
+        {t.resources} {linked && linked.length > 0 && <span className="text-muted font-normal">({linked.length})</span>}
+      </button>
+      {!collapsed && (
+        <div className="pl-5">
+          {(linked ?? []).length === 0 && !showPicker && (
+            <div className="text-xs text-muted mb-2">{t.no_resources_yet}</div>
+          )}
+          {(linked ?? []).map((r) => (
+            <div key={r.id} className="flex items-center gap-2 py-1 group text-sm">
+              <button
+                onClick={() => {
+                  let u = r.url;
+                  if (u && !u.startsWith("http://") && !u.startsWith("https://")) u = "https://" + u;
+                  import("@tauri-apps/plugin-shell").then((m) => m.open(u));
+                }}
+                className="flex items-center gap-1 text-accent hover:underline truncate max-w-[300px]"
+              >
+                <ExternalLink size={12} />
+                {r.name}
+              </button>
+              <span className="text-xs text-muted truncate max-w-[200px]">
+                {r.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+              </span>
+              <button
+                onClick={() => unlinkResource.mutate({ resourceId: r.id, projectId })}
+                className="text-danger opacity-0 group-hover:opacity-100"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ))}
+          {showPicker ? (
+            <div className="mt-2 border border-gray-200 rounded-md p-2">
+              {unlinked.length === 0 ? (
+                <div className="text-xs text-muted">{t.no_matching_resources}</div>
+              ) : (
+                <div className="max-h-32 overflow-y-auto space-y-1">
+                  {unlinked.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => {
+                        linkResource.mutate({ resourceId: r.id, projectId });
+                        setShowPicker(false);
+                      }}
+                      className="w-full text-left px-2 py-1 text-sm hover:bg-gray-50 dark:hover:bg-gray-200 rounded flex items-center gap-2"
+                    >
+                      <Bookmark size={12} className="text-muted" />
+                      {r.name}
+                      <span className="text-xs text-muted ml-auto truncate max-w-[150px]">
+                        {r.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button onClick={() => setShowPicker(false)} className="text-xs text-muted mt-1 hover:text-gray-900">
+                {t.cancel}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowPicker(true)}
+              className="flex items-center gap-1 text-xs text-accent hover:underline mt-1"
+            >
+              <Plus size={12} /> {t.add}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

@@ -59,11 +59,11 @@ export function CommandPalette() {
       <div className="fixed inset-0 bg-black/40" onClick={close} />
       <div className="fixed top-[20%] left-1/2 -translate-x-1/2 w-full max-w-lg">
         <Command
-          className="bg-white dark:bg-gray-100 rounded-xl shadow-2xl border border-gray-200 overflow-hidden"
+          className="bg-white dark:bg-gray-100 rounded-xl shadow-2xl border border-gray-100 overflow-hidden"
           shouldFilter={true}
         >
-          <div className="flex items-center gap-2 px-4 border-b border-gray-100">
-            <Search size={16} className="text-muted" />
+          <div className="flex items-center gap-2 px-4 border-b border-gray-200">
+            <Search size={16} className="text-muted shrink-0" />
             <Command.Input
               value={search}
               onValueChange={setSearch}
@@ -71,7 +71,7 @@ export function CommandPalette() {
               className="w-full py-3 text-sm outline-none bg-transparent"
               autoFocus
             />
-            <kbd className="text-[10px] text-muted bg-gray-100 px-1.5 py-0.5 rounded">
+            <kbd className="text-[10px] text-muted bg-gray-50 dark:bg-gray-200 border border-gray-200 px-1.5 py-0.5 rounded shrink-0">
               ESC
             </kbd>
           </div>

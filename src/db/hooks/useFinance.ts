@@ -21,3 +21,17 @@ export function useDashboardKPIs(year: number) {
     queryFn: () => q.getDashboardKPIs(year),
   });
 }
+
+export function useRevenueByActivity(year: number) {
+  return useQuery({
+    queryKey: ["finance", "revenue-by-activity", year],
+    queryFn: () => q.getRevenueByActivity(year),
+  });
+}
+
+export function useRevenueByClient(year: number) {
+  return useQuery({
+    queryKey: ["finance", "revenue-by-client", year],
+    queryFn: () => q.getRevenueByClient(year),
+  });
+}

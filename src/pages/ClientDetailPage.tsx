@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Save, Plus, Trash2, Eye, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { PageSpinner } from "../components/ui";
+import { useTabStore } from "../stores/tab-store";
 import {
   useClient,
   useUpdateClient,
@@ -10,12 +12,15 @@ import {
   useCreateClientContact,
   useUpdateClientContact,
   useDeleteClientContact,
+  useClientAddresses,
+  useCreateClientAddress,
+  useUpdateClientAddress,
+  useDeleteClientAddress,
 } from "../db/hooks/useClients";
 import { useProjectsByClient } from "../db/hooks/useProjects";
 import { useInvoicesByClient } from "../db/hooks/useInvoices";
 import { useT } from "../i18n/useT";
-import type { Client } from "../types/client";
-import type { ClientContact } from "../types/client";
+import type { Client, ClientContact, ClientAddress } from "../types/client";
 
 export function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -23,9 +28,11 @@ export function ClientDetailPage() {
   const { data: projects } = useProjectsByClient(id!);
   const { data: invoices } = useInvoicesByClient(id!);
   const { data: contacts } = useClientContacts(id!);
+  const { data: addresses } = useClientAddresses(id!);
   const updateClient = useUpdateClient();
   const deleteClient = useDeleteClient();
   const navigate = useNavigate();
+  const updateActiveTab = useTabStore((s) => s.updateActiveTab);
   const t = useT();
 
   const [form, setForm] = useState<Partial<Client>>({});
@@ -35,6 +42,11 @@ export function ClientDetailPage() {
   useEffect(() => {
     if (client) setForm(client);
   }, [client]);
+
+  // Update tab label with client name
+  useEffect(() => {
+    if (client?.name) updateActiveTab(`/clients/${id}`, client.name);
+  }, [client?.name, id]);
 
   const saveField = (field: keyof Client, value: unknown) => {
     if (!id) return;
@@ -64,7 +76,7 @@ export function ClientDetailPage() {
     );
   };
 
-  if (isLoading) return <div className="text-muted text-sm">{t.loading}</div>;
+  if (isLoading) return <PageSpinner />;
   if (!client) return <div className="text-muted text-sm">{t.client_not_found}</div>;
 
   return (
@@ -101,7 +113,7 @@ export function ClientDetailPage() {
               </button>
               <button
                 onClick={() => setConfirmDelete(false)}
-                className="px-2 py-1 border border-gray-200 rounded-md text-xs hover:bg-gray-50"
+                className="px-2 py-1 border border-gray-200 rounded-md text-xs hover:bg-gray-50 dark:hover:bg-gray-200"
               >
                 {t.cancel}
               </button>
@@ -123,10 +135,6 @@ export function ClientDetailPage() {
           <Section title={t.details}>
             <div className="grid grid-cols-2 gap-3">
               <Field label={t.display_name} value={form.name ?? ""} onBlur={(v) => saveField("name", v)} />
-              <Field label={t.billing_name} value={form.billing_name ?? ""} onBlur={(v) => saveField("billing_name", v)} />
-              <Field label={t.address_line_1} value={form.address_line1 ?? ""} onBlur={(v) => saveField("address_line1", v)} />
-              <Field label={t.address_line_2} value={form.address_line2 ?? ""} onBlur={(v) => saveField("address_line2", v)} />
-              <Field label={t.postal_city} value={form.postal_city ?? ""} onBlur={(v) => saveField("postal_city", v)} />
               <div>
                 <label className="block text-xs font-medium text-muted mb-1">{t.language}</label>
                 <select
@@ -175,6 +183,8 @@ export function ClientDetailPage() {
           </Section>
 
           <ContactsSection clientId={id!} contacts={contacts ?? []} />
+
+          <AddressesSection clientId={id!} addresses={addresses ?? []} />
 
           <Section title={t.notes}>
             <textarea
@@ -305,7 +315,7 @@ function ContactsSection({
   };
 
   return (
-    <div className="border border-gray-200 rounded-lg p-4">
+    <div className="border border-gray-100 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-medium">{t.contacts}</h2>
         <button
@@ -478,11 +488,214 @@ function ContactCard({
   );
 }
 
+/* ── Addresses Section ── */
+
+interface AddressRow {
+  label: string;
+  billing_name: string;
+  address_line1: string;
+  address_line2: string;
+  postal_city: string;
+}
+
+function AddressesSection({
+  clientId,
+  addresses,
+}: {
+  clientId: string;
+  addresses: ClientAddress[];
+}) {
+  const createAddress = useCreateClientAddress();
+  const updateAddress = useUpdateClientAddress();
+  const deleteAddress = useDeleteClientAddress();
+  const t = useT();
+
+  const [drafts, setDrafts] = useState<AddressRow[]>([]);
+
+  const addDraft = () =>
+    setDrafts((prev) => [
+      ...prev,
+      { label: "", billing_name: "", address_line1: "", address_line2: "", postal_city: "" },
+    ]);
+
+  const saveDraft = (idx: number) => {
+    const d = drafts[idx];
+    if (!d.label && !d.address_line1) return;
+    createAddress.mutate(
+      { client_id: clientId, ...d },
+      {
+        onSuccess: () => {
+          toast.success(t.address_added);
+          setDrafts((prev) => prev.filter((_, i) => i !== idx));
+        },
+      }
+    );
+  };
+
+  const removeDraft = (idx: number) =>
+    setDrafts((prev) => prev.filter((_, i) => i !== idx));
+
+  const updateField = (
+    addr: ClientAddress,
+    field: keyof Omit<ClientAddress, "id" | "client_id">,
+    value: string
+  ) => {
+    updateAddress.mutate({
+      id: addr.id,
+      clientId,
+      data: { [field]: value },
+    });
+  };
+
+  const removeAddress = (addr: ClientAddress) => {
+    deleteAddress.mutate(
+      { id: addr.id, clientId },
+      { onSuccess: () => toast.success(t.address_removed) }
+    );
+  };
+
+  return (
+    <div className="border border-gray-100 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-medium">{t.billing_addresses}</h2>
+        <button
+          onClick={addDraft}
+          className="flex items-center gap-1 text-xs text-accent hover:text-accent-hover"
+        >
+          <Plus size={14} /> {t.add}
+        </button>
+      </div>
+
+      {addresses.length === 0 && drafts.length === 0 && (
+        <div className="text-sm text-muted">{t.no_addresses}</div>
+      )}
+
+      <div className="space-y-3">
+        {addresses.map((a) => (
+          <div key={a.id} className="border border-gray-200 rounded-md p-3 group">
+            <div className="flex items-start justify-between mb-2">
+              <span className="text-xs font-medium text-accent">
+                <EditableText
+                  value={a.label}
+                  placeholder="Label"
+                  onCommit={(v) => updateField(a, "label", v)}
+                />
+              </span>
+              <button
+                onClick={() => removeAddress(a)}
+                title={t.delete}
+                className="opacity-0 group-hover:opacity-100 text-muted hover:text-danger transition-opacity"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <MiniField
+                label={t.billing_name}
+                value={a.billing_name}
+                onChange={(v) => updateField(a, "billing_name", v)}
+                onBlur
+              />
+              <MiniField
+                label={t.address_line_1}
+                value={a.address_line1}
+                onChange={(v) => updateField(a, "address_line1", v)}
+                onBlur
+              />
+              <MiniField
+                label={t.address_line_2}
+                value={a.address_line2}
+                onChange={(v) => updateField(a, "address_line2", v)}
+                onBlur
+              />
+              <MiniField
+                label={t.postal_city}
+                value={a.postal_city}
+                onChange={(v) => updateField(a, "postal_city", v)}
+                onBlur
+              />
+            </div>
+          </div>
+        ))}
+
+        {drafts.map((d, idx) => (
+          <div
+            key={`draft-addr-${idx}`}
+            className="border border-dashed border-gray-300 rounded-md p-3 space-y-2"
+          >
+            <div className="grid grid-cols-2 gap-2">
+              <MiniField
+                label={t.label}
+                value={d.label}
+                onChange={(v) =>
+                  setDrafts((prev) =>
+                    prev.map((x, i) => (i === idx ? { ...x, label: v } : x))
+                  )
+                }
+              />
+              <MiniField
+                label={t.billing_name}
+                value={d.billing_name}
+                onChange={(v) =>
+                  setDrafts((prev) =>
+                    prev.map((x, i) => (i === idx ? { ...x, billing_name: v } : x))
+                  )
+                }
+              />
+              <MiniField
+                label={t.address_line_1}
+                value={d.address_line1}
+                onChange={(v) =>
+                  setDrafts((prev) =>
+                    prev.map((x, i) => (i === idx ? { ...x, address_line1: v } : x))
+                  )
+                }
+              />
+              <MiniField
+                label={t.address_line_2}
+                value={d.address_line2}
+                onChange={(v) =>
+                  setDrafts((prev) =>
+                    prev.map((x, i) => (i === idx ? { ...x, address_line2: v } : x))
+                  )
+                }
+              />
+              <MiniField
+                label={t.postal_city}
+                value={d.postal_city}
+                onChange={(v) =>
+                  setDrafts((prev) =>
+                    prev.map((x, i) => (i === idx ? { ...x, postal_city: v } : x))
+                  )
+                }
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => removeDraft(idx)}
+                className="text-xs text-muted hover:text-danger"
+              >
+                {t.cancel}
+              </button>
+              <button
+                onClick={() => saveDraft(idx)}
+                className="text-xs text-accent hover:text-accent-hover font-medium"
+              >
+                {t.save}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ── Shared UI ── */
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="border border-gray-200 rounded-lg p-4">
+    <div className="border border-gray-100 rounded-lg p-4">
       <h2 className="text-sm font-medium mb-3">{title}</h2>
       {children}
     </div>

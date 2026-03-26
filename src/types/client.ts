@@ -15,6 +15,16 @@ export interface Client {
   updated_at: string;
 }
 
+export interface ClientAddress {
+  id: number;
+  client_id: string;
+  label: string;
+  billing_name: string;
+  address_line1: string;
+  address_line2: string;
+  postal_city: string;
+}
+
 export interface ClientContact {
   id: number;
   client_id: string;

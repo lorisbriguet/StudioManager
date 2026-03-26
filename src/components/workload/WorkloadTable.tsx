@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { Plus, Trash2, GripVertical, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Settings2, X, ChevronRight, ChevronDown, Copy, Download, Sigma, Pin } from "lucide-react";
+import { Button } from "../ui";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
@@ -321,9 +322,9 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
   }, [sortedRows, columns]);
 
   return (
-    <div className="border border-gray-200 rounded-lg p-4">
+    <div className="border border-gray-100 rounded-lg p-4">
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 select-none">
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="flex items-center gap-1 text-sm font-medium hover:text-accent"
@@ -388,11 +389,13 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
 
       {/* Table */}
       {isOpen && (<>
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
+      <div className="border border-gray-100 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="text-sm" style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}>
             <thead>
-              <tr className="border-b border-gray-200 bg-gray-50">
+              <tr className="border-b border-gray-200 bg-gray-50 select-none">
                 <th className={`w-8 px-2 border-r border-gray-200 ${stickyFirstCol ? "sticky left-0 z-10" : ""} bg-gray-50`} />
                 {columns.map((col, ci) => {
                   const w = getColWidth(col);
@@ -437,8 +440,6 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                 <th className="w-14" />
               </tr>
             </thead>
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
             <tbody>
               {sortedRows.map((row) => (
                 <SortableRow
@@ -478,20 +479,20 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                 </tr>
               )}
             </tbody>
-            </SortableContext>
-            </DndContext>
           </table>
         </div>
 
         {/* Add row button */}
         <button
           onClick={handleAddRow}
-          className="w-full px-4 py-2 text-sm text-muted hover:text-accent hover:bg-gray-50 flex items-center gap-1 border-t border-gray-100"
+          className="w-full px-4 py-2 text-sm text-muted hover:text-accent hover:bg-gray-50 dark:hover:bg-gray-200 flex items-center gap-1 border-t border-gray-100"
         >
           <Plus size={14} />
           {t.new_row}
         </button>
       </div>
+      </SortableContext>
+      </DndContext>
       </>)}
 
       {/* Column header menu */}
@@ -529,7 +530,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
       {/* Save as template modal */}
       {showSaveModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-gray-100 rounded-xl shadow-2xl w-full max-w-sm border border-gray-200 overflow-hidden">
+          <div className="bg-gray-100 rounded-xl shadow-2xl w-full max-w-sm border border-gray-100 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
               <h3 className="text-sm font-medium">{t.save_as_template}</h3>
               <button onClick={() => setShowSaveModal(false)} className="text-muted hover:text-gray-700">
@@ -547,19 +548,18 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
               />
             </div>
             <div className="flex justify-end gap-2 px-4 py-3 border-t border-gray-200">
-              <button
+              <Button
+                variant="secondary"
                 onClick={() => setShowSaveModal(false)}
-                className="px-3 py-1.5 text-sm border border-gray-200 rounded-md hover:bg-gray-50"
               >
                 {t.cancel}
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={confirmSaveTemplate}
                 disabled={!saveTemplateName.trim()}
-                className="px-3 py-1.5 text-sm bg-accent text-white rounded-md hover:bg-accent-hover disabled:opacity-50"
               >
                 {t.save}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -615,7 +615,7 @@ function SortableRow({
     <tr
       ref={setNodeRef}
       style={style}
-      className="border-b border-gray-100 hover:bg-gray-50 group/row"
+      className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200 group/row"
     >
       <td className={`border-r border-gray-100 ${stickyFirstCol ? "sticky left-0 z-10" : ""} bg-inherit`}>
         <div
@@ -726,7 +726,7 @@ function ColumnHeaderMenu({
   return (
     <div
       ref={ref}
-      className="fixed z-50 w-48 bg-gray-100 border border-gray-200 rounded-lg shadow-lg overflow-hidden py-1"
+      className="fixed z-50 w-48 bg-gray-100 border border-gray-100 rounded-lg shadow-lg overflow-hidden py-1"
       style={{ top: pos.top, left: pos.left }}
     >
       {col.type !== "formula" && (

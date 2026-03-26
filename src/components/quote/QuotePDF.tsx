@@ -7,7 +7,7 @@ import {
 } from "@react-pdf/renderer";
 import { invoiceLabels, type InvoiceLanguage } from "../../i18n/invoice-labels";
 import type { Quote, QuoteLineItem } from "../../types/quote";
-import type { Client } from "../../types/client";
+import type { Client, ClientAddress } from "../../types/client";
 import type { BusinessProfile } from "../../types/business-profile";
 import { formatDisplayDate } from "../../utils/formatDate";
 
@@ -16,6 +16,9 @@ interface QuotePDFProps {
   lineItems: QuoteLineItem[];
   client: Client;
   profile: BusinessProfile;
+  contactName?: string;
+  billingAddress?: ClientAddress | null;
+  projectName?: string;
 }
 
 const s = StyleSheet.create({
@@ -93,12 +96,27 @@ const s = StyleSheet.create({
   },
   colDesignation: { flex: 1 },
   colRate: { width: 70, textAlign: "right" },
+  colUnit: { width: 50, textAlign: "center" },
   colQty: { width: 50, textAlign: "right" },
   colAmount: { width: 80, textAlign: "right" },
   thText: {
     fontFamily: "Helvetica-Bold",
     fontSize: 8,
     textTransform: "uppercase",
+  },
+  notesBlock: {
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  notesLabel: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 8,
+    marginBottom: 2,
+  },
+  notesText: {
+    fontSize: 8,
+    color: "#444",
+    lineHeight: 1.4,
   },
   totalsBlock: {
     marginTop: 10,
@@ -153,11 +171,27 @@ const s = StyleSheet.create({
     fontSize: 9,
     marginBottom: 2,
   },
+  bankSection: {
+    fontSize: 8,
+    lineHeight: 1.5,
+  },
+  bankTitle: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 9,
+    marginBottom: 2,
+  },
   thankYou: {
     fontSize: 8,
     color: "#666",
     textAlign: "right",
     alignSelf: "flex-start",
+  },
+  pageNumber: {
+    position: "absolute",
+    bottom: 12,
+    right: 50,
+    fontSize: 7,
+    color: "#999",
   },
 });
 
@@ -173,10 +207,21 @@ export function QuotePDF({
   lineItems,
   client,
   profile,
+  contactName,
+  billingAddress,
+  projectName,
 }: QuotePDFProps) {
   const lang = (quote.language as InvoiceLanguage) || "FR";
   const t = invoiceLabels[lang];
   const hasRate = lineItems.some((item) => item.rate != null);
+  const hasUnit = lineItems.some((item) => item.unit != null && item.unit !== "");
+
+  const addr = billingAddress ?? {
+    billing_name: client.billing_name || client.name,
+    address_line1: client.address_line1,
+    address_line2: client.address_line2,
+    postal_city: client.postal_city,
+  };
 
   return (
     <Document>
@@ -196,10 +241,13 @@ export function QuotePDF({
               <Text>{profile.phone}</Text>
             </View>
             <View style={s.clientBlock}>
-              <Text style={s.clientName}>{client.name}</Text>
-              {client.address_line1 && <Text>{client.address_line1}</Text>}
-              {client.address_line2 && <Text>{client.address_line2}</Text>}
-              {client.postal_city && <Text>{client.postal_city}</Text>}
+              <Text style={s.clientName}>{addr.billing_name || client.name}</Text>
+              {contactName && (
+                <Text>{lang === "FR" ? `A l'att. de ${contactName}` : `att: ${contactName}`}</Text>
+              )}
+              {addr.address_line1 && <Text>{addr.address_line1}</Text>}
+              {addr.address_line2 && <Text>{addr.address_line2}</Text>}
+              {addr.postal_city && <Text>{addr.postal_city}</Text>}
             </View>
           </View>
 
@@ -245,6 +293,12 @@ export function QuotePDF({
                 <Text style={s.metaValue}>{quote.assignment}</Text>
               </View>
             )}
+            {projectName && (
+              <View style={s.metaRow}>
+                <Text style={s.metaLabel}>{t.project}</Text>
+                <Text style={s.metaValue}>{projectName}</Text>
+              </View>
+            )}
           </View>
 
           {/* Line items table */}
@@ -252,6 +306,7 @@ export function QuotePDF({
             <View style={s.tableHeader}>
               <Text style={[s.thText, s.colDesignation]}>{t.designation}</Text>
               {hasRate && <Text style={[s.thText, s.colRate]}>{t.rate}</Text>}
+              {hasUnit && <Text style={[s.thText, s.colUnit]}>{t.unit}</Text>}
               <Text style={[s.thText, s.colQty]}>{t.quantity}</Text>
               <Text style={[s.thText, s.colAmount]}>{t.amount}</Text>
             </View>
@@ -263,11 +318,22 @@ export function QuotePDF({
                     {item.rate != null ? formatCHF(item.rate) : ""}
                   </Text>
                 )}
+                {hasUnit && (
+                  <Text style={s.colUnit}>{item.unit || ""}</Text>
+                )}
                 <Text style={s.colQty}>{item.quantity}</Text>
                 <Text style={s.colAmount}>{formatCHF(item.amount)}</Text>
               </View>
             ))}
           </View>
+
+          {/* Notes */}
+          {quote.notes ? (
+            <View style={s.notesBlock}>
+              <Text style={s.notesLabel}>{t.notes}</Text>
+              <Text style={s.notesText}>{quote.notes}</Text>
+            </View>
+          ) : null}
 
           {/* Totals */}
           <View style={s.totalsBlock}>
@@ -297,10 +363,27 @@ export function QuotePDF({
                 <Text style={s.validityTitle}>{t.validity}</Text>
                 <Text>{t.valid_30_days}</Text>
               </View>
+              {profile.bank_name && (
+                <View style={s.bankSection}>
+                  <Text style={s.bankTitle}>{t.bank_details}</Text>
+                  <Text>{profile.bank_name}</Text>
+                  <Text>IBAN: {profile.iban}</Text>
+                  {profile.bic_swift && <Text>{t.bic}: {profile.bic_swift}</Text>}
+                </View>
+              )}
               <Text style={s.thankYou}>{t.thank_you}</Text>
             </View>
           </View>
         </View>
+
+        {/* Page numbers — only when multi-page */}
+        <Text
+          style={s.pageNumber}
+          render={({ pageNumber, totalPages }) =>
+            totalPages > 1 ? `${t.page} ${pageNumber} / ${totalPages}` : ""
+          }
+          fixed
+        />
       </Page>
     </Document>
   );
