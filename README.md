@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.3-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.5.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="Platform">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
@@ -34,6 +34,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 
 ### Client Management
 - Full client database with contacts, addresses, language preferences
+- Multiple billing addresses per client (e.g., different offices)
 - Per-client discount settings (e.g., cultural organizations at 10%)
 - Quick navigation from client to their projects, invoices, and quotes
 
@@ -44,9 +45,10 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Side peek panel for quick project overview without leaving the page
 - Weighted progress calculation (tasks + subtasks)
 - Task filters: todo, done, all — applied globally
+- Workload tracker with custom columns (text, number, checkbox, select, formula)
 
 ### Calendar
-- Monthly and weekly calendar views
+- Monthly and weekly calendar views (FullCalendar)
 - Multi-day event spanning across dates
 - Tasks and subtasks displayed on their due dates
 - One-directional sync with iCloud Calendar (macOS)
@@ -55,10 +57,16 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 ### Invoicing
 - Professional invoice generation with automatic reference numbering
 - Swiss QR-bill (QR-Rechnung) on every invoice PDF
+- Multi-currency support (CHF, EUR, USD, GBP) with auto exchange rates
 - Auto-language switching (French/English) based on client preference
 - Automatic discount application for eligible clients
 - Status tracking: draft, sent, paid, overdue, cancelled
 - Automatic overdue detection on app startup with notifications
+- Late payment reminders with numbered reminder PDFs
+- Recurring invoice templates (monthly, quarterly, biannual, annual)
+- Editable PO number field, VOID overlay for cancelled invoices
+- Draft reference deferral — reference generated only on send
+- Configurable footer text, bank details, and payment terms in PDF
 
 ### Quotes
 - Quote creation mirroring the invoice workflow
@@ -68,10 +76,23 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 
 ### Expense Tracking
 - Categorized expenses following Swiss tax declaration structure
-- Drag-and-drop receipt upload (PDF, PNG, JPG)
+- Customizable expense categories (add/edit/delete in Settings)
+- Drag-and-drop receipt upload (PDF, PNG, JPG, HEIC)
+- Receipt OCR — auto-fills supplier, amount, and date from dropped images
 - Supplier autocomplete with smart autofill (category + amount)
 - Inline editable paid date
 - Receipt preview inline
+
+### Income Tracking
+- Non-invoice revenue tracking (side income, grants, refunds, interest)
+- Year-grouped collapsible table with receipt attachment
+- Feeds into P&L and finance overview
+
+### Resources
+- Bookmarked links with free-form tags
+- Filter by tag, search by name
+- Link resources to projects
+- Click to open URLs externally
 
 ### Finance & P&L
 - Real-time profit & loss overview
@@ -80,14 +101,28 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Follows Swiss independent worker tax format
 - Year-end export: P&L PDF, invoice list, expense list with receipts — ready for your trustee
 
+### Dashboard
+- Customizable drag-and-drop grid layout (react-grid-layout)
+- 30+ widget types across financial, client, project, calendar, and productivity categories
+- KPIs: revenue, outstanding total, profit margin, quote conversion rate, and more
+- Charts: revenue by client, revenue by activity, expense breakdown, cash flow forecast
+- Lists: recent invoices, overdue tasks, upcoming deadlines, today's schedule
+- Utility: quick create buttons, pinned notes, recent activity feed
+- Layout persistence with reset to defaults
+
 ### Additional Features
+- **Tabs** — Cmd+T/W, middle-click to open in new tab, Ctrl+Tab cycling
 - **Command Palette** (Cmd+K) — quick search and actions
-- **Undo System** (Cmd+Z) — undo any action with full state restoration
+- **Undo/Redo** (Cmd+Z / Cmd+Shift+Z) — full undo/redo with state restoration
+- **Context Menus** — right-click on any list row for contextual actions
+- **Test Mode** — sandbox environment to experiment without affecting production data
 - **Dark Mode** — full dark theme with automatic color adaptation
 - **19 Accent Colors** — customize the app appearance
-- **Notifications** — persistent in-app notifications with unread badges and copy-to-clipboard
-- **Backup System** — automatic and manual backups with configurable paths and backup notifications
+- **macOS Native Notifications** — OS-level banners for overdue invoices and backups
+- **Notifications** — persistent in-app notifications with unread badges
+- **Backup System** — automatic and manual backups with configurable paths
 - **Multiple Activities** — define a list of activities in your profile, select per invoice/quote
+- **Sidebar Keyboard Navigation** — arrow keys to navigate between pages
 - **Bilingual UI** — English and French interface
 - **Auto-Updater** — check for updates and install from within the app
 - **Offline-first** — all data stored locally in SQLite, no internet required
@@ -103,9 +138,12 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 | Styling | Tailwind CSS v4 |
 | Database | SQLite (via tauri-plugin-sql) |
 | State | Zustand (UI) + TanStack Query (DB) |
-| PDF | @react-pdf/renderer + swissqrbill |
+| PDF | @react-pdf/renderer + swissqrbill + pdf-lib |
 | Calendar | FullCalendar + macOS EventKit |
+| Dashboard | react-grid-layout |
 | Charts | Recharts |
+| OCR | tesseract.js |
+| Notifications | tauri-plugin-notification |
 | Forms | React Hook Form + Zod |
 | Icons | Lucide React |
 
@@ -198,15 +236,21 @@ The production build outputs a `.dmg` file in `src-tauri/target/release/bundle/d
 ```
 src/                    # React frontend
   components/           # Reusable UI components
+    ui/                 # Design system (Button, Badge, Card, Modal, etc.)
+    dashboard/          # Dashboard widget components
+    invoice/            # Invoice PDF renderer
+    quote/              # Quote PDF renderer
+    layout/             # MainLayout, Sidebar, TabBar
+    workload/           # Workload tracker components
   db/                   # Database layer (queries + React Query hooks)
   hooks/                # Custom React hooks
   i18n/                 # Internationalization (EN/FR)
-  lib/                  # Utilities (backup, PDF, calendar)
+  lib/                  # Utilities (backup, PDF, calendar, OCR, exchange rates)
   pages/                # Page components (one per route)
   stores/               # Zustand state stores
   types/                # TypeScript type definitions
 src-tauri/              # Tauri/Rust backend
-  src/                  # Rust source (commands, EventKit bindings)
+  src/                  # Rust source (commands, EventKit bindings, DB switching)
   migrations/           # SQLite schema migrations
   icons/                # App icons (all sizes)
 ```
@@ -219,7 +263,7 @@ StudioManager is designed for Swiss freelancers:
 
 - **QR-Rechnung**: Every invoice includes a Swiss QR payment slip with IBAN and structured reference
 - **Tax-ready P&L**: Expense categories and profit & loss structure match the Swiss independent worker tax declaration (Form 2)
-- **CHF currency**: All amounts in Swiss Francs
+- **CHF currency**: Default currency with multi-currency support (CHF equivalent tracked for P&L)
 - **VAT exempt**: Designed for businesses below the CHF 100,000 threshold (no VAT calculations)
 - **Bilingual**: Full French and English support for both the interface and generated documents
 
@@ -228,9 +272,8 @@ StudioManager is designed for Swiss freelancers:
 ## Roadmap
 
 - [ ] Windows support
-- [x] Auto-updater (Tauri updater plugin)
-- [ ] Multi-currency support
-- [ ] Receipt OCR auto-detection
+- [ ] Project generation from quotes (tasks from line items)
+- [ ] Curated color themes
 
 ---
 
