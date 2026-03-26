@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { markOverdueInvoices } from "../db/queries/invoices";
 import { createNotification } from "../db/queries/notifications";
 import { logError } from "../lib/log";
+import { sendNativeNotification } from "../lib/nativeNotification";
 
 export function useOverdueCheck() {
   const qc = useQueryClient();
@@ -30,6 +31,8 @@ export function useOverdueCheck() {
         });
 
         qc.invalidateQueries({ queryKey: ["notifications"] });
+
+        sendNativeNotification("Invoices overdue", msg);
       }
     }).catch((e) => {
       logError("Overdue check failed:", e);

@@ -30,6 +30,8 @@ interface LineItemsTableProps {
   discountRate: number;
   discountAmount: number;
   total: number;
+  /** Currency label (defaults to "CHF") */
+  currency?: string;
 }
 
 export function LineItemsTable({
@@ -46,11 +48,12 @@ export function LineItemsTable({
   discountRate,
   discountAmount,
   total,
+  currency = "CHF",
 }: LineItemsTableProps) {
   const t = useT();
 
   return (
-    <div className="border border-gray-200 rounded-lg p-4">
+    <div className="border border-gray-100 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-medium">{t.line_items}</h2>
         <div className="flex items-center gap-3">
@@ -133,17 +136,17 @@ export function LineItemsTable({
       <div className="border-t border-gray-200 mt-3 pt-3 space-y-1 text-sm">
         <div className="flex justify-between">
           <span className="text-muted">{t.subtotal}</span>
-          <span>CHF {subtotal.toFixed(2)}</span>
+          <span>{currency} {subtotal.toFixed(2)}</span>
         </div>
         {discountRate > 0 && (
           <div className="flex justify-between text-muted">
             <span>{t.cultural_discount} ({(discountRate * 100).toFixed(0)}%)</span>
-            <span>- CHF {discountAmount.toFixed(2)}</span>
+            <span>- {currency} {discountAmount.toFixed(2)}</span>
           </div>
         )}
         <div className="flex justify-between font-semibold text-base pt-1">
           <span>{t.total}</span>
-          <span>CHF {total.toFixed(2)}</span>
+          <span>{currency} {total.toFixed(2)}</span>
         </div>
       </div>
     </div>

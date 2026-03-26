@@ -65,6 +65,8 @@ interface AppState {
   commandPaletteOpen: boolean;
   sidebarCollapsed: boolean;
   darkMode: boolean;
+  testMode: boolean;
+  nativeNotifications: boolean;
   dateFormat: DateFormatOption;
   accentColor: AccentPreset;
   calendarSync: boolean;
@@ -76,6 +78,7 @@ interface AppState {
   lastAutoBackup: number; // timestamp
   projectOpenMode: ProjectOpenMode;
   showTasksPage: boolean;
+  showIncome: boolean;
   language: AppLanguage;
   exportLanguage: AppLanguage;
   clientsSortKey: string;
@@ -104,8 +107,11 @@ interface AppState {
   setLastAutoBackup: (ts: number) => void;
   setProjectOpenMode: (mode: ProjectOpenMode) => void;
   setShowTasksPage: (show: boolean) => void;
+  setShowIncome: (show: boolean) => void;
   setContext: (ctx: Partial<AppState["currentContext"]>) => void;
   clearContext: () => void;
+  setTestMode: (enabled: boolean) => void;
+  setNativeNotifications: (enabled: boolean) => void;
 }
 
 const initialDark = getInitialDarkMode();
@@ -118,6 +124,8 @@ export const useAppStore = create<AppState>((set) => ({
   commandPaletteOpen: false,
   sidebarCollapsed: false,
   darkMode: initialDark,
+  testMode: false,
+  nativeNotifications: localStorage.getItem("nativeNotifications") !== "false",
   dateFormat: (localStorage.getItem("dateFormat") as DateFormatOption) ?? "dd.MM.yyyy",
   accentColor: initialAccent,
   calendarSync: localStorage.getItem("calendarSync") === "true",
@@ -129,6 +137,7 @@ export const useAppStore = create<AppState>((set) => ({
   lastAutoBackup: Number(localStorage.getItem("lastAutoBackup")) || 0,
   projectOpenMode: (localStorage.getItem("projectOpenMode") as ProjectOpenMode) ?? "peek",
   showTasksPage: localStorage.getItem("showTasksPage") !== "false",
+  showIncome: localStorage.getItem("showIncome") === "true",
   language: (localStorage.getItem("appLanguage") as AppLanguage) ?? "EN",
   exportLanguage: (localStorage.getItem("exportLanguage") as AppLanguage) ?? "FR",
   clientsSortKey: localStorage.getItem("clientsSortKey") ?? "name",
@@ -217,7 +226,16 @@ export const useAppStore = create<AppState>((set) => ({
     localStorage.setItem("showTasksPage", String(show));
     set({ showTasksPage: show });
   },
+  setShowIncome: (show) => {
+    localStorage.setItem("showIncome", String(show));
+    set({ showIncome: show });
+  },
   setContext: (ctx) =>
     set((s) => ({ currentContext: { ...s.currentContext, ...ctx } })),
   clearContext: () => set({ currentContext: {} }),
+  setTestMode: (enabled) => set({ testMode: enabled }),
+  setNativeNotifications: (enabled) => {
+    localStorage.setItem("nativeNotifications", String(enabled));
+    set({ nativeNotifications: enabled });
+  },
 }));

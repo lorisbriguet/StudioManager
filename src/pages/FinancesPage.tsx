@@ -24,6 +24,8 @@ import { useClients } from "../db/hooks/useClients";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
+import { PageHeader, PageSpinner, Button } from "../components/ui";
+import { useChartTheme } from "../hooks/useChartTheme";
 import { getInvoiceLineItems } from "../db/queries/invoices";
 import { InvoicePDF } from "../components/invoice/InvoicePDF";
 import { PLPDF } from "../components/finance/PLPDF";
@@ -32,7 +34,14 @@ import { ExpensesListPDF } from "../components/finance/ExpensesListPDF";
 import { getMonthlyData } from "../db/queries/finance";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const PIE_COLORS = ["#2563eb", "#7c3aed", "#0891b2", "#059669", "#d97706", "#dc2626"];
+const PIE_COLORS = [
+  "var(--color-chart-1)",
+  "var(--color-chart-5)",
+  "var(--color-chart-6)",
+  "var(--color-chart-2)",
+  "var(--color-chart-3)",
+  "var(--color-chart-4)",
+];
 
 export function FinancesPage() {
   const t = useT();
@@ -43,7 +52,7 @@ export function FinancesPage() {
   const { data: expenses } = useExpenses();
   const { data: clients } = useClients();
   const { data: profile } = useBusinessProfile();
-  const dark = useAppStore((s) => s.darkMode);
+  const chart = useChartTheme();
   const exportLang = useAppStore((s) => s.exportLanguage);
 
   const exportForTrustee = async () => {
@@ -122,7 +131,7 @@ export function FinancesPage() {
     }
   };
 
-  if (isLoading) return <div className="text-muted text-sm">{t.loading}</div>;
+  if (isLoading) return <PageSpinner />;
 
   const chartData = monthly?.map((m, i) => ({
     name: MONTHS[i],
@@ -136,42 +145,34 @@ export function FinancesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold">{t.finances}</h1>
-        <div className="flex items-center gap-3">
-          <select
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-            className="border border-gray-200 rounded-md px-3 py-1.5 text-sm"
-          >
-            {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((y) => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
-          <button
-            onClick={exportForTrustee}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover"
-          >
-            <Download size={14} /> {t.export_trustee}
-          </button>
-        </div>
-      </div>
+      <PageHeader title={t.finances}>
+        <select
+          value={year}
+          onChange={(e) => setYear(Number(e.target.value))}
+          className="border border-gray-200 rounded-md px-3 py-1.5 text-sm"
+        >
+          {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
+        <Button icon={<Download size={14} />} onClick={exportForTrustee}>{t.export_trustee}</Button>
+      </PageHeader>
 
       {/* Monthly revenue vs expenses chart */}
-      <div className="border border-gray-200 rounded-lg p-4 mb-6">
+      <div className="border border-gray-100 rounded-lg p-4 mb-6">
         <h2 className="text-sm font-medium mb-4">{t.revenue_vs_expenses}</h2>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={chartData} barGap={2}>
-            <CartesianGrid strokeDasharray="3 3" stroke={dark ? "#2d2d2d" : "#f0f0f0"} />
-            <XAxis dataKey="name" tick={{ fontSize: 11, fill: dark ? "#a3a3a3" : undefined }} />
-            <YAxis tick={{ fontSize: 11, fill: dark ? "#a3a3a3" : undefined }} />
+            <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: chart.tickFill }} />
+            <YAxis tick={{ fontSize: 11, fill: chart.tickFill }} />
             <Tooltip
               formatter={(value) => [`CHF ${Number(value ?? 0).toFixed(2)}`, ""]}
-              contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid", borderColor: dark ? "#2d2d2d" : "#e5e5e5", backgroundColor: dark ? "#1e1e1e" : "#fff", color: dark ? "#e5e5e5" : undefined }}
-              cursor={{ fill: dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)" }}
+              contentStyle={chart.tooltipStyle}
+              cursor={{ fill: chart.cursorFill }}
             />
-            <Bar dataKey="revenue" fill="#16a34a" radius={[3, 3, 0, 0]} name="Revenue" />
-            <Bar dataKey="expenses" fill="#dc2626" radius={[3, 3, 0, 0]} name="Expenses" />
+            <Bar dataKey="revenue" fill="var(--color-chart-2)" radius={[3, 3, 0, 0]} name="Revenue" />
+            <Bar dataKey="expenses" fill="var(--color-chart-4)" radius={[3, 3, 0, 0]} name="Expenses" />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -179,7 +180,7 @@ export function FinancesPage() {
       <div className="grid grid-cols-2 gap-6">
         {/* Expense breakdown pie chart */}
         {pieData.length > 0 && (
-          <div className="border border-gray-200 rounded-lg p-4">
+          <div className="border border-gray-100 rounded-lg p-4">
             <h2 className="text-sm font-medium mb-4">{t.expense_breakdown}</h2>
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
@@ -201,8 +202,8 @@ export function FinancesPage() {
                     `CHF ${Number(value ?? 0).toFixed(2)}`,
                     (entry as { payload: { label: string } }).payload.label,
                   ]}
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid", borderColor: dark ? "#2d2d2d" : "#e5e5e5", backgroundColor: dark ? "#1e1e1e" : "#fff", color: dark ? "#e5e5e5" : undefined }}
-                  itemStyle={dark ? { color: "#e5e5e5" } : undefined}
+                  contentStyle={chart.tooltipStyle}
+                  itemStyle={chart.pieItemStyle}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -222,10 +223,16 @@ export function FinancesPage() {
 
         {/* P&L statement */}
         {pl && (
-          <div className="border border-gray-200 rounded-lg p-4">
+          <div className="border border-gray-100 rounded-lg p-4">
             <h2 className="text-sm font-medium mb-4">{t.profit_loss}</h2>
             <div className="space-y-1">
               <PLLine label={t.revenue} value={pl.revenue} bold />
+              {pl.other_income > 0 && (
+                <>
+                  <PLLine label={`  ${t.invoiced_revenue}`} value={pl.invoice_revenue} />
+                  <PLLine label={`  ${t.other_income}`} value={pl.other_income} />
+                </>
+              )}
 
               {pl.operating_expenses.map((cat) => (
                 <PLLine

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "StudioManager",
-  "version": "1.4.2",
+  "version": "1.5.0",
   "identifier": "ch.studiomanager.app",
   "build": {
     "frontendDist": "../dist",
@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: blob: data:; font-src 'self' data:; frame-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost https://github.com"
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: blob: data:; font-src 'self' data:; frame-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost https://github.com https://api.frankfurter.app"
     }
   },
   "plugins": {

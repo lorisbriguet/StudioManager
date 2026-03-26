@@ -438,7 +438,7 @@ function TaskPicker({
   const dropdown = (
     <div
       ref={ref}
-      className="fixed z-50 w-48 bg-gray-100 border border-gray-200 rounded-lg shadow-lg overflow-hidden"
+      className="fixed z-50 w-48 bg-gray-100 border border-gray-100 rounded-lg shadow-lg overflow-hidden"
       style={pos ? { top: pos.top, left: pos.left } : undefined}
     >
       {currentId && (

@@ -15,6 +15,7 @@ export interface Quote {
   discount_applied: number;
   discount_rate: number;
   total: number;
+  billing_address_id: number | null;
   converted_to_invoice_id: number | null;
   notes: string;
   created_at: string;

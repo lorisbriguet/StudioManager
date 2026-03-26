@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient, QueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import * as q from "../queries/tasks";
 import type { Task, Subtask } from "../../types/task";
 import { useAppStore } from "../../stores/app-store";
@@ -132,10 +133,15 @@ export function useCreateTask() {
           await q.deleteTask(id);
           qc.invalidateQueries({ queryKey: ["tasks"] });
         },
+        redo: async () => {
+          await q.createTask(data);
+          qc.invalidateQueries({ queryKey: ["tasks"] });
+        },
       });
       return id;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -175,6 +181,7 @@ export function useUpdateTask() {
       syncTaskCalendar(id);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -201,6 +208,7 @@ export function useDeleteTask() {
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -224,10 +232,15 @@ export function useCreateSubtask() {
           await q.deleteSubtask(id);
           qc.invalidateQueries({ queryKey: ["subtasks"] });
         },
+        redo: async () => {
+          await q.createSubtask(data);
+          qc.invalidateQueries({ queryKey: ["subtasks"] });
+        },
       });
       return id;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["subtasks"] }),
+    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -266,6 +279,7 @@ export function useUpdateSubtask() {
       syncSubtaskCalendar(id);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["subtasks"] }),
+    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -292,6 +306,7 @@ export function useDeleteSubtask() {
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["subtasks"] }),
+    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -300,5 +315,6 @@ export function useReorderSubtasks() {
   return useMutation({
     mutationFn: (ids: number[]) => q.reorderSubtasks(ids),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["subtasks"] }),
+    onError: (e) => { toast.error(String(e)); },
   });
 }

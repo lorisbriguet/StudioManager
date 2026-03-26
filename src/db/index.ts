@@ -1,5 +1,6 @@
 import Database from "@tauri-apps/plugin-sql";
 import { invoke } from "@tauri-apps/api/core";
+import { logError } from "../lib/log";
 
 const SAFE_FIELD = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -39,33 +40,54 @@ export class TransactionBatch {
   }
 }
 
-/** @deprecated Use TransactionBatch instead — withTransaction doesn't work reliably with the Tauri SQL plugin connection pool. */
-export async function withTransaction<T>(fn: (db: Database) => Promise<T>): Promise<T> {
-  const db = await getDb();
-  await db.execute("BEGIN");
-  try {
-    const result = await fn(db);
-    await db.execute("COMMIT");
-    return result;
-  } catch (e) {
-    try { await db.execute("ROLLBACK"); } catch { /* transaction may already be aborted */ }
-    throw e;
-  }
-}
-
 let dbPromise: Promise<Database> | null = null;
+let currentDbName = "studiomanager.db";
 
 export async function getDb(): Promise<Database> {
   if (!dbPromise) {
     dbPromise = (async () => {
-      const database = await Database.load("sqlite:studiomanager.db");
-      await ensureSchema(database);
+      const database = await Database.load(`sqlite:${currentDbName}`);
+      try {
+        await ensureSchema(database);
+      } catch (e) {
+        logError("[DB] ensureSchema failed:", e);
+      }
       return database;
     })();
-    // Clear cached promise on failure so next call retries
-    dbPromise.catch(() => { dbPromise = null; });
   }
   return dbPromise;
+}
+
+/**
+ * Switch the frontend DB connection to a different database file.
+ * Closes the current connection and opens the new one.
+ */
+export async function switchDb(dbName: string): Promise<void> {
+  if (dbPromise) {
+    try {
+      const db = await dbPromise;
+      await db.close();
+    } catch { /* ignore close errors */ }
+    dbPromise = null;
+  }
+  currentDbName = dbName;
+  // Pre-warm the new connection
+  await getDb();
+}
+
+/**
+ * Reset the DB connection (e.g., after restoring a snapshot).
+ * Closes and reopens with the same DB name.
+ */
+export async function resetDb(): Promise<void> {
+  if (dbPromise) {
+    try {
+      const db = await dbPromise;
+      await db.close();
+    } catch { /* ignore close errors */ }
+    dbPromise = null;
+  }
+  await getDb();
 }
 
 /**
@@ -137,6 +159,158 @@ async function ensureSchema(db: Database) {
     }
     await db.execute("UPDATE clients SET email = '', phone = '' WHERE id = $1", [c.id]);
   }
+
+  // ── Client addresses table + migration ───────────────────
+  await db.execute(`CREATE TABLE IF NOT EXISTS client_addresses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    label TEXT NOT NULL DEFAULT '',
+    billing_name TEXT NOT NULL DEFAULT '',
+    address_line1 TEXT NOT NULL DEFAULT '',
+    address_line2 TEXT NOT NULL DEFAULT '',
+    postal_city TEXT NOT NULL DEFAULT ''
+  )`);
+  // Migrate existing client addresses into client_addresses (one-time)
+  const clientsWithAddr = await db.select<{ id: string; billing_name: string; address_line1: string; address_line2: string; postal_city: string }[]>(
+    "SELECT id, billing_name, address_line1, address_line2, postal_city FROM clients WHERE (address_line1 != '' OR postal_city != '') AND id NOT IN (SELECT client_id FROM client_addresses)"
+  );
+  for (const c of clientsWithAddr) {
+    await db.execute(
+      "INSERT INTO client_addresses (client_id, label, billing_name, address_line1, address_line2, postal_city) VALUES ($1, $2, $3, $4, $5, $6)",
+      [c.id, "Main", c.billing_name || "", c.address_line1 || "", c.address_line2 || "", c.postal_city || ""]
+    );
+  }
+
+  // ── Invoices/Quotes: billing_address_id ────────────────────
+  await addColumnIfMissing("invoices", "billing_address_id", "INTEGER DEFAULT NULL");
+  await addColumnIfMissing("quotes", "billing_address_id", "INTEGER DEFAULT NULL");
+
+  // ── Invoices: multi-currency columns ──────────────────────
+  await addColumnIfMissing("invoices", "currency", "TEXT NOT NULL DEFAULT 'CHF'");
+  await addColumnIfMissing("invoices", "exchange_rate", "REAL NOT NULL DEFAULT 1.0");
+  await addColumnIfMissing("invoices", "chf_equivalent", "REAL NOT NULL DEFAULT 0");
+  // Backfill chf_equivalent for existing invoices where it's 0
+  await db.execute(
+    "UPDATE invoices SET chf_equivalent = total WHERE chf_equivalent = 0 AND currency = 'CHF'"
+  );
+
+  // ── Income table ────────────────────────────────────────────
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS income (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      reference TEXT NOT NULL,
+      date TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      amount REAL NOT NULL DEFAULT 0,
+      category TEXT NOT NULL DEFAULT 'side_income',
+      source TEXT NOT NULL DEFAULT '',
+      receipt_path TEXT,
+      notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  // ── Resources tables ──────────────────────────────────────
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS resources (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL DEFAULT '',
+      url TEXT NOT NULL DEFAULT '',
+      price TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS resource_tags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+      tag TEXT NOT NULL
+    )
+  `);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS resource_projects (
+      resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      PRIMARY KEY (resource_id, project_id)
+    )
+  `);
+
+  // ── Seed resources from Notion export (one-time) ─────────
+  const resourceCount = await db.select<{ cnt: number }[]>(
+    "SELECT COUNT(*) as cnt FROM resources"
+  );
+  if (resourceCount[0]?.cnt === 0) {
+    const seedResources: { name: string; url: string; price: string; tags: string[] }[] = [
+      { name: "miniEngine", url: "http://www.minie.airiclenz.com/tag/bezier/", price: "", tags: ["motor"] },
+      { name: "SimpleFoc", url: "https://simplefoc.com/", price: "", tags: ["motor"] },
+      { name: "Ubu", url: "https://www.ubu.com/sound/", price: "", tags: ["sound"] },
+      { name: "icons8", url: "https://icons8.com/upscaler", price: "", tags: ["Upscaling"] },
+      { name: "vanceAI", url: "https://vanceai.com/workspace/", price: "", tags: ["Upscaling"] },
+      { name: "Wikipedia commons", url: "https://commons.wikimedia.org/", price: "", tags: ["CC Photo", "CC Video"] },
+      { name: "Unsplash", url: "https://unsplash.com/fr", price: "", tags: ["CC Photo"] },
+      { name: "Russian Photo", url: "https://russiainphoto.ru/", price: "", tags: ["CC Photo"] },
+      { name: "Archive.gov", url: "https://catalog.archives.gov/", price: "", tags: ["CC Video"] },
+      { name: "ultralibrarian", url: "https://ultralibrarian.com", price: "", tags: ["CAD"] },
+      { name: "grabcad", url: "https://grabcad.com/", price: "", tags: ["CAD"] },
+      { name: "web haptics", url: "https://haptics.lochie.me/", price: "free", tags: ["npm", "web"] },
+      { name: "Vercel", url: "https://vercel.com/", price: "", tags: ["web"] },
+      { name: "Notion Cafe", url: "https://calendar.notion.cafe/calendars", price: "", tags: ["Tools"] },
+      { name: "AdobeColor", url: "https://color.adobe.com/fr/create/color-wheel", price: "", tags: ["Tools"] },
+      { name: "Book Mockups", url: "https://mockups-design.com/free-book-mockups/", price: "", tags: ["Mockup"] },
+      { name: "VHS look After Effect", url: "https://www.rocketstock.com/blog/create-vhs-look-after-effects/", price: "", tags: ["Tuto"] },
+      { name: "Chord Generator", url: "https://chordchord.com/generator", price: "", tags: ["Music"] },
+      { name: "House Of Blanks", url: "https://wholesale.houseofblanks.com/wholesale/dashboard", price: "", tags: ["merch"] },
+      { name: "Rory King", url: "https://rorykingetc.com/dasickfonts", price: "free", tags: ["Type"] },
+      { name: "Plain", url: "https://plain-form.com/typefaces/ready", price: "", tags: ["Type"] },
+      { name: "Free Faces", url: "https://www.freefaces.gallery/", price: "free", tags: ["Type"] },
+      { name: "Font of the Month", url: "https://djr.com/font-of-the-month-club#2017-08", price: "paid", tags: ["Type"] },
+      { name: "Out of the Dark", url: "https://www.outofthedark.xyz/", price: "paid", tags: ["Type"] },
+      { name: "Written Shape", url: "https://www.writtenshape.com/", price: "paid", tags: ["Type"] },
+      { name: "Eliott Grunewald", url: "https://eliottgrunewald.xyz/typefaces/herbus", price: "paid", tags: ["Type"] },
+      { name: "New Letters", url: "https://www.new-letters.de/shop/", price: "paid", tags: ["Type"] },
+      { name: "Fresh Luts", url: "https://freshluts.com/", price: "paid", tags: ["video"] },
+      { name: "Skew Pro", url: "https://www.goodboy.ninja/skew-pro", price: "", tags: ["AfterEffect", "plugin"] },
+      { name: "React Old Icons", url: "https://gsnoopy.github.io/react-old-icons/", price: "", tags: ["Tools", "npm", "web"] },
+    ];
+    for (const r of seedResources) {
+      await db.execute(
+        "INSERT INTO resources (name, url, price) VALUES ($1, $2, $3)",
+        [r.name, r.url, r.price]
+      );
+      const inserted = await db.select<{ id: number }[]>(
+        "SELECT last_insert_rowid() as id"
+      );
+      const rid = inserted[0]?.id;
+      if (rid) {
+        for (const tag of r.tags) {
+          await db.execute(
+            "INSERT INTO resource_tags (resource_id, tag) VALUES ($1, $2)",
+            [rid, tag]
+          );
+        }
+      }
+    }
+  }
+
+  // ── Invoice reminder tracking ──────────────────────────────
+  await addColumnIfMissing("invoices", "reminder_count", "INTEGER NOT NULL DEFAULT 0");
+  await addColumnIfMissing("invoices", "last_reminder_date", "TEXT DEFAULT NULL");
+
+  // ── Recurring invoice templates ────────────────────────────
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS recurring_invoice_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      base_invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+      client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      frequency TEXT NOT NULL DEFAULT 'monthly',
+      next_due TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
 
   // ── Seed default workload template if none exist ───────────
   const templateCount = await db.select<{ cnt: number }[]>(

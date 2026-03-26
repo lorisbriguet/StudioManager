@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Eye } from "lucide-react";
+import { Button } from "../components/ui";
 import { toast } from "sonner";
 import { addDays, format } from "date-fns";
 import { useQuote, useCreateQuote, useUpdateQuote } from "../db/hooks/useQuotes";
-import { useClients } from "../db/hooks/useClients";
+import { useClients, useClientAddresses } from "../db/hooks/useClients";
 import { useProjects } from "../db/hooks/useProjects";
 import { getNextQuoteReference, getQuoteLineItems } from "../db/queries/quotes";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
@@ -30,6 +31,7 @@ export function QuoteFormPage() {
   const updateQuote = useUpdateQuote();
 
   const [clientId, setClientId] = useState("");
+  const [billingAddressId, setBillingAddressId] = useState<number | null>(null);
   const [projectId, setProjectId] = useState<number | null>(null);
   const [quoteDate, setQuoteDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [activity, setActivity] = useState("");
@@ -44,6 +46,7 @@ export function QuoteFormPage() {
   useEffect(() => {
     if (existingQuote) {
       setClientId(existingQuote.client_id);
+      setBillingAddressId(existingQuote.billing_address_id);
       setProjectId(existingQuote.project_id);
       setQuoteDate(existingQuote.quote_date);
       setActivity(existingQuote.activity);
@@ -81,7 +84,15 @@ export function QuoteFormPage() {
   const discountAmount = subtotal * discountRate;
   const total = subtotal - discountAmount;
 
+  const { data: clientAddresses } = useClientAddresses(clientId);
   const clientProjects = projects?.filter((p) => p.client_id === clientId);
+
+  // Auto-select address when client has exactly one
+  useEffect(() => {
+    if (clientAddresses && clientAddresses.length === 1 && !billingAddressId) {
+      setBillingAddressId(clientAddresses[0].id);
+    }
+  }, [clientAddresses]);
 
   const save = async () => {
     if (!clientId) return toast.error(t.toast_select_client);
@@ -98,6 +109,7 @@ export function QuoteFormPage() {
             data: {
               client_id: clientId,
               project_id: projectId,
+              billing_address_id: billingAddressId,
               language: selectedClient?.language ?? "FR",
               activity,
               assignment,
@@ -127,6 +139,7 @@ export function QuoteFormPage() {
               reference,
               client_id: clientId,
               project_id: projectId,
+              billing_address_id: billingAddressId,
               status: "draft",
               language: selectedClient?.language ?? "FR",
               activity,
@@ -159,9 +172,7 @@ export function QuoteFormPage() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate("/quotes")} className="text-muted hover:text-gray-900">
-          <ArrowLeft size={18} />
-        </button>
+        <Button variant="ghost" size="sm" onClick={() => navigate("/quotes")} icon={<ArrowLeft size={18} />} />
         <h1 className="text-xl font-semibold">
           {isEdit ? t.edit_quote : t.new_quote}
         </h1>
@@ -175,6 +186,7 @@ export function QuoteFormPage() {
               value={clientId}
               onChange={(e) => {
                 setClientId(e.target.value);
+                setBillingAddressId(null);
                 setProjectId(null);
               }}
               className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
@@ -185,6 +197,23 @@ export function QuoteFormPage() {
               ))}
             </select>
           </div>
+          {clientAddresses && clientAddresses.length >= 1 && (
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">{t.billing_address}</label>
+              <select
+                value={billingAddressId ?? ""}
+                onChange={(e) => setBillingAddressId(e.target.value ? Number(e.target.value) : null)}
+                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+              >
+                <option value="">{t.none}</option>
+                {clientAddresses.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label}{a.billing_name ? ` — ${a.billing_name}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-muted mb-1">{t.project_optional}</label>
             <select
@@ -258,27 +287,30 @@ export function QuoteFormPage() {
         </div>
 
         <div className="flex gap-2">
-          <button
+          <Button
+            size="lg"
             onClick={save}
             disabled={createQuote.isPending || updateQuote.isPending}
-            className="px-4 py-2 bg-accent text-white text-sm rounded-md hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isEdit ? t.update_quote : t.create_quote}
-          </button>
+          </Button>
           {isEdit && (
-            <button
+            <Button
+              variant="secondary"
+              size="lg"
+              icon={<Eye size={14} />}
               onClick={() => navigate(`/quotes/${quoteId}/preview`)}
-              className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 text-sm rounded-md hover:bg-gray-50"
             >
-              <Eye size={14} /> {t.preview}
-            </button>
+              {t.preview}
+            </Button>
           )}
-          <button
+          <Button
+            variant="secondary"
+            size="lg"
             onClick={() => navigate("/quotes")}
-            className="px-4 py-2 border border-gray-200 text-sm rounded-md hover:bg-gray-50"
           >
             {t.cancel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

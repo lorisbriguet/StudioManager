@@ -1,5 +1,7 @@
 export interface PLData {
   revenue: number;
+  invoice_revenue: number;
+  other_income: number;
   operating_expenses: CategoryTotal[];
   total_operating: number;
   social_charges: number;

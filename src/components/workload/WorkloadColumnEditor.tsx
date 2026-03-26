@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
+import { Button } from "../ui";
 import type { WorkloadColumn, WorkloadColumnType, SelectOption } from "../../types/workload";
 import { TAG_COLORS, TAG_COLOR_NAMES } from "../../types/workload";
 import { COLUMN_ICONS, COLUMN_ICON_NAMES } from "./columnIcons";
@@ -94,7 +95,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-gray-100 rounded-xl shadow-2xl w-full max-w-md border border-gray-200 overflow-hidden">
+      <div className="bg-gray-100 rounded-xl shadow-2xl w-full max-w-md border border-gray-100 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
           <h3 className="text-sm font-medium">
             {isNew ? t.add_column : t.edit_column}
@@ -264,31 +265,31 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
         <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
           <div>
             {!isNew && onDelete && (
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => {
                   onDelete();
                   onClose();
                 }}
-                className="text-sm text-red-600 hover:text-red-700"
+                className="text-red-600 hover:text-red-700"
               >
                 {t.delete_column}
-              </button>
+              </Button>
             )}
           </div>
           <div className="flex gap-2">
-            <button
+            <Button
+              variant="secondary"
               onClick={onClose}
-              className="px-3 py-1.5 text-sm border border-gray-200 rounded-md hover:bg-gray-50"
             >
               {t.cancel}
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={handleSave}
               disabled={!name.trim() || (type === "formula" && !!formulaError && !!formula.trim())}
-              className="px-3 py-1.5 text-sm bg-accent text-white rounded-md hover:bg-accent-hover disabled:opacity-50"
             >
               {t.save}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

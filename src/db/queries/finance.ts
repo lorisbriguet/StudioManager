@@ -6,11 +6,19 @@ export async function getPLData(year: number): Promise<PLData> {
   const yearStr = String(year);
 
   const [revenueRow] = await db.select<{ total: number }[]>(
-    `SELECT COALESCE(SUM(total), 0) as total FROM invoices
-     WHERE strftime('%Y', invoice_date) = $1`,
+    `SELECT COALESCE(SUM(CASE WHEN currency != 'CHF' AND chf_equivalent > 0 THEN chf_equivalent ELSE total END), 0) as total FROM invoices
+     WHERE strftime('%Y', invoice_date) = $1 AND status != 'cancelled'`,
     [yearStr]
   );
-  const revenue = revenueRow?.total ?? 0;
+  const invoiceRevenue = revenueRow?.total ?? 0;
+
+  const [incomeRow] = await db.select<{ total: number }[]>(
+    `SELECT COALESCE(SUM(amount), 0) as total FROM income
+     WHERE strftime('%Y', date) = $1`,
+    [yearStr]
+  );
+  const otherIncome = incomeRow?.total ?? 0;
+  const revenue = invoiceRevenue + otherIncome;
 
   const operatingRows = await db.select<CategoryTotal[]>(
     `SELECT e.category_code, ec.name_fr, ec.name_en, COALESCE(SUM(e.amount), 0) as total
@@ -34,6 +42,8 @@ export async function getPLData(year: number): Promise<PLData> {
 
   return {
     revenue,
+    invoice_revenue: invoiceRevenue,
+    other_income: otherIncome,
     operating_expenses: operatingRows,
     total_operating: totalOperating,
     social_charges: socialCharges,
@@ -58,8 +68,9 @@ export async function getMonthlyData(year: number): Promise<MonthlyData[]> {
   });
 
   const revenueRows = await db.select<{ month: string; total: number }[]>(
-    `SELECT strftime('%Y-%m', invoice_date) as month, COALESCE(SUM(total), 0) as total
-     FROM invoices WHERE strftime('%Y', invoice_date) = $1
+    `SELECT strftime('%Y-%m', invoice_date) as month,
+     COALESCE(SUM(CASE WHEN currency != 'CHF' AND chf_equivalent > 0 THEN chf_equivalent ELSE total END), 0) as total
+     FROM invoices WHERE strftime('%Y', invoice_date) = $1 AND status != 'cancelled'
      GROUP BY month ORDER BY month`,
     [yearStr]
   );
@@ -71,9 +82,20 @@ export async function getMonthlyData(year: number): Promise<MonthlyData[]> {
     [yearStr]
   );
 
+  const incomeRows = await db.select<{ month: string; total: number }[]>(
+    `SELECT strftime('%Y-%m', date) as month, COALESCE(SUM(amount), 0) as total
+     FROM income WHERE strftime('%Y', date) = $1
+     GROUP BY month ORDER BY month`,
+    [yearStr]
+  );
+
   for (const r of revenueRows) {
     const m = months.find((m) => m.month === r.month);
     if (m) m.revenue = r.total;
+  }
+  for (const inc of incomeRows) {
+    const m = months.find((m) => m.month === inc.month);
+    if (m) m.revenue += inc.total;
   }
   for (const e of expenseRows) {
     const m = months.find((m) => m.month === e.month);
@@ -83,18 +105,46 @@ export async function getMonthlyData(year: number): Promise<MonthlyData[]> {
   return months;
 }
 
+export interface RevenueByGroup {
+  label: string;
+  total: number;
+}
+
+export async function getRevenueByActivity(year: number): Promise<RevenueByGroup[]> {
+  const db = await getDb();
+  return db.select<RevenueByGroup[]>(
+    `SELECT COALESCE(activity, 'N/A') as label,
+     COALESCE(SUM(CASE WHEN currency != 'CHF' AND chf_equivalent > 0 THEN chf_equivalent ELSE total END), 0) as total
+     FROM invoices WHERE strftime('%Y', invoice_date) = $1 AND status != 'cancelled'
+     GROUP BY activity ORDER BY total DESC`,
+    [String(year)]
+  );
+}
+
+export async function getRevenueByClient(year: number): Promise<RevenueByGroup[]> {
+  const db = await getDb();
+  return db.select<RevenueByGroup[]>(
+    `SELECT COALESCE(c.name, 'Unknown') as label,
+     COALESCE(SUM(CASE WHEN i.currency != 'CHF' AND i.chf_equivalent > 0 THEN i.chf_equivalent ELSE i.total END), 0) as total
+     FROM invoices i LEFT JOIN clients c ON i.client_id = c.id
+     WHERE strftime('%Y', i.invoice_date) = $1 AND i.status != 'cancelled'
+     GROUP BY i.client_id ORDER BY total DESC`,
+    [String(year)]
+  );
+}
+
 export async function getDashboardKPIs(year: number): Promise<DashboardKPIs> {
   const db = await getDb();
   const yearStr = String(year);
 
   const [invoiced] = await db.select<{ total: number; count: number }[]>(
-    `SELECT COALESCE(SUM(total), 0) as total, COUNT(*) as count
-     FROM invoices WHERE strftime('%Y', invoice_date) = $1`,
+    `SELECT COALESCE(SUM(CASE WHEN currency != 'CHF' AND chf_equivalent > 0 THEN chf_equivalent ELSE total END), 0) as total, COUNT(*) as count
+     FROM invoices WHERE strftime('%Y', invoice_date) = $1 AND status != 'cancelled'`,
     [yearStr]
   );
 
   const [open] = await db.select<{ total: number }[]>(
-    `SELECT COALESCE(SUM(total), 0) as total
+    `SELECT COALESCE(SUM(CASE WHEN currency != 'CHF' AND chf_equivalent > 0 THEN chf_equivalent ELSE total END), 0) as total
      FROM invoices WHERE status != 'paid' AND status != 'cancelled'
      AND strftime('%Y', invoice_date) = $1`,
     [yearStr]
@@ -112,12 +162,19 @@ export async function getDashboardKPIs(year: number): Promise<DashboardKPIs> {
     [yearStr]
   );
 
+  const [incomeTotal] = await db.select<{ total: number }[]>(
+    `SELECT COALESCE(SUM(amount), 0) as total
+     FROM income WHERE strftime('%Y', date) = $1`,
+    [yearStr]
+  );
+  const otherIncome = incomeTotal?.total ?? 0;
+
   return {
-    total_invoiced: invoiced?.total ?? 0,
+    total_invoiced: (invoiced?.total ?? 0) + otherIncome,
     open_balance: open?.total ?? 0,
     overdue_count: overdue?.count ?? 0,
     total_expenses: expenses?.total ?? 0,
-    net_result: (invoiced?.total ?? 0) - (expenses?.total ?? 0),
+    net_result: (invoiced?.total ?? 0) + otherIncome - (expenses?.total ?? 0),
     invoice_count: invoiced?.count ?? 0,
   };
 }

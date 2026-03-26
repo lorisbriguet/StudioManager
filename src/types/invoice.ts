@@ -19,10 +19,16 @@ export interface Invoice {
   total: number;
   paid_date: string | null;
   contact_id: number | null;
+  billing_address_id: number | null;
+  currency: string;
+  exchange_rate: number;
+  chf_equivalent: number;
   po_number: string | null;
   pdf_path: string | null;
   from_quote_id: number | null;
   notes: string;
+  reminder_count: number;
+  last_reminder_date: string | null;
   created_at: string;
   updated_at: string;
 }

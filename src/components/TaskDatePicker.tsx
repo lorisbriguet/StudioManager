@@ -184,8 +184,8 @@ export function TaskDatePicker({
         onClick={() => setOpen(!open)}
         className={`flex items-center gap-1.5 text-xs rounded px-2 py-1 border transition-colors ${
           dueDate
-            ? "border-gray-200 text-gray-700 hover:bg-gray-50"
-            : "border-dashed border-gray-300 text-muted hover:border-gray-400 hover:bg-gray-50"
+            ? "border-gray-200 text-gray-700 hover:bg-gray-50 dark:hover:bg-gray-200"
+            : "border-dashed border-gray-300 text-muted hover:border-gray-400 hover:bg-gray-50 dark:hover:bg-gray-200"
         } ${compact ? "px-1.5 py-0.5" : ""}`}
       >
         <Calendar size={compact ? 12 : 14} className="shrink-0" />
@@ -195,7 +195,7 @@ export function TaskDatePicker({
       {open && popoverPos && createPortal(
         <div
           ref={popoverRef}
-          className="fixed z-[9999] bg-gray-50 border border-gray-200 rounded-lg shadow-lg p-3 w-[300px]"
+          className="fixed z-[9999] bg-gray-50 border border-gray-100 rounded-lg shadow-lg p-3 w-[300px]"
           style={{ top: popoverPos.top, left: popoverPos.left }}
         >
           {/* Quick shortcuts */}

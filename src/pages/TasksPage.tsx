@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Search, ChevronRight, Plus, GripVertical, Trash2 } from "lucide-react";
+import { ChevronRight, Plus, GripVertical, Trash2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -24,16 +24,20 @@ import { useQuery } from "@tanstack/react-query";
 import { useProjects } from "../db/hooks/useProjects";
 import { useClients } from "../db/hooks/useClients";
 import { TaskDatePicker } from "../components/TaskDatePicker";
+import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
+import { useTabStore } from "../stores/tab-store";
 import { useT } from "../i18n/useT";
-import type { TaskStatus } from "../types/task";
+import { PageHeader, SearchBar, PageSpinner } from "../components/ui";
+import type { Task, Subtask, TaskStatus } from "../types/task";
 
 const statusColors: Record<TaskStatus, string> = {
-  todo: "!bg-yellow-100 !text-yellow-700 dark:!bg-yellow-900/40 dark:!text-yellow-300",
-  done: "!bg-green-100 !text-green-700 dark:!bg-green-900/40 dark:!text-green-300",
+  todo: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300",
+  done: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
 };
 
 export function TasksPage() {
   const t = useT();
+  const openTab = useTabStore((s) => s.openTab);
   const { data: tasks, isLoading } = useAllTasks();
   const { data: projects } = useProjects();
   const { data: clients } = useClients();
@@ -51,6 +55,9 @@ export function TasksPage() {
   const [newTaskText, setNewTaskText] = useState<Record<number, string>>({});
   const [editingTask, setEditingTask] = useState<number | null>(null);
   const [editingSubtask, setEditingSubtask] = useState<number | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<ContextMenuState<Task> | null>(null);
+  const [subCtxMenu, setSubCtxMenu] = useState<ContextMenuState<Subtask> | null>(null);
+  const [headerCtxMenu, setHeaderCtxMenu] = useState<ContextMenuState<{ projectId: number; projectName: string }> | null>(null);
   const [collapsedProjects, setCollapsedProjects] = useState<Set<number>>(() => {
     try {
       const stored = localStorage.getItem("tasksCollapsedProjects");
@@ -64,13 +71,16 @@ export function TasksPage() {
     } catch { return []; }
   });
 
+  const projectsMap = useMemo(() => new Map(projects?.map((p) => [p.id, p]) ?? []), [projects]);
+  const clientsMap = useMemo(() => new Map(clients?.map((c) => [c.id, c.name]) ?? []), [clients]);
+
   const projectName = (projectId: number) =>
-    projects?.find((p) => p.id === projectId)?.name ?? "";
+    projectsMap.get(projectId)?.name ?? "";
 
   const clientForProject = (projectId: number) => {
-    const project = projects?.find((p) => p.id === projectId);
+    const project = projectsMap.get(projectId);
     if (!project) return "";
-    return clients?.find((c) => c.id === project.client_id)?.name ?? "";
+    return clientsMap.get(project.client_id) ?? "";
   };
 
   const grouped = useMemo(() => {
@@ -138,11 +148,11 @@ export function TasksPage() {
     { value: "done", label: t.done },
   ];
 
-  if (isLoading) return <div className="text-muted text-sm">{t.loading}</div>;
+  if (isLoading) return <PageSpinner />;
 
   return (
     <div>
-      <h1 className="text-xl font-semibold mb-6">{t.tasks}</h1>
+      <PageHeader title={t.tasks} />
 
       <div className="flex items-center gap-4 mb-4">
         <div className="flex gap-2">
@@ -153,22 +163,18 @@ export function TasksPage() {
               className={`px-3 py-1 text-xs rounded-full border ${
                 filter === tab.value
                   ? "bg-accent text-white border-accent"
-                  : "border-gray-200 text-muted hover:bg-gray-50"
+                  : "border-gray-200 text-muted hover:bg-gray-50 dark:hover:bg-gray-200"
               }`}
             >
               {tab.label}
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2">
-          <Search size={16} className="text-muted" />
-          <input
-            placeholder={t.search_tasks}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-1.5 text-sm w-64"
-          />
-        </div>
+        <SearchBar
+          value={search}
+          onChange={setSearch}
+          placeholder={t.search_tasks}
+        />
       </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleProjectDragEnd}>
@@ -177,7 +183,10 @@ export function TasksPage() {
         {grouped.map((g) => (
           <SortableProjectGroup key={g.projectId} id={g.projectId}>
             {({ attributes, listeners }) => (<>
-            <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center gap-2">
+            <div
+              className="px-4 py-2 border-b border-gray-100 flex items-center gap-2 select-none"
+              onContextMenu={(e) => { e.preventDefault(); setHeaderCtxMenu({ x: e.clientX, y: e.clientY, item: { projectId: g.projectId, projectName: g.projectName } }); }}
+            >
               <DragHandle attributes={attributes} listeners={listeners} />
               <button
                 onClick={() => {
@@ -214,7 +223,10 @@ export function TasksPage() {
 
                 return (
                   <div key={tk.id}>
-                    <div className="flex items-center gap-3 px-4 py-2.5 group/task">
+                    <div
+                      className="flex items-center gap-3 px-4 py-2.5 group/task"
+                      onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: tk }); }}
+                    >
                       <button
                         onClick={() => {
                           const next = new Set(expandedTasks);
@@ -259,7 +271,7 @@ export function TasksPage() {
                       ) : (
                         <span
                           onDoubleClick={() => setEditingTask(tk.id)}
-                          className={`flex-1 text-sm cursor-text ${
+                          className={`flex-1 text-sm select-none ${
                             tk.status === "done" ? "line-through text-muted" : ""
                           }`}
                         >
@@ -306,7 +318,7 @@ export function TasksPage() {
                     {isExpanded && (
                       <div className="ml-12 mr-4 border-l border-gray-200 pl-3 pb-2 mb-1">
                         {filteredSubs.map((s) => (
-                          <div key={s.id} className="flex items-center gap-2 py-1 group/sub">
+                          <div key={s.id} className="flex items-center gap-2 py-1 group/sub" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setSubCtxMenu({ x: e.clientX, y: e.clientY, item: s }); }}>
                             <input
                               type="checkbox"
                               checked={s.status === "done"}
@@ -338,7 +350,7 @@ export function TasksPage() {
                             ) : (
                               <span
                                 onDoubleClick={() => setEditingSubtask(s.id)}
-                                className={`flex-1 text-xs cursor-text ${
+                                className={`flex-1 text-xs select-none ${
                                   s.status === "done" ? "line-through text-muted" : ""
                                 }`}
                               >
@@ -516,6 +528,41 @@ export function TasksPage() {
       </div>
       </SortableContext>
       </DndContext>
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          onClose={() => setCtxMenu(null)}
+          items={[
+            { label: ctxMenu.item.status === "done" ? t.todo : t.done, onClick: () => updateTask.mutate({ id: ctxMenu.item.id, data: { status: ctxMenu.item.status === "done" ? "todo" : "done" } }) },
+            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/projects/${ctxMenu.item.project_id}`, projectName(ctxMenu.item.project_id)) },
+            { label: "", divider: true, onClick: () => {} },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteTask.mutate(ctxMenu.item.id) },
+          ]}
+        />
+      )}
+      {subCtxMenu && (
+        <ContextMenu
+          x={subCtxMenu.x}
+          y={subCtxMenu.y}
+          onClose={() => setSubCtxMenu(null)}
+          items={[
+            { label: subCtxMenu.item.status === "done" ? t.todo : t.done, onClick: () => updateSubtask.mutate({ id: subCtxMenu.item.id, data: { status: subCtxMenu.item.status === "done" ? "todo" : "done" } }) },
+            { label: "", divider: true, onClick: () => {} },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteSubtask.mutate(subCtxMenu.item.id) },
+          ]}
+        />
+      )}
+      {headerCtxMenu && (
+        <ContextMenu
+          x={headerCtxMenu.x}
+          y={headerCtxMenu.y}
+          onClose={() => setHeaderCtxMenu(null)}
+          items={[
+            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/projects/${headerCtxMenu.item.projectId}`, headerCtxMenu.item.projectName) },
+          ]}
+        />
+      )}
     </div>
   );
 }
@@ -533,7 +580,7 @@ function SortableProjectGroup({ id, children }: { id: number; children: (dragHan
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="border border-gray-200 rounded-lg overflow-hidden">
+    <div ref={setNodeRef} style={style} className="border border-gray-100 rounded-lg overflow-hidden">
       {children({ attributes, listeners })}
     </div>
   );

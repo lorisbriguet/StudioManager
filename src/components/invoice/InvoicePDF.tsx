@@ -7,7 +7,7 @@ import {
 } from "@react-pdf/renderer";
 import { invoiceLabels, type InvoiceLanguage } from "../../i18n/invoice-labels";
 import type { Invoice, InvoiceLineItem } from "../../types/invoice";
-import type { Client } from "../../types/client";
+import type { Client, ClientAddress } from "../../types/client";
 import type { BusinessProfile } from "../../types/business-profile";
 import { formatDisplayDate } from "../../utils/formatDate";
 import { QRBillCanvas } from "./QRBillSvgRenderer";
@@ -19,6 +19,10 @@ interface InvoicePDFProps {
   client: Client;
   profile: BusinessProfile;
   contactName?: string;
+  billingAddress?: ClientAddress | null;
+  projectName?: string;
+  /** When > 0, renders a "REMINDER" header with the count */
+  reminderCount?: number;
 }
 
 // A4: 595.28 x 841.89pt — QR bill: 210x105mm = 595.28x297.64pt
@@ -104,6 +108,7 @@ const s = StyleSheet.create({
   },
   colDesignation: { flex: 1 },
   colRate: { width: 70, textAlign: "right" },
+  colUnit: { width: 50, textAlign: "center" },
   colQty: { width: 50, textAlign: "right" },
   colAmount: { width: 80, textAlign: "right" },
   thText: {
@@ -172,6 +177,51 @@ const s = StyleSheet.create({
     textAlign: "right",
     alignSelf: "flex-start",
   },
+  notesBlock: {
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  notesLabel: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 8,
+    marginBottom: 2,
+  },
+  notesText: {
+    fontSize: 8,
+    color: "#444",
+    lineHeight: 1.4,
+  },
+  bankSection: {
+    fontSize: 8,
+    lineHeight: 1.5,
+  },
+  bankTitle: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 9,
+    marginBottom: 2,
+  },
+  pageNumber: {
+    position: "absolute",
+    bottom: 12,
+    right: 50,
+    fontSize: 7,
+    color: "#999",
+  },
+  // ── Reminder banner ──
+  reminderBanner: {
+    backgroundColor: "#fee2e2",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+    borderRadius: 2,
+  },
+  reminderText: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 11,
+    color: "#b91c1c",
+    textTransform: "uppercase" as const,
+    textAlign: "center" as const,
+  },
   // ── QR bill ──
   qrBill: {
     width: "100%",
@@ -179,8 +229,8 @@ const s = StyleSheet.create({
   },
 });
 
-function formatCHF(amount: number): string {
-  return `CHF ${amount.toLocaleString("de-CH", {
+function formatAmount(amount: number, currency = "CHF"): string {
+  return `${currency} ${amount.toLocaleString("de-CH", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -192,18 +242,43 @@ export function InvoicePDF({
   client,
   profile,
   contactName,
+  billingAddress,
+  projectName,
+  reminderCount = 0,
 }: InvoicePDFProps) {
   const lang = (invoice.language as InvoiceLanguage) || "FR";
   const t = invoiceLabels[lang];
   const qrBillData = profile.iban ? buildQRBillData(invoice, client, profile) : null;
   const qrBillLang = invoice.language === "EN" ? "EN" as const : "FR" as const;
   const hasRate = lineItems.some((item) => item.rate != null);
+  const hasUnit = lineItems.some((item) => item.unit != null && item.unit !== "");
+  const cur = invoice.currency || "CHF";
+  const fmt = (amount: number) => formatAmount(amount, cur);
+  const paymentDays = invoice.payment_terms_days || profile.default_payment_terms_days || 30;
+  const paymentTermsText = t.net_days.replace("{days}", String(paymentDays));
+
+  // Use billing address if provided, otherwise fall back to client defaults
+  const addr = billingAddress ?? {
+    billing_name: client.billing_name || client.name,
+    address_line1: client.address_line1,
+    address_line2: client.address_line2,
+    postal_city: client.postal_city,
+  };
 
   return (
     <Document>
       <Page size="A4" style={s.page}>
         {/* Content area — flex: 1 fills space above QR bill */}
         <View style={s.content}>
+          {/* Reminder banner */}
+          {reminderCount > 0 && (
+            <View style={s.reminderBanner}>
+              <Text style={s.reminderText}>
+                {t.reminder_nth.replace("{n}", String(reminderCount))}
+              </Text>
+            </View>
+          )}
+
           {/* Title */}
           <Text style={s.title}>{t.invoice_title.toUpperCase()}</Text>
 
@@ -218,11 +293,13 @@ export function InvoicePDF({
               <Text>{profile.phone}</Text>
             </View>
             <View style={s.clientBlock}>
-              {contactName && <Text>{contactName}</Text>}
-              <Text style={s.clientName}>{client.name}</Text>
-              {client.address_line1 && <Text>{client.address_line1}</Text>}
-              {client.address_line2 && <Text>{client.address_line2}</Text>}
-              {client.postal_city && <Text>{client.postal_city}</Text>}
+              <Text style={s.clientName}>{addr.billing_name || client.name}</Text>
+              {contactName && (
+                <Text>{lang === "FR" ? `A l'att. de ${contactName}` : `att: ${contactName}`}</Text>
+              )}
+              {addr.address_line1 && <Text>{addr.address_line1}</Text>}
+              {addr.address_line2 && <Text>{addr.address_line2}</Text>}
+              {addr.postal_city && <Text>{addr.postal_city}</Text>}
             </View>
           </View>
 
@@ -251,7 +328,7 @@ export function InvoicePDF({
             </View>
             <View style={s.metaRow}>
               <Text style={s.metaLabel}>{t.reference}</Text>
-              <Text style={s.metaValue}>{invoice.reference}</Text>
+              <Text style={s.metaValue}>{invoice.reference.startsWith("DRAFT") ? "Draft" : invoice.reference}</Text>
             </View>
             <View style={{ height: 6 }} />
             {invoice.activity && (
@@ -264,6 +341,12 @@ export function InvoicePDF({
               <View style={s.metaRow}>
                 <Text style={s.metaLabel}>{t.assignment}</Text>
                 <Text style={s.metaValue}>{invoice.assignment}</Text>
+              </View>
+            )}
+            {projectName && (
+              <View style={s.metaRow}>
+                <Text style={s.metaLabel}>{t.project}</Text>
+                <Text style={s.metaValue}>{projectName}</Text>
               </View>
             )}
             {invoice.po_number && <View style={{ height: 6 }} />}
@@ -280,6 +363,7 @@ export function InvoicePDF({
             <View style={s.tableHeader}>
               <Text style={[s.thText, s.colDesignation]}>{t.designation}</Text>
               {hasRate && <Text style={[s.thText, s.colRate]}>{t.rate}</Text>}
+              {hasUnit && <Text style={[s.thText, s.colUnit]}>{t.unit}</Text>}
               <Text style={[s.thText, s.colQty]}>{t.quantity}</Text>
               <Text style={[s.thText, s.colAmount]}>{t.amount}</Text>
             </View>
@@ -288,14 +372,25 @@ export function InvoicePDF({
                 <Text style={s.colDesignation}>{item.designation}</Text>
                 {hasRate && (
                   <Text style={s.colRate}>
-                    {item.rate != null ? formatCHF(item.rate) : ""}
+                    {item.rate != null ? fmt(item.rate) : ""}
                   </Text>
                 )}
+                {hasUnit && (
+                  <Text style={s.colUnit}>{item.unit || ""}</Text>
+                )}
                 <Text style={s.colQty}>{item.quantity}</Text>
-                <Text style={s.colAmount}>{formatCHF(item.amount)}</Text>
+                <Text style={s.colAmount}>{fmt(item.amount)}</Text>
               </View>
             ))}
           </View>
+
+          {/* Notes */}
+          {invoice.notes ? (
+            <View style={s.notesBlock}>
+              <Text style={s.notesLabel}>{t.notes}</Text>
+              <Text style={s.notesText}>{invoice.notes}</Text>
+            </View>
+          ) : null}
 
           {/* Totals */}
           <View style={s.totalsBlock}>
@@ -308,13 +403,13 @@ export function InvoicePDF({
                   {t.cultural_discount} ({(invoice.discount_rate * 100).toFixed(0)}%)
                 </Text>
                 <Text>
-                  - {formatCHF(invoice.subtotal * invoice.discount_rate)}
+                  - {fmt(invoice.subtotal * invoice.discount_rate)}
                 </Text>
               </View>
             )}
             <View style={s.grandTotalRow}>
               <Text style={s.grandTotalLabel}>{t.invoice_total.toUpperCase()}</Text>
-              <Text style={s.grandTotalValue}>{formatCHF(invoice.total)}</Text>
+              <Text style={s.grandTotalValue}>{fmt(invoice.total)}</Text>
             </View>
           </View>
 
@@ -323,8 +418,16 @@ export function InvoicePDF({
             <View style={s.footerRow}>
               <View style={s.paymentSection}>
                 <Text style={s.paymentTitle}>{t.payment_terms}</Text>
-                <Text>{t.net_30}</Text>
+                <Text>{paymentTermsText}</Text>
               </View>
+              {profile.bank_name && (
+                <View style={s.bankSection}>
+                  <Text style={s.bankTitle}>{t.bank_details}</Text>
+                  <Text>{profile.bank_name}</Text>
+                  <Text>IBAN: {profile.iban}</Text>
+                  {profile.bic_swift && <Text>{t.bic}: {profile.bic_swift}</Text>}
+                </View>
+              )}
               <Text style={s.thankYou}>{t.thank_you}</Text>
             </View>
           </View>
@@ -336,6 +439,15 @@ export function InvoicePDF({
             <QRBillCanvas data={qrBillData} language={qrBillLang} />
           </View>
         )}
+
+        {/* Page numbers — only when multi-page */}
+        <Text
+          style={s.pageNumber}
+          render={({ pageNumber, totalPages }) =>
+            totalPages > 1 ? `${t.page} ${pageNumber} / ${totalPages}` : ""
+          }
+          fixed
+        />
       </Page>
     </Document>
   );

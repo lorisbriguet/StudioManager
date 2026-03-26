@@ -429,7 +429,7 @@ function QuickCreatePopup({
   return createPortal(
     <div
       ref={popoverRef}
-      className="fixed z-[9999] bg-gray-50 border border-gray-200 rounded-lg shadow-lg p-3 w-[260px]"
+      className="fixed z-[9999] bg-gray-50 border border-gray-100 rounded-lg shadow-lg p-3 w-[260px]"
       style={{ top, left }}
     >
       <div className="text-[11px] text-muted mb-2">

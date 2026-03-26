@@ -1,26 +1,31 @@
 import { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, Search, X } from "lucide-react";
+import { Plus, X, Eye, Trash2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
-import { useProjects, useCreateProject } from "../db/hooks/useProjects";
+import { useProjects, useCreateProject, useDeleteProject } from "../db/hooks/useProjects";
 import { useClients } from "../db/hooks/useClients";
 import { useAllTasks } from "../db/hooks/useTasks";
 import { getAllSubtasks } from "../db/queries/tasks";
 import { useQuery } from "@tanstack/react-query";
 import type { Subtask } from "../types/task";
 import { useAppStore } from "../stores/app-store";
+import { useTabStore } from "../stores/tab-store";
+import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
 import { formatDisplayDate } from "../utils/formatDate";
 import { ProjectDetailContent } from "../components/ProjectDetailContent";
 import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
+import { Button, Badge, PageHeader, SearchBar, PageSpinner, Input } from "../components/ui";
 
-const statusColors: Record<ProjectStatus, string> = {
-  active: "bg-accent-light text-accent",
-  completed: "bg-green-100 text-green-700",
-  on_hold: "bg-yellow-100 text-yellow-700",
-  cancelled: "bg-gray-200 text-gray-500",
+type BadgeVariant = "success" | "warning" | "danger" | "neutral" | "accent" | "info";
+
+const statusBadgeVariant: Record<ProjectStatus, BadgeVariant> = {
+  active: "accent",
+  completed: "success",
+  on_hold: "warning",
+  cancelled: "neutral",
 };
 
 const statusKeys: Record<ProjectStatus, UIKey> = {
@@ -36,8 +41,11 @@ export function ProjectsPage() {
   const { data: allTasks } = useAllTasks();
   const { data: allSubtasks } = useQuery({ queryKey: ["subtasks"], queryFn: getAllSubtasks });
   const createProject = useCreateProject();
+  const deleteProject = useDeleteProject();
   const navigate = useNavigate();
+  const openTab = useTabStore((s) => s.openTab);
   const projectOpenMode = useAppStore((s) => s.projectOpenMode);
+  const [ctxMenu, setCtxMenu] = useState<ContextMenuState<{ id: number; name: string }> | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState<ProjectStatus | "all">("active");
   const [search, setSearch] = useState("");
@@ -127,20 +135,14 @@ export function ProjectsPage() {
     cancelled: t.cancelled,
   };
 
-  if (isLoading) return <div className="text-muted text-sm">{t.loading}</div>;
+  if (isLoading) return <PageSpinner />;
 
   return (
     <div className="flex flex-1 min-h-0">
       <div className={`min-w-0 overflow-y-auto ${peekId !== null ? "flex-1" : "w-full"}`}>
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-semibold">{t.projects}</h1>
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover"
-          >
-            <Plus size={16} /> {t.new_project}
-          </button>
-        </div>
+        <PageHeader title={t.projects}>
+          <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>{t.new_project}</Button>
+        </PageHeader>
 
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <div className="flex flex-wrap gap-2">
@@ -151,22 +153,14 @@ export function ProjectsPage() {
                 className={`px-3 py-1 text-xs rounded-full border ${
                   filter === s
                     ? "bg-accent text-white border-accent"
-                    : "border-gray-200 text-muted hover:bg-gray-50"
+                    : "border-gray-200 text-muted hover:bg-gray-50 dark:hover:bg-gray-200"
                 }`}
               >
                 {filterLabels[s]}
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2">
-            <Search size={16} className="text-muted shrink-0" />
-            <input
-              placeholder={t.search_projects}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="border border-gray-200 rounded-md px-3 py-1.5 text-sm w-48"
-            />
-          </div>
+          <SearchBar value={search} onChange={setSearch} placeholder={t.search_projects} className="w-48" />
         </div>
 
         {showForm && (
@@ -193,6 +187,7 @@ export function ProjectsPage() {
               <div
                 key={p.id}
                 onClick={() => handleProjectClick(p.id)}
+                onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: { id: p.id, name: p.name } }); }}
                 className={`block border rounded-lg p-4 hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer ${
                   peekId === p.id
                     ? "border-accent bg-accent-light/30"
@@ -201,11 +196,9 @@ export function ProjectsPage() {
               >
                 <div className="flex items-start justify-between mb-2">
                   <h3 className="text-sm font-medium leading-tight">{p.name}</h3>
-                  <span
-                    className={`text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 ml-2 ${statusColors[p.status]}`}
-                  >
+                  <Badge variant={statusBadgeVariant[p.status]} className="shrink-0 ml-2">
                     {t[statusKeys[p.status]]}
-                  </span>
+                  </Badge>
                 </div>
 
                 <div className="text-xs text-muted mb-3">{clientName(p.client_id)}</div>
@@ -246,6 +239,20 @@ export function ProjectsPage() {
           )}
         </div>
       </div>
+
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          onClose={() => setCtxMenu(null)}
+          items={[
+            { label: t.view_details, icon: <Eye size={14} />, onClick: () => navigate(`/projects/${ctxMenu.item.id}`) },
+            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/projects/${ctxMenu.item.id}`, ctxMenu.item.name) },
+            { label: "", divider: true, onClick: () => {} },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteProject.mutate(ctxMenu.item.id) },
+          ]}
+        />
+      )}
 
       {/* Side Peek Panel */}
       {peekId !== null && (
@@ -300,18 +307,17 @@ function NewProjectForm({
   const t = useT();
 
   return (
-    <div className="border border-gray-200 rounded-lg p-4 mb-6 space-y-3">
+    <div className="border border-gray-100 rounded-lg p-4 mb-6 space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <input
+        <Input
           placeholder={`${t.project_name} *`}
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
-          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
         />
         <select
           value={form.client_id}
           onChange={(e) => setForm({ ...form, client_id: e.target.value })}
-          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
+          className="border border-gray-200 dark:border-gray-600 rounded-md px-3 py-1.5 text-sm"
         >
           {clients.map((c) => (
             <option key={c.id} value={c.id}>
@@ -319,21 +325,19 @@ function NewProjectForm({
             </option>
           ))}
         </select>
-        <input
+        <Input
           type="date"
           value={form.start_date}
           onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
         />
-        <input
+        <Input
           type="date"
           value={form.deadline}
           onChange={(e) => setForm({ ...form, deadline: e.target.value })}
-          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
         />
       </div>
       <div className="flex gap-2">
-        <button
+        <Button
           onClick={() => {
             if (!form.name.trim()) return toast.error(t.toast_name_required);
             if (!form.client_id) return toast.error(t.toast_select_client);
@@ -343,16 +347,12 @@ function NewProjectForm({
               deadline: form.deadline || null,
             });
           }}
-          className="px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover"
         >
           {t.save}
-        </button>
-        <button
-          onClick={onCancel}
-          className="px-3 py-1.5 border border-gray-200 text-sm rounded-md hover:bg-gray-50"
-        >
+        </Button>
+        <Button variant="secondary" onClick={onCancel}>
           {t.cancel}
-        </button>
+        </Button>
       </div>
     </div>
   );

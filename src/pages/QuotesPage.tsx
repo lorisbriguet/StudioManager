@@ -1,61 +1,47 @@
 import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
-import { Plus, Search, Eye, Pencil, FileOutput, Check } from "lucide-react";
-import { undoable } from "../lib/undo";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getDb } from "../db/index";
+import { Link, useNavigate } from "react-router-dom";
+import { Plus, Eye, Pencil, FileOutput, Check, Trash2, Send, ExternalLink } from "lucide-react";
 import { useClients } from "../db/hooks/useClients";
+import { useQuotes, useUpdateQuote, useDeleteQuote } from "../db/hooks/useQuotes";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
 import { formatDisplayDate } from "../utils/formatDate";
 import { useT } from "../i18n/useT";
+import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
+import { useTabStore } from "../stores/tab-store";
+import { PageHeader, SearchBar, PageSpinner, Button } from "../components/ui";
 import type { Quote, QuoteStatus } from "../types/quote";
 
-async function getQuotes(): Promise<Quote[]> {
-  const db = await getDb();
-  return db.select<Quote[]>("SELECT * FROM quotes ORDER BY quote_date DESC");
-}
-
-async function updateQuoteStatus(id: number, status: QuoteStatus): Promise<void> {
-  const db = await getDb();
-  await db.execute("UPDATE quotes SET status = $1, updated_at = datetime('now') WHERE id = $2", [status, id]);
-}
-
 const statusColors: Record<QuoteStatus, string> = {
-  draft: "!bg-gray-100 !text-gray-600 dark:!bg-gray-700 dark:!text-gray-300",
-  sent: "!bg-accent-light !text-accent dark:!bg-accent-light dark:!text-accent",
-  accepted: "!bg-green-100 !text-green-700 dark:!bg-green-900/40 dark:!text-green-300",
-  rejected: "!bg-red-100 !text-red-700 dark:!bg-red-900/40 dark:!text-red-300",
-  expired: "!bg-yellow-100 !text-yellow-700 dark:!bg-yellow-900/40 dark:!text-yellow-300",
+  draft: "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300",
+  sent: "bg-accent-light text-accent",
+  accepted: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
+  rejected: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+  expired: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300",
 };
 
 type SortKey = "reference" | "client_name" | "quote_date" | "status" | "total";
 
 export function QuotesPage() {
-  const { data: quotes, isLoading } = useQuery({
-    queryKey: ["quotes"],
-    queryFn: getQuotes,
-  });
+  const { data: quotes, isLoading } = useQuotes();
   const { data: clients } = useClients();
-  const qc = useQueryClient();
-  const updateStatus = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: QuoteStatus }) =>
-      updateQuoteStatus(id, status),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["quotes"] }),
-  });
+  const updateQuote = useUpdateQuote();
 
+  const navigate = useNavigate();
+  const openTab = useTabStore((s) => s.openTab);
+  const deleteQuote = useDeleteQuote();
   const t = useT();
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortState<SortKey>>({ key: "quote_date", dir: "desc" });
+  const [ctxMenu, setCtxMenu] = useState<ContextMenuState<Quote & { client_name: string }> | null>(null);
 
-  const clientName = (clientId: string) =>
-    clients?.find((c) => c.id === clientId)?.name ?? clientId;
+  const clientsMap = useMemo(() => new Map(clients?.map((c) => [c.id, c.name]) ?? []), [clients]);
 
   const enriched = useMemo(() => {
     return (quotes ?? []).map((q) => ({
       ...q,
-      client_name: clientName(q.client_id),
+      client_name: clientsMap.get(q.client_id) ?? q.client_id,
     }));
-  }, [quotes, clients]);
+  }, [quotes, clientsMap]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -70,34 +56,22 @@ export function QuotesPage() {
     return sortRows(rows, sort.key, sort.dir);
   }, [enriched, search, sort]);
 
-  if (isLoading) return <div className="text-muted text-sm">{t.loading}</div>;
+  if (isLoading) return <PageSpinner />;
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold">{t.quotes}</h1>
-        <Link
-          to="/quotes/new"
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover"
-        >
-          <Plus size={16} /> {t.new_quote}
-        </Link>
-      </div>
+      <PageHeader title={t.quotes}>
+        <Button icon={<Plus size={16} />} onClick={() => navigate("/quotes/new")}>
+          {t.new_quote}
+        </Button>
+      </PageHeader>
 
-      <div className="flex items-center gap-2 mb-4">
-        <Search size={16} className="text-muted" />
-        <input
-          placeholder={t.search_quotes}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="border border-gray-200 rounded-md px-3 py-1.5 text-sm w-64"
-        />
-      </div>
+      <SearchBar value={search} onChange={setSearch} placeholder={t.search_quotes} className="w-64 mb-4" />
 
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
+      <div>
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
+            <tr className="border-b border-gray-100">
               <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
               <SortHeader label={t.client} sortKey="client_name" current={sort} onSort={setSort} />
               <SortHeader label={t.date} sortKey="quote_date" current={sort} onSort={setSort} />
@@ -108,11 +82,15 @@ export function QuotesPage() {
           </thead>
           <tbody>
             {filtered.map((q) => (
-              <tr key={q.id} className="border-b border-gray-100 hover:bg-gray-50">
+              <tr
+                key={q.id}
+                className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200 group"
+                onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: q }); }}
+              >
                 <td className="px-4 py-2">
                   <Link
                     to={`/quotes/${q.id}/edit`}
-                    className="text-muted hover:text-accent align-middle"
+                    className="text-muted hover:text-accent align-middle opacity-0 group-hover:opacity-100 transition-opacity"
                     title={t.edit}
                     onClick={(e) => e.stopPropagation()}
                   >
@@ -127,16 +105,7 @@ export function QuotesPage() {
                     value={q.status}
                     onChange={(e) => {
                       const status = e.target.value as QuoteStatus;
-                      const prevStatus = q.status;
-                      updateStatus.mutate(
-                        { id: q.id, status },
-                        {
-                          onSuccess: () =>
-                            undoable(t.status_updated, () =>
-                              updateStatus.mutateAsync({ id: q.id, status: prevStatus })
-                            ),
-                        }
-                      );
+                      updateQuote.mutate({ id: q.id, data: { status } });
                     }}
                     className={`text-xs px-2 py-0.5 rounded-full border-0 appearance-none cursor-pointer ${statusColors[q.status]}`}
                   >
@@ -151,28 +120,30 @@ export function QuotesPage() {
                   CHF {q.total.toFixed(2)}
                 </td>
                 <td className="px-4 py-2 text-right">
-                  <Link
-                    to={`/quotes/${q.id}/preview`}
-                    className="text-muted hover:text-accent align-middle"
-                    title={t.preview}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Eye size={14} className="inline" />
-                  </Link>
-                  {q.converted_to_invoice_id ? (
-                    <span className="inline ml-2 text-green-500 align-middle" title={t.already_converted}>
-                      <Check size={14} className="inline" />
-                    </span>
-                  ) : (
+                  <span className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-2">
                     <Link
-                      to={`/invoices/new?from_quote=${q.id}`}
-                      className="text-muted hover:text-accent align-middle ml-2"
-                      title={t.convert_to_invoice}
+                      to={`/quotes/${q.id}/preview`}
+                      className="text-muted hover:text-accent align-middle"
+                      title={t.preview}
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <FileOutput size={14} className="inline" />
+                      <Eye size={14} className="inline" />
                     </Link>
-                  )}
+                    {q.converted_to_invoice_id ? (
+                      <span className="text-green-500 align-middle" title={t.already_converted}>
+                        <Check size={14} className="inline" />
+                      </span>
+                    ) : (
+                      <Link
+                        to={`/invoices/new?from_quote=${q.id}`}
+                        className="text-muted hover:text-accent align-middle"
+                        title={t.convert_to_invoice}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <FileOutput size={14} className="inline" />
+                      </Link>
+                    )}
+                  </span>
                 </td>
               </tr>
             ))}
@@ -186,6 +157,23 @@ export function QuotesPage() {
           </tbody>
         </table>
       </div>
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          onClose={() => setCtxMenu(null)}
+          items={[
+            { label: t.edit, icon: <Pencil size={14} />, onClick: () => navigate(`/quotes/${ctxMenu.item.id}/edit`) },
+            { label: t.preview_pdf, icon: <Eye size={14} />, onClick: () => navigate(`/quotes/${ctxMenu.item.id}/preview`) },
+            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/quotes/${ctxMenu.item.id}/edit`, ctxMenu.item.reference) },
+            { label: "", divider: true, onClick: () => {} },
+            ...(ctxMenu.item.status === "draft" ? [{ label: t.mark_sent, icon: <Send size={14} />, onClick: () => updateQuote.mutate({ id: ctxMenu.item.id, data: { status: "sent" as QuoteStatus } }) }] : []),
+            ...(!ctxMenu.item.converted_to_invoice_id ? [{ label: t.convert_to_invoice, icon: <FileOutput size={14} />, onClick: () => navigate(`/invoices/new?from_quote=${ctxMenu.item.id}`) }] : []),
+            { label: "", divider: true, onClick: () => {} },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteQuote.mutate(ctxMenu.item.id) },
+          ]}
+        />
+      )}
     </div>
   );
 }

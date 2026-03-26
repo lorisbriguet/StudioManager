@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { parseActivities } from "../types/business-profile";
 import type { BusinessProfile } from "../types/business-profile";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
+import { Button, Input, PageSpinner } from "../components/ui";
 
 type FormData = Omit<BusinessProfile, "id">;
 
@@ -87,13 +88,40 @@ export function ProfilePage() {
     saveActivities(activities.filter((_, i) => i !== idx));
   };
 
-  if (isLoading) return <div className="text-muted text-sm">{t.loading}</div>;
-
   const categories: { key: ProfileCategory; label: string }[] = [
     { key: "business", label: t.business_profile },
     { key: "bank", label: t.bank_details },
     { key: "invoicing", label: t.invoice_defaults },
   ];
+
+  // Keyboard navigation for profile sidebar
+  const handleProfileKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if ((e.target as HTMLElement).isContentEditable) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const idx = categories.findIndex((c) => c.key === activeCategory);
+        const len = categories.length;
+        const next = e.key === "ArrowDown" ? (idx + 1) % len : (idx - 1 + len) % len;
+        setActiveCategory(categories[next].key);
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("sidebar-focus"));
+      }
+    },
+    [activeCategory, categories]
+  );
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleProfileKeyDown);
+    return () => window.removeEventListener("keydown", handleProfileKeyDown);
+  }, [handleProfileKeyDown]);
+
+  if (isLoading) return <PageSpinner />;
 
   return (
     <div className="flex gap-0 h-full -m-8">
@@ -109,7 +137,7 @@ export function ProfilePage() {
               className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
                 activeCategory === cat.key
                   ? "bg-accent-light text-accent font-medium"
-                  : "text-muted hover:bg-gray-100 hover:text-gray-900"
+                  : "text-muted hover:bg-gray-100 dark:hover:bg-gray-200 hover:text-gray-900"
               }`}
             >
               {cat.label}
@@ -132,21 +160,13 @@ export function ProfilePage() {
                     <label className="block text-xs font-medium text-muted mb-1">
                       {t[labelKey]}
                     </label>
-                    <input
-                      {...register(key)}
-                      type={type ?? "text"}
-                      className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
-                    />
+                    <Input {...register(key)} type={type ?? "text"} />
                   </div>
                 ))}
               </div>
-              <button
-                type="submit"
-                disabled={updateProfile.isPending}
-                className="mt-6 px-4 py-2 bg-accent text-white text-sm rounded-md hover:bg-accent-hover disabled:opacity-50"
-              >
+              <Button type="submit" className="mt-6" disabled={updateProfile.isPending}>
                 {updateProfile.isPending ? t.saving : t.save}
-              </button>
+              </Button>
             </section>
           )}
 
@@ -161,21 +181,13 @@ export function ProfilePage() {
                     <label className="block text-xs font-medium text-muted mb-1">
                       {t[labelKey]}
                     </label>
-                    <input
-                      {...register(key)}
-                      type="text"
-                      className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
-                    />
+                    <Input {...register(key)} type="text" />
                   </div>
                 ))}
               </div>
-              <button
-                type="submit"
-                disabled={updateProfile.isPending}
-                className="mt-6 px-4 py-2 bg-accent text-white text-sm rounded-md hover:bg-accent-hover disabled:opacity-50"
-              >
+              <Button type="submit" className="mt-6" disabled={updateProfile.isPending}>
                 {updateProfile.isPending ? t.saving : t.save}
-              </button>
+              </Button>
             </section>
           )}
 
@@ -208,7 +220,7 @@ export function ProfilePage() {
                     ))}
                   </div>
                   <div className="flex gap-2">
-                    <input
+                    <Input
                       value={newActivity}
                       onChange={(e) => setNewActivity(e.target.value)}
                       onKeyDown={(e) => {
@@ -218,7 +230,7 @@ export function ProfilePage() {
                         }
                       }}
                       placeholder={t.add_activity}
-                      className="flex-1 border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+                      className="flex-1"
                     />
                     <button
                       type="button"
@@ -235,10 +247,9 @@ export function ProfilePage() {
                   <label className="block text-xs font-medium text-muted mb-1">
                     {t.payment_terms_days}
                   </label>
-                  <input
+                  <Input
                     {...register("default_payment_terms_days", { valueAsNumber: true })}
                     type="number"
-                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
                   />
                 </div>
 
@@ -251,13 +262,9 @@ export function ProfilePage() {
                   <label className="text-sm">{t.vat_exempt}</label>
                 </div>
               </div>
-              <button
-                type="submit"
-                disabled={updateProfile.isPending}
-                className="mt-6 px-4 py-2 bg-accent text-white text-sm rounded-md hover:bg-accent-hover disabled:opacity-50"
-              >
+              <Button type="submit" className="mt-6" disabled={updateProfile.isPending}>
                 {updateProfile.isPending ? t.saving : t.save}
-              </button>
+              </Button>
             </section>
           )}
         </form>

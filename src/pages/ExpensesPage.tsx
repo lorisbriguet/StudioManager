@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
-import { Plus, Paperclip, Search, Eye, X, ChevronRight, Upload } from "lucide-react";
+import { Plus, Paperclip, Eye, X, ChevronRight, Upload, Trash2, CheckCircle } from "lucide-react";
+import { Button, PageHeader, SearchBar, PageSpinner } from "../components/ui";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { formatDisplayDate } from "../utils/formatDate";
@@ -14,12 +15,16 @@ import {
   useDistinctSuppliers,
   useCreateExpense,
   useUpdateExpense,
+  useDeleteExpense,
 } from "../db/hooks/useExpenses";
+import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
+import type { Expense } from "../types/expense";
 import { getNextExpenseReference } from "../db/queries/expenses";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
 import { useT } from "../i18n/useT";
-import { extractPdfText, parseExpenseFromText, type ExtractedExpenseData } from "../lib/pdfExtract";
+import { extractPdfText, extractImageText, parseExpenseFromText, type ExtractedExpenseData } from "../lib/pdfExtract";
 import { logError } from "../lib/log";
+import { useYearGrouping } from "../hooks/useYearGrouping";
 
 type SortKey = "reference" | "supplier" | "category_code" | "invoice_date" | "amount" | "paid_date";
 
@@ -30,12 +35,12 @@ export function ExpensesPage() {
   const { data: pastSuppliers } = useDistinctSuppliers();
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
+  const deleteExpense = useDeleteExpense();
   const [showForm, setShowForm] = useState(false);
+  const [ctxMenu, setCtxMenu] = useState<ContextMenuState<Expense> | null>(null);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortState<SortKey>>({ key: "invoice_date", dir: "desc" });
   const [preview, setPreview] = useState<{ path: string; reference: string } | null>(null);
-  const currentYear = new Date().getFullYear();
-  const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set([currentYear]));
   const [isDragging, setIsDragging] = useState(false);
   const [prefill, setPrefill] = useState<(ExtractedExpenseData & { receiptPath?: string }) | null>(null);
   const [parsing, setParsing] = useState(false);
@@ -57,26 +62,14 @@ export function ExpensesPage() {
     return sortRows(rows, sort.key, sort.dir);
   }, [expenses, search, sort]);
 
-  const groupedByYear = useMemo(() => {
-    const groups = new Map<number, typeof filtered>();
-    for (const exp of filtered) {
-      const year = exp.invoice_date ? parseInt(exp.invoice_date.substring(0, 4)) : currentYear;
-      const arr = groups.get(year) ?? [];
-      arr.push(exp);
-      groups.set(year, arr);
-    }
-    return Array.from(groups.entries()).sort(([a], [b]) => b - a);
-  }, [filtered, currentYear]);
-
-  const toggleYear = (year: number) => {
-    const next = new Set(expandedYears);
-    next.has(year) ? next.delete(year) : next.add(year);
-    setExpandedYears(next);
-  };
+  const { expandedYears, groupedByYear, toggleYear } = useYearGrouping(
+    filtered,
+    useCallback((exp: (typeof filtered)[0]) => exp.invoice_date, [])
+  );
 
   const handleDroppedFile = useCallback(async (filePath: string) => {
     const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
-    if (!["pdf", "png", "jpg", "jpeg"].includes(ext)) {
+    if (!["pdf", "png", "jpg", "jpeg", "heic"].includes(ext)) {
       toast.error(t.unsupported_file);
       return;
     }
@@ -87,6 +80,11 @@ export function ExpensesPage() {
 
       if (ext === "pdf") {
         const text = await extractPdfText(filePath);
+        if (text) {
+          extracted = parseExpenseFromText(text);
+        }
+      } else if (["png", "jpg", "jpeg", "heic"].includes(ext)) {
+        const text = await extractImageText(filePath);
         if (text) {
           extracted = parseExpenseFromText(text);
         }
@@ -149,7 +147,7 @@ export function ExpensesPage() {
     try {
       const selected = await open({
         multiple: false,
-        filters: [{ name: "Files", extensions: ["pdf", "png", "jpg", "jpeg"] }],
+        filters: [{ name: "Files", extensions: ["pdf", "png", "jpg", "jpeg", "heic"] }],
       });
       if (!selected) return;
       const filePath = typeof selected === "string" ? selected : selected;
@@ -172,7 +170,7 @@ export function ExpensesPage() {
     }
   };
 
-  if (isLoading) return <div className="text-muted text-sm">{t.loading}</div>;
+  if (isLoading) return <PageSpinner />;
 
   return (
     <div className="relative">
@@ -186,30 +184,19 @@ export function ExpensesPage() {
       )}
 
       {parsing && (
-        <div className="absolute inset-0 z-40 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 rounded-lg">
-          <span className="text-sm text-muted">Analyzing PDF...</span>
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-gray-100/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg">
+          <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 border border-gray-200 shadow-sm">
+            <div className="h-4 w-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm text-muted">{t.analyzing_receipt}</span>
+          </div>
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold">{t.expenses}</h1>
-        <button
-          onClick={() => { setPrefill(null); setShowForm(true); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover"
-        >
-          <Plus size={16} /> {t.new_expense}
-        </button>
-      </div>
+      <PageHeader title={t.expenses}>
+        <Button icon={<Plus size={16} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
+      </PageHeader>
 
-      <div className="flex items-center gap-2 mb-4">
-        <Search size={16} className="text-muted" />
-        <input
-          placeholder={t.search_expenses}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="border border-gray-200 rounded-md px-3 py-1.5 text-sm w-64"
-        />
-      </div>
+      <SearchBar value={search} onChange={setSearch} placeholder={t.search_expenses} className="w-64 mb-4" />
 
       {showForm && (
         <NewExpenseForm
@@ -253,10 +240,10 @@ export function ExpensesPage() {
         />
       )}
 
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
+      <div>
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
+            <tr className="border-b border-gray-100">
               <SortHeader label="Reference" sortKey="reference" current={sort} onSort={setSort} />
               <SortHeader label={t.supplier} sortKey="supplier" current={sort} onSort={setSort} />
               <SortHeader label={t.category} sortKey="category_code" current={sort} onSort={setSort} />
@@ -273,7 +260,7 @@ export function ExpensesPage() {
               return (
                 <React.Fragment key={year}>
                   <tr
-                    className="border-b border-gray-200 bg-gray-50 cursor-pointer hover:bg-gray-100"
+                    className="border-b border-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-200"
                     onClick={() => toggleYear(year)}
                   >
                     <td colSpan={7} className="px-4 py-2">
@@ -294,7 +281,11 @@ export function ExpensesPage() {
                   </tr>
                   {isOpen &&
                     yearExpenses.map((exp) => (
-                      <tr key={exp.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <tr
+                        key={exp.id}
+                        className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200 group"
+                        onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: exp }); }}
+                      >
                         <td className="px-4 py-2 font-medium">{exp.reference}</td>
                         <td className="px-4 py-2">{exp.supplier}</td>
                         <td className="px-4 py-2">
@@ -388,6 +379,17 @@ export function ExpensesPage() {
           path={preview.path}
           reference={preview.reference}
           onClose={() => setPreview(null)}
+        />
+      )}
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          onClose={() => setCtxMenu(null)}
+          items={[
+            ...(!ctxMenu.item.paid_date ? [{ label: t.mark_paid, icon: <CheckCircle size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: new Date().toISOString().split("T")[0] } }) }] : []),
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteExpense.mutate(ctxMenu.item.id) },
+          ]}
         />
       )}
     </div>
@@ -505,6 +507,29 @@ function NewExpenseForm({
       notes: "",
     };
   });
+  // Sync prefill into form when it changes (e.g. new file dropped while form is open)
+  useEffect(() => {
+    if (!prefill) return;
+    let categoryCode = categories[0]?.code ?? "FA";
+    let amount = 0;
+    if (prefill.supplier && pastSuppliers.length > 0) {
+      const match = pastSuppliers.find(
+        (s) => s.supplier.toLowerCase() === prefill.supplier!.toLowerCase()
+      );
+      if (match) {
+        categoryCode = match.category_code;
+        amount = match.amount;
+      }
+    }
+    setForm({
+      supplier: prefill.supplier ?? "",
+      category_code: categoryCode,
+      invoice_date: prefill.invoice_date ?? format(new Date(), "yyyy-MM-dd"),
+      amount: prefill.amount ?? amount,
+      notes: "",
+    });
+  }, [prefill]);
+
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   const suggestions = form.supplier.length > 0
@@ -524,7 +549,7 @@ function NewExpenseForm({
   };
 
   return (
-    <div className="border border-gray-200 rounded-lg p-4 mb-6 space-y-3">
+    <div className="border border-gray-100 rounded-lg p-4 mb-6 space-y-3">
       {prefill?.receiptPath && (
         <div className="flex items-center gap-2 text-xs text-success">
           <Paperclip size={12} />
@@ -590,7 +615,7 @@ function NewExpenseForm({
         />
       </div>
       <div className="flex gap-2">
-        <button
+        <Button
           onClick={() => {
             if (!form.supplier.trim()) return toast.error("Supplier is required");
             if (!form.amount) return toast.error("Amount is required");
@@ -601,16 +626,12 @@ function NewExpenseForm({
               receipt_path: null,
             });
           }}
-          className="px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover"
         >
           {t.save}
-        </button>
-        <button
-          onClick={onCancel}
-          className="px-3 py-1.5 border border-gray-200 text-sm rounded-md hover:bg-gray-50"
-        >
+        </Button>
+        <Button variant="secondary" onClick={onCancel}>
           {t.cancel}
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -24,6 +24,11 @@
       "identifier": "fs:scope",
       "allow": ["$HOME/**/*"]
     },
+    "notification:default",
+    "notification:allow-notify",
+    "notification:allow-request-permission",
+    "notification:allow-is-permission-granted",
+    "log:default",
     "window-state:default",
     "updater:default",
     "process:default",
