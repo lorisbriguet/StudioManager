@@ -1,6 +1,6 @@
 export type ProjectStatus = "active" | "completed" | "on_hold" | "cancelled";
 
-export type BlockType = "tasks" | "workload" | "resources" | "notes" | "named_tables" | "invoices" | "quotes";
+export type BlockType = "tasks" | "workload" | "resources" | "notes" | "named_tables" | "invoices" | "quotes" | "wiki";
 
 export interface LayoutBlock {
   type: BlockType;

@@ -1,6 +1,7 @@
 import Database from "@tauri-apps/plugin-sql";
 import { invoke } from "@tauri-apps/api/core";
 import { logError } from "../lib/log";
+import { seedUserGuide } from "./seeds/user-guide";
 
 const SAFE_FIELD = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -520,6 +521,43 @@ async function ensureSchema(db: Database) {
         [p.name, p.layout_json, p.sort_order]
       );
     }
+  }
+
+  // ── Wiki tables ─────────────────────────────────────────────
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS wiki_folders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS wiki_articles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      folder_id INTEGER REFERENCES wiki_folders(id) ON DELETE SET NULL,
+      project_id INTEGER DEFAULT NULL,
+      title TEXT NOT NULL DEFAULT 'Untitled',
+      content TEXT NOT NULL DEFAULT '',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS wiki_article_tags (
+      article_id INTEGER NOT NULL REFERENCES wiki_articles(id) ON DELETE CASCADE,
+      tag TEXT NOT NULL,
+      PRIMARY KEY (article_id, tag)
+    )
+  `);
+
+  // ── Seed wiki user guide (one-time) ──────────────────────
+  const wikiFolderCount = await db.select<{ cnt: number }[]>(
+    "SELECT COUNT(*) as cnt FROM wiki_folders"
+  );
+  if (wikiFolderCount[0]?.cnt === 0) {
+    await seedUserGuide(db);
   }
 
   // ── Migrate workload_rows → tasks (one-time) ─────────────
