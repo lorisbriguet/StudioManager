@@ -446,7 +446,7 @@ function QuickCreatePopup({
   return createPortal(
     <div
       ref={popoverRef}
-      className="fixed z-[9999] bg-gray-50 border border-gray-100 rounded-lg shadow-lg p-3 w-[260px]"
+      className="fixed z-[9999] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] p-3 w-[260px]"
       style={{ top, left }}
     >
       <div className="text-[11px] text-muted mb-2">
@@ -501,7 +501,7 @@ function QuickCreatePopup({
           />
         )}
         {!selectedTask && showSuggestions && suggestions.length > 0 && (
-          <div className="absolute z-10 top-full left-0 right-0 mt-0.5 bg-gray-50 border border-gray-200 rounded shadow-lg max-h-32 overflow-y-auto">
+          <div className="absolute z-10 top-full left-0 right-0 mt-0.5 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.4)] max-h-32 overflow-y-auto">
             {suggestions.map((task) => (
               <button
                 key={task.id}

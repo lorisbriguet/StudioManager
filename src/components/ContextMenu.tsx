@@ -52,7 +52,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   return (
     <div
       ref={ref}
-      className="fixed z-50 bg-white dark:bg-gray-100 border border-gray-100 rounded-xl shadow-xl py-1 min-w-[160px] animate-in fade-in duration-100"
+      className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[160px] animate-in fade-in duration-100"
       style={{ left: x, top: y }}
     >
       {items.map((item, i) => {

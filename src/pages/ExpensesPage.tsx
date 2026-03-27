@@ -2,6 +2,8 @@ import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Plus, Paperclip, Eye, X, ChevronRight, Upload, Trash2, CheckCircle, Receipt } from "lucide-react";
 import { Button, Input, Select, PageHeader, SearchBar, PageSpinner, EmptyState, Card } from "../components/ui";
 import { SavedFilterBar } from "../components/SavedFilterBar";
+import { getTagColor } from "../lib/tagColors";
+import { useAppStore } from "../stores/app-store";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { formatDisplayDate } from "../utils/formatDate";
@@ -36,6 +38,7 @@ type SortKey = "reference" | "supplier" | "category_code" | "invoice_date" | "am
 
 export function ExpensesPage() {
   const t = useT();
+  const darkMode = useAppStore((s) => s.darkMode);
   const { data: expenses, isLoading } = useExpenses();
   const { data: categories } = useExpenseCategories();
   const { data: pastSuppliers } = useDistinctSuppliers();
@@ -216,7 +219,7 @@ export function ExpensesPage() {
 
       {parsing && (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-gray-100/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg">
-          <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gray-100 border border-gray-200 shadow-sm">
             <div className="h-4 w-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
             <span className="text-sm text-muted">{t.analyzing_receipt}</span>
           </div>
@@ -293,7 +296,7 @@ export function ExpensesPage() {
               <SortHeader label={t.date} sortKey="invoice_date" current={sort} onSort={setSort} />
               <SortHeader label={t.amount} sortKey="amount" current={sort} onSort={setSort} align="right" />
               <SortHeader label="Paid" sortKey="paid_date" current={sort} onSort={setSort} />
-              <th className="px-4 py-2 font-medium text-muted text-left">{t.receipt}</th>
+              <th className="px-4 py-2.5 font-medium text-muted text-left">{t.receipt}</th>
             </tr>
           </thead>
           <tbody>
@@ -306,7 +309,7 @@ export function ExpensesPage() {
                     className="border-b border-[var(--color-border-divider)] cursor-pointer hover:bg-[var(--color-hover-row)] rounded-md"
                     onClick={() => toggleYear(year)}
                   >
-                    <td colSpan={8} className="px-4 py-2">
+                    <td colSpan={8} className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
                         <ChevronRight
                           size={14}
@@ -337,19 +340,21 @@ export function ExpensesPage() {
                             className="accent-[var(--accent)]"
                           />
                         </td>
-                        <td className="px-4 py-2 font-medium">{exp.reference}</td>
-                        <td className="px-4 py-2">{exp.supplier}</td>
-                        <td className="px-4 py-2">
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100">
-                            {exp.category_code}
-                          </span>
+                        <td className="px-4 py-2.5 font-medium">{exp.reference}</td>
+                        <td className="px-4 py-2.5">{exp.supplier}</td>
+                        <td className="px-4 py-2.5">
+                          {(() => { const c = getTagColor(exp.category_code, darkMode); return (
+                            <span style={{ background: c.bg, color: c.text }} className="px-2 py-0.5 text-xs rounded-full font-medium">
+                              {exp.category_code}
+                            </span>
+                          ); })()}
                           <span className="ml-1 text-xs text-muted">{categoryName(exp.category_code)}</span>
                         </td>
-                        <td className="px-4 py-2 text-muted">{formatDisplayDate(exp.invoice_date)}</td>
-                        <td className="px-4 py-2 text-right font-medium">
+                        <td className="px-4 py-2.5 text-muted">{formatDisplayDate(exp.invoice_date)}</td>
+                        <td className="px-4 py-2.5 text-right font-medium">
                           CHF {exp.amount.toFixed(2)}
                         </td>
-                        <td className="px-4 py-2">
+                        <td className="px-4 py-2.5">
                           <div className="flex items-center gap-1">
                             <Input
                               type="date"
@@ -387,7 +392,7 @@ export function ExpensesPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-2">
+                        <td className="px-4 py-2.5">
                           {exp.receipt_path ? (
                             <div className="flex items-center gap-2">
                               <button

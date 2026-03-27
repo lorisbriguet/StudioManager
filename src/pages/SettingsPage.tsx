@@ -759,7 +759,7 @@ function AccentColorPicker({
         <ChevronDown size={14} className={`text-muted transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto border border-gray-200 rounded-md bg-white dark:bg-gray-100 shadow-lg py-1">
+        <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto border border-[var(--color-border-header)] rounded-xl bg-[var(--color-surface)] shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1">
           {isCustom && (
             <button
               key="theme-custom"

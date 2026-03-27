@@ -37,7 +37,7 @@ export function Modal({ open, onClose, title, children, footer, size = "sm" }: M
     >
       <div
         ref={ref}
-        className={`bg-white dark:bg-gray-100 rounded-xl shadow-xl dark:shadow-[0_16px_48px_rgba(0,0,0,0.5)] w-full ${sizeClasses[size]} mx-4 overflow-hidden modal-animate`}
+        className={`bg-[var(--color-surface)] rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.5)] w-full ${sizeClasses[size]} mx-4 overflow-hidden modal-animate`}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (
