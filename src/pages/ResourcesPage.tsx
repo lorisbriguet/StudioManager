@@ -131,7 +131,7 @@ export function ResourcesPage() {
   if (isLoading) return (
     <div>
       <PageHeader title={t.resources}>
-        <Button icon={<Plus size={14} />} onClick={() => {}}>{t.new_resource}</Button>
+        <Button icon={<Plus size={16} />} onClick={() => {}}>{t.new_resource}</Button>
       </PageHeader>
       <div className="space-y-3 mt-4">
         {Array.from({ length: 5 }).map((_, i) => (
@@ -150,7 +150,7 @@ export function ResourcesPage() {
   return (
     <div>
       <PageHeader title={t.resources}>
-        <Button icon={<Plus size={14} />} onClick={() => setShowForm(!showForm)}>
+        <Button icon={<Plus size={16} />} onClick={() => setShowForm(!showForm)}>
           {t.new_resource}
         </Button>
       </PageHeader>

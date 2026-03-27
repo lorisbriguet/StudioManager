@@ -508,9 +508,9 @@ function QuickCreatePopup({
             <span className="text-xs flex-1 truncate">{selectedTask.title}</span>
             <button
               onClick={handleClearTask}
-              className="text-muted hover:text-[var(--color-text)] text-xs shrink-0"
+              className="text-muted hover:text-[var(--color-text)] shrink-0"
             >
-              ✕
+              <X size={12} />
             </button>
           </div>
         ) : (
