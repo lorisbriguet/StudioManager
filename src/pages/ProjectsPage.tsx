@@ -267,7 +267,14 @@ export function ProjectsPage() {
           onClick={(e) => e.stopPropagation()}
           onAnimationEnd={() => { if (closingPeek) { setPeekId(null); setClosingPeek(false); } }}
         >
-          <div className="flex items-center justify-end gap-1 p-2 border-b border-[var(--color-border-header)]">
+          <div className="flex items-center gap-1 p-2 border-b border-[var(--color-border-header)]">
+            <button
+              onClick={handleClosePeek}
+              className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
+            >
+              <X size={14} />
+            </button>
+            <div className="flex-1" />
             <Link
               to={`/projects/${peekId}`}
               className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
@@ -282,12 +289,6 @@ export function ProjectsPage() {
             >
               <Maximize2 size={14} />
             </Link>
-            <button
-              onClick={handleClosePeek}
-              className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
-            >
-              <X size={14} />
-            </button>
           </div>
           <div className="p-4">
             <ProjectDetailContent key={peekId} projectId={peekId} compact />

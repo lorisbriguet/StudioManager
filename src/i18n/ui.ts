@@ -603,6 +603,8 @@ const ui = {
     resources_count_singular: "resource",
     resources_count_plural: "resources",
     add_tag: "Add tag...",
+    tags: "Tags",
+    color: "Color",
     price_label: "Price",
     price_free: "Free",
     price_paid: "Paid",
@@ -614,6 +616,8 @@ const ui = {
     unsaved_changes_message: "You have unsaved changes. Are you sure you want to leave?",
     leave: "Leave",
     stay: "Stay",
+    invoice_due: "Invoice {ref} due",
+    quote_expires: "Quote {ref} expires",
   },
   FR: {
     // Sidebar / Nav
@@ -1217,6 +1221,8 @@ const ui = {
     resources_count_singular: "ressource",
     resources_count_plural: "ressources",
     add_tag: "Ajouter un tag...",
+    tags: "Tags",
+    color: "Couleur",
     price_label: "Prix",
     price_free: "Gratuit",
     price_paid: "Payant",
@@ -1228,6 +1234,8 @@ const ui = {
     unsaved_changes_message: "Vous avez des modifications non enregistrees. Voulez-vous vraiment quitter ?",
     leave: "Quitter",
     stay: "Rester",
+    invoice_due: "Facture {ref} echue",
+    quote_expires: "Devis {ref} expire",
   },
 } as const;
 

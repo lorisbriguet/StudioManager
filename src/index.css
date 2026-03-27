@@ -255,6 +255,21 @@ body {
   --fc-event-text-color: #b91c1c;
 }
 
+.fc-studio .fc .fc-event.fc-invoice-overdue {
+  --fc-event-bg-color: #fef2f2;
+  --fc-event-text-color: #dc2626;
+}
+
+.fc-studio .fc .fc-event.fc-invoice-sent {
+  --fc-event-bg-color: #fefce8;
+  --fc-event-text-color: #ca8a04;
+}
+
+.fc-studio .fc .fc-event.fc-quote-expiry {
+  --fc-event-bg-color: #fefce8;
+  --fc-event-text-color: #ca8a04;
+}
+
 .fc-studio .fc .fc-timegrid-slot {
   height: 32px;
 }
@@ -345,6 +360,21 @@ body {
 .dark .fc-studio .fc .fc-event.fc-deadline {
   --fc-event-bg-color: #451a1a;
   --fc-event-text-color: #fca5a5;
+}
+
+.dark .fc-studio .fc .fc-event.fc-invoice-overdue {
+  --fc-event-bg-color: #451a1a;
+  --fc-event-text-color: #fca5a5;
+}
+
+.dark .fc-studio .fc .fc-event.fc-invoice-sent {
+  --fc-event-bg-color: #422006;
+  --fc-event-text-color: #fde68a;
+}
+
+.dark .fc-studio .fc .fc-event.fc-quote-expiry {
+  --fc-event-bg-color: #422006;
+  --fc-event-text-color: #fde68a;
 }
 
 /* ─── Animation tokens ─── */

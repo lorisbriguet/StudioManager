@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Plus, Eye, Pencil, FileOutput, Check, Trash2, Send, ExternalLink, FolderPlus, FolderKanban, FileText } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Plus, Eye, Pencil, FileOutput, Trash2, Send, ExternalLink, FolderPlus, FileText, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { undoable } from "../lib/undo";
 import { ask } from "@tauri-apps/plugin-dialog";
@@ -20,7 +20,7 @@ import { PageHeader, SearchBar, PageSpinner, Button, EmptyState } from "../compo
 import { quoteStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Quote, QuoteStatus, QuoteLineItem } from "../types/quote";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
-import { applyFilterConditions } from "../types/saved-filter";
+import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
 type SortKey = "reference" | "client_name" | "quote_date" | "status" | "total";
 
@@ -38,11 +38,13 @@ export function QuotesPage() {
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState<Quote & { client_name: string }> | null>(null);
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
+  const [filterLogic, setFilterLogic] = useState<ConditionLogic>("and");
 
   const applyFilter = useCallback((filters: SavedFilterData) => {
     if (typeof filters.search === "string") setSearch(filters.search);
     if (filters.sort && typeof filters.sort === "object") setSort(filters.sort as SortState<SortKey>);
     setFilterConditions(filters.conditions ?? []);
+    setFilterLogic(filters.conditionLogic ?? "and");
   }, []);
 
   const quoteFields = useMemo<FilterableField[]>(() => [
@@ -90,7 +92,7 @@ export function QuotesPage() {
             quote.status.includes(q)
         )
       : enriched;
-    rows = applyFilterConditions(rows, filterConditions);
+    rows = applyFilterConditions(rows, filterConditions, filterLogic);
     return sortRows(rows, sort.key, sort.dir);
   }, [enriched, search, sort, filterConditions]);
 
@@ -132,7 +134,7 @@ export function QuotesPage() {
       <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); setFilterConditions([]); }} placeholder={t.search_quotes} className="w-64 mb-4" />
       <SavedFilterBar
         page="quotes"
-        currentFilters={{ search, sort, conditions: filterConditions }}
+        currentFilters={{ search, sort, conditions: filterConditions, conditionLogic: filterLogic }}
         onApply={applyFilter}
         activeFilterId={activeFilterId}
         onActiveChange={setActiveFilterId}
@@ -146,12 +148,12 @@ export function QuotesPage() {
               <th className="w-8 px-2 py-2">
                 <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
               </th>
+              <th className="w-8" />
               <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
               <SortHeader label={t.client} sortKey="client_name" current={sort} onSort={setSort} />
               <SortHeader label={t.date} sortKey="quote_date" current={sort} onSort={setSort} />
               <SortHeader label={t.status} sortKey="status" current={sort} onSort={setSort} />
               <SortHeader label={t.amount} sortKey="total" current={sort} onSort={setSort} align="right" />
-              <th className="px-4 py-2.5 text-right text-xs font-medium text-muted" />
             </tr>
           </thead>
           <tbody>
@@ -169,16 +171,19 @@ export function QuotesPage() {
                     className="accent-[var(--accent)]"
                   />
                 </td>
-                <td className="px-4 py-2.5">
-                  <Link
-                    to={`/quotes/${q.id}/edit`}
-                    className="text-muted hover:text-accent align-middle opacity-0 group-hover:opacity-100 transition-opacity"
-                    title={t.edit}
-                    onClick={(e) => e.stopPropagation()}
+                <td className="w-8 px-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCtxMenu({ x: e.clientX, y: e.clientY, item: q });
+                    }}
+                    className="opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
                   >
-                    <Pencil size={14} className="inline" />
-                  </Link>
-                  <span className="font-medium ml-1.5 align-middle">{q.reference.startsWith("DRAFT") ? t.draft : q.reference}</span>
+                    <Settings2 size={14} />
+                  </button>
+                </td>
+                <td className="px-4 py-2.5">
+                  <span className="font-medium">{q.reference.startsWith("DRAFT") ? t.draft : q.reference}</span>
                 </td>
                 <td className="px-4 py-2.5">{q.client_name}</td>
                 <td className="px-4 py-2.5 text-muted">{formatDisplayDate(q.quote_date)}</td>
@@ -200,42 +205,6 @@ export function QuotesPage() {
                 </td>
                 <td className="px-4 py-2.5 text-right font-medium">
                   CHF {q.total.toFixed(2)}
-                </td>
-                <td className="px-4 py-2.5 text-right">
-                  <span className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-2">
-                    <Link
-                      to={`/quotes/${q.id}/preview`}
-                      className="text-muted hover:text-accent align-middle"
-                      title={t.preview}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Eye size={14} className="inline" />
-                    </Link>
-                    {q.converted_to_project_id ? (
-                      <Link
-                        to={`/projects/${q.converted_to_project_id}`}
-                        className="text-green-500 hover:text-green-400 align-middle"
-                        title={t.view_project}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <FolderKanban size={14} className="inline" />
-                      </Link>
-                    ) : null}
-                    {q.converted_to_invoice_id ? (
-                      <span className="text-green-500 align-middle" title={t.already_converted}>
-                        <Check size={14} className="inline" />
-                      </span>
-                    ) : (
-                      <Link
-                        to={`/invoices/new?from_quote=${q.id}`}
-                        className="text-muted hover:text-accent align-middle"
-                        title={t.convert_to_invoice}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <FileOutput size={14} className="inline" />
-                      </Link>
-                    )}
-                  </span>
                 </td>
               </tr>
             ))}

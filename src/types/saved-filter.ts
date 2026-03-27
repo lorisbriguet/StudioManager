@@ -6,12 +6,15 @@ export interface FilterCondition {
   value: string;
 }
 
+export type ConditionLogic = "and" | "or";
+
 export interface SavedFilterData {
   search?: string;
   sort?: { key: string; dir: "asc" | "desc" };
   filter?: string;
   tagFilter?: string;
   conditions?: FilterCondition[];
+  conditionLogic?: ConditionLogic;
 }
 
 export interface SavedFilter {
@@ -35,14 +38,30 @@ export interface FilterableField {
  * Apply filter conditions to a list of rows.
  * Each row is treated as a Record<string, unknown> for field access.
  */
-export function applyFilterConditions<T>(rows: T[], conditions: FilterCondition[]): T[] {
+export function applyFilterConditions<T>(rows: T[], conditions: FilterCondition[], logic: ConditionLogic = "and"): T[] {
   if (!conditions || conditions.length === 0) return rows;
 
   return rows.filter((row) => {
     const record = row as Record<string, unknown>;
-    return conditions.every((cond) => {
+    const matcher = logic === "or" ? conditions.some.bind(conditions) : conditions.every.bind(conditions);
+    return matcher((cond) => {
       const rawValue = record[cond.field];
       if (rawValue == null) return false;
+
+      // Handle array fields (e.g. tags): check if any element matches
+      if (Array.isArray(rawValue)) {
+        const condValue = cond.value.toLowerCase();
+        switch (cond.operator) {
+          case "eq":
+            return rawValue.some((v) => String(v).toLowerCase() === condValue);
+          case "neq":
+            return rawValue.every((v) => String(v).toLowerCase() !== condValue);
+          case "contains":
+            return rawValue.some((v) => String(v).toLowerCase().includes(condValue));
+          default:
+            return true;
+        }
+      }
 
       const strValue = String(rawValue).toLowerCase();
       const condValue = cond.value.toLowerCase();

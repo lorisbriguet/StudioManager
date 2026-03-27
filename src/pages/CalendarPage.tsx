@@ -11,6 +11,8 @@ import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useT } from "../i18n/useT";
 import { useTasksWithDueDate, useUpdateTask, useUpdateSubtask, useCreateTask, useCreateSubtask, useTasksByProject } from "../db/hooks/useTasks";
 import { useProjects, useUpdateProject } from "../db/hooks/useProjects";
+import { useInvoices } from "../db/hooks/useInvoices";
+import { useQuotes } from "../db/hooks/useQuotes";
 import { useAppStore } from "../stores/app-store";
 import { ProjectDetailContent } from "../components/ProjectDetailContent";
 import { getSubtasksWithDueDate } from "../db/queries/tasks";
@@ -61,6 +63,8 @@ export function CalendarPage() {
   const { data: tasks } = useTasksWithDueDate();
   const { data: subtasks } = useQuery({ queryKey: ["subtasks", "with-due-date"], queryFn: getSubtasksWithDueDate });
   const { data: projects } = useProjects();
+  const { data: invoices } = useInvoices();
+  const { data: quotes } = useQuotes();
   const updateTask = useUpdateTask();
   const updateSubtask = useUpdateSubtask();
   const updateProject = useUpdateProject();
@@ -160,8 +164,40 @@ export function CalendarPage() {
       });
     }
 
+    // Invoice due dates (sent or overdue)
+    for (const inv of invoices ?? []) {
+      if (inv.status !== "sent" && inv.status !== "overdue") continue;
+      if (!inv.invoice_date || !inv.payment_terms_days) continue;
+      const dueDate = new Date(inv.invoice_date + "T12:00:00");
+      dueDate.setDate(dueDate.getDate() + inv.payment_terms_days);
+      const dueDateStr = toDateStr(dueDate);
+      items.push({
+        id: `inv-${inv.id}`,
+        title: t.invoice_due.replace("{ref}", inv.reference),
+        start: dueDateStr,
+        allDay: true,
+        editable: false,
+        extendedProps: { type: "invoice", itemId: inv.id, isInvoice: true },
+        classNames: [inv.status === "overdue" ? "fc-invoice-overdue" : "fc-invoice-sent"],
+      });
+    }
+
+    // Quote expiry dates (sent with valid_until)
+    for (const qt of quotes ?? []) {
+      if (qt.status !== "sent" || !qt.valid_until) continue;
+      items.push({
+        id: `quo-${qt.id}`,
+        title: t.quote_expires.replace("{ref}", qt.reference),
+        start: qt.valid_until,
+        allDay: true,
+        editable: false,
+        extendedProps: { type: "quote", itemId: qt.id, isQuote: true },
+        classNames: ["fc-quote-expiry"],
+      });
+    }
+
     return items;
-  }, [tasks, subtasks, projects]);
+  }, [tasks, subtasks, projects, invoices, quotes, t]);
 
   const handleEventChange = useCallback((event: EventDropArg["event"]) => {
     const { type, itemId } = event.extendedProps;
@@ -184,11 +220,19 @@ export function CalendarPage() {
   }, [handleEventChange]);
 
   const handleEventClick = useCallback((info: { event: { extendedProps: Record<string, unknown> } }) => {
-    const projectId = info.event.extendedProps.projectId as number | undefined;
+    const { type, itemId, projectId } = info.event.extendedProps;
+    if (type === "invoice") {
+      navigate(`/invoices/${itemId}/preview`);
+      return;
+    }
+    if (type === "quote") {
+      navigate(`/quotes/${itemId}/preview`);
+      return;
+    }
     if (!projectId) return;
     if (projectOpenMode === "peek") {
       setClosingPeek(false);
-      setPeekId(projectId);
+      setPeekId(projectId as number);
     } else {
       navigate(`/projects/${projectId}`);
     }
@@ -268,13 +312,14 @@ export function CalendarPage() {
   }, [quickCreate, createTask, createSubtask]);
 
   const renderEventContent = useCallback((arg: EventContentArg) => {
-    const { status, isSubtask, isDeadline } = arg.event.extendedProps;
+    const { status, isSubtask, isDeadline, isInvoice, isQuote } = arg.event.extendedProps;
     const done = status === "done";
     const wrap = !arg.event.allDay;
     return (
       <div className={`${wrap ? "whitespace-normal break-words" : "truncate"} text-[11px] leading-tight px-1 ${done ? "line-through opacity-60" : ""}`}>
         {isSubtask && <span className="opacity-60">↳ </span>}
         {isDeadline && <span className="font-semibold">!</span>}
+        {(isInvoice || isQuote) && <span className="font-semibold mr-0.5">$</span>}
         {arg.timeText && <span className="font-medium mr-1">{arg.timeText}</span>}
         <span>{arg.event.title}</span>
       </div>

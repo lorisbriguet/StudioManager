@@ -9,7 +9,8 @@ import { createBackup, listBackups, restoreFromBackup, validateBackupPath, isBac
 import { switchDb, resetDb, seedPresentationDb } from "../db";
 import { useExpenseCategories, useCreateExpenseCategory, useUpdateExpenseCategory, useDeleteExpenseCategory, isDefaultCategory } from "../db/hooks/useExpenses";
 import { isCategoryInUse } from "../db/queries/expenses";
-import type { ExpenseCategory } from "../types/expense";
+import type { ExpenseCategory, TagColorName } from "../types/expense";
+import { getNamedTagColor } from "../lib/tagColors";
 import { useAppStore, ACCENT_PRESETS, type DateFormatOption, type AccentPreset, type ProjectOpenMode } from "../stores/app-store";
 import { THEMES } from "../lib/themes";
 import { useT } from "../i18n/useT";
@@ -754,8 +755,26 @@ function AccentColorPicker({
   );
 }
 
+const TAG_COLOR_NAMES: TagColorName[] = ["blue", "purple", "green", "red", "yellow", "cyan", "orange", "teal", "gray"];
+
+function ColorSwatchPicker({ value, onChange }: { value: TagColorName | null; onChange: (c: TagColorName | null) => void }) {
+  return (
+    <select
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value ? e.target.value as TagColorName : null)}
+      className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1 text-xs"
+    >
+      <option value="">Auto</option>
+      {TAG_COLOR_NAMES.map((name) => (
+        <option key={name} value={name}>{name.charAt(0).toUpperCase() + name.slice(1)}</option>
+      ))}
+    </select>
+  );
+}
+
 function ExpenseCategoryManager() {
   const t = useT();
+  const darkMode = useAppStore((s) => s.darkMode);
   const { data: categories } = useExpenseCategories();
   const cats = categories ?? [];
   const createCategory = useCreateExpenseCategory();
@@ -768,6 +787,7 @@ function ExpenseCategoryManager() {
     name_fr: "",
     name_en: "",
     pl_section: "operating",
+    color: null,
   });
   const [categoryUsage, setCategoryUsage] = useState<Record<string, boolean>>({});
 
@@ -788,7 +808,7 @@ function ExpenseCategoryManager() {
       await createCategory.mutateAsync(form);
       toast.success(t.toast_category_created);
       setAdding(false);
-      setForm({ code: "", name_fr: "", name_en: "", pl_section: "operating" });
+      setForm({ code: "", name_fr: "", name_en: "", pl_section: "operating", color: null });
     } catch (e) {
       toast.error(String(e));
     }
@@ -836,6 +856,7 @@ function ExpenseCategoryManager() {
             <th className="py-2 pr-2">{t.category_name_fr}</th>
             <th className="py-2 pr-2">{t.category_name_en}</th>
             <th className="py-2 pr-2 w-32">{t.category_pl_section}</th>
+            <th className="py-2 pr-2 w-40">{t.color}</th>
             <th className="py-2 w-28" />
           </tr>
         </thead>
@@ -866,6 +887,9 @@ function ExpenseCategoryManager() {
                       <option value="social_charges">{t.pl_social_charges}</option>
                     </Select>
                   </td>
+                  <td className="py-2 pr-2">
+                    <ColorSwatchPicker value={form.color} onChange={(c) => setForm({ ...form, color: c })} />
+                  </td>
                   <td className="py-2 flex gap-1">
                     <button type="button" onClick={handleSaveEdit} className="px-2 py-1 bg-accent text-white text-xs rounded hover:bg-accent-hover">
                       {t.save}
@@ -882,6 +906,20 @@ function ExpenseCategoryManager() {
                   <td className="py-2 pr-2">{cat.name_en}</td>
                   <td className="py-2 pr-2 text-muted">
                     {cat.pl_section === "operating" ? t.pl_operating : t.pl_social_charges}
+                  </td>
+                  <td className="py-2 pr-2">
+                    {cat.color ? (() => {
+                      const c = getNamedTagColor(cat.color as TagColorName, darkMode);
+                      return (
+                        <span
+                          className="inline-block w-5 h-5 rounded-full"
+                          style={{ background: c.bg, border: `2px solid ${c.text}40` }}
+                          title={cat.color}
+                        />
+                      );
+                    })() : (
+                      <span className="text-xs text-muted">auto</span>
+                    )}
                   </td>
                   <td className="py-2 flex gap-1">
                     <button type="button" onClick={() => startEdit(cat)} className="px-2 py-1 border border-[var(--color-input-border)] text-xs rounded hover:bg-[var(--color-hover-row)]">
@@ -928,6 +966,9 @@ function ExpenseCategoryManager() {
                   <option value="social_charges">{t.pl_social_charges}</option>
                 </Select>
               </td>
+              <td className="py-2 pr-2">
+                <ColorSwatchPicker value={form.color} onChange={(c) => setForm({ ...form, color: c })} />
+              </td>
               <td className="py-2 flex gap-1">
                 <button type="button" onClick={handleSaveNew} className="px-2 py-1 bg-accent text-white text-xs rounded hover:bg-accent-hover">
                   {t.save}
@@ -945,7 +986,7 @@ function ExpenseCategoryManager() {
           type="button"
           onClick={() => {
             setAdding(true);
-            setForm({ code: "", name_fr: "", name_en: "", pl_section: "operating" });
+            setForm({ code: "", name_fr: "", name_en: "", pl_section: "operating", color: null });
           }}
           className="mt-3 px-3 py-1.5 text-sm text-accent border border-accent rounded-md hover:bg-accent-light"
         >

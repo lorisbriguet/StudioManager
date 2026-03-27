@@ -95,42 +95,39 @@ export function NotificationsPage() {
                   </p>
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon={<Copy size={14} />}
+                  <button
+                    className="p-1 text-muted hover:text-[var(--color-text-secondary)] transition-colors"
                     onClick={(e) => {
                       e.stopPropagation();
                       const text = `${n.title}${n.message ? ` — ${n.message}` : ""}`;
                       navigator.clipboard.writeText(text).then(() => toast.success(t.copied));
                     }}
-                    className="p-1"
                     title={t.copy}
-                  />
+                  >
+                    <Copy size={14} />
+                  </button>
                   {!n.read && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={<Check size={14} />}
+                    <button
+                      className="p-1 text-muted hover:text-[var(--color-text-secondary)] transition-colors"
                       onClick={(e) => {
                         e.stopPropagation();
                         markRead.mutate(n.id);
                       }}
-                      className="p-1"
                       title={t.mark_read}
-                    />
+                    >
+                      <Check size={14} />
+                    </button>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon={<Trash2 size={14} />}
+                  <button
+                    className="p-1 text-muted hover:text-red-500 transition-colors"
                     onClick={(e) => {
                       e.stopPropagation();
                       deleteNotif.mutate(n.id);
                     }}
-                    className="p-1 text-red-500 hover:bg-red-100"
                     title={t.delete}
-                  />
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
             );

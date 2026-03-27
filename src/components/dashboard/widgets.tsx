@@ -51,7 +51,12 @@ function PriorityDot({ priority }: { priority: string }) {
 }
 
 function StatusDot({ status }: { status: string }) {
-  const color = status === "paid" ? "bg-success" : status === "overdue" ? "bg-danger" : "bg-[var(--color-input-bg)]";
+  const color =
+    status === "paid" ? "bg-success" :
+    status === "overdue" ? "bg-danger" :
+    status === "sent" ? "bg-warning" :
+    status === "draft" ? "bg-indigo-500" :
+    "bg-[var(--color-input-bg)]";
   return <span className={`dot-sm ml-2 ${color}`} />;
 }
 

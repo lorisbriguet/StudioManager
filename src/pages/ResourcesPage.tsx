@@ -23,7 +23,7 @@ import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useT } from "../i18n/useT";
 import { logError } from "../lib/log";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
-import { applyFilterConditions } from "../types/saved-filter";
+import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
 type SortKey = "name" | "price";
 
@@ -52,17 +52,20 @@ export function ResourcesPage() {
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState<ResourceRow> | null>(null);
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
+  const [filterLogic, setFilterLogic] = useState<ConditionLogic>("and");
 
   const applyFilter = useCallback((filters: SavedFilterData) => {
     if (typeof filters.search === "string") setSearch(filters.search);
     setTagFilter(typeof filters.tagFilter === "string" ? filters.tagFilter : null);
     setFilterConditions(filters.conditions ?? []);
+    setFilterLogic(filters.conditionLogic ?? "and");
   }, []);
 
   const resourceFields = useMemo<FilterableField[]>(() => [
     { key: "name", label: t.name, type: "string" },
-    { key: "price", label: "Price", type: "string" },
-  ], [t]);
+    { key: "price", label: t.price_label, type: "select", options: [{ value: "free", label: t.price_free }, { value: "paid", label: t.price_paid }] },
+    { key: "tags", label: t.tags, type: "select", options: (allTags ?? []).map((tag) => ({ value: tag, label: tag })) },
+  ], [t, allTags]);
 
   // Build rows with tags
   const [rows, setRows] = useState<ResourceRow[]>([]);
@@ -94,7 +97,7 @@ export function ResourcesPage() {
     if (tagFilter) {
       list = list.filter((r) => r.tags.includes(tagFilter));
     }
-    list = applyFilterConditions(list, filterConditions);
+    list = applyFilterConditions(list, filterConditions, filterLogic);
     return sortRows(list, sort.key, sort.dir);
   }, [rows, search, tagFilter, sort, filterConditions]);
 
@@ -219,7 +222,7 @@ export function ResourcesPage() {
 
       <SavedFilterBar
         page="resources"
-        currentFilters={{ search, tagFilter: tagFilter ?? undefined, conditions: filterConditions }}
+        currentFilters={{ search, tagFilter: tagFilter ?? undefined, conditions: filterConditions, conditionLogic: filterLogic }}
         onApply={applyFilter}
         activeFilterId={activeFilterId}
         onActiveChange={setActiveFilterId}
