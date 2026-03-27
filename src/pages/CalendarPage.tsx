@@ -287,10 +287,11 @@ export function CalendarPage() {
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
             initialView="timeGridWeek"
             headerToolbar={{
-              left: "prev,next today",
-              center: "title",
+              left: "prev,next today title",
+              center: "",
               right: "dayGridMonth,timeGridWeek",
             }}
+            dayHeaderFormat={{ weekday: "short", day: "numeric" }}
             events={events}
             editable
             droppable
