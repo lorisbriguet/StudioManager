@@ -5,6 +5,7 @@ export type BlockType = "tasks" | "workload" | "resources" | "notes" | "named_ta
 export interface LayoutBlock {
   type: BlockType;
   collapsed?: boolean;
+  width?: "full" | "half";
 }
 
 export type LayoutConfig = LayoutBlock[];
@@ -15,6 +16,8 @@ export const STANDARD_LAYOUT: LayoutConfig = [
   { type: "workload" },
   { type: "resources" },
   { type: "named_tables" },
+  { type: "invoices", width: "half" },
+  { type: "quotes", width: "half" },
 ];
 
 export const PROJECT_TEMPLATES: Record<string, { label: string; layout: LayoutConfig }> = {

@@ -73,8 +73,6 @@ export function SettingsPage() {
   const setTestMode = useAppStore((s) => s.setTestMode);
   const presentationMode = useAppStore((s) => s.presentationMode);
   const setPresentationMode = useAppStore((s) => s.setPresentationMode);
-  const enableModularProjects = useAppStore((s) => s.enableModularProjects);
-  const setEnableModularProjects = useAppStore((s) => s.setEnableModularProjects);
   const [togglingTestMode, setTogglingTestMode] = useState(false);
   const [togglingPresentation, setTogglingPresentation] = useState(false);
   const [snapshotting, setSnapshotting] = useState(false);
@@ -584,12 +582,6 @@ export function SettingsPage() {
                     {togglingPresentation ? t.loading : t.enter_presentation_mode}
                   </button>
                 )}
-              </SettingRow>
-
-              <div className="border-t border-[var(--color-border-divider)] my-3" />
-              <SectionHeader title={t.modular_projects} desc={t.modular_projects_desc} />
-              <SettingRow label={t.modular_projects} desc={t.modular_projects_desc}>
-                <Toggle checked={enableModularProjects} onChange={setEnableModularProjects} />
               </SettingRow>
 
               <div className="border-t border-[var(--color-border-divider)] my-3" />

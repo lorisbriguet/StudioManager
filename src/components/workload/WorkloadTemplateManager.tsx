@@ -68,11 +68,17 @@ export function WorkloadTemplateManager() {
 
   const handleSaveColumn = (col: WorkloadColumn) => {
     if (!editingTemplate || !editingColumn) return;
-    const next = [...editingTemplate.columns];
+    let next = [...editingTemplate.columns];
     if (editingColumn.column) {
       next[editingColumn.index] = col;
     } else {
       next.push(col);
+    }
+    // Only one column can be the calendar color source — clear others
+    if (col.calendarColor) {
+      next = next.map((c) =>
+        c.key === col.key ? c : { ...c, calendarColor: false }
+      );
     }
     updateTemplate.mutate({ id: editingTemplate.id, columns: next });
   };

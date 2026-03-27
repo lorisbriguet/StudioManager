@@ -485,6 +485,7 @@ const ui = {
     formula_help: "Use column keys for references (e.g. hours, og_scope). Supports +, -, *, /, ternary (condition ? a : b).",
     icon: "Icon",
     icon_only: "Show icon only (hide column name)",
+    calendar_color_column: "Calendar colors",
     options: "Options",
     new_option: "New option...",
     rename: "Rename",
@@ -618,6 +619,12 @@ const ui = {
     stay: "Stay",
     invoice_due: "Invoice {ref} due",
     quote_expires: "Quote {ref} expires",
+    save_layout: "Save current layout...",
+    custom_layout: "Custom",
+    load_preset: "Load preset",
+    delete_preset: "Delete preset",
+    preset_name: "Preset name",
+    presets: "Presets",
   },
   FR: {
     // Sidebar / Nav
@@ -1103,6 +1110,7 @@ const ui = {
     formula_help: "Utilisez les cles de colonnes (ex. hours, og_scope). Supporte +, -, *, /, ternaire (condition ? a : b).",
     icon: "Icone",
     icon_only: "Afficher uniquement l'icone (masquer le nom)",
+    calendar_color_column: "Couleurs calendrier",
     options: "Options",
     new_option: "Nouvelle option...",
     rename: "Renommer",
@@ -1236,6 +1244,12 @@ const ui = {
     stay: "Rester",
     invoice_due: "Facture {ref} echue",
     quote_expires: "Devis {ref} expire",
+    save_layout: "Enregistrer la disposition...",
+    custom_layout: "Personnalise",
+    load_preset: "Charger un preset",
+    delete_preset: "Supprimer le preset",
+    preset_name: "Nom du preset",
+    presets: "Presets",
   },
 } as const;
 
