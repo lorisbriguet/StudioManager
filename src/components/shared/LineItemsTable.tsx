@@ -59,7 +59,7 @@ export function LineItemsTable({
   const t = useT();
 
   return (
-    <div className="rounded-xl bg-[var(--color-surface)] p-4">
+    <div className="p-0">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-medium">{t.line_items}</h2>
         <div className="flex items-center gap-3">

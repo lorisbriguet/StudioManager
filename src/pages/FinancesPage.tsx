@@ -26,6 +26,7 @@ import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
 import { PageHeader, PageSpinner, Button, Card } from "../components/ui";
 import { useChartTheme } from "../hooks/useChartTheme";
+import { getTagColor } from "../lib/tagColors";
 import { getInvoiceLineItems } from "../db/queries/invoices";
 import { InvoicePDF } from "../components/invoice/InvoicePDF";
 import { PLPDF } from "../components/finance/PLPDF";
@@ -34,14 +35,10 @@ import { ExpensesListPDF } from "../components/finance/ExpensesListPDF";
 import { getMonthlyData } from "../db/queries/finance";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const PIE_COLORS = [
-  "var(--color-chart-1)",
-  "var(--color-chart-5)",
-  "var(--color-chart-6)",
-  "var(--color-chart-2)",
-  "var(--color-chart-3)",
-  "var(--color-chart-4)",
-];
+/** Derive pie-chart fill color from category name using the tag color palette */
+function getPieColor(categoryName: string, dark: boolean): string {
+  return getTagColor(categoryName, dark).text;
+}
 
 export function FinancesPage() {
   const t = useT();
@@ -54,6 +51,7 @@ export function FinancesPage() {
   const { data: profile } = useBusinessProfile();
   const chart = useChartTheme();
   const exportLang = useAppStore((s) => s.exportLanguage);
+  const darkMode = useAppStore((s) => s.darkMode);
 
   const exportForTrustee = async () => {
     try {
@@ -193,8 +191,8 @@ export function FinancesPage() {
                   dataKey="value"
                   stroke="none"
                 >
-                  {pieData.map((_, i) => (
-                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                  {pieData.map((d, i) => (
+                    <Cell key={i} fill={getPieColor(d.name, darkMode)} />
                   ))}
                 </Pie>
                 <Tooltip
@@ -208,11 +206,11 @@ export function FinancesPage() {
               </PieChart>
             </ResponsiveContainer>
             <div className="flex flex-wrap gap-3 mt-2 justify-center">
-              {pieData.map((d, i) => (
+              {pieData.map((d) => (
                 <div key={d.name} className="flex items-center gap-1.5 text-xs">
                   <div
                     className="w-2.5 h-2.5 rounded-full"
-                    style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
+                    style={{ backgroundColor: getPieColor(d.name, darkMode) }}
                   />
                   <span className="text-muted">{d.name}</span>
                 </div>
