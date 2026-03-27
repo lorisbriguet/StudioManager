@@ -128,8 +128,8 @@ body {
   --fc-event-bg-color: color-mix(in srgb, var(--color-accent) 15%, white);
   --fc-event-text-color: var(--color-accent);
   font-size: 13px;
-  border-radius: 0.5rem;
-  overflow: hidden;
+  border-radius: 0;
+  overflow: visible;
 }
 
 .fc-studio .fc .fc-button {
@@ -158,11 +158,6 @@ body {
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: white;
-}
-
-.fc-studio .fc .fc-toolbar-title {
-  font-size: 16px;
-  font-weight: 600;
 }
 
 .fc-studio .fc .fc-col-header-cell {
@@ -245,6 +240,36 @@ body {
 
 .fc-studio .fc .fc-timegrid-slot {
   height: 32px;
+}
+
+/* Thin separator between all-day and time grid */
+.fc-studio .fc .fc-timegrid-divider {
+  padding: 0;
+  border-top: 1px solid var(--color-border-divider);
+  border-bottom: none;
+  background: transparent;
+}
+
+/* Remove horizontal lines in time label column */
+.fc-studio .fc .fc-timegrid-slot-label {
+  border-top: none !important;
+}
+
+/* Remove bottom clipping — no border-radius on the calendar body */
+.fc-studio .fc .fc-view-harness {
+  border-radius: 0;
+  overflow: visible;
+}
+
+.fc-studio .fc .fc-scrollgrid {
+  border-radius: 0;
+}
+
+/* Title left-aligned with spacing after nav buttons */
+.fc-studio .fc .fc-toolbar-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-left: 8px !important;
 }
 
 .fc-studio .fc .fc-daygrid-more-link {
