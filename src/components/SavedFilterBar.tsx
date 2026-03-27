@@ -9,7 +9,7 @@ import {
   useDeleteSavedFilter,
 } from "../db/hooks/useSavedFilters";
 import { useT } from "../i18n/useT";
-import type { SavedFilter, SavedFilterData, FilterCondition, FilterableField, FilterOperator } from "../types/saved-filter";
+import type { SavedFilter, SavedFilterData, FilterCondition, FilterableField, FilterOperator, ConditionLogic } from "../types/saved-filter";
 
 const STRING_OPERATORS: FilterOperator[] = ["eq", "neq", "contains"];
 const NUMBER_OPERATORS: FilterOperator[] = ["eq", "neq", "gt", "lt", "gte", "lte"];
@@ -128,6 +128,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
   const [editName, setEditName] = useState("");
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; filter: SavedFilter } | null>(null);
   const [conditions, setConditions] = useState<FilterCondition[]>([]);
+  const [conditionLogic, setConditionLogic] = useState<ConditionLogic>("and");
   const [showConditions, setShowConditions] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -151,15 +152,16 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
     setNaming(true);
     // Pre-populate conditions from current active filter conditions if any
     setConditions(currentFilters.conditions ?? []);
+    setConditionLogic(currentFilters.conditionLogic ?? "and");
   };
 
   const handleSave = () => {
     const name = nameInput.trim();
     if (!name) return;
-    // Include conditions in the saved filter data
     const filtersToSave: SavedFilterData = {
       ...currentFilters,
       conditions: conditions.filter((c) => c.value.trim() !== ""),
+      conditionLogic,
     };
     createFilter.mutate(
       { name, filters: filtersToSave },
@@ -224,18 +226,32 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
   const conditionsUI = fields && fields.length > 0 && showConditions && (
     <div className="flex flex-col gap-1.5 mt-1.5 mb-1">
       {conditions.map((c, i) => (
-        <ConditionRow
-          key={i}
-          condition={c}
-          fields={fields}
-          onChange={(updated) => updateCondition(i, updated)}
-          onRemove={() => removeCondition(i)}
-          t={t}
-        />
+        <div key={i} className="flex items-center gap-1.5">
+          {i > 0 && (
+            <select
+              value={conditionLogic}
+              onChange={(e) => setConditionLogic(e.target.value as ConditionLogic)}
+              className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--color-input-border)] bg-[var(--color-input-bg)] text-muted w-12"
+            >
+              <option value="and">AND</option>
+              <option value="or">OR</option>
+            </select>
+          )}
+          {i === 0 && <div className="w-12" />}
+          <div className="flex-1">
+            <ConditionRow
+              condition={c}
+              fields={fields}
+              onChange={(updated) => updateCondition(i, updated)}
+              onRemove={() => removeCondition(i)}
+              t={t}
+            />
+          </div>
+        </div>
       ))}
       <button
         onClick={addCondition}
-        className="flex items-center gap-1 text-xs text-muted hover:text-accent transition-colors self-start"
+        className="flex items-center gap-1 text-xs text-muted hover:text-accent transition-colors self-start ml-[52px]"
       >
         <Plus size={10} />
         {t.add_condition}

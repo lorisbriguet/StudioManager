@@ -319,6 +319,9 @@ async function ensureSchema(db: Database) {
     }
   }
 
+  // ── Expense category color ─────────────────────────────────
+  await addColumnIfMissing("expense_categories", "color", "TEXT DEFAULT NULL");
+
   // ── Invoice reminder tracking ──────────────────────────────
   await addColumnIfMissing("invoices", "reminder_count", "INTEGER NOT NULL DEFAULT 0");
   await addColumnIfMissing("invoices", "last_reminder_date", "TEXT DEFAULT NULL");

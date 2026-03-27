@@ -37,7 +37,7 @@ import { PageHeader, SearchBar, PageSpinner, EmptyState } from "../components/ui
 import { taskStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Task, Subtask, TaskStatus } from "../types/task";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
-import { applyFilterConditions } from "../types/saved-filter";
+import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
 export function TasksPage() {
   const t = useT();
@@ -94,11 +94,13 @@ export function TasksPage() {
   }, [toggleTimer, projectName]);
 
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
+  const [filterLogic, setFilterLogic] = useState<ConditionLogic>("and");
 
   const applyFilter = useCallback((filters: SavedFilterData) => {
     if (typeof filters.search === "string") setSearch(filters.search);
     if (filters.filter === "all" || filters.filter === "todo" || filters.filter === "done") setFilter(filters.filter as TaskStatus | "all");
     setFilterConditions(filters.conditions ?? []);
+    setFilterLogic(filters.conditionLogic ?? "and");
   }, []);
 
   const taskFields = useMemo<FilterableField[]>(() => [
@@ -126,7 +128,7 @@ export function TasksPage() {
           projectName(tk.project_id).toLowerCase().includes(q)
       );
     }
-    rows = applyFilterConditions(rows, filterConditions);
+    rows = applyFilterConditions(rows, filterConditions, filterLogic);
     const groups = new Map<number, typeof rows>();
     for (const tk of rows) {
       const arr = groups.get(tk.project_id) ?? [];
@@ -238,7 +240,7 @@ export function TasksPage() {
 
       <SavedFilterBar
         page="tasks"
-        currentFilters={{ search, filter, conditions: filterConditions }}
+        currentFilters={{ search, filter, conditions: filterConditions, conditionLogic: filterLogic }}
         onApply={applyFilter}
         activeFilterId={activeFilterId}
         onActiveChange={setActiveFilterId}

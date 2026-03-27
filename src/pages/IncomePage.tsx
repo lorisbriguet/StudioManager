@@ -26,7 +26,7 @@ import { logError } from "../lib/log";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import { SavedFilterBar } from "../components/SavedFilterBar";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
-import { applyFilterConditions } from "../types/saved-filter";
+import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
 type SortKey = "reference" | "source" | "category" | "date" | "amount";
 
@@ -55,11 +55,13 @@ export function IncomePage() {
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState<Income> | null>(null);
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
+  const [filterLogic, setFilterLogic] = useState<ConditionLogic>("and");
 
   const applyFilter = useCallback((filters: SavedFilterData) => {
     if (typeof filters.search === "string") setSearch(filters.search);
     if (filters.sort && typeof filters.sort === "object") setSort(filters.sort as SortState<SortKey>);
     setFilterConditions(filters.conditions ?? []);
+    setFilterLogic(filters.conditionLogic ?? "and");
   }, []);
 
   const incomeFields = useMemo<FilterableField[]>(() => [
@@ -81,7 +83,7 @@ export function IncomePage() {
             i.category.toLowerCase().includes(q)
         )
       : incomes;
-    rows = applyFilterConditions(rows, filterConditions);
+    rows = applyFilterConditions(rows, filterConditions, filterLogic);
     return sortRows(rows, sort.key, sort.dir);
   }, [incomes, search, sort, filterConditions]);
 
@@ -211,7 +213,7 @@ export function IncomePage() {
 
       <SavedFilterBar
         page="income"
-        currentFilters={{ search, sort, conditions: filterConditions }}
+        currentFilters={{ search, sort, conditions: filterConditions, conditionLogic: filterLogic }}
         onApply={applyFilter}
         activeFilterId={activeFilterId}
         onActiveChange={setActiveFilterId}

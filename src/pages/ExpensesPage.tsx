@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
-import { Plus, Paperclip, Eye, X, ChevronRight, Upload, Trash2, CheckCircle, Receipt } from "lucide-react";
+import { Plus, Paperclip, Eye, X, ChevronRight, Upload, Trash2, CheckCircle, Receipt, Settings2 } from "lucide-react";
 import { Button, Input, Select, PageHeader, SearchBar, PageSpinner, EmptyState, Card } from "../components/ui";
 import { SavedFilterBar } from "../components/SavedFilterBar";
-import { getTagColor } from "../lib/tagColors";
+import { getTagColor, getNamedTagColor } from "../lib/tagColors";
+import type { TagColorName } from "../types/expense";
 import { useAppStore } from "../stores/app-store";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -32,7 +33,7 @@ import { extractPdfText, extractImageText, parseExpenseFromText, type ExtractedE
 import { logError } from "../lib/log";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
-import { applyFilterConditions } from "../types/saved-filter";
+import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
 type SortKey = "reference" | "supplier" | "category_code" | "invoice_date" | "amount" | "paid_date";
 
@@ -55,11 +56,13 @@ export function ExpensesPage() {
   const [parsing, setParsing] = useState(false);
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
+  const [filterLogic, setFilterLogic] = useState<ConditionLogic>("and");
 
   const applyFilter = useCallback((filters: SavedFilterData) => {
     if (typeof filters.search === "string") setSearch(filters.search);
     if (filters.sort && typeof filters.sort === "object") setSort(filters.sort as SortState<SortKey>);
     setFilterConditions(filters.conditions ?? []);
+    setFilterLogic(filters.conditionLogic ?? "and");
   }, []);
 
   const expenseFields = useMemo<FilterableField[]>(() => [
@@ -72,6 +75,12 @@ export function ExpensesPage() {
   const categoryName = (code: string) =>
     categories?.find((c) => c.code === code)?.name_fr ?? code;
 
+  const categoryColor = (code: string) => {
+    const cat = categories?.find((c) => c.code === code);
+    if (cat?.color) return getNamedTagColor(cat.color as TagColorName, darkMode);
+    return getTagColor(code, darkMode);
+  };
+
   const filtered = useMemo(() => {
     if (!expenses) return [];
     const q = search.toLowerCase();
@@ -83,7 +92,7 @@ export function ExpensesPage() {
             e.category_code.toLowerCase().includes(q)
         )
       : expenses;
-    rows = applyFilterConditions(rows, filterConditions);
+    rows = applyFilterConditions(rows, filterConditions, filterLogic);
     return sortRows(rows, sort.key, sort.dir);
   }, [expenses, search, sort, filterConditions]);
 
@@ -234,7 +243,7 @@ export function ExpensesPage() {
 
       <SavedFilterBar
         page="expenses"
-        currentFilters={{ search, sort, conditions: filterConditions }}
+        currentFilters={{ search, sort, conditions: filterConditions, conditionLogic: filterLogic }}
         onApply={applyFilter}
         activeFilterId={activeFilterId}
         onActiveChange={setActiveFilterId}
@@ -290,13 +299,14 @@ export function ExpensesPage() {
               <th className="w-8 px-2 py-2">
                 <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
               </th>
+              <th className="w-8" />
               <SortHeader label="Reference" sortKey="reference" current={sort} onSort={setSort} />
               <SortHeader label={t.supplier} sortKey="supplier" current={sort} onSort={setSort} />
               <SortHeader label={t.category} sortKey="category_code" current={sort} onSort={setSort} />
               <SortHeader label={t.date} sortKey="invoice_date" current={sort} onSort={setSort} />
-              <SortHeader label={t.amount} sortKey="amount" current={sort} onSort={setSort} align="right" />
               <SortHeader label="Paid" sortKey="paid_date" current={sort} onSort={setSort} />
               <th className="px-4 py-2.5 font-medium text-muted text-left">{t.receipt}</th>
+              <SortHeader label={t.amount} sortKey="amount" current={sort} onSort={setSort} align="right" />
             </tr>
           </thead>
           <tbody>
@@ -309,7 +319,7 @@ export function ExpensesPage() {
                     className="border-b border-[var(--color-border-divider)] cursor-pointer hover:bg-[var(--color-hover-row)] rounded-md"
                     onClick={() => toggleYear(year)}
                   >
-                    <td colSpan={8} className="px-4 py-2.5">
+                    <td colSpan={9} className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
                         <ChevronRight
                           size={14}
@@ -340,10 +350,21 @@ export function ExpensesPage() {
                             className="accent-[var(--accent)]"
                           />
                         </td>
+                        <td className="w-8 px-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCtxMenu({ x: e.clientX, y: e.clientY, item: exp });
+                            }}
+                            className="opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
+                          >
+                            <Settings2 size={14} />
+                          </button>
+                        </td>
                         <td className="px-4 py-2.5 font-medium">{exp.reference}</td>
                         <td className="px-4 py-2.5">{exp.supplier}</td>
                         <td className="px-4 py-2.5">
-                          {(() => { const c = getTagColor(exp.category_code, darkMode); return (
+                          {(() => { const c = categoryColor(exp.category_code); return (
                             <span style={{ background: c.bg, color: c.text }} className="px-2 py-0.5 text-xs rounded-full font-medium">
                               {exp.category_code}
                             </span>
@@ -351,9 +372,6 @@ export function ExpensesPage() {
                           <span className="ml-1 text-xs text-muted">{categoryName(exp.category_code)}</span>
                         </td>
                         <td className="px-4 py-2.5 text-muted">{formatDisplayDate(exp.invoice_date)}</td>
-                        <td className="px-4 py-2.5 text-right font-medium">
-                          CHF {exp.amount.toFixed(2)}
-                        </td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-1">
                             <Input
@@ -414,6 +432,9 @@ export function ExpensesPage() {
                               <Paperclip size={12} /> {t.attach}
                             </button>
                           )}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-medium">
+                          CHF {exp.amount.toFixed(2)}
                         </td>
                       </tr>
                     ))}

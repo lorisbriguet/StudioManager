@@ -98,8 +98,8 @@ export async function createExpenseCategory(
 ): Promise<void> {
   const db = await getDb();
   await db.execute(
-    "INSERT INTO expense_categories (code, name_fr, name_en, pl_section) VALUES ($1, $2, $3, $4)",
-    [data.code, data.name_fr, data.name_en, data.pl_section]
+    "INSERT INTO expense_categories (code, name_fr, name_en, pl_section, color) VALUES ($1, $2, $3, $4, $5)",
+    [data.code, data.name_fr, data.name_en, data.pl_section, data.color ?? null]
   );
 }
 

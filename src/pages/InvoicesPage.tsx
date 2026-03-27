@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Plus, Eye, ChevronRight, Pencil, Trash2, CheckCircle, Send, Repeat, X, AlertTriangle, ExternalLink, FileText } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Plus, Eye, ChevronRight, Pencil, Trash2, CheckCircle, Send, Repeat, X, AlertTriangle, ExternalLink, FileText, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { addMonths, format } from "date-fns";
@@ -22,7 +22,7 @@ import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Invoice, InvoiceStatus } from "../types/invoice";
 import type { RecurringFrequency } from "../types/recurring";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
-import { applyFilterConditions } from "../types/saved-filter";
+import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
 const FREQUENCIES: RecurringFrequency[] = ["monthly", "quarterly", "biannual", "annual"];
 
@@ -46,11 +46,13 @@ export function InvoicesPage() {
   const [showRecurring, setShowRecurring] = useState(false);
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
+  const [filterLogic, setFilterLogic] = useState<ConditionLogic>("and");
 
   const applyFilter = useCallback((filters: SavedFilterData) => {
     if (typeof filters.search === "string") setSearch(filters.search);
     if (filters.sort && typeof filters.sort === "object") setSort(filters.sort as SortState<SortKey>);
     setFilterConditions(filters.conditions ?? []);
+    setFilterLogic(filters.conditionLogic ?? "and");
   }, []);
 
   const invoiceFields = useMemo<FilterableField[]>(() => [
@@ -85,7 +87,7 @@ export function InvoicesPage() {
             inv.status.includes(q)
         )
       : enriched;
-    rows = applyFilterConditions(rows, filterConditions);
+    rows = applyFilterConditions(rows, filterConditions, filterLogic);
     return sortRows(rows, sort.key, sort.dir);
   }, [enriched, search, sort, filterConditions]);
 
@@ -283,7 +285,7 @@ export function InvoicesPage() {
       />
       <SavedFilterBar
         page="invoices"
-        currentFilters={{ search, sort, conditions: filterConditions }}
+        currentFilters={{ search, sort, conditions: filterConditions, conditionLogic: filterLogic }}
         onApply={applyFilter}
         activeFilterId={activeFilterId}
         onActiveChange={setActiveFilterId}
@@ -297,12 +299,12 @@ export function InvoicesPage() {
               <th className="w-8 px-2 py-2">
                 <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
               </th>
+              <th className="w-8" />
               <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
               <SortHeader label={t.client} sortKey="client_name" current={sort} onSort={setSort} />
               <SortHeader label={t.date} sortKey="invoice_date" current={sort} onSort={setSort} />
               <SortHeader label={t.status} sortKey="status" current={sort} onSort={setSort} />
               <SortHeader label={t.amount} sortKey="total" current={sort} onSort={setSort} align="right" />
-              <th className="px-4 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
@@ -346,15 +348,19 @@ export function InvoicesPage() {
                             className="accent-[var(--accent)]"
                           />
                         </td>
-                        <td className="px-4 py-2.5">
-                          <Link
-                            to={`/invoices/${inv.id}/edit`}
-                            className="inline-flex items-center gap-1.5 text-muted hover:text-accent opacity-0 group-hover:opacity-100 transition-opacity"
-                            title="Edit"
+                        <td className="w-8 px-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCtxMenu({ x: e.clientX, y: e.clientY, item: inv });
+                            }}
+                            className="opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
                           >
-                            <Pencil size={14} />
-                          </Link>
-                          <span className="ml-1.5">{inv.reference.startsWith("DRAFT") ? t.draft : inv.reference}</span>
+                            <Settings2 size={14} />
+                          </button>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span>{inv.reference.startsWith("DRAFT") ? t.draft : inv.reference}</span>
                         </td>
                         <td className="px-4 py-2.5">{inv.client_name}</td>
                         <td className="px-4 py-2.5 text-muted">{formatDisplayDate(inv.invoice_date)}</td>
@@ -401,15 +407,6 @@ export function InvoicesPage() {
                           ) : (
                             <span>CHF {inv.total.toFixed(2)}</span>
                           )}
-                        </td>
-                        <td className="px-4 py-2.5 text-right">
-                          <Link
-                            to={`/invoices/${inv.id}/preview`}
-                            className="text-muted hover:text-accent opacity-0 group-hover:opacity-100 transition-opacity"
-                            title="Preview PDF"
-                          >
-                            <Eye size={14} />
-                          </Link>
                         </td>
                       </tr>
                     ))}

@@ -186,6 +186,11 @@ import { Button } from "../components/ui";
 Variants: `primary`, `secondary`, `ghost`, `danger`, `success`, `link`
 Sizes: `sm`, `md`, `lg`
 
+### Button Icon Rules
+- **Icon + text**: always use `<Button icon={<Icon size={14} />}>Label</Button>` — never raw `<button>` with icon and text side by side
+- **Icon-only**: use `<button className="text-muted hover:text-[var(--color-text-secondary)] transition-colors"><Icon size={14} /></button>` — never use the shared `Button` component for icon-only actions (it adds borders/padding that are too heavy)
+- Never put a lucide icon inside a `<button>` alongside text without using the shared Button component
+
 ### Badge
 ```tsx
 import { Badge } from "../components/ui";

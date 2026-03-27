@@ -16,7 +16,7 @@ import { useTabStore } from "../stores/tab-store";
 import { Button, Badge, Card, Input, PageHeader, SearchBar, PageSpinner, EmptyState } from "../components/ui";
 import type { Client } from "../types/client";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
-import { applyFilterConditions } from "../types/saved-filter";
+import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
 type SortKey = "id" | "name" | "language" | "discount_rate" | "status";
 
@@ -37,6 +37,7 @@ export function ClientsPage() {
   const [search, setSearch] = useState("");
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
+  const [filterLogic, setFilterLogic] = useState<ConditionLogic>("and");
   const sort: SortState<SortKey> = { key: clientsSortKey as SortKey, dir: clientsSortDir };
   const setSort = useCallback((s: SortState<SortKey>) => {
     setClientsSortKey(s.key);
@@ -47,6 +48,7 @@ export function ClientsPage() {
     if (typeof filters.search === "string") setSearch(filters.search);
     if (filters.sort && typeof filters.sort === "object") setSort(filters.sort as SortState<SortKey>);
     setFilterConditions(filters.conditions ?? []);
+    setFilterLogic(filters.conditionLogic ?? "and");
   }, [setSort]);
 
   const clientFields = useMemo<FilterableField[]>(() => [
@@ -82,7 +84,7 @@ export function ClientsPage() {
             c.name.toLowerCase().includes(q)
         )
       : withStatus;
-    rows = applyFilterConditions(rows, filterConditions);
+    rows = applyFilterConditions(rows, filterConditions, filterLogic);
     return sortRows(rows, sort.key, sort.dir);
   }, [clients, search, sort, activeClientIds, filterConditions]);
 
@@ -108,7 +110,7 @@ export function ClientsPage() {
       <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); setFilterConditions([]); }} placeholder={t.search_clients} className="mb-4 w-64" />
       <SavedFilterBar
         page="clients"
-        currentFilters={{ search, sort, conditions: filterConditions }}
+        currentFilters={{ search, sort, conditions: filterConditions, conditionLogic: filterLogic }}
         onApply={applyFilter}
         activeFilterId={activeFilterId}
         onActiveChange={setActiveFilterId}

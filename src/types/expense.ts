@@ -1,8 +1,11 @@
+export type TagColorName = "blue" | "purple" | "green" | "red" | "yellow" | "cyan" | "orange" | "teal" | "gray";
+
 export interface ExpenseCategory {
   code: string;
   name_fr: string;
   name_en: string;
   pl_section: "operating" | "social_charges";
+  color: TagColorName | null;
 }
 
 export interface Expense {
