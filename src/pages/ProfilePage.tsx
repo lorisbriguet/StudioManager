@@ -126,7 +126,7 @@ export function ProfilePage() {
   return (
     <div className="flex gap-0 h-full -m-8">
       {/* Category sidebar */}
-      <div className="w-56 shrink-0 border-r border-gray-200 py-6">
+      <div className="w-56 shrink-0 border-r border-[var(--color-border-divider)] py-6">
         <h1 className="text-xl font-semibold px-6 mb-6">{t.profile}</h1>
         <nav className="space-y-0.5 px-3">
           {categories.map((cat) => (
@@ -137,7 +137,7 @@ export function ProfilePage() {
               className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
                 activeCategory === cat.key
                   ? "bg-accent-light text-accent font-medium"
-                  : "text-muted hover:bg-gray-100 dark:hover:bg-gray-200 hover:text-gray-900 dark:hover:text-gray-800"
+                  : "text-muted hover:bg-[var(--color-hover-row)] hover:text-gray-900 dark:hover:text-gray-800"
               }`}
             >
               {cat.label}
@@ -206,7 +206,7 @@ export function ProfilePage() {
                     {activities.map((a, i) => (
                       <div
                         key={i}
-                        className="flex items-center gap-2 border border-gray-200 rounded-md px-3 py-1.5 text-sm"
+                        className="flex items-center gap-2 border border-[var(--color-border-divider)] rounded-lg px-3 py-1.5 text-sm"
                       >
                         <span className="flex-1">{a}</span>
                         <button

@@ -118,16 +118,16 @@ function ChartRevenue() {
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} barGap={2}>
-            <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} />
-            <XAxis dataKey="name" tick={{ fontSize: 11, fill: chart.tickFill }} />
-            <YAxis tick={{ fontSize: 11, fill: chart.tickFill }} />
+            <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} vertical={false} />
+            <XAxis dataKey="name" tick={{ fontSize: 10, fill: chart.tickFill }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: chart.tickFill }} axisLine={false} tickLine={false} />
             <Tooltip
               formatter={(value) => [`CHF ${Number(value ?? 0).toFixed(2)}`, ""]}
               contentStyle={chart.tooltipStyle}
               cursor={{ fill: chart.cursorFill }}
             />
-            <Bar dataKey="revenue" fill="var(--color-chart-2)" radius={[3, 3, 0, 0]} name={t.revenue} />
-            <Bar dataKey="expenses" fill="var(--color-chart-4)" radius={[3, 3, 0, 0]} name={t.expenses} />
+            <Bar dataKey="revenue" fill="var(--color-chart-2)" radius={[4, 4, 0, 0]} name={t.revenue} />
+            <Bar dataKey="expenses" fill="var(--color-chart-4)" radius={[4, 4, 0, 0]} name={t.expenses} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -1078,10 +1078,11 @@ function BusiestDay() {
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data}>
-            <XAxis dataKey="name" tick={{ fontSize: 10, fill: chart.tickFill }} />
-            <YAxis tick={{ fontSize: 10, fill: chart.tickFill }} width={25} />
+            <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} vertical={false} />
+            <XAxis dataKey="name" tick={{ fontSize: 10, fill: chart.tickFill }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: chart.tickFill }} width={25} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={chart.tooltipStyle} />
-            <Bar dataKey="count" fill="var(--color-accent)" radius={[3, 3, 0, 0]} name={t.tasks_due} />
+            <Bar dataKey="count" fill="var(--color-accent)" radius={[4, 4, 0, 0]} name={t.tasks_due} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -1111,7 +1112,7 @@ function QuickCreate() {
             key={item.to}
             type="button"
             onClick={() => navigate(item.to)}
-            className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-200 rounded-md hover:bg-gray-50 dark:hover:bg-gray-200 hover:border-gray-300 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-[var(--color-input-bg)] hover:bg-[var(--color-hover-row)] transition-colors"
           >
             <span className="text-muted">{item.icon}</span>
             <span className="truncate">{item.label}</span>
@@ -1142,7 +1143,7 @@ function PinnedNotes() {
     <div className="h-full flex flex-col p-4">
       <h2 className="text-sm font-medium mb-2">{t.pinned_notes}</h2>
       <textarea
-        className="flex-1 w-full resize-none text-sm bg-transparent border border-gray-200 rounded-md p-2 focus:outline-none focus:border-accent cursor-text"
+        className="flex-1 w-full resize-none text-sm bg-[var(--color-input-bg)] rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-accent cursor-text"
         value={local}
         onChange={(e) => handleChange(e.target.value)}
         onMouseDown={(e) => e.stopPropagation()}
@@ -1195,11 +1196,11 @@ function TimeThisWeek() {
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} />
-            <XAxis dataKey="day" tick={{ fontSize: 11, fill: chart.tickFill }} />
-            <YAxis tick={{ fontSize: 11, fill: chart.tickFill }} tickFormatter={(v) => fmtHours(Number(v))} />
+            <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} vertical={false} />
+            <XAxis dataKey="day" tick={{ fontSize: 10, fill: chart.tickFill }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: chart.tickFill }} tickFormatter={(v) => fmtHours(Number(v))} axisLine={false} tickLine={false} />
             <Tooltip formatter={(value) => fmtHours(Number(value ?? 0))} contentStyle={chart.tooltipStyle} cursor={{ fill: chart.cursorFill }} />
-            <Bar dataKey="minutes" fill="var(--color-chart-1)" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="minutes" fill="var(--color-chart-1)" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -1228,13 +1229,13 @@ function PlannedVsActual() {
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} layout="vertical">
-            <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} />
-            <XAxis type="number" tick={{ fontSize: 11, fill: chart.tickFill }} unit="h" />
-            <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: chart.tickFill }} width={90} />
+            <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} vertical={false} />
+            <XAxis type="number" tick={{ fontSize: 10, fill: chart.tickFill }} unit="h" axisLine={false} tickLine={false} />
+            <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: chart.tickFill }} width={90} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={chart.tooltipStyle} cursor={{ fill: chart.cursorFill }} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Bar dataKey={t.planned} fill="var(--color-chart-3)" radius={[0, 3, 3, 0]} />
-            <Bar dataKey={t.tracked} fill="var(--color-chart-1)" radius={[0, 3, 3, 0]} />
+            <Bar dataKey={t.planned} fill="var(--color-chart-3)" radius={[0, 4, 4, 0]} />
+            <Bar dataKey={t.tracked} fill="var(--color-chart-1)" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -1304,9 +1305,9 @@ function WeeklyTrendWidget() {
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} />
-            <XAxis dataKey="week" tick={{ fontSize: 11, fill: chart.tickFill }} />
-            <YAxis tick={{ fontSize: 11, fill: chart.tickFill }} unit="h" />
+            <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} vertical={false} />
+            <XAxis dataKey="week" tick={{ fontSize: 10, fill: chart.tickFill }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: chart.tickFill }} unit="h" axisLine={false} tickLine={false} />
             <Tooltip formatter={(value) => `${value}h`} contentStyle={chart.tooltipStyle} cursor={{ fill: chart.cursorFill }} />
             <Line type="monotone" dataKey="hours" stroke="var(--color-chart-1)" strokeWidth={2} dot={{ r: 3 }} />
           </LineChart>

@@ -149,7 +149,7 @@ export function FinancesPage() {
         <select
           value={year}
           onChange={(e) => setYear(Number(e.target.value))}
-          className="border border-gray-200 rounded-md px-3 py-1.5 text-sm"
+          className="border border-[var(--color-border-divider)] rounded-lg px-3 py-1.5 text-sm bg-[var(--color-surface)]"
         >
           {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((y) => (
             <option key={y} value={y}>{y}</option>
@@ -252,7 +252,7 @@ export function FinancesPage() {
               <PLLine label={t.operating_net} value={pl.operating_net} bold />
               <PLLine label={t.social_charges} value={-pl.social_charges} negative />
 
-              <div className="border-t-2 border-gray-900 mt-2 pt-2">
+              <div className="border-t-2 border-[var(--color-border-header)] mt-2 pt-2">
                 <PLLine label={t.net_result} value={pl.net_result} bold large />
               </div>
             </div>
@@ -281,7 +281,7 @@ function PLLine({
   return (
     <div
       className={`flex justify-between py-1 ${
-        border ? "border-t border-gray-200 pt-2" : ""
+        border ? "border-t border-[var(--color-border-divider)] pt-2" : ""
       }`}
     >
       <span className={`text-xs ${bold ? "font-semibold" : "text-muted"}`}>

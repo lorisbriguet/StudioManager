@@ -20,11 +20,11 @@ export function BulkActionBar({ count, actions, onClear }: Props) {
   if (count === 0) return null;
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-xl shadow-lg bulk-bar-animate">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2.5 rounded-xl bg-[var(--color-surface)] shadow-lg bulk-bar-animate">
       <span className="text-sm font-medium whitespace-nowrap">
         {count} {t.selected}
       </span>
-      <div className="w-px h-5 bg-gray-200" />
+      <div className="w-px h-5 bg-[var(--color-border-divider)]" />
       {actions.map((action, i) => (
         <button
           key={i}

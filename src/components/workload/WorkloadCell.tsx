@@ -97,7 +97,7 @@ function TextCell({
           if (e.key === "Enter") commit();
           if (e.key === "Escape") setEditing(false);
         }}
-        className="w-full text-sm border border-gray-200 rounded px-2 py-0.5 outline-none"
+        className="w-full text-sm border border-[var(--color-border-divider)] rounded-lg px-2 py-0.5 outline-none"
       />
     );
   }
@@ -153,7 +153,7 @@ function NumberCell({
           if (e.key === "Enter") commit();
           if (e.key === "Escape") setEditing(false);
         }}
-        className="w-full text-sm border border-gray-200 rounded px-2 py-0.5 outline-none text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+        className="w-full text-sm border border-[var(--color-border-divider)] rounded-lg px-2 py-0.5 outline-none text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
       />
     );
   }

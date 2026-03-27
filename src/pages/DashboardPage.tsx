@@ -75,7 +75,7 @@ export function DashboardPage() {
       {showWidgetPanel && (() => {
         const categories = [...new Set(WIDGET_CATALOG.map((e) => e.category))];
         return (
-          <div className="mb-4 border border-gray-100 rounded-lg p-4 max-h-[60vh] overflow-y-auto">
+          <div className="mb-4 bg-[var(--color-surface)] rounded-xl p-4 max-h-[60vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-medium">{t.add}</h2>
               <button type="button" onClick={() => setShowWidgetPanel(false)} className="text-muted hover:text-gray-900 dark:hover:text-gray-200">
@@ -95,10 +95,10 @@ export function DashboardPage() {
                         type="button"
                         disabled={alreadyUsed}
                         onClick={() => { addWidget(entry.type as WidgetType); setShowWidgetPanel(false); }}
-                        className={`text-left px-3 py-2 text-sm border rounded-md transition-colors ${
+                        className={`text-left px-3 py-2 text-sm rounded-lg transition-colors ${
                           alreadyUsed
-                            ? "border-gray-100 text-muted/50 cursor-not-allowed opacity-40"
-                            : "border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-200 hover:border-gray-300"
+                            ? "text-muted/50 cursor-not-allowed opacity-40"
+                            : "hover:bg-[var(--color-hover-row)] bg-[var(--color-input-bg)]"
                         }`}
                       >
                         <div className="font-medium text-xs">{label}</div>
@@ -131,7 +131,7 @@ export function DashboardPage() {
           autoSize
         >
           {sortedWidgets.map((widget, idx) => (
-            <div key={widget.id} className="stagger-in border border-gray-100 rounded-lg bg-white dark:bg-gray-100 overflow-hidden relative group cursor-grab active:cursor-grabbing" style={{ animationDelay: `${idx * 50}ms` }}>
+            <div key={widget.id} className="stagger-in bg-[var(--color-surface)] rounded-xl overflow-hidden relative group cursor-grab active:cursor-grabbing" style={{ animationDelay: `${idx * 50}ms` }}>
               {/* Remove button */}
               <button
                 type="button"

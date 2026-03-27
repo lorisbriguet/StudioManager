@@ -28,7 +28,7 @@ export function ProjectDetailPage() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(-1)} className="text-muted hover:text-gray-900 dark:hover:text-gray-200">
+        <button onClick={() => navigate(-1)} className="text-[var(--color-muted)] hover:text-[var(--color-text-secondary)]">
           <ArrowLeft size={18} />
         </button>
         <div className="ml-auto flex items-center gap-2">

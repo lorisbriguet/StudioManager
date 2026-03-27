@@ -76,27 +76,27 @@ export function ProjectBlockLayout({ project, projectId, renderBlock }: Props) {
       {layout.map((block, i) => {
         const isCollapsed = !!block.collapsed;
         return (
-          <div key={block.type} className="group">
-            <div className="flex items-center gap-2 mb-1">
+          <div key={block.type} className="group bg-[var(--color-surface)] rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-2">
               <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => moveBlock(i, -1)}
                   disabled={i === 0}
-                  className="text-muted hover:text-gray-700 disabled:opacity-30 text-xs"
+                  className="text-[var(--color-muted)] hover:text-[var(--color-text-secondary)] disabled:opacity-30 text-xs cursor-grab"
                   title="Move up"
                 >
                   <GripVertical size={12} />
                 </button>
               </div>
-              <button onClick={() => toggleCollapse(block.type)} className="text-muted hover:text-gray-700">
+              <button onClick={() => toggleCollapse(block.type)} className="text-[var(--color-muted)] hover:text-[var(--color-text-secondary)]">
                 {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
               </button>
-              <h3 className="text-sm font-medium">
+              <h3 className="text-xs font-semibold tracking-tight">
                 {(t as Record<string, string>)[block.type] ?? BLOCK_LABELS[block.type]}
               </h3>
               <button
                 onClick={() => removeBlock(block.type)}
-                className="opacity-0 group-hover:opacity-100 text-muted hover:text-red-500 transition-opacity ml-auto"
+                className="opacity-0 group-hover:opacity-100 text-[var(--color-muted)] hover:text-red-500 transition-opacity ml-auto"
                 title={t.delete}
               >
                 <X size={12} />
@@ -111,17 +111,17 @@ export function ProjectBlockLayout({ project, projectId, renderBlock }: Props) {
         <div className="relative">
           <button
             onClick={() => setShowAddMenu(!showAddMenu)}
-            className="flex items-center gap-1.5 text-xs text-muted hover:text-accent transition-colors"
+            className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-accent transition-colors w-full justify-center py-2 rounded-xl border border-dashed border-[var(--color-input-border)]"
           >
             <Plus size={14} /> {t.add_block}
           </button>
           {showAddMenu && (
-            <div className="absolute z-20 mt-1 bg-white dark:bg-gray-100 border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
+            <div className="absolute z-20 mt-1 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-lg py-1 min-w-[160px]">
               {availableBlocks.map((type) => (
                 <button
                   key={type}
                   onClick={() => addBlock(type)}
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-200"
+                  className="w-full text-left px-3 py-1.5 text-xs rounded-md hover:bg-[var(--color-hover-row)]"
                 >
                   {BLOCK_LABELS[type]}
                 </button>
