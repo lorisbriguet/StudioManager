@@ -4,6 +4,8 @@
 
 Complete visual overhaul following a Notion-clean design language: minimal borders, whitespace-driven separation, refined typography, and polished interactive components. Every visible surface in the app is touched.
 
+**Visual mockups:** `.superpowers/brainstorm/41737-1774612694/` — run the companion server to view.
+
 ## Design Principles
 
 - **No unnecessary borders.** Content separated by whitespace and subtle background shifts, not lines.
@@ -17,9 +19,10 @@ Complete visual overhaul following a Notion-clean design language: minimal borde
 ## 1. Global Design Tokens
 
 ### Borders
-- **Table row dividers:** `border-gray-50` (light) / `#1f1f1f` (dark) — barely visible
-- **Table header separator:** `border-gray-100` (light) / `#2a2a2a` (dark) — slightly stronger
+- **Table row dividers:** `#f7f7f7` (light) / `#1f1f1f` (dark) — barely visible
+- **Table header separator:** `#f0f0f0` (light) / `#2a2a2a` (dark) — slightly stronger
 - **Sidebar edge:** faint, via `--color-sidebar-border` CSS var
+- **Peek panel:** faint border (`#1f1f1f` dark / `#f0f0f0` light) — not shadow-based
 - **Everything else:** no borders. Cards, forms, sections — all borderless.
 
 ### Backgrounds
@@ -41,7 +44,7 @@ Complete visual overhaul following a Notion-clean design language: minimal borde
 - **Table column header:** `text-xs text-muted` (lowercase, not uppercase)
 - **Body / row text:** `text-sm` (13px)
 - **Card title:** `text-sm font-semibold tracking-tight`
-- **Muted secondary:** `text-muted` (#666 dark / #999 light)
+- **Muted secondary:** `text-muted` (#555 dark / #999 light)
 
 ### Shadows
 - **Cards (optional lift):** `shadow-[0_1px_2px_rgba(0,0,0,0.03)]` (light) / `shadow-[0_1px_3px_rgba(0,0,0,0.2)]` (dark)
@@ -73,7 +76,7 @@ Complete visual overhaul following a Notion-clean design language: minimal borde
 - `bg-input border border-input-border rounded-lg`
 - Focus: `border-accent shadow-[0_0_0_2px_rgba(accent,0.15)]`
 - Error: `border-danger shadow-[0_0_0_2px_rgba(danger,0.15)]`
-- No visible border change on hover (clean)
+- No visible border change on hover
 
 ### Select
 - Same styling as Input
@@ -87,17 +90,17 @@ Complete visual overhaul following a Notion-clean design language: minimal borde
 ### Badge
 - All `rounded-full` with `px-2.5 py-0.5`
 - Status colors (dark theme):
-  - paid: `bg-green-900/40 text-green-400`
-  - sent: `bg-yellow-900/30 text-yellow-400`
-  - overdue: `bg-red-900/30 text-red-400`
-  - draft: `bg-indigo-900/30 text-indigo-400`
-  - cancelled: `bg-gray-800 text-gray-500`
+  - paid: `bg-[#052e16] text-[#4ade80]`
+  - sent: `bg-[#1c1917] text-[#fbbf24]`
+  - overdue: `bg-[#2a1215] text-[#f87171]`
+  - draft: `bg-[#1a1a2e] text-[#818cf8]`
+  - cancelled: `bg-[#1a1a1a] text-[#666]`
   - active: `bg-accent-light text-accent`
-  - completed: `bg-green-900/40 text-green-400`
-  - on_hold: `bg-yellow-900/30 text-yellow-400`
-  - todo: `bg-indigo-900/30 text-indigo-400`
-  - in_progress: `bg-cyan-900/30 text-cyan-400`
-  - done: `bg-green-900/40 text-green-400`
+  - completed: `bg-[#052e16] text-[#4ade80]`
+  - on_hold: `bg-[#1c1917] text-[#fbbf24]`
+  - todo: `bg-[#1a1a2e] text-[#818cf8]`
+  - in_progress: `bg-[#0c1a2e] text-[#38bdf8]`
+  - done: `bg-[#052e16] text-[#4ade80]`
 
 ### Checkbox
 - 16px square, `rounded` (4px), `border-[#444]`
@@ -107,10 +110,11 @@ Complete visual overhaul following a Notion-clean design language: minimal borde
 - 16px circle, `border-[#444]`
 - Checked: `border-accent` with accent-filled inner dot
 
-### Toggle
+### Toggle (new shared component)
 - 36x20px track, `rounded-full`
 - Off: `bg-[#333]`, On: `bg-accent`
 - White knob, animated slide
+- Replace checkboxes in Settings where toggle makes sense
 
 ### Dropdown / Context Menu
 - `bg-surface border border-border rounded-xl`
@@ -216,33 +220,47 @@ Applied to: resource tags, named table tags columns.
 
 ### Settings Page
 - Flat Notion-style layout — remove boxy cards around each section
-- Category sidebar: same style as main sidebar nav
-- Setting rows: clean label + control, separated by whitespace not borders
-- Toggles replace checkboxes where appropriate
+- Category sidebar: same style as main sidebar nav, with section labels (Preferences / Data / App)
+- Setting rows: clean label + control, separated by faint dividers not borders
+- Toggles replace checkboxes for on/off settings
+- Theme grid and accent swatches in Appearance section
 
 ### Command Palette (Cmd+K)
-- `rounded-xl` overlay
-- Softer border, heavier shadow
-- Input: borderless, large font
-- Results: hover bg, `rounded-md`
+- `rounded-xl` overlay with heavy shadow
+- Borderless input, large font (15px), search icon left, esc badge right
+- Results grouped by type with section labels
+- Selected item: accent-light bg
+- Footer: navigation hints with kbd badges
+- Search highlighting: matched text in bold
 
 ### Side Peek Panel
-- Remove hard `border-l`
-- Use shadow instead: `shadow-[-8px_0_24px_rgba(0,0,0,0.3)]`
-- Smooth slide-in animation (already exists)
+- Faint border-left (`#1f1f1f` dark / `#f0f0f0` light) — not shadow
+- Half of content area width (after sidebar)
+- Top bar: edit (pencil) + expand (arrow) + close (x) icons — no footer
+- Uses same block card pattern as full project page (single-column stack)
+- Same surface bg, rounded-xl blocks, drag handles
 
 ### Calendar
-- Softer grid lines (use `--border-divider` color)
-- Event chips: `rounded-full`, use tag color system for project-based coloring
-- Day headers: muted, uppercase label style
-- Today highlight: accent bg tint
+- Grid lines: faint divider color (`#1f1f1f` dark)
+- Event chips: `rounded-full` pills using 9-color tag palette
+- All-day events: `rounded-sm` bars at top of day cell
+- Multi-day events: spanning bars across consecutive days, dedicated "all-day" row in week view
+- Today indicator: accent-colored text only (day name + number) — no circle
+- Other month days: 30% opacity
+- Day headers: uppercase, muted, small
+- Toolbar: ghost buttons, accent on active view
 
 ### Charts (Recharts)
-- Card wrapper: borderless surface bg
-- Axis labels: muted, 11px
-- Grid lines: `--border-divider` color (barely visible)
-- Tooltip: `rounded-lg`, surface bg, shadow, no border
-- Legend: small text, muted
+- Card wrapper: borderless surface bg, rounded-xl
+- Grid lines: `#1a1a1a` (barely visible), horizontal only
+- Axis labels: 10px muted
+- Tooltip: surface bg, rounded-lg, shadow, no border, dot + label + value per row
+- Bar radius: 4px top corners, stacked bars only top segment gets radius
+- Line chart: 2px stroke, dots at data points, gradient area fill
+- Donut: 18px stroke width, center text for total, legend with right-aligned values
+- Horizontal bars: 8px height, rounded-full track
+- Colors: use tag palette for chart series, primary series = blue
+- Period selectors: small ghost buttons (6M / 12M / All)
 
 ### Forms (Invoice/Quote)
 - Form container: borderless card bg
@@ -254,12 +272,24 @@ Applied to: resource tags, named table tags columns.
 
 ## 5. Modular Project Pages (#4 rework)
 
-Current implementation allows drag-and-drop block layout. The UI rework applies the new design system:
+Block layout with drag-and-drop repositioning:
 
-- Block containers: borderless, surface bg, `rounded-xl`
-- Block headers: card-title style, drag handle muted
-- Add block button: ghost style
-- Block types maintain their content styling but inherit the new card/table patterns
+- **Full page:** 2-column grid of blocks
+- **Peek view:** single-column stack of same blocks
+- Block containers: borderless surface bg, `rounded-xl`
+- Block headers: title (11-12px semibold) + drag handle (muted) + count + action button
+- Add block button: dashed border, ghost style
+
+Block types:
+- **Tasks** — checklist with status badges, due dates, expandable subtasks (indented, smaller text)
+- **Workload** — planned vs tracked hours mini table
+- **Notes** — free text with edit action
+- **Named Tables** — configurable columns with colored tags
+- **Invoices** — linked invoices with status badge + amount
+- **Quotes** — linked quotes with status badge + amount
+- **Resources** — linked bookmarks with external link icon
+
+Project header: title, client link, status badge, due date, "Open folder" link, edit button.
 
 ---
 
@@ -277,32 +307,37 @@ Borrow patterns from resources table:
 
 ## 7. Project Folder Link (#11)
 
-- Add a "Open in Finder" button/link on project detail pages
-- Uses Tauri `open` command with the project folder path
-- Small icon button (FolderOpen from lucide) in project header
+- "Open in Finder" link in project header metadata line
+- Uses Tauri `open` or `revealItemInDir` command with the project folder path
+- Small folder icon + "Folder" text, muted color, hover to secondary
 - If no folder path set, show a "Set folder" prompt that opens a directory picker
+- Folder path stored as new column on projects table
 
 ---
 
 ## 8. Skeleton Loading States
 
-Add shimmer placeholders for:
-- Table rows (3-5 skeleton rows while loading)
-- KPI widgets (pulsing rectangle)
-- Project cards (card-shaped skeleton)
-- Chart areas (rectangular placeholder)
+Shimmer placeholders while data loads, matching content shapes:
 
-Implementation: CSS `@keyframes shimmer` animation on `bg-gradient` elements. Reusable `<Skeleton />` component with `width`, `height`, `rounded` props.
+- **Table rows:** 4-5 skeleton rows with column-width rectangles + rounded pill for status
+- **KPI widgets:** label, value, subtitle rectangles
+- **Project cards:** title, client, progress bar rectangles
+- **Chart:** title + bar column placeholders
+- **Animation:** CSS `@keyframes shimmer` — left-to-right gradient sweep
+- **Dark:** base #1a1a1a, shine #242424
+- **Light:** base #f0f0f0, shine #e5e5e5
+- **Duration:** 1.8s ease-in-out infinite
+- **Reusable `<Skeleton />` component** with `width`, `height`, `rounded` props
 
 ---
 
 ## 9. Transitions
 
-- **Page transitions:** fade-in on route change (already exists via `useAnimateIn`)
+- **Page transitions:** fade-in on route change (existing `useAnimateIn`)
 - **Table rows:** stagger fade-in when data loads or filter changes (50ms delay per row, max 10)
 - **Cards:** scale-up fade-in on mount
-- **Modals:** scale + fade (already exists)
-- **Side peek:** slide-in from right (already exists, refine easing)
+- **Modals:** scale + fade (existing, refine easing)
+- **Side peek:** slide-in from right (existing, refine easing)
 - **Dropdowns:** scale-from-top fade-in
 - **Respect `prefers-reduced-motion`:** all animations disabled when set
 
@@ -328,29 +363,12 @@ Implementation: CSS `@keyframes shimmer` animation on `bg-gradient` elements. Re
 - `src/components/layout/TabBar.tsx` — tab styling
 
 ### Pages (all)
-- `src/pages/InvoicesPage.tsx`
-- `src/pages/QuotesPage.tsx`
-- `src/pages/ExpensesPage.tsx`
-- `src/pages/IncomePage.tsx`
-- `src/pages/ClientsPage.tsx`
-- `src/pages/ClientDetailPage.tsx`
-- `src/pages/ProjectsPage.tsx`
-- `src/pages/ProjectDetailPage.tsx`
-- `src/pages/TasksPage.tsx`
-- `src/pages/ResourcesPage.tsx`
-- `src/pages/DashboardPage.tsx`
-- `src/pages/CalendarPage.tsx`
-- `src/pages/SettingsPage.tsx`
-- `src/pages/ProfilePage.tsx`
-- `src/pages/FinancesPage.tsx`
-- `src/pages/InvoiceFormPage.tsx`
-- `src/pages/QuoteFormPage.tsx`
-- `src/pages/TimeTrackingPage.tsx`
+- All page files in `src/pages/` — updated to use new patterns
 
 ### Components
-- `src/components/NamedTable.tsx` — rework
-- `src/components/ProjectBlockLayout.tsx` — rework
-- `src/components/ProjectDetailContent.tsx`
+- `src/components/NamedTable.tsx` — rework with colored tags
+- `src/components/ProjectBlockLayout.tsx` — rework block styling
+- `src/components/ProjectDetailContent.tsx` — project header + blocks
 - `src/components/SavedFilterBar.tsx`
 - `src/components/BulkActionBar.tsx`
 - `src/components/ClientTimeline.tsx`
@@ -362,4 +380,4 @@ Implementation: CSS `@keyframes shimmer` animation on `bg-gradient` elements. Re
 ### New Files
 - `src/lib/tagColors.ts` — tag color palette + hash
 - `src/components/ui/Skeleton.tsx` — loading placeholder component
-- `src/components/ui/Toggle.tsx` — toggle switch component (extract from inline)
+- `src/components/ui/Toggle.tsx` — toggle switch component
