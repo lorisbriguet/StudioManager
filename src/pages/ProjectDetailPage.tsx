@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import { Button } from "../components/ui";
 import { toast } from "sonner";
@@ -28,9 +28,9 @@ export function ProjectDetailPage() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <Link to="/projects" className="text-muted hover:text-gray-900">
+        <button onClick={() => navigate(-1)} className="text-muted hover:text-gray-900 dark:hover:text-gray-200">
           <ArrowLeft size={18} />
-        </Link>
+        </button>
         <div className="ml-auto flex items-center gap-2">
           {confirmDelete ? (
             <div className="flex items-center gap-2 text-sm">

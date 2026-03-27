@@ -22,6 +22,7 @@ import { FinancesPage } from "./pages/FinancesPage";
 import { InvoicePreviewPage } from "./pages/InvoicePreviewPage";
 import { QuotePreviewPage } from "./pages/QuotePreviewPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
+import { TimeTrackingPage } from "./pages/TimeTrackingPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { NotificationsPage } from "./pages/NotificationsPage";
@@ -95,9 +96,12 @@ function StartupChecks() {
         if (action) {
           e.preventDefault();
           Promise.resolve(action.execute()).then(() => {
-            // Push redo action if available
             if (action.redo) {
               store.pushRedo({ label: action.label, execute: action.redo, redo: action.execute });
+            }
+            if (action.redirectTo) {
+              window.history.pushState({}, "", action.redirectTo);
+              window.dispatchEvent(new PopStateEvent("popstate"));
             }
             toast.success(`Undo: ${action.label}`);
           }).catch((err) => {
@@ -137,6 +141,7 @@ export default function App() {
               <Route path="quotes/new" element={<QuoteFormPage />} />
               <Route path="quotes/:id/edit" element={<QuoteFormPage />} />
               <Route path="quotes/:id/preview" element={<QuotePreviewPage />} />
+              <Route path="time-tracking" element={<TimeTrackingPage />} />
               <Route path="expenses" element={<ExpensesPage />} />
               <Route path="income" element={<IncomePage />} />
               <Route path="finances" element={<FinancesPage />} />

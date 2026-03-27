@@ -1,7 +1,9 @@
 import { useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight, Plus, GripVertical, Trash2, ExternalLink } from "lucide-react";
+import { ChevronRight, Plus, GripVertical, Trash2, ExternalLink, Play, Square, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
+import { undoable } from "../lib/undo";
+import { ask } from "@tauri-apps/plugin-dialog";
 import {
   DndContext,
   closestCenter,
@@ -25,15 +27,15 @@ import { useProjects } from "../db/hooks/useProjects";
 import { useClients } from "../db/hooks/useClients";
 import { TaskDatePicker } from "../components/TaskDatePicker";
 import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
+import { BulkActionBar } from "../components/BulkActionBar";
+import { SavedFilterBar } from "../components/SavedFilterBar";
+import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
+import { useTimerActions } from "../hooks/useTimerActions";
 import { useT } from "../i18n/useT";
-import { PageHeader, SearchBar, PageSpinner } from "../components/ui";
+import { PageHeader, SearchBar, PageSpinner, EmptyState } from "../components/ui";
+import { taskStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Task, Subtask, TaskStatus } from "../types/task";
-
-const statusColors: Record<TaskStatus, string> = {
-  todo: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300",
-  done: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
-};
 
 export function TasksPage() {
   const t = useT();
@@ -48,8 +50,10 @@ export function TasksPage() {
   const createSubtask = useCreateSubtask();
   const updateSubtask = useUpdateSubtask();
   const deleteSubtask = useDeleteSubtask();
+  const { activeTimer, toggleTimer } = useTimerActions();
   const [filter, setFilter] = useState<TaskStatus | "all">("todo");
   const [search, setSearch] = useState("");
+  const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
   const [newSubtaskText, setNewSubtaskText] = useState<Record<number, string>>({});
   const [newTaskText, setNewTaskText] = useState<Record<number, string>>({});
@@ -82,6 +86,15 @@ export function TasksPage() {
     if (!project) return "";
     return clientsMap.get(project.client_id) ?? "";
   };
+
+  const handleTimerToggle = useCallback(async (taskId: number, projectId: number) => {
+    await toggleTimer(taskId, projectId, projectName(projectId));
+  }, [toggleTimer, projectName]);
+
+  const applyFilter = useCallback((filters: Record<string, unknown>) => {
+    if (typeof filters.search === "string") setSearch(filters.search);
+    if (filters.filter === "all" || filters.filter === "todo" || filters.filter === "done") setFilter(filters.filter as TaskStatus | "all");
+  }, []);
 
   const grouped = useMemo(() => {
     if (!tasks) return [];
@@ -116,6 +129,33 @@ export function TasksPage() {
     }
     return result;
   }, [tasks, projects, clients, filter, search, projectOrder]);
+
+  const flatTasks = useMemo(() => grouped.flatMap((g) => g.tasks), [grouped]);
+  const bulk = useBulkSelect(flatTasks);
+
+  const bulkMarkDone = useCallback(() => {
+    const ids = [...bulk.selected] as number[];
+    const prevStates = ids.map((id) => {
+      const tk = flatTasks.find((task) => task.id === id);
+      return { id, status: tk?.status };
+    });
+    ids.forEach((id) => updateTask.mutate({ id, data: { status: "done" } }));
+    undoable(t.bulk_updated, async () => {
+      await Promise.all(
+        prevStates.map((prev) =>
+          updateTask.mutateAsync({ id: prev.id, data: { status: (prev.status ?? "todo") as TaskStatus } })
+        )
+      );
+    });
+    bulk.clearSelection();
+  }, [bulk, updateTask, flatTasks, t]);
+
+  const bulkDelete = useCallback(async () => {
+    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
+    const ids = [...bulk.selected] as number[];
+    ids.forEach((id) => deleteTask.mutate(id));
+    bulk.clearSelection();
+  }, [bulk, deleteTask, t]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -159,7 +199,7 @@ export function TasksPage() {
           {statusTabs.map((tab) => (
             <button
               key={tab.value}
-              onClick={() => setFilter(tab.value)}
+              onClick={() => { setFilter(tab.value); setActiveFilterId(null); }}
               className={`px-3 py-1 text-xs rounded-full border ${
                 filter === tab.value
                   ? "bg-accent text-white border-accent"
@@ -172,10 +212,18 @@ export function TasksPage() {
         </div>
         <SearchBar
           value={search}
-          onChange={setSearch}
+          onChange={(v) => { setSearch(v); setActiveFilterId(null); }}
           placeholder={t.search_tasks}
         />
       </div>
+
+      <SavedFilterBar
+        page="tasks"
+        currentFilters={{ search, filter }}
+        onApply={applyFilter}
+        activeFilterId={activeFilterId}
+        onActiveChange={setActiveFilterId}
+      />
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleProjectDragEnd}>
       <SortableContext items={projectIds} strategy={verticalListSortingStrategy}>
@@ -222,11 +270,18 @@ export function TasksPage() {
                 const doneSubtasks = taskSubs.filter((s) => s.status === "done").length;
 
                 return (
-                  <div key={tk.id}>
+                  <div key={tk.id} data-task-row>
                     <div
                       className="flex items-center gap-3 px-4 py-2.5 group/task"
                       onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: tk }); }}
                     >
+                      <input
+                        type="checkbox"
+                        checked={bulk.selected.has(tk.id)}
+                        onChange={(e) => bulk.toggleItem(tk.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="accent-[var(--accent)] shrink-0"
+                      />
                       <button
                         onClick={() => {
                           const next = new Set(expandedTasks);
@@ -243,12 +298,23 @@ export function TasksPage() {
                       <input
                         type="checkbox"
                         checked={tk.status === "done"}
-                        onChange={() =>
-                          updateTask.mutate({
-                            id: tk.id,
-                            data: { status: tk.status === "done" ? "todo" : "done" },
-                          })
-                        }
+                        onChange={(e) => {
+                          if (e.target.checked) e.target.classList.add("check-pop");
+                          const newStatus = tk.status === "done" ? "todo" : "done";
+                          const willExit = filter !== "all" && newStatus !== filter;
+                          if (willExit) {
+                            const row = (e.target as HTMLElement).closest("[data-task-row]");
+                            if (row) {
+                              row.classList.add("task-exit");
+                              setTimeout(() => {
+                                updateTask.mutate({ id: tk.id, data: { status: newStatus } });
+                              }, 450);
+                              return;
+                            }
+                          }
+                          updateTask.mutate({ id: tk.id, data: { status: newStatus } });
+                        }}
+                        onAnimationEnd={(e) => (e.target as HTMLElement).classList.remove("check-pop")}
                         className="rounded"
                       />
                       {editingTask === tk.id ? (
@@ -291,7 +357,7 @@ export function TasksPage() {
                             data: { status: e.target.value as TaskStatus },
                           })
                         }
-                        className={`px-2 py-1 text-xs rounded-full border-0 appearance-none cursor-pointer ${statusColors[tk.status]}`}
+                        className={`px-2 py-1 text-xs rounded-full border-0 appearance-none cursor-pointer ${statusClasses(taskStatusVariant(tk.status))}`}
                       >
                         <option value="todo">{t.todo}</option>
                         <option value="done">{t.done}</option>
@@ -306,6 +372,17 @@ export function TasksPage() {
                         compact
                       />
                       <button
+                        onClick={() => handleTimerToggle(tk.id, tk.project_id)}
+                        className={`p-0.5 transition-opacity ${
+                          activeTimer?.taskId === tk.id
+                            ? "text-red-500"
+                            : "opacity-0 group-hover/task:opacity-100 text-muted hover:text-accent"
+                        }`}
+                        title={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
+                      >
+                        {activeTimer?.taskId === tk.id ? <Square size={14} /> : <Play size={14} />}
+                      </button>
+                      <button
                         onClick={() => deleteTask.mutate(tk.id, {
                           onSuccess: () => toast.success(t.toast_task_deleted),
                         })}
@@ -318,16 +395,27 @@ export function TasksPage() {
                     {isExpanded && (
                       <div className="ml-12 mr-4 border-l border-gray-200 pl-3 pb-2 mb-1">
                         {filteredSubs.map((s) => (
-                          <div key={s.id} className="flex items-center gap-2 py-1 group/sub" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setSubCtxMenu({ x: e.clientX, y: e.clientY, item: s }); }}>
+                          <div key={s.id} data-task-row className="flex items-center gap-2 py-1 group/sub" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setSubCtxMenu({ x: e.clientX, y: e.clientY, item: s }); }}>
                             <input
                               type="checkbox"
                               checked={s.status === "done"}
-                              onChange={() =>
-                                updateSubtask.mutate({
-                                  id: s.id,
-                                  data: { status: s.status === "done" ? "todo" : "done" },
-                                })
-                              }
+                              onChange={(e) => {
+                                if (e.target.checked) e.target.classList.add("check-pop");
+                                const newStatus = s.status === "done" ? "todo" : "done";
+                                const willExit = filter !== "all" && newStatus !== filter;
+                                if (willExit) {
+                                  const row = (e.target as HTMLElement).closest("[data-task-row]");
+                                  if (row) {
+                                    row.classList.add("task-exit");
+                                    setTimeout(() => {
+                                      updateSubtask.mutate({ id: s.id, data: { status: newStatus } });
+                                    }, 450);
+                                    return;
+                                  }
+                                }
+                                updateSubtask.mutate({ id: s.id, data: { status: newStatus } });
+                              }}
+                              onAnimationEnd={(e) => (e.target as HTMLElement).classList.remove("check-pop")}
                               className="rounded"
                             />
                             {editingSubtask === s.id ? (
@@ -520,10 +608,8 @@ export function TasksPage() {
             </>)}
           </SortableProjectGroup>
         ))}
-        {grouped.length === 0 && (
-          <div className="text-sm text-muted text-center py-8">
-            {search ? t.no_matching_tasks : t.no_tasks_yet}
-          </div>
+        {grouped.length === 0 && !isLoading && (
+          <EmptyState message={search ? t.no_matching_tasks : (t.no_tasks ?? "No tasks found")} icon={<CheckCircle size={32} />} />
         )}
       </div>
       </SortableContext>
@@ -563,6 +649,14 @@ export function TasksPage() {
           ]}
         />
       )}
+      <BulkActionBar
+        count={bulk.count}
+        onClear={bulk.clearSelection}
+        actions={[
+          { label: t.mark_done, icon: <CheckCircle size={14} />, onClick: bulkMarkDone },
+          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+        ]}
+      />
     </div>
   );
 }

@@ -221,7 +221,7 @@ export function TaskDatePicker({
             <button
               type="button"
               onClick={() => setMonth(subMonths(month, 1))}
-              className="p-1 text-muted hover:text-gray-900"
+              className="p-1 text-muted hover:text-gray-900 dark:hover:text-gray-200"
             >
               <ChevronLeft size={16} />
             </button>
@@ -229,7 +229,7 @@ export function TaskDatePicker({
             <button
               type="button"
               onClick={() => setMonth(addMonths(month, 1))}
-              className="p-1 text-muted hover:text-gray-900"
+              className="p-1 text-muted hover:text-gray-900 dark:hover:text-gray-200"
             >
               <ChevronRight size={16} />
             </button>
@@ -432,7 +432,7 @@ function CalendarGrid({
                   ? "bg-accent/10 text-accent"
                   : today
                   ? "font-bold text-accent"
-                  : "text-gray-700 hover:bg-gray-100"
+                  : "text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-200"
               }`}
             >
               {format(day, "d")}

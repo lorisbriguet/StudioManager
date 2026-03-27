@@ -250,8 +250,12 @@ export function InvoicePDF({
   const t = invoiceLabels[lang];
   const qrBillData = profile.iban ? buildQRBillData(invoice, client, profile) : null;
   const qrBillLang = invoice.language === "EN" ? "EN" as const : "FR" as const;
-  const hasRate = lineItems.some((item) => item.rate != null);
-  const hasUnit = lineItems.some((item) => item.unit != null && item.unit !== "");
+  // Detect global rate: all items share the same non-null rate and same unit
+  const allSameRate = lineItems.length > 0 && lineItems.every((item) => item.rate != null && item.rate === lineItems[0].rate);
+  const allSameUnit = lineItems.length > 0 && lineItems.every((item) => item.unit === lineItems[0].unit);
+  const isGlobalRate = allSameRate && allSameUnit && lineItems[0].rate != null && lineItems[0].unit;
+  const hasRate = !isGlobalRate && lineItems.some((item) => item.rate != null);
+  const hasUnit = !isGlobalRate && lineItems.some((item) => item.unit != null && item.unit !== "");
   const cur = invoice.currency || "CHF";
   const fmt = (amount: number) => formatAmount(amount, cur);
   const paymentDays = invoice.payment_terms_days || profile.default_payment_terms_days || 30;
@@ -383,6 +387,13 @@ export function InvoicePDF({
               </View>
             ))}
           </View>
+
+          {/* Global rate label */}
+          {isGlobalRate && (
+            <Text style={{ fontSize: 8, color: "#666", marginTop: 4, marginBottom: 4 }}>
+              {t.all_items_at} {fmt(lineItems[0].rate!)} / {(t as Record<string, string>)[`unit_${lineItems[0].unit}`] ?? lineItems[0].unit}
+            </Text>
+          )}
 
           {/* Notes */}
           {invoice.notes ? (

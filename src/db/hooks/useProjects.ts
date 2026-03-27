@@ -115,15 +115,15 @@ export function useDeleteProject() {
             if (workloadConfig.columns) {
               await wq.setProjectWorkloadConfig(newProjectId, workloadConfig.template_id, workloadConfig.columns);
             }
-            // Restore workload rows
+            // Restore workload cell data on recreated tasks
             for (const row of workloadRows) {
-              const newTaskId = row.task_id ? taskIdMap.get(row.task_id) ?? null : null;
-              await wq.createWorkloadRow({
-                project_id: newProjectId,
-                template_id: row.template_id,
-                task_id: newTaskId,
+              const newTaskId = taskIdMap.get(row.id);
+              if (!newTaskId) continue;
+              await wq.updateWorkloadRow(newTaskId, {
                 cells: row.cells,
                 sort_order: row.sort_order,
+                tracked_minutes: row.tracked_minutes,
+                planned_minutes: row.planned_minutes,
               });
             }
             qc.invalidateQueries({ queryKey: ["projects"] });
@@ -141,6 +141,34 @@ export function useDeleteProject() {
       qc.invalidateQueries({ queryKey: ["subtasks"] });
       qc.invalidateQueries({ queryKey: ["workload-rows"] });
       qc.invalidateQueries({ queryKey: ["workload-config"] });
+    },
+    onError: (e) => { toast.error(String(e)); },
+  });
+}
+
+export function useCreateProjectFromQuote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Parameters<typeof q.createProjectFromQuote>[0]) => {
+      const projectId = await q.createProjectFromQuote(data);
+      useUndoStore.getState().push({
+        label: `Generate project "${data.name}"`,
+        execute: async () => {
+          await q.deleteProject(projectId);
+          qc.invalidateQueries({ queryKey: ["projects"] });
+          qc.invalidateQueries({ queryKey: ["tasks"] });
+          qc.invalidateQueries({ queryKey: ["workload-rows"] });
+          qc.invalidateQueries({ queryKey: ["quotes"] });
+        },
+        redirectTo: "/quotes",
+      });
+      return projectId;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["workload-rows"] });
+      qc.invalidateQueries({ queryKey: ["quotes"] });
     },
     onError: (e) => { toast.error(String(e)); },
   });

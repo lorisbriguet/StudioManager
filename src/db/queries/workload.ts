@@ -4,7 +4,6 @@ import type {
   WorkloadTemplate,
   WorkloadTemplateRow,
   WorkloadRow,
-  WorkloadRowDB,
   WorkloadColumn,
 } from "../../types/workload";
 
@@ -17,13 +16,13 @@ function parseTemplate(row: WorkloadTemplateRow): WorkloadTemplate {
   } catch {
     logError(`Failed to parse columns for template ${row.id}`);
   }
-  return { ...row, columns };
+  return { ...row, is_system: row.is_system === 1, columns };
 }
 
 export async function getWorkloadTemplates(): Promise<WorkloadTemplate[]> {
   const db = await getDb();
   const rows = await db.select<WorkloadTemplateRow[]>(
-    "SELECT * FROM workload_templates ORDER BY name"
+    "SELECT * FROM workload_templates ORDER BY is_system DESC, name"
   );
   return rows.map(parseTemplate);
 }
@@ -72,47 +71,81 @@ export async function updateWorkloadTemplate(
 
 export async function deleteWorkloadTemplate(id: number): Promise<void> {
   const db = await getDb();
+  // Prevent deleting system templates
+  const rows = await db.select<{ is_system: number }[]>(
+    "SELECT is_system FROM workload_templates WHERE id = $1",
+    [id]
+  );
+  if (rows[0]?.is_system === 1) {
+    throw new Error("Cannot delete system template");
+  }
   await db.execute("DELETE FROM workload_templates WHERE id = $1", [id]);
 }
 
-// ── Rows ───────────────────────────────────────────────────
+// ── Workload Rows (backed by tasks) ──────────────────────
 
-function parseRow(row: WorkloadRowDB): WorkloadRow {
+interface TaskWorkloadDB {
+  id: number;
+  project_id: number;
+  title: string;
+  status: string;
+  tracked_minutes: number;
+  planned_minutes: number | null;
+  workload_cells: string;
+  workload_sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+function parseWorkloadRow(row: TaskWorkloadDB): WorkloadRow {
   let cells: Record<string, unknown> = {};
   try {
-    cells = JSON.parse(row.cells) as Record<string, unknown>;
+    cells = JSON.parse(row.workload_cells) as Record<string, unknown>;
   } catch {
-    logError(`Failed to parse cells for workload row ${row.id}`);
+    logError(`Failed to parse workload_cells for task ${row.id}`);
   }
-  return { ...row, cells };
+  return {
+    id: row.id,
+    project_id: row.project_id,
+    title: row.title,
+    status: row.status,
+    tracked_minutes: row.tracked_minutes ?? 0,
+    planned_minutes: row.planned_minutes,
+    cells,
+    sort_order: row.workload_sort_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
 }
 
 export async function getWorkloadRows(
   projectId: number
 ): Promise<WorkloadRow[]> {
   const db = await getDb();
-  const rows = await db.select<WorkloadRowDB[]>(
-    "SELECT * FROM workload_rows WHERE project_id = $1 ORDER BY sort_order, created_at",
+  const rows = await db.select<TaskWorkloadDB[]>(
+    `SELECT id, project_id, title, status, tracked_minutes, planned_minutes,
+            workload_cells, workload_sort_order, created_at, updated_at
+     FROM tasks WHERE project_id = $1
+     ORDER BY workload_sort_order, created_at`,
     [projectId]
   );
-  return rows.map(parseRow);
+  return rows.map(parseWorkloadRow);
 }
 
+/** Create a workload row = create a task */
 export async function createWorkloadRow(data: {
   project_id: number;
-  template_id: number | null;
-  task_id: number | null;
+  title?: string;
   cells: Record<string, unknown>;
   sort_order: number;
 }): Promise<number> {
   const db = await getDb();
   const result = await db.execute(
-    `INSERT INTO workload_rows (project_id, template_id, task_id, cells, sort_order)
-     VALUES ($1, $2, $3, $4, $5)`,
+    `INSERT INTO tasks (project_id, title, description, status, priority, sort_order, workload_cells, workload_sort_order)
+     VALUES ($1, $2, '', 'todo', 'low', 0, $3, $4)`,
     [
       data.project_id,
-      data.template_id,
-      data.task_id,
+      data.title ?? "",
       JSON.stringify(data.cells),
       data.sort_order,
     ]
@@ -120,31 +153,46 @@ export async function createWorkloadRow(data: {
   return result.lastInsertId ?? 0;
 }
 
+/** Update workload-specific fields on a task */
 export async function updateWorkloadRow(
   id: number,
   data: {
-    task_id?: number | null;
+    title?: string;
     cells?: Record<string, unknown>;
     sort_order?: number;
+    tracked_minutes?: number;
+    planned_minutes?: number | null;
   }
 ): Promise<void> {
   const db = await getDb();
   if (data.cells !== undefined) {
     await db.execute(
-      "UPDATE workload_rows SET cells = $1, updated_at = datetime('now') WHERE id = $2",
+      "UPDATE tasks SET workload_cells = $1, updated_at = datetime('now') WHERE id = $2",
       [JSON.stringify(data.cells), id]
     );
   }
-  if (data.task_id !== undefined) {
+  if (data.title !== undefined) {
     await db.execute(
-      "UPDATE workload_rows SET task_id = $1, updated_at = datetime('now') WHERE id = $2",
-      [data.task_id, id]
+      "UPDATE tasks SET title = $1, updated_at = datetime('now') WHERE id = $2",
+      [data.title, id]
     );
   }
   if (data.sort_order !== undefined) {
     await db.execute(
-      "UPDATE workload_rows SET sort_order = $1, updated_at = datetime('now') WHERE id = $2",
+      "UPDATE tasks SET workload_sort_order = $1, updated_at = datetime('now') WHERE id = $2",
       [data.sort_order, id]
+    );
+  }
+  if (data.tracked_minutes !== undefined) {
+    await db.execute(
+      "UPDATE tasks SET tracked_minutes = $1, updated_at = datetime('now') WHERE id = $2",
+      [data.tracked_minutes, id]
+    );
+  }
+  if (data.planned_minutes !== undefined) {
+    await db.execute(
+      "UPDATE tasks SET planned_minutes = $1, updated_at = datetime('now') WHERE id = $2",
+      [data.planned_minutes, id]
     );
   }
 }
@@ -154,23 +202,25 @@ export async function reorderWorkloadRows(
 ): Promise<void> {
   const batch = new TransactionBatch();
   for (let i = 0; i < orderedIds.length; i++) {
-    batch.add("UPDATE workload_rows SET sort_order = $1 WHERE id = $2", [i, orderedIds[i]]);
+    batch.add("UPDATE tasks SET workload_sort_order = $1 WHERE id = $2", [i, orderedIds[i]]);
   }
   await batch.commit();
 }
 
 export async function getWorkloadRow(id: number): Promise<WorkloadRow | null> {
   const db = await getDb();
-  const rows = await db.select<WorkloadRowDB[]>(
-    "SELECT * FROM workload_rows WHERE id = $1",
+  const rows = await db.select<TaskWorkloadDB[]>(
+    `SELECT id, project_id, title, status, tracked_minutes, planned_minutes,
+            workload_cells, workload_sort_order, created_at, updated_at
+     FROM tasks WHERE id = $1`,
     [id]
   );
-  return rows[0] ? parseRow(rows[0]) : null;
+  return rows[0] ? parseWorkloadRow(rows[0]) : null;
 }
 
 export async function deleteWorkloadRow(id: number): Promise<void> {
   const db = await getDb();
-  await db.execute("DELETE FROM workload_rows WHERE id = $1", [id]);
+  await db.execute("DELETE FROM tasks WHERE id = $1", [id]);
 }
 
 // ── Project workload config ────────────────────────────────
@@ -211,5 +261,21 @@ export async function setProjectWorkloadConfig(
   await db.execute(
     "UPDATE projects SET workload_template_id = $1, workload_columns = $2 WHERE id = $3",
     [templateId, JSON.stringify(columns), projectId]
+  );
+}
+
+/** Get aggregated time data across all projects (for Time Overview) */
+export async function getTimeOverviewData(): Promise<
+  { project_id: number; project_name: string; task_id: number; task_title: string; tracked_minutes: number; planned_minutes: number | null; date: string }[]
+> {
+  const db = await getDb();
+  return db.select(
+    `SELECT t.id as task_id, t.title as task_title, t.project_id,
+            p.name as project_name, t.tracked_minutes,
+            t.planned_minutes, t.updated_at as date
+     FROM tasks t
+     JOIN projects p ON t.project_id = p.id
+     WHERE t.tracked_minutes > 0
+     ORDER BY t.updated_at DESC`
   );
 }

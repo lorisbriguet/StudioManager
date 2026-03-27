@@ -189,3 +189,34 @@ export async function deleteClientAddress(id: number): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM client_addresses WHERE id = $1", [id]);
 }
+
+// ── Client Activity Timeline ─────────────────────────────────
+
+export interface ClientActivityEvent {
+  type: "invoice" | "quote" | "project";
+  action: string;
+  entity_id: number;
+  label: string;
+  date: string;
+}
+
+export async function getClientActivity(
+  clientId: string,
+  limit = 20,
+  offset = 0
+): Promise<ClientActivityEvent[]> {
+  const db = await getDb();
+  return db.select<ClientActivityEvent[]>(
+    `SELECT * FROM (
+       SELECT 'invoice' as type, status as action, id as entity_id, reference as label, invoice_date as date
+       FROM invoices WHERE client_id = $1
+       UNION ALL
+       SELECT 'quote' as type, status as action, id as entity_id, reference as label, quote_date as date
+       FROM quotes WHERE client_id = $1
+       UNION ALL
+       SELECT 'project' as type, status as action, id as entity_id, name as label, created_at as date
+       FROM projects WHERE client_id = $1
+     ) ORDER BY date DESC LIMIT $2 OFFSET $3`,
+    [clientId, limit, offset]
+  );
+}

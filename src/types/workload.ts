@@ -27,6 +27,7 @@ export interface WorkloadColumn {
 export interface WorkloadTemplate {
   id: number;
   name: string;
+  is_system: boolean;
   columns: WorkloadColumn[]; // stored as JSON string in DB
   created_at: string;
   updated_at: string;
@@ -36,30 +37,22 @@ export interface WorkloadTemplate {
 export interface WorkloadTemplateRow {
   id: number;
   name: string;
+  is_system: number; // 0 or 1 in SQLite
   columns: string;
   created_at: string;
   updated_at: string;
 }
 
+/** A workload row is a task. System columns map to task fields, custom columns to workload_cells JSON. */
 export interface WorkloadRow {
-  id: number;
-  project_id: number;
-  template_id: number | null;
-  task_id: number | null;
-  cells: Record<string, unknown>; // stored as JSON string in DB
-  sort_order: number;
-  created_at: string;
-  updated_at: string;
-}
-
-/** Raw row from the database (JSON fields as strings) */
-export interface WorkloadRowDB {
-  id: number;
-  project_id: number;
-  template_id: number | null;
-  task_id: number | null;
-  cells: string;
-  sort_order: number;
+  id: number;              // task.id
+  project_id: number;      // task.project_id
+  title: string;           // task.title (system column: Task)
+  status: string;          // task.status
+  tracked_minutes: number; // task.tracked_minutes (system column: Duration)
+  planned_minutes: number | null; // task.planned_minutes (system column: Planned)
+  cells: Record<string, unknown>; // task.workload_cells (parsed JSON)
+  sort_order: number;      // task.workload_sort_order
   created_at: string;
   updated_at: string;
 }

@@ -6,6 +6,24 @@
     <title>StudioManager</title>
   </head>
   <body>
+    <script>
+      // Apply theme before React loads to prevent white flash
+      (function() {
+        try {
+          var dark = localStorage.getItem('darkMode');
+          var themeId = localStorage.getItem('themeId') || 'default-light';
+          var isDark = dark === 'true' || (dark === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+            document.body.style.background = '#111111';
+            document.body.style.color = '#e5e5e5';
+          }
+          if (localStorage.getItem('reduceMotion') === 'true') {
+            document.documentElement.classList.add('reduce-motion');
+          }
+        } catch(e) {}
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

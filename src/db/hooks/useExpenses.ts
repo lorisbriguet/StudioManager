@@ -94,6 +94,15 @@ export function useDeleteExpense() {
   });
 }
 
+// ── Duplicate Detection ──────────────────────────────────────
+
+export function useDuplicateCheck() {
+  return useMutation({
+    mutationFn: ({ supplier, amount, date }: { supplier: string; amount: number; date: string }) =>
+      q.findDuplicateExpenses(supplier, amount, date),
+  });
+}
+
 // ── Expense Category Mutations ────────────────────────────────
 
 export function useCreateExpenseCategory() {

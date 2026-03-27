@@ -29,8 +29,11 @@ src-tauri/WixTools/
 
 # Claude Code
 .claude/
+.superpowers/
 SUPERPOWERS.md
+UI-UX-AUDIT.md
 V1.5.0-PLAN.md
+V1.6.0-PLAN.md
 
 # Logs
 *.log

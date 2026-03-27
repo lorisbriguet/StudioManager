@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Eye } from "lucide-react";
-import { Button } from "../components/ui";
+import { Button, Input, Select } from "../components/ui";
 import { toast } from "sonner";
 import { addDays, format } from "date-fns";
 import { useQuote, useCreateQuote, useUpdateQuote } from "../db/hooks/useQuotes";
@@ -12,7 +12,7 @@ import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { logError } from "../lib/log";
 import { parseActivities } from "../types/business-profile";
 import { useT } from "../i18n/useT";
-import { makeLineItem, useLineItemForm, toPersistedLineItems } from "../lib/lineItems";
+import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel } from "../lib/lineItems";
 import { LineItemsTable } from "../components/shared/LineItemsTable";
 
 export function QuoteFormPage() {
@@ -40,8 +40,35 @@ export function QuoteFormPage() {
 
   const {
     items, setItems, sensors, lineItemIds, handleDragEnd,
-    addItem, removeItem, updateItem,
+    addItem: _addItemBase, removeItem, updateItem,
   } = useLineItemForm();
+  void _addItemBase;
+
+  const [useGlobalRate, setUseGlobalRate] = useState(false);
+  const [globalRate, setGlobalRate] = useState<number>(0);
+  const [globalUnit, setGlobalUnit] = useState<string>("hours");
+  const globalRateRef = useRef<number>(0);
+  globalRateRef.current = globalRate;
+  const useGlobalRateRef = useRef(false);
+  useGlobalRateRef.current = useGlobalRate;
+  const globalUnitRef = useRef<string>("hours");
+  globalUnitRef.current = globalUnit;
+
+  const addItem = useCallback(() => {
+    const rate = useGlobalRateRef.current ? globalRateRef.current : null;
+    const unit = useGlobalRateRef.current ? globalUnitRef.current : null;
+    setItems((prev) => [...prev, makeLineItem({ rate, unit, amount: rate ? rate * 1 : 0 })]);
+  }, [setItems]);
+
+  const applyGlobalRate = useCallback((rate: number, unit?: string) => {
+    const u = unit ?? globalUnitRef.current;
+    setItems((prev) => prev.map((item) => ({
+      ...item,
+      rate,
+      unit: u,
+      amount: rate * item.quantity,
+    })));
+  }, [setItems]);
 
   useEffect(() => {
     if (existingQuote) {
@@ -151,6 +178,7 @@ export function QuoteFormPage() {
               discount_rate: discountRate,
               total,
               converted_to_invoice_id: null,
+              converted_to_project_id: null,
               notes,
             },
             lineItems,
@@ -182,28 +210,28 @@ export function QuoteFormPage() {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-muted mb-1">{t.client}</label>
-            <select
+            <Select
               value={clientId}
               onChange={(e) => {
                 setClientId(e.target.value);
                 setBillingAddressId(null);
                 setProjectId(null);
               }}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+              className="py-2"
             >
               <option value="">{t.select_client}</option>
               {clients?.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
-            </select>
+            </Select>
           </div>
           {clientAddresses && clientAddresses.length >= 1 && (
             <div>
               <label className="block text-xs font-medium text-muted mb-1">{t.billing_address}</label>
-              <select
+              <Select
                 value={billingAddressId ?? ""}
                 onChange={(e) => setBillingAddressId(e.target.value ? Number(e.target.value) : null)}
-                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+                className="py-2"
               >
                 <option value="">{t.none}</option>
                 {clientAddresses.map((a) => (
@@ -211,37 +239,37 @@ export function QuoteFormPage() {
                     {a.label}{a.billing_name ? ` — ${a.billing_name}` : ""}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           )}
           <div>
             <label className="block text-xs font-medium text-muted mb-1">{t.project_optional}</label>
-            <select
+            <Select
               value={projectId ?? ""}
               onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+              className="py-2"
             >
               <option value="">{t.none}</option>
               {clientProjects?.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
             <label className="block text-xs font-medium text-muted mb-1">{t.date}</label>
-            <input
+            <Input
               type="date"
               value={quoteDate}
               onChange={(e) => setQuoteDate(e.target.value)}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+              className="py-2"
             />
           </div>
           <div>
             <label className="block text-xs font-medium text-muted mb-1">{t.activity}</label>
-            <select
+            <Select
               value={activity}
               onChange={(e) => setActivity(e.target.value)}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+              className="py-2"
             >
               {profileActivities.map((a) => (
                 <option key={a} value={a}>{a}</option>
@@ -249,17 +277,64 @@ export function QuoteFormPage() {
               {activity && !profileActivities.includes(activity) && (
                 <option value={activity}>{activity}</option>
               )}
-            </select>
+            </Select>
           </div>
           <div className="col-span-2">
             <label className="block text-xs font-medium text-muted mb-1">{t.assignment}</label>
-            <input
+            <Input
               value={assignment}
               onChange={(e) => setAssignment(e.target.value)}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+              className="py-2"
               placeholder={t.description_work}
             />
           </div>
+        </div>
+
+        {/* Global rate toggle */}
+        <div className="flex items-center gap-3 mb-2">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={useGlobalRate}
+              onChange={(e) => {
+                setUseGlobalRate(e.target.checked);
+                if (e.target.checked && globalRate > 0) {
+                  applyGlobalRate(globalRate);
+                }
+              }}
+              className="accent-[var(--accent)]"
+            />
+            {t.apply_global_rate}
+          </label>
+          {useGlobalRate && (
+            <>
+              <Input
+                type="number"
+                value={globalRate || ""}
+                onChange={(e) => {
+                  const rate = e.target.value ? Number(e.target.value) : 0;
+                  setGlobalRate(rate);
+                  applyGlobalRate(rate);
+                }}
+                placeholder={t.global_rate}
+                fullWidth={false}
+                className="w-28 text-right"
+              />
+              <select
+                value={globalUnit}
+                onChange={(e) => {
+                  setGlobalUnit(e.target.value);
+                  if (globalRate > 0) applyGlobalRate(globalRate, e.target.value);
+                }}
+                className="border border-gray-200 rounded px-2 py-1.5 text-sm"
+              >
+                <option value="hours">{t.hours}</option>
+                <option value="days">{t.days}</option>
+                <option value="units">{t.units}</option>
+                <option value="flat">{t.flat_rate}</option>
+              </select>
+            </>
+          )}
         </div>
 
         <LineItemsTable
@@ -274,6 +349,8 @@ export function QuoteFormPage() {
           discountRate={discountRate}
           discountAmount={discountAmount}
           total={total}
+          hideRate={useGlobalRate}
+          globalRateLabel={useGlobalRate && globalRate > 0 ? t.all_items_at_rate.replace("{rate}", String(globalRate)).replace("{currency}", "CHF").replace("{unit}", unitShortLabel(globalUnit)) : undefined}
         />
 
         <div>

@@ -28,7 +28,7 @@ export async function getTasksWithDueDate(): Promise<Task[]> {
 }
 
 export async function createTask(
-  data: Omit<Task, "id" | "created_at" | "updated_at" | "calendar_event_id">
+  data: Omit<Task, "id" | "created_at" | "updated_at" | "calendar_event_id" | "planned_minutes" | "tracked_minutes" | "workload_cells" | "workload_sort_order">
 ): Promise<number> {
   const db = await getDb();
   const result = await db.execute(
@@ -158,4 +158,109 @@ export async function reorderSubtasks(ids: number[]): Promise<void> {
 export async function deleteSubtask(id: number): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM subtasks WHERE id = $1", [id]);
+}
+
+// ── Time aggregation queries for dashboard widgets ──
+
+export interface DayTimeEntry {
+  day: string; // ISO date, e.g. "2026-03-24"
+  minutes: number;
+}
+
+/** Tracked minutes per day for the current week (Mon–Sun). */
+export async function getTimeThisWeek(): Promise<DayTimeEntry[]> {
+  const db = await getDb();
+  // Get start of current ISO week (Monday)
+  return db.select<DayTimeEntry[]>(
+    `SELECT date(t.updated_at) AS day, SUM(t.tracked_minutes) AS minutes
+     FROM tasks t
+     WHERE t.tracked_minutes > 0
+       AND date(t.updated_at) >= date('now', 'weekday 0', '-6 days')
+     GROUP BY day
+     ORDER BY day`
+  );
+}
+
+export interface ProjectTimeComparison {
+  project_id: number;
+  project_name: string;
+  planned: number;
+  tracked: number;
+}
+
+/** Per-project planned vs tracked minutes for active projects. */
+export async function getPlannedVsActual(): Promise<ProjectTimeComparison[]> {
+  const db = await getDb();
+  return db.select<ProjectTimeComparison[]>(
+    `SELECT p.id AS project_id, p.name AS project_name,
+            COALESCE(SUM(t.planned_minutes), 0) AS planned,
+            SUM(t.tracked_minutes) AS tracked
+     FROM projects p
+     JOIN tasks t ON t.project_id = p.id
+     WHERE p.status = 'active' AND t.tracked_minutes > 0
+     GROUP BY p.id
+     ORDER BY tracked DESC
+     LIMIT 10`
+  );
+}
+
+export interface TopTimeTask {
+  id: number;
+  title: string;
+  project_name: string;
+  tracked_minutes: number;
+}
+
+/** Tasks with the most tracked time. */
+export async function getTopTimeConsumers(limit = 10): Promise<TopTimeTask[]> {
+  const db = await getDb();
+  return db.select<TopTimeTask[]>(
+    `SELECT t.id, t.title, p.name AS project_name, t.tracked_minutes
+     FROM tasks t
+     JOIN projects p ON p.id = t.project_id
+     WHERE t.tracked_minutes > 0
+     ORDER BY t.tracked_minutes DESC
+     LIMIT $1`,
+    [limit]
+  );
+}
+
+export interface WeeklyTimeEntry {
+  week: string; // e.g. "W12"
+  week_start: string; // ISO date
+  minutes: number;
+}
+
+/** Total tracked hours per week over the last 8 weeks. */
+export async function getWeeklyTrend(): Promise<WeeklyTimeEntry[]> {
+  const db = await getDb();
+  return db.select<WeeklyTimeEntry[]>(
+    `SELECT 'W' || strftime('%W', t.updated_at) AS week,
+            date(t.updated_at, 'weekday 0', '-6 days') AS week_start,
+            SUM(t.tracked_minutes) AS minutes
+     FROM tasks t
+     WHERE t.tracked_minutes > 0
+       AND date(t.updated_at) >= date('now', '-56 days')
+     GROUP BY week
+     ORDER BY week_start`
+  );
+}
+
+export interface ProjectTimeShare {
+  project_name: string;
+  minutes: number;
+}
+
+/** Distribution of tracked time across active projects. */
+export async function getProjectTimeDistribution(): Promise<ProjectTimeShare[]> {
+  const db = await getDb();
+  return db.select<ProjectTimeShare[]>(
+    `SELECT p.name AS project_name, SUM(t.tracked_minutes) AS minutes
+     FROM tasks t
+     JOIN projects p ON p.id = t.project_id
+     WHERE p.status = 'active' AND t.tracked_minutes > 0
+     GROUP BY p.id
+     ORDER BY minutes DESC
+     LIMIT 8`
+  );
 }

@@ -12,6 +12,8 @@ import {
   TrendingUp,
   BarChart3,
   Bookmark,
+  Clock,
+  Square,
   Bell,
   Settings,
   UserCircle,
@@ -19,6 +21,7 @@ import {
 import { useAppStore } from "../../stores/app-store";
 import { useTabStore } from "../../stores/tab-store";
 import { useUnreadNotificationCount } from "../../db/hooks/useNotifications";
+import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
 import type { UIKey } from "../../i18n/ui";
 
@@ -32,6 +35,7 @@ const navItems: SidebarItem[] = [
   { to: "/tasks", icon: CheckSquare, labelKey: "tasks" },
   { to: "/calendar", icon: CalendarDays, labelKey: "calendar" },
   { to: "/resources", icon: Bookmark, labelKey: "resources" },
+  { to: "/time-tracking", icon: Clock, labelKey: "time_tracking" },
   { divider: true },
   { to: "/invoices", icon: FileText, labelKey: "invoices" },
   { to: "/quotes", icon: FilePlus2, labelKey: "quotes" },
@@ -48,6 +52,7 @@ export function Sidebar() {
   const collapsed = useAppStore((s) => s.sidebarCollapsed);
   const showTasksPage = useAppStore((s) => s.showTasksPage);
   const showIncome = useAppStore((s) => s.showIncome);
+  const showTimeOverview = useAppStore((s) => s.showTimeOverview);
   const { data: unreadCount = 0 } = useUnreadNotificationCount();
   const openTab = useTabStore((s) => s.openTab);
   const t = useT();
@@ -60,9 +65,10 @@ export function Sidebar() {
       if ("divider" in item) return false;
       if (item.labelKey === "tasks" && !showTasksPage) return false;
       if (item.labelKey === "income" && !showIncome) return false;
+      if (item.labelKey === "time_tracking" && !showTimeOverview) return false;
       return true;
     });
-  }, [showTasksPage, showIncome]);
+  }, [showTasksPage, showIncome, showTimeOverview]);
 
   // Track keyboard focus index (-1 = no keyboard focus)
   const [focusIdx, setFocusIdx] = useState(-1);
@@ -162,9 +168,10 @@ export function Sidebar() {
       if ("divider" in item) return true;
       if (item.labelKey === "tasks" && !showTasksPage) return false;
       if (item.labelKey === "income" && !showIncome) return false;
+      if (item.labelKey === "time_tracking" && !showTimeOverview) return false;
       return true;
     });
-  }, [showTasksPage, showIncome]);
+  }, [showTasksPage, showIncome, showTimeOverview]);
 
   // Map from allVisible index to visibleLinks index (for focus matching)
   const linkIndexMap = useMemo(() => {
@@ -216,7 +223,7 @@ export function Sidebar() {
                 `flex items-center gap-3 px-4 py-2 mx-2 rounded-md text-sm transition-colors ${
                   isActive
                     ? "bg-accent-light text-accent font-medium"
-                    : "text-muted hover:bg-gray-100 hover:text-gray-900"
+                    : "text-muted hover:bg-gray-100 dark:hover:bg-gray-200 hover:text-gray-900 dark:hover:text-gray-800"
                 }${isFocused ? " ring-2 ring-accent/40 ring-inset" : ""}`
               }
             >
@@ -242,6 +249,57 @@ export function Sidebar() {
           );
         })}
       </nav>
+      <TimerIndicator collapsed={collapsed} />
     </aside>
+  );
+}
+
+function TimerIndicator({ collapsed }: { collapsed: boolean }) {
+  const { activeTimer, stopAndSave } = useTimerActions();
+  const t = useT();
+  const [elapsed, setElapsed] = useState("");
+
+  useEffect(() => {
+    if (!activeTimer) return;
+    const tick = () => {
+      const diff = Math.floor((Date.now() - activeTimer.startedAt) / 1000);
+      const h = Math.floor(diff / 3600);
+      const m = Math.floor((diff % 3600) / 60);
+      const s = diff % 60;
+      setElapsed(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [activeTimer]);
+
+  if (!activeTimer) return null;
+
+  return (
+    <div className="px-3 py-2 border-t border-sidebar-border">
+      <div className="flex items-center gap-2 text-xs">
+        <span className="relative flex h-2 w-2 shrink-0">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+        </span>
+        {!collapsed && (
+          <>
+            <div className="flex flex-col min-w-0 flex-1">
+              <span className="font-medium text-red-500 tabular-nums">{elapsed}</span>
+              {activeTimer.projectName && (
+                <span className="text-muted truncate">{activeTimer.projectName}</span>
+              )}
+            </div>
+            <button
+              onClick={() => stopAndSave()}
+              className="shrink-0 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-200 text-red-500 hover:text-red-600"
+              title={t.stop_timer}
+            >
+              <Square size={12} />
+            </button>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

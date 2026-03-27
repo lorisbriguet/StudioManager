@@ -213,8 +213,12 @@ export function QuotePDF({
 }: QuotePDFProps) {
   const lang = (quote.language as InvoiceLanguage) || "FR";
   const t = invoiceLabels[lang];
-  const hasRate = lineItems.some((item) => item.rate != null);
-  const hasUnit = lineItems.some((item) => item.unit != null && item.unit !== "");
+  // Detect global rate: all items share the same non-null rate and same unit
+  const allSameRate = lineItems.length > 0 && lineItems.every((item) => item.rate != null && item.rate === lineItems[0].rate);
+  const allSameUnit = lineItems.length > 0 && lineItems.every((item) => item.unit === lineItems[0].unit);
+  const isGlobalRate = allSameRate && allSameUnit && lineItems[0].rate != null && lineItems[0].unit;
+  const hasRate = !isGlobalRate && lineItems.some((item) => item.rate != null);
+  const hasUnit = !isGlobalRate && lineItems.some((item) => item.unit != null && item.unit !== "");
 
   const addr = billingAddress ?? {
     billing_name: client.billing_name || client.name,
@@ -327,6 +331,13 @@ export function QuotePDF({
             ))}
           </View>
 
+          {/* Global rate label */}
+          {isGlobalRate && (
+            <Text style={{ fontSize: 8, color: "#666", marginTop: 4, marginBottom: 4 }}>
+              {t.all_items_at} {formatCHF(lineItems[0].rate!)} / {(t as Record<string, string>)[`unit_${lineItems[0].unit}`] ?? lineItems[0].unit}
+            </Text>
+          )}
+
           {/* Notes */}
           {quote.notes ? (
             <View style={s.notesBlock}>
@@ -363,14 +374,6 @@ export function QuotePDF({
                 <Text style={s.validityTitle}>{t.validity}</Text>
                 <Text>{t.valid_30_days}</Text>
               </View>
-              {profile.bank_name && (
-                <View style={s.bankSection}>
-                  <Text style={s.bankTitle}>{t.bank_details}</Text>
-                  <Text>{profile.bank_name}</Text>
-                  <Text>IBAN: {profile.iban}</Text>
-                  {profile.bic_swift && <Text>{t.bic}: {profile.bic_swift}</Text>}
-                </View>
-              )}
               <Text style={s.thankYou}>{t.thank_you}</Text>
             </View>
           </View>

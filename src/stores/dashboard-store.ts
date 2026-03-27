@@ -41,7 +41,14 @@ export type WidgetType =
   | "busiest-day"
   // Phase 18 — Utility
   | "quick-create"
-  | "pinned-notes";
+  | "pinned-notes"
+  // Phase 13 — Time tracking
+  | "time-this-week"
+  | "planned-vs-actual"
+  | "top-time-consumers"
+  | "billable-summary"
+  | "weekly-trend"
+  | "project-time-distribution";
 
 export interface DashboardWidget {
   id: string;
@@ -97,6 +104,13 @@ export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
   // Phase 18 — Utility
   { type: "quick-create", labelKey: "quick_create", category: "utility", defaultW: 2, defaultH: 2, minW: 2, minH: 2 },
   { type: "pinned-notes", labelKey: "pinned_notes", category: "utility", defaultW: 3, defaultH: 3, minW: 3, minH: 3 },
+  // Phase 13 — Time tracking
+  { type: "time-this-week", labelKey: "time_this_week", category: "productivity", defaultW: 4, defaultH: 4, minW: 3, minH: 3 },
+  { type: "planned-vs-actual", labelKey: "planned_vs_actual", category: "productivity", defaultW: 4, defaultH: 4, minW: 3, minH: 3 },
+  { type: "top-time-consumers", labelKey: "top_time_consumers", category: "productivity", defaultW: 3, defaultH: 3, minW: 3, minH: 3 },
+  { type: "billable-summary", labelKey: "billable_summary", category: "financial", defaultW: 2, defaultH: 2, minW: 2, minH: 2 },
+  { type: "weekly-trend", labelKey: "weekly_trend", category: "productivity", defaultW: 4, defaultH: 4, minW: 3, minH: 3 },
+  { type: "project-time-distribution", labelKey: "project_time_distribution", category: "productivity", defaultW: 3, defaultH: 3, minW: 3, minH: 3 },
 ];
 
 const DEFAULT_WIDGETS: DashboardWidget[] = [

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { Plus, Trash2, GripVertical, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Settings2, X, ChevronRight, ChevronDown, Copy, Download, Sigma, Pin } from "lucide-react";
+import { Plus, Trash2, GripVertical, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Settings2, X, ChevronRight, ChevronDown, Copy, Download, Sigma, Pin, Play, Square } from "lucide-react";
 import { Button } from "../ui";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
@@ -27,20 +27,44 @@ import {
   useDeleteWorkloadRow,
   useReorderWorkloadRows,
   useCreateWorkloadTemplate,
+  useUpdateWorkloadTemplate,
   useWorkloadTemplates,
   useProjectWorkloadConfig,
   useSetProjectWorkloadConfig,
 } from "../../db/hooks/useWorkload";
-import { useTasksByProject } from "../../db/hooks/useTasks";
 import type { WorkloadColumn, WorkloadRow, SelectOption } from "../../types/workload";
-import type { Task } from "../../types/task";
 import { COLUMN_ICONS } from "./columnIcons";
 import { evaluateFormula } from "../../lib/formulaEval";
 import { useT } from "../../i18n/useT";
+import { useTimerActions } from "../../hooks/useTimerActions";
 
 interface Props {
   projectId: number;
   onEditColumn?: (column: WorkloadColumn | null, index: number) => void;
+}
+
+// ── Duration formatting ─────────────────────────────────────
+function fmtMin(mins: number | null | undefined): string {
+  if (!mins) return "";
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h > 0 ? `${h}h${String(m).padStart(2, "0")}` : `${m}m`;
+}
+
+function parseMinInput(val: string): number {
+  val = val.trim();
+  // "1h30" or "1H30"
+  const hm = val.match(/^(\d+)\s*[hH]\s*(\d+)?$/);
+  if (hm) return parseInt(hm[1]) * 60 + (parseInt(hm[2] || "0"));
+  // "1:30"
+  const colon = val.match(/^(\d+):(\d+)$/);
+  if (colon) return parseInt(colon[1]) * 60 + parseInt(colon[2]);
+  // "1.5" (hours)
+  const decimal = parseFloat(val);
+  if (!isNaN(decimal) && val.includes(".")) return Math.round(decimal * 60);
+  // Plain number = minutes
+  const n = parseInt(val);
+  return isNaN(n) ? 0 : n;
 }
 
 export function WorkloadTable({ projectId, onEditColumn }: Props) {
@@ -48,20 +72,22 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
   const { data: rows } = useWorkloadRows(projectId);
   const { data: config } = useProjectWorkloadConfig(projectId);
   const { data: templates } = useWorkloadTemplates();
-  const { data: tasks } = useTasksByProject(projectId);
   const createRow = useCreateWorkloadRow();
   const updateRow = useUpdateWorkloadRow(projectId);
   const deleteRow = useDeleteWorkloadRow(projectId);
   const reorderRows = useReorderWorkloadRows(projectId);
   const createTemplate = useCreateWorkloadTemplate();
+  const updateTemplate = useUpdateWorkloadTemplate();
   const setConfig = useSetProjectWorkloadConfig(projectId);
+  const { activeTimer, toggleTimer } = useTimerActions();
 
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [isOpen, setIsOpen] = useState(true);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveTemplateName, setSaveTemplateName] = useState("");
-  const [headerMenu, setHeaderMenu] = useState<{ ci: number; pos: { top: number; left: number } } | null>(null);
+  const [headerMenu, setHeaderMenu] = useState<{ ci: number; pos: { top: number; left: number }; isSystem?: boolean } | null>(null);
+  const [sectionMenu, setSectionMenu] = useState<{ x: number; y: number } | null>(null);
   const [stickyFirstCol, setStickyFirstCol] = useState(() => {
     try { return localStorage.getItem(`workload_sticky_${projectId}`) === "1"; } catch { return false; }
   });
@@ -69,7 +95,6 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
   const columns: WorkloadColumn[] = config?.columns ?? [];
   const templateId = config?.template_id ?? null;
 
-  // Ref to avoid stale closures in pointer event handlers (e.g. column resize)
   const columnsRef = useRef(columns);
   columnsRef.current = columns;
   const templateIdRef = useRef(templateId);
@@ -92,12 +117,11 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
   const handleAddRow = useCallback(() => {
     createRow.mutate({
       project_id: projectId,
-      template_id: templateId,
-      task_id: null,
+      title: "",
       cells: {},
       sort_order: rows?.length ?? 0,
     });
-  }, [projectId, templateId, rows, createRow]);
+  }, [projectId, rows, createRow]);
 
   const handleCellChange = useCallback(
     (row: WorkloadRow, colKey: string, value: unknown) => {
@@ -107,9 +131,10 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
     [updateRow]
   );
 
-  const handleLinkTask = useCallback(
-    (row: WorkloadRow, taskId: number | null) => {
-      updateRow.mutate({ id: row.id, task_id: taskId });
+  /** Update a system column on a workload row (task) */
+  const handleSystemChange = useCallback(
+    (row: WorkloadRow, field: "title" | "tracked_minutes" | "planned_minutes", value: unknown) => {
+      updateRow.mutate({ id: row.id, [field]: value });
     },
     [updateRow]
   );
@@ -124,23 +149,35 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
     (row: WorkloadRow) => {
       createRow.mutate({
         project_id: projectId,
-        template_id: templateId,
-        task_id: row.task_id,
+        title: row.title,
         cells: { ...row.cells },
         sort_order: (rows?.length ?? 0),
       });
     },
-    [projectId, templateId, rows, createRow]
+    [projectId, rows, createRow]
   );
 
   const confirmSaveTemplate = useCallback(() => {
-    if (!saveTemplateName.trim()) return;
+    const name = saveTemplateName.trim();
+    if (!name) return;
+    if (templates?.some((tpl) => tpl.name.toLowerCase() === name.toLowerCase())) {
+      toast.error(t.template_name_exists);
+      return;
+    }
     createTemplate.mutate(
-      { name: saveTemplateName.trim(), columns },
+      { name, columns },
       { onSuccess: () => toast.success(t.toast_created) }
     );
     setShowSaveModal(false);
-  }, [saveTemplateName, columns, createTemplate, t]);
+  }, [saveTemplateName, columns, createTemplate, templates, t]);
+
+  const handleUpdateTemplate = useCallback(() => {
+    if (!templateId || columns.length === 0) return;
+    updateTemplate.mutate(
+      { id: templateId, columns },
+      { onSuccess: () => toast.success(t.toast_status_updated) }
+    );
+  }, [templateId, columns, updateTemplate, t]);
 
   const handleMoveColumn = useCallback(
     (fromIndex: number, toIndex: number) => {
@@ -198,6 +235,11 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
   );
 
   // ── Column resize by drag ─────────────────────────────────
+  const [taskColWidth, setTaskColWidth] = useState(() => {
+    try { return Number(localStorage.getItem(`workload_taskw_${projectId}`)) || 180; } catch { return 180; }
+  });
+  const taskColWidthRef = useRef(taskColWidth);
+  taskColWidthRef.current = taskColWidth;
   const [colWidths, setColWidths] = useState<Record<string, number>>({});
   const resizingRef = useRef<{
     colIndex: number;
@@ -207,6 +249,31 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
 
   const getColWidth = (col: WorkloadColumn) =>
     colWidths[col.key] ?? col.width ?? 120;
+
+  const onTaskColResizeStart = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const startX = e.clientX;
+      const startW = taskColWidthRef.current;
+
+      const onPointerMove = (ev: PointerEvent) => {
+        const delta = ev.clientX - startX;
+        const newW = Math.max(80, startW + delta);
+        setTaskColWidth(newW);
+      };
+
+      const onPointerUp = () => {
+        document.removeEventListener("pointermove", onPointerMove);
+        document.removeEventListener("pointerup", onPointerUp);
+        try { localStorage.setItem(`workload_taskw_${projectId}`, String(taskColWidthRef.current)); } catch { /* */ }
+      };
+
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", onPointerUp);
+    },
+    [projectId]
+  );
 
   const onResizeStart = useCallback(
     (e: React.PointerEvent, colIndex: number) => {
@@ -229,7 +296,6 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
         document.removeEventListener("pointerup", onPointerUp);
         if (!resizingRef.current) return;
         const { colIndex: ci } = resizingRef.current;
-        // Use refs to get latest columns/templateId (avoids stale closure)
         const latestCols = columnsRef.current;
         const latestTplId = templateIdRef.current;
         setColWidths((prev) => {
@@ -252,6 +318,20 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
     if (!rows) return [];
     if (!sortKey) return [...rows].sort((a, b) => a.sort_order - b.sort_order);
     return [...rows].sort((a, b) => {
+      // System column sorting
+      if (sortKey === "__title") {
+        const cmp = a.title.localeCompare(b.title);
+        return sortDir === "asc" ? cmp : -cmp;
+      }
+      if (sortKey === "__duration") {
+        const cmp = a.tracked_minutes - b.tracked_minutes;
+        return sortDir === "asc" ? cmp : -cmp;
+      }
+      if (sortKey === "__planned") {
+        const cmp = (a.planned_minutes ?? 0) - (b.planned_minutes ?? 0);
+        return sortDir === "asc" ? cmp : -cmp;
+      }
+      // Custom column sorting
       const av = a.cells[sortKey];
       const bv = b.cells[sortKey];
       let cmp = 0;
@@ -276,10 +356,16 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
       }
       return s;
     };
-    const headers = columns.map((c) => escape(c.name));
+    // System columns + custom columns
+    const headers = [escape(t.tasks), escape(t.duration), escape(t.planned), ...columns.map((c) => escape(c.name))];
     const lines = [headers.join(",")];
     for (const row of sortedRows) {
-      const vals = columns.map((col) => {
+      const systemVals = [
+        escape(row.title),
+        escape(fmtMin(row.tracked_minutes)),
+        escape(fmtMin(row.planned_minutes)),
+      ];
+      const customVals = columns.map((col) => {
         if (col.type === "formula" && col.formula) {
           return escape(evaluateFormula(col.formula, row.cells));
         }
@@ -288,7 +374,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
         if (typeof v === "boolean") return v ? "1" : "0";
         return escape(v);
       });
-      lines.push(vals.join(","));
+      lines.push([...systemVals, ...customVals].join(","));
     }
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -300,10 +386,13 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
     toast.success(t.export_csv);
   }, [sortedRows, columns, projectId, t]);
 
-  // Compute summary row (sum of number & formula columns)
+  // Compute summary row (sum of number & formula columns + system duration/planned)
   const summaryRow = useMemo(() => {
     if (!sortedRows.length) return null;
-    const sums: Record<string, number> = {};
+    const sums: Record<string, number> = {
+      __duration: sortedRows.reduce((sum, r) => sum + r.tracked_minutes, 0),
+      __planned: sortedRows.reduce((sum, r) => sum + (r.planned_minutes ?? 0), 0),
+    };
     for (const col of columns) {
       if (col.showSum === false) continue;
       if (col.type === "number") {
@@ -327,6 +416,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
       <div className="flex items-center justify-between mb-3 select-none">
         <button
           onClick={() => setIsOpen(!isOpen)}
+          onContextMenu={(e) => { e.preventDefault(); setSectionMenu({ x: e.clientX, y: e.clientY }); }}
           className="flex items-center gap-1 text-sm font-medium hover:text-accent"
         >
           {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -340,6 +430,8 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                 const val = e.target.value;
                 if (val === "__save__") {
                   handleSaveAsTemplate();
+                } else if (val === "__update__") {
+                  handleUpdateTemplate();
                 } else {
                   handleTemplateChange(val ? Number(val) : null);
                 }
@@ -349,33 +441,16 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
               <option value="">{t.select_template}</option>
               {templates?.map((tpl) => (
                 <option key={tpl.id} value={tpl.id}>
-                  {tpl.name}
+                  {tpl.name}{tpl.is_system ? " *" : ""}
                 </option>
               ))}
+              {templateId && columns.length > 0 && (
+                <option value="__update__">{t.update_template}</option>
+              )}
               {columns.length > 0 && (
                 <option value="__save__">{t.save_as_template}</option>
               )}
             </select>
-            <button
-              onClick={() => {
-                const next = !stickyFirstCol;
-                setStickyFirstCol(next);
-                try { localStorage.setItem(`workload_sticky_${projectId}`, next ? "1" : "0"); } catch { /* */ }
-              }}
-              className={`p-1 hover:text-accent ${stickyFirstCol ? "text-accent" : "text-muted"}`}
-              title={t.pin_first_column}
-            >
-              <Pin size={16} />
-            </button>
-            {sortedRows.length > 0 && (
-              <button
-                onClick={handleExportCsv}
-                className="p-1 text-muted hover:text-accent"
-                title={t.export_csv}
-              >
-                <Download size={16} />
-              </button>
-            )}
             <button
               onClick={() => onEditColumn?.(null, columns.length)}
               className="p-1 text-muted hover:text-accent"
@@ -395,20 +470,74 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
         <div className="overflow-x-auto">
           <table className="text-sm" style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}>
             <thead>
-              <tr className="border-b border-gray-200 bg-gray-50 select-none">
-                <th className={`w-8 px-2 border-r border-gray-200 ${stickyFirstCol ? "sticky left-0 z-10" : ""} bg-gray-50`} />
+              <tr className="border-b border-gray-100 select-none">
+                {/* Drag handle column */}
+                <th className={`w-8 px-2 ${stickyFirstCol ? "sticky left-0 z-10 bg-gray-100" : ""}`} />
+                {/* System: Task */}
+                <th
+                  className={`relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-gray-700 select-none ${stickyFirstCol ? "sticky left-8 z-10 bg-gray-100" : ""}`}
+                  style={{ width: taskColWidth, minWidth: 80 }}
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setHeaderMenu((prev) =>
+                      prev?.ci === -1 && prev?.isSystem ? null : { ci: -1, pos: { top: rect.bottom + 2, left: rect.left }, isSystem: true }
+                    );
+                  }}
+                >
+                  <div className="flex items-center gap-1">
+                    <span className="truncate">{t.tasks}</span>
+                    {sortKey === "__title" && <span className="text-[10px] ml-auto">{sortDir === "asc" ? "\u2191" : "\u2193"}</span>}
+                  </div>
+                  {/* Resize handle */}
+                  <div
+                    onPointerDown={(e) => { e.stopPropagation(); onTaskColResizeStart(e); }}
+                    className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-accent/30 active:bg-accent/50"
+                  />
+                </th>
+                {/* System: Duration */}
+                <th
+                  className="relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-gray-700 select-none"
+                  style={{ width: 90, minWidth: 60 }}
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setHeaderMenu((prev) =>
+                      prev?.ci === -2 && prev?.isSystem ? null : { ci: -2, pos: { top: rect.bottom + 2, left: rect.left }, isSystem: true }
+                    );
+                  }}
+                >
+                  <div className="flex items-center gap-1">
+                    <span className="truncate">{t.duration}</span>
+                    {sortKey === "__duration" && <span className="text-[10px] ml-auto">{sortDir === "asc" ? "\u2191" : "\u2193"}</span>}
+                  </div>
+                </th>
+                {/* System: Planned */}
+                <th
+                  className="relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-gray-700 select-none"
+                  style={{ width: 90, minWidth: 60 }}
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setHeaderMenu((prev) =>
+                      prev?.ci === -3 && prev?.isSystem ? null : { ci: -3, pos: { top: rect.bottom + 2, left: rect.left }, isSystem: true }
+                    );
+                  }}
+                >
+                  <div className="flex items-center gap-1">
+                    <span className="truncate">{t.planned}</span>
+                    {sortKey === "__planned" && <span className="text-[10px] ml-auto">{sortDir === "asc" ? "\u2191" : "\u2193"}</span>}
+                  </div>
+                </th>
+                {/* Custom columns */}
                 {columns.map((col, ci) => {
                   const w = getColWidth(col);
-                  const isFirstCol = ci === 0;
                   return (
                     <th
                       key={`${col.key}_${ci}`}
-                      className={`relative px-2 py-1.5 text-left font-medium text-muted cursor-pointer hover:text-gray-700 select-none ${ci < columns.length - 1 ? "border-r border-gray-200" : ""} ${isFirstCol && stickyFirstCol ? "sticky left-8 z-10 bg-gray-50" : ""}`}
+                      className="relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-gray-700 select-none"
                       style={{ width: w, minWidth: 24 }}
                       onClick={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect();
                         setHeaderMenu((prev) =>
-                          prev?.ci === ci ? null : { ci, pos: { top: rect.bottom + 2, left: rect.left } }
+                          prev?.ci === ci && !prev?.isSystem ? null : { ci, pos: { top: rect.bottom + 2, left: rect.left } }
                         );
                       }}
                     >
@@ -446,32 +575,46 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                   key={row.id}
                   row={row}
                   columns={columns}
+                  taskColWidth={taskColWidth}
                   getColWidth={getColWidth}
                   handleCellChange={handleCellChange}
-                  handleLinkTask={handleLinkTask}
+                  handleSystemChange={handleSystemChange}
                   handleOptionsChange={handleOptionsChange}
                   handleDuplicateRow={handleDuplicateRow}
                   deleteRow={deleteRow}
-                  tasks={tasks}
                   t={t}
                   stickyFirstCol={stickyFirstCol}
+                  projectId={projectId}
+                  activeTimer={activeTimer}
+                  toggleTimer={toggleTimer}
                 />
               ))}
               {/* Summary row */}
               {summaryRow && sortedRows.length > 0 && (
-                <tr className="border-t border-gray-200 bg-gray-50 font-medium">
-                  <td className={`border-r border-gray-100 ${stickyFirstCol ? "sticky left-0 z-10" : ""} bg-gray-50`} />
+                <tr className="border-t border-gray-200 font-medium">
+                  <td className={`${stickyFirstCol ? "sticky left-0 z-10 bg-gray-100" : ""}`} />
+                  {/* System: Task total label */}
+                  <td className={`px-4 py-2 text-sm ${stickyFirstCol ? "sticky left-8 z-10 bg-gray-100" : ""}`}>
+                    <span className="text-muted">{t.total}</span>
+                  </td>
+                  {/* System: Duration total */}
+                  <td className="px-4 py-2 text-sm text-right">
+                    {fmtMin(summaryRow.__duration)}
+                  </td>
+                  {/* System: Planned total */}
+                  <td className="px-4 py-2 text-sm text-right">
+                    {fmtMin(summaryRow.__planned)}
+                  </td>
+                  {/* Custom columns */}
                   {columns.map((col, ci) => (
                     <td
                       key={`${col.key}_${ci}`}
-                      className={`px-3 py-2 text-sm ${ci < columns.length - 1 ? "border-r border-gray-100" : ""} ${ci === 0 && stickyFirstCol ? "sticky left-8 z-10 bg-gray-50" : ""}`}
+                      className="px-4 py-2 text-sm"
                     >
                       {(col.type === "number" || col.type === "formula") && summaryRow[col.key] !== undefined ? (
                         <span className="block text-right">
                           {Math.round(summaryRow[col.key] * 100) / 100}
                         </span>
-                      ) : ci === 0 ? (
-                        <span className="text-muted">{t.total}</span>
                       ) : null}
                     </td>
                   ))}
@@ -495,8 +638,36 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
       </DndContext>
       </>)}
 
-      {/* Column header menu */}
-      {headerMenu && (() => {
+      {/* Column header menu — system columns (sort-only) */}
+      {headerMenu && headerMenu.isSystem && (() => {
+        const keyMap: Record<number, string> = { [-1]: "__title", [-2]: "__duration", [-3]: "__planned" };
+        const sysKey = keyMap[headerMenu.ci];
+        if (!sysKey) return null;
+        const isAsc = sortKey === sysKey && sortDir === "asc";
+        const isDesc = sortKey === sysKey && sortDir === "desc";
+        return createPortal(
+          <SystemHeaderMenu
+            pos={headerMenu.pos}
+            isAsc={isAsc}
+            isDesc={isDesc}
+            onSort={(dir) => {
+              if (sortKey === sysKey && sortDir === dir) {
+                setSortKey(null);
+              } else {
+                setSortKey(sysKey);
+                setSortDir(dir);
+              }
+              setHeaderMenu(null);
+            }}
+            onClose={() => setHeaderMenu(null)}
+            t={t}
+          />,
+          document.body
+        );
+      })()}
+
+      {/* Column header menu — custom columns */}
+      {headerMenu && !headerMenu.isSystem && (() => {
         const col = columns[headerMenu.ci];
         if (!col) return null;
         return createPortal(
@@ -527,8 +698,8 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
         );
       })()}
 
-      {/* Save as template modal */}
-      {showSaveModal && (
+      {/* Save as template modal — portalled so it escapes side-peek overflow */}
+      {showSaveModal && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-gray-100 rounded-xl shadow-2xl w-full max-w-sm border border-gray-100 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
@@ -562,7 +733,85 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Section context menu (right-click on "Workload" header) */}
+      {sectionMenu && createPortal(
+        <SectionContextMenu
+          x={sectionMenu.x}
+          y={sectionMenu.y}
+          stickyFirstCol={stickyFirstCol}
+          hasRows={sortedRows.length > 0}
+          onTogglePin={() => {
+            const next = !stickyFirstCol;
+            setStickyFirstCol(next);
+            try { localStorage.setItem(`workload_sticky_${projectId}`, next ? "1" : "0"); } catch { /* */ }
+            setSectionMenu(null);
+          }}
+          onExportCsv={() => { handleExportCsv(); setSectionMenu(null); }}
+          onClose={() => setSectionMenu(null)}
+          t={t}
+        />,
+        document.body
+      )}
+    </div>
+  );
+}
+
+// ── Section Context Menu ─────────────────────────────────────
+
+function SectionContextMenu({
+  x,
+  y,
+  stickyFirstCol,
+  hasRows,
+  onTogglePin,
+  onExportCsv,
+  onClose,
+  t,
+}: {
+  x: number;
+  y: number;
+  stickyFirstCol: boolean;
+  hasRows: boolean;
+  onTogglePin: () => void;
+  onExportCsv: () => void;
+  onClose: () => void;
+  t: Record<string, string>;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onPointerDown(e: PointerEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className="fixed z-50 w-48 bg-gray-100 border border-gray-100 rounded-lg shadow-lg overflow-hidden py-1"
+      style={{ top: y, left: x }}
+    >
+      <button
+        onClick={onTogglePin}
+        className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-200 ${stickyFirstCol ? "text-accent" : ""}`}
+      >
+        <Pin size={14} />
+        {t.pin_first_column}
+      </button>
+      {hasRows && (
+        <button
+          onClick={onExportCsv}
+          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-200"
+        >
+          <Download size={14} />
+          {t.export_csv}
+        </button>
       )}
     </div>
   );
@@ -573,27 +822,33 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
 function SortableRow({
   row,
   columns,
+  taskColWidth,
   getColWidth,
   handleCellChange,
-  handleLinkTask,
+  handleSystemChange,
   handleOptionsChange,
   handleDuplicateRow,
   deleteRow,
-  tasks,
   t,
   stickyFirstCol,
+  projectId,
+  activeTimer,
+  toggleTimer,
 }: {
   row: WorkloadRow;
   columns: WorkloadColumn[];
+  taskColWidth: number;
   getColWidth: (col: WorkloadColumn) => number;
   handleCellChange: (row: WorkloadRow, colKey: string, value: unknown) => void;
-  handleLinkTask: (row: WorkloadRow, taskId: number | null) => void;
+  handleSystemChange: (row: WorkloadRow, field: "title" | "tracked_minutes" | "planned_minutes", value: unknown) => void;
   handleOptionsChange: (ci: number, opts: SelectOption[]) => void;
   handleDuplicateRow: (row: WorkloadRow) => void;
   deleteRow: { mutate: (id: number) => void };
-  tasks: Task[] | undefined;
   t: Record<string, string>;
   stickyFirstCol: boolean;
+  projectId: number;
+  activeTimer: { taskId: number; projectId: number; startedAt: number; projectName?: string } | null;
+  toggleTimer: (taskId: number, projectId: number, projectName?: string) => Promise<void>;
 }) {
   const {
     attributes,
@@ -611,13 +866,16 @@ function SortableRow({
     zIndex: isDragging ? 50 : undefined,
   };
 
+  const isTimerActive = activeTimer?.taskId === row.id;
+
   return (
     <tr
       ref={setNodeRef}
       style={style}
       className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200 group/row"
     >
-      <td className={`border-r border-gray-100 ${stickyFirstCol ? "sticky left-0 z-10" : ""} bg-inherit`}>
+      {/* Drag handle */}
+      <td className={`${stickyFirstCol ? "sticky left-0 z-10" : ""} bg-inherit`}>
         <div
           {...attributes}
           {...listeners}
@@ -627,10 +885,51 @@ function SortableRow({
           <GripVertical size={14} />
         </div>
       </td>
+
+      {/* System: Task title + timer button */}
+      <td className={`px-4 py-2 ${stickyFirstCol ? "sticky left-8 z-10 bg-inherit" : ""}`} style={{ width: taskColWidth }}>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => toggleTimer(row.id, projectId)}
+            className={`shrink-0 p-0.5 rounded ${
+              isTimerActive
+                ? "text-red-500 hover:text-red-600"
+                : "text-muted opacity-0 group-hover/row:opacity-100 hover:text-accent"
+            }`}
+            title={isTimerActive ? t.stop_timer : t.start_timer}
+          >
+            {isTimerActive ? <Square size={12} /> : <Play size={12} />}
+          </button>
+          <InlineTitle
+            value={row.title}
+            onChange={(v) => handleSystemChange(row, "title", v)}
+          />
+        </div>
+      </td>
+
+      {/* System: Duration (tracked_minutes) */}
+      <td className="px-4 py-2" style={{ width: 90 }}>
+        <InlineDuration
+          value={row.tracked_minutes}
+          isTimerActive={isTimerActive}
+          timerStartedAt={isTimerActive ? activeTimer!.startedAt : undefined}
+          onChange={(v) => handleSystemChange(row, "tracked_minutes", v)}
+        />
+      </td>
+
+      {/* System: Planned (planned_minutes) */}
+      <td className="px-4 py-2" style={{ width: 90 }}>
+        <InlineDuration
+          value={row.planned_minutes ?? 0}
+          onChange={(v) => handleSystemChange(row, "planned_minutes", v)}
+        />
+      </td>
+
+      {/* Custom columns */}
       {columns.map((col, ci) => (
         <td
           key={`${col.key}_${ci}`}
-          className={`px-3 py-1.5 ${ci < columns.length - 1 ? "border-r border-gray-100" : ""} ${ci === 0 && stickyFirstCol ? "sticky left-8 z-10 bg-inherit" : ""}`}
+          className="px-4 py-2"
           style={{ width: getColWidth(col), minWidth: 24 }}
         >
           <WorkloadCell
@@ -638,13 +937,6 @@ function SortableRow({
             value={row.cells[col.key]}
             allCells={row.cells}
             onChange={(v) => handleCellChange(row, col.key, v)}
-            tasks={col.type === "link" ? tasks ?? undefined : undefined}
-            linkedTaskId={col.type === "link" ? row.task_id : undefined}
-            onLinkTask={
-              col.type === "link"
-                ? (taskId) => handleLinkTask(row, taskId)
-                : undefined
-            }
             onOptionsChange={
               col.type === "select" || col.type === "multi_select"
                 ? (opts) => handleOptionsChange(ci, opts)
@@ -653,6 +945,8 @@ function SortableRow({
           />
         </td>
       ))}
+
+      {/* Row actions */}
       <td className="px-2 text-center">
         <div className="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100">
           <button
@@ -675,7 +969,161 @@ function SortableRow({
   );
 }
 
+// ── Inline Title Editor ────────────────────────────────────
+
+function InlineTitle({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  if (!editing) {
+    return (
+      <span
+        className="text-sm cursor-text flex-1 min-w-0 break-words whitespace-pre-wrap"
+        onDoubleClick={() => { setDraft(value); setEditing(true); }}
+      >
+        {value || <span className="text-muted italic">Untitled</span>}
+      </span>
+    );
+  }
+
+  return (
+    <input
+      className="text-sm w-full bg-transparent border-none outline-none flex-1 min-w-0"
+      value={draft}
+      autoFocus
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        setEditing(false);
+        const trimmed = draft.trim();
+        if (trimmed !== value) onChange(trimmed);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        if (e.key === "Escape") { setDraft(value); setEditing(false); }
+      }}
+    />
+  );
+}
+
+// ── Inline Duration Editor ──────────────────────────────────
+
+function InlineDuration({
+  value,
+  onChange,
+  isTimerActive,
+  timerStartedAt,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  isTimerActive?: boolean;
+  timerStartedAt?: number;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [liveElapsed, setLiveElapsed] = useState(0);
+
+  // Live ticking when timer is active
+  useEffect(() => {
+    if (!isTimerActive || !timerStartedAt) {
+      setLiveElapsed(0);
+      return;
+    }
+    const tick = () => setLiveElapsed(Math.floor((Date.now() - timerStartedAt) / 60000));
+    tick();
+    const iv = setInterval(tick, 10000); // Update every 10s
+    return () => clearInterval(iv);
+  }, [isTimerActive, timerStartedAt]);
+
+  const displayMins = isTimerActive ? value + liveElapsed : value;
+
+  if (editing) {
+    return (
+      <input
+        className="text-sm w-full bg-transparent border-none outline-none text-right"
+        value={draft}
+        autoFocus
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          setEditing(false);
+          const parsed = parseMinInput(draft);
+          if (parsed !== value) onChange(parsed);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          if (e.key === "Escape") setEditing(false);
+        }}
+        placeholder="0m"
+      />
+    );
+  }
+
+  return (
+    <span
+      className={`text-sm text-right block cursor-text ${isTimerActive ? "text-red-500 font-medium" : ""}`}
+      onDoubleClick={() => {
+        setDraft(fmtMin(value) || "0");
+        setEditing(true);
+      }}
+    >
+      {fmtMin(displayMins) || <span className="text-muted">-</span>}
+    </span>
+  );
+}
+
 // ── Column Header Menu ──────────────────────────────────────
+
+function SystemHeaderMenu({
+  pos,
+  isAsc,
+  isDesc,
+  onSort,
+  onClose,
+  t,
+}: {
+  pos: { top: number; left: number };
+  isAsc: boolean;
+  isDesc: boolean;
+  onSort: (dir: "asc" | "desc") => void;
+  onClose: () => void;
+  t: Record<string, string>;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onPointerDown(e: PointerEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className="fixed z-50 w-48 bg-gray-100 border border-gray-100 rounded-lg shadow-lg overflow-hidden py-1"
+      style={{ top: pos.top, left: pos.left }}
+    >
+      <button
+        onClick={() => onSort("asc")}
+        className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-200 ${isAsc ? "text-accent" : ""}`}
+      >
+        <ArrowUp size={14} />
+        {t.sort_ascending}
+      </button>
+      <button
+        onClick={() => onSort("desc")}
+        className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-200 ${isDesc ? "text-accent" : ""}`}
+      >
+        <ArrowDown size={14} />
+        {t.sort_descending}
+      </button>
+    </div>
+  );
+}
+
+// ── Column Header Menu (custom columns) ─────────────────────
 
 function ColumnHeaderMenu({
   pos,

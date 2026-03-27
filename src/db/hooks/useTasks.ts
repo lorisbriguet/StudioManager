@@ -124,7 +124,7 @@ export function useCreateTask() {
   const qc = useQueryClient();
   _qc = qc;
   return useMutation({
-    mutationFn: async (data: Omit<Task, "id" | "created_at" | "updated_at" | "calendar_event_id">) => {
+    mutationFn: async (data: Omit<Task, "id" | "created_at" | "updated_at" | "calendar_event_id" | "planned_minutes" | "tracked_minutes" | "workload_cells" | "workload_sort_order">) => {
       const id = await q.createTask(data);
       syncTaskCalendar(id);
       useUndoStore.getState().push({

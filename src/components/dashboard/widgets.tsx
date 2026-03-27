@@ -11,9 +11,13 @@ import {
   PieChart,
   Pie,
   Cell,
+  LineChart,
+  Line,
+  Legend,
 } from "recharts";
 import { useQuery } from "@tanstack/react-query";
 import { FileText, Receipt, ClipboardList, FolderPlus } from "lucide-react";
+import { useCountUp } from "../../hooks/useCountUp";
 import { useDashboardKPIs, useMonthlyData, useRevenueByActivity, useRevenueByClient } from "../../db/hooks/useFinance";
 import { useProjects } from "../../db/hooks/useProjects";
 import { useAllTasks } from "../../db/hooks/useTasks";
@@ -21,7 +25,14 @@ import { useInvoices } from "../../db/hooks/useInvoices";
 import { useQuotes } from "../../db/hooks/useQuotes";
 import { useExpenses } from "../../db/hooks/useExpenses";
 import { useClients } from "../../db/hooks/useClients";
-import { getSubtasksWithDueDate } from "../../db/queries/tasks";
+import {
+  getSubtasksWithDueDate,
+  getTimeThisWeek,
+  getPlannedVsActual,
+  getTopTimeConsumers,
+  getWeeklyTrend,
+  getProjectTimeDistribution,
+} from "../../db/queries/tasks";
 import { useDashboardStore } from "../../stores/dashboard-store";
 import { effectivePriority } from "../../types/task";
 import { useChartTheme } from "../../hooks/useChartTheme";
@@ -46,11 +57,15 @@ function StatusDot({ status }: { status: string }) {
 
 // ── KPI widgets ──
 
-function KPIWidget({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function KPIWidget({ label, value, numericValue, accent }: { label: string; value: string; numericValue?: number; accent?: boolean }) {
+  const animated = useCountUp(numericValue ?? 0);
+  const displayValue = numericValue != null
+    ? `CHF ${animated.toLocaleString("de-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : value;
   return (
     <div className="h-full flex flex-col justify-center px-4">
       <div className="text-xs text-muted uppercase tracking-wide mb-1">{label}</div>
-      <div className={`text-lg font-semibold ${accent ? "text-warning" : ""}`}>{value}</div>
+      <div className={`text-lg font-semibold ${accent ? "text-warning" : ""}`}>{displayValue}</div>
     </div>
   );
 }
@@ -59,28 +74,28 @@ function KPIInvoiced() {
   const year = new Date().getFullYear();
   const { data: kpis } = useDashboardKPIs(year);
   const t = useT();
-  return <KPIWidget label={t.total_invoiced} value={formatCHF(kpis?.total_invoiced ?? 0)} />;
+  return <KPIWidget label={t.total_invoiced} value={formatCHF(kpis?.total_invoiced ?? 0)} numericValue={kpis?.total_invoiced ?? 0} />;
 }
 
 function KPIBalance() {
   const year = new Date().getFullYear();
   const { data: kpis } = useDashboardKPIs(year);
   const t = useT();
-  return <KPIWidget label={t.open_balance} value={formatCHF(kpis?.open_balance ?? 0)} accent={!!kpis?.open_balance} />;
+  return <KPIWidget label={t.open_balance} value={formatCHF(kpis?.open_balance ?? 0)} numericValue={kpis?.open_balance ?? 0} accent={!!kpis?.open_balance} />;
 }
 
 function KPIExpenses() {
   const year = new Date().getFullYear();
   const { data: kpis } = useDashboardKPIs(year);
   const t = useT();
-  return <KPIWidget label={t.total_expenses} value={formatCHF(kpis?.total_expenses ?? 0)} />;
+  return <KPIWidget label={t.total_expenses} value={formatCHF(kpis?.total_expenses ?? 0)} numericValue={kpis?.total_expenses ?? 0} />;
 }
 
 function KPINet() {
   const year = new Date().getFullYear();
   const { data: kpis } = useDashboardKPIs(year);
   const t = useT();
-  return <KPIWidget label={t.net_result} value={formatCHF(kpis?.net_result ?? 0)} />;
+  return <KPIWidget label={t.net_result} value={formatCHF(kpis?.net_result ?? 0)} numericValue={kpis?.net_result ?? 0} />;
 }
 
 // ── Chart widget ──
@@ -1138,6 +1153,219 @@ function PinnedNotes() {
   );
 }
 
+// ── Phase 13: Time tracking widgets ──
+
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function fmtHours(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m > 0 ? `${h}h${String(m).padStart(2, "0")}` : `${h}h`;
+}
+
+function TimeThisWeek() {
+  const t = useT();
+  const chart = useChartTheme();
+  const { data } = useQuery({ queryKey: ["time-this-week"], queryFn: getTimeThisWeek });
+  const chartData = useMemo(() => {
+    if (!data || data.length === 0) return [];
+    const now = new Date();
+    const dayOfWeek = now.getDay() || 7;
+    const monday = new Date(now);
+    monday.setDate(monday.getDate() - dayOfWeek + 1);
+    return WEEKDAYS.map((label, i) => {
+      const d = new Date(monday);
+      d.setDate(d.getDate() + i);
+      const iso = d.toISOString().slice(0, 10);
+      const entry = data.find((e) => e.day === iso);
+      return { day: label, minutes: entry?.minutes ?? 0 };
+    });
+  }, [data]);
+
+  const totalMin = chartData.reduce((s, d) => s + d.minutes, 0);
+
+  if (!data || data.length === 0) {
+    return <div className="h-full flex items-center justify-center text-sm text-muted">{t.no_time_data}</div>;
+  }
+
+  return (
+    <div className="h-full flex flex-col p-3">
+      <div className="text-xs text-muted mb-1">{t.time_this_week}</div>
+      <div className="text-lg font-semibold mb-2">{fmtHours(totalMin)}</div>
+      <div className="flex-1 min-h-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} />
+            <XAxis dataKey="day" tick={{ fontSize: 11, fill: chart.tickFill }} />
+            <YAxis tick={{ fontSize: 11, fill: chart.tickFill }} tickFormatter={(v) => fmtHours(Number(v))} />
+            <Tooltip formatter={(value) => fmtHours(Number(value ?? 0))} contentStyle={chart.tooltipStyle} cursor={{ fill: chart.cursorFill }} />
+            <Bar dataKey="minutes" fill="var(--color-chart-1)" radius={[3, 3, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function PlannedVsActual() {
+  const t = useT();
+  const chart = useChartTheme();
+  const { data } = useQuery({ queryKey: ["planned-vs-actual"], queryFn: getPlannedVsActual });
+
+  if (!data || data.length === 0) {
+    return <div className="h-full flex items-center justify-center text-sm text-muted">{t.no_time_data}</div>;
+  }
+
+  const chartData = data.map((d) => ({
+    name: d.project_name.length > 15 ? d.project_name.slice(0, 14) + "..." : d.project_name,
+    [t.planned]: Math.round(d.planned / 60 * 10) / 10,
+    [t.tracked]: Math.round(d.tracked / 60 * 10) / 10,
+  }));
+
+  return (
+    <div className="h-full flex flex-col p-3">
+      <div className="text-xs text-muted mb-2">{t.planned_vs_actual}</div>
+      <div className="flex-1 min-h-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData} layout="vertical">
+            <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} />
+            <XAxis type="number" tick={{ fontSize: 11, fill: chart.tickFill }} unit="h" />
+            <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: chart.tickFill }} width={90} />
+            <Tooltip contentStyle={chart.tooltipStyle} cursor={{ fill: chart.cursorFill }} />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <Bar dataKey={t.planned} fill="var(--color-chart-3)" radius={[0, 3, 3, 0]} />
+            <Bar dataKey={t.tracked} fill="var(--color-chart-1)" radius={[0, 3, 3, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function TopTimeConsumers() {
+  const t = useT();
+  const { data } = useQuery({ queryKey: ["top-time-consumers"], queryFn: () => getTopTimeConsumers(8) });
+
+  if (!data || data.length === 0) {
+    return <div className="h-full flex items-center justify-center text-sm text-muted">{t.no_time_data}</div>;
+  }
+
+  return (
+    <div className="h-full overflow-y-auto p-3">
+      <div className="text-xs text-muted mb-2">{t.top_time_consumers}</div>
+      <div className="space-y-1.5">
+        {data.map((task) => (
+          <div key={task.id} className="flex items-center justify-between text-sm">
+            <div className="truncate flex-1 mr-2">
+              <span>{task.title}</span>
+              <span className="text-xs text-muted ml-1">({task.project_name})</span>
+            </div>
+            <span className="text-xs font-medium shrink-0">{fmtHours(task.tracked_minutes)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BillableSummary() {
+  const t = useT();
+  const { data: tasks } = useAllTasks();
+  const totalMin = useMemo(() => (tasks ?? []).reduce((s, tk) => s + (tk.tracked_minutes ?? 0), 0), [tasks]);
+  const totalHours = Math.round(totalMin / 60 * 10) / 10;
+  const animated = useCountUp(totalHours);
+
+  return (
+    <div className="h-full flex flex-col justify-center px-4">
+      <div className="text-xs text-muted uppercase tracking-wide mb-1">{t.billable_summary}</div>
+      <div className="text-lg font-semibold">{animated.toFixed(1)}h</div>
+      <div className="text-xs text-muted">{t.tracked}</div>
+    </div>
+  );
+}
+
+function WeeklyTrendWidget() {
+  const t = useT();
+  const chart = useChartTheme();
+  const { data } = useQuery({ queryKey: ["weekly-trend"], queryFn: getWeeklyTrend });
+
+  if (!data || data.length === 0) {
+    return <div className="h-full flex items-center justify-center text-sm text-muted">{t.no_time_data}</div>;
+  }
+
+  const chartData = data.map((d) => ({
+    week: d.week,
+    hours: Math.round(d.minutes / 60 * 10) / 10,
+  }));
+
+  return (
+    <div className="h-full flex flex-col p-3">
+      <div className="text-xs text-muted mb-2">{t.weekly_trend}</div>
+      <div className="flex-1 min-h-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} />
+            <XAxis dataKey="week" tick={{ fontSize: 11, fill: chart.tickFill }} />
+            <YAxis tick={{ fontSize: 11, fill: chart.tickFill }} unit="h" />
+            <Tooltip formatter={(value) => `${value}h`} contentStyle={chart.tooltipStyle} cursor={{ fill: chart.cursorFill }} />
+            <Line type="monotone" dataKey="hours" stroke="var(--color-chart-1)" strokeWidth={2} dot={{ r: 3 }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+const PIE_COLORS = [
+  "var(--color-chart-1)", "var(--color-chart-2)", "var(--color-chart-3)", "var(--color-chart-4)",
+  "var(--color-chart-5)", "var(--color-chart-6)", "var(--color-chart-7)", "var(--color-chart-8)",
+];
+
+function ProjectTimeDistribution() {
+  const t = useT();
+  const chart = useChartTheme();
+  const { data } = useQuery({ queryKey: ["project-time-distribution"], queryFn: getProjectTimeDistribution });
+
+  if (!data || data.length === 0) {
+    return <div className="h-full flex items-center justify-center text-sm text-muted">{t.no_time_data}</div>;
+  }
+
+  const chartData = data.map((d) => ({
+    name: d.project_name,
+    value: d.minutes,
+  }));
+
+  return (
+    <div className="h-full flex flex-col p-3">
+      <div className="text-xs text-muted mb-2">{t.project_time_distribution}</div>
+      <div className="flex-1 min-h-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={chartData}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              outerRadius="70%"
+              label={({ name, percent }) => {
+                const n = String(name ?? "");
+                return `${n.length > 12 ? n.slice(0, 11) + "…" : n} ${((percent ?? 0) * 100).toFixed(0)}%`;
+              }}
+              labelLine
+            >
+              {chartData.map((_, i) => (
+                <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip formatter={(value) => fmtHours(Number(value ?? 0))} contentStyle={chart.tooltipStyle} />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
 // ── Widget renderer ──
 
 export function renderWidget(type: WidgetType) {
@@ -1175,6 +1403,13 @@ export function renderWidget(type: WidgetType) {
     case "busiest-day": return <BusiestDay />;
     case "quick-create": return <QuickCreate />;
     case "pinned-notes": return <PinnedNotes />;
+    // Phase 13 — Time tracking
+    case "time-this-week": return <TimeThisWeek />;
+    case "planned-vs-actual": return <PlannedVsActual />;
+    case "top-time-consumers": return <TopTimeConsumers />;
+    case "billable-summary": return <BillableSummary />;
+    case "weekly-trend": return <WeeklyTrendWidget />;
+    case "project-time-distribution": return <ProjectTimeDistribution />;
     default: return <div className="p-4 text-muted text-sm">Unknown widget</div>;
   }
 }

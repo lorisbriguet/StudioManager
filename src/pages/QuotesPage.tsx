@@ -1,23 +1,24 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, Eye, Pencil, FileOutput, Check, Trash2, Send, ExternalLink } from "lucide-react";
+import { Plus, Eye, Pencil, FileOutput, Check, Trash2, Send, ExternalLink, FolderPlus, FolderKanban, FileText } from "lucide-react";
+import { toast } from "sonner";
+import { undoable } from "../lib/undo";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { useClients } from "../db/hooks/useClients";
 import { useQuotes, useUpdateQuote, useDeleteQuote } from "../db/hooks/useQuotes";
+import { getQuoteLineItems } from "../db/queries/quotes";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
 import { formatDisplayDate } from "../utils/formatDate";
 import { useT } from "../i18n/useT";
 import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
+import { BulkActionBar } from "../components/BulkActionBar";
+import { SavedFilterBar } from "../components/SavedFilterBar";
+import { useBulkSelect } from "../hooks/useBulkSelect";
+import { QuoteToProjectWizard } from "../components/QuoteToProjectWizard";
 import { useTabStore } from "../stores/tab-store";
-import { PageHeader, SearchBar, PageSpinner, Button } from "../components/ui";
-import type { Quote, QuoteStatus } from "../types/quote";
-
-const statusColors: Record<QuoteStatus, string> = {
-  draft: "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300",
-  sent: "bg-accent-light text-accent",
-  accepted: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
-  rejected: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
-  expired: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300",
-};
+import { PageHeader, SearchBar, PageSpinner, Button, EmptyState } from "../components/ui";
+import { quoteStatusVariant, statusClasses } from "../lib/statusColors";
+import type { Quote, QuoteStatus, QuoteLineItem } from "../types/quote";
 
 type SortKey = "reference" | "client_name" | "quote_date" | "status" | "total";
 
@@ -33,6 +34,25 @@ export function QuotesPage() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortState<SortKey>>({ key: "quote_date", dir: "desc" });
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState<Quote & { client_name: string }> | null>(null);
+  const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
+
+  const applyFilter = useCallback((filters: Record<string, unknown>) => {
+    if (typeof filters.search === "string") setSearch(filters.search);
+    if (filters.sort && typeof filters.sort === "object") setSort(filters.sort as SortState<SortKey>);
+  }, []);
+
+  const [wizardQuote, setWizardQuote] = useState<(Quote & { client_name: string }) | null>(null);
+  const [wizardLineItems, setWizardLineItems] = useState<QuoteLineItem[]>([]);
+
+  const openWizard = async (quote: Quote & { client_name: string }) => {
+    if (quote.converted_to_project_id) {
+      toast.info(t.project_already_generated);
+      return;
+    }
+    const items = await getQuoteLineItems(quote.id);
+    setWizardLineItems(items);
+    setWizardQuote(quote);
+  };
 
   const clientsMap = useMemo(() => new Map(clients?.map((c) => [c.id, c.name]) ?? []), [clients]);
 
@@ -56,6 +76,31 @@ export function QuotesPage() {
     return sortRows(rows, sort.key, sort.dir);
   }, [enriched, search, sort]);
 
+  const bulk = useBulkSelect(filtered);
+
+  const bulkMarkSent = useCallback(() => {
+    const ids = [...bulk.selected] as number[];
+    const prevStates = ids.map((id) => {
+      const q = filtered.find((quote) => quote.id === id);
+      return { id, status: q?.status };
+    });
+    ids.forEach((id) => updateQuote.mutate({ id, data: { status: "sent" as QuoteStatus } }));
+    undoable(t.bulk_updated, async () => {
+      await Promise.all(
+        prevStates.map((prev) =>
+          updateQuote.mutateAsync({ id: prev.id, data: { status: prev.status as QuoteStatus } })
+        )
+      );
+    });
+    bulk.clearSelection();
+  }, [bulk, updateQuote, filtered, t]);
+
+  const bulkDelete = useCallback(async () => {
+    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
+    ([...bulk.selected] as number[]).forEach((id) => deleteQuote.mutate(id));
+    bulk.clearSelection();
+  }, [bulk, deleteQuote, t]);
+
   if (isLoading) return <PageSpinner />;
 
   return (
@@ -66,12 +111,22 @@ export function QuotesPage() {
         </Button>
       </PageHeader>
 
-      <SearchBar value={search} onChange={setSearch} placeholder={t.search_quotes} className="w-64 mb-4" />
+      <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); }} placeholder={t.search_quotes} className="w-64 mb-4" />
+      <SavedFilterBar
+        page="quotes"
+        currentFilters={{ search, sort }}
+        onApply={applyFilter}
+        activeFilterId={activeFilterId}
+        onActiveChange={setActiveFilterId}
+      />
 
       <div>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100">
+              <th className="w-8 px-2 py-2">
+                <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
+              </th>
               <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
               <SortHeader label={t.client} sortKey="client_name" current={sort} onSort={setSort} />
               <SortHeader label={t.date} sortKey="quote_date" current={sort} onSort={setSort} />
@@ -87,6 +142,14 @@ export function QuotesPage() {
                 className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200 group"
                 onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: q }); }}
               >
+                <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={bulk.selected.has(q.id)}
+                    onChange={(e) => bulk.toggleItem(q.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
+                    className="accent-[var(--accent)]"
+                  />
+                </td>
                 <td className="px-4 py-2">
                   <Link
                     to={`/quotes/${q.id}/edit`}
@@ -107,7 +170,7 @@ export function QuotesPage() {
                       const status = e.target.value as QuoteStatus;
                       updateQuote.mutate({ id: q.id, data: { status } });
                     }}
-                    className={`text-xs px-2 py-0.5 rounded-full border-0 appearance-none cursor-pointer ${statusColors[q.status]}`}
+                    className={`text-xs px-2 py-0.5 rounded-full border-0 appearance-none cursor-pointer ${statusClasses(quoteStatusVariant(q.status))}`}
                   >
                     <option value="draft">{t.draft}</option>
                     <option value="sent">{t.sent}</option>
@@ -129,6 +192,16 @@ export function QuotesPage() {
                     >
                       <Eye size={14} className="inline" />
                     </Link>
+                    {q.converted_to_project_id ? (
+                      <Link
+                        to={`/projects/${q.converted_to_project_id}`}
+                        className="text-green-500 hover:text-green-400 align-middle"
+                        title={t.view_project}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <FolderKanban size={14} className="inline" />
+                      </Link>
+                    ) : null}
                     {q.converted_to_invoice_id ? (
                       <span className="text-green-500 align-middle" title={t.already_converted}>
                         <Check size={14} className="inline" />
@@ -147,15 +220,11 @@ export function QuotesPage() {
                 </td>
               </tr>
             ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-muted">
-                  {search ? t.no_matching_quotes : t.no_quotes_yet}
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
+        {filtered.length === 0 && !isLoading && (
+          <EmptyState message={search ? t.no_matching_quotes : t.no_quotes_yet} icon={<FileText size={32} />} />
+        )}
       </div>
       {ctxMenu && (
         <ContextMenu
@@ -169,9 +238,28 @@ export function QuotesPage() {
             { label: "", divider: true, onClick: () => {} },
             ...(ctxMenu.item.status === "draft" ? [{ label: t.mark_sent, icon: <Send size={14} />, onClick: () => updateQuote.mutate({ id: ctxMenu.item.id, data: { status: "sent" as QuoteStatus } }) }] : []),
             ...(!ctxMenu.item.converted_to_invoice_id ? [{ label: t.convert_to_invoice, icon: <FileOutput size={14} />, onClick: () => navigate(`/invoices/new?from_quote=${ctxMenu.item.id}`) }] : []),
+            ...(ctxMenu.item.status === "accepted" && !ctxMenu.item.converted_to_project_id ? [{ label: t.generate_project, icon: <FolderPlus size={14} />, onClick: () => openWizard(ctxMenu.item) }] : []),
             { label: "", divider: true, onClick: () => {} },
             { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteQuote.mutate(ctxMenu.item.id) },
           ]}
+        />
+      )}
+
+      <BulkActionBar
+        count={bulk.count}
+        onClear={bulk.clearSelection}
+        actions={[
+          { label: t.mark_sent, icon: <Send size={14} />, onClick: bulkMarkSent },
+          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+        ]}
+      />
+      {wizardQuote && (
+        <QuoteToProjectWizard
+          open={!!wizardQuote}
+          onClose={() => setWizardQuote(null)}
+          quote={wizardQuote}
+          lineItems={wizardLineItems}
+          clientName={wizardQuote.client_name}
         />
       )}
     </div>

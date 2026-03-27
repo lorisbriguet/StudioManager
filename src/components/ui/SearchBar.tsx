@@ -16,13 +16,13 @@ export function SearchBar({ value, onChange, placeholder, className = "w-64" }: 
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full border border-gray-200 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-accent dark:border-gray-600 pr-7"
+          className="w-full border border-gray-200 rounded-md px-3 py-1.5 text-sm focus-accent dark:border-gray-600 pr-7"
         />
         {value && (
           <button
             type="button"
             onClick={() => onChange("")}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-gray-900"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-gray-900 dark:hover:text-gray-200"
           >
             <X size={12} />
           </button>

@@ -34,6 +34,12 @@ export function makeLineItem(partial?: Partial<Omit<LineItem, "_id">>): LineItem
   };
 }
 
+const UNIT_SHORT: Record<string, string> = { hours: "h", days: "d", units: "u", flat: "flat" };
+/** Short label for a unit value, e.g. "hours" -> "h" */
+export function unitShortLabel(unit: string): string {
+  return UNIT_SHORT[unit] ?? unit;
+}
+
 /** Strips _id and adds sort_order for persistence */
 export function toPersistedLineItems(items: LineItem[]) {
   return items.map(({ _id, ...item }, i) => ({ ...item, sort_order: i }));

@@ -41,7 +41,11 @@ export class TransactionBatch {
 }
 
 let dbPromise: Promise<Database> | null = null;
-let currentDbName = "studiomanager.db";
+let currentDbName = localStorage.getItem("presentationMode") === "true"
+  ? "studiomanager_presentation.db"
+  : localStorage.getItem("testMode") === "true"
+    ? "studiomanager_test.db"
+    : "studiomanager.db";
 
 export async function getDb(): Promise<Database> {
   if (!dbPromise) {
@@ -62,6 +66,26 @@ export async function getDb(): Promise<Database> {
  * Switch the frontend DB connection to a different database file.
  * Closes the current connection and opens the new one.
  */
+export async function seedPresentationDb(): Promise<void> {
+  const db = await getDb();
+  // Import seed SQL as raw text (Vite raw import)
+  const seedSql = (await import("./seeds/presentation.sql?raw")).default;
+  // Split on semicolons, strip comment-only lines, then execute each statement
+  const statements = seedSql
+    .split(";")
+    .map((s: string) =>
+      s
+        .split("\n")
+        .filter((line: string) => !line.trim().startsWith("--"))
+        .join("\n")
+        .trim()
+    )
+    .filter((s: string) => s.length > 0);
+  for (const stmt of statements) {
+    await db.execute(stmt + ";");
+  }
+}
+
 export async function switchDb(dbName: string): Promise<void> {
   if (dbPromise) {
     try {
@@ -184,6 +208,7 @@ async function ensureSchema(db: Database) {
   // ── Invoices/Quotes: billing_address_id ────────────────────
   await addColumnIfMissing("invoices", "billing_address_id", "INTEGER DEFAULT NULL");
   await addColumnIfMissing("quotes", "billing_address_id", "INTEGER DEFAULT NULL");
+  await addColumnIfMissing("quotes", "converted_to_project_id", "INTEGER DEFAULT NULL");
 
   // ── Invoices: multi-currency columns ──────────────────────
   await addColumnIfMissing("invoices", "currency", "TEXT NOT NULL DEFAULT 'CHF'");
@@ -312,6 +337,50 @@ async function ensureSchema(db: Database) {
     )
   `);
 
+  // ── Saved filters ────────────────────────────────────────
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS saved_filters (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      page TEXT NOT NULL,
+      name TEXT NOT NULL,
+      filters TEXT NOT NULL DEFAULT '{}',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  // ── Named Tables (custom project tables) ─────────────────
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS project_tables (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL DEFAULT 'Untitled',
+      column_config TEXT NOT NULL DEFAULT '[]',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS project_table_rows (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      table_id INTEGER NOT NULL REFERENCES project_tables(id) ON DELETE CASCADE,
+      data TEXT NOT NULL DEFAULT '{}',
+      sort_order INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+
+  // ── Modular project pages (layout_config) ────────────────
+  await addColumnIfMissing("projects", "layout_config", "TEXT DEFAULT NULL");
+
+  // ── Planned time on tasks (for quote→project comparison) ──
+  await addColumnIfMissing("tasks", "planned_minutes", "INTEGER DEFAULT NULL");
+
+  // ── Boosted workload: time tracking + workload data on tasks ──
+  await addColumnIfMissing("tasks", "tracked_minutes", "INTEGER NOT NULL DEFAULT 0");
+  await addColumnIfMissing("tasks", "workload_cells", "TEXT NOT NULL DEFAULT '{}'");
+  await addColumnIfMissing("tasks", "workload_sort_order", "INTEGER NOT NULL DEFAULT 0");
+  await addColumnIfMissing("workload_templates", "is_system", "INTEGER NOT NULL DEFAULT 0");
+
   // ── Seed default workload template if none exist ───────────
   const templateCount = await db.select<{ cnt: number }[]>(
     "SELECT COUNT(*) as cnt FROM workload_templates"
@@ -339,5 +408,39 @@ async function ensureSchema(db: Database) {
       "INSERT INTO workload_templates (name, columns) VALUES ($1, $2)",
       ["Workload Tracker", defaultCols]
     );
+  }
+
+  // Mark first template as system (protected, non-deletable)
+  await db.execute(
+    "UPDATE workload_templates SET is_system = 1 WHERE id = (SELECT MIN(id) FROM workload_templates) AND is_system = 0"
+  );
+
+  // ── Migrate workload_rows → tasks (one-time) ─────────────
+  const hasWorkloadRows = await db.select<{ cnt: number }[]>(
+    "SELECT COUNT(*) as cnt FROM workload_rows"
+  ).catch(() => [{ cnt: 0 }]); // table may not exist yet
+  if (hasWorkloadRows[0]?.cnt > 0) {
+    const wRows = await db.select<{
+      id: number; project_id: number; task_id: number | null;
+      cells: string; sort_order: number;
+    }[]>("SELECT id, project_id, task_id, cells, sort_order FROM workload_rows");
+    for (const wr of wRows) {
+      if (wr.task_id) {
+        // Linked row — copy cells to existing task
+        await db.execute(
+          "UPDATE tasks SET workload_cells = $1, workload_sort_order = $2 WHERE id = $3 AND workload_cells = '{}'",
+          [wr.cells, wr.sort_order, wr.task_id]
+        );
+      } else {
+        // Unlinked row — create a task
+        await db.execute(
+          `INSERT INTO tasks (project_id, title, description, status, priority, sort_order, workload_cells, workload_sort_order)
+           VALUES ($1, 'Untitled', '', 'todo', 'low', 0, $2, $3)`,
+          [wr.project_id, wr.cells, wr.sort_order]
+        );
+      }
+    }
+    // Clear migrated rows so this doesn't run again
+    await db.execute("DELETE FROM workload_rows");
   }
 }

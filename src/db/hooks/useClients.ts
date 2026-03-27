@@ -305,4 +305,14 @@ export function useDeleteClientAddress() {
   });
 }
 
+// ── Client Activity Timeline ─────────────────────────────────
+
+export function useClientActivity(clientId: string) {
+  return useQuery({
+    queryKey: ["client-activity", clientId],
+    queryFn: () => q.getClientActivity(clientId),
+    enabled: !!clientId,
+  });
+}
+
 export { getNextClientId } from "../queries/clients";
