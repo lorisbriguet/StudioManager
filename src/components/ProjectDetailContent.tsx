@@ -1300,7 +1300,7 @@ function PriorityBadge({ priority, onClick }: { priority: TaskPriority; onClick?
       className="cursor-pointer hover:opacity-70"
       title={`Priority: ${priority}`}
     >
-      <span className={`inline-block w-2 h-2 rounded-full ${colors[priority]}`} />
+      <span className={`dot ${colors[priority]}`} />
     </button>
   );
 }

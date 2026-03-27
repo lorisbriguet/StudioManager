@@ -209,7 +209,7 @@ export function FinancesPage() {
               {pieData.map((d) => (
                 <div key={d.name} className="flex items-center gap-1.5 text-xs">
                   <div
-                    className="w-2.5 h-2.5 rounded-full"
+                    className="dot"
                     style={{ backgroundColor: getPieColor(d.name, darkMode) }}
                   />
                   <span className="text-muted">{d.name}</span>

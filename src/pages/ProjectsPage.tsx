@@ -230,7 +230,7 @@ export function ProjectsPage() {
                 <div className="flex items-center justify-between text-[11px] text-muted">
                   <span>{p.deadline ? formatDisplayDate(p.deadline) : t.no_deadline}</span>
                   {stats.total > 0 && (
-                    <span className={`inline-block w-2 h-2 rounded-full ${
+                    <span className={`dot ${
                       stats.maxPriority === "high" ? "bg-danger" : stats.maxPriority === "medium" ? "bg-warning" : "bg-success"
                     }`} />
                   )}

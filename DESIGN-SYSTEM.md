@@ -127,18 +127,36 @@ All icons use **lucide-react**. Never use unicode characters (no `✕`, `←`, `
 
 ---
 
-## Priority Indicators
+## Indicator Dots
 
-Priorities are shown as small colored dots, not text symbols:
+Two standardized dot sizes defined as CSS classes in `index.css`. Never use inline `w-X h-X rounded-full` for dots.
+
+| Class | Size | Usage |
+|-------|------|-------|
+| `dot-sm` | 6px | Dense list items (dashboard widget rows) |
+| `dot` | 8px | Standard indicators (priority, status, unread, chart legends) |
 
 ```tsx
 // CORRECT
-<span className={`inline-block w-2 h-2 rounded-full ${
+<span className="dot bg-danger" />
+<span className="dot-sm bg-success" />
+
+// WRONG — don't inline dot sizes
+<span className="inline-block w-2 h-2 rounded-full bg-danger" />
+```
+
+**Special cases** (not using dot classes):
+- Sidebar notification ping: animated pulse, unique pattern
+- Calendar day today marker: 4px absolute-positioned dot inside day cell
+
+### Priority Dots
+
+Priorities use colored `dot` class, never text symbols:
+
+```tsx
+<span className={`dot ${
   priority === "high" ? "bg-danger" : priority === "medium" ? "bg-warning" : "bg-success"
 }`} />
-
-// WRONG
-{priority === "high" ? "!!!" : "!!"}
 ```
 
 | Priority | Color | Class |
