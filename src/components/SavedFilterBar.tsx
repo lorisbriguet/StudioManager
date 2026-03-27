@@ -75,7 +75,7 @@ function ConditionRow({
           const newOp = newOps.includes(condition.operator) ? condition.operator : newOps[0];
           onChange({ field: e.target.value, operator: newOp, value: "" });
         }}
-        className="text-xs px-1.5 py-1 border border-gray-200 rounded-md bg-transparent min-w-[80px]"
+        className="text-xs px-1.5 py-1 border border-[var(--color-border-divider)] rounded-lg bg-transparent min-w-[80px]"
       >
         {fields.map((f) => (
           <option key={f.key} value={f.key}>{f.label}</option>
@@ -84,7 +84,7 @@ function ConditionRow({
       <select
         value={condition.operator}
         onChange={(e) => onChange({ ...condition, operator: e.target.value as FilterOperator })}
-        className="text-xs px-1.5 py-1 border border-gray-200 rounded-md bg-transparent"
+        className="text-xs px-1.5 py-1 border border-[var(--color-border-divider)] rounded-lg bg-transparent"
       >
         {ops.map((op) => (
           <option key={op} value={op}>{opLabels[op]}</option>
@@ -94,7 +94,7 @@ function ConditionRow({
         <select
           value={condition.value}
           onChange={(e) => onChange({ ...condition, value: e.target.value })}
-          className="text-xs px-1.5 py-1 border border-gray-200 rounded-md bg-transparent min-w-[80px]"
+          className="text-xs px-1.5 py-1 border border-[var(--color-border-divider)] rounded-lg bg-transparent min-w-[80px]"
         >
           <option value="">--</option>
           {fieldDef.options.map((opt) => (
@@ -106,7 +106,7 @@ function ConditionRow({
           value={condition.value}
           onChange={(e) => onChange({ ...condition, value: e.target.value })}
           placeholder={t.value}
-          className="text-xs px-1.5 py-1 border border-gray-200 rounded-md bg-transparent w-24"
+          className="text-xs px-1.5 py-1 border border-[var(--color-border-divider)] rounded-lg bg-transparent w-24"
         />
       )}
       <button onClick={onRemove} className="text-muted hover:text-red-500">
@@ -259,7 +259,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
                     if (e.key === "Escape") { setNaming(false); setNameInput(""); setConditions([]); setShowConditions(false); }
                   }}
                   placeholder={t.filter_name}
-                  className="text-xs px-2 py-1 border border-gray-200 rounded-md w-36 bg-transparent"
+                  className="text-xs px-2 py-1 border border-[var(--color-border-divider)] rounded-lg w-36 bg-transparent"
                 />
                 {fields && fields.length > 0 && (
                   <button
@@ -296,10 +296,10 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
       <div className="flex items-center gap-1.5 flex-wrap">
         <button
           onClick={handleClearAll}
-          className={`text-xs px-2.5 py-1 rounded-md transition-colors ${
+          className={`text-xs px-2.5 py-1 rounded-full transition-colors ${
             activeFilterId == null
               ? "bg-accent text-white"
-              : "text-muted hover:bg-gray-100 dark:hover:bg-gray-200"
+              : "text-muted hover:bg-[var(--color-hover-row)]"
           }`}
         >
           {t.all}
@@ -318,10 +318,10 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
                 e.preventDefault();
                 setCtxMenu({ x: e.clientX, y: e.clientY, filter: f });
               }}
-              className={`text-xs px-2.5 py-1 rounded-md transition-colors flex items-center gap-1 ${
+              className={`text-xs px-2.5 py-1 rounded-full transition-colors flex items-center gap-1 ${
                 activeFilterId === f.id
                   ? "bg-accent text-white"
-                  : "text-muted hover:bg-gray-100 dark:hover:bg-gray-200"
+                  : "text-muted hover:bg-[var(--color-hover-row)]"
               }`}
             >
               {editingId === f.id ? (
@@ -366,7 +366,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
                   if (e.key === "Escape") { setNaming(false); setNameInput(""); setConditions([]); setShowConditions(false); }
                 }}
                 placeholder={t.filter_name}
-                className="text-xs px-2 py-1 border border-gray-200 rounded-md w-28 bg-transparent"
+                className="text-xs px-2 py-1 border border-[var(--color-border-divider)] rounded-lg w-28 bg-transparent"
               />
               {fields && fields.length > 0 && (
                 <button
@@ -395,11 +395,11 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
 
         {ctxMenu && createPortal(
           <div
-            className="fixed z-50 bg-white dark:bg-gray-100 border border-gray-200 rounded-lg shadow-lg py-1 min-w-[140px] animate-in"
+            className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-lg py-1 min-w-[140px] animate-in"
             style={{ left: ctxMenu.x, top: ctxMenu.y }}
           >
             <button
-              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-left hover:bg-gray-50 dark:hover:bg-gray-200"
+              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-left hover:bg-[var(--color-hover-row)]"
               onClick={() => {
                 setEditingId(ctxMenu.filter.id);
                 setEditName(ctxMenu.filter.name);

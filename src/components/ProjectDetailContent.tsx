@@ -194,7 +194,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                   updateProject.mutate({ id: projectId, data: { notes: val } });
                 }
               }}
-              className="w-full border border-gray-100 rounded-lg px-3 py-2 text-sm resize-vertical min-h-[60px] max-h-[60vh] placeholder:text-muted"
+              className="w-full border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-3 py-2 text-sm resize-vertical min-h-[60px] max-h-[60vh] placeholder:text-muted"
               style={{ fieldSizing: "content" } as React.CSSProperties}
             />
           </div>
@@ -249,7 +249,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
       <div>
         <div className="flex items-center gap-3 mb-4">
           <div className="flex-1 min-w-0">
-            <h2 className={compact ? "text-base font-semibold" : "text-xl font-semibold"}>
+            <h2 className={compact ? "text-base font-semibold tracking-tight" : "text-xl font-semibold tracking-tight"}>
               {project.name}
             </h2>
             {client && (
@@ -268,7 +268,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                 { onSuccess: () => toast.success(t.toast_status_updated) }
               );
             }}
-            className="border border-gray-200 rounded-md px-2 py-1 text-xs"
+            className="border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-2 py-1 text-xs"
           >
             <option value="active">{t.active}</option>
             <option value="completed">{t.completed}</option>
@@ -289,7 +289,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                   data: { start_date: e.target.value || null },
                 })
               }
-              className="border border-gray-200 rounded px-2 py-1 text-xs"
+              className="border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-2 py-1 text-xs"
             />
           </div>
           <div className="flex items-center gap-2">
@@ -303,7 +303,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                   data: { deadline: e.target.value || null },
                 })
               }
-              className="border border-gray-200 rounded px-2 py-1 text-xs"
+              className="border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-2 py-1 text-xs"
             />
           </div>
           {project.folder_path ? (
@@ -336,7 +336,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
               <span>{t.progress}</span>
               <span>{progress}%</span>
             </div>
-            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-1.5 bg-[var(--color-input)] rounded-full overflow-hidden">
               <div
                 className="h-full bg-accent rounded-full transition-all"
                 style={{ width: `${progress}%` }}
@@ -365,7 +365,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
     <div>
       <div className="flex items-center gap-3 mb-4">
         <div className="flex-1 min-w-0">
-          <h2 className={compact ? "text-base font-semibold" : "text-xl font-semibold"}>
+          <h2 className={compact ? "text-base font-semibold tracking-tight" : "text-xl font-semibold tracking-tight"}>
             {project.name}
           </h2>
           {client && (
@@ -384,7 +384,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
               { onSuccess: () => toast.success(t.toast_status_updated) }
             );
           }}
-          className="border border-gray-200 rounded-md px-2 py-1 text-xs"
+          className="border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-2 py-1 text-xs"
         >
           <option value="active">{t.active}</option>
           <option value="completed">{t.completed}</option>
@@ -405,7 +405,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                 data: { start_date: e.target.value || null },
               })
             }
-            className="border border-gray-200 rounded px-2 py-1 text-xs"
+            className="border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-2 py-1 text-xs"
           />
         </div>
         <div className="flex items-center gap-2">
@@ -419,7 +419,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                 data: { deadline: e.target.value || null },
               })
             }
-            className="border border-gray-200 rounded px-2 py-1 text-xs"
+            className="border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-2 py-1 text-xs"
           />
         </div>
         {project.folder_path ? (
@@ -452,7 +452,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
             <span>{t.progress}</span>
             <span>{progress}%</span>
           </div>
-          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-1.5 bg-[var(--color-input)] rounded-full overflow-hidden">
             <div
               className="h-full bg-accent rounded-full transition-all"
               style={{ width: `${progress}%` }}
@@ -471,12 +471,12 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
               updateProject.mutate({ id: projectId, data: { notes: val } });
             }
           }}
-          className="w-full border border-gray-100 rounded-lg px-3 py-2 text-sm resize-vertical min-h-[60px] max-h-[60vh] placeholder:text-muted"
+          className="w-full border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-3 py-2 text-sm resize-vertical min-h-[60px] max-h-[60vh] placeholder:text-muted"
           style={{ fieldSizing: "content" } as React.CSSProperties}
         />
       </div>
 
-      <div className="border border-gray-100 rounded-lg p-4">
+      <div className="bg-[var(--color-surface)] rounded-xl p-4">
         <div
           className="flex items-center justify-between mb-3 select-none"
           onContextMenu={(e) => { e.preventDefault(); setSectionCtxMenu({ x: e.clientX, y: e.clientY, item: "tasks" }); }}
@@ -497,7 +497,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                   className={`px-2 py-0.5 text-[11px] rounded-full border ${
                     taskFilter === f
                       ? "bg-accent text-white border-accent"
-                      : "border-gray-200 text-muted hover:bg-gray-50 dark:hover:bg-gray-200"
+                      : "border-[var(--color-input-border)] text-muted hover:bg-[var(--color-hover-row)]"
                   }`}
                 >
                   {f === "todo" ? t.todo : f === "done" ? t.done : t.all}
@@ -516,7 +516,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
             onKeyDown={(e) => {
               if (e.key === "Enter") addTask();
             }}
-            className="flex-1 border border-gray-200 rounded-md px-3 py-1.5 text-sm"
+            className="flex-1 border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-3 py-1.5 text-sm"
           />
           <button onClick={addTask} className="p-1.5 text-muted hover:text-accent">
             <Plus size={16} />
@@ -574,7 +574,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                         if (e.key === "Escape") setEditingTask(null);
                       }}
-                      className="flex-1 text-sm border border-gray-200 rounded px-1 py-0.5"
+                      className="flex-1 text-sm border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-1 py-0.5"
                     />
                   ) : (
                     <span
@@ -629,7 +629,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                   </button>
                 </div>
                 {isExpanded && (
-                  <div className="ml-9 border-l border-gray-200 pl-3 pb-1">
+                  <div className="ml-9 border-l border-[var(--color-border-divider)] pl-3 pb-1">
                     <DndContext
                       sensors={subtaskSensors}
                       collisionDetection={closestCenter}
@@ -680,7 +680,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                               if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                               if (e.key === "Escape") setEditingSubtask(null);
                             }}
-                            className="flex-1 text-xs border border-gray-200 rounded px-1 py-0.5"
+                            className="flex-1 text-xs border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-1 py-0.5"
                           />
                         ) : (
                           <span
@@ -746,7 +746,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                             );
                           }
                         }}
-                        className="flex-1 border border-gray-200 rounded px-2 py-1 text-xs"
+                        className="flex-1 border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-2 py-1 text-xs"
                       />
                       <button
                         onClick={() => {
@@ -895,7 +895,7 @@ function ProjectResources({ projectId }: { projectId: number }) {
             </div>
           ))}
           {showPicker ? (
-            <div className="mt-2 border border-gray-200 rounded-md p-2">
+            <div className="mt-2 border border-[var(--color-border-divider)] rounded-xl p-2">
               {unlinked.length === 0 ? (
                 <div className="text-xs text-muted">{t.no_matching_resources}</div>
               ) : (
@@ -907,7 +907,7 @@ function ProjectResources({ projectId }: { projectId: number }) {
                         linkResource.mutate({ resourceId: r.id, projectId });
                         setShowPicker(false);
                       }}
-                      className="w-full text-left px-2 py-1 text-sm hover:bg-gray-50 dark:hover:bg-gray-200 rounded flex items-center gap-2"
+                      className="w-full text-left px-2 py-1 text-sm hover:bg-[var(--color-hover-row)] rounded-md flex items-center gap-2"
                     >
                       <Bookmark size={12} className="text-muted" />
                       {r.name}
@@ -1005,7 +1005,7 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
               className={`px-2 py-0.5 text-[11px] rounded-full border ${
                 taskFilter === f
                   ? "bg-accent text-white border-accent"
-                  : "border-gray-200 text-muted hover:bg-gray-50 dark:hover:bg-gray-200"
+                  : "border-[var(--color-input-border)] text-muted hover:bg-[var(--color-hover-row)]"
               }`}
             >
               {f === "todo" ? t.todo : f === "done" ? t.done : t.all}
@@ -1020,7 +1020,7 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
           value={newTask}
           onChange={(e) => setNewTask(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") addTask(); }}
-          className="flex-1 border border-gray-200 rounded-md px-3 py-1.5 text-sm"
+          className="flex-1 border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-3 py-1.5 text-sm"
         />
         <button onClick={addTask} className="p-1.5 text-muted hover:text-accent">
           <Plus size={16} />
@@ -1070,7 +1070,7 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
                       if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                       if (e.key === "Escape") setEditingTask(null);
                     }}
-                    className="flex-1 text-sm border border-gray-200 rounded px-1 py-0.5"
+                    className="flex-1 text-sm border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-1 py-0.5"
                   />
                 ) : (
                   <span
@@ -1114,7 +1114,7 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
                 </button>
               </div>
               {isExpanded && (
-                <div className="ml-9 border-l border-gray-200 pl-3 pb-1">
+                <div className="ml-9 border-l border-[var(--color-border-divider)] pl-3 pb-1">
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(event: DragEndEvent) => {
                     const { active, over } = event;
                     if (!over || active.id === over.id) return;
@@ -1153,7 +1153,7 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
                             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                             if (e.key === "Escape") setEditingSubtask(null);
                           }}
-                          className="flex-1 text-xs border border-gray-200 rounded px-1 py-0.5"
+                          className="flex-1 text-xs border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-1 py-0.5"
                         />
                       ) : (
                         <span
@@ -1195,7 +1195,7 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
                           );
                         }
                       }}
-                      className="flex-1 border border-gray-200 rounded px-2 py-1 text-xs"
+                      className="flex-1 border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-2 py-1 text-xs"
                     />
                     <button
                       onClick={() => {

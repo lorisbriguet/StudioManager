@@ -59,7 +59,7 @@ export function LineItemsTable({
   const t = useT();
 
   return (
-    <div className="border border-gray-100 rounded-lg p-4">
+    <div className="rounded-xl bg-[var(--color-surface)] p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-medium">{t.line_items}</h2>
         <div className="flex items-center gap-3">
@@ -99,7 +99,7 @@ export function LineItemsTable({
                       <input
                         value={item.designation}
                         onChange={(e) => onUpdate(i, "designation", e.target.value)}
-                        className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm"
+                        className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm"
                         placeholder={t.description}
                       />
                     )}
@@ -110,7 +110,7 @@ export function LineItemsTable({
                         type="number"
                         value={item.rate ?? ""}
                         onChange={(e) => onUpdate(i, "rate", e.target.value ? Number(e.target.value) : null)}
-                        className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm text-right"
+                        className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm text-right"
                         placeholder="0"
                       />
                     </td>
@@ -120,7 +120,7 @@ export function LineItemsTable({
                       <select
                         value={item.unit ?? ""}
                         onChange={(e) => onUpdate(i, "unit", e.target.value || null)}
-                        className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm"
+                        className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm"
                       >
                         <option value="">—</option>
                         <option value="hours">{t.hours}</option>
@@ -135,7 +135,7 @@ export function LineItemsTable({
                       type="number"
                       value={item.quantity}
                       onChange={(e) => onUpdate(i, "quantity", Number(e.target.value))}
-                      className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm text-right"
+                      className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm text-right"
                     />
                   </td>
                   <td className="px-1 py-1">
@@ -143,7 +143,7 @@ export function LineItemsTable({
                       type="number"
                       value={item.amount}
                       onChange={(e) => onUpdate(i, "amount", Number(e.target.value))}
-                      className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm text-right"
+                      className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm text-right"
                     />
                   </td>
                   <td className="pl-1 py-1">
@@ -160,7 +160,7 @@ export function LineItemsTable({
         </SortableContext>
       </DndContext>
 
-      <div className="border-t border-gray-200 mt-3 pt-3 space-y-1 text-sm">
+      <div className="border-t border-[var(--color-border-divider)] mt-3 pt-3 space-y-1 text-sm">
         <div className="flex justify-between">
           <span className="text-muted">{t.subtotal}</span>
           <span>{currency} {subtotal.toFixed(2)}</span>

@@ -17,6 +17,7 @@ import type { AppLanguage } from "../i18n/ui";
 import { UpdateChecker } from "../components/UpdateChecker";
 import { WorkloadTemplateManager } from "../components/workload/WorkloadTemplateManager";
 import { Input, Select } from "../components/ui";
+import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
 
 type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "workload" | "categories" | "updates" | "backup" | "sandbox";
@@ -274,17 +275,34 @@ export function SettingsPage() {
     }
   };
 
-  const categories: { key: SettingsCategory; label: string; icon: React.ReactNode }[] = [
-    { key: "general", label: t.general, icon: <Settings2 size={16} /> },
-    { key: "appearance", label: t.appearance, icon: <Palette size={16} /> },
-    { key: "behavior", label: t.behavior, icon: <SlidersHorizontal size={16} /> },
-    { key: "calendar", label: t.calendar_sync, icon: <CalendarDays size={16} /> },
-    { key: "workload", label: t.workload_templates, icon: <LayoutList size={16} /> },
-    { key: "categories", label: t.expense_categories, icon: <Tags size={16} /> },
-    { key: "updates", label: t.updates, icon: <Download size={16} /> },
-    { key: "backup", label: t.backup, icon: <Archive size={16} /> },
-    { key: "sandbox", label: t.test_mode, icon: <Shield size={16} /> },
+  const categorySections: { label: string; items: { key: SettingsCategory; label: string; icon: React.ReactNode }[] }[] = [
+    {
+      label: "Preferences",
+      items: [
+        { key: "general", label: t.general, icon: <Settings2 size={15} /> },
+        { key: "appearance", label: t.appearance, icon: <Palette size={15} /> },
+        { key: "behavior", label: t.behavior, icon: <SlidersHorizontal size={15} /> },
+        { key: "calendar", label: t.calendar_sync, icon: <CalendarDays size={15} /> },
+        { key: "workload", label: t.workload_templates, icon: <LayoutList size={15} /> },
+      ],
+    },
+    {
+      label: "Data",
+      items: [
+        { key: "categories", label: t.expense_categories, icon: <Tags size={15} /> },
+        { key: "backup", label: t.backup, icon: <Archive size={15} /> },
+        { key: "sandbox", label: t.test_mode, icon: <Shield size={15} /> },
+      ],
+    },
+    {
+      label: "App",
+      items: [
+        { key: "updates", label: t.updates, icon: <Download size={15} /> },
+      ],
+    },
   ];
+
+  const categories = categorySections.flatMap((s) => s.items);
 
   // Keyboard navigation for settings sidebar
   const handleSettingsKeyDown = useCallback(
@@ -316,23 +334,31 @@ export function SettingsPage() {
   return (
     <div className="flex gap-0 h-full -m-8">
       {/* Category sidebar */}
-      <div className="w-48 shrink-0 border-r border-gray-200 py-5">
+      <div className="w-48 shrink-0 border-r border-[var(--color-border-divider)] py-5">
         <h1 className="text-sm font-semibold px-5 mb-4 text-muted uppercase tracking-wider">{t.settings}</h1>
-        <nav className="space-y-px px-2">
-          {categories.map((cat) => (
-            <button
-              key={cat.key}
-              type="button"
-              onClick={() => setActiveCategory(cat.key)}
-              className={`w-full text-left px-3 py-1.5 rounded text-[13px] transition-colors flex items-center gap-2 ${
-                activeCategory === cat.key
-                  ? "bg-accent-light text-accent font-medium"
-                  : "text-muted hover:bg-gray-100 dark:hover:bg-gray-200 hover:text-gray-900 dark:hover:text-gray-800"
-              }`}
-            >
-              {cat.icon}
-              {cat.label}
-            </button>
+        <nav className="space-y-3 px-1">
+          {categorySections.map((section) => (
+            <div key={section.label}>
+              <div className="text-[9px] font-medium uppercase tracking-widest text-muted px-3 mb-1">{section.label}</div>
+              <div className="space-y-px">
+                {section.items.map((cat) => (
+                  <button
+                    key={cat.key}
+                    type="button"
+                    onClick={() => setActiveCategory(cat.key)}
+                    className={`w-full text-left px-3 py-1.5 mx-1 rounded-md text-xs transition-colors flex items-center gap-2 ${
+                      activeCategory === cat.key
+                        ? "bg-accent-light text-accent font-medium"
+                        : "text-muted hover:bg-[var(--color-hover-row)]"
+                    }`}
+                    style={{ width: "calc(100% - 8px)" }}
+                  >
+                    {cat.icon}
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
         {appVersion && (
@@ -422,7 +448,7 @@ export function SettingsPage() {
                 />
               </SettingRow>
               <SettingRow label={t.reduce_motion} desc={t.reduce_motion_desc}>
-                <Toggle checked={reduceMotion} onChange={() => setReduceMotion(!reduceMotion)} />
+                <Toggle checked={reduceMotion} onChange={setReduceMotion} />
               </SettingRow>
             </div>
           )}
@@ -441,16 +467,16 @@ export function SettingsPage() {
                 </Select>
               </SettingRow>
               <SettingRow label={t.show_tasks_page} desc={t.show_tasks_page_desc}>
-                <Toggle checked={showTasksPage} onChange={() => setShowTasksPage(!showTasksPage)} />
+                <Toggle checked={showTasksPage} onChange={setShowTasksPage} />
               </SettingRow>
               <SettingRow label={t.show_income} desc={t.show_income_desc}>
-                <Toggle checked={showIncome} onChange={() => setShowIncome(!showIncome)} />
+                <Toggle checked={showIncome} onChange={setShowIncome} />
               </SettingRow>
               <SettingRow label={t.show_time_overview} desc={t.show_time_overview_desc}>
-                <Toggle checked={showTimeOverview} onChange={() => setShowTimeOverview(!showTimeOverview)} />
+                <Toggle checked={showTimeOverview} onChange={setShowTimeOverview} />
               </SettingRow>
               <SettingRow label={t.native_notifications} desc={t.native_notifications_desc}>
-                <Toggle checked={nativeNotifications} onChange={() => setNativeNotifications(!nativeNotifications)} />
+                <Toggle checked={nativeNotifications} onChange={setNativeNotifications} />
               </SettingRow>
             </div>
           )}
@@ -489,7 +515,7 @@ export function SettingsPage() {
                 <Toggle
                   checked={calendarSync}
                   disabled={syncing}
-                  onChange={() => {
+                  onChange={(_v: boolean) => {
                     if (!calendarName && !calendarSync) {
                       toast.error(t.toast_select_calendar);
                       return;
@@ -541,7 +567,7 @@ export function SettingsPage() {
                 )}
               </SettingRow>
 
-              <div className="border-t border-gray-200 my-3" />
+              <div className="border-t border-[var(--color-border-divider)] my-3" />
               <SectionHeader title={t.presentation_mode} desc={t.presentation_mode_desc} />
               <SettingRow label={t.presentation_mode}>
                 {presentationMode ? (
@@ -558,21 +584,13 @@ export function SettingsPage() {
                 )}
               </SettingRow>
 
-              <div className="border-t border-gray-200 my-3" />
+              <div className="border-t border-[var(--color-border-divider)] my-3" />
               <SectionHeader title={t.modular_projects} desc={t.modular_projects_desc} />
-              <SettingRow label={t.modular_projects}>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={enableModularProjects}
-                    onChange={(e) => setEnableModularProjects(e.target.checked)}
-                    className="rounded"
-                  />
-                  <span className="text-xs text-muted">{t.modular_projects_desc}</span>
-                </label>
+              <SettingRow label={t.modular_projects} desc={t.modular_projects_desc}>
+                <Toggle checked={enableModularProjects} onChange={setEnableModularProjects} />
               </SettingRow>
 
-              <div className="border-t border-gray-200 my-3" />
+              <div className="border-t border-[var(--color-border-divider)] my-3" />
               <SectionHeader title={t.snapshot} desc={t.snapshot_desc} />
               <SettingRow label={t.snapshot}>
                 <div className="flex items-center gap-2">
@@ -647,7 +665,7 @@ export function SettingsPage() {
                 </button>
               </div>
 
-              <div className="border-t border-gray-200 my-3" />
+              <div className="border-t border-[var(--color-border-divider)] my-3" />
               <SettingRow label={t.restore_from_backup}>
                 <div className="flex items-center gap-1.5">
                   <Select
@@ -681,10 +699,10 @@ export function SettingsPage() {
   );
 }
 
-/** Compact inline row: label left, control right */
+/** Compact inline row: label left, control right, separated by faint dividers */
 function SettingRow({ label, desc, children }: { label: string; desc?: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between py-2.5 min-h-[36px]">
+    <div className="flex items-center justify-between py-2.5 min-h-[36px] border-b border-[var(--color-border-divider)]">
       <div className="flex-1 min-w-0 pr-4">
         <div className="text-sm">{label}</div>
         {desc && <div className="text-[11px] text-muted leading-tight mt-0.5">{desc}</div>}
@@ -694,35 +712,16 @@ function SettingRow({ label, desc, children }: { label: string; desc?: string; c
   );
 }
 
-/** Section header with optional description */
+/** Flat section label with optional description */
 function SectionHeader({ title, desc }: { title: string; desc?: string }) {
   return (
-    <div className="pb-2 mb-1">
-      <h2 className="text-base font-medium">{title}</h2>
-      {desc && <p className="text-[11px] text-muted mt-0.5">{desc}</p>}
+    <div className="border-b border-[var(--color-border-divider)] pb-2 mb-3">
+      <h2 className="text-[10px] font-medium uppercase tracking-widest text-muted">{title}</h2>
+      {desc && <p className="text-[11px] text-muted mt-1 normal-case tracking-normal">{desc}</p>}
     </div>
   );
 }
 
-/** Small toggle switch */
-function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: () => void; disabled?: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={onChange}
-      disabled={disabled}
-      className={`relative w-8 h-[18px] rounded-full transition-colors ${
-        checked ? "bg-accent" : "bg-gray-300 dark:bg-gray-500"
-      } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-    >
-      <div
-        className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] bg-white rounded-full shadow transition-transform ${
-          checked ? "translate-x-[14px]" : ""
-        }`}
-      />
-    </button>
-  );
-}
 
 function AccentColorPicker({
   presets,
@@ -877,7 +876,7 @@ function ExpenseCategoryManager() {
     <div className="max-w-3xl">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-gray-100 text-left text-xs text-muted uppercase">
+          <tr className="border-b border-[var(--color-border-divider)] text-left text-xs text-muted uppercase">
             <th className="py-2 pr-2 w-20">{t.category_code}</th>
             <th className="py-2 pr-2">{t.category_name_fr}</th>
             <th className="py-2 pr-2">{t.category_name_en}</th>
@@ -887,7 +886,7 @@ function ExpenseCategoryManager() {
         </thead>
         <tbody>
           {cats.map((cat) => (
-            <tr key={cat.code} className="border-b border-gray-100">
+            <tr key={cat.code} className="border-b border-[var(--color-border-divider)]">
               {editingCode === cat.code ? (
                 <>
                   <td className="py-2 pr-2 text-muted">{cat.code}</td>
@@ -948,7 +947,7 @@ function ExpenseCategoryManager() {
             </tr>
           ))}
           {adding && (
-            <tr className="border-b border-gray-100">
+            <tr className="border-b border-[var(--color-border-divider)]">
               <td className="py-2 pr-2">
                 <Input
                   fullWidth={false}

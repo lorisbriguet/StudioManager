@@ -501,7 +501,7 @@ export function InvoiceFormPage() {
                   setGlobalUnit(e.target.value);
                   if (globalRate > 0) applyGlobalRate(globalRate, e.target.value);
                 }}
-                className="border border-gray-200 rounded px-2 py-1.5 text-sm"
+                className="border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm bg-[var(--color-surface)]"
               >
                 <option value="hours">{t.hours}</option>
                 <option value="days">{t.days}</option>
@@ -572,7 +572,7 @@ export function InvoiceFormPage() {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
-            className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+            className="w-full border border-[var(--color-border-divider)] rounded-lg px-3 py-2 text-sm bg-[var(--color-surface)]"
           />
         </div>
 
@@ -666,11 +666,11 @@ function DesignationInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => setOpen(true)}
-        className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm"
+        className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm"
         placeholder={t.description}
       />
       {open && filtered.length > 0 && (
-        <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white dark:bg-gray-100 border border-gray-200 rounded-md shadow-lg max-h-40 overflow-y-auto">
+        <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-lg shadow-lg max-h-40 overflow-y-auto">
           {filtered.map((tk, idx) => (
             <button
               key={`${tk.title}-${idx}`}
@@ -679,7 +679,7 @@ function DesignationInput({
                 onChange(tk.title);
                 setOpen(false);
               }}
-              className="w-full text-left px-2 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-200"
+              className="w-full text-left px-2 py-1.5 text-sm hover:bg-[var(--color-hover-row)]"
             >
               {tk.title}
             </button>

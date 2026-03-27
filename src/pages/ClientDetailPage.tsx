@@ -114,7 +114,7 @@ export function ClientDetailPage() {
               </button>
               <button
                 onClick={() => setConfirmDelete(false)}
-                className="px-2 py-1 border border-gray-200 rounded-md text-xs hover:bg-gray-50 dark:hover:bg-gray-200"
+                className="px-2 py-1 border border-[var(--color-border-divider)] rounded-md text-xs hover:bg-[var(--color-hover-row)]"
               >
                 {t.cancel}
               </button>
@@ -141,7 +141,7 @@ export function ClientDetailPage() {
                 <select
                   value={form.language ?? "FR"}
                   onChange={(e) => { update("language", e.target.value); saveField("language", e.target.value); }}
-                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+                  className="w-full border border-[var(--color-border-divider)] rounded-lg px-3 py-2 text-sm bg-[var(--color-surface)]"
                 >
                   <option value="FR">{t.french}</option>
                   <option value="EN">{t.english}</option>
@@ -194,7 +194,7 @@ export function ClientDetailPage() {
               onChange={(e) => update("notes", e.target.value)}
               onBlur={(e) => saveField("notes", e.target.value)}
               rows={3}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+              className="w-full border border-[var(--color-border-divider)] rounded-lg px-3 py-2 text-sm bg-[var(--color-surface)]"
             />
           </Section>
         </div>
@@ -436,7 +436,7 @@ function ContactCard({
   const t = useT();
 
   return (
-    <div className="border border-gray-200 rounded-md p-3 group">
+    <div className="border border-[var(--color-border-divider)] rounded-lg p-3 group">
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2 text-sm font-medium">
           <EditableText
@@ -578,7 +578,7 @@ function AddressesSection({
 
       <div className="space-y-3">
         {addresses.map((a) => (
-          <div key={a.id} className="border border-gray-200 rounded-md p-3 group">
+          <div key={a.id} className="border border-[var(--color-border-divider)] rounded-lg p-3 group">
             <div className="flex items-start justify-between mb-2">
               <span className="text-xs font-medium text-accent">
                 <EditableText
@@ -702,7 +702,7 @@ function AddressesSection({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <Card>
-      <h2 className="text-sm font-medium mb-3">{title}</h2>
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-muted mb-3">{title}</h2>
       {children}
     </Card>
   );

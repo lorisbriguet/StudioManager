@@ -59,19 +59,19 @@ export function CommandPalette() {
       <div className="fixed inset-0 bg-black/40" onClick={close} />
       <div className="fixed top-[20%] left-1/2 -translate-x-1/2 w-full max-w-lg">
         <Command
-          className="bg-white dark:bg-gray-100 rounded-xl shadow-2xl border border-gray-100 overflow-hidden"
+          className="rounded-xl bg-[var(--color-surface)] border border-[var(--color-border-header)] shadow-[0_16px_48px_rgba(0,0,0,0.5)] overflow-hidden"
           shouldFilter={true}
         >
-          <div className="flex items-center gap-2 px-4 border-b border-gray-200">
+          <div className="flex items-center gap-2 px-4 border-b border-[var(--color-border-divider)]">
             <Search size={16} className="text-muted shrink-0" />
             <Command.Input
               value={search}
               onValueChange={setSearch}
               placeholder={t.search_or_jump}
-              className="w-full py-3 text-sm outline-none bg-transparent"
+              className="w-full py-3 text-base outline-none bg-transparent border-none"
               autoFocus
             />
-            <kbd className="text-[10px] text-muted bg-gray-50 dark:bg-gray-200 border border-gray-200 px-1.5 py-0.5 rounded shrink-0">
+            <kbd className="text-[10px] text-muted bg-[var(--color-input-bg)] border border-[var(--color-border-divider)] px-1.5 py-0.5 rounded shrink-0">
               ESC
             </kbd>
           </div>
@@ -82,7 +82,7 @@ export function CommandPalette() {
             </Command.Empty>
 
             {/* Quick actions */}
-            <Command.Group heading={t.quick_actions} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
+            <Command.Group heading={t.quick_actions} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
               <PaletteItem icon={Plus} label={t.new_client} onSelect={() => go("/clients")} />
               <PaletteItem icon={Plus} label={t.new_project} onSelect={() => go("/projects")} />
               <PaletteItem icon={Plus} label={t.new_invoice} onSelect={() => go("/invoices/new")} />
@@ -90,7 +90,7 @@ export function CommandPalette() {
             </Command.Group>
 
             {/* Navigation */}
-            <Command.Group heading={t.navigate} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
+            <Command.Group heading={t.navigate} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
               <PaletteItem icon={LayoutDashboard} label={t.dashboard} onSelect={() => go("/")} />
               <PaletteItem icon={Users} label={t.clients} onSelect={() => go("/clients")} />
               <PaletteItem icon={FolderKanban} label={t.projects} onSelect={() => go("/projects")} />
@@ -106,7 +106,7 @@ export function CommandPalette() {
 
             {/* Clients search */}
             {clients && clients.length > 0 && (
-              <Command.Group heading={t.clients} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
+              <Command.Group heading={t.clients} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
                 {clients.map((c) => (
                   <PaletteItem
                     key={c.id}
@@ -121,7 +121,7 @@ export function CommandPalette() {
 
             {/* Projects search */}
             {projects && projects.length > 0 && (
-              <Command.Group heading={t.projects} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
+              <Command.Group heading={t.projects} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
                 {projects.map((p) => (
                   <PaletteItem
                     key={p.id}
@@ -136,7 +136,7 @@ export function CommandPalette() {
 
             {/* Invoices search */}
             {invoices && invoices.length > 0 && (
-              <Command.Group heading={t.invoices} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
+              <Command.Group heading={t.invoices} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
                 {invoices.map((inv) => (
                   <PaletteItem
                     key={inv.id}
@@ -149,6 +149,21 @@ export function CommandPalette() {
               </Command.Group>
             )}
           </Command.List>
+
+          <div className="flex items-center gap-4 px-4 py-2 border-t border-[var(--color-border-divider)] text-[10px] text-muted">
+            <span className="flex items-center gap-1">
+              <kbd className="bg-[var(--color-input-bg)] border border-[var(--color-border-divider)] px-1 py-0.5 rounded text-[10px]">&uarr;&darr;</kbd>
+              navigate
+            </span>
+            <span className="flex items-center gap-1">
+              <kbd className="bg-[var(--color-input-bg)] border border-[var(--color-border-divider)] px-1 py-0.5 rounded text-[10px]">&crarr;</kbd>
+              select
+            </span>
+            <span className="flex items-center gap-1">
+              <kbd className="bg-[var(--color-input-bg)] border border-[var(--color-border-divider)] px-1 py-0.5 rounded text-[10px]">esc</kbd>
+              close
+            </span>
+          </div>
         </Command>
       </div>
     </div>
@@ -169,9 +184,11 @@ function PaletteItem({
   return (
     <Command.Item
       onSelect={onSelect}
-      className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm cursor-pointer data-[selected=true]:bg-accent-light data-[selected=true]:text-accent"
+      className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm cursor-pointer hover:bg-[var(--color-hover-row)] data-[selected=true]:bg-[var(--color-accent-light)] data-[selected=true]:text-accent"
     >
-      <Icon size={16} strokeWidth={1.5} />
+      <div className="w-7 h-7 rounded-md bg-[var(--color-input-bg)] flex items-center justify-center shrink-0">
+        <Icon size={16} strokeWidth={1.5} />
+      </div>
       <span className="flex-1">{label}</span>
       {subtitle && <span className="text-xs text-muted">{subtitle}</span>}
     </Command.Item>

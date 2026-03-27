@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, X, Eye, Trash2, ExternalLink } from "lucide-react";
+import { Plus, X, Eye, Trash2, ExternalLink, Pencil, Maximize2 } from "lucide-react";
 import { toast } from "sonner";
 import { useProjects, useCreateProject, useDeleteProject } from "../db/hooks/useProjects";
 import { useClients } from "../db/hooks/useClients";
@@ -159,7 +159,7 @@ export function ProjectsPage() {
                 className={`px-3 py-1 text-xs rounded-full border ${
                   filter === s
                     ? "bg-accent text-white border-accent"
-                    : "border-gray-200 text-muted hover:bg-gray-50 dark:hover:bg-gray-200"
+                    : "border-[var(--color-input-border)] text-muted hover:bg-[var(--color-hover-row)]"
                 }`}
               >
                 {filterLabels[s]}
@@ -194,10 +194,10 @@ export function ProjectsPage() {
                 key={p.id}
                 onClick={() => handleProjectClick(p.id)}
                 onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: { id: p.id, name: p.name } }); }}
-                className={`block border rounded-lg p-4 hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer ${
+                className={`block rounded-xl p-4 transition-all cursor-pointer ${
                   peekId === p.id
-                    ? "border-accent bg-accent-light/30"
-                    : "border-gray-200"
+                    ? "bg-accent-light/30 ring-1 ring-accent"
+                    : "bg-[var(--color-surface)] hover:bg-[var(--color-hover-row)]"
                 }`}
               >
                 <div className="flex items-start justify-between mb-2">
@@ -215,7 +215,7 @@ export function ProjectsPage() {
                       <span>{stats.total} {t.tasks.toLowerCase()}</span>
                       <span>{pct}%</span>
                     </div>
-                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-[var(--color-input)] rounded-full overflow-hidden">
                       <div
                         className="h-full bg-accent rounded-full transition-all"
                         style={{ width: `${pct}%` }}
@@ -263,25 +263,35 @@ export function ProjectsPage() {
       {/* Side Peek Panel */}
       {peekId !== null && (
         <div
-          className={`shrink-0 border-l border-[var(--color-border-divider)] overflow-y-auto ${closingPeek ? "peek-exit" : "peek-enter"}`}
+          className={`shrink-0 w-1/2 border-l border-[var(--color-border-divider)] overflow-y-auto ${closingPeek ? "peek-exit" : "peek-enter"}`}
           onClick={(e) => e.stopPropagation()}
           onAnimationEnd={() => { if (closingPeek) { setPeekId(null); setClosingPeek(false); } }}
         >
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-end gap-1 p-2 border-b border-[var(--color-border-header)]">
             <Link
               to={`/projects/${peekId}`}
-              className="text-xs text-accent hover:underline"
+              className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
+              title={t.open_full_page}
             >
-              {t.open_full_page}
+              <Pencil size={14} />
+            </Link>
+            <Link
+              to={`/projects/${peekId}`}
+              className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
+              title={t.open_full_page}
+            >
+              <Maximize2 size={14} />
             </Link>
             <button
               onClick={handleClosePeek}
-              className="text-muted hover:text-gray-700"
+              className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
             >
-              <X size={16} />
+              <X size={14} />
             </button>
           </div>
-          <ProjectDetailContent key={peekId} projectId={peekId} compact />
+          <div className="p-4">
+            <ProjectDetailContent key={peekId} projectId={peekId} compact />
+          </div>
         </div>
       )}
     </div>
@@ -329,7 +339,7 @@ function NewProjectForm({
         <select
           value={form.client_id}
           onChange={(e) => setForm({ ...form, client_id: e.target.value })}
-          className="border border-gray-200 dark:border-gray-600 rounded-md px-3 py-1.5 text-sm"
+          className="border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-3 py-1.5 text-sm"
         >
           {clients.map((c) => (
             <option key={c.id} value={c.id}>

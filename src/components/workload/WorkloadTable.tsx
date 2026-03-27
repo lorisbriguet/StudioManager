@@ -411,7 +411,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
   }, [sortedRows, columns]);
 
   return (
-    <div className="border border-gray-100 rounded-lg p-4">
+    <div className="rounded-xl bg-[var(--color-surface)] p-4">
       {/* Header */}
       <div className="flex items-center justify-between mb-3 select-none">
         <button
@@ -436,7 +436,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                   handleTemplateChange(val ? Number(val) : null);
                 }
               }}
-              className="text-xs border border-gray-200 rounded px-2 py-1"
+              className="text-xs border border-[var(--color-border-divider)] rounded-lg px-2 py-1"
             >
               <option value="">{t.select_template}</option>
               {templates?.map((tpl) => (
@@ -466,11 +466,11 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
       {isOpen && (<>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
-      <div className="border border-gray-100 rounded-lg overflow-hidden">
+      <div className="rounded-xl overflow-hidden border border-[var(--color-border-divider)]">
         <div className="overflow-x-auto">
           <table className="text-sm" style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}>
             <thead>
-              <tr className="border-b border-gray-100 select-none">
+              <tr className="border-b border-[var(--color-border-header)] select-none">
                 {/* Drag handle column */}
                 <th className={`w-8 px-2 ${stickyFirstCol ? "sticky left-0 z-10 bg-gray-100" : ""}`} />
                 {/* System: Task */}
@@ -591,7 +591,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
               ))}
               {/* Summary row */}
               {summaryRow && sortedRows.length > 0 && (
-                <tr className="border-t border-gray-200 font-medium">
+                <tr className="border-t border-[var(--color-border-header)] font-medium">
                   <td className={`${stickyFirstCol ? "sticky left-0 z-10 bg-gray-100" : ""}`} />
                   {/* System: Task total label */}
                   <td className={`px-4 py-2 text-sm ${stickyFirstCol ? "sticky left-8 z-10 bg-gray-100" : ""}`}>
@@ -628,7 +628,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
         {/* Add row button */}
         <button
           onClick={handleAddRow}
-          className="w-full px-4 py-2 text-sm text-muted hover:text-accent hover:bg-gray-50 dark:hover:bg-gray-200 flex items-center gap-1 border-t border-gray-100"
+          className="w-full px-4 py-2 text-sm text-muted hover:text-accent hover:bg-[var(--color-hover-row)] flex items-center gap-1 border-t border-[var(--color-border-divider)]"
         >
           <Plus size={14} />
           {t.new_row}
@@ -701,8 +701,8 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
       {/* Save as template modal — portalled so it escapes side-peek overflow */}
       {showSaveModal && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-gray-100 rounded-xl shadow-2xl w-full max-w-sm border border-gray-100 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+          <div className="bg-[var(--color-surface)] rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-divider)]">
               <h3 className="text-sm font-medium">{t.save_as_template}</h3>
               <button onClick={() => setShowSaveModal(false)} className="text-muted hover:text-gray-700">
                 <X size={16} />
@@ -714,11 +714,11 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                 value={saveTemplateName}
                 onChange={(e) => setSaveTemplateName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && confirmSaveTemplate()}
-                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+                className="w-full border border-[var(--color-border-divider)] rounded-lg px-3 py-2 text-sm"
                 autoFocus
               />
             </div>
-            <div className="flex justify-end gap-2 px-4 py-3 border-t border-gray-200">
+            <div className="flex justify-end gap-2 px-4 py-3 border-t border-[var(--color-border-divider)]">
               <Button
                 variant="secondary"
                 onClick={() => setShowSaveModal(false)}
@@ -794,12 +794,12 @@ function SectionContextMenu({
   return (
     <div
       ref={ref}
-      className="fixed z-50 w-48 bg-gray-100 border border-gray-100 rounded-lg shadow-lg overflow-hidden py-1"
+      className="fixed z-50 w-48 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-lg overflow-hidden py-1"
       style={{ top: y, left: x }}
     >
       <button
         onClick={onTogglePin}
-        className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-200 ${stickyFirstCol ? "text-accent" : ""}`}
+        className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)] ${stickyFirstCol ? "text-accent" : ""}`}
       >
         <Pin size={14} />
         {t.pin_first_column}
@@ -807,7 +807,7 @@ function SectionContextMenu({
       {hasRows && (
         <button
           onClick={onExportCsv}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-200"
+          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)]"
         >
           <Download size={14} />
           {t.export_csv}
@@ -872,7 +872,7 @@ function SortableRow({
     <tr
       ref={setNodeRef}
       style={style}
-      className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200 group/row"
+      className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] group/row"
     >
       {/* Drag handle */}
       <td className={`${stickyFirstCol ? "sticky left-0 z-10" : ""} bg-inherit`}>
@@ -1102,19 +1102,19 @@ function SystemHeaderMenu({
   return (
     <div
       ref={ref}
-      className="fixed z-50 w-48 bg-gray-100 border border-gray-100 rounded-lg shadow-lg overflow-hidden py-1"
+      className="fixed z-50 w-48 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-lg overflow-hidden py-1"
       style={{ top: pos.top, left: pos.left }}
     >
       <button
         onClick={() => onSort("asc")}
-        className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-200 ${isAsc ? "text-accent" : ""}`}
+        className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)] ${isAsc ? "text-accent" : ""}`}
       >
         <ArrowUp size={14} />
         {t.sort_ascending}
       </button>
       <button
         onClick={() => onSort("desc")}
-        className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-200 ${isDesc ? "text-accent" : ""}`}
+        className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)] ${isDesc ? "text-accent" : ""}`}
       >
         <ArrowDown size={14} />
         {t.sort_descending}
@@ -1174,32 +1174,32 @@ function ColumnHeaderMenu({
   return (
     <div
       ref={ref}
-      className="fixed z-50 w-48 bg-gray-100 border border-gray-100 rounded-lg shadow-lg overflow-hidden py-1"
+      className="fixed z-50 w-48 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-lg overflow-hidden py-1"
       style={{ top: pos.top, left: pos.left }}
     >
       {col.type !== "formula" && (
         <>
           <button
             onClick={() => onSort(col.key, "asc")}
-            className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-200 ${isAsc ? "text-accent" : ""}`}
+            className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)] ${isAsc ? "text-accent" : ""}`}
           >
             <ArrowUp size={14} />
             {t.sort_ascending}
           </button>
           <button
             onClick={() => onSort(col.key, "desc")}
-            className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-200 ${isDesc ? "text-accent" : ""}`}
+            className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)] ${isDesc ? "text-accent" : ""}`}
           >
             <ArrowDown size={14} />
             {t.sort_descending}
           </button>
-          <div className="border-t border-gray-200 my-1" />
+          <div className="border-t border-[var(--color-border-divider)] my-1" />
         </>
       )}
       {colIndex > 0 && (
         <button
           onClick={onMoveLeft}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-200"
+          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)]"
         >
           <ArrowLeft size={14} />
           {t.move_left}
@@ -1208,7 +1208,7 @@ function ColumnHeaderMenu({
       {colIndex < colCount - 1 && (
         <button
           onClick={onMoveRight}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-200"
+          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)]"
         >
           <ArrowRight size={14} />
           {t.move_right}
@@ -1216,20 +1216,20 @@ function ColumnHeaderMenu({
       )}
       {isSummable && (
         <>
-          <div className="border-t border-gray-200 my-1" />
+          <div className="border-t border-[var(--color-border-divider)] my-1" />
           <button
             onClick={onToggleSum}
-            className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-200 ${sumVisible ? "" : "text-muted"}`}
+            className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)] ${sumVisible ? "" : "text-muted"}`}
           >
             <Sigma size={14} />
             {sumVisible ? t.hide_sum : t.show_sum}
           </button>
         </>
       )}
-      <div className="border-t border-gray-200 my-1" />
+      <div className="border-t border-[var(--color-border-divider)] my-1" />
       <button
         onClick={onEdit}
-        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-200"
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)]"
       >
         <Settings2 size={14} />
         {t.edit_column}

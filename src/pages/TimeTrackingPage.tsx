@@ -83,10 +83,10 @@ export function TimeTrackingPage() {
           {grouped.map((group) => (
             <div
               key={group.project_id}
-              className="border border-gray-100 rounded-lg overflow-hidden"
+              className="rounded-xl bg-[var(--color-surface)] overflow-hidden"
             >
               {/* Project header */}
-              <div className="flex items-center justify-between px-3 py-2 bg-gray-50/50 dark:bg-gray-100/50 border-b border-gray-100">
+              <div className="flex items-center justify-between px-3 py-2 bg-[var(--color-surface)] border-b border-[var(--color-border-divider)]">
                 <span className="text-sm font-medium">
                   {group.project_name}
                 </span>
@@ -103,7 +103,7 @@ export function TimeTrackingPage() {
               {/* Task rows */}
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-100">
+                  <tr className="border-b border-[var(--color-border-header)]">
                     <th className="text-left px-3 py-1.5 text-xs font-medium text-muted">
                       {t.tasks}
                     </th>
@@ -122,7 +122,7 @@ export function TimeTrackingPage() {
                   {group.tasks.map((task) => (
                     <tr
                       key={task.task_id}
-                      className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200"
+                      className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)]"
                     >
                       <td className="px-3 py-1.5">
                         {task.task_title || (
