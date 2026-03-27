@@ -22,6 +22,7 @@ import { FinancesPage } from "./pages/FinancesPage";
 import { InvoicePreviewPage } from "./pages/InvoicePreviewPage";
 import { QuotePreviewPage } from "./pages/QuotePreviewPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
+import { WikiPage } from "./pages/WikiPage";
 import { TimeTrackingPage } from "./pages/TimeTrackingPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { ProfilePage } from "./pages/ProfilePage";
@@ -145,6 +146,7 @@ export default function App() {
               <Route path="expenses" element={<ExpensesPage />} />
               <Route path="income" element={<IncomePage />} />
               <Route path="finances" element={<FinancesPage />} />
+              <Route path="wiki" element={<WikiPage />} />
               <Route path="resources" element={<ResourcesPage />} />
               <Route path="notifications" element={<NotificationsPage />} />
               <Route path="settings" element={<SettingsPage />} />

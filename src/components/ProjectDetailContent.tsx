@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
-import { Plus, ChevronRight, ChevronDown, Trash2, GripVertical, ExternalLink, Bookmark, X, Play, Square, FolderOpen } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { useWikiArticlesByProject } from "../db/hooks/useWiki";
+import { Plus, ChevronRight, ChevronDown, Trash2, GripVertical, ExternalLink, Bookmark, X, Play, Square, FolderOpen, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -58,6 +59,8 @@ import { useTimerActions } from "../hooks/useTimerActions";
 import { open as openDirectory } from "@tauri-apps/plugin-dialog";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
 import { useT } from "../i18n/useT";
+import { getTagColor } from "../lib/tagColors";
+import { useAppStore } from "../stores/app-store";
 
 interface Props {
   projectId: number;
@@ -81,6 +84,9 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
   const { data: wlConfig } = useProjectWorkloadConfig(projectId);
   const setWlConfig = useSetProjectWorkloadConfig(projectId);
   const t = useT();
+  const navigate = useNavigate();
+  const darkMode = useAppStore((s) => s.darkMode);
+  const { data: wikiArticles } = useWikiArticlesByProject(projectId);
 
   const wlColumns = wlConfig?.columns ?? DEFAULT_WORKLOAD_COLUMNS;
   const wlTemplateId = wlConfig?.template_id ?? null;
@@ -194,6 +200,41 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
             <Link to={`/quotes?project=${projectId}`} className="text-accent hover:underline">
               {t.quotes}
             </Link>
+          </div>
+        );
+      case "wiki":
+        return (
+          <div className="text-sm">
+            {(!wikiArticles || wikiArticles.length === 0) ? (
+              <div className="text-muted">{t.no_wiki_articles_linked ?? "No wiki articles linked"}</div>
+            ) : (
+              <div className="divide-y divide-[var(--color-border-divider)]">
+                {wikiArticles.map((article: { id: number; title: string; tags?: string[] }) => (
+                  <button
+                    key={article.id}
+                    onClick={() => navigate(`/wiki?article=${article.id}`)}
+                    className="w-full flex items-center gap-2 py-1.5 text-left hover:bg-[var(--color-hover-row)] rounded-md px-1 transition-colors"
+                  >
+                    <BookOpen size={14} className="text-muted shrink-0" />
+                    <span className="text-sm truncate">{article.title}</span>
+                    <div className="flex items-center gap-1 ml-auto shrink-0">
+                      {(article.tags ?? []).map((tag: string) => {
+                        const c = getTagColor(tag, darkMode);
+                        return (
+                          <span
+                            key={tag}
+                            style={{ background: c.bg, color: c.text }}
+                            className="px-2 py-0.5 text-xs rounded-full font-medium"
+                          >
+                            {tag}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         );
       default:

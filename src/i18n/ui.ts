@@ -603,6 +603,20 @@ const ui = {
     no_matching_resources: "No matching resources",
     resources_count_singular: "resource",
     resources_count_plural: "resources",
+
+    // Wiki
+    wiki: "Wiki",
+    knowledge: "Knowledge",
+    new_article: "New article",
+    all_articles: "All articles",
+    untitled: "Untitled",
+    no_articles_yet: "No articles yet",
+    search_articles: "Search articles...",
+    new_folder: "New folder",
+    start_writing: "Start writing... Use / for commands",
+    no_wiki_articles_linked: "No wiki articles linked",
+    updated: "Updated",
+
     add_tag: "Add tag...",
     tags: "Tags",
     color: "Color",
@@ -1228,6 +1242,20 @@ const ui = {
     no_matching_resources: "Aucune ressource correspondante",
     resources_count_singular: "ressource",
     resources_count_plural: "ressources",
+
+    // Wiki
+    wiki: "Wiki",
+    knowledge: "Connaissances",
+    new_article: "Nouvel article",
+    all_articles: "Tous les articles",
+    untitled: "Sans titre",
+    no_articles_yet: "Aucun article",
+    search_articles: "Rechercher des articles...",
+    new_folder: "Nouveau dossier",
+    start_writing: "Commencez a ecrire... Utilisez / pour les commandes",
+    no_wiki_articles_linked: "Aucun article wiki lie",
+    updated: "Modifie",
+
     add_tag: "Ajouter un tag...",
     tags: "Tags",
     color: "Couleur",

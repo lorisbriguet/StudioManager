@@ -26,7 +26,7 @@ interface Props {
   renderBlock: (type: BlockType) => React.ReactNode;
 }
 
-const ALL_BLOCKS: BlockType[] = ["tasks", "workload", "resources", "notes", "named_tables", "invoices", "quotes"];
+const ALL_BLOCKS: BlockType[] = ["tasks", "workload", "resources", "notes", "named_tables", "invoices", "quotes", "wiki"];
 
 const BLOCK_LABELS: Record<BlockType, string> = {
   tasks: "Tasks",
@@ -36,6 +36,7 @@ const BLOCK_LABELS: Record<BlockType, string> = {
   named_tables: "Custom Tables",
   invoices: "Invoices",
   quotes: "Quotes",
+  wiki: "Wiki",
 };
 
 interface SortableBlockProps {
