@@ -122,6 +122,8 @@ const ui = {
     start: "Start",
     deadline: "Deadline",
     notes: "Notes...",
+    folder: "Folder",
+    set_folder: "Set folder",
 
     // Tasks
     new_task: "New task...",
@@ -730,6 +732,8 @@ const ui = {
     start: "Debut",
     deadline: "Deadline",
     notes: "Notes...",
+    folder: "Dossier",
+    set_folder: "Definir le dossier",
 
     // Tasks
     new_task: "Nouvelle tache...",
