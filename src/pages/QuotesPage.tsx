@@ -151,7 +151,7 @@ export function QuotesPage() {
               <SortHeader label={t.date} sortKey="quote_date" current={sort} onSort={setSort} />
               <SortHeader label={t.status} sortKey="status" current={sort} onSort={setSort} />
               <SortHeader label={t.amount} sortKey="total" current={sort} onSort={setSort} align="right" />
-              <th className="px-4 py-2 text-right text-xs font-medium text-muted" />
+              <th className="px-4 py-2.5 text-right text-xs font-medium text-muted" />
             </tr>
           </thead>
           <tbody>
@@ -169,7 +169,7 @@ export function QuotesPage() {
                     className="accent-[var(--accent)]"
                   />
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2.5">
                   <Link
                     to={`/quotes/${q.id}/edit`}
                     className="text-muted hover:text-accent align-middle opacity-0 group-hover:opacity-100 transition-opacity"
@@ -180,9 +180,9 @@ export function QuotesPage() {
                   </Link>
                   <span className="font-medium ml-1.5 align-middle">{q.reference.startsWith("DRAFT") ? t.draft : q.reference}</span>
                 </td>
-                <td className="px-4 py-2">{q.client_name}</td>
-                <td className="px-4 py-2 text-muted">{formatDisplayDate(q.quote_date)}</td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2.5">{q.client_name}</td>
+                <td className="px-4 py-2.5 text-muted">{formatDisplayDate(q.quote_date)}</td>
+                <td className="px-4 py-2.5">
                   <select
                     value={q.status}
                     onChange={(e) => {
@@ -198,10 +198,10 @@ export function QuotesPage() {
                     <option value="expired">{t.expired}</option>
                   </select>
                 </td>
-                <td className="px-4 py-2 text-right font-medium">
+                <td className="px-4 py-2.5 text-right font-medium">
                   CHF {q.total.toFixed(2)}
                 </td>
-                <td className="px-4 py-2 text-right">
+                <td className="px-4 py-2.5 text-right">
                   <span className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-2">
                     <Link
                       to={`/quotes/${q.id}/preview`}

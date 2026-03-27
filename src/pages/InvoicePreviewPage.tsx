@@ -161,7 +161,7 @@ export function InvoicePreviewPage() {
 
   return (
     <div className="flex flex-col -m-8 h-screen">
-      <div className="flex items-center gap-3 px-6 py-3 border-b border-gray-200 bg-white dark:bg-gray-100">
+      <div className="flex items-center gap-3 px-6 py-3 border-b border-[var(--color-border-divider)] bg-[var(--color-surface)]">
         <button
           onClick={() => navigate(-1)}
           className="text-muted hover:text-gray-900 dark:hover:text-gray-200"
@@ -201,7 +201,7 @@ export function InvoicePreviewPage() {
       </div>
       {showDraftWarning && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-100 rounded-xl shadow-xl p-6 max-w-sm mx-4">
+          <div className="bg-[var(--color-surface)] rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.5)] p-6 max-w-sm mx-4">
             <p className="text-sm mb-4">{t.export_draft_warning}</p>
             <div className="flex gap-2 justify-end">
               <Button variant="ghost" onClick={() => setShowDraftWarning(false)}>

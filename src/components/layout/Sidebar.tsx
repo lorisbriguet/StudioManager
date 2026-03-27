@@ -220,7 +220,7 @@ export function Sidebar() {
                 }
               }}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-2 mx-2 rounded-md text-sm transition-colors ${
+                `flex items-center gap-2.5 px-3.5 py-[6px] mx-2 rounded-md text-[13px] transition-colors ${
                   isActive
                     ? "bg-accent-light text-accent font-medium"
                     : "text-muted hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"

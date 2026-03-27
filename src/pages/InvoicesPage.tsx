@@ -302,7 +302,7 @@ export function InvoicesPage() {
               <SortHeader label={t.date} sortKey="invoice_date" current={sort} onSort={setSort} />
               <SortHeader label={t.status} sortKey="status" current={sort} onSort={setSort} />
               <SortHeader label={t.amount} sortKey="total" current={sort} onSort={setSort} align="right" />
-              <th className="px-4 py-2"></th>
+              <th className="px-4 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
@@ -315,7 +315,7 @@ export function InvoicesPage() {
                     className="border-b border-[var(--color-border-divider)] cursor-pointer hover:bg-[var(--color-hover-row)] rounded-md"
                     onClick={() => toggleYear(year)}
                   >
-                    <td colSpan={7} className="px-4 py-2">
+                    <td colSpan={7} className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
                         <ChevronRight
                           size={14}
@@ -346,7 +346,7 @@ export function InvoicesPage() {
                             className="accent-[var(--accent)]"
                           />
                         </td>
-                        <td className="px-4 py-2">
+                        <td className="px-4 py-2.5">
                           <Link
                             to={`/invoices/${inv.id}/edit`}
                             className="inline-flex items-center gap-1.5 text-muted hover:text-accent opacity-0 group-hover:opacity-100 transition-opacity"
@@ -356,9 +356,9 @@ export function InvoicesPage() {
                           </Link>
                           <span className="ml-1.5">{inv.reference.startsWith("DRAFT") ? t.draft : inv.reference}</span>
                         </td>
-                        <td className="px-4 py-2">{inv.client_name}</td>
-                        <td className="px-4 py-2 text-muted">{formatDisplayDate(inv.invoice_date)}</td>
-                        <td className="px-4 py-2">
+                        <td className="px-4 py-2.5">{inv.client_name}</td>
+                        <td className="px-4 py-2.5 text-muted">{formatDisplayDate(inv.invoice_date)}</td>
+                        <td className="px-4 py-2.5">
                           <select
                             value={inv.status}
                             onChange={(e) => {
@@ -389,7 +389,7 @@ export function InvoicesPage() {
                             <option value="cancelled">{t.cancelled}</option>
                           </select>
                         </td>
-                        <td className="px-4 py-2 text-right font-medium">
+                        <td className="px-4 py-2.5 text-right font-medium">
                           {inv.status === "cancelled" ? (
                             <span className="text-muted">CHF 0.00</span>
                           ) : inv.currency && inv.currency !== "CHF" ? (
@@ -402,7 +402,7 @@ export function InvoicesPage() {
                             <span>CHF {inv.total.toFixed(2)}</span>
                           )}
                         </td>
-                        <td className="px-4 py-2 text-right">
+                        <td className="px-4 py-2.5 text-right">
                           <Link
                             to={`/invoices/${inv.id}/preview`}
                             className="text-muted hover:text-accent opacity-0 group-hover:opacity-100 transition-opacity"

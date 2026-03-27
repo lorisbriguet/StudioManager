@@ -162,17 +162,17 @@ export function ClientsPage() {
                     className="accent-[var(--accent)]"
                   />
                 </td>
-                <td className="px-4 py-2 text-muted">{c.id}</td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2.5 font-medium">{c.id}</td>
+                <td className="px-4 py-2.5">
                   <Link to={`/clients/${c.id}`} className="text-accent hover:underline">
                     {c.name}
                   </Link>
                 </td>
-                <td className="px-4 py-2">{c.language}</td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2.5">{c.language}</td>
+                <td className="px-4 py-2.5">
                   {c.has_discount ? `${(c.discount_rate * 100).toFixed(0)}%` : "-"}
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2.5">
                   <Badge variant={c.status === "active" ? "success" : "neutral"}>
                     {c.status === "active" ? t.active : t.inactive}
                   </Badge>

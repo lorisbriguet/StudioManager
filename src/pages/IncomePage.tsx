@@ -271,8 +271,8 @@ export function IncomePage() {
               <SortHeader label={t.description} sortKey="category" current={sort} onSort={setSort} />
               <SortHeader label={t.date} sortKey="date" current={sort} onSort={setSort} />
               <SortHeader label={t.amount} sortKey="amount" current={sort} onSort={setSort} align="right" />
-              <th className="px-4 py-2 font-medium text-muted text-left">{t.receipt}</th>
-              <th className="px-4 py-2"></th>
+              <th className="px-4 py-2.5 font-medium text-muted text-left">{t.receipt}</th>
+              <th className="px-4 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
@@ -285,7 +285,7 @@ export function IncomePage() {
                     className="border-b border-[var(--color-border-divider)] cursor-pointer hover:bg-[var(--color-hover-row)] rounded-md"
                     onClick={() => toggleYear(year)}
                   >
-                    <td colSpan={8} className="px-4 py-2">
+                    <td colSpan={8} className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
                         <ChevronRight
                           size={14}
@@ -316,9 +316,9 @@ export function IncomePage() {
                             className="accent-[var(--accent)]"
                           />
                         </td>
-                        <td className="px-4 py-2 font-medium">{inc.reference}</td>
-                        <td className="px-4 py-2">{inc.source}</td>
-                        <td className="px-4 py-2">
+                        <td className="px-4 py-2.5 font-medium">{inc.reference}</td>
+                        <td className="px-4 py-2.5">{inc.source}</td>
+                        <td className="px-4 py-2.5">
                           <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100">
                             {inc.category}
                           </span>
@@ -326,11 +326,11 @@ export function IncomePage() {
                             <span className="ml-1 text-xs text-muted">{inc.description}</span>
                           )}
                         </td>
-                        <td className="px-4 py-2 text-muted">{formatDisplayDate(inc.date)}</td>
-                        <td className="px-4 py-2 text-right font-medium">
+                        <td className="px-4 py-2.5 text-muted">{formatDisplayDate(inc.date)}</td>
+                        <td className="px-4 py-2.5 text-right font-medium">
                           CHF {inc.amount.toFixed(2)}
                         </td>
-                        <td className="px-4 py-2">
+                        <td className="px-4 py-2.5">
                           {inc.receipt_path ? (
                             <div className="flex items-center gap-2">
                               <button
@@ -352,7 +352,7 @@ export function IncomePage() {
                             </button>
                           )}
                         </td>
-                        <td className="px-4 py-2">
+                        <td className="px-4 py-2.5">
                           <button
                             onClick={() => {
                               deleteIncome.mutate(inc.id, {
