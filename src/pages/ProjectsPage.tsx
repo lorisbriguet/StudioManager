@@ -196,7 +196,7 @@ export function ProjectsPage() {
                 onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: { id: p.id, name: p.name } }); }}
                 className={`block rounded-xl p-4 transition-all cursor-pointer ${
                   peekId === p.id
-                    ? "bg-[var(--color-hover-row)] ring-1 ring-accent"
+                    ? "bg-[var(--color-hover-row)] outline outline-1 outline-accent"
                     : "bg-[var(--color-surface)] hover:bg-[var(--color-hover-row)]"
                 }`}
               >

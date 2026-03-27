@@ -289,7 +289,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                   data: { start_date: e.target.value || null },
                 })
               }
-              className="border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-2 py-1 text-xs"
+              className="bg-transparent border-none text-xs text-muted cursor-pointer hover:text-[var(--color-text-secondary)]"
             />
           </div>
           <div className="flex items-center gap-2">
@@ -303,7 +303,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                   data: { deadline: e.target.value || null },
                 })
               }
-              className="border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-2 py-1 text-xs"
+              className="bg-transparent border-none text-xs text-muted cursor-pointer hover:text-[var(--color-text-secondary)]"
             />
           </div>
           {project.folder_path ? (
@@ -405,7 +405,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                 data: { start_date: e.target.value || null },
               })
             }
-            className="border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-2 py-1 text-xs"
+            className="bg-transparent border-none text-xs text-muted cursor-pointer hover:text-[var(--color-text-secondary)]"
           />
         </div>
         <div className="flex items-center gap-2">
@@ -419,7 +419,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                 data: { deadline: e.target.value || null },
               })
             }
-            className="border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-2 py-1 text-xs"
+            className="bg-transparent border-none text-xs text-muted cursor-pointer hover:text-[var(--color-text-secondary)]"
           />
         </div>
         {project.folder_path ? (

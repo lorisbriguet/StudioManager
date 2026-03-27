@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
-import { FolderOpen, HardDrive, ChevronDown, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield } from "lucide-react";
+import { FolderOpen, HardDrive, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield } from "lucide-react";
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { purgeAllCalendarEvents, syncAllExisting, listWritableCalendars } from "../lib/appleCalendar";
 import { createBackup, listBackups, restoreFromBackup, validateBackupPath, isBackupRunning, setBackupRunning } from "../lib/backup";
@@ -732,69 +732,23 @@ function AccentColorPicker({
   value: AccentPreset;
   onChange: (preset: AccentPreset) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const isCustom = !presets.some((p) => p.color.toLowerCase() === value.color.toLowerCase());
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
   return (
-    <div className="relative w-56" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 w-full px-3 py-2 border border-gray-200 rounded-md text-sm hover:border-gray-300 transition-colors"
-      >
-        <div
-          className="w-4 h-4 rounded-full shrink-0"
-          style={{ backgroundColor: value.color }}
-        />
-        <span className="flex-1 text-left">{value.name}</span>
-        <ChevronDown size={14} className={`text-muted transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
-        <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto border border-[var(--color-border-header)] rounded-xl bg-[var(--color-surface)] shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1">
-          {isCustom && (
-            <button
-              key="theme-custom"
-              type="button"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 w-full px-3 py-1.5 text-sm bg-accent-light text-accent font-medium"
-            >
-              <div
-                className="w-4 h-4 rounded-full shrink-0"
-                style={{ backgroundColor: value.color }}
-              />
-              <span>{value.name}</span>
-            </button>
-          )}
-          {presets.map((preset) => (
-            <button
-              key={preset.color}
-              type="button"
-              onClick={() => {
-                onChange(preset);
-                setOpen(false);
-              }}
-              className={`flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-200 transition-colors ${
-                !isCustom && value.color.toLowerCase() === preset.color.toLowerCase() ? "bg-accent-light text-accent font-medium" : ""
-              }`}
-            >
-              <div
-                className="w-4 h-4 rounded-full shrink-0"
-                style={{ backgroundColor: preset.color }}
-              />
-              <span>{preset.name}</span>
-            </button>
-          ))}
-        </div>
-      )}
+    <div className="flex flex-wrap gap-2">
+      {presets.map((preset) => {
+        const isActive = value.color.toLowerCase() === preset.color.toLowerCase();
+        return (
+          <button
+            key={preset.color}
+            type="button"
+            onClick={() => onChange(preset)}
+            title={preset.name}
+            className={`w-6 h-6 rounded-full transition-transform hover:scale-110 ${
+              isActive ? "ring-2 ring-white ring-offset-2 ring-offset-[var(--color-bg)]" : ""
+            }`}
+            style={{ backgroundColor: preset.color }}
+          />
+        );
+      })}
     </div>
   );
 }
