@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.5.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.6.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="Platform">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
@@ -39,13 +39,15 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Quick navigation from client to their projects, invoices, and quotes
 
 ### Project & Task Tracking
-- Project boards linked to clients with status tracking
+- Modular project pages with drag-and-drop block layout (Tasks, Workload, Notes, Tables, Invoices, Quotes)
 - Hierarchical tasks and subtasks with inline editing
 - Due dates, priorities, drag-and-drop reordering
 - Side peek panel for quick project overview without leaving the page
 - Weighted progress calculation (tasks + subtasks)
 - Task filters: todo, done, all — applied globally
 - Workload tracker with custom columns (text, number, checkbox, select, formula)
+- Named tables per project with configurable columns (text, number, checkbox, select, tags, date)
+- Time tracking — start/stop timer per task, tracked minutes accumulate
 
 ### Calendar
 - Monthly and weekly calendar views (FullCalendar)
@@ -72,6 +74,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Quote creation mirroring the invoice workflow
 - PDF preview and export with client/supplier name in filename
 - Convert accepted quotes to invoices with one click
+- Quote-to-project wizard — generate projects with tasks from accepted quotes
 - Status tracking: draft, sent, accepted, rejected, expired
 
 ### Expense Tracking
@@ -116,8 +119,14 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - **Undo/Redo** (Cmd+Z / Cmd+Shift+Z) — full undo/redo with state restoration
 - **Context Menus** — right-click on any list row for contextual actions
 - **Test Mode** — sandbox environment to experiment without affecting production data
-- **Dark Mode** — full dark theme with automatic color adaptation
+- **10 Color Themes** — curated full-app palettes (Default, Nord, Rose Pine, Catppuccin, Tokyo Night, Evergreen, Midnight, Sand, Lavender)
 - **19 Accent Colors** — customize the app appearance
+- **Smooth Animations** — page transitions, card fade-ins, counter animations (with reduce-motion support)
+- **Presentation Mode** — demo environment with seeded data for client presentations
+- **Batch Operations** — multi-select with bulk actions on all list pages
+- **Saved Filters** — save and quick-apply filter configurations per page
+- **Client Activity Timeline** — chronological feed of invoices, quotes, and projects
+- **Duplicate Expense Warning** — detects similar entries on save
 - **macOS Native Notifications** — OS-level banners for overdue invoices and backups
 - **Notifications** — persistent in-app notifications with unread badges
 - **Backup System** — automatic and manual backups with configurable paths
@@ -272,8 +281,8 @@ StudioManager is designed for Swiss freelancers:
 ## Roadmap
 
 - [ ] Windows support
-- [ ] Project generation from quotes (tasks from line items)
-- [ ] Curated color themes
+- [ ] Unsaved changes warning on invoice/quote pages
+- [ ] Tab navigation arrows (back/forward)
 
 ---
 
