@@ -142,7 +142,7 @@ export function QuotesPage() {
       <div>
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100">
+            <tr className="border-b border-[var(--color-border-header)]">
               <th className="w-8 px-2 py-2">
                 <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
               </th>
@@ -158,7 +158,7 @@ export function QuotesPage() {
             {filtered.map((q) => (
               <tr
                 key={q.id}
-                className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200 group"
+                className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md group"
                 onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: q }); }}
               >
                 <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>

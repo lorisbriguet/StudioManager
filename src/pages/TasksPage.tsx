@@ -222,7 +222,7 @@ export function TasksPage() {
               className={`px-3 py-1 text-xs rounded-full border ${
                 filter === tab.value
                   ? "bg-accent text-white border-accent"
-                  : "border-gray-200 text-muted hover:bg-gray-50 dark:hover:bg-gray-200"
+                  : "border-gray-200 text-muted hover:bg-[var(--color-hover-row)]"
               }`}
             >
               {tab.label}
@@ -252,7 +252,7 @@ export function TasksPage() {
           <SortableProjectGroup key={g.projectId} id={g.projectId}>
             {({ attributes, listeners }) => (<>
             <div
-              className="px-4 py-2 border-b border-gray-100 flex items-center gap-2 select-none"
+              className="px-4 py-2 border-b border-[var(--color-border-header)] flex items-center gap-2 select-none"
               onContextMenu={(e) => { e.preventDefault(); setHeaderCtxMenu({ x: e.clientX, y: e.clientY, item: { projectId: g.projectId, projectName: g.projectName } }); }}
             >
               <DragHandle attributes={attributes} listeners={listeners} />
@@ -282,7 +282,7 @@ export function TasksPage() {
               <span className="text-xs text-muted ml-auto">{g.tasks.length} task{g.tasks.length !== 1 ? "s" : ""}</span>
               </button>
             </div>
-            {!collapsedProjects.has(g.projectId) && <div className="divide-y divide-gray-100">
+            {!collapsedProjects.has(g.projectId) && <div className="divide-y divide-[var(--color-border-divider)]">
               {g.tasks.map((tk) => {
                 const taskSubs = subtasks?.filter((s) => s.task_id === tk.id) ?? [];
                 const filteredSubs = filter === "all" ? taskSubs : taskSubs.filter((s) => s.status === filter);
@@ -413,7 +413,7 @@ export function TasksPage() {
                       </button>
                     </div>
                     {isExpanded && (
-                      <div className="ml-12 mr-4 border-l border-gray-200 pl-3 pb-2 mb-1">
+                      <div className="ml-12 mr-4 border-l border-[var(--color-border-divider)] pl-3 pb-2 mb-1">
                         {filteredSubs.map((s) => (
                           <div key={s.id} data-task-row className="flex items-center gap-2 py-1 group/sub" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setSubCtxMenu({ x: e.clientX, y: e.clientY, item: s }); }}>
                             <input
@@ -554,7 +554,7 @@ export function TasksPage() {
                 );
               })}
             </div>}
-            {!collapsedProjects.has(g.projectId) && <div className="flex gap-2 px-4 py-2 border-t border-gray-100">
+            {!collapsedProjects.has(g.projectId) && <div className="flex gap-2 px-4 py-2 border-t border-[var(--color-border-divider)]">
               <input
                 placeholder={t.new_task}
                 value={newTaskText[g.projectId] ?? ""}
@@ -694,7 +694,7 @@ function SortableProjectGroup({ id, children }: { id: number; children: (dragHan
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="border border-gray-100 rounded-lg overflow-hidden">
+    <div ref={setNodeRef} style={style} className="rounded-lg overflow-hidden">
       {children({ attributes, listeners })}
     </div>
   );
