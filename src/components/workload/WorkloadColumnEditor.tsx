@@ -95,8 +95,8 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-gray-100 rounded-xl shadow-2xl w-full max-w-md border border-gray-100 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+      <div className="bg-[var(--color-surface)] rounded-xl shadow-2xl w-full max-w-md border border-gray-100 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-divider)]">
           <h3 className="text-sm font-medium">
             {isNew ? t.add_column : t.edit_column}
           </h3>
@@ -112,7 +112,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+              className="w-full border border-[var(--color-border-divider)] rounded-md px-3 py-2 text-sm"
               autoFocus
             />
           </div>
@@ -123,7 +123,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
             <select
               value={type}
               onChange={(e) => setType(e.target.value as WorkloadColumnType)}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+              className="w-full border border-[var(--color-border-divider)] rounded-md px-3 py-2 text-sm"
             >
               {COLUMN_TYPES.map((ct) => (
                 <option key={ct.value} value={ct.value}>
@@ -137,7 +137,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
           <div>
             <label className="text-xs text-muted block mb-1">{t.icon}</label>
             <div className="flex items-center gap-3">
-              <div className="flex-1 border border-gray-200 rounded-md overflow-hidden">
+              <div className="flex-1 border border-[var(--color-border-divider)] rounded-md overflow-hidden">
                 <div className="flex flex-wrap gap-0.5 p-1.5 max-h-24 overflow-y-auto">
                   <button
                     onClick={() => { setIcon(""); setIconOnly(false); }}
@@ -183,7 +183,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                 value={formula}
                 onChange={(e) => handleFormulaChange(e.target.value)}
                 placeholder="e.g. og_scope ? hours : 0"
-                className={`w-full border rounded-md px-3 py-2 text-sm font-mono ${formulaError ? "border-red-400" : "border-gray-200"}`}
+                className={`w-full border rounded-md px-3 py-2 text-sm font-mono ${formulaError ? "border-red-400" : "border-[var(--color-border-divider)]"}`}
               />
               {formulaError ? (
                 <p className="text-[10px] text-red-500 mt-1">{formulaError}</p>
@@ -214,7 +214,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                           next[i] = { ...next[i], color: e.target.value };
                           setOptions(next);
                         }}
-                        className="text-xs border border-gray-200 rounded px-1 py-0.5"
+                        className="text-xs border border-[var(--color-border-divider)] rounded px-1 py-0.5"
                       >
                         {TAG_COLOR_NAMES.map((c) => (
                           <option key={c} value={c}>
@@ -238,12 +238,12 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                   onChange={(e) => setNewOptValue(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && addOption()}
                   placeholder={t.new_option}
-                  className="flex-1 border border-gray-200 rounded px-2 py-1.5 text-sm"
+                  className="flex-1 border border-[var(--color-border-divider)] rounded px-2 py-1.5 text-sm"
                 />
                 <select
                   value={newOptColor}
                   onChange={(e) => setNewOptColor(e.target.value)}
-                  className="text-sm border border-gray-200 rounded px-2 py-1.5"
+                  className="text-sm border border-[var(--color-border-divider)] rounded px-2 py-1.5"
                 >
                   {TAG_COLOR_NAMES.map((c) => (
                     <option key={c} value={c}>
@@ -262,7 +262,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
           )}
         </div>
 
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
+        <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--color-border-divider)]">
           <div>
             {!isNew && onDelete && (
               <Button
