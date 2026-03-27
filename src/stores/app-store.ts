@@ -118,7 +118,7 @@ export interface AppState {
   themeId: string;
   testMode: boolean;
   presentationMode: boolean;
-  enableModularProjects: boolean;
+
   reduceMotion: boolean;
   nativeNotifications: boolean;
   dateFormat: DateFormatOption;
@@ -178,7 +178,6 @@ export interface AppState {
   setReduceMotion: (enabled: boolean) => void;
   setTestMode: (enabled: boolean) => void;
   setPresentationMode: (enabled: boolean) => void;
-  setEnableModularProjects: (enabled: boolean) => void;
   setNativeNotifications: (enabled: boolean) => void;
 }
 
@@ -222,7 +221,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   themeId: localStorage.getItem("themeId") ?? "default-light",
   testMode: localStorage.getItem("testMode") === "true",
   presentationMode: localStorage.getItem("presentationMode") === "true",
-  enableModularProjects: localStorage.getItem("enableModularProjects") === "true",
+
   reduceMotion: localStorage.getItem("reduceMotion") === "true",
   nativeNotifications: localStorage.getItem("nativeNotifications") !== "false",
   dateFormat: (localStorage.getItem("dateFormat") as DateFormatOption) ?? "dd.MM.yyyy",
@@ -392,10 +391,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     localStorage.setItem("presentationMode", String(enabled));
     if (!enabled) localStorage.removeItem("presentationMode");
     set({ presentationMode: enabled });
-  },
-  setEnableModularProjects: (enabled) => {
-    localStorage.setItem("enableModularProjects", String(enabled));
-    set({ enableModularProjects: enabled });
   },
   setNativeNotifications: (enabled) => {
     localStorage.setItem("nativeNotifications", String(enabled));

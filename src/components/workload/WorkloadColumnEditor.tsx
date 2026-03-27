@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Plus, Trash2 } from "lucide-react";
+import { X, Plus, Trash2, Calendar } from "lucide-react";
 import { Button } from "../ui";
 import type { WorkloadColumn, WorkloadColumnType, SelectOption } from "../../types/workload";
 import { TAG_COLORS, TAG_COLOR_NAMES } from "../../types/workload";
@@ -35,6 +35,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
   const [iconOnly, setIconOnly] = useState(column?.iconOnly ?? false);
   const [options, setOptions] = useState<SelectOption[]>(column?.options ?? []);
   const [formula, setFormula] = useState(column?.formula ?? "");
+  const [calendarColor, setCalendarColor] = useState(column?.calendarColor ?? false);
   const [newOptValue, setNewOptValue] = useState("");
   const [newOptColor, setNewOptColor] = useState("gray");
   const [formulaError, setFormulaError] = useState("");
@@ -81,6 +82,9 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
     }
     if (type === "formula") {
       col.formula = formula;
+    }
+    if ((type === "select" || type === "multi_select") && calendarColor) {
+      col.calendarColor = true;
     }
     onSave(col);
     onClose();
@@ -174,6 +178,20 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
               </label>
             )}
           </div>
+
+          {/* Calendar color toggle (select/multi_select only) */}
+          {(type === "select" || type === "multi_select") && (
+            <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
+              <input
+                type="checkbox"
+                checked={calendarColor}
+                onChange={(e) => setCalendarColor(e.target.checked)}
+                className="rounded"
+              />
+              <Calendar size={14} className="shrink-0" />
+              {t.calendar_color_column}
+            </label>
+          )}
 
           {/* Formula */}
           {type === "formula" && (

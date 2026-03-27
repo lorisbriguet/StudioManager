@@ -419,6 +419,109 @@ async function ensureSchema(db: Database) {
     "UPDATE workload_templates SET is_system = 1 WHERE id = (SELECT MIN(id) FROM workload_templates) AND is_system = 0"
   );
 
+  // ── Dashboard presets ─────────────────────────────────────
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS dashboard_presets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      layout_json TEXT NOT NULL,
+      is_builtin INTEGER NOT NULL DEFAULT 0,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+  const presetCount = await db.select<{ cnt: number }[]>(
+    "SELECT COUNT(*) as cnt FROM dashboard_presets"
+  );
+  if (presetCount[0]?.cnt === 0) {
+    const builtinPresets = [
+      {
+        name: "Financial",
+        sort_order: 0,
+        layout_json: JSON.stringify({
+          widgets: [
+            { id: "w-chart-revenue", type: "chart-revenue" },
+            { id: "w-kpi-balance", type: "kpi-balance" },
+            { id: "w-expense-breakdown", type: "expense-breakdown" },
+            { id: "w-monthly-comparison", type: "monthly-comparison" },
+            { id: "w-recent-invoices", type: "recent-invoices" },
+          ],
+          layout: [
+            { i: "w-chart-revenue", x: 0, y: 0, w: 8, h: 5, minW: 4, minH: 4 },
+            { i: "w-kpi-balance", x: 8, y: 0, w: 4, h: 2, minW: 2, minH: 2 },
+            { i: "w-expense-breakdown", x: 8, y: 2, w: 4, h: 3, minW: 2, minH: 3 },
+            { i: "w-monthly-comparison", x: 0, y: 5, w: 6, h: 4, minW: 3, minH: 2 },
+            { i: "w-recent-invoices", x: 6, y: 5, w: 6, h: 4, minW: 3, minH: 3 },
+          ],
+        }),
+      },
+      {
+        name: "Project Manager",
+        sort_order: 1,
+        layout_json: JSON.stringify({
+          widgets: [
+            { id: "w-project-progress", type: "project-progress" },
+            { id: "w-overdue-tasks", type: "overdue-tasks" },
+            { id: "w-time-this-week", type: "time-this-week" },
+            { id: "w-planned-vs-actual", type: "planned-vs-actual" },
+            { id: "w-upcoming-deadlines", type: "upcoming-deadlines" },
+          ],
+          layout: [
+            { i: "w-project-progress", x: 0, y: 0, w: 6, h: 4, minW: 3, minH: 3 },
+            { i: "w-overdue-tasks", x: 6, y: 0, w: 6, h: 4, minW: 3, minH: 3 },
+            { i: "w-time-this-week", x: 0, y: 4, w: 4, h: 4, minW: 3, minH: 3 },
+            { i: "w-planned-vs-actual", x: 4, y: 4, w: 4, h: 4, minW: 3, minH: 3 },
+            { i: "w-upcoming-deadlines", x: 8, y: 4, w: 4, h: 4, minW: 3, minH: 3 },
+          ],
+        }),
+      },
+      {
+        name: "Time Tracker",
+        sort_order: 2,
+        layout_json: JSON.stringify({
+          widgets: [
+            { id: "w-time-this-week", type: "time-this-week" },
+            { id: "w-weekly-trend", type: "weekly-trend" },
+            { id: "w-top-time-consumers", type: "top-time-consumers" },
+            { id: "w-billable-summary", type: "billable-summary" },
+            { id: "w-project-time-distribution", type: "project-time-distribution" },
+          ],
+          layout: [
+            { i: "w-time-this-week", x: 0, y: 0, w: 6, h: 4, minW: 3, minH: 3 },
+            { i: "w-weekly-trend", x: 6, y: 0, w: 6, h: 4, minW: 3, minH: 3 },
+            { i: "w-top-time-consumers", x: 0, y: 4, w: 4, h: 4, minW: 3, minH: 3 },
+            { i: "w-billable-summary", x: 4, y: 4, w: 4, h: 2, minW: 2, minH: 2 },
+            { i: "w-project-time-distribution", x: 8, y: 4, w: 4, h: 4, minW: 3, minH: 3 },
+          ],
+        }),
+      },
+      {
+        name: "Minimal",
+        sort_order: 3,
+        layout_json: JSON.stringify({
+          widgets: [
+            { id: "w-kpi-invoiced", type: "kpi-invoiced" },
+            { id: "w-kpi-balance", type: "kpi-balance" },
+            { id: "w-profit-margin", type: "profit-margin" },
+            { id: "w-recent-invoices", type: "recent-invoices" },
+          ],
+          layout: [
+            { i: "w-kpi-invoiced", x: 0, y: 0, w: 4, h: 2, minW: 2, minH: 2 },
+            { i: "w-kpi-balance", x: 4, y: 0, w: 4, h: 2, minW: 2, minH: 2 },
+            { i: "w-profit-margin", x: 8, y: 0, w: 4, h: 2, minW: 2, minH: 2 },
+            { i: "w-recent-invoices", x: 0, y: 2, w: 12, h: 5, minW: 3, minH: 3 },
+          ],
+        }),
+      },
+    ];
+    for (const p of builtinPresets) {
+      await db.execute(
+        "INSERT INTO dashboard_presets (name, layout_json, is_builtin, sort_order) VALUES ($1, $2, 1, $3)",
+        [p.name, p.layout_json, p.sort_order]
+      );
+    }
+  }
+
   // ── Migrate workload_rows → tasks (one-time) ─────────────
   const hasWorkloadRows = await db.select<{ cnt: number }[]>(
     "SELECT COUNT(*) as cnt FROM workload_rows"

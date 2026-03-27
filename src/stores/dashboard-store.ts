@@ -157,30 +157,52 @@ function loadWidgets(): DashboardWidget[] {
 }
 
 const NOTES_KEY = "dashboard-pinned-notes";
+const PRESET_ID_KEY = "dashboard-preset-id";
+const PRESET_NAME_KEY = "dashboard-preset-name";
 
 function loadNotes(): string {
   return localStorage.getItem(NOTES_KEY) ?? "";
+}
+
+function loadPresetId(): number | null {
+  const raw = localStorage.getItem(PRESET_ID_KEY);
+  return raw ? Number(raw) : null;
+}
+
+function loadPresetName(): string {
+  return localStorage.getItem(PRESET_NAME_KEY) ?? "Custom";
 }
 
 interface DashboardState {
   widgets: DashboardWidget[];
   layout: LayoutItem[];
   pinnedNotes: string;
+  activePresetId: number | null;
+  activePresetName: string;
   setLayout: (layout: LayoutItem[]) => void;
   addWidget: (type: WidgetType) => void;
   removeWidget: (id: string) => void;
   resetDashboard: () => void;
   setPinnedNotes: (text: string) => void;
+  setActivePreset: (id: number | null, name: string, widgets: DashboardWidget[], layout: LayoutItem[]) => void;
+}
+
+function clearPresetTracking() {
+  localStorage.removeItem(PRESET_ID_KEY);
+  localStorage.setItem(PRESET_NAME_KEY, "Custom");
 }
 
 export const useDashboardStore = create<DashboardState>((set, get) => ({
   widgets: loadWidgets(),
   layout: loadLayout(),
   pinnedNotes: loadNotes(),
+  activePresetId: loadPresetId(),
+  activePresetName: loadPresetName(),
 
   setLayout: (layout) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
-    set({ layout });
+    clearPresetTracking();
+    set({ layout, activePresetId: null, activePresetName: "Custom" });
   },
 
   addWidget: (type) => {
@@ -196,7 +218,8 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     ];
     localStorage.setItem(WIDGETS_KEY, JSON.stringify(widgets));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
-    set({ widgets, layout });
+    clearPresetTracking();
+    set({ widgets, layout, activePresetId: null, activePresetName: "Custom" });
   },
 
   removeWidget: (id) => {
@@ -204,17 +227,31 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     const layout = get().layout.filter((l) => l.i !== id);
     localStorage.setItem(WIDGETS_KEY, JSON.stringify(widgets));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
-    set({ widgets, layout });
+    clearPresetTracking();
+    set({ widgets, layout, activePresetId: null, activePresetName: "Custom" });
   },
 
   resetDashboard: () => {
     localStorage.setItem(WIDGETS_KEY, JSON.stringify(DEFAULT_WIDGETS));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_LAYOUT));
-    set({ widgets: DEFAULT_WIDGETS, layout: DEFAULT_LAYOUT });
+    clearPresetTracking();
+    set({ widgets: DEFAULT_WIDGETS, layout: DEFAULT_LAYOUT, activePresetId: null, activePresetName: "Custom" });
   },
 
   setPinnedNotes: (text) => {
     localStorage.setItem(NOTES_KEY, text);
     set({ pinnedNotes: text });
+  },
+
+  setActivePreset: (id, name, widgets, layout) => {
+    localStorage.setItem(WIDGETS_KEY, JSON.stringify(widgets));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
+    if (id !== null) {
+      localStorage.setItem(PRESET_ID_KEY, String(id));
+    } else {
+      localStorage.removeItem(PRESET_ID_KEY);
+    }
+    localStorage.setItem(PRESET_NAME_KEY, name);
+    set({ widgets, layout, activePresetId: id, activePresetName: name });
   },
 }));

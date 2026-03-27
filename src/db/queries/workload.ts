@@ -264,6 +264,27 @@ export async function setProjectWorkloadConfig(
   );
 }
 
+/** Get all project workload column configs (for calendar colors) */
+export async function getAllProjectWorkloadConfigs(): Promise<
+  Map<number, WorkloadColumn[]>
+> {
+  const db = await getDb();
+  const rows = await db.select<
+    { id: number; workload_columns: string | null }[]
+  >("SELECT id, workload_columns FROM projects WHERE workload_columns IS NOT NULL");
+  const map = new Map<number, WorkloadColumn[]>();
+  for (const row of rows) {
+    if (!row.workload_columns) continue;
+    try {
+      const cols = JSON.parse(row.workload_columns) as WorkloadColumn[];
+      map.set(row.id, cols);
+    } catch {
+      logError(`Failed to parse workload_columns for project ${row.id}`);
+    }
+  }
+  return map;
+}
+
 /** Get aggregated time data across all projects (for Time Overview) */
 export async function getTimeOverviewData(): Promise<
   { project_id: number; project_name: string; task_id: number; task_title: string; tracked_minutes: number; planned_minutes: number | null; date: string }[]

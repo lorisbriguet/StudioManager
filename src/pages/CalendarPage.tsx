@@ -18,6 +18,10 @@ import { ProjectDetailContent } from "../components/ProjectDetailContent";
 import { getSubtasksWithDueDate } from "../db/queries/tasks";
 import { useQuery } from "@tanstack/react-query";
 import { effectivePriority } from "../types/task";
+import { useAllProjectWorkloadConfigs } from "../db/hooks/useWorkload";
+import { getTagColor } from "../lib/tagColors";
+import type { WorkloadColumn } from "../types/workload";
+import { DEFAULT_WORKLOAD_COLUMNS } from "../types/workload";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 function toDateStr(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
@@ -58,6 +62,42 @@ interface QuickCreateState {
   pos: { top: number; left: number };
 }
 
+/** Find the designated calendar color column for a project, or fall back to first select/tag column */
+function findCalendarColorColumn(columns: WorkloadColumn[]): WorkloadColumn | undefined {
+  const designated = columns.find((c) => c.calendarColor);
+  if (designated) return designated;
+  return columns.find((c) => c.type === "select" || c.type === "multi_select");
+}
+
+/** Get the calendar event color from a task's workload cells */
+function getTaskEventColor(
+  projectId: number,
+  workloadCellsJson: string,
+  wlConfigs: Map<number, WorkloadColumn[]> | undefined,
+  dark: boolean,
+): { backgroundColor: string; textColor: string } | null {
+  const columns = wlConfigs?.get(projectId) ?? DEFAULT_WORKLOAD_COLUMNS;
+  const col = findCalendarColorColumn(columns);
+  if (!col) return null;
+
+  let cells: Record<string, unknown> = {};
+  try {
+    cells = JSON.parse(workloadCellsJson || "{}") as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+
+  const value = cells[col.key];
+  if (!value) return null;
+
+  // For multi_select, use the first value
+  const tagName = Array.isArray(value) ? value[0] : String(value);
+  if (!tagName) return null;
+
+  const color = getTagColor(String(tagName), dark);
+  return { backgroundColor: color.bg, textColor: color.text };
+}
+
 export function CalendarPage() {
   const t = useT();
   const { data: tasks } = useTasksWithDueDate();
@@ -71,6 +111,8 @@ export function CalendarPage() {
   const createTask = useCreateTask();
   const navigate = useNavigate();
   const projectOpenMode = useAppStore((s) => s.projectOpenMode);
+  const darkMode = useAppStore((s) => s.darkMode);
+  const { data: wlConfigs } = useAllProjectWorkloadConfigs();
 
   const [quickCreate, setQuickCreate] = useState<QuickCreateState | null>(null);
   const [peekId, setPeekId] = useState<number | null>(null);
@@ -100,6 +142,7 @@ export function CalendarPage() {
       const projectName = projects?.find((p) => p.id === t.project_id)?.name ?? "";
       const prio = effectivePriority(t.priority, t.due_date, t.end_date);
       const prioClass = `fc-priority-${prio}`;
+      const tagColor = getTaskEventColor(t.project_id, t.workload_cells, wlConfigs, darkMode);
       if (t.start_time) {
         items.push({
           id: `t-${t.id}`,
@@ -108,7 +151,8 @@ export function CalendarPage() {
           end: t.end_time ? `${(t.end_date || t.due_date)}T${t.end_time}` : undefined,
           allDay: false,
           extendedProps: { type: "task", itemId: t.id, projectId: t.project_id, status: t.status, isSubtask: false },
-          classNames: t.status === "done" ? ["fc-done"] : [prioClass],
+          classNames: t.status === "done" ? ["fc-done"] : tagColor ? [] : [prioClass],
+          ...(tagColor && t.status !== "done" ? { backgroundColor: tagColor.backgroundColor, textColor: tagColor.textColor } : {}),
         });
       } else {
         items.push({
@@ -118,7 +162,8 @@ export function CalendarPage() {
           end: t.end_date ? nextDay(t.end_date) : undefined,
           allDay: true,
           extendedProps: { type: "task", itemId: t.id, projectId: t.project_id, status: t.status, isSubtask: false },
-          classNames: t.status === "done" ? ["fc-done"] : [prioClass],
+          classNames: t.status === "done" ? ["fc-done"] : tagColor ? [] : [prioClass],
+          ...(tagColor && t.status !== "done" ? { backgroundColor: tagColor.backgroundColor, textColor: tagColor.textColor } : {}),
         });
       }
     }
@@ -197,7 +242,7 @@ export function CalendarPage() {
     }
 
     return items;
-  }, [tasks, subtasks, projects, invoices, quotes, t]);
+  }, [tasks, subtasks, projects, invoices, quotes, t, wlConfigs, darkMode]);
 
   const handleEventChange = useCallback((event: EventDropArg["event"]) => {
     const { type, itemId } = event.extendedProps;

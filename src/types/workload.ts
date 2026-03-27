@@ -22,6 +22,7 @@ export interface WorkloadColumn {
   options?: SelectOption[];
   formula?: string;
   showSum?: boolean;
+  calendarColor?: boolean;
 }
 
 export interface WorkloadTemplate {

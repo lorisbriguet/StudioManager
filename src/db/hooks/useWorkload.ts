@@ -201,6 +201,15 @@ export function useSetProjectWorkloadConfig(projectId: number) {
   });
 }
 
+// ── All project workload configs (for calendar colors) ─────
+
+export function useAllProjectWorkloadConfigs() {
+  return useQuery({
+    queryKey: ["workload-configs-all"],
+    queryFn: q.getAllProjectWorkloadConfigs,
+  });
+}
+
 // ── Time Overview (read-only aggregate) ────────────────────
 
 export function useTimeOverviewData() {
