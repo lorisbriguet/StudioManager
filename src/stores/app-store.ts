@@ -198,6 +198,23 @@ if (initialTheme && initialThemeId !== "default-light") {
   applyAccentColor(initialAccent.color, initialDark ? initialAccent.darkLight : initialAccent.light, initialAccent.darkLight);
 }
 
+// Derive the effective accent for the initial theme so the picker stays in sync
+function getInitialAccentForTheme(): AccentPreset {
+  if (initialTheme && initialThemeId !== "default-light") {
+    const matchingPreset = ACCENT_PRESETS.find(
+      (p) => p.color.toLowerCase() === initialTheme.colors.accent.toLowerCase()
+    );
+    return matchingPreset ?? {
+      name: "Theme",
+      color: initialTheme.colors.accent,
+      light: initialTheme.colors.accentLight,
+      darkLight: initialTheme.colors.accentLight,
+    };
+  }
+  return initialAccent;
+}
+const effectiveInitialAccent = getInitialAccentForTheme();
+
 export const useAppStore = create<AppState>((set, get) => ({
   commandPaletteOpen: false,
   sidebarCollapsed: false,
@@ -209,7 +226,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   reduceMotion: localStorage.getItem("reduceMotion") === "true",
   nativeNotifications: localStorage.getItem("nativeNotifications") !== "false",
   dateFormat: (localStorage.getItem("dateFormat") as DateFormatOption) ?? "dd.MM.yyyy",
-  accentColor: initialAccent,
+  accentColor: effectiveInitialAccent,
   calendarSync: localStorage.getItem("calendarSync") === "true",
   calendarName: localStorage.getItem("calendarName") ?? "",
   backupPath: localStorage.getItem("backupPath") ?? "",
@@ -346,7 +363,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       const theme = getThemeById(themeId);
       if (theme) {
         applyThemeColors(theme);
-        return { themeId, darkMode: theme.mode === "dark" };
+        // Sync accentColor state to match the theme's accent
+        const matchingPreset = ACCENT_PRESETS.find(
+          (p) => p.color.toLowerCase() === theme.colors.accent.toLowerCase()
+        );
+        const newAccent: AccentPreset = matchingPreset ?? {
+          name: "Theme",
+          color: theme.colors.accent,
+          light: theme.colors.accentLight,
+          darkLight: theme.colors.accentLight,
+        };
+        localStorage.setItem("accentColor", newAccent.color);
+        return { themeId, darkMode: theme.mode === "dark", accentColor: newAccent };
       }
       return { themeId };
     }),

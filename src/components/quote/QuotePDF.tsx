@@ -282,7 +282,7 @@ export function QuotePDF({
             )}
             <View style={s.metaRow}>
               <Text style={s.metaLabel}>{t.reference}</Text>
-              <Text style={s.metaValue}>{quote.reference}</Text>
+              <Text style={s.metaValue}>{quote.reference.startsWith("DRAFT") ? "DRAFT" : quote.reference}</Text>
             </View>
             <View style={{ height: 6 }} />
             {quote.activity && (

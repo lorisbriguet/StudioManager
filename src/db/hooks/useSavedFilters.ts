@@ -5,6 +5,7 @@ import {
   renameSavedFilter,
   deleteSavedFilter,
 } from "../queries/savedFilters";
+import type { SavedFilterData } from "../../types/saved-filter";
 
 export function useSavedFilters(page: string) {
   return useQuery({
@@ -16,8 +17,8 @@ export function useSavedFilters(page: string) {
 export function useCreateSavedFilter(page: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ name, filters }: { name: string; filters: Record<string, unknown> }) =>
-      createSavedFilter(page, name, filters),
+    mutationFn: ({ name, filters }: { name: string; filters: SavedFilterData }) =>
+      createSavedFilter(page, name, filters as Record<string, unknown>),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["saved-filters", page] }),
   });
 }

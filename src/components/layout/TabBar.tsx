@@ -1,6 +1,6 @@
-import { useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { X, Plus, Pin } from "lucide-react";
+import { useRef, useState, useEffect, useCallback } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { X, Plus, Pin, ChevronLeft, ChevronRight } from "lucide-react";
 import { useTabStore, type Tab } from "../../stores/tab-store";
 
 function TabItem({ tab, isActive, onActivate, onClose, onMiddleClick }: {
@@ -38,7 +38,34 @@ function TabItem({ tab, isActive, onActivate, onClose, onMiddleClick }: {
 export function TabBar() {
   const { tabs, activeTabId, openTab, closeTab, activateTab } = useTabStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Track back/forward availability via react-router's history.state.idx
+  const [canGoBack, setCanGoBack] = useState(false);
+  const [canGoForward, setCanGoForward] = useState(false);
+
+  const updateNavState = useCallback(() => {
+    // history.state?.idx is set by react-router and tracks position in the history stack
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    setCanGoBack(idx > 0);
+    // We track max index seen to know if forward is possible
+    const maxKey = "nav_max_idx";
+    const storedMax = Number(sessionStorage.getItem(maxKey) || "0");
+    const newMax = Math.max(storedMax, idx);
+    sessionStorage.setItem(maxKey, String(newMax));
+    setCanGoForward(idx < newMax);
+  }, []);
+
+  useEffect(() => {
+    updateNavState();
+  }, [location, updateNavState]);
+
+  useEffect(() => {
+    const handler = () => updateNavState();
+    window.addEventListener("popstate", handler);
+    return () => window.removeEventListener("popstate", handler);
+  }, [updateNavState]);
 
   // Don't show tab bar when only 1 tab
   if (tabs.length <= 1) return null;
@@ -63,6 +90,27 @@ export function TabBar() {
 
   return (
     <div className="flex items-center border-b border-gray-200 bg-white dark:bg-gray-100 shrink-0" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
+      {/* Back / Forward navigation */}
+      <div className="flex items-center shrink-0 ml-1.5 gap-0.5">
+        <button
+          type="button"
+          disabled={!canGoBack}
+          onClick={() => navigate(-1)}
+          className="p-1 rounded text-muted hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-200 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+          title="Back"
+        >
+          <ChevronLeft size={14} />
+        </button>
+        <button
+          type="button"
+          disabled={!canGoForward}
+          onClick={() => navigate(1)}
+          className="p-1 rounded text-muted hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-200 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+          title="Forward"
+        >
+          <ChevronRight size={14} />
+        </button>
+      </div>
       <div
         ref={scrollRef}
         className="flex items-center flex-1 overflow-x-auto scrollbar-hide"

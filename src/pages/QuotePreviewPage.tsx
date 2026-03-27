@@ -56,7 +56,7 @@ export function QuotePreviewPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${quote.reference}_${client.name}.pdf`;
+      a.download = `${quote.reference.startsWith("DRAFT") ? "DRAFT" : quote.reference}_${client.name}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success("PDF downloaded");
@@ -90,7 +90,7 @@ export function QuotePreviewPage() {
           <ArrowLeft size={18} />
         </button>
         <h1 className="text-sm font-semibold flex-1">
-          {quote.reference} — {client.name}
+          {quote.reference.startsWith("DRAFT") ? t.draft : quote.reference} — {client.name}
         </h1>
         {quote.status === "accepted" && !quote.converted_to_project_id && (
           <Button variant="secondary" icon={<FolderPlus size={14} />} onClick={() => setShowWizard(true)}>

@@ -19,6 +19,8 @@ import { BulkActionBar } from "../components/BulkActionBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useT } from "../i18n/useT";
 import { logError } from "../lib/log";
+import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
+import { applyFilterConditions } from "../types/saved-filter";
 
 type SortKey = "name" | "price";
 
@@ -45,11 +47,18 @@ export function ResourcesPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState<ResourceRow> | null>(null);
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
+  const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
 
-  const applyFilter = useCallback((filters: Record<string, unknown>) => {
+  const applyFilter = useCallback((filters: SavedFilterData) => {
     if (typeof filters.search === "string") setSearch(filters.search);
     setTagFilter(typeof filters.tagFilter === "string" ? filters.tagFilter : null);
+    setFilterConditions(filters.conditions ?? []);
   }, []);
+
+  const resourceFields = useMemo<FilterableField[]>(() => [
+    { key: "name", label: t.name, type: "string" },
+    { key: "price", label: "Price", type: "string" },
+  ], [t]);
 
   // Build rows with tags
   const [rows, setRows] = useState<ResourceRow[]>([]);
@@ -81,8 +90,9 @@ export function ResourcesPage() {
     if (tagFilter) {
       list = list.filter((r) => r.tags.includes(tagFilter));
     }
+    list = applyFilterConditions(list, filterConditions);
     return sortRows(list, sort.key, sort.dir);
-  }, [rows, search, tagFilter, sort]);
+  }, [rows, search, tagFilter, sort, filterConditions]);
 
   const bulk = useBulkSelect(filtered);
 
@@ -180,10 +190,11 @@ export function ResourcesPage() {
 
       <SavedFilterBar
         page="resources"
-        currentFilters={{ search, tagFilter }}
+        currentFilters={{ search, tagFilter: tagFilter ?? undefined, conditions: filterConditions }}
         onApply={applyFilter}
         activeFilterId={activeFilterId}
         onActiveChange={setActiveFilterId}
+        fields={resourceFields}
       />
 
       {filtered.length === 0 ? (

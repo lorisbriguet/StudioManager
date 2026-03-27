@@ -19,6 +19,7 @@ import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel } f
 import { LineItemsTable } from "../components/shared/LineItemsTable";
 import { currencies, getExchangeRate, toCHF, type Currency } from "../lib/exchangeRate";
 import { useTabStore } from "../stores/tab-store";
+import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 
 export function InvoiceFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -39,6 +40,14 @@ export function InvoiceFormPage() {
   const deleteInvoice = useDeleteInvoice();
   const queryClient = useQueryClient();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Track whether the user has made any changes to the form
+  const [formDirty, setFormDirty] = useState(false);
+  const formLoadedRef = useRef(false);
+  const markDirty = useCallback(() => {
+    if (formLoadedRef.current) setFormDirty(true);
+  }, []);
+  useUnsavedChangesWarning(formDirty);
 
   const [clientId, setClientId] = useState("");
   const [contactId, setContactId] = useState<number | null>(null);
@@ -88,6 +97,7 @@ export function InvoiceFormPage() {
 
   useEffect(() => {
     if (existingInvoice) {
+      formLoadedRef.current = false;
       setClientId(existingInvoice.client_id);
       setContactId(existingInvoice.contact_id);
       setBillingAddressId(existingInvoice.billing_address_id);
@@ -118,6 +128,9 @@ export function InvoiceFormPage() {
       }).catch((e) => {
         logError("Failed to load line items:", e);
         toast.error(t.failed_load_line_items);
+      }).finally(() => {
+        // Allow a tick for React to settle before arming dirty tracking
+        setTimeout(() => { formLoadedRef.current = true; }, 0);
       });
     }
   }, [existingInvoice, invoiceId]);
@@ -137,9 +150,17 @@ export function InvoiceFormPage() {
     }
   }, [profileActivities, isEdit, fromQuoteId]);
 
+  // Arm dirty tracking for new invoices (no existing data to load)
+  useEffect(() => {
+    if (!isEdit && !fromQuoteId) {
+      setTimeout(() => { formLoadedRef.current = true; }, 0);
+    }
+  }, [isEdit, fromQuoteId]);
+
   // Pre-fill from quote when converting
   useEffect(() => {
     if (!fromQuoteId || isEdit) return;
+    formLoadedRef.current = false;
     (async () => {
       const quote = await getQuote(fromQuoteId);
       if (!quote) return;
@@ -161,6 +182,7 @@ export function InvoiceFormPage() {
           }))
         );
       }
+      setTimeout(() => { formLoadedRef.current = true; }, 0);
     })().catch((e) => {
       logError("Failed to load quote:", e);
       toast.error(t.failed_load_line_items);
@@ -247,6 +269,7 @@ export function InvoiceFormPage() {
           },
           {
             onSuccess: () => {
+              setFormDirty(false);
               toast.success(t.invoice_updated);
               navigate("/invoices");
             },
@@ -294,6 +317,7 @@ export function InvoiceFormPage() {
                 await updateQuote(fromQuoteId, { converted_to_invoice_id: invoiceId });
                 queryClient.invalidateQueries({ queryKey: ["quotes"] });
               }
+              setFormDirty(false);
               toast.success(fromQuoteId ? t.quote_converted : t.invoice_created);
               navigate("/invoices");
             },
@@ -315,7 +339,7 @@ export function InvoiceFormPage() {
         </h1>
       </div>
 
-      <div className="space-y-4 max-w-3xl">
+      <div className="space-y-4 max-w-3xl" onChange={markDirty} onInput={markDirty}>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-muted mb-1">{t.client}</label>
@@ -492,10 +516,10 @@ export function InvoiceFormPage() {
           items={items}
           lineItemIds={lineItemIds}
           sensors={sensors}
-          onDragEnd={handleDragEnd}
-          onAdd={addItem}
-          onRemove={removeItem}
-          onUpdate={updateItem}
+          onDragEnd={(...a) => { handleDragEnd(...a); markDirty(); }}
+          onAdd={() => { addItem(); markDirty(); }}
+          onRemove={(...a) => { removeItem(...a); markDirty(); }}
+          onUpdate={(...a) => { updateItem(...a); markDirty(); }}
           subtotal={subtotal}
           discountRate={discountRate}
           discountAmount={discountAmount}
@@ -524,6 +548,7 @@ export function InvoiceFormPage() {
                     }));
                     const nonEmpty = items.filter((i) => i.designation.trim());
                     setItems(nonEmpty.length > 0 ? [...nonEmpty, ...newItems] : newItems);
+                    markDirty();
                   }}
                   className="text-accent hover:underline"
                 >
@@ -585,6 +610,7 @@ export function InvoiceFormPage() {
                 onClick={() => {
                   deleteInvoice.mutate(invoiceId, {
                     onSuccess: () => {
+                      setFormDirty(false);
                       toast.success(t.delete + " — " + existingInvoice.reference);
                       navigate("/invoices");
                     },
