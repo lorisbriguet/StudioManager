@@ -466,16 +466,16 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
       {isOpen && (<>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
-      <div className="rounded-xl overflow-hidden border border-[var(--color-border-divider)]">
+      <div className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="text-sm" style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}>
             <thead>
               <tr className="border-b border-[var(--color-border-header)] select-none">
                 {/* Drag handle column */}
-                <th className={`w-8 px-2 ${stickyFirstCol ? "sticky left-0 z-10 bg-gray-100" : ""}`} />
+                <th className={`w-8 px-2 ${stickyFirstCol ? "sticky left-0 z-10 bg-[var(--color-surface)]" : ""}`} />
                 {/* System: Task */}
                 <th
-                  className={`relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-gray-700 select-none ${stickyFirstCol ? "sticky left-8 z-10 bg-gray-100" : ""}`}
+                  className={`relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-gray-700 select-none ${stickyFirstCol ? "sticky left-8 z-10 bg-[var(--color-surface)]" : ""}`}
                   style={{ width: taskColWidth, minWidth: 80 }}
                   onClick={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
@@ -592,9 +592,9 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
               {/* Summary row */}
               {summaryRow && sortedRows.length > 0 && (
                 <tr className="border-t border-[var(--color-border-header)] font-medium">
-                  <td className={`${stickyFirstCol ? "sticky left-0 z-10 bg-gray-100" : ""}`} />
+                  <td className={`${stickyFirstCol ? "sticky left-0 z-10 bg-[var(--color-surface)]" : ""}`} />
                   {/* System: Task total label */}
-                  <td className={`px-4 py-2 text-sm ${stickyFirstCol ? "sticky left-8 z-10 bg-gray-100" : ""}`}>
+                  <td className={`px-4 py-2 text-sm ${stickyFirstCol ? "sticky left-8 z-10 bg-[var(--color-surface)]" : ""}`}>
                     <span className="text-muted">{t.total}</span>
                   </td>
                   {/* System: Duration total */}

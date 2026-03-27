@@ -440,13 +440,14 @@ export function SettingsPage() {
                   ))}
                 </div>
               </div>
-              <SettingRow label={t.accent_color}>
+              <div className="py-3 border-b border-[var(--color-border-divider)]">
+                <div className="text-sm mb-2">{t.accent_color}</div>
                 <AccentColorPicker
                   presets={ACCENT_PRESETS}
                   value={accentColor}
                   onChange={setAccentColor}
                 />
-              </SettingRow>
+              </div>
               <SettingRow label={t.reduce_motion} desc={t.reduce_motion_desc}>
                 <Toggle checked={reduceMotion} onChange={setReduceMotion} />
               </SettingRow>
