@@ -475,7 +475,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                 <th className={`w-8 px-2 ${stickyFirstCol ? "sticky left-0 z-10 bg-[var(--color-surface)]" : ""}`} />
                 {/* System: Task */}
                 <th
-                  className={`relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-gray-700 select-none ${stickyFirstCol ? "sticky left-8 z-10 bg-[var(--color-surface)]" : ""}`}
+                  className={`relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-[var(--color-text-secondary)] select-none ${stickyFirstCol ? "sticky left-8 z-10 bg-[var(--color-surface)]" : ""}`}
                   style={{ width: taskColWidth, minWidth: 80 }}
                   onClick={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
@@ -496,7 +496,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                 </th>
                 {/* System: Duration */}
                 <th
-                  className="relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-gray-700 select-none"
+                  className="relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-[var(--color-text-secondary)] select-none"
                   style={{ width: 90, minWidth: 60 }}
                   onClick={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
@@ -512,7 +512,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                 </th>
                 {/* System: Planned */}
                 <th
-                  className="relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-gray-700 select-none"
+                  className="relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-[var(--color-text-secondary)] select-none"
                   style={{ width: 90, minWidth: 60 }}
                   onClick={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
@@ -532,7 +532,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                   return (
                     <th
                       key={`${col.key}_${ci}`}
-                      className="relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-gray-700 select-none"
+                      className="relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-[var(--color-text-secondary)] select-none"
                       style={{ width: w, minWidth: 24 }}
                       onClick={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect();
@@ -704,7 +704,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
           <div className="bg-[var(--color-surface)] rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-divider)]">
               <h3 className="text-sm font-medium">{t.save_as_template}</h3>
-              <button onClick={() => setShowSaveModal(false)} className="text-muted hover:text-gray-700">
+              <button onClick={() => setShowSaveModal(false)} className="text-muted hover:text-[var(--color-text-secondary)]">
                 <X size={16} />
               </button>
             </div>

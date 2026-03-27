@@ -78,7 +78,7 @@ export function DashboardPage() {
           <div className="mb-4 bg-[var(--color-surface)] rounded-xl p-4 max-h-[60vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-medium">{t.add}</h2>
-              <button type="button" onClick={() => setShowWidgetPanel(false)} className="text-muted hover:text-gray-900 dark:hover:text-gray-200">
+              <button type="button" onClick={() => setShowWidgetPanel(false)} className="text-muted hover:text-[var(--color-text)]">
                 <X size={14} />
               </button>
             </div>

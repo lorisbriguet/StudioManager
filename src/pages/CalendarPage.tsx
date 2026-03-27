@@ -369,7 +369,7 @@ export function CalendarPage() {
             </Link>
             <button
               onClick={handleClosePeek}
-              className="text-muted hover:text-gray-700"
+              className="text-muted hover:text-[var(--color-text-secondary)]"
             >
               <X size={16} />
             </button>
@@ -493,7 +493,7 @@ function QuickCreatePopup({
           setSubtaskTitle("");
           setTitle("");
         }}
-        className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-xs mb-2"
+        className="w-full border border-[var(--color-input-border)] rounded-md px-2 py-1.5 text-xs mb-2"
       >
         <option value="">{t.select_project}</option>
         {projects.map((p) => (
@@ -508,7 +508,7 @@ function QuickCreatePopup({
             <span className="text-xs flex-1 truncate">{selectedTask.title}</span>
             <button
               onClick={handleClearTask}
-              className="text-muted hover:text-gray-900 dark:hover:text-gray-200 text-xs shrink-0"
+              className="text-muted hover:text-[var(--color-text)] text-xs shrink-0"
             >
               ✕
             </button>
@@ -530,7 +530,7 @@ function QuickCreatePopup({
               }
             }}
             placeholder={t.new_task}
-            className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-xs"
+            className="w-full border border-[var(--color-input-border)] rounded-md px-2 py-1.5 text-xs"
           />
         )}
         {!selectedTask && showSuggestions && suggestions.length > 0 && (
@@ -540,7 +540,7 @@ function QuickCreatePopup({
                 key={task.id}
                 type="button"
                 onClick={() => handleSelectTask(task)}
-                className="w-full text-left px-2 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-200 truncate"
+                className="w-full text-left px-2 py-1.5 text-xs hover:bg-[var(--color-hover-row)] truncate"
               >
                 {task.title}
               </button>
@@ -559,14 +559,14 @@ function QuickCreatePopup({
             if (e.key === "Enter") handleSubmit();
           }}
           placeholder={t.new_subtask}
-          className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-xs mb-2"
+          className="w-full border border-[var(--color-input-border)] rounded-md px-2 py-1.5 text-xs mb-2"
         />
       )}
 
       <div className="flex justify-end gap-1.5">
         <button
           onClick={onClose}
-          className="px-2.5 py-1 text-xs border border-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-200"
+          className="px-2.5 py-1 text-xs border border-[var(--color-input-border)] rounded hover:bg-[var(--color-hover-row)]"
         >
           {t.cancel}
         </button>

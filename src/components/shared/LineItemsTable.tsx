@@ -203,7 +203,7 @@ function SortableLineItemHandle({ id }: { id: number }) {
     <div
       {...attributes}
       {...listeners}
-      className="cursor-grab text-gray-300 hover:text-gray-600 flex items-center justify-center"
+      className="cursor-grab text-muted hover:text-[var(--color-text-secondary)] flex items-center justify-center"
       aria-label="Drag to reorder"
     >
       <GripVertical size={14} />

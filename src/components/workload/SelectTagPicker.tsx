@@ -78,7 +78,7 @@ export function SelectTagPicker({
   const dropdown = (
     <div
       ref={ref}
-      className={`${anchorRef ? "fixed" : "absolute mt-1"} z-50 w-52 bg-[var(--color-surface)] border border-gray-100 rounded-lg shadow-lg overflow-hidden`}
+      className={`${anchorRef ? "fixed" : "absolute mt-1"} z-50 w-52 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-lg shadow-lg overflow-hidden`}
       style={pos ? { top: pos.top, left: pos.left } : undefined}
     >
       <div className="p-1.5">
@@ -104,7 +104,7 @@ export function SelectTagPicker({
             <button
               key={opt.value}
               onClick={() => toggle(opt.value)}
-              className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-200 ${
+              className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-[var(--color-hover-row)] ${
                 selected ? "bg-[var(--color-hover-row)]" : ""
               }`}
             >
@@ -122,7 +122,7 @@ export function SelectTagPicker({
         {search.trim() && !options.some((o) => o.value === search.trim()) && (
           <button
             onClick={createOption}
-            className="w-full text-left px-3 py-2 text-sm text-accent hover:bg-gray-200"
+            className="w-full text-left px-3 py-2 text-sm text-accent hover:bg-[var(--color-hover-row)]"
           >
             Create &quot;{search.trim()}&quot;
           </button>

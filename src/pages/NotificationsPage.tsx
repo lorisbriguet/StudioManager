@@ -71,7 +71,7 @@ export function NotificationsPage() {
                 onClick={() => handleClick(n)}
                 className={`flex items-start gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer group ${
                   n.read
-                    ? "bg-transparent hover:bg-gray-50 dark:hover:bg-gray-200"
+                    ? "bg-transparent hover:bg-[var(--color-hover-row)]"
                     : "bg-accent-light/50 hover:bg-accent-light"
                 }`}
               >

@@ -144,7 +144,7 @@ export function NamedTable({ table, projectId }: Props) {
     <div className="rounded-xl bg-[var(--color-surface)] overflow-visible">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2 bg-[var(--color-surface)]">
-        <button onClick={() => setCollapsed(!collapsed)} className="text-muted hover:text-gray-700">
+        <button onClick={() => setCollapsed(!collapsed)} className="text-muted hover:text-[var(--color-text-secondary)]">
           {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
         </button>
         {editingName ? (
@@ -214,7 +214,7 @@ export function NamedTable({ table, projectId }: Props) {
                           value={colName}
                           onChange={(e) => setColName(e.target.value)}
                           onKeyDown={(e) => { if (e.key === "Enter") commitColEdit(); }}
-                          className="w-full border border-gray-200 rounded px-2 py-1 text-xs mb-2"
+                          className="w-full border border-[var(--color-input-border)] rounded px-2 py-1 text-xs mb-2"
                           autoFocus
                         />
                         {(col.type === "select" || col.type === "tags") && (
@@ -229,7 +229,7 @@ export function NamedTable({ table, projectId }: Props) {
                                     next[i] = e.target.value;
                                     setColOptions(next);
                                   }}
-                                  className="flex-1 border border-gray-200 rounded px-2 py-0.5 text-xs"
+                                  className="flex-1 border border-[var(--color-input-border)] rounded px-2 py-0.5 text-xs"
                                 />
                                 <button
                                   type="button"
@@ -272,7 +272,7 @@ export function NamedTable({ table, projectId }: Props) {
                 <th className="w-10 relative">
                   <button
                     onClick={() => setShowColPicker((v) => !v)}
-                    className="text-muted hover:text-accent transition-colors p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-200"
+                    className="text-muted hover:text-accent transition-colors p-0.5 rounded hover:bg-[var(--color-hover-row)]"
                     title={t.add_column}
                   >
                     <Plus size={14} />
@@ -389,7 +389,7 @@ export function NamedTable({ table, projectId }: Props) {
                 key={opt}
                 type="button"
                 onClick={() => addTag(opt)}
-                className="px-1.5 py-0.5 rounded-full text-[10px] bg-gray-50 dark:bg-gray-200 text-muted hover:text-accent hover:bg-accent-light transition-colors"
+                className="px-1.5 py-0.5 rounded-full text-[10px] bg-[var(--color-input-bg)] text-muted hover:text-accent hover:bg-accent-light transition-colors"
               >
                 + {opt}
               </button>
@@ -428,7 +428,7 @@ export function NamedTable({ table, projectId }: Props) {
             className="cursor-pointer hover:text-accent block truncate"
             onDoubleClick={() => startEditing(row, col)}
           >
-            {row.data[col.id] != null ? String(row.data[col.id]) : <span className="text-gray-300">—</span>}
+            {row.data[col.id] != null ? String(row.data[col.id]) : <span className="text-muted">—</span>}
           </span>
         );
     }

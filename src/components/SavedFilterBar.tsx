@@ -273,7 +273,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
                   </button>
                 )}
                 <button onClick={handleSave} className="text-xs text-accent hover:text-accent-hover px-1">{t.save}</button>
-                <button onClick={() => { setNaming(false); setNameInput(""); setConditions([]); setShowConditions(false); }} className="text-muted hover:text-gray-700"><X size={12} /></button>
+                <button onClick={() => { setNaming(false); setNameInput(""); setConditions([]); setShowConditions(false); }} className="text-muted hover:text-[var(--color-text-secondary)]"><X size={12} /></button>
               </div>
               {conditionsUI}
             </div>
@@ -343,7 +343,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
                   {f.name}
                   {condCount > 0 && (
                     <span className={`text-[10px] rounded-full px-1 py-0 ${
-                      activeFilterId === f.id ? "bg-white/25" : "bg-gray-200 text-gray-500"
+                      activeFilterId === f.id ? "bg-white/25" : "bg-[var(--color-input-bg)] text-[var(--color-muted)]"
                     }`}>
                       {condCount}
                     </span>
@@ -380,7 +380,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
                 </button>
               )}
               <button onClick={handleSave} className="text-xs text-accent hover:text-accent-hover px-1">{t.save}</button>
-              <button onClick={() => { setNaming(false); setNameInput(""); setConditions([]); setShowConditions(false); }} className="text-muted hover:text-gray-700"><X size={12} /></button>
+              <button onClick={() => { setNaming(false); setNameInput(""); setConditions([]); setShowConditions(false); }} className="text-muted hover:text-[var(--color-text-secondary)]"><X size={12} /></button>
             </div>
           </div>
         ) : (

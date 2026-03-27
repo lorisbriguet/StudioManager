@@ -539,7 +539,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                       next.has(tk.id) ? next.delete(tk.id) : next.add(tk.id);
                       setExpandedTasks(next);
                     }}
-                    className="text-muted hover:text-gray-700 p-0.5"
+                    className="text-muted hover:text-[var(--color-text-secondary)] p-0.5"
                   >
                     <ChevronRight
                       size={14}
@@ -918,7 +918,7 @@ function ProjectResources({ projectId }: { projectId: number }) {
                   ))}
                 </div>
               )}
-              <button onClick={() => setShowPicker(false)} className="text-xs text-muted mt-1 hover:text-gray-900 dark:hover:text-gray-200">
+              <button onClick={() => setShowPicker(false)} className="text-xs text-muted mt-1 hover:text-[var(--color-text)]">
                 {t.cancel}
               </button>
             </div>
@@ -1043,7 +1043,7 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
                     next.has(tk.id) ? next.delete(tk.id) : next.add(tk.id);
                     setExpandedTasks(next);
                   }}
-                  className="text-muted hover:text-gray-700 p-0.5"
+                  className="text-muted hover:text-[var(--color-text-secondary)] p-0.5"
                 >
                   <ChevronRight size={14} className={`transition-transform ${isExpanded ? "rotate-90" : ""}`} />
                 </button>
@@ -1238,7 +1238,7 @@ function SortableSubtaskRow({ id, children }: { id: number; children: React.Reac
       <div
         {...attributes}
         {...listeners}
-        className="cursor-grab text-gray-300 hover:text-gray-600 opacity-0 group-hover/sub:opacity-100 shrink-0"
+        className="cursor-grab text-muted hover:text-[var(--color-text-secondary)] opacity-0 group-hover/sub:opacity-100 shrink-0"
         aria-label="Drag to reorder"
       >
         <GripVertical size={14} />
@@ -1259,7 +1259,7 @@ function ProjectNamedTables({ projectId }: { projectId: number }) {
   return (
     <div className="mt-6">
       <div className="flex items-center gap-2 mb-2">
-        <button onClick={() => setCollapsed(!collapsed)} className="text-muted hover:text-gray-700">
+        <button onClick={() => setCollapsed(!collapsed)} className="text-muted hover:text-[var(--color-text-secondary)]">
           {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
         </button>
         <h2 className="text-sm font-medium">
@@ -1291,7 +1291,7 @@ function PriorityBadge({ priority, onClick }: { priority: TaskPriority; onClick?
   const colors: Record<TaskPriority, string> = {
     high: "text-red-600",
     medium: "text-yellow-600",
-    low: "text-gray-400",
+    low: "text-muted",
   };
   return (
     <button

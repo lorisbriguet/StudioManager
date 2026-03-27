@@ -95,12 +95,12 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-[var(--color-surface)] rounded-xl shadow-2xl w-full max-w-md border border-gray-100 overflow-hidden">
+      <div className="bg-[var(--color-surface)] rounded-xl shadow-2xl w-full max-w-md border border-[var(--color-border-divider)] overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-divider)]">
           <h3 className="text-sm font-medium">
             {isNew ? t.add_column : t.edit_column}
           </h3>
-          <button onClick={onClose} className="text-muted hover:text-gray-700">
+          <button onClick={onClose} className="text-muted hover:text-[var(--color-text-secondary)]">
             <X size={16} />
           </button>
         </div>
@@ -141,7 +141,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                 <div className="flex flex-wrap gap-0.5 p-1.5 max-h-24 overflow-y-auto">
                   <button
                     onClick={() => { setIcon(""); setIconOnly(false); }}
-                    className={`p-1 rounded ${!icon ? "bg-accent text-white" : "hover:bg-gray-200 text-muted"}`}
+                    className={`p-1 rounded ${!icon ? "bg-accent text-white" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
                     title="None"
                   >
                     <X size={14} />
@@ -152,7 +152,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                       <button
                         key={name}
                         onClick={() => setIcon(name)}
-                        className={`p-1 rounded ${icon === name ? "bg-accent text-white" : "hover:bg-gray-200 text-muted"}`}
+                        className={`p-1 rounded ${icon === name ? "bg-accent text-white" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
                         title={name}
                       >
                         <Icon size={14} />

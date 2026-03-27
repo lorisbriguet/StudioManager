@@ -184,8 +184,8 @@ export function TaskDatePicker({
         onClick={() => setOpen(!open)}
         className={`flex items-center gap-1.5 text-xs rounded px-2 py-1 border transition-colors ${
           dueDate
-            ? "border-gray-200 text-gray-700 hover:bg-gray-50 dark:hover:bg-gray-200"
-            : "border-dashed border-gray-300 text-muted hover:border-gray-400 hover:bg-gray-50 dark:hover:bg-gray-200"
+            ? "border-[var(--color-input-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
+            : "border-dashed border-[var(--color-input-border)] text-muted hover:border-[var(--color-input-border)] hover:bg-[var(--color-hover-row)]"
         } ${compact ? "px-1.5 py-0.5" : ""}`}
       >
         <Calendar size={compact ? 12 : 14} className="shrink-0" />
@@ -195,7 +195,7 @@ export function TaskDatePicker({
       {open && popoverPos && createPortal(
         <div
           ref={popoverRef}
-          className="fixed z-[9999] bg-gray-50 border border-gray-100 rounded-lg shadow-lg p-3 w-[300px]"
+          className="fixed z-[9999] bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-lg shadow-lg p-3 w-[300px]"
           style={{ top: popoverPos.top, left: popoverPos.left }}
         >
           {/* Quick shortcuts */}
@@ -203,14 +203,14 @@ export function TaskDatePicker({
             <button
               type="button"
               onClick={handleToday}
-              className="px-2 py-1 text-[11px] font-medium rounded bg-gray-100 text-gray-700 hover:bg-gray-200 "
+              className="px-2 py-1 text-[11px] font-medium rounded bg-[var(--color-input-bg)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] "
             >
               {t.today}
             </button>
             <button
               type="button"
               onClick={handleTomorrow}
-              className="px-2 py-1 text-[11px] font-medium rounded bg-gray-100 text-gray-700 hover:bg-gray-200 "
+              className="px-2 py-1 text-[11px] font-medium rounded bg-[var(--color-input-bg)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] "
             >
               {t.tomorrow}
             </button>
@@ -221,7 +221,7 @@ export function TaskDatePicker({
             <button
               type="button"
               onClick={() => setMonth(subMonths(month, 1))}
-              className="p-1 text-muted hover:text-gray-900 dark:hover:text-gray-200"
+              className="p-1 text-muted hover:text-[var(--color-text)]"
             >
               <ChevronLeft size={16} />
             </button>
@@ -229,7 +229,7 @@ export function TaskDatePicker({
             <button
               type="button"
               onClick={() => setMonth(addMonths(month, 1))}
-              className="p-1 text-muted hover:text-gray-900 dark:hover:text-gray-200"
+              className="p-1 text-muted hover:text-[var(--color-text)]"
             >
               <ChevronRight size={16} />
             </button>
@@ -244,7 +244,7 @@ export function TaskDatePicker({
           />
 
           {/* Divider */}
-          <div className="border-t border-gray-200 my-2" />
+          <div className="border-t border-[var(--color-input-border)] my-2" />
 
           {/* End date toggle */}
           <ToggleRow
@@ -294,7 +294,7 @@ export function TaskDatePicker({
                   reminder: e.target.value === "none" ? null : (e.target.value as ReminderOption),
                 })
               }
-              className="border border-gray-200 rounded px-2 py-1 text-xs"
+              className="border border-[var(--color-input-border)] rounded px-2 py-1 text-xs"
             >
               {REMINDER_KEYS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -305,7 +305,7 @@ export function TaskDatePicker({
           </div>
 
           {/* Clear button */}
-          <div className="border-t border-gray-200 pt-2">
+          <div className="border-t border-[var(--color-input-border)] pt-2">
             <button
               type="button"
               onClick={handleClear}
@@ -340,7 +340,7 @@ function ToggleRow({
       <div
         onClick={() => onChange(!checked)}
         className={`relative w-8 h-4.5 rounded-full transition-colors cursor-pointer ${
-          checked ? "bg-accent" : "bg-gray-200"
+          checked ? "bg-accent" : "bg-[var(--color-input-bg)]"
         }`}
       >
         <div
@@ -363,7 +363,7 @@ function TimeInput({ value, onCommit }: { value: string; onCommit: (v: string) =
       value={local}
       onChange={(e) => setLocal(e.target.value)}
       onBlur={() => { if (local !== value) onCommit(local); }}
-      className="border border-gray-200 rounded px-2 py-1 text-xs w-24"
+      className="border border-[var(--color-input-border)] rounded px-2 py-1 text-xs w-24"
     />
   );
 }
@@ -432,7 +432,7 @@ function CalendarGrid({
                   ? "bg-accent/10 text-accent"
                   : today
                   ? "font-bold text-accent"
-                  : "text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-200"
+                  : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
               }`}
             >
               {format(day, "d")}

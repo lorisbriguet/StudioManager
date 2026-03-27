@@ -91,7 +91,7 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
                   ? "bg-[var(--accent)] text-white"
                   : i === step
                   ? "bg-[var(--accent)] text-white"
-                  : "bg-gray-200 text-muted"
+                  : "bg-[var(--color-input-bg)] text-muted"
               }`}
             >
               {i < step ? <Check size={12} /> : i + 1}
@@ -99,7 +99,7 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
             <span className={`text-xs ${i === step ? "font-medium" : "text-muted"}`}>
               {label}
             </span>
-            {i < steps.length - 1 && <div className="w-6 h-px bg-gray-200" />}
+            {i < steps.length - 1 && <div className="w-6 h-px bg-[var(--color-input-bg)]" />}
           </div>
         ))}
       </div>
@@ -107,7 +107,7 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
       {/* Step 1: Review items */}
       {step === 0 && (
         <div className="space-y-1 max-h-80 overflow-y-auto">
-          <div className="grid grid-cols-[auto_1fr_100px] gap-2 text-xs font-medium text-muted pb-1 border-b border-gray-100 px-1">
+          <div className="grid grid-cols-[auto_1fr_100px] gap-2 text-xs font-medium text-muted pb-1 border-b border-[var(--color-border-divider)] px-1">
             <span>{t.include}</span>
             <span>{t.task_name}</span>
             <span>{t.planned_time}</span>
@@ -129,7 +129,7 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
                 type="text"
                 value={task.title}
                 onChange={(e) => updateTask(i, { title: e.target.value })}
-                className="text-sm border border-gray-200 rounded px-2 py-1"
+                className="text-sm border border-[var(--color-input-border)] rounded px-2 py-1"
               />
               <input
                 type="number"
@@ -140,7 +140,7 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
                   })
                 }
                 placeholder="min"
-                className="text-sm border border-gray-200 rounded px-2 py-1 text-right"
+                className="text-sm border border-[var(--color-input-border)] rounded px-2 py-1 text-right"
               />
             </div>
           ))}
@@ -156,7 +156,7 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
               type="text"
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+              className="w-full border border-[var(--color-input-border)] rounded-md px-3 py-2 text-sm"
             />
           </div>
           <div>
@@ -165,7 +165,7 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
               type="date"
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+              className="w-full border border-[var(--color-input-border)] rounded-md px-3 py-2 text-sm"
             />
           </div>
           <div>
@@ -174,7 +174,7 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+              className="w-full border border-[var(--color-input-border)] rounded-md px-3 py-2 text-sm"
             />
           </div>
         </div>

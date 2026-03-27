@@ -21,7 +21,7 @@ export function SearchBar({ value, onChange, placeholder, className = "w-64" }: 
         <button
           type="button"
           onClick={() => onChange("")}
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-gray-900 dark:hover:text-gray-200"
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-[var(--color-text)]"
         >
           <X size={12} />
         </button>

@@ -262,7 +262,7 @@ function NewClientForm({
         <select
           value={form.language}
           onChange={(e) => setForm({ ...form, language: e.target.value as "FR" | "EN" })}
-          className="border border-gray-200 rounded-md px-3 py-2 text-sm dark:border-gray-600"
+          className="border border-[var(--color-input-border)] rounded-md px-3 py-2 text-sm"
         >
           <option value="FR">French</option>
           <option value="EN">English</option>
