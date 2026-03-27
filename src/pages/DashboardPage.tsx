@@ -65,7 +65,7 @@ export function DashboardPage() {
           <div className="mb-4 border border-gray-100 rounded-lg p-4 max-h-[60vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-medium">{t.add}</h2>
-              <button type="button" onClick={() => setShowWidgetPanel(false)} className="text-muted hover:text-gray-900">
+              <button type="button" onClick={() => setShowWidgetPanel(false)} className="text-muted hover:text-gray-900 dark:hover:text-gray-200">
                 <X size={14} />
               </button>
             </div>
@@ -117,8 +117,8 @@ export function DashboardPage() {
           margin={[12, 12] as [number, number]}
           autoSize
         >
-          {widgets.map((widget) => (
-            <div key={widget.id} className="border border-gray-100 rounded-lg bg-white dark:bg-gray-100 overflow-hidden relative group cursor-grab active:cursor-grabbing">
+          {widgets.map((widget, idx) => (
+            <div key={widget.id} className="stagger-in border border-gray-100 rounded-lg bg-white dark:bg-gray-100 overflow-hidden relative group cursor-grab active:cursor-grabbing" style={{ animationDelay: `${idx * 50}ms` }}>
               {/* Remove button */}
               <button
                 type="button"

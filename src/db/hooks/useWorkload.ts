@@ -49,7 +49,7 @@ export function useDeleteWorkloadTemplate() {
   });
 }
 
-// ── Rows ───────────────────────────────────────────────────
+// ── Rows (backed by tasks) ────────────────────────────────
 
 export function useWorkloadRows(projectId: number) {
   return useQuery({
@@ -63,8 +63,7 @@ export function useCreateWorkloadRow() {
   return useMutation({
     mutationFn: async (data: {
       project_id: number;
-      template_id: number | null;
-      task_id: number | null;
+      title?: string;
       cells: Record<string, unknown>;
       sort_order: number;
     }) => {
@@ -74,14 +73,15 @@ export function useCreateWorkloadRow() {
         execute: async () => {
           await q.deleteWorkloadRow(id);
           qc.invalidateQueries({ queryKey: ["workload-rows", data.project_id] });
+          qc.invalidateQueries({ queryKey: ["tasks"] });
         },
       });
       return id;
     },
-    onSuccess: (_id, vars) =>
-      qc.invalidateQueries({
-        queryKey: ["workload-rows", vars.project_id],
-      }),
+    onSuccess: (_id, vars) => {
+      qc.invalidateQueries({ queryKey: ["workload-rows", vars.project_id] });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+    },
   });
 }
 
@@ -90,32 +90,41 @@ export function useUpdateWorkloadRow(projectId: number) {
   return useMutation({
     mutationFn: async (data: {
       id: number;
-      task_id?: number | null;
+      title?: string;
       cells?: Record<string, unknown>;
       sort_order?: number;
+      tracked_minutes?: number;
+      planned_minutes?: number | null;
     }) => {
       const prev = await q.getWorkloadRow(data.id);
       await q.updateWorkloadRow(data.id, data);
       if (prev) {
         const prevUpdate: Record<string, unknown> = {};
         if (data.cells !== undefined) prevUpdate.cells = prev.cells;
-        if (data.task_id !== undefined) prevUpdate.task_id = prev.task_id;
+        if (data.title !== undefined) prevUpdate.title = prev.title;
         if (data.sort_order !== undefined) prevUpdate.sort_order = prev.sort_order;
+        if (data.tracked_minutes !== undefined) prevUpdate.tracked_minutes = prev.tracked_minutes;
+        if (data.planned_minutes !== undefined) prevUpdate.planned_minutes = prev.planned_minutes;
         useUndoStore.getState().push({
           label: "Edit workload cell",
           execute: async () => {
             await q.updateWorkloadRow(data.id, prevUpdate as {
-              task_id?: number | null;
+              title?: string;
               cells?: Record<string, unknown>;
               sort_order?: number;
+              tracked_minutes?: number;
+              planned_minutes?: number | null;
             });
             qc.invalidateQueries({ queryKey: ["workload-rows", projectId] });
+            qc.invalidateQueries({ queryKey: ["tasks"] });
           },
         });
       }
     },
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["workload-rows", projectId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["workload-rows", projectId] });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+    },
   });
 }
 
@@ -140,18 +149,20 @@ export function useDeleteWorkloadRow(projectId: number) {
           execute: async () => {
             await q.createWorkloadRow({
               project_id: prev.project_id,
-              template_id: prev.template_id,
-              task_id: prev.task_id,
+              title: prev.title,
               cells: prev.cells,
               sort_order: prev.sort_order,
             });
             qc.invalidateQueries({ queryKey: ["workload-rows", projectId] });
+            qc.invalidateQueries({ queryKey: ["tasks"] });
           },
         });
       }
     },
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["workload-rows", projectId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["workload-rows", projectId] });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+    },
   });
 }
 
@@ -187,5 +198,14 @@ export function useSetProjectWorkloadConfig(projectId: number) {
     },
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ["workload-config", projectId] }),
+  });
+}
+
+// ── Time Overview (read-only aggregate) ────────────────────
+
+export function useTimeOverviewData() {
+  return useQuery({
+    queryKey: ["time-overview"],
+    queryFn: q.getTimeOverviewData,
   });
 }

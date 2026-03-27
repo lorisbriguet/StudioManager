@@ -1,4 +1,4 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { TabBar } from "./TabBar";
 import { useTabSync } from "../../hooks/useTabSync";
@@ -13,9 +13,12 @@ import { X } from "lucide-react";
 export function MainLayout() {
   const testMode = useAppStore((s) => s.testMode);
   const setTestMode = useAppStore((s) => s.setTestMode);
+  const presentationMode = useAppStore((s) => s.presentationMode);
+  const setPresentationMode = useAppStore((s) => s.setPresentationMode);
   const t = useT();
 
   useTabSync();
+  const location = useLocation();
 
   const exitTestMode = async () => {
     const confirmed = await ask(t.test_mode_confirm_exit, { kind: "warning" });
@@ -28,6 +31,20 @@ export function MainLayout() {
       setTimeout(() => window.location.reload(), 500);
     } catch {
       toast.error(t.toast_test_mode_failed);
+    }
+  };
+
+  const exitPresentationMode = async () => {
+    const confirmed = await ask(t.presentation_mode_confirm_exit, { kind: "warning" });
+    if (!confirmed) return;
+    try {
+      await invoke("exit_presentation_mode");
+      await switchDb("studiomanager.db");
+      setPresentationMode(false);
+      toast.success(t.toast_presentation_exited);
+      setTimeout(() => window.location.reload(), 500);
+    } catch {
+      toast.error(String(t.toast_presentation_failed));
     }
   };
 
@@ -46,8 +63,19 @@ export function MainLayout() {
             </button>
           </div>
         )}
+        {presentationMode && (
+          <div className="bg-indigo-500 text-white text-sm font-semibold py-1.5 px-4 shrink-0 flex items-center justify-center gap-3">
+            <span>{t.presentation_mode_banner}</span>
+            <button
+              onClick={exitPresentationMode}
+              className="flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-xs"
+            >
+              <X size={12} /> {t.exit_presentation_mode}
+            </button>
+          </div>
+        )}
         <TabBar />
-        <div className="p-8 w-full flex-1 overflow-y-auto flex flex-col min-h-0">
+        <div key={location.pathname} className="page-transition p-8 w-full flex-1 overflow-y-auto flex flex-col min-h-0">
           <Outlet />
         </div>
       </main>

@@ -2,26 +2,26 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
-import { Moon, Sun, Monitor, FolderOpen, HardDrive, ChevronDown, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield } from "lucide-react";
+import { FolderOpen, HardDrive, ChevronDown, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield } from "lucide-react";
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { purgeAllCalendarEvents, syncAllExisting, listWritableCalendars } from "../lib/appleCalendar";
 import { createBackup, listBackups, restoreFromBackup, validateBackupPath, isBackupRunning, setBackupRunning } from "../lib/backup";
-import { switchDb, resetDb } from "../db";
+import { switchDb, resetDb, seedPresentationDb } from "../db";
 import { useExpenseCategories, useCreateExpenseCategory, useUpdateExpenseCategory, useDeleteExpenseCategory, isDefaultCategory } from "../db/hooks/useExpenses";
 import { isCategoryInUse } from "../db/queries/expenses";
 import type { ExpenseCategory } from "../types/expense";
 import { useAppStore, ACCENT_PRESETS, type DateFormatOption, type AccentPreset, type ProjectOpenMode } from "../stores/app-store";
+import { THEMES } from "../lib/themes";
 import { useT } from "../i18n/useT";
 import type { AppLanguage } from "../i18n/ui";
 import { UpdateChecker } from "../components/UpdateChecker";
 import { WorkloadTemplateManager } from "../components/workload/WorkloadTemplateManager";
+import { Input, Select } from "../components/ui";
 import { logError } from "../lib/log";
 
 type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "workload" | "categories" | "updates" | "backup" | "sandbox";
 
 export function SettingsPage() {
-  const darkMode = useAppStore((s) => s.darkMode);
-  const toggleDarkMode = useAppStore((s) => s.toggleDarkMode);
   const dateFormat = useAppStore((s) => s.dateFormat);
   const setDateFormat = useAppStore((s) => s.setDateFormat);
   const accentColor = useAppStore((s) => s.accentColor);
@@ -36,6 +36,12 @@ export function SettingsPage() {
   const setShowTasksPage = useAppStore((s) => s.setShowTasksPage);
   const showIncome = useAppStore((s) => s.showIncome);
   const setShowIncome = useAppStore((s) => s.setShowIncome);
+  const showTimeOverview = useAppStore((s) => s.showTimeOverview);
+  const setShowTimeOverview = useAppStore((s) => s.setShowTimeOverview);
+  const themeId = useAppStore((s) => s.themeId);
+  const setTheme = useAppStore((s) => s.setTheme);
+  const reduceMotion = useAppStore((s) => s.reduceMotion);
+  const setReduceMotion = useAppStore((s) => s.setReduceMotion);
   const nativeNotifications = useAppStore((s) => s.nativeNotifications);
   const setNativeNotifications = useAppStore((s) => s.setNativeNotifications);
   const backupPath = useAppStore((s) => s.backupPath);
@@ -63,7 +69,12 @@ export function SettingsPage() {
   const [appVersion, setAppVersion] = useState("");
   const testMode = useAppStore((s) => s.testMode);
   const setTestMode = useAppStore((s) => s.setTestMode);
+  const presentationMode = useAppStore((s) => s.presentationMode);
+  const setPresentationMode = useAppStore((s) => s.setPresentationMode);
+  const enableModularProjects = useAppStore((s) => s.enableModularProjects);
+  const setEnableModularProjects = useAppStore((s) => s.setEnableModularProjects);
   const [togglingTestMode, setTogglingTestMode] = useState(false);
+  const [togglingPresentation, setTogglingPresentation] = useState(false);
   const [snapshotting, setSnapshotting] = useState(false);
   const [restoringSnapshot, setRestoringSnapshot] = useState(false);
   const [hasSnapshotFile, setHasSnapshotFile] = useState(false);
@@ -102,6 +113,41 @@ export function SettingsPage() {
       toast.error(`${t.toast_test_mode_failed}: ${String(e)}`);
     } finally {
       setTogglingTestMode(false);
+    }
+  };
+
+  const handleEnterPresentation = async () => {
+    setTogglingPresentation(true);
+    try {
+      await invoke<string>("enter_presentation_mode");
+      await switchDb("studiomanager_presentation.db");
+      await seedPresentationDb();
+      setPresentationMode(true);
+      toast.success(t.toast_presentation_entered);
+      setTimeout(() => window.location.reload(), 500);
+    } catch (e) {
+      logError("Enter presentation mode failed:", e);
+      toast.error(`${t.toast_presentation_failed}: ${String(e)}`);
+    } finally {
+      setTogglingPresentation(false);
+    }
+  };
+
+  const handleExitPresentation = async () => {
+    const confirmed = await ask(t.presentation_mode_confirm_exit, { kind: "warning" });
+    if (!confirmed) return;
+    setTogglingPresentation(true);
+    try {
+      await invoke("exit_presentation_mode");
+      await switchDb("studiomanager.db");
+      setPresentationMode(false);
+      toast.success(t.toast_presentation_exited);
+      setTimeout(() => window.location.reload(), 500);
+    } catch (e) {
+      logError("Exit presentation mode failed:", e);
+      toast.error(`${t.toast_presentation_failed}: ${String(e)}`);
+    } finally {
+      setTogglingPresentation(false);
     }
   };
 
@@ -281,7 +327,7 @@ export function SettingsPage() {
               className={`w-full text-left px-3 py-1.5 rounded text-[13px] transition-colors flex items-center gap-2 ${
                 activeCategory === cat.key
                   ? "bg-accent-light text-accent font-medium"
-                  : "text-muted hover:bg-gray-100 dark:hover:bg-gray-200 hover:text-gray-900"
+                  : "text-muted hover:bg-gray-100 dark:hover:bg-gray-200 hover:text-gray-900 dark:hover:text-gray-800"
               }`}
             >
               {cat.icon}
@@ -301,36 +347,36 @@ export function SettingsPage() {
             <div className="space-y-1">
               <SectionHeader title={t.general} />
               <SettingRow label={t.app_language}>
-                <select
+                <Select
                   value={language}
                   onChange={(e) => setLanguage(e.target.value as AppLanguage)}
-                  className="border border-gray-200 rounded px-2 py-1 text-sm"
+                  fullWidth={false}
                 >
                   <option value="EN">English</option>
                   <option value="FR">Francais</option>
-                </select>
+                </Select>
               </SettingRow>
               <SettingRow label={t.export_language}>
-                <select
+                <Select
                   value={exportLanguage}
                   onChange={(e) => setExportLanguage(e.target.value as AppLanguage)}
-                  className="border border-gray-200 rounded px-2 py-1 text-sm"
+                  fullWidth={false}
                 >
                   <option value="EN">English</option>
                   <option value="FR">Francais</option>
-                </select>
+                </Select>
               </SettingRow>
               <SettingRow label={t.date_format}>
-                <select
+                <Select
                   value={dateFormat}
                   onChange={(e) => setDateFormat(e.target.value as DateFormatOption)}
-                  className="border border-gray-200 rounded px-2 py-1 text-sm"
+                  fullWidth={false}
                 >
                   <option value="dd.MM.yyyy">05.03.2026</option>
                   <option value="dd/MM/yyyy">05/03/2026</option>
                   <option value="MM/dd/yyyy">03/05/2026</option>
                   <option value="yyyy-MM-dd">2026-03-05</option>
-                </select>
+                </Select>
               </SettingRow>
             </div>
           )}
@@ -338,34 +384,45 @@ export function SettingsPage() {
           {activeCategory === "appearance" && (
             <div className="space-y-1">
               <SectionHeader title={t.appearance} />
-              <SettingRow label={t.appearance}>
-                <div className="flex gap-1.5">
-                  {([
-                    { key: "light", label: t.light, icon: <Sun size={14} />, active: !darkMode, action: () => darkMode && toggleDarkMode() },
-                    { key: "dark", label: t.dark, icon: <Moon size={14} />, active: darkMode, action: () => !darkMode && toggleDarkMode() },
-                    { key: "system", label: t.system, icon: <Monitor size={14} />, active: false, action: () => { const sd = window.matchMedia("(prefers-color-scheme: dark)").matches; if (sd !== darkMode) toggleDarkMode(); localStorage.removeItem("darkMode"); } },
-                  ] as const).map((opt) => (
+              <div className="pb-3">
+                <div className="text-sm mb-2">{t.theme}</div>
+                <div className="grid grid-cols-5 gap-2">
+                  {THEMES.map((theme) => (
                     <button
-                      key={opt.key}
+                      key={theme.id}
                       type="button"
-                      onClick={opt.action}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${
-                        opt.active
-                          ? "bg-accent-light text-accent font-medium"
-                          : "text-muted hover:bg-gray-100 dark:hover:bg-gray-200"
+                      onClick={() => setTheme(theme.id)}
+                      className={`flex flex-col rounded-lg overflow-hidden border-2 transition-colors ${
+                        themeId === theme.id
+                          ? "border-accent shadow-sm"
+                          : "border-gray-100 hover:border-gray-300"
                       }`}
+                      title={theme.name}
                     >
-                      {opt.icon} {opt.label}
+                      <div className="flex h-10" style={{ background: theme.colors.bg }}>
+                        <div className="w-3 shrink-0" style={{ background: theme.colors.sidebar, borderRight: `1px solid ${theme.colors.sidebarBorder}` }} />
+                        <div className="flex-1 p-1 flex flex-col gap-0.5 justify-center">
+                          <div className="h-1 w-3/4 rounded-full" style={{ background: theme.colors.accent }} />
+                          <div className="h-1 w-1/2 rounded-full opacity-40" style={{ background: theme.colors.textMuted }} />
+                          <div className="h-1 w-2/3 rounded-full opacity-25" style={{ background: theme.colors.textMuted }} />
+                        </div>
+                      </div>
+                      <div className="text-[10px] text-center py-0.5 truncate px-1" style={{ background: theme.colors.surface, color: theme.colors.text }}>
+                        {theme.name}
+                      </div>
                     </button>
                   ))}
                 </div>
-              </SettingRow>
+              </div>
               <SettingRow label={t.accent_color}>
                 <AccentColorPicker
                   presets={ACCENT_PRESETS}
                   value={accentColor}
                   onChange={setAccentColor}
                 />
+              </SettingRow>
+              <SettingRow label={t.reduce_motion} desc={t.reduce_motion_desc}>
+                <Toggle checked={reduceMotion} onChange={() => setReduceMotion(!reduceMotion)} />
               </SettingRow>
             </div>
           )}
@@ -374,20 +431,23 @@ export function SettingsPage() {
             <div className="space-y-1">
               <SectionHeader title={t.behavior} />
               <SettingRow label={t.project_open_mode}>
-                <select
+                <Select
                   value={projectOpenMode}
                   onChange={(e) => setProjectOpenMode(e.target.value as ProjectOpenMode)}
-                  className="border border-gray-200 rounded px-2 py-1 text-sm"
+                  fullWidth={false}
                 >
                   <option value="peek">{t.side_peek}</option>
                   <option value="page">{t.full_page}</option>
-                </select>
+                </Select>
               </SettingRow>
               <SettingRow label={t.show_tasks_page} desc={t.show_tasks_page_desc}>
                 <Toggle checked={showTasksPage} onChange={() => setShowTasksPage(!showTasksPage)} />
               </SettingRow>
               <SettingRow label={t.show_income} desc={t.show_income_desc}>
                 <Toggle checked={showIncome} onChange={() => setShowIncome(!showIncome)} />
+              </SettingRow>
+              <SettingRow label={t.show_time_overview} desc={t.show_time_overview_desc}>
+                <Toggle checked={showTimeOverview} onChange={() => setShowTimeOverview(!showTimeOverview)} />
               </SettingRow>
               <SettingRow label={t.native_notifications} desc={t.native_notifications_desc}>
                 <Toggle checked={nativeNotifications} onChange={() => setNativeNotifications(!nativeNotifications)} />
@@ -400,7 +460,7 @@ export function SettingsPage() {
               <SectionHeader title={t.calendar_sync} desc={t.calendar_permission_help} />
               <SettingRow label={t.target_calendar}>
                 <div className="flex items-center gap-2">
-                  <select
+                  <Select
                     value={calendarName}
                     onChange={(e) => setCalendarName(e.target.value)}
                     onFocus={() => {
@@ -412,7 +472,7 @@ export function SettingsPage() {
                           .finally(() => setLoadingCalendars(false));
                       }
                     }}
-                    className="border border-gray-200 rounded px-2 py-1 text-sm"
+                    fullWidth={false}
                   >
                     <option value="">{t.select_calendar}</option>
                     {availableCalendars.map((name) => (
@@ -421,7 +481,7 @@ export function SettingsPage() {
                     {calendarName && !availableCalendars.includes(calendarName) && (
                       <option value={calendarName}>{calendarName}</option>
                     )}
-                  </select>
+                  </Select>
                   {loadingCalendars && <span className="text-[11px] text-muted">{t.loading}</span>}
                 </div>
               </SettingRow>
@@ -482,6 +542,37 @@ export function SettingsPage() {
               </SettingRow>
 
               <div className="border-t border-gray-200 my-3" />
+              <SectionHeader title={t.presentation_mode} desc={t.presentation_mode_desc} />
+              <SettingRow label={t.presentation_mode}>
+                {presentationMode ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-indigo-600 font-medium">Presentation active</span>
+                    <button type="button" onClick={handleExitPresentation} disabled={togglingPresentation} className="px-2 py-1 border border-red-300 text-red-600 text-xs rounded hover:bg-red-50 disabled:opacity-50">
+                      {t.exit_presentation_mode}
+                    </button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={handleEnterPresentation} disabled={togglingPresentation || testMode} className="flex items-center gap-1 px-2.5 py-1 bg-indigo-500 text-white text-xs rounded hover:bg-indigo-600 disabled:opacity-50">
+                    {togglingPresentation ? t.loading : t.enter_presentation_mode}
+                  </button>
+                )}
+              </SettingRow>
+
+              <div className="border-t border-gray-200 my-3" />
+              <SectionHeader title={t.modular_projects} desc={t.modular_projects_desc} />
+              <SettingRow label={t.modular_projects}>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={enableModularProjects}
+                    onChange={(e) => setEnableModularProjects(e.target.checked)}
+                    className="rounded"
+                  />
+                  <span className="text-xs text-muted">{t.modular_projects_desc}</span>
+                </label>
+              </SettingRow>
+
+              <div className="border-t border-gray-200 my-3" />
               <SectionHeader title={t.snapshot} desc={t.snapshot_desc} />
               <SettingRow label={t.snapshot}>
                 <div className="flex items-center gap-2">
@@ -515,33 +606,34 @@ export function SettingsPage() {
                     <FolderOpen size={12} /> {t.browse}
                   </button>
                   {backupPath2 && (
-                    <button type="button" onClick={() => setBackupPath2("")} className="text-muted hover:text-gray-900 text-xs">✕</button>
+                    <button type="button" onClick={() => setBackupPath2("")} className="text-muted hover:text-gray-900 dark:hover:text-gray-200 text-xs">✕</button>
                   )}
                 </div>
               </SettingRow>
               <SettingRow label={t.keep_last_n}>
-                <input
+                <Input
                   type="number"
                   min={1}
                   max={50}
                   value={maxBackups}
                   onChange={(e) => setMaxBackups(Math.max(1, Number(e.target.value) || 5))}
-                  className="w-16 border border-gray-200 rounded px-2 py-1 text-sm"
+                  fullWidth={false}
+                  className="w-16"
                 />
               </SettingRow>
               <SettingRow label={t.auto_backup_interval}>
                 <div className="flex items-center gap-2">
-                  <select
+                  <Select
                     value={autoBackupInterval}
                     onChange={(e) => setAutoBackupInterval(Number(e.target.value))}
-                    className="border border-gray-200 rounded px-2 py-1 text-sm"
+                    fullWidth={false}
                   >
                     <option value={0}>{t.disabled}</option>
                     <option value={1440}>{t.daily}</option>
                     <option value={10080}>{t.weekly}</option>
                     <option value={20160}>{t.biweekly}</option>
                     <option value={43200}>{t.monthly}</option>
-                  </select>
+                  </Select>
                   {autoBackupInterval > 0 && lastAutoBackup > 0 && (
                     <span className="text-[11px] text-muted">
                       Last: {new Date(lastAutoBackup).toLocaleString()}
@@ -558,14 +650,15 @@ export function SettingsPage() {
               <div className="border-t border-gray-200 my-3" />
               <SettingRow label={t.restore_from_backup}>
                 <div className="flex items-center gap-1.5">
-                  <select
+                  <Select
                     value={selectedBackup}
                     onChange={(e) => setSelectedBackup(e.target.value)}
                     onFocus={() => {
                       if (availableBackups.length === 0 && !loadingBackups) loadBackupList();
                     }}
                     disabled={!backupPath || restoring}
-                    className="border border-gray-200 rounded px-2 py-1 text-sm max-w-[180px]"
+                    fullWidth={false}
+                    className="max-w-[180px]"
                   >
                     {availableBackups.length === 0 && !loadingBackups && (
                       <option value="">{backupPath ? t.select_backup : t.toast_set_backup_dir}</option>
@@ -574,7 +667,7 @@ export function SettingsPage() {
                     {availableBackups.map((name) => (
                       <option key={name} value={name}>{name.replace("backup-", "")}</option>
                     ))}
-                  </select>
+                  </Select>
                   <button type="button" onClick={runRestore} disabled={restoring || !selectedBackup || !backupPath} className="flex items-center gap-1 px-2 py-1 border border-red-300 text-red-600 text-xs rounded hover:bg-red-50 disabled:opacity-50">
                     <RotateCcw size={12} /> {restoring ? t.restoring : t.restore}
                   </button>
@@ -619,11 +712,11 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
       onClick={onChange}
       disabled={disabled}
       className={`relative w-8 h-[18px] rounded-full transition-colors ${
-        checked ? "bg-accent" : "bg-gray-300"
+        checked ? "bg-accent" : "bg-gray-300 dark:bg-gray-500"
       } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
     >
       <div
-        className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] bg-white dark:bg-gray-300 rounded-full shadow transition-transform ${
+        className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] bg-white rounded-full shadow transition-transform ${
           checked ? "translate-x-[14px]" : ""
         }`}
       />
@@ -765,8 +858,6 @@ function ExpenseCategoryManager() {
     setAdding(false);
   };
 
-  const inputCls = "border border-gray-200 rounded-md px-2 py-1.5 text-sm";
-
   return (
     <div className="max-w-3xl">
       <table className="w-full text-sm">
@@ -786,28 +877,25 @@ function ExpenseCategoryManager() {
                 <>
                   <td className="py-2 pr-2 text-muted">{cat.code}</td>
                   <td className="py-2 pr-2">
-                    <input
-                      className={inputCls}
+                    <Input
                       value={form.name_fr}
                       onChange={(e) => setForm({ ...form, name_fr: e.target.value })}
                     />
                   </td>
                   <td className="py-2 pr-2">
-                    <input
-                      className={inputCls}
+                    <Input
                       value={form.name_en}
                       onChange={(e) => setForm({ ...form, name_en: e.target.value })}
                     />
                   </td>
                   <td className="py-2 pr-2">
-                    <select
-                      className={inputCls}
+                    <Select
                       value={form.pl_section}
                       onChange={(e) => setForm({ ...form, pl_section: e.target.value as ExpenseCategory["pl_section"] })}
                     >
                       <option value="operating">{t.pl_operating}</option>
                       <option value="social_charges">{t.pl_social_charges}</option>
-                    </select>
+                    </Select>
                   </td>
                   <td className="py-2 flex gap-1">
                     <button type="button" onClick={handleSaveEdit} className="px-2 py-1 bg-accent text-white text-xs rounded hover:bg-accent-hover">
@@ -847,8 +935,9 @@ function ExpenseCategoryManager() {
           {adding && (
             <tr className="border-b border-gray-100">
               <td className="py-2 pr-2">
-                <input
-                  className={`${inputCls} w-16`}
+                <Input
+                  fullWidth={false}
+                  className="w-16"
                   placeholder="XX"
                   maxLength={4}
                   value={form.code}
@@ -856,20 +945,19 @@ function ExpenseCategoryManager() {
                 />
               </td>
               <td className="py-2 pr-2">
-                <input className={inputCls} value={form.name_fr} onChange={(e) => setForm({ ...form, name_fr: e.target.value })} />
+                <Input value={form.name_fr} onChange={(e) => setForm({ ...form, name_fr: e.target.value })} />
               </td>
               <td className="py-2 pr-2">
-                <input className={inputCls} value={form.name_en} onChange={(e) => setForm({ ...form, name_en: e.target.value })} />
+                <Input value={form.name_en} onChange={(e) => setForm({ ...form, name_en: e.target.value })} />
               </td>
               <td className="py-2 pr-2">
-                <select
-                  className={inputCls}
+                <Select
                   value={form.pl_section}
                   onChange={(e) => setForm({ ...form, pl_section: e.target.value as ExpenseCategory["pl_section"] })}
                 >
                   <option value="operating">{t.pl_operating}</option>
                   <option value="social_charges">{t.pl_social_charges}</option>
-                </select>
+                </Select>
               </td>
               <td className="py-2 flex gap-1">
                 <button type="button" onClick={handleSaveNew} className="px-2 py-1 bg-accent text-white text-xs rounded hover:bg-accent-hover">

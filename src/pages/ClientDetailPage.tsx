@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Save, Plus, Trash2, Eye, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { PageSpinner } from "../components/ui";
+import { Input, PageSpinner, Card } from "../components/ui";
 import { useTabStore } from "../stores/tab-store";
 import {
   useClient,
@@ -20,6 +20,7 @@ import {
 import { useProjectsByClient } from "../db/hooks/useProjects";
 import { useInvoicesByClient } from "../db/hooks/useInvoices";
 import { useT } from "../i18n/useT";
+import { ClientTimeline } from "../components/ClientTimeline";
 import type { Client, ClientContact, ClientAddress } from "../types/client";
 
 export function ClientDetailPage() {
@@ -82,9 +83,9 @@ export function ClientDetailPage() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <Link to="/clients" className="text-muted hover:text-gray-900">
+        <button onClick={() => navigate(-1)} className="text-muted hover:text-gray-900 dark:hover:text-gray-200">
           <ArrowLeft size={18} />
-        </Link>
+        </button>
         <h1 className="text-xl font-semibold">{client.name}</h1>
         <div className="ml-auto flex items-center gap-2">
           {dirty && (
@@ -166,7 +167,7 @@ export function ClientDetailPage() {
               </label>
               {!!form.has_discount && (
                 <div className="flex items-center gap-1">
-                  <input
+                  <Input
                     type="number"
                     min={0}
                     max={100}
@@ -174,7 +175,8 @@ export function ClientDetailPage() {
                     value={Math.round((form.discount_rate ?? 0.1) * 100)}
                     onChange={(e) => update("discount_rate", Number(e.target.value) / 100)}
                     onBlur={(e) => saveField("discount_rate", Number(e.target.value) / 100)}
-                    className="w-16 border border-gray-200 rounded-md px-2 py-1 text-sm text-center"
+                    fullWidth={false}
+                    className="w-16 px-2 py-1 text-center"
                   />
                   <span className="text-sm text-muted">%</span>
                 </div>
@@ -240,6 +242,10 @@ export function ClientDetailPage() {
             {(!invoices || invoices.length === 0) && (
               <div className="text-sm text-muted">{t.no_invoices}</div>
             )}
+          </Section>
+
+          <Section title={t.client_activity}>
+            <ClientTimeline clientId={id!} />
           </Section>
         </div>
       </div>
@@ -315,7 +321,7 @@ function ContactsSection({
   };
 
   return (
-    <div className="border border-gray-100 rounded-lg p-4">
+    <Card>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-medium">{t.contacts}</h2>
         <button
@@ -411,7 +417,7 @@ function ContactsSection({
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -555,7 +561,7 @@ function AddressesSection({
   };
 
   return (
-    <div className="border border-gray-100 rounded-lg p-4">
+    <Card>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-medium">{t.billing_addresses}</h2>
         <button
@@ -687,7 +693,7 @@ function AddressesSection({
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -695,10 +701,10 @@ function AddressesSection({
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="border border-gray-100 rounded-lg p-4">
+    <Card>
       <h2 className="text-sm font-medium mb-3">{title}</h2>
       {children}
-    </div>
+    </Card>
   );
 }
 
@@ -722,7 +728,7 @@ function Field({
   return (
     <div>
       <label className="block text-xs font-medium text-muted mb-1">{label}</label>
-      <input
+      <Input
         value={local}
         onFocus={() => { focusedRef.current = true; }}
         onChange={(e) => setLocal(e.target.value)}
@@ -730,7 +736,7 @@ function Field({
           focusedRef.current = false;
           if (onBlur && local !== value) onBlur(local);
         }}
-        className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+        className="py-2"
       />
     </div>
   );
@@ -756,7 +762,7 @@ function MiniField({
   return (
     <div>
       <label className="block text-[10px] text-muted mb-0.5">{label}</label>
-      <input
+      <Input
         value={local}
         onChange={(e) => {
           setLocal(e.target.value);
@@ -765,7 +771,7 @@ function MiniField({
         onBlur={() => {
           if (onBlur && local !== value) onChange(local);
         }}
-        className="w-full border border-gray-200 rounded-md px-2 py-1 text-sm"
+        className="px-2 py-1"
       />
     </div>
   );

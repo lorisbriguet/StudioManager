@@ -34,6 +34,12 @@ body {
   overflow: hidden;
 }
 
+.dark body,
+.dark > body {
+  background: #111111;
+  color: #e5e5e5;
+}
+
 #root {
   height: 100vh;
   width: 100vw;
@@ -79,11 +85,6 @@ body {
   --color-border: #333333;
 }
 
-.dark body {
-  background: #111111;
-  color: #e5e5e5;
-}
-
 .dark input,
 .dark select:not(.appearance-none),
 .dark textarea {
@@ -94,6 +95,12 @@ body {
 .dark input::placeholder,
 .dark textarea::placeholder {
   color: #525252;
+}
+
+/* ─── Focus ring that follows accent at runtime ─── */
+.focus-accent:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--color-surface, #fff), 0 0 0 3px color-mix(in srgb, var(--color-accent) 50%, transparent);
 }
 
 /* ─── FullCalendar overrides ─── */
@@ -260,22 +267,178 @@ body {
   --fc-event-text-color: #fca5a5;
 }
 
+/* ─── Animation tokens ─── */
+:root {
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --duration-fast: 0ms; --duration-normal: 0ms; --duration-slow: 0ms; }
+}
+.reduce-motion { --duration-fast: 0ms; --duration-normal: 0ms; --duration-slow: 0ms; }
+
 /* ─── Global transitions (Notion-like smooth feel) ─── */
 table tbody tr {
-  transition: background-color 150ms ease;
+  transition: background-color var(--duration-fast) ease;
 }
 
 button, a, select, [role="button"] {
-  transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease, opacity 150ms ease;
+  transition: color var(--duration-fast) ease, background-color var(--duration-fast) ease, border-color var(--duration-fast) ease, opacity var(--duration-fast) ease;
 }
 
 /* ─── Animations ─── */
 @keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-in {
+  animation: fade-in var(--duration-normal) var(--ease-out);
+}
+
+/* Page transition */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.page-transition {
+  animation: page-enter var(--duration-normal) var(--ease-out);
+}
+
+/* Checkbox pop */
+@keyframes check-pop {
+  0% { transform: scale(0.8); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+.check-pop {
+  animation: check-pop var(--duration-normal) var(--ease-spring);
+}
+
+/* Checkmark stroke draw */
+@keyframes stroke-draw {
+  from { stroke-dashoffset: 20; }
+  to { stroke-dashoffset: 0; }
+}
+.stroke-draw {
+  stroke-dasharray: 20;
+  animation: stroke-draw var(--duration-normal) var(--ease-out);
+}
+
+/* Strikethrough sweep */
+@keyframes strike-sweep {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+/* Status pill crossfade */
+.status-transition {
+  transition: background-color var(--duration-normal) ease, color var(--duration-normal) ease;
+}
+
+/* Toast slide-in */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Modal open */
+@keyframes modal-open {
   from { opacity: 0; transform: scale(0.97); }
   to { opacity: 1; transform: scale(1); }
 }
-.animate-in {
-  animation: fade-in var(--animate-duration, 150ms) ease-out;
+.modal-animate {
+  animation: modal-open var(--duration-normal) var(--ease-out);
+}
+@keyframes bulk-bar-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.bulk-bar-animate {
+  animation: bulk-bar-in var(--duration-normal) var(--ease-spring);
+}
+
+/* Sidebar active indicator */
+.sidebar-indicator {
+  transition: transform var(--duration-normal) var(--ease-spring);
+}
+
+/* Staggered fade-in for dashboard widgets (opacity-only to avoid overriding grid transform) */
+@keyframes stagger-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.stagger-in {
+  opacity: 0;
+  animation: stagger-fade var(--duration-slow) var(--ease-out) forwards;
+}
+
+/* Task row exit animation (when checked off in filtered view) */
+@keyframes task-exit {
+  0% { opacity: 1; transform: translateX(0); max-height: 60px; }
+  60% { opacity: 0; transform: translateX(16px); max-height: 60px; }
+  100% { opacity: 0; transform: translateX(16px); max-height: 0; padding-top: 0; padding-bottom: 0; }
+}
+.task-exit {
+  animation: task-exit 500ms var(--ease-out) forwards;
+  overflow: hidden;
+}
+
+/* Side peek slide-in / slide-out (width + opacity for smooth card reflow) */
+@keyframes peek-in {
+  from {
+    opacity: 0;
+    width: 0;
+    min-width: 0;
+    margin-left: 0;
+    padding-left: 0;
+    border-left-width: 0;
+    overflow: hidden;
+  }
+  to {
+    opacity: 1;
+    width: 50%;
+    margin-left: 1rem;
+    padding-left: 1rem;
+    border-left-width: 1px;
+  }
+}
+@keyframes peek-out {
+  from {
+    opacity: 1;
+    width: 50%;
+    margin-left: 1rem;
+    padding-left: 1rem;
+    border-left-width: 1px;
+  }
+  to {
+    opacity: 0;
+    width: 0;
+    min-width: 0;
+    margin-left: 0;
+    padding-left: 0;
+    border-left-width: 0;
+    overflow: hidden;
+  }
+}
+.peek-enter {
+  animation: peek-in var(--duration-slow) var(--ease-out) forwards;
+}
+.peek-exit {
+  animation: peek-out var(--duration-slow) var(--ease-out) forwards;
+  pointer-events: none;
+}
+
+/* Drag item lift */
+.drag-lift {
+  transition: box-shadow var(--duration-fast) ease, transform var(--duration-fast) ease;
+}
+.drag-lift:active, .drag-lift.dragging {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transform: scale(1.02);
 }
 
 /* ─── Dashboard grid overrides ─── */

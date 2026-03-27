@@ -5,6 +5,7 @@ interface UndoAction {
   execute: () => Promise<void> | void;
   /** If provided, allows redo after undo */
   redo?: () => Promise<void> | void;
+  redirectTo?: string;
 }
 
 interface UndoState {

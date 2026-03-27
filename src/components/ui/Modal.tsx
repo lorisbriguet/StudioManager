@@ -6,6 +6,7 @@ interface ModalProps {
   onClose: () => void;
   title?: string;
   children: ReactNode;
+  footer?: ReactNode;
   size?: "sm" | "md" | "lg";
 }
 
@@ -15,7 +16,7 @@ const sizeClasses = {
   lg: "max-w-lg",
 };
 
-export function Modal({ open, onClose, title, children, size = "sm" }: ModalProps) {
+export function Modal({ open, onClose, title, children, footer, size = "sm" }: ModalProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -36,13 +37,13 @@ export function Modal({ open, onClose, title, children, size = "sm" }: ModalProp
     >
       <div
         ref={ref}
-        className={`bg-white dark:bg-gray-100 rounded-xl shadow-xl w-full ${sizeClasses[size]} mx-4 overflow-hidden animate-in`}
+        className={`bg-white dark:bg-gray-100 rounded-xl shadow-xl w-full ${sizeClasses[size]} mx-4 overflow-hidden modal-animate`}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (
           <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
             <h3 className="text-sm font-medium">{title}</h3>
-            <button onClick={onClose} className="text-muted hover:text-gray-700">
+            <button onClick={onClose} className="text-muted hover:text-gray-700 dark:hover:text-gray-200">
               <X size={16} />
             </button>
           </div>
@@ -50,6 +51,11 @@ export function Modal({ open, onClose, title, children, size = "sm" }: ModalProp
         <div className={title ? "p-5" : "p-6"}>
           {children}
         </div>
+        {footer && (
+          <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-100">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

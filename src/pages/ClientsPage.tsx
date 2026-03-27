@@ -1,15 +1,19 @@
 import { useState, useMemo, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, Eye, Trash2, ExternalLink } from "lucide-react";
+import { Plus, Eye, Trash2, ExternalLink, Users } from "lucide-react";
 import { toast } from "sonner";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { useClients, useCreateClient, useDeleteClient, getNextClientId } from "../db/hooks/useClients";
 import { useProjects } from "../db/hooks/useProjects";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
 import { useT } from "../i18n/useT";
 import { useAppStore } from "../stores/app-store";
 import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
+import { BulkActionBar } from "../components/BulkActionBar";
+import { SavedFilterBar } from "../components/SavedFilterBar";
+import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
-import { Button, Badge, Input, PageHeader, SearchBar, PageSpinner } from "../components/ui";
+import { Button, Badge, Card, Input, PageHeader, SearchBar, PageSpinner, EmptyState } from "../components/ui";
 import type { Client } from "../types/client";
 
 type SortKey = "id" | "name" | "language" | "discount_rate" | "status";
@@ -29,11 +33,17 @@ export function ClientsPage() {
   const setClientsSortDir = useAppStore((s) => s.setClientsSortDir);
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState("");
+  const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const sort: SortState<SortKey> = { key: clientsSortKey as SortKey, dir: clientsSortDir };
   const setSort = useCallback((s: SortState<SortKey>) => {
     setClientsSortKey(s.key);
     setClientsSortDir(s.dir);
   }, [setClientsSortKey, setClientsSortDir]);
+
+  const applyFilter = useCallback((filters: Record<string, unknown>) => {
+    if (typeof filters.search === "string") setSearch(filters.search);
+    if (filters.sort && typeof filters.sort === "object") setSort(filters.sort as SortState<SortKey>);
+  }, [setSort]);
 
   const activeClientIds = useMemo(() => {
     if (!projects) return new Set<string>();
@@ -59,6 +69,15 @@ export function ClientsPage() {
     return sortRows(rows, sort.key, sort.dir);
   }, [clients, search, sort, activeClientIds]);
 
+  const bulk = useBulkSelect(filtered);
+
+  const bulkDelete = useCallback(async () => {
+    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
+    const ids = [...bulk.selected] as string[];
+    ids.forEach((id) => deleteClient.mutate(id));
+    bulk.clearSelection();
+  }, [bulk, deleteClient, t]);
+
   if (isLoading) return <PageSpinner />;
 
   return (
@@ -69,7 +88,14 @@ export function ClientsPage() {
         </Button>
       </PageHeader>
 
-      <SearchBar value={search} onChange={setSearch} placeholder={t.search_clients} className="mb-4 w-64" />
+      <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); }} placeholder={t.search_clients} className="mb-4 w-64" />
+      <SavedFilterBar
+        page="clients"
+        currentFilters={{ search, sort }}
+        onApply={applyFilter}
+        activeFilterId={activeFilterId}
+        onActiveChange={setActiveFilterId}
+      />
 
       {showForm && (
         <NewClientForm
@@ -93,6 +119,9 @@ export function ClientsPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100">
+              <th className="w-8 px-2 py-2">
+                <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
+              </th>
               <SortHeader label="ID" sortKey="id" current={sort} onSort={setSort} />
               <SortHeader label={t.display_name} sortKey="name" current={sort} onSort={setSort} />
               <SortHeader label={t.language} sortKey="language" current={sort} onSort={setSort} />
@@ -107,6 +136,14 @@ export function ClientsPage() {
                 className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200"
                 onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: c }); }}
               >
+                <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={bulk.selected.has(c.id)}
+                    onChange={(e) => bulk.toggleItem(c.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
+                    className="accent-[var(--accent)]"
+                  />
+                </td>
                 <td className="px-4 py-2 text-muted">{c.id}</td>
                 <td className="px-4 py-2">
                   <Link to={`/clients/${c.id}`} className="text-accent hover:underline">
@@ -124,15 +161,11 @@ export function ClientsPage() {
                 </td>
               </tr>
             ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted">
-                  {search ? t.no_matching_clients : t.no_clients}
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
+        {filtered.length === 0 && !isLoading && (
+          <EmptyState message={t.no_clients ?? "No clients found"} icon={<Users size={32} />} />
+        )}
       </div>
       {ctxMenu && (
         <ContextMenu
@@ -147,6 +180,13 @@ export function ClientsPage() {
           ]}
         />
       )}
+      <BulkActionBar
+        count={bulk.count}
+        onClear={bulk.clearSelection}
+        actions={[
+          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+        ]}
+      />
     </div>
   );
 }
@@ -174,7 +214,7 @@ function NewClientForm({
   });
 
   return (
-    <div className="border border-gray-100 rounded-lg p-4 mb-6 space-y-3">
+    <Card className="mb-6 space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <Input
           placeholder={`${t.display_name} *`}
@@ -233,6 +273,6 @@ function NewClientForm({
           {t.cancel}
         </Button>
       </div>
-    </div>
+    </Card>
   );
 }

@@ -70,7 +70,14 @@ export function CalendarPage() {
 
   const [quickCreate, setQuickCreate] = useState<QuickCreateState | null>(null);
   const [peekId, setPeekId] = useState<number | null>(null);
+  const [closingPeek, setClosingPeek] = useState(false);
   const lastClickRef = useRef<{ time: number; date: string }>({ time: 0, date: "" });
+  const calRef = useRef<FullCalendar>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => calRef.current?.getApi()?.updateSize(), 100);
+    return () => clearTimeout(t);
+  }, [peekId]);
 
   const events = useMemo<EventInput[]>(() => {
     const items: EventInput[] = [];
@@ -171,11 +178,16 @@ export function CalendarPage() {
     const projectId = info.event.extendedProps.projectId as number | undefined;
     if (!projectId) return;
     if (projectOpenMode === "peek") {
+      setClosingPeek(false);
       setPeekId(projectId);
     } else {
       navigate(`/projects/${projectId}`);
     }
   }, [navigate, projectOpenMode]);
+
+  const handleClosePeek = useCallback(() => {
+    setClosingPeek(true);
+  }, []);
 
   const handleDateClick = useCallback((info: DateClickArg) => {
     const d = info.date;
@@ -267,10 +279,11 @@ export function CalendarPage() {
 
   return (
     <div className="flex h-full">
-      <div className={`min-w-0 ${peekId !== null ? "flex-1" : "w-full"}`}>
+      <div className="min-w-0 flex-1">
         <h1 className="text-xl font-semibold mb-6">{t.calendar}</h1>
         <div className="fc-studio">
           <FullCalendar
+            ref={calRef}
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
             initialView="timeGridWeek"
             headerToolbar={{
@@ -309,7 +322,11 @@ export function CalendarPage() {
       </div>
 
       {peekId !== null && (
-        <div className="w-1/2 shrink-0 border-l border-gray-200 ml-4 pl-4 overflow-y-auto h-[calc(100vh-6rem)]">
+        <div
+          className={`shrink-0 border-l border-gray-200 h-[calc(100vh-6rem)] ${closingPeek ? "peek-exit overflow-hidden" : "peek-enter overflow-y-auto"}`}
+          style={closingPeek ? undefined : { width: '50%', minWidth: 0 }}
+          onAnimationEnd={() => { if (closingPeek) { setPeekId(null); setClosingPeek(false); } }}
+        >
           <div className="flex items-center justify-between mb-4">
             <Link
               to={`/projects/${peekId}`}
@@ -318,7 +335,7 @@ export function CalendarPage() {
               {t.open_full_page}
             </Link>
             <button
-              onClick={() => setPeekId(null)}
+              onClick={handleClosePeek}
               className="text-muted hover:text-gray-700"
             >
               <X size={16} />
@@ -458,7 +475,7 @@ function QuickCreatePopup({
             <span className="text-xs flex-1 truncate">{selectedTask.title}</span>
             <button
               onClick={handleClearTask}
-              className="text-muted hover:text-gray-900 text-xs shrink-0"
+              className="text-muted hover:text-gray-900 dark:hover:text-gray-200 text-xs shrink-0"
             >
               ✕
             </button>
@@ -490,7 +507,7 @@ function QuickCreatePopup({
                 key={task.id}
                 type="button"
                 onClick={() => handleSelectTask(task)}
-                className="w-full text-left px-2 py-1.5 text-xs hover:bg-gray-100 truncate"
+                className="w-full text-left px-2 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-200 truncate"
               >
                 {task.title}
               </button>
@@ -516,7 +533,7 @@ function QuickCreatePopup({
       <div className="flex justify-end gap-1.5">
         <button
           onClick={onClose}
-          className="px-2.5 py-1 text-xs border border-gray-200 rounded hover:bg-gray-100"
+          className="px-2.5 py-1 text-xs border border-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-200"
         >
           {t.cancel}
         </button>

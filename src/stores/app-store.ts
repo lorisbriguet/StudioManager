@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import type { AppLanguage } from "../i18n/ui";
+import { getThemeById } from "../lib/themes";
+import type { ThemeDefinition } from "../types/theme";
 
 function getInitialDarkMode(): boolean {
   const stored = localStorage.getItem("darkMode");
@@ -52,6 +54,54 @@ function applyAccentColor(color: string, light: string, darkLight: string) {
   el.style.setProperty("--color-accent-dark-light", darkLight);
 }
 
+function applyThemeColors(theme: ThemeDefinition) {
+  const el = document.documentElement;
+  const c = theme.colors;
+
+  // Apply dark/light class
+  el.classList.toggle("dark", theme.mode === "dark");
+
+  // Body colors
+  document.body.style.background = c.bg;
+  document.body.style.color = c.text;
+
+  // CSS custom properties
+  el.style.setProperty("--color-sidebar", c.sidebar);
+  el.style.setProperty("--color-sidebar-border", c.sidebarBorder);
+  el.style.setProperty("--color-accent", c.accent);
+  el.style.setProperty("--color-accent-light", c.accentLight);
+  el.style.setProperty("--color-accent-hover", c.accentHover);
+  el.style.setProperty("--color-accent-dark-light", c.accentLight);
+  el.style.setProperty("--color-muted", c.textMuted);
+  el.style.setProperty("--color-success", c.success);
+  el.style.setProperty("--color-warning", c.warning);
+  el.style.setProperty("--color-danger", c.danger);
+  el.style.setProperty("--color-surface", c.surface);
+  el.style.setProperty("--color-border", c.border);
+  el.style.setProperty("--color-chart-1", c.chart1);
+  el.style.setProperty("--color-chart-2", c.chart2);
+  el.style.setProperty("--color-chart-3", c.chart3);
+  el.style.setProperty("--color-chart-4", c.chart4);
+  el.style.setProperty("--color-chart-5", c.chart5);
+  el.style.setProperty("--color-chart-6", c.chart6);
+  el.style.setProperty("--color-chart-7", c.chart7);
+  el.style.setProperty("--color-chart-8", c.chart8);
+
+  // Dark mode gray overrides for non-default themes
+  if (theme.mode === "dark") {
+    el.style.setProperty("--color-gray-50", c.bg);
+    el.style.setProperty("--color-gray-100", c.surface);
+    el.style.setProperty("--color-gray-200", c.border);
+    el.style.setProperty("--color-gray-300", c.sidebarBorder);
+  } else {
+    // Light theme: remove any dark-mode gray overrides that may linger from a previous dark theme
+    el.style.removeProperty("--color-gray-50");
+    el.style.removeProperty("--color-gray-100");
+    el.style.removeProperty("--color-gray-200");
+    el.style.removeProperty("--color-gray-300");
+  }
+}
+
 function getInitialAccent(): AccentPreset {
   const stored = localStorage.getItem("accentColor");
   if (stored) {
@@ -61,11 +111,15 @@ function getInitialAccent(): AccentPreset {
   return ACCENT_PRESETS[0];
 }
 
-interface AppState {
+export interface AppState {
   commandPaletteOpen: boolean;
   sidebarCollapsed: boolean;
   darkMode: boolean;
+  themeId: string;
   testMode: boolean;
+  presentationMode: boolean;
+  enableModularProjects: boolean;
+  reduceMotion: boolean;
   nativeNotifications: boolean;
   dateFormat: DateFormatOption;
   accentColor: AccentPreset;
@@ -79,14 +133,23 @@ interface AppState {
   projectOpenMode: ProjectOpenMode;
   showTasksPage: boolean;
   showIncome: boolean;
+  showTimeOverview: boolean;
   language: AppLanguage;
   exportLanguage: AppLanguage;
   clientsSortKey: string;
   clientsSortDir: "asc" | "desc";
+  activeTimer: {
+    taskId: number;
+    projectId: number;
+    startedAt: number; // timestamp
+    projectName?: string;
+  } | null;
   currentContext: {
     clientId?: string;
     projectId?: number;
   };
+  startTimer: (taskId: number, projectId: number, projectName?: string) => void;
+  stopTimer: () => { taskId: number; projectId: number; durationMinutes: number } | null;
   setClientsSortKey: (key: string) => void;
   setClientsSortDir: (dir: "asc" | "desc") => void;
   setLanguage: (lang: AppLanguage) => void;
@@ -108,23 +171,42 @@ interface AppState {
   setProjectOpenMode: (mode: ProjectOpenMode) => void;
   setShowTasksPage: (show: boolean) => void;
   setShowIncome: (show: boolean) => void;
+  setShowTimeOverview: (show: boolean) => void;
   setContext: (ctx: Partial<AppState["currentContext"]>) => void;
   clearContext: () => void;
+  setTheme: (themeId: string) => void;
+  setReduceMotion: (enabled: boolean) => void;
   setTestMode: (enabled: boolean) => void;
+  setPresentationMode: (enabled: boolean) => void;
+  setEnableModularProjects: (enabled: boolean) => void;
   setNativeNotifications: (enabled: boolean) => void;
 }
 
 const initialDark = getInitialDarkMode();
 applyDarkClass(initialDark);
 
-const initialAccent = getInitialAccent();
-applyAccentColor(initialAccent.color, initialDark ? initialAccent.darkLight : initialAccent.light, initialAccent.darkLight);
+if (localStorage.getItem("reduceMotion") === "true") {
+  document.documentElement.classList.add("reduce-motion");
+}
 
-export const useAppStore = create<AppState>((set) => ({
+const initialAccent = getInitialAccent();
+const initialThemeId = localStorage.getItem("themeId") ?? "default-light";
+const initialTheme = getThemeById(initialThemeId);
+if (initialTheme && initialThemeId !== "default-light") {
+  applyThemeColors(initialTheme);
+} else {
+  applyAccentColor(initialAccent.color, initialDark ? initialAccent.darkLight : initialAccent.light, initialAccent.darkLight);
+}
+
+export const useAppStore = create<AppState>((set, get) => ({
   commandPaletteOpen: false,
   sidebarCollapsed: false,
   darkMode: initialDark,
-  testMode: false,
+  themeId: localStorage.getItem("themeId") ?? "default-light",
+  testMode: localStorage.getItem("testMode") === "true",
+  presentationMode: localStorage.getItem("presentationMode") === "true",
+  enableModularProjects: localStorage.getItem("enableModularProjects") === "true",
+  reduceMotion: localStorage.getItem("reduceMotion") === "true",
   nativeNotifications: localStorage.getItem("nativeNotifications") !== "false",
   dateFormat: (localStorage.getItem("dateFormat") as DateFormatOption) ?? "dd.MM.yyyy",
   accentColor: initialAccent,
@@ -138,11 +220,32 @@ export const useAppStore = create<AppState>((set) => ({
   projectOpenMode: (localStorage.getItem("projectOpenMode") as ProjectOpenMode) ?? "peek",
   showTasksPage: localStorage.getItem("showTasksPage") !== "false",
   showIncome: localStorage.getItem("showIncome") === "true",
+  showTimeOverview: localStorage.getItem("showTimeOverview") === "true",
   language: (localStorage.getItem("appLanguage") as AppLanguage) ?? "EN",
   exportLanguage: (localStorage.getItem("exportLanguage") as AppLanguage) ?? "FR",
   clientsSortKey: localStorage.getItem("clientsSortKey") ?? "name",
   clientsSortDir: (localStorage.getItem("clientsSortDir") as "asc" | "desc") ?? "asc",
+  activeTimer: null,
   currentContext: {},
+  startTimer: (taskId, projectId, projectName) =>
+    set((s) => {
+      // Stop any existing timer (discard result — caller should handle via stopTimer first)
+      if (s.activeTimer) return { activeTimer: { taskId, projectId, startedAt: Date.now(), projectName } };
+      return { activeTimer: { taskId, projectId, startedAt: Date.now(), projectName } };
+    }),
+  stopTimer: () => {
+    const { activeTimer } = get();
+    if (!activeTimer) return null;
+    const elapsed = Date.now() - activeTimer.startedAt;
+    const durationMinutes = Math.max(1, Math.round(elapsed / 60000));
+    const result = {
+      taskId: activeTimer.taskId,
+      projectId: activeTimer.projectId,
+      durationMinutes,
+    };
+    set({ activeTimer: null });
+    return result;
+  },
   setClientsSortKey: (key) => {
     localStorage.setItem("clientsSortKey", key);
     set({ clientsSortKey: key });
@@ -230,10 +333,42 @@ export const useAppStore = create<AppState>((set) => ({
     localStorage.setItem("showIncome", String(show));
     set({ showIncome: show });
   },
+  setShowTimeOverview: (show) => {
+    localStorage.setItem("showTimeOverview", String(show));
+    set({ showTimeOverview: show });
+  },
   setContext: (ctx) =>
     set((s) => ({ currentContext: { ...s.currentContext, ...ctx } })),
   clearContext: () => set({ currentContext: {} }),
-  setTestMode: (enabled) => set({ testMode: enabled }),
+  setTheme: (themeId) =>
+    set(() => {
+      localStorage.setItem("themeId", themeId);
+      const theme = getThemeById(themeId);
+      if (theme) {
+        applyThemeColors(theme);
+        return { themeId, darkMode: theme.mode === "dark" };
+      }
+      return { themeId };
+    }),
+  setReduceMotion: (enabled) => {
+    localStorage.setItem("reduceMotion", String(enabled));
+    document.documentElement.classList.toggle("reduce-motion", enabled);
+    set({ reduceMotion: enabled });
+  },
+  setTestMode: (enabled) => {
+    localStorage.setItem("testMode", String(enabled));
+    if (!enabled) localStorage.removeItem("testMode");
+    set({ testMode: enabled });
+  },
+  setPresentationMode: (enabled) => {
+    localStorage.setItem("presentationMode", String(enabled));
+    if (!enabled) localStorage.removeItem("presentationMode");
+    set({ presentationMode: enabled });
+  },
+  setEnableModularProjects: (enabled) => {
+    localStorage.setItem("enableModularProjects", String(enabled));
+    set({ enableModularProjects: enabled });
+  },
   setNativeNotifications: (enabled) => {
     localStorage.setItem("nativeNotifications", String(enabled));
     set({ nativeNotifications: enabled });

@@ -24,7 +24,7 @@ import { useClients } from "../db/hooks/useClients";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
-import { PageHeader, PageSpinner, Button } from "../components/ui";
+import { PageHeader, PageSpinner, Button, Card } from "../components/ui";
 import { useChartTheme } from "../hooks/useChartTheme";
 import { getInvoiceLineItems } from "../db/queries/invoices";
 import { InvoicePDF } from "../components/invoice/InvoicePDF";
@@ -159,7 +159,7 @@ export function FinancesPage() {
       </PageHeader>
 
       {/* Monthly revenue vs expenses chart */}
-      <div className="border border-gray-100 rounded-lg p-4 mb-6">
+      <Card className="mb-6">
         <h2 className="text-sm font-medium mb-4">{t.revenue_vs_expenses}</h2>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={chartData} barGap={2}>
@@ -175,12 +175,12 @@ export function FinancesPage() {
             <Bar dataKey="expenses" fill="var(--color-chart-4)" radius={[3, 3, 0, 0]} name="Expenses" />
           </BarChart>
         </ResponsiveContainer>
-      </div>
+      </Card>
 
       <div className="grid grid-cols-2 gap-6">
         {/* Expense breakdown pie chart */}
         {pieData.length > 0 && (
-          <div className="border border-gray-100 rounded-lg p-4">
+          <Card>
             <h2 className="text-sm font-medium mb-4">{t.expense_breakdown}</h2>
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
@@ -218,12 +218,12 @@ export function FinancesPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
         )}
 
         {/* P&L statement */}
         {pl && (
-          <div className="border border-gray-100 rounded-lg p-4">
+          <Card>
             <h2 className="text-sm font-medium mb-4">{t.profit_loss}</h2>
             <div className="space-y-1">
               <PLLine label={t.revenue} value={pl.revenue} bold />
@@ -256,7 +256,7 @@ export function FinancesPage() {
                 <PLLine label={t.net_result} value={pl.net_result} bold large />
               </div>
             </div>
-          </div>
+          </Card>
         )}
       </div>
     </div>

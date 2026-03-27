@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
-import { Plus, Paperclip, Eye, X, ChevronRight, Trash2, Upload } from "lucide-react";
-import { PageHeader, SearchBar, Button } from "../components/ui";
+import { Plus, Paperclip, Eye, X, ChevronRight, Trash2, Upload, Wallet } from "lucide-react";
+import { PageHeader, SearchBar, Button, Card, EmptyState, Input, Select } from "../components/ui";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { formatDisplayDate } from "../utils/formatDate";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, ask } from "@tauri-apps/plugin-dialog";
 import { copyFile, mkdir, exists, readFile } from "@tauri-apps/plugin-fs";
 import { appDataDir } from "@tauri-apps/api/path";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -17,11 +17,14 @@ import {
 import { getNextIncomeReference } from "../db/queries/income";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
 import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
+import { BulkActionBar } from "../components/BulkActionBar";
+import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useT } from "../i18n/useT";
 import type { Income } from "../types/income";
 import { extractPdfText, extractImageText, parseExpenseFromText } from "../lib/pdfExtract";
 import { logError } from "../lib/log";
 import { useYearGrouping } from "../hooks/useYearGrouping";
+import { SavedFilterBar } from "../components/SavedFilterBar";
 
 type SortKey = "reference" | "source" | "category" | "date" | "amount";
 
@@ -48,6 +51,12 @@ export function IncomePage() {
   const [prefill, setPrefill] = useState<{ amount?: number; date?: string; source?: string } | null>(null);
   const [parsing, setParsing] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState<Income> | null>(null);
+  const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
+
+  const applyFilter = useCallback((filters: Record<string, unknown>) => {
+    if (typeof filters.search === "string") setSearch(filters.search);
+    if (filters.sort && typeof filters.sort === "object") setSort(filters.sort as SortState<SortKey>);
+  }, []);
 
   const filtered = useMemo(() => {
     if (!incomes) return [];
@@ -63,6 +72,15 @@ export function IncomePage() {
       : incomes;
     return sortRows(rows, sort.key, sort.dir);
   }, [incomes, search, sort]);
+
+  const bulk = useBulkSelect(filtered);
+
+  const bulkDelete = useCallback(async () => {
+    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
+    const ids = [...bulk.selected] as number[];
+    ids.forEach((id) => deleteIncome.mutate(id));
+    bulk.clearSelection();
+  }, [bulk, deleteIncome, t]);
 
   const { expandedYears, groupedByYear, toggleYear } = useYearGrouping(
     filtered,
@@ -177,7 +195,15 @@ export function IncomePage() {
         </Button>
       </PageHeader>
 
-      <SearchBar value={search} onChange={setSearch} placeholder={t.search_incomes} className="w-64 mb-4" />
+      <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); }} placeholder={t.search_incomes} className="w-64 mb-4" />
+
+      <SavedFilterBar
+        page="income"
+        currentFilters={{ search, sort }}
+        onApply={applyFilter}
+        activeFilterId={activeFilterId}
+        onActiveChange={setActiveFilterId}
+      />
 
       {showForm && (
         <NewIncomeForm
@@ -224,6 +250,9 @@ export function IncomePage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100">
+              <th className="w-8 px-2 py-2">
+                <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
+              </th>
               <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
               <SortHeader label={t.source} sortKey="source" current={sort} onSort={setSort} />
               <SortHeader label={t.description} sortKey="category" current={sort} onSort={setSort} />
@@ -243,7 +272,7 @@ export function IncomePage() {
                     className="border-b border-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-200"
                     onClick={() => toggleYear(year)}
                   >
-                    <td colSpan={7} className="px-4 py-2">
+                    <td colSpan={8} className="px-4 py-2">
                       <div className="flex items-center gap-2">
                         <ChevronRight
                           size={14}
@@ -266,6 +295,14 @@ export function IncomePage() {
                         className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200 group"
                         onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: inc }); }}
                       >
+                        <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={bulk.selected.has(inc.id)}
+                            onChange={(e) => bulk.toggleItem(inc.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
+                            className="accent-[var(--accent)]"
+                          />
+                        </td>
                         <td className="px-4 py-2 font-medium">{inc.reference}</td>
                         <td className="px-4 py-2">{inc.source}</td>
                         <td className="px-4 py-2">
@@ -320,15 +357,11 @@ export function IncomePage() {
                 </React.Fragment>
               );
             })}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted">
-                  {search ? t.no_matching_incomes : t.no_incomes_yet}
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
+        {filtered.length === 0 && !isLoading && (
+          <EmptyState message={t.no_incomes_yet} icon={<Wallet size={32} />} />
+        )}
       </div>
 
       {preview && (
@@ -348,6 +381,13 @@ export function IncomePage() {
           ]}
         />
       )}
+      <BulkActionBar
+        count={bulk.count}
+        onClear={bulk.clearSelection}
+        actions={[
+          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+        ]}
+      />
     </div>
   );
 }
@@ -393,7 +433,7 @@ function ReceiptPreview({
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
           <h2 className="text-sm font-semibold">{reference}</h2>
-          <button onClick={onClose} className="text-muted hover:text-gray-900">
+          <button onClick={onClose} className="text-muted hover:text-gray-900 dark:hover:text-gray-200">
             <X size={18} />
           </button>
         </div>
@@ -460,7 +500,7 @@ function NewIncomeForm({
   }, [prefill]);
 
   return (
-    <div className="border border-gray-100 rounded-lg p-4 mb-6 space-y-3">
+    <Card className="mb-6 space-y-3">
       {droppedReceiptPath && (
         <div className="flex items-center gap-2 text-xs text-success">
           <Paperclip size={12} />
@@ -468,40 +508,38 @@ function NewIncomeForm({
         </div>
       )}
       <div className="grid grid-cols-2 gap-3">
-        <input
+        <Input
           placeholder={`${t.source} *`}
           value={form.source}
           onChange={(e) => setForm({ ...form, source: e.target.value })}
-          className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
         />
-        <select
+        <Select
           value={form.category}
           onChange={(e) => setForm({ ...form, category: e.target.value })}
-          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
+          className="py-2"
         >
           {INCOME_CATEGORIES.map((c) => (
             <option key={c} value={c}>{c.replace(/_/g, " ")}</option>
           ))}
-        </select>
-        <input
+        </Select>
+        <Input
           placeholder={t.description}
           value={form.description}
           onChange={(e) => setForm({ ...form, description: e.target.value })}
-          className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
         />
-        <input
+        <Input
           type="date"
           value={form.date}
           onChange={(e) => setForm({ ...form, date: e.target.value })}
-          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
+          fullWidth={false}
         />
-        <input
+        <Input
           type="number"
           step="0.01"
           placeholder={`${t.amount} *`}
           value={form.amount || ""}
           onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
-          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
+          fullWidth={false}
         />
       </div>
       <div className="flex gap-2">
@@ -525,6 +563,6 @@ function NewIncomeForm({
           {t.cancel}
         </button>
       </div>
-    </div>
+    </Card>
   );
 }

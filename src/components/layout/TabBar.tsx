@@ -18,7 +18,7 @@ function TabItem({ tab, isActive, onActivate, onClose, onMiddleClick }: {
       className={`flex items-center gap-1.5 px-3.5 py-2 text-sm shrink-0 border-b-2 transition-colors group ${
         isActive
           ? "border-accent text-accent font-medium"
-          : "border-transparent text-muted hover:text-gray-900 hover:bg-gray-50 dark:hover:bg-gray-200"
+          : "border-transparent text-muted hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-200"
       }`}
     >
       {tab.pinned && <Pin size={10} className="text-muted shrink-0" />}
@@ -81,7 +81,7 @@ export function TabBar() {
       <button
         type="button"
         onClick={handleNewTab}
-        className="shrink-0 p-1.5 mx-1 text-muted hover:text-gray-900 hover:bg-gray-100 rounded"
+        className="shrink-0 p-1.5 mx-1 text-muted hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-200 rounded"
       >
         <Plus size={14} />
       </button>

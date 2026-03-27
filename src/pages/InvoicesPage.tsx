@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, Eye, ChevronRight, Pencil, Trash2, CheckCircle, Send, Repeat, X, AlertTriangle, ExternalLink } from "lucide-react";
+import { Plus, Eye, ChevronRight, Pencil, Trash2, CheckCircle, Send, Repeat, X, AlertTriangle, ExternalLink, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { addMonths, format } from "date-fns";
 import { undoable } from "../lib/undo";
 import { useInvoices, useUpdateInvoice, useDeleteInvoice } from "../db/hooks/useInvoices";
@@ -11,19 +12,15 @@ import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
 import { formatDisplayDate } from "../utils/formatDate";
 import { useT } from "../i18n/useT";
 import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
+import { BulkActionBar } from "../components/BulkActionBar";
+import { SavedFilterBar } from "../components/SavedFilterBar";
+import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useYearGrouping } from "../hooks/useYearGrouping";
-import { PageHeader, SearchBar, PageSpinner, Button } from "../components/ui";
+import { PageHeader, SearchBar, PageSpinner, Button, EmptyState, Card } from "../components/ui";
+import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Invoice, InvoiceStatus } from "../types/invoice";
 import type { RecurringFrequency } from "../types/recurring";
-
-const statusColors: Record<InvoiceStatus, string> = {
-  draft: "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300",
-  sent: "bg-accent-light text-accent",
-  paid: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
-  overdue: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
-  cancelled: "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500",
-};
 
 const FREQUENCIES: RecurringFrequency[] = ["monthly", "quarterly", "biannual", "annual"];
 
@@ -45,6 +42,12 @@ export function InvoicesPage() {
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState<Invoice & { client_name: string }> | null>(null);
   const [sort, setSort] = useState<SortState<SortKey>>({ key: "reference", dir: "desc" });
   const [showRecurring, setShowRecurring] = useState(false);
+  const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
+
+  const applyFilter = useCallback((filters: Record<string, unknown>) => {
+    if (typeof filters.search === "string") setSearch(filters.search);
+    if (filters.sort && typeof filters.sort === "object") setSort(filters.sort as SortState<SortKey>);
+  }, []);
 
   const clientsMap = useMemo(() => new Map(clients?.map((c) => [c.id, c.name]) ?? []), [clients]);
 
@@ -67,6 +70,49 @@ export function InvoicesPage() {
       : enriched;
     return sortRows(rows, sort.key, sort.dir);
   }, [enriched, search, sort]);
+
+  const bulk = useBulkSelect(filtered);
+
+  const bulkMarkPaid = useCallback(() => {
+    const ids = [...bulk.selected] as number[];
+    const prevStates = ids.map((id) => {
+      const inv = enriched.find((i) => i.id === id);
+      return { id, status: inv?.status, paid_date: inv?.paid_date };
+    });
+    const today = new Date().toISOString().split("T")[0];
+    ids.forEach((id) => updateInvoice.mutate({ id, data: { status: "paid" as InvoiceStatus, paid_date: today } }));
+    undoable(t.bulk_updated, async () => {
+      await Promise.all(
+        prevStates.map((prev) =>
+          updateInvoice.mutateAsync({ id: prev.id, data: { status: prev.status as InvoiceStatus, paid_date: prev.paid_date } })
+        )
+      );
+    });
+    bulk.clearSelection();
+  }, [bulk, updateInvoice, enriched, t]);
+
+  const bulkMarkSent = useCallback(() => {
+    const ids = [...bulk.selected] as number[];
+    const prevStates = ids.map((id) => {
+      const inv = enriched.find((i) => i.id === id);
+      return { id, status: inv?.status };
+    });
+    ids.forEach((id) => updateInvoice.mutate({ id, data: { status: "sent" as InvoiceStatus } }));
+    undoable(t.bulk_updated, async () => {
+      await Promise.all(
+        prevStates.map((prev) =>
+          updateInvoice.mutateAsync({ id: prev.id, data: { status: prev.status as InvoiceStatus } })
+        )
+      );
+    });
+    bulk.clearSelection();
+  }, [bulk, updateInvoice, enriched, t]);
+
+  const bulkDelete = useCallback(async () => {
+    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
+    ([...bulk.selected] as number[]).forEach((id) => deleteInvoice.mutate(id));
+    bulk.clearSelection();
+  }, [bulk, deleteInvoice, t]);
 
   const { expandedYears, groupedByYear, toggleYear } = useYearGrouping(
     filtered,
@@ -139,10 +185,10 @@ export function InvoicesPage() {
 
       {/* Recurring templates panel */}
       {showRecurring && (
-        <div className="mb-6 border border-gray-100 rounded-lg p-4">
+        <Card className="mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-medium">{t.recurring_invoices}</h2>
-            <button type="button" onClick={() => setShowRecurring(false)} className="text-muted hover:text-gray-900">
+            <button type="button" onClick={() => setShowRecurring(false)} className="text-muted hover:text-gray-900 dark:hover:text-gray-200">
               <X size={14} />
             </button>
           </div>
@@ -208,20 +254,30 @@ export function InvoicesPage() {
               </tbody>
             </table>
           )}
-        </div>
+        </Card>
       )}
 
       <SearchBar
         value={search}
-        onChange={setSearch}
+        onChange={(v) => { setSearch(v); setActiveFilterId(null); }}
         placeholder={t.search_invoices}
         className="mb-4 w-64"
+      />
+      <SavedFilterBar
+        page="invoices"
+        currentFilters={{ search, sort }}
+        onApply={applyFilter}
+        activeFilterId={activeFilterId}
+        onActiveChange={setActiveFilterId}
       />
 
       <div>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100">
+              <th className="w-8 px-2 py-2">
+                <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
+              </th>
               <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
               <SortHeader label={t.client} sortKey="client_name" current={sort} onSort={setSort} />
               <SortHeader label={t.date} sortKey="invoice_date" current={sort} onSort={setSort} />
@@ -240,7 +296,7 @@ export function InvoicesPage() {
                     className="border-b border-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-200"
                     onClick={() => toggleYear(year)}
                   >
-                    <td colSpan={6} className="px-4 py-2">
+                    <td colSpan={7} className="px-4 py-2">
                       <div className="flex items-center gap-2">
                         <ChevronRight
                           size={14}
@@ -263,6 +319,14 @@ export function InvoicesPage() {
                         className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200 group"
                         onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: inv }); }}
                       >
+                        <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={bulk.selected.has(inv.id)}
+                            onChange={(e) => bulk.toggleItem(inv.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
+                            className="accent-[var(--accent)]"
+                          />
+                        </td>
                         <td className="px-4 py-2">
                           <Link
                             to={`/invoices/${inv.id}/edit`}
@@ -297,7 +361,7 @@ export function InvoicesPage() {
                                 }
                               );
                             }}
-                            className={`text-xs px-2 py-0.5 rounded-full border-0 appearance-none cursor-pointer ${statusColors[inv.status]}`}
+                            className={`text-xs px-2 py-0.5 rounded-full border-0 appearance-none cursor-pointer ${statusClasses(invoiceStatusVariant(inv.status), inv.status)}`}
                           >
                             {inv.status === "draft" && <option value="draft">{t.draft}</option>}
                             <option value="sent">{t.sent}</option>
@@ -333,15 +397,14 @@ export function InvoicesPage() {
                 </React.Fragment>
               );
             })}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-muted">
-                  {search ? t.no_matching_invoices : t.no_invoices_yet}
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
+        {filtered.length === 0 && (
+          <EmptyState
+            message={search ? t.no_matching_invoices : t.no_invoices_yet}
+            icon={<FileText size={32} />}
+          />
+        )}
       </div>
       {ctxMenu && (
         <ContextMenu
@@ -362,6 +425,15 @@ export function InvoicesPage() {
           ]}
         />
       )}
+      <BulkActionBar
+        count={bulk.count}
+        onClear={bulk.clearSelection}
+        actions={[
+          { label: t.mark_paid, icon: <CheckCircle size={14} />, onClick: bulkMarkPaid },
+          { label: t.mark_sent, icon: <Send size={14} />, onClick: bulkMarkSent },
+          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+        ]}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Download } from "lucide-react";
+import { ArrowLeft, Download, FolderPlus } from "lucide-react";
 import { Button } from "../components/ui";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { useQuote, useUpdateQuote } from "../db/hooks/useQuotes";
@@ -9,6 +9,7 @@ import { useClient, useClientAddresses } from "../db/hooks/useClients";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { useProject } from "../db/hooks/useProjects";
 import { QuotePDF } from "../components/quote/QuotePDF";
+import { QuoteToProjectWizard } from "../components/QuoteToProjectWizard";
 import { toast } from "sonner";
 import { useT } from "../i18n/useT";
 
@@ -24,6 +25,7 @@ export function QuotePreviewPage() {
   const { data: profile } = useBusinessProfile();
   const { data: project } = useProject(quote?.project_id ?? 0);
   const [showDraftWarning, setShowDraftWarning] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
   const updateQuote = useUpdateQuote();
   const t = useT();
 
@@ -83,13 +85,18 @@ export function QuotePreviewPage() {
       <div className="flex items-center gap-3 px-6 py-3 border-b border-gray-200 bg-white dark:bg-gray-100">
         <button
           onClick={() => navigate(-1)}
-          className="text-muted hover:text-gray-900"
+          className="text-muted hover:text-gray-900 dark:hover:text-gray-200"
         >
           <ArrowLeft size={18} />
         </button>
         <h1 className="text-sm font-semibold flex-1">
           {quote.reference} — {client.name}
         </h1>
+        {quote.status === "accepted" && !quote.converted_to_project_id && (
+          <Button variant="secondary" icon={<FolderPlus size={14} />} onClick={() => setShowWizard(true)}>
+            {t.generate_project}
+          </Button>
+        )}
         <Button icon={<Download size={14} />} onClick={downloadPdf}>
           {t.download_pdf}
         </Button>
@@ -104,6 +111,15 @@ export function QuotePreviewPage() {
           {pdfDocument}
         </PDFViewer>
       </div>
+      {showWizard && lineItems && (
+        <QuoteToProjectWizard
+          open={showWizard}
+          onClose={() => setShowWizard(false)}
+          quote={quote}
+          lineItems={lineItems}
+          clientName={client.name}
+        />
+      )}
       {showDraftWarning && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-100 rounded-xl shadow-xl p-6 max-w-sm mx-4">

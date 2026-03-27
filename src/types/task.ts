@@ -37,6 +37,10 @@ export interface Task {
   scheduled_end: string | null;
   calendar_event_id: string | null;
   notes: string;
+  planned_minutes: number | null;
+  tracked_minutes: number;
+  workload_cells: string; // JSON string — parsed in workload layer
+  workload_sort_order: number;
   sort_order: number;
   created_at: string;
   updated_at: string;

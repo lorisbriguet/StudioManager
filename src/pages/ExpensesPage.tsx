@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
-import { Plus, Paperclip, Eye, X, ChevronRight, Upload, Trash2, CheckCircle } from "lucide-react";
-import { Button, PageHeader, SearchBar, PageSpinner } from "../components/ui";
+import { Plus, Paperclip, Eye, X, ChevronRight, Upload, Trash2, CheckCircle, Receipt } from "lucide-react";
+import { Button, Input, Select, PageHeader, SearchBar, PageSpinner, EmptyState, Card } from "../components/ui";
+import { SavedFilterBar } from "../components/SavedFilterBar";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { formatDisplayDate } from "../utils/formatDate";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, ask } from "@tauri-apps/plugin-dialog";
 import { copyFile, mkdir, exists } from "@tauri-apps/plugin-fs";
 import { appDataDir } from "@tauri-apps/api/path";
 import { readFile } from "@tauri-apps/plugin-fs";
@@ -16,8 +17,11 @@ import {
   useCreateExpense,
   useUpdateExpense,
   useDeleteExpense,
+  useDuplicateCheck,
 } from "../db/hooks/useExpenses";
 import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
+import { BulkActionBar } from "../components/BulkActionBar";
+import { useBulkSelect } from "../hooks/useBulkSelect";
 import type { Expense } from "../types/expense";
 import { getNextExpenseReference } from "../db/queries/expenses";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
@@ -44,6 +48,12 @@ export function ExpensesPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [prefill, setPrefill] = useState<(ExtractedExpenseData & { receiptPath?: string }) | null>(null);
   const [parsing, setParsing] = useState(false);
+  const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
+
+  const applyFilter = useCallback((filters: Record<string, unknown>) => {
+    if (typeof filters.search === "string") setSearch(filters.search);
+    if (filters.sort && typeof filters.sort === "object") setSort(filters.sort as SortState<SortKey>);
+  }, []);
 
   const categoryName = (code: string) =>
     categories?.find((c) => c.code === code)?.name_fr ?? code;
@@ -66,6 +76,15 @@ export function ExpensesPage() {
     filtered,
     useCallback((exp: (typeof filtered)[0]) => exp.invoice_date, [])
   );
+
+  const bulk = useBulkSelect(filtered);
+
+  const bulkDelete = useCallback(async () => {
+    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
+    const ids = [...bulk.selected] as number[];
+    ids.forEach((id) => deleteExpense.mutate(id));
+    bulk.clearSelection();
+  }, [bulk, deleteExpense, t]);
 
   const handleDroppedFile = useCallback(async (filePath: string) => {
     const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
@@ -196,7 +215,15 @@ export function ExpensesPage() {
         <Button icon={<Plus size={16} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
       </PageHeader>
 
-      <SearchBar value={search} onChange={setSearch} placeholder={t.search_expenses} className="w-64 mb-4" />
+      <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); }} placeholder={t.search_expenses} className="w-64 mb-4" />
+
+      <SavedFilterBar
+        page="expenses"
+        currentFilters={{ search, sort }}
+        onApply={applyFilter}
+        activeFilterId={activeFilterId}
+        onActiveChange={setActiveFilterId}
+      />
 
       {showForm && (
         <NewExpenseForm
@@ -244,6 +271,9 @@ export function ExpensesPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100">
+              <th className="w-8 px-2 py-2">
+                <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
+              </th>
               <SortHeader label="Reference" sortKey="reference" current={sort} onSort={setSort} />
               <SortHeader label={t.supplier} sortKey="supplier" current={sort} onSort={setSort} />
               <SortHeader label={t.category} sortKey="category_code" current={sort} onSort={setSort} />
@@ -263,7 +293,7 @@ export function ExpensesPage() {
                     className="border-b border-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-200"
                     onClick={() => toggleYear(year)}
                   >
-                    <td colSpan={7} className="px-4 py-2">
+                    <td colSpan={8} className="px-4 py-2">
                       <div className="flex items-center gap-2">
                         <ChevronRight
                           size={14}
@@ -286,6 +316,14 @@ export function ExpensesPage() {
                         className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200 group"
                         onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: exp }); }}
                       >
+                        <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={bulk.selected.has(exp.id)}
+                            onChange={(e) => bulk.toggleItem(exp.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
+                            className="accent-[var(--accent)]"
+                          />
+                        </td>
                         <td className="px-4 py-2 font-medium">{exp.reference}</td>
                         <td className="px-4 py-2">{exp.supplier}</td>
                         <td className="px-4 py-2">
@@ -300,8 +338,9 @@ export function ExpensesPage() {
                         </td>
                         <td className="px-4 py-2">
                           <div className="flex items-center gap-1">
-                            <input
+                            <Input
                               type="date"
+                              fullWidth={false}
                               value={exp.paid_date ?? ""}
                               onChange={(e) =>
                                 updateExpense.mutate(
@@ -312,7 +351,7 @@ export function ExpensesPage() {
                                   { onSuccess: () => toast.success(e.target.value ? "Paid date updated" : "Marked as unpaid") }
                                 )
                               }
-                              className={`border border-gray-200 rounded px-1.5 py-0.5 text-xs w-[110px] ${
+                              className={`px-1.5 py-0.5 text-xs rounded w-[110px] ${
                                 exp.paid_date ? "text-green-700 dark:text-green-300" : "text-red-600 dark:text-red-300"
                               }`}
                             />
@@ -363,15 +402,11 @@ export function ExpensesPage() {
                 </React.Fragment>
               );
             })}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted">
-                  {search ? t.no_matching_expenses : t.no_expenses_yet}
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
+        {filtered.length === 0 && !isLoading && (
+          <EmptyState message={search ? (t.no_matching_expenses ?? "No matching expenses") : (t.no_expenses_yet ?? "No expenses yet")} icon={<Receipt size={32} />} />
+        )}
       </div>
 
       {preview && (
@@ -392,6 +427,13 @@ export function ExpensesPage() {
           ]}
         />
       )}
+      <BulkActionBar
+        count={bulk.count}
+        onClear={bulk.clearSelection}
+        actions={[
+          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+        ]}
+      />
     </div>
   );
 }
@@ -437,7 +479,7 @@ function ReceiptPreview({
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
           <h2 className="text-sm font-semibold">{reference}</h2>
-          <button onClick={onClose} className="text-muted hover:text-gray-900">
+          <button onClick={onClose} className="text-muted hover:text-gray-900 dark:hover:text-gray-200">
             <X size={18} />
           </button>
         </div>
@@ -531,6 +573,25 @@ function NewExpenseForm({
   }, [prefill]);
 
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState<{ supplier: string; amount: number; date: string } | null>(null);
+  const duplicateCheck = useDuplicateCheck();
+
+  const checkForDuplicates = () => {
+    if (form.supplier.trim() && form.amount > 0 && form.invoice_date) {
+      duplicateCheck.mutate(
+        { supplier: form.supplier, amount: form.amount, date: form.invoice_date },
+        {
+          onSuccess: (dupes) => {
+            if (dupes.length > 0) {
+              setDuplicateWarning({ supplier: dupes[0].supplier, amount: dupes[0].amount, date: dupes[0].invoice_date });
+            } else {
+              setDuplicateWarning(null);
+            }
+          },
+        }
+      );
+    }
+  };
 
   const suggestions = form.supplier.length > 0
     ? pastSuppliers.filter((s) =>
@@ -546,10 +607,11 @@ function NewExpenseForm({
       amount: s.amount,
     });
     setShowSuggestions(false);
+    setDuplicateWarning(null);
   };
 
   return (
-    <div className="border border-gray-100 rounded-lg p-4 mb-6 space-y-3">
+    <Card className="mb-6 space-y-3">
       {prefill?.receiptPath && (
         <div className="flex items-center gap-2 text-xs text-success">
           <Paperclip size={12} />
@@ -558,7 +620,7 @@ function NewExpenseForm({
       )}
       <div className="grid grid-cols-2 gap-3">
         <div className="relative">
-          <input
+          <Input
             placeholder={`${t.supplier} *`}
             value={form.supplier}
             onChange={(e) => {
@@ -567,7 +629,7 @@ function NewExpenseForm({
             }}
             onFocus={() => setShowSuggestions(true)}
             onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-            className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+            className="py-2"
             autoComplete="off"
           />
           {showSuggestions && suggestions.length > 0 && (
@@ -588,32 +650,43 @@ function NewExpenseForm({
             </div>
           )}
         </div>
-        <select
+        <Select
           value={form.category_code}
           onChange={(e) => setForm({ ...form, category_code: e.target.value })}
-          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
+          className="py-2"
         >
           {categories.map((c) => (
             <option key={c.code} value={c.code}>
               {c.code} - {c.name_fr}
             </option>
           ))}
-        </select>
-        <input
+        </Select>
+        <Input
           type="date"
+          fullWidth={false}
           value={form.invoice_date}
           onChange={(e) => setForm({ ...form, invoice_date: e.target.value })}
-          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
+          className="py-2"
         />
-        <input
+        <Input
           type="number"
           step="0.01"
+          fullWidth={false}
           placeholder={`${t.amount} *`}
           value={form.amount || ""}
           onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
-          className="border border-gray-200 rounded-md px-3 py-2 text-sm"
+          onBlur={checkForDuplicates}
+          className="py-2"
         />
       </div>
+      {duplicateWarning && (
+        <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md text-sm">
+          <span className="text-yellow-600 dark:text-yellow-400 font-medium">{t.possible_duplicate}:</span>
+          <span className="text-yellow-700 dark:text-yellow-300">
+            {duplicateWarning.supplier} — {duplicateWarning.amount.toFixed(2)} CHF ({formatDisplayDate(duplicateWarning.date)})
+          </span>
+        </div>
+      )}
       <div className="flex gap-2">
         <Button
           onClick={() => {
@@ -633,6 +706,6 @@ function NewExpenseForm({
           {t.cancel}
         </Button>
       </div>
-    </div>
+    </Card>
   );
 }

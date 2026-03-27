@@ -32,6 +32,10 @@ interface LineItemsTableProps {
   total: number;
   /** Currency label (defaults to "CHF") */
   currency?: string;
+  /** Hide the rate and unit columns (used when global rate is active) */
+  hideRate?: boolean;
+  /** Label shown above table when global rate is active, e.g. "All items at 150 CHF/h" */
+  globalRateLabel?: string;
 }
 
 export function LineItemsTable({
@@ -49,6 +53,8 @@ export function LineItemsTable({
   discountAmount,
   total,
   currency = "CHF",
+  hideRate,
+  globalRateLabel,
 }: LineItemsTableProps) {
   const t = useT();
 
@@ -63,6 +69,9 @@ export function LineItemsTable({
           </button>
         </div>
       </div>
+      {globalRateLabel && (
+        <div className="text-xs text-muted mb-2 italic">{globalRateLabel}</div>
+      )}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={lineItemIds} strategy={verticalListSortingStrategy}>
           <table className="w-full text-sm">
@@ -70,7 +79,8 @@ export function LineItemsTable({
               <tr className="text-xs text-muted">
                 <th className="w-8"></th>
                 <th className="text-left pb-2">{t.designation}</th>
-                <th className="text-right pb-2 w-24">{t.rate}</th>
+                {!hideRate && <th className="text-right pb-2 w-24">{t.rate}</th>}
+                {!hideRate && <th className="text-left pb-2 w-24">{t.unit}</th>}
                 <th className="text-right pb-2 w-20">{t.qty}</th>
                 <th className="text-right pb-2 w-28">{t.amount}</th>
                 <th className="w-8"></th>
@@ -94,15 +104,32 @@ export function LineItemsTable({
                       />
                     )}
                   </td>
-                  <td className="px-1 py-1">
-                    <input
-                      type="number"
-                      value={item.rate ?? ""}
-                      onChange={(e) => onUpdate(i, "rate", e.target.value ? Number(e.target.value) : null)}
-                      className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm text-right"
-                      placeholder="0"
-                    />
-                  </td>
+                  {!hideRate && (
+                    <td className="px-1 py-1">
+                      <input
+                        type="number"
+                        value={item.rate ?? ""}
+                        onChange={(e) => onUpdate(i, "rate", e.target.value ? Number(e.target.value) : null)}
+                        className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm text-right"
+                        placeholder="0"
+                      />
+                    </td>
+                  )}
+                  {!hideRate && (
+                    <td className="px-1 py-1">
+                      <select
+                        value={item.unit ?? ""}
+                        onChange={(e) => onUpdate(i, "unit", e.target.value || null)}
+                        className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm"
+                      >
+                        <option value="">—</option>
+                        <option value="hours">{t.hours}</option>
+                        <option value="days">{t.days}</option>
+                        <option value="units">{t.units}</option>
+                        <option value="flat">{t.flat_rate}</option>
+                      </select>
+                    </td>
+                  )}
                   <td className="px-1 py-1">
                     <input
                       type="number"

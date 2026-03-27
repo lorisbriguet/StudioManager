@@ -137,7 +137,7 @@ export function ProfilePage() {
               className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
                 activeCategory === cat.key
                   ? "bg-accent-light text-accent font-medium"
-                  : "text-muted hover:bg-gray-100 dark:hover:bg-gray-200 hover:text-gray-900"
+                  : "text-muted hover:bg-gray-100 dark:hover:bg-gray-200 hover:text-gray-900 dark:hover:text-gray-800"
               }`}
             >
               {cat.label}

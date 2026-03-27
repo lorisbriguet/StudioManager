@@ -10,7 +10,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <input
         ref={ref}
-        className={`border border-gray-200 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-accent dark:border-gray-600 ${
+        className={`border border-gray-200 rounded-md px-3 py-1.5 text-sm focus-accent dark:border-gray-600 ${
           fullWidth ? "w-full" : ""
         } ${className}`}
         {...props}

@@ -167,6 +167,53 @@ fn exit_test_mode(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Enter presentation mode: snapshot prod DB, create empty presentation DB, switch to it.
+#[tauri::command]
+fn enter_presentation_mode(app: tauri::AppHandle) -> Result<String, String> {
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    let prod_db = app_dir.join("studiomanager.db");
+    let snapshot_db = app_dir.join("studiomanager_snapshot.db");
+    let pres_db = app_dir.join("studiomanager_presentation.db");
+
+    // Snapshot production DB (safety net)
+    std::fs::copy(&prod_db, &snapshot_db)
+        .map_err(|e| format!("Failed to snapshot production DB: {e}"))?;
+
+    // Copy production DB to presentation DB (so schema/migrations are intact)
+    std::fs::copy(&prod_db, &pres_db)
+        .map_err(|e| format!("Failed to create presentation DB: {e}"))?;
+
+    // Switch active DB to presentation
+    let active_db = app.state::<ActiveDb>();
+    *active_db.0.lock().map_err(|e| format!("Lock error: {e}"))? = "studiomanager_presentation.db".to_string();
+
+    Ok(pres_db.to_string_lossy().to_string())
+}
+
+/// Exit presentation mode: switch back to production DB and remove presentation DB.
+#[tauri::command]
+fn exit_presentation_mode(app: tauri::AppHandle) -> Result<(), String> {
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    let pres_db = app_dir.join("studiomanager_presentation.db");
+
+    // Switch back to production DB
+    let active_db = app.state::<ActiveDb>();
+    *active_db.0.lock().map_err(|e| format!("Lock error: {e}"))? = "studiomanager.db".to_string();
+
+    // Remove presentation DB
+    if pres_db.exists() {
+        let _ = std::fs::remove_file(&pres_db);
+    }
+
+    Ok(())
+}
+
 /// Create a manual snapshot of the production DB.
 #[tauri::command]
 fn snapshot_db(app: tauri::AppHandle) -> Result<String, String> {
@@ -274,6 +321,8 @@ pub fn run() {
             execute_batch,
             enter_test_mode,
             exit_test_mode,
+            enter_presentation_mode,
+            exit_presentation_mode,
             snapshot_db,
             restore_snapshot,
             has_snapshot,

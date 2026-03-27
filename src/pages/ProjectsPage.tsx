@@ -17,7 +17,7 @@ import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Button, Badge, PageHeader, SearchBar, PageSpinner, Input } from "../components/ui";
+import { Button, Badge, Card, PageHeader, SearchBar, PageSpinner, Input } from "../components/ui";
 
 type BadgeVariant = "success" | "warning" | "danger" | "neutral" | "accent" | "info";
 
@@ -50,6 +50,7 @@ export function ProjectsPage() {
   const [filter, setFilter] = useState<ProjectStatus | "all">("active");
   const [search, setSearch] = useState("");
   const [peekId, setPeekId] = useState<number | null>(null);
+  const [closingPeek, setClosingPeek] = useState(false);
   const t = useT();
 
   const clientName = (clientId: string) =>
@@ -121,10 +122,15 @@ export function ProjectsPage() {
 
   const handleProjectClick = (projectId: number) => {
     if (projectOpenMode === "peek") {
+      setClosingPeek(false);
       setPeekId(projectId);
     } else {
       navigate(`/projects/${projectId}`);
     }
+  };
+
+  const handleClosePeek = () => {
+    setClosingPeek(true);
   };
 
   const filterLabels: Record<ProjectStatus | "all", string> = {
@@ -139,7 +145,7 @@ export function ProjectsPage() {
 
   return (
     <div className="flex flex-1 min-h-0">
-      <div className={`min-w-0 overflow-y-auto ${peekId !== null ? "flex-1" : "w-full"}`}>
+      <div className="min-w-0 overflow-y-auto flex-1">
         <PageHeader title={t.projects}>
           <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>{t.new_project}</Button>
         </PageHeader>
@@ -178,7 +184,7 @@ export function ProjectsPage() {
           />
         )}
 
-        <div className={`grid gap-4 ${peekId !== null ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"}`}>
+        <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
           {filtered.map((p) => {
             const stats = taskStats[p.id] ?? { total: 0, pct: 0, maxPriority: "low" as TaskPriority };
             const pct = stats.pct;
@@ -256,7 +262,11 @@ export function ProjectsPage() {
 
       {/* Side Peek Panel */}
       {peekId !== null && (
-        <div className="w-1/2 shrink-0 border-l border-gray-200 ml-4 pl-4 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div
+          className={`shrink-0 border-l border-gray-200 overflow-y-auto ${closingPeek ? "peek-exit" : "peek-enter"}`}
+          onClick={(e) => e.stopPropagation()}
+          onAnimationEnd={() => { if (closingPeek) { setPeekId(null); setClosingPeek(false); } }}
+        >
           <div className="flex items-center justify-between mb-4">
             <Link
               to={`/projects/${peekId}`}
@@ -265,7 +275,7 @@ export function ProjectsPage() {
               {t.open_full_page}
             </Link>
             <button
-              onClick={() => setPeekId(null)}
+              onClick={handleClosePeek}
               className="text-muted hover:text-gray-700"
             >
               <X size={16} />
@@ -292,6 +302,7 @@ function NewProjectForm({
     start_date: string | null;
     deadline: string | null;
     notes: string;
+    layout_config: string | null;
   }) => void;
   onCancel: () => void;
 }) {
@@ -307,7 +318,7 @@ function NewProjectForm({
   const t = useT();
 
   return (
-    <div className="border border-gray-100 rounded-lg p-4 mb-6 space-y-3">
+    <Card className="mb-6 space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <Input
           placeholder={`${t.project_name} *`}
@@ -345,6 +356,7 @@ function NewProjectForm({
               ...form,
               start_date: form.start_date || null,
               deadline: form.deadline || null,
+              layout_config: null,
             });
           }}
         >
@@ -354,6 +366,6 @@ function NewProjectForm({
           {t.cancel}
         </Button>
       </div>
-    </div>
+    </Card>
   );
 }

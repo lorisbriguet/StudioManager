@@ -134,6 +134,29 @@ export async function deleteExpenseCategory(code: string): Promise<void> {
   await db.execute("DELETE FROM expense_categories WHERE code = $1", [code]);
 }
 
+// ── Duplicate detection ──────────────────────────────────────
+
+export async function findDuplicateExpenses(
+  supplier: string,
+  amount: number,
+  date: string
+): Promise<Expense[]> {
+  const db = await getDb();
+  // Match expenses sharing at least 2 of 3 criteria:
+  // same supplier (case-insensitive), same amount, or date within ±3 days
+  return db.select<Expense[]>(
+    `SELECT * FROM expenses
+     WHERE (
+       (LOWER(supplier) = LOWER($1)) +
+       (amount = $2) +
+       (ABS(julianday(invoice_date) - julianday($3)) <= 3)
+     ) >= 2
+     ORDER BY invoice_date DESC
+     LIMIT 5`,
+    [supplier, amount, date]
+  );
+}
+
 export async function isCategoryInUse(code: string): Promise<boolean> {
   const db = await getDb();
   const rows = await db.select<{ cnt: number }[]>(

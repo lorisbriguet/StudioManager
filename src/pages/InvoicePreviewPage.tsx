@@ -164,7 +164,7 @@ export function InvoicePreviewPage() {
       <div className="flex items-center gap-3 px-6 py-3 border-b border-gray-200 bg-white dark:bg-gray-100">
         <button
           onClick={() => navigate(-1)}
-          className="text-muted hover:text-gray-900"
+          className="text-muted hover:text-gray-900 dark:hover:text-gray-200"
         >
           <ArrowLeft size={18} />
         </button>

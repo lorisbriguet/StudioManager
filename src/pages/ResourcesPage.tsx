@@ -1,7 +1,9 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Plus, Search, ExternalLink, Trash2, X, Tag } from "lucide-react";
 import { PageHeader, Button, PageSpinner, EmptyState } from "../components/ui";
+import { SavedFilterBar } from "../components/SavedFilterBar";
 import { toast } from "sonner";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
 import {
   useResources,
@@ -13,6 +15,8 @@ import {
 import { getResourceTags } from "../db/queries/resources";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
 import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
+import { BulkActionBar } from "../components/BulkActionBar";
+import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useT } from "../i18n/useT";
 import { logError } from "../lib/log";
 
@@ -40,6 +44,12 @@ export function ResourcesPage() {
   const [sort, setSort] = useState<SortState<SortKey>>({ key: "name", dir: "asc" });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState<ResourceRow> | null>(null);
+  const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
+
+  const applyFilter = useCallback((filters: Record<string, unknown>) => {
+    if (typeof filters.search === "string") setSearch(filters.search);
+    setTagFilter(typeof filters.tagFilter === "string" ? filters.tagFilter : null);
+  }, []);
 
   // Build rows with tags
   const [rows, setRows] = useState<ResourceRow[]>([]);
@@ -73,6 +83,15 @@ export function ResourcesPage() {
     }
     return sortRows(list, sort.key, sort.dir);
   }, [rows, search, tagFilter, sort]);
+
+  const bulk = useBulkSelect(filtered);
+
+  const bulkDelete = useCallback(async () => {
+    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
+    const ids = [...bulk.selected] as number[];
+    ids.forEach((id) => deleteResource.mutate(id));
+    bulk.clearSelection();
+  }, [bulk, deleteResource, t]);
 
   const handleDelete = async (id: number, name: string) => {
     try {
@@ -130,7 +149,7 @@ export function ResourcesPage() {
             type="text"
             placeholder={t.search_resources}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setActiveFilterId(null); }}
             className="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-md text-sm"
           />
         </div>
@@ -139,7 +158,7 @@ export function ResourcesPage() {
             <Tag size={14} className="text-muted" />
             {tagFilter && (
               <button
-                onClick={() => setTagFilter(null)}
+                onClick={() => { setTagFilter(null); setActiveFilterId(null); }}
                 className="px-2 py-0.5 text-xs rounded-full bg-accent text-white flex items-center gap-1"
               >
                 {tagFilter} <X size={10} />
@@ -149,7 +168,7 @@ export function ResourcesPage() {
               (allTags ?? []).map((tag) => (
                 <button
                   key={tag}
-                  onClick={() => setTagFilter(tag)}
+                  onClick={() => { setTagFilter(tag); setActiveFilterId(null); }}
                   className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200"
                 >
                   {tag}
@@ -159,6 +178,14 @@ export function ResourcesPage() {
         )}
       </div>
 
+      <SavedFilterBar
+        page="resources"
+        currentFilters={{ search, tagFilter }}
+        onApply={applyFilter}
+        activeFilterId={activeFilterId}
+        onActiveChange={setActiveFilterId}
+      />
+
       {filtered.length === 0 ? (
         <EmptyState message={rows.length === 0 ? t.no_resources_yet : t.no_matching_resources} />
       ) : (
@@ -166,6 +193,9 @@ export function ResourcesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
+                <th className="w-8 px-2 py-2">
+                  <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
+                </th>
                 <SortHeader<SortKey> label={t.name} sortKey="name" current={sort} onSort={setSort} />
                 <th className="text-left px-3 py-2 font-medium text-xs text-muted">{t.type}</th>
                 <SortHeader<SortKey> label={t.price_label} sortKey="price" current={sort} onSort={setSort} />
@@ -180,6 +210,8 @@ export function ResourcesPage() {
                   resource={r}
                   allTags={allTags ?? []}
                   isEditing={editingId === r.id}
+                  isSelected={bulk.selected.has(r.id)}
+                  onToggleSelect={(shiftKey) => bulk.toggleItem(r.id, shiftKey)}
                   onStartEdit={() => setEditingId(r.id)}
                   onCancelEdit={() => setEditingId(null)}
                   onSave={async (data, tags) => {
@@ -218,6 +250,13 @@ export function ResourcesPage() {
           ]}
         />
       )}
+      <BulkActionBar
+        count={bulk.count}
+        onClear={bulk.clearSelection}
+        actions={[
+          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+        ]}
+      />
     </div>
   );
 }
@@ -323,7 +362,7 @@ function NewResourceForm({
         >
           {t.save}
         </button>
-        <button onClick={onCancel} className="px-3 py-1.5 text-sm text-muted hover:text-gray-900">
+        <button onClick={onCancel} className="px-3 py-1.5 text-sm text-muted hover:text-gray-900 dark:hover:text-gray-200">
           {t.cancel}
         </button>
       </div>
@@ -335,6 +374,8 @@ function ResourceTableRow({
   resource,
   allTags,
   isEditing,
+  isSelected,
+  onToggleSelect,
   onStartEdit,
   onCancelEdit,
   onSave,
@@ -345,6 +386,8 @@ function ResourceTableRow({
   resource: ResourceRow;
   allTags: string[];
   isEditing: boolean;
+  isSelected: boolean;
+  onToggleSelect: (shiftKey: boolean) => void;
   onStartEdit: () => void;
   onCancelEdit: () => void;
   onSave: (data: Partial<{ name: string; url: string; price: string }>, tags?: string[]) => void;
@@ -369,6 +412,14 @@ function ResourceTableRow({
   if (isEditing) {
     return (
       <tr className="border-b border-gray-100 bg-accent-light/30">
+        <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => onToggleSelect(e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
+            className="accent-[var(--accent)]"
+          />
+        </td>
         <td className="px-3 py-2">
           <input
             value={name}
@@ -430,7 +481,7 @@ function ResourceTableRow({
             >
               {t.save}
             </button>
-            <button onClick={onCancelEdit} className="text-xs text-muted hover:text-gray-900">
+            <button onClick={onCancelEdit} className="text-xs text-muted hover:text-gray-900 dark:hover:text-gray-200">
               {t.cancel}
             </button>
           </div>
@@ -445,6 +496,14 @@ function ResourceTableRow({
       onDoubleClick={onStartEdit}
       onContextMenu={onContextMenu}
     >
+      <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={(e) => onToggleSelect(e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
+          className="accent-[var(--accent)]"
+        />
+      </td>
       <td className="px-3 py-2 font-medium">{resource.name}</td>
       <td className="px-3 py-2">
         <div className="flex flex-wrap gap-1">
