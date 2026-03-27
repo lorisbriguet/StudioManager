@@ -1,7 +1,10 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Plus, Search, ExternalLink, Trash2, X, Tag } from "lucide-react";
-import { PageHeader, Button, PageSpinner, EmptyState } from "../components/ui";
+import { PageHeader, Button, EmptyState } from "../components/ui";
+import { Skeleton } from "../components/ui/Skeleton";
 import { SavedFilterBar } from "../components/SavedFilterBar";
+import { getTagColor } from "../lib/tagColors";
+import { useAppStore } from "../stores/app-store";
 import { toast } from "sonner";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
@@ -34,6 +37,7 @@ interface ResourceRow {
 
 export function ResourcesPage() {
   const t = useT();
+  const darkMode = useAppStore((s) => s.darkMode);
   const { data: resources, isLoading } = useResources();
   const { data: allTags } = useAllTags();
   const createResource = useCreateResource();
@@ -124,7 +128,24 @@ export function ResourcesPage() {
     });
   };
 
-  if (isLoading) return <PageSpinner />;
+  if (isLoading) return (
+    <div>
+      <PageHeader title={t.resources}>
+        <Button icon={<Plus size={14} />} onClick={() => {}}>{t.new_resource}</Button>
+      </PageHeader>
+      <div className="space-y-3 mt-4">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-4 px-3 py-2">
+            <Skeleton width={16} height={16} rounded="sm" />
+            <Skeleton width="30%" height={14} />
+            <Skeleton width="15%" height={14} />
+            <Skeleton width="10%" height={14} />
+            <Skeleton width="20%" height={14} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div>
@@ -166,24 +187,32 @@ export function ResourcesPage() {
         {(allTags ?? []).length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">
             <Tag size={14} className="text-muted" />
-            {tagFilter && (
-              <button
-                onClick={() => { setTagFilter(null); setActiveFilterId(null); }}
-                className="px-2 py-0.5 text-xs rounded-full bg-accent text-white flex items-center gap-1"
-              >
-                {tagFilter} <X size={10} />
-              </button>
-            )}
-            {!tagFilter &&
-              (allTags ?? []).map((tag) => (
+            {tagFilter && (() => {
+              const c = getTagColor(tagFilter, darkMode);
+              return (
                 <button
-                  key={tag}
-                  onClick={() => { setTagFilter(tag); setActiveFilterId(null); }}
-                  className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  onClick={() => { setTagFilter(null); setActiveFilterId(null); }}
+                  style={{ background: c.bg, color: c.text }}
+                  className="px-2 py-0.5 text-xs rounded-full font-medium flex items-center gap-1"
                 >
-                  {tag}
+                  {tagFilter} <X size={10} />
                 </button>
-              ))}
+              );
+            })()}
+            {!tagFilter &&
+              (allTags ?? []).map((tag) => {
+                const c = getTagColor(tag, darkMode);
+                return (
+                  <button
+                    key={tag}
+                    onClick={() => { setTagFilter(tag); setActiveFilterId(null); }}
+                    style={{ background: c.bg, color: c.text }}
+                    className="px-2 py-0.5 text-xs rounded-full font-medium hover:opacity-80 transition-opacity"
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
           </div>
         )}
       </div>
@@ -203,7 +232,7 @@ export function ResourcesPage() {
         <div>
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100">
+              <tr className="border-b border-[var(--color-border-header)]">
                 <th className="w-8 px-2 py-2">
                   <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
                 </th>
@@ -282,6 +311,7 @@ function NewResourceForm({
   onCancel: () => void;
 }) {
   const t = useT();
+  const darkMode = useAppStore((s) => s.darkMode);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [price, setPrice] = useState("");
@@ -297,7 +327,7 @@ function NewResourceForm({
   };
 
   return (
-    <div className="border border-gray-100 rounded-lg p-4 mb-4 bg-gray-50">
+    <div className="rounded-xl p-4 mb-4 bg-[var(--color-surface)]">
       <div className="grid grid-cols-4 gap-3">
         <input
           type="text"
@@ -349,17 +379,21 @@ function NewResourceForm({
       </div>
       {tags.length > 0 && (
         <div className="flex gap-1.5 mt-2 flex-wrap">
-          {tags.map((tag) => (
-            <span
-              key={tag}
-              className="px-2 py-0.5 text-xs rounded-full bg-accent-light text-accent flex items-center gap-1"
-            >
-              {tag}
-              <button onClick={() => setTags(tags.filter((t) => t !== tag))}>
-                <X size={10} />
-              </button>
-            </span>
-          ))}
+          {tags.map((tag) => {
+            const c = getTagColor(tag, darkMode);
+            return (
+              <span
+                key={tag}
+                style={{ background: c.bg, color: c.text }}
+                className="px-2 py-0.5 text-xs rounded-full font-medium flex items-center gap-1"
+              >
+                {tag}
+                <button onClick={() => setTags(tags.filter((t) => t !== tag))}>
+                  <X size={10} />
+                </button>
+              </span>
+            );
+          })}
         </div>
       )}
       <div className="flex gap-2 mt-3">
@@ -407,6 +441,7 @@ function ResourceTableRow({
   onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const t = useT();
+  const darkMode = useAppStore((s) => s.darkMode);
   const [name, setName] = useState(resource.name);
   const [url, setUrl] = useState(resource.url);
   const [price, setPrice] = useState(resource.price);
@@ -422,7 +457,7 @@ function ResourceTableRow({
 
   if (isEditing) {
     return (
-      <tr className="border-b border-gray-100 bg-accent-light/30">
+      <tr className="border-b border-[var(--color-border-divider)] bg-accent-light/30">
         <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
           <input
             type="checkbox"
@@ -441,12 +476,15 @@ function ResourceTableRow({
         </td>
         <td className="px-3 py-2">
           <div className="flex flex-wrap gap-1 items-center">
-            {tags.map((tag) => (
-              <span key={tag} className="px-2 py-0.5 text-xs rounded-full bg-accent-light text-accent flex items-center gap-1">
-                {tag}
-                <button onClick={() => setTags(tags.filter((t) => t !== tag))}><X size={10} /></button>
-              </span>
-            ))}
+            {tags.map((tag) => {
+              const c = getTagColor(tag, darkMode);
+              return (
+                <span key={tag} style={{ background: c.bg, color: c.text }} className="px-2 py-0.5 text-xs rounded-full font-medium flex items-center gap-1">
+                  {tag}
+                  <button onClick={() => setTags(tags.filter((t) => t !== tag))}><X size={10} /></button>
+                </span>
+              );
+            })}
             <input
               type="text"
               placeholder={t.add_tag}
@@ -503,7 +541,7 @@ function ResourceTableRow({
 
   return (
     <tr
-      className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200 group cursor-pointer"
+      className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] group cursor-pointer transition-colors"
       onDoubleClick={onStartEdit}
       onContextMenu={onContextMenu}
     >
@@ -518,11 +556,14 @@ function ResourceTableRow({
       <td className="px-3 py-2 font-medium">{resource.name}</td>
       <td className="px-3 py-2">
         <div className="flex flex-wrap gap-1">
-          {resource.tags.map((tag) => (
-            <span key={tag} className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">
-              {tag}
-            </span>
-          ))}
+          {resource.tags.map((tag) => {
+            const c = getTagColor(tag, darkMode);
+            return (
+              <span key={tag} style={{ background: c.bg, color: c.text }} className="px-2 py-0.5 text-xs rounded-full font-medium">
+                {tag}
+              </span>
+            );
+          })}
         </div>
       </td>
       <td className="px-3 py-2">

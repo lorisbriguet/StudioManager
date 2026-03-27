@@ -10,6 +10,8 @@ import {
   useDeleteProjectTable,
 } from "../db/hooks/useProjectTables";
 import { useT } from "../i18n/useT";
+import { getTagColor } from "../lib/tagColors";
+import { useAppStore } from "../stores/app-store";
 import type { ProjectTable, TableColumnDef, ProjectTableRow } from "../types/project-table";
 
 interface Props {
@@ -19,6 +21,7 @@ interface Props {
 
 export function NamedTable({ table, projectId }: Props) {
   const t = useT();
+  const darkMode = useAppStore((s) => s.darkMode);
   const { data: rows } = useProjectTableRows(table.id);
   const createRow = useCreateProjectTableRow(table.id);
   const updateRow = useUpdateProjectTableRow(table.id);
@@ -138,9 +141,9 @@ export function NamedTable({ table, projectId }: Props) {
   const cols = table.column_config;
 
   return (
-    <div className="border border-gray-100 rounded-lg overflow-visible">
+    <div className="rounded-xl bg-[var(--color-surface)] overflow-visible">
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-100">
+      <div className="flex items-center gap-2 px-3 py-2 bg-[var(--color-surface)]">
         <button onClick={() => setCollapsed(!collapsed)} className="text-muted hover:text-gray-700">
           {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
         </button>
@@ -186,12 +189,12 @@ export function NamedTable({ table, projectId }: Props) {
         <>
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100">
+              <tr className="border-b border-[var(--color-border-header)]">
                 <th className="w-6 px-1" />
                 {cols.map((col) => (
                   <th
                     key={col.id}
-                    className="px-3 py-1.5 text-left text-xs font-medium text-muted relative"
+                    className="px-3 py-1.5 text-left text-xs text-muted relative"
                     style={{ width: col.width ?? 150 }}
                   >
                     <button
@@ -204,7 +207,7 @@ export function NamedTable({ table, projectId }: Props) {
                     {editingCol === col.id && (
                       <div
                         ref={colEditorRef}
-                        className="absolute left-0 top-full mt-1 z-50 bg-white dark:bg-gray-100 border border-gray-200 dark:border-gray-300 rounded-lg shadow-lg p-3 min-w-[200px]"
+                        className="absolute left-0 top-full mt-1 z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] p-3 min-w-[200px]"
                       >
                         <label className="block text-[10px] text-muted mb-1">{t.rename}</label>
                         <input
@@ -246,7 +249,7 @@ export function NamedTable({ table, projectId }: Props) {
                             </button>
                           </>
                         )}
-                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--color-border-divider)]">
                           <button
                             type="button"
                             onClick={() => deleteColumn(col.id)}
@@ -277,13 +280,13 @@ export function NamedTable({ table, projectId }: Props) {
                   {showColPicker && (
                     <div
                       ref={colPickerRef}
-                      className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-gray-100 border border-gray-200 dark:border-gray-300 rounded-lg shadow-lg py-1 min-w-[140px]"
+                      className="absolute right-0 top-full mt-1 z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[140px]"
                     >
                       {(["text", "number", "checkbox", "select", "tags", "date"] as const).map((type) => (
                         <button
                           key={type}
                           onClick={() => addColumn(type)}
-                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-200 capitalize"
+                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-hover-row)] capitalize"
                         >
                           {type}
                         </button>
@@ -296,7 +299,7 @@ export function NamedTable({ table, projectId }: Props) {
             </thead>
             <tbody>
               {(rows ?? []).map((row) => (
-                <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200 group">
+                <tr key={row.id} className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] group">
                   <td className="w-6 px-1 text-muted cursor-grab">
                     <GripVertical size={12} />
                   </td>
@@ -320,7 +323,7 @@ export function NamedTable({ table, projectId }: Props) {
           </table>
           <button
             onClick={() => createRow.mutate(undefined)}
-            className="flex items-center gap-1 text-xs text-muted hover:text-accent px-3 py-2 w-full text-left"
+            className="flex items-center gap-1 text-xs text-accent hover:underline px-3 py-2 w-full text-left"
           >
             <Plus size={12} /> {t.add_row}
           </button>
@@ -366,17 +369,21 @@ export function NamedTable({ table, projectId }: Props) {
         };
         return (
           <div className="flex flex-wrap gap-1 items-center">
-            {selected.map((tag) => (
-              <span
-                key={tag}
-                className="px-1.5 py-0.5 text-[10px] rounded-full bg-accent-light text-accent flex items-center gap-0.5"
-              >
-                {tag}
-                <button type="button" onClick={() => removeTag(tag)} className="hover:text-danger">
-                  <X size={8} />
-                </button>
-              </span>
-            ))}
+            {selected.map((tag) => {
+              const color = getTagColor(tag, darkMode);
+              return (
+                <span
+                  key={tag}
+                  style={{ background: color.bg, color: color.text }}
+                  className="px-1.5 py-0.5 text-[10px] rounded-full flex items-center gap-0.5"
+                >
+                  {tag}
+                  <button type="button" onClick={() => removeTag(tag)} className="hover:text-danger">
+                    <X size={8} />
+                  </button>
+                </span>
+              );
+            })}
             {available.map((opt) => (
               <button
                 key={opt}
