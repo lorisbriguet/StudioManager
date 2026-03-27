@@ -1289,18 +1289,18 @@ function ProjectNamedTables({ projectId }: { projectId: number }) {
 
 function PriorityBadge({ priority, onClick }: { priority: TaskPriority; onClick?: () => void }) {
   const colors: Record<TaskPriority, string> = {
-    high: "text-red-600",
-    medium: "text-yellow-600",
-    low: "text-muted",
+    high: "bg-danger",
+    medium: "bg-warning",
+    low: "bg-success",
   };
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`text-xs cursor-pointer hover:opacity-70 ${colors[priority]}`}
+      className="cursor-pointer hover:opacity-70"
       title={`Priority: ${priority}`}
     >
-      {priority === "high" ? "!!!" : priority === "medium" ? "!!" : "!"}
+      <span className={`inline-block w-2 h-2 rounded-full ${colors[priority]}`} />
     </button>
   );
 }
