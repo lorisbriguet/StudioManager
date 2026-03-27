@@ -28,8 +28,8 @@ export async function createProject(
 ): Promise<number> {
   const db = await getDb();
   const result = await db.execute(
-    `INSERT INTO projects (client_id, name, description, status, start_date, deadline, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    `INSERT INTO projects (client_id, name, description, status, start_date, deadline, notes, folder_path)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
     [
       data.client_id,
       data.name,
@@ -38,6 +38,7 @@ export async function createProject(
       data.start_date,
       data.deadline,
       data.notes,
+      data.folder_path ?? null,
     ]
   );
   return result.lastInsertId ?? 0;

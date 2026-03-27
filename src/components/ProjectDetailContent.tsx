@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Plus, ChevronRight, ChevronDown, Trash2, GripVertical, ExternalLink, Bookmark, X, Play, Square } from "lucide-react";
+import { Plus, ChevronRight, ChevronDown, Trash2, GripVertical, ExternalLink, Bookmark, X, Play, Square, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -56,6 +56,8 @@ import { effectivePriority, type TaskPriority } from "../types/task";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu";
 import { useTabStore } from "../stores/tab-store";
 import { useTimerActions } from "../hooks/useTimerActions";
+import { open as openDirectory } from "@tauri-apps/plugin-dialog";
+import { open as openUrl } from "@tauri-apps/plugin-shell";
 import { useT } from "../i18n/useT";
 
 interface Props {
@@ -304,6 +306,28 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
               className="border border-gray-200 rounded px-2 py-1 text-xs"
             />
           </div>
+          {project.folder_path ? (
+            <button
+              onClick={() => openUrl(project.folder_path!)}
+              className="text-muted hover:text-[var(--color-text-secondary)] text-xs flex items-center gap-1"
+            >
+              <FolderOpen size={12} />
+              {t.folder}
+            </button>
+          ) : (
+            <button
+              onClick={async () => {
+                const dir = await openDirectory({ directory: true, title: t.set_folder });
+                if (typeof dir === "string") {
+                  updateProject.mutate({ id: projectId, data: { folder_path: dir } });
+                }
+              }}
+              className="text-muted hover:text-[var(--color-text-secondary)] text-xs flex items-center gap-1"
+            >
+              <FolderOpen size={12} />
+              {t.set_folder}
+            </button>
+          )}
         </div>
 
         {totalCount > 0 && (
@@ -398,6 +422,28 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
             className="border border-gray-200 rounded px-2 py-1 text-xs"
           />
         </div>
+        {project.folder_path ? (
+          <button
+            onClick={() => openUrl(project.folder_path!)}
+            className="text-muted hover:text-[var(--color-text-secondary)] text-xs flex items-center gap-1"
+          >
+            <FolderOpen size={12} />
+            {t.folder}
+          </button>
+        ) : (
+          <button
+            onClick={async () => {
+              const dir = await openDirectory({ directory: true, title: t.set_folder });
+              if (typeof dir === "string") {
+                updateProject.mutate({ id: projectId, data: { folder_path: dir } });
+              }
+            }}
+            className="text-muted hover:text-[var(--color-text-secondary)] text-xs flex items-center gap-1"
+          >
+            <FolderOpen size={12} />
+            {t.set_folder}
+          </button>
+        )}
       </div>
 
       {totalCount > 0 && (
