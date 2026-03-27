@@ -735,6 +735,7 @@ function AccentColorPicker({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const isCustom = !presets.some((p) => p.color.toLowerCase() === value.color.toLowerCase());
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -760,6 +761,20 @@ function AccentColorPicker({
       </button>
       {open && (
         <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto border border-gray-200 rounded-md bg-white dark:bg-gray-100 shadow-lg py-1">
+          {isCustom && (
+            <button
+              key="theme-custom"
+              type="button"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 w-full px-3 py-1.5 text-sm bg-accent-light text-accent font-medium"
+            >
+              <div
+                className="w-4 h-4 rounded-full shrink-0"
+                style={{ backgroundColor: value.color }}
+              />
+              <span>{value.name}</span>
+            </button>
+          )}
           {presets.map((preset) => (
             <button
               key={preset.color}
@@ -769,7 +784,7 @@ function AccentColorPicker({
                 setOpen(false);
               }}
               className={`flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-200 transition-colors ${
-                value.color === preset.color ? "bg-accent-light text-accent font-medium" : ""
+                !isCustom && value.color.toLowerCase() === preset.color.toLowerCase() ? "bg-accent-light text-accent font-medium" : ""
               }`}
             >
               <div

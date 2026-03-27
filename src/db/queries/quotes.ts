@@ -88,10 +88,40 @@ export async function updateQuoteWithLineItems(
 }
 
 export async function deleteQuote(id: number): Promise<void> {
+  const db = await getDb();
+  // Get the quote to know its reference prefix before deleting
+  const rows = await db.select<Quote[]>("SELECT * FROM quotes WHERE id = $1", [id]);
+  const quote = rows[0];
   const batch = new TransactionBatch();
   batch.add("DELETE FROM quote_line_items WHERE quote_id = $1", [id]);
   batch.add("DELETE FROM quotes WHERE id = $1", [id]);
   await batch.commit();
+  // Reindex remaining quotes for the same year
+  if (quote && !quote.reference.startsWith("DRAFT")) {
+    // Reference format: D-{year}-{number}
+    const parts = quote.reference.split("-");
+    if (parts.length >= 3) {
+      const yearPrefix = `D-${parts[1]}-`;
+      await reindexQuoteReferences(yearPrefix, parts[1]);
+    }
+  }
+}
+
+async function reindexQuoteReferences(prefix: string, _year: string): Promise<void> {
+  const db = await getDb();
+  const quotes = await db.select<{ id: number; reference: string }[]>(
+    "SELECT id, reference FROM quotes WHERE reference LIKE $1 ORDER BY CAST(SUBSTR(reference, $2) AS INTEGER)",
+    [`${prefix}%`, prefix.length + 1]
+  );
+  for (let i = 0; i < quotes.length; i++) {
+    const newRef = `${prefix}${String(i + 1).padStart(3, "0")}`;
+    if (quotes[i].reference !== newRef) {
+      await db.execute(
+        "UPDATE quotes SET reference = $1, updated_at = datetime('now') WHERE id = $2",
+        [newRef, quotes[i].id]
+      );
+    }
+  }
 }
 
 export async function getQuoteLineItems(quoteId: number): Promise<QuoteLineItem[]> {

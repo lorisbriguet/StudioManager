@@ -29,6 +29,8 @@ import { useT } from "../i18n/useT";
 import { extractPdfText, extractImageText, parseExpenseFromText, type ExtractedExpenseData } from "../lib/pdfExtract";
 import { logError } from "../lib/log";
 import { useYearGrouping } from "../hooks/useYearGrouping";
+import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
+import { applyFilterConditions } from "../types/saved-filter";
 
 type SortKey = "reference" | "supplier" | "category_code" | "invoice_date" | "amount" | "paid_date";
 
@@ -49,11 +51,20 @@ export function ExpensesPage() {
   const [prefill, setPrefill] = useState<(ExtractedExpenseData & { receiptPath?: string }) | null>(null);
   const [parsing, setParsing] = useState(false);
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
+  const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
 
-  const applyFilter = useCallback((filters: Record<string, unknown>) => {
+  const applyFilter = useCallback((filters: SavedFilterData) => {
     if (typeof filters.search === "string") setSearch(filters.search);
     if (filters.sort && typeof filters.sort === "object") setSort(filters.sort as SortState<SortKey>);
+    setFilterConditions(filters.conditions ?? []);
   }, []);
+
+  const expenseFields = useMemo<FilterableField[]>(() => [
+    { key: "reference", label: t.reference, type: "string" },
+    { key: "supplier", label: t.supplier, type: "string" },
+    { key: "category_code", label: t.category, type: "select", options: (categories ?? []).map((c) => ({ value: c.code, label: c.name_fr })) },
+    { key: "amount", label: t.amount, type: "number" },
+  ], [t, categories]);
 
   const categoryName = (code: string) =>
     categories?.find((c) => c.code === code)?.name_fr ?? code;
@@ -61,7 +72,7 @@ export function ExpensesPage() {
   const filtered = useMemo(() => {
     if (!expenses) return [];
     const q = search.toLowerCase();
-    const rows = q
+    let rows = q
       ? expenses.filter(
           (e) =>
             e.reference.toLowerCase().includes(q) ||
@@ -69,8 +80,9 @@ export function ExpensesPage() {
             e.category_code.toLowerCase().includes(q)
         )
       : expenses;
+    rows = applyFilterConditions(rows, filterConditions);
     return sortRows(rows, sort.key, sort.dir);
-  }, [expenses, search, sort]);
+  }, [expenses, search, sort, filterConditions]);
 
   const { expandedYears, groupedByYear, toggleYear } = useYearGrouping(
     filtered,
@@ -215,14 +227,15 @@ export function ExpensesPage() {
         <Button icon={<Plus size={16} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
       </PageHeader>
 
-      <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); }} placeholder={t.search_expenses} className="w-64 mb-4" />
+      <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); setFilterConditions([]); }} placeholder={t.search_expenses} className="w-64 mb-4" />
 
       <SavedFilterBar
         page="expenses"
-        currentFilters={{ search, sort }}
+        currentFilters={{ search, sort, conditions: filterConditions }}
         onApply={applyFilter}
         activeFilterId={activeFilterId}
         onActiveChange={setActiveFilterId}
+        fields={expenseFields}
       />
 
       {showForm && (

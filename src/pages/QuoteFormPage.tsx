@@ -7,13 +7,14 @@ import { addDays, format } from "date-fns";
 import { useQuote, useCreateQuote, useUpdateQuote } from "../db/hooks/useQuotes";
 import { useClients, useClientAddresses } from "../db/hooks/useClients";
 import { useProjects } from "../db/hooks/useProjects";
-import { getNextQuoteReference, getQuoteLineItems } from "../db/queries/quotes";
+import { getQuoteLineItems } from "../db/queries/quotes";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { logError } from "../lib/log";
 import { parseActivities } from "../types/business-profile";
 import { useT } from "../i18n/useT";
 import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel } from "../lib/lineItems";
 import { LineItemsTable } from "../components/shared/LineItemsTable";
+import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 
 export function QuoteFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -29,6 +30,14 @@ export function QuoteFormPage() {
   const profileActivities = useMemo(() => parseActivities(profile?.default_activity), [profile?.default_activity]);
   const createQuote = useCreateQuote();
   const updateQuote = useUpdateQuote();
+
+  // Track whether the user has made any changes to the form
+  const [formDirty, setFormDirty] = useState(false);
+  const formLoadedRef = useRef(false);
+  const markDirty = useCallback(() => {
+    if (formLoadedRef.current) setFormDirty(true);
+  }, []);
+  useUnsavedChangesWarning(formDirty);
 
   const [clientId, setClientId] = useState("");
   const [billingAddressId, setBillingAddressId] = useState<number | null>(null);
@@ -72,6 +81,7 @@ export function QuoteFormPage() {
 
   useEffect(() => {
     if (existingQuote) {
+      formLoadedRef.current = false;
       setClientId(existingQuote.client_id);
       setBillingAddressId(existingQuote.billing_address_id);
       setProjectId(existingQuote.project_id);
@@ -94,6 +104,8 @@ export function QuoteFormPage() {
       }).catch((e) => {
         logError("Failed to load line items:", e);
         toast.error(t.failed_load_line_items);
+      }).finally(() => {
+        setTimeout(() => { formLoadedRef.current = true; }, 0);
       });
     }
   }, [existingQuote, quoteId]);
@@ -104,6 +116,13 @@ export function QuoteFormPage() {
       setActivity(profileActivities[0]);
     }
   }, [profileActivities, isEdit]);
+
+  // Arm dirty tracking for new quotes (no existing data to load)
+  useEffect(() => {
+    if (!isEdit) {
+      setTimeout(() => { formLoadedRef.current = true; }, 0);
+    }
+  }, [isEdit]);
 
   const selectedClient = clients?.find((c) => c.id === clientId);
   const discountRate = selectedClient?.has_discount ? selectedClient.discount_rate : 0;
@@ -152,6 +171,7 @@ export function QuoteFormPage() {
           },
           {
             onSuccess: () => {
+              setFormDirty(false);
               toast.success(t.quote_updated);
               navigate("/quotes");
             },
@@ -159,7 +179,7 @@ export function QuoteFormPage() {
           }
         );
       } else {
-        const reference = await getNextQuoteReference(new Date().getFullYear());
+        const reference = `DRAFT-${Date.now()}`;
         createQuote.mutate(
           {
             data: {
@@ -185,6 +205,7 @@ export function QuoteFormPage() {
           },
           {
             onSuccess: () => {
+              setFormDirty(false);
               toast.success(t.quote_created);
               navigate("/quotes");
             },
@@ -206,7 +227,7 @@ export function QuoteFormPage() {
         </h1>
       </div>
 
-      <div className="space-y-4 max-w-3xl">
+      <div className="space-y-4 max-w-3xl" onChange={markDirty} onInput={markDirty}>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-muted mb-1">{t.client}</label>
@@ -341,10 +362,10 @@ export function QuoteFormPage() {
           items={items}
           lineItemIds={lineItemIds}
           sensors={sensors}
-          onDragEnd={handleDragEnd}
-          onAdd={addItem}
-          onRemove={removeItem}
-          onUpdate={updateItem}
+          onDragEnd={(...a) => { handleDragEnd(...a); markDirty(); }}
+          onAdd={() => { addItem(); markDirty(); }}
+          onRemove={(...a) => { removeItem(...a); markDirty(); }}
+          onUpdate={(...a) => { updateItem(...a); markDirty(); }}
           subtotal={subtotal}
           discountRate={discountRate}
           discountAmount={discountAmount}

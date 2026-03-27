@@ -15,6 +15,8 @@ import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { Button, Badge, Card, Input, PageHeader, SearchBar, PageSpinner, EmptyState } from "../components/ui";
 import type { Client } from "../types/client";
+import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
+import { applyFilterConditions } from "../types/saved-filter";
 
 type SortKey = "id" | "name" | "language" | "discount_rate" | "status";
 
@@ -34,16 +36,30 @@ export function ClientsPage() {
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState("");
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
+  const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
   const sort: SortState<SortKey> = { key: clientsSortKey as SortKey, dir: clientsSortDir };
   const setSort = useCallback((s: SortState<SortKey>) => {
     setClientsSortKey(s.key);
     setClientsSortDir(s.dir);
   }, [setClientsSortKey, setClientsSortDir]);
 
-  const applyFilter = useCallback((filters: Record<string, unknown>) => {
+  const applyFilter = useCallback((filters: SavedFilterData) => {
     if (typeof filters.search === "string") setSearch(filters.search);
     if (filters.sort && typeof filters.sort === "object") setSort(filters.sort as SortState<SortKey>);
+    setFilterConditions(filters.conditions ?? []);
   }, [setSort]);
+
+  const clientFields = useMemo<FilterableField[]>(() => [
+    { key: "name", label: t.display_name, type: "string" },
+    { key: "language", label: t.language, type: "select", options: [
+      { value: "FR", label: "French" },
+      { value: "EN", label: "English" },
+    ]},
+    { key: "status", label: "Status", type: "select", options: [
+      { value: "active", label: t.active },
+      { value: "inactive", label: t.inactive },
+    ]},
+  ], [t]);
 
   const activeClientIds = useMemo(() => {
     if (!projects) return new Set<string>();
@@ -59,15 +75,16 @@ export function ClientsPage() {
       ...c,
       status: activeClientIds.has(c.id) ? "active" : "inactive",
     }));
-    const rows = q
+    let rows = q
       ? withStatus.filter(
           (c) =>
             c.id.toLowerCase().includes(q) ||
             c.name.toLowerCase().includes(q)
         )
       : withStatus;
+    rows = applyFilterConditions(rows, filterConditions);
     return sortRows(rows, sort.key, sort.dir);
-  }, [clients, search, sort, activeClientIds]);
+  }, [clients, search, sort, activeClientIds, filterConditions]);
 
   const bulk = useBulkSelect(filtered);
 
@@ -88,13 +105,14 @@ export function ClientsPage() {
         </Button>
       </PageHeader>
 
-      <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); }} placeholder={t.search_clients} className="mb-4 w-64" />
+      <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); setFilterConditions([]); }} placeholder={t.search_clients} className="mb-4 w-64" />
       <SavedFilterBar
         page="clients"
-        currentFilters={{ search, sort }}
+        currentFilters={{ search, sort, conditions: filterConditions }}
         onApply={applyFilter}
         activeFilterId={activeFilterId}
         onActiveChange={setActiveFilterId}
+        fields={clientFields}
       />
 
       {showForm && (

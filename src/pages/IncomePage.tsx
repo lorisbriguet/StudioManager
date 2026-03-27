@@ -25,6 +25,8 @@ import { extractPdfText, extractImageText, parseExpenseFromText } from "../lib/p
 import { logError } from "../lib/log";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import { SavedFilterBar } from "../components/SavedFilterBar";
+import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
+import { applyFilterConditions } from "../types/saved-filter";
 
 type SortKey = "reference" | "source" | "category" | "date" | "amount";
 
@@ -52,16 +54,25 @@ export function IncomePage() {
   const [parsing, setParsing] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState<Income> | null>(null);
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
+  const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
 
-  const applyFilter = useCallback((filters: Record<string, unknown>) => {
+  const applyFilter = useCallback((filters: SavedFilterData) => {
     if (typeof filters.search === "string") setSearch(filters.search);
     if (filters.sort && typeof filters.sort === "object") setSort(filters.sort as SortState<SortKey>);
+    setFilterConditions(filters.conditions ?? []);
   }, []);
+
+  const incomeFields = useMemo<FilterableField[]>(() => [
+    { key: "reference", label: t.reference, type: "string" },
+    { key: "source", label: t.source, type: "string" },
+    { key: "category", label: t.category, type: "select", options: INCOME_CATEGORIES.map((c) => ({ value: c, label: (t as Record<string, string>)[c] ?? c })) },
+    { key: "amount", label: t.amount, type: "number" },
+  ], [t]);
 
   const filtered = useMemo(() => {
     if (!incomes) return [];
     const q = search.toLowerCase();
-    const rows = q
+    let rows = q
       ? incomes.filter(
           (i) =>
             i.reference.toLowerCase().includes(q) ||
@@ -70,8 +81,9 @@ export function IncomePage() {
             i.category.toLowerCase().includes(q)
         )
       : incomes;
+    rows = applyFilterConditions(rows, filterConditions);
     return sortRows(rows, sort.key, sort.dir);
-  }, [incomes, search, sort]);
+  }, [incomes, search, sort, filterConditions]);
 
   const bulk = useBulkSelect(filtered);
 
@@ -195,14 +207,15 @@ export function IncomePage() {
         </Button>
       </PageHeader>
 
-      <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); }} placeholder={t.search_incomes} className="w-64 mb-4" />
+      <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); setFilterConditions([]); }} placeholder={t.search_incomes} className="w-64 mb-4" />
 
       <SavedFilterBar
         page="income"
-        currentFilters={{ search, sort }}
+        currentFilters={{ search, sort, conditions: filterConditions }}
         onApply={applyFilter}
         activeFilterId={activeFilterId}
         onActiveChange={setActiveFilterId}
+        fields={incomeFields}
       />
 
       {showForm && (

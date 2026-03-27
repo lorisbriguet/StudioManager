@@ -36,6 +36,8 @@ import { useT } from "../i18n/useT";
 import { PageHeader, SearchBar, PageSpinner, EmptyState } from "../components/ui";
 import { taskStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Task, Subtask, TaskStatus } from "../types/task";
+import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
+import { applyFilterConditions } from "../types/saved-filter";
 
 export function TasksPage() {
   const t = useT();
@@ -91,10 +93,26 @@ export function TasksPage() {
     await toggleTimer(taskId, projectId, projectName(projectId));
   }, [toggleTimer, projectName]);
 
-  const applyFilter = useCallback((filters: Record<string, unknown>) => {
+  const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
+
+  const applyFilter = useCallback((filters: SavedFilterData) => {
     if (typeof filters.search === "string") setSearch(filters.search);
     if (filters.filter === "all" || filters.filter === "todo" || filters.filter === "done") setFilter(filters.filter as TaskStatus | "all");
+    setFilterConditions(filters.conditions ?? []);
   }, []);
+
+  const taskFields = useMemo<FilterableField[]>(() => [
+    { key: "title", label: t.tasks, type: "string" },
+    { key: "priority", label: "Priority", type: "select", options: [
+      { value: "low", label: "Low" },
+      { value: "medium", label: "Medium" },
+      { value: "high", label: "High" },
+    ]},
+    { key: "status", label: t.status, type: "select", options: [
+      { value: "todo", label: t.todo },
+      { value: "done", label: t.done },
+    ]},
+  ], [t]);
 
   const grouped = useMemo(() => {
     if (!tasks) return [];
@@ -108,6 +126,7 @@ export function TasksPage() {
           projectName(tk.project_id).toLowerCase().includes(q)
       );
     }
+    rows = applyFilterConditions(rows, filterConditions);
     const groups = new Map<number, typeof rows>();
     for (const tk of rows) {
       const arr = groups.get(tk.project_id) ?? [];
@@ -128,7 +147,7 @@ export function TasksPage() {
       });
     }
     return result;
-  }, [tasks, projects, clients, filter, search, projectOrder]);
+  }, [tasks, projects, clients, filter, search, projectOrder, filterConditions]);
 
   const flatTasks = useMemo(() => grouped.flatMap((g) => g.tasks), [grouped]);
   const bulk = useBulkSelect(flatTasks);
@@ -199,7 +218,7 @@ export function TasksPage() {
           {statusTabs.map((tab) => (
             <button
               key={tab.value}
-              onClick={() => { setFilter(tab.value); setActiveFilterId(null); }}
+              onClick={() => { setFilter(tab.value); setActiveFilterId(null); setFilterConditions([]); }}
               className={`px-3 py-1 text-xs rounded-full border ${
                 filter === tab.value
                   ? "bg-accent text-white border-accent"
@@ -212,17 +231,18 @@ export function TasksPage() {
         </div>
         <SearchBar
           value={search}
-          onChange={(v) => { setSearch(v); setActiveFilterId(null); }}
+          onChange={(v) => { setSearch(v); setActiveFilterId(null); setFilterConditions([]); }}
           placeholder={t.search_tasks}
         />
       </div>
 
       <SavedFilterBar
         page="tasks"
-        currentFilters={{ search, filter }}
+        currentFilters={{ search, filter, conditions: filterConditions }}
         onApply={applyFilter}
         activeFilterId={activeFilterId}
         onActiveChange={setActiveFilterId}
+        fields={taskFields}
       />
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleProjectDragEnd}>

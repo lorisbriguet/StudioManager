@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import * as q from "../queries/quotes";
+import { getNextQuoteReference } from "../queries/quotes";
 import type { Quote, QuoteLineItem } from "../../types/quote";
 import { useUndoStore } from "../../stores/undo-store";
 
@@ -64,6 +65,20 @@ export function useUpdateQuote() {
     }) => {
       const prev = await q.getQuote(id);
       const prevLineItems = lineItems ? await q.getQuoteLineItems(id) : undefined;
+
+      // Auto-assign reference when status changes to "sent" and ref is still DRAFT
+      if (data.status === "sent" && prev?.reference.startsWith("DRAFT")) {
+        const year = prev.quote_date
+          ? parseInt(prev.quote_date.substring(0, 4))
+          : new Date().getFullYear();
+        data.reference = await getNextQuoteReference(year);
+      }
+
+      // Prevent changing back to draft once it's been set to another status
+      if (data.status === "draft" && prev && prev.status !== "draft") {
+        throw new Error("Cannot revert to draft status");
+      }
+
       await q.updateQuoteWithLineItems(id, data, lineItems);
       if (prev) {
         const prevData: Record<string, unknown> = {};

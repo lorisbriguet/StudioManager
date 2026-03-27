@@ -21,6 +21,8 @@ import { PageHeader, SearchBar, PageSpinner, Button, EmptyState, Card } from "..
 import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Invoice, InvoiceStatus } from "../types/invoice";
 import type { RecurringFrequency } from "../types/recurring";
+import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
+import { applyFilterConditions } from "../types/saved-filter";
 
 const FREQUENCIES: RecurringFrequency[] = ["monthly", "quarterly", "biannual", "annual"];
 
@@ -43,11 +45,26 @@ export function InvoicesPage() {
   const [sort, setSort] = useState<SortState<SortKey>>({ key: "reference", dir: "desc" });
   const [showRecurring, setShowRecurring] = useState(false);
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
+  const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
 
-  const applyFilter = useCallback((filters: Record<string, unknown>) => {
+  const applyFilter = useCallback((filters: SavedFilterData) => {
     if (typeof filters.search === "string") setSearch(filters.search);
     if (filters.sort && typeof filters.sort === "object") setSort(filters.sort as SortState<SortKey>);
+    setFilterConditions(filters.conditions ?? []);
   }, []);
+
+  const invoiceFields = useMemo<FilterableField[]>(() => [
+    { key: "reference", label: t.reference, type: "string" },
+    { key: "client_name", label: t.client, type: "string" },
+    { key: "status", label: t.status, type: "select", options: [
+      { value: "draft", label: t.draft },
+      { value: "sent", label: t.sent },
+      { value: "paid", label: t.paid },
+      { value: "overdue", label: t.overdue },
+      { value: "cancelled", label: t.cancelled },
+    ]},
+    { key: "total", label: t.amount, type: "number" },
+  ], [t]);
 
   const clientsMap = useMemo(() => new Map(clients?.map((c) => [c.id, c.name]) ?? []), [clients]);
 
@@ -60,7 +77,7 @@ export function InvoicesPage() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    const rows = q
+    let rows = q
       ? enriched.filter(
           (inv) =>
             inv.reference.toLowerCase().includes(q) ||
@@ -68,8 +85,9 @@ export function InvoicesPage() {
             inv.status.includes(q)
         )
       : enriched;
+    rows = applyFilterConditions(rows, filterConditions);
     return sortRows(rows, sort.key, sort.dir);
-  }, [enriched, search, sort]);
+  }, [enriched, search, sort, filterConditions]);
 
   const bulk = useBulkSelect(filtered);
 
@@ -259,16 +277,17 @@ export function InvoicesPage() {
 
       <SearchBar
         value={search}
-        onChange={(v) => { setSearch(v); setActiveFilterId(null); }}
+        onChange={(v) => { setSearch(v); setActiveFilterId(null); setFilterConditions([]); }}
         placeholder={t.search_invoices}
         className="mb-4 w-64"
       />
       <SavedFilterBar
         page="invoices"
-        currentFilters={{ search, sort }}
+        currentFilters={{ search, sort, conditions: filterConditions }}
         onApply={applyFilter}
         activeFilterId={activeFilterId}
         onActiveChange={setActiveFilterId}
+        fields={invoiceFields}
       />
 
       <div>

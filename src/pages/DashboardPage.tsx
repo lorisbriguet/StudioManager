@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { ResponsiveGridLayout, useContainerWidth, verticalCompactor } from "react-grid-layout";
 import type { Layout, ResponsiveLayouts } from "react-grid-layout";
 import { Plus, X, RotateCcw } from "lucide-react";
@@ -23,6 +23,19 @@ export function DashboardPage() {
   const [showWidgetPanel, setShowWidgetPanel] = useState(false);
   const { width, containerRef, mounted } = useContainerWidth();
   const t = useT();
+
+  // Sort widgets by grid position (top-left to bottom-right) so DOM order
+  // matches visual order — important for accessibility, tab order, and animations.
+  const sortedWidgets = useMemo(() => {
+    const layoutMap = new Map(layout.map((l) => [l.i, l]));
+    return [...widgets].sort((a, b) => {
+      const la = layoutMap.get(a.id);
+      const lb = layoutMap.get(b.id);
+      if (!la || !lb) return 0;
+      if (la.y !== lb.y) return la.y - lb.y;
+      return la.x - lb.x;
+    });
+  }, [widgets, layout]);
 
   const handleLayoutChange = useCallback((currentLayout: Layout, _allLayouts: ResponsiveLayouts) => {
     setLayout([...currentLayout]);
@@ -117,7 +130,7 @@ export function DashboardPage() {
           margin={[12, 12] as [number, number]}
           autoSize
         >
-          {widgets.map((widget, idx) => (
+          {sortedWidgets.map((widget, idx) => (
             <div key={widget.id} className="stagger-in border border-gray-100 rounded-lg bg-white dark:bg-gray-100 overflow-hidden relative group cursor-grab active:cursor-grabbing" style={{ animationDelay: `${idx * 50}ms` }}>
               {/* Remove button */}
               <button

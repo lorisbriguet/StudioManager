@@ -19,6 +19,8 @@ import { useTabStore } from "../stores/tab-store";
 import { PageHeader, SearchBar, PageSpinner, Button, EmptyState } from "../components/ui";
 import { quoteStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Quote, QuoteStatus, QuoteLineItem } from "../types/quote";
+import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
+import { applyFilterConditions } from "../types/saved-filter";
 
 type SortKey = "reference" | "client_name" | "quote_date" | "status" | "total";
 
@@ -35,11 +37,26 @@ export function QuotesPage() {
   const [sort, setSort] = useState<SortState<SortKey>>({ key: "quote_date", dir: "desc" });
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState<Quote & { client_name: string }> | null>(null);
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
+  const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
 
-  const applyFilter = useCallback((filters: Record<string, unknown>) => {
+  const applyFilter = useCallback((filters: SavedFilterData) => {
     if (typeof filters.search === "string") setSearch(filters.search);
     if (filters.sort && typeof filters.sort === "object") setSort(filters.sort as SortState<SortKey>);
+    setFilterConditions(filters.conditions ?? []);
   }, []);
+
+  const quoteFields = useMemo<FilterableField[]>(() => [
+    { key: "reference", label: t.reference, type: "string" },
+    { key: "client_name", label: t.client, type: "string" },
+    { key: "status", label: t.status, type: "select", options: [
+      { value: "draft", label: t.draft },
+      { value: "sent", label: t.sent },
+      { value: "accepted", label: t.accepted },
+      { value: "rejected", label: t.rejected },
+      { value: "expired", label: t.expired },
+    ]},
+    { key: "total", label: t.amount, type: "number" },
+  ], [t]);
 
   const [wizardQuote, setWizardQuote] = useState<(Quote & { client_name: string }) | null>(null);
   const [wizardLineItems, setWizardLineItems] = useState<QuoteLineItem[]>([]);
@@ -65,7 +82,7 @@ export function QuotesPage() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    const rows = q
+    let rows = q
       ? enriched.filter(
           (quote) =>
             quote.reference.toLowerCase().includes(q) ||
@@ -73,8 +90,9 @@ export function QuotesPage() {
             quote.status.includes(q)
         )
       : enriched;
+    rows = applyFilterConditions(rows, filterConditions);
     return sortRows(rows, sort.key, sort.dir);
-  }, [enriched, search, sort]);
+  }, [enriched, search, sort, filterConditions]);
 
   const bulk = useBulkSelect(filtered);
 
@@ -111,13 +129,14 @@ export function QuotesPage() {
         </Button>
       </PageHeader>
 
-      <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); }} placeholder={t.search_quotes} className="w-64 mb-4" />
+      <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); setFilterConditions([]); }} placeholder={t.search_quotes} className="w-64 mb-4" />
       <SavedFilterBar
         page="quotes"
-        currentFilters={{ search, sort }}
+        currentFilters={{ search, sort, conditions: filterConditions }}
         onApply={applyFilter}
         activeFilterId={activeFilterId}
         onActiveChange={setActiveFilterId}
+        fields={quoteFields}
       />
 
       <div>
@@ -159,7 +178,7 @@ export function QuotesPage() {
                   >
                     <Pencil size={14} className="inline" />
                   </Link>
-                  <span className="font-medium ml-1.5 align-middle">{q.reference}</span>
+                  <span className="font-medium ml-1.5 align-middle">{q.reference.startsWith("DRAFT") ? t.draft : q.reference}</span>
                 </td>
                 <td className="px-4 py-2">{q.client_name}</td>
                 <td className="px-4 py-2 text-muted">{formatDisplayDate(q.quote_date)}</td>
@@ -172,7 +191,7 @@ export function QuotesPage() {
                     }}
                     className={`text-xs px-2 py-0.5 rounded-full border-0 appearance-none cursor-pointer ${statusClasses(quoteStatusVariant(q.status))}`}
                   >
-                    <option value="draft">{t.draft}</option>
+                    {q.status === "draft" && <option value="draft">{t.draft}</option>}
                     <option value="sent">{t.sent}</option>
                     <option value="accepted">{t.accepted}</option>
                     <option value="rejected">{t.rejected}</option>
@@ -234,7 +253,7 @@ export function QuotesPage() {
           items={[
             { label: t.edit, icon: <Pencil size={14} />, onClick: () => navigate(`/quotes/${ctxMenu.item.id}/edit`) },
             { label: t.preview_pdf, icon: <Eye size={14} />, onClick: () => navigate(`/quotes/${ctxMenu.item.id}/preview`) },
-            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/quotes/${ctxMenu.item.id}/edit`, ctxMenu.item.reference) },
+            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/quotes/${ctxMenu.item.id}/edit`, ctxMenu.item.reference.startsWith("DRAFT") ? t.draft : ctxMenu.item.reference) },
             { label: "", divider: true, onClick: () => {} },
             ...(ctxMenu.item.status === "draft" ? [{ label: t.mark_sent, icon: <Send size={14} />, onClick: () => updateQuote.mutate({ id: ctxMenu.item.id, data: { status: "sent" as QuoteStatus } }) }] : []),
             ...(!ctxMenu.item.converted_to_invoice_id ? [{ label: t.convert_to_invoice, icon: <FileOutput size={14} />, onClick: () => navigate(`/invoices/new?from_quote=${ctxMenu.item.id}`) }] : []),
