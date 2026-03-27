@@ -215,7 +215,7 @@ export function InvoicesPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 text-left text-xs text-muted uppercase">
+                <tr className="border-b border-[var(--color-border-header)] text-left text-xs text-muted uppercase">
                   <th className="py-2 pr-2">{t.base_invoice}</th>
                   <th className="py-2 pr-2">{t.client}</th>
                   <th className="py-2 pr-2">{t.frequency}</th>
@@ -226,7 +226,7 @@ export function InvoicesPage() {
               </thead>
               <tbody>
                 {templates.map((tmpl) => (
-                  <tr key={tmpl.id} className="border-b border-gray-100">
+                  <tr key={tmpl.id} className="border-b border-[var(--color-border-divider)]">
                     <td className="py-2 pr-2">{invoiceRef(tmpl.base_invoice_id)}</td>
                     <td className="py-2 pr-2">{clientsMap.get(tmpl.client_id) ?? tmpl.client_id}</td>
                     <td className="py-2 pr-2">
@@ -293,7 +293,7 @@ export function InvoicesPage() {
       <div>
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100">
+            <tr className="border-b border-[var(--color-border-header)]">
               <th className="w-8 px-2 py-2">
                 <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
               </th>
@@ -312,7 +312,7 @@ export function InvoicesPage() {
               return (
                 <React.Fragment key={year}>
                   <tr
-                    className="border-b border-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-200"
+                    className="border-b border-[var(--color-border-divider)] cursor-pointer hover:bg-[var(--color-hover-row)] rounded-md"
                     onClick={() => toggleYear(year)}
                   >
                     <td colSpan={7} className="px-4 py-2">
@@ -321,7 +321,7 @@ export function InvoicesPage() {
                           size={14}
                           className={`text-muted transition-transform ${isOpen ? "rotate-90" : ""}`}
                         />
-                        <span className="font-medium text-sm">{year}</span>
+                        <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{year}</span>
                         <span className="text-xs text-muted">
                           {yearInvoices.length} invoice{yearInvoices.length !== 1 ? "s" : ""}
                         </span>
@@ -335,7 +335,7 @@ export function InvoicesPage() {
                     yearInvoices.map((inv) => (
                       <tr
                         key={inv.id}
-                        className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200 group"
+                        className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md group"
                         onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: inv }); }}
                       >
                         <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>

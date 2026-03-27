@@ -283,7 +283,7 @@ export function ExpensesPage() {
       <div>
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100">
+            <tr className="border-b border-[var(--color-border-header)]">
               <th className="w-8 px-2 py-2">
                 <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
               </th>
@@ -303,7 +303,7 @@ export function ExpensesPage() {
               return (
                 <React.Fragment key={year}>
                   <tr
-                    className="border-b border-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-200"
+                    className="border-b border-[var(--color-border-divider)] cursor-pointer hover:bg-[var(--color-hover-row)] rounded-md"
                     onClick={() => toggleYear(year)}
                   >
                     <td colSpan={8} className="px-4 py-2">
@@ -312,7 +312,7 @@ export function ExpensesPage() {
                           size={14}
                           className={`text-muted transition-transform ${isOpen ? "rotate-90" : ""}`}
                         />
-                        <span className="font-medium text-sm">{year}</span>
+                        <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{year}</span>
                         <span className="text-xs text-muted">
                           {yearExpenses.length} expense{yearExpenses.length !== 1 ? "s" : ""}
                         </span>
@@ -326,7 +326,7 @@ export function ExpensesPage() {
                     yearExpenses.map((exp) => (
                       <tr
                         key={exp.id}
-                        className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200 group"
+                        className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md group"
                         onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: exp }); }}
                       >
                         <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
