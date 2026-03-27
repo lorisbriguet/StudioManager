@@ -7,7 +7,7 @@ import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import type { EventInput, EventContentArg, EventDropArg } from "@fullcalendar/core";
 import type { DateClickArg, EventResizeDoneArg } from "@fullcalendar/interaction";
-import { X } from "lucide-react";
+import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useT } from "../i18n/useT";
 import { useTasksWithDueDate, useUpdateTask, useUpdateSubtask, useCreateTask, useCreateSubtask, useTasksByProject } from "../db/hooks/useTasks";
 import { useProjects, useUpdateProject } from "../db/hooks/useProjects";
@@ -73,9 +73,18 @@ export function CalendarPage() {
   const [closingPeek, setClosingPeek] = useState(false);
   const lastClickRef = useRef<{ time: number; date: string }>({ time: 0, date: "" });
   const calRef = useRef<FullCalendar>(null);
+  const [calTitle, setCalTitle] = useState("");
+  const [calView, setCalView] = useState<"dayGridMonth" | "timeGridWeek">("timeGridWeek");
+
+  const calApi = () => calRef.current?.getApi();
+  const syncTitle = () => { const api = calApi(); if (api) setCalTitle(api.view.title); };
+  const calPrev = () => { calApi()?.prev(); syncTitle(); };
+  const calNext = () => { calApi()?.next(); syncTitle(); };
+  const calToday = () => { calApi()?.today(); syncTitle(); };
+  const calSetView = (v: "dayGridMonth" | "timeGridWeek") => { calApi()?.changeView(v); setCalView(v); syncTitle(); };
 
   useEffect(() => {
-    const t = setTimeout(() => calRef.current?.getApi()?.updateSize(), 100);
+    const t = setTimeout(() => { calRef.current?.getApi()?.updateSize(); syncTitle(); }, 100);
     return () => clearTimeout(t);
   }, [peekId]);
 
@@ -280,17 +289,39 @@ export function CalendarPage() {
   return (
     <div className="flex h-full">
       <div className="min-w-0 flex-1">
-        <h1 className="text-xl font-semibold mb-6">{t.calendar}</h1>
+        {/* Custom toolbar */}
+        <div className="flex items-center gap-3 mb-4">
+          <button onClick={calPrev} className="p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors">
+            <ChevronLeft size={18} />
+          </button>
+          <button onClick={calNext} className="p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors">
+            <ChevronRight size={18} />
+          </button>
+          <button onClick={calToday} className="px-3 py-1 text-xs border border-[var(--color-input-border)] rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:border-[#444] transition-colors">
+            {t.today}
+          </button>
+          <h1 className="text-xl font-semibold tracking-tight">{calTitle}</h1>
+          <div className="ml-auto flex gap-1">
+            <button
+              onClick={() => calSetView("dayGridMonth")}
+              className={`px-3 py-1 text-xs rounded-md transition-colors ${calView === "dayGridMonth" ? "bg-accent-light text-accent font-medium" : "border border-[var(--color-input-border)] text-muted hover:text-[var(--color-text-secondary)]"}`}
+            >
+              {t.month}
+            </button>
+            <button
+              onClick={() => calSetView("timeGridWeek")}
+              className={`px-3 py-1 text-xs rounded-md transition-colors ${calView === "timeGridWeek" ? "bg-accent-light text-accent font-medium" : "border border-[var(--color-input-border)] text-muted hover:text-[var(--color-text-secondary)]"}`}
+            >
+              {t.week}
+            </button>
+          </div>
+        </div>
         <div className="fc-studio">
           <FullCalendar
             ref={calRef}
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
             initialView="timeGridWeek"
-            headerToolbar={{
-              left: "prev,next today title",
-              center: "",
-              right: "dayGridMonth,timeGridWeek",
-            }}
+            headerToolbar={false}
             dayHeaderFormat={{ weekday: "short", day: "numeric" }}
             events={events}
             editable
@@ -307,6 +338,7 @@ export function CalendarPage() {
             nowIndicator
             eventDisplay="block"
             dayMaxEvents={false}
+            datesSet={() => syncTitle()}
           />
         </div>
 

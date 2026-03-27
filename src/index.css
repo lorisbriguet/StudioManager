@@ -190,11 +190,24 @@ body {
   border-radius: 4px;
 }
 
-/* Today: accent text only, no filled circle */
+/* Today: accent text on header + subtle column tint */
 .fc-studio .fc .fc-day-today .fc-daygrid-day-number {
   background: transparent;
   color: var(--color-accent);
   font-weight: 600;
+}
+
+.fc-studio .fc .fc-col-header-cell.fc-day-today {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.fc-studio .fc .fc-day-today {
+  background: color-mix(in srgb, var(--color-accent) 5%, transparent) !important;
+}
+
+.fc-studio .fc .fc-timegrid-col.fc-day-today {
+  background: color-mix(in srgb, var(--color-accent) 5%, transparent);
 }
 
 /* Other month days: faded */
