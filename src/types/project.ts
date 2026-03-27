@@ -34,6 +34,7 @@ export interface Project {
   deadline: string | null;
   notes: string;
   layout_config: string | null;
+  folder_path: string | null;
   created_at: string;
   updated_at: string;
 }

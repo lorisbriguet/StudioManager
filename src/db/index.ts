@@ -371,6 +371,7 @@ async function ensureSchema(db: Database) {
 
   // ── Modular project pages (layout_config) ────────────────
   await addColumnIfMissing("projects", "layout_config", "TEXT DEFAULT NULL");
+  await addColumnIfMissing("projects", "folder_path", "TEXT DEFAULT NULL");
 
   // ── Planned time on tasks (for quote→project comparison) ──
   await addColumnIfMissing("tasks", "planned_minutes", "INTEGER DEFAULT NULL");

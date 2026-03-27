@@ -1,5 +1,6 @@
 import { variantClasses, type BadgeVariant } from "../components/ui/Badge";
 import type { InvoiceStatus } from "../types/invoice";
+import type { ProjectStatus } from "../types/project";
 import type { QuoteStatus } from "../types/quote";
 import type { TaskStatus } from "../types/task";
 
@@ -9,27 +10,31 @@ import type { TaskStatus } from "../types/task";
  */
 
 const INVOICE_VARIANT: Record<InvoiceStatus, BadgeVariant> = {
-  draft: "neutral",
-  sent: "accent",
+  draft: "indigo",
+  sent: "warning",
   paid: "success",
   overdue: "danger",
   cancelled: "neutral",
 };
 
-/** Cancelled invoices use a more muted treatment than draft (both are "neutral" variant). */
-const CANCELLED_CLASSES = "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500";
-
 const QUOTE_VARIANT: Record<QuoteStatus, BadgeVariant> = {
-  draft: "neutral",
-  sent: "accent",
+  draft: "indigo",
+  sent: "warning",
   accepted: "success",
   rejected: "danger",
-  expired: "warning",
+  expired: "neutral",
 };
 
 const TASK_VARIANT: Record<TaskStatus, BadgeVariant> = {
-  todo: "warning",
+  todo: "indigo",
   done: "success",
+};
+
+const PROJECT_VARIANT: Record<ProjectStatus, BadgeVariant> = {
+  active: "accent",
+  completed: "success",
+  on_hold: "warning",
+  cancelled: "neutral",
 };
 
 export function invoiceStatusVariant(s: InvoiceStatus): BadgeVariant {
@@ -44,8 +49,12 @@ export function taskStatusVariant(s: TaskStatus): BadgeVariant {
   return TASK_VARIANT[s];
 }
 
+export function projectStatusVariant(s: ProjectStatus): BadgeVariant {
+  return PROJECT_VARIANT[s];
+}
+
 /** Returns the raw CSS classes for a Badge variant — useful for <select> elements styled as badges. */
 export function statusClasses(variant: BadgeVariant, status?: string): string {
-  if (status === "cancelled") return CANCELLED_CLASSES;
+  if (status === "cancelled") return variantClasses.neutral;
   return variantClasses[variant];
 }

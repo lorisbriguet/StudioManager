@@ -19,7 +19,7 @@ import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
 import { Button, Badge, Card, PageHeader, SearchBar, PageSpinner, Input } from "../components/ui";
 
-type BadgeVariant = "success" | "warning" | "danger" | "neutral" | "accent" | "info";
+import type { BadgeVariant } from "../components/ui/Badge";
 
 const statusBadgeVariant: Record<ProjectStatus, BadgeVariant> = {
   active: "accent",
@@ -263,7 +263,7 @@ export function ProjectsPage() {
       {/* Side Peek Panel */}
       {peekId !== null && (
         <div
-          className={`shrink-0 border-l border-gray-200 overflow-y-auto ${closingPeek ? "peek-exit" : "peek-enter"}`}
+          className={`shrink-0 border-l border-[var(--color-border-divider)] overflow-y-auto ${closingPeek ? "peek-exit" : "peek-enter"}`}
           onClick={(e) => e.stopPropagation()}
           onAnimationEnd={() => { if (closingPeek) { setPeekId(null); setClosingPeek(false); } }}
         >
@@ -303,6 +303,7 @@ function NewProjectForm({
     deadline: string | null;
     notes: string;
     layout_config: string | null;
+    folder_path: string | null;
   }) => void;
   onCancel: () => void;
 }) {
@@ -357,6 +358,7 @@ function NewProjectForm({
               start_date: form.start_date || null,
               deadline: form.deadline || null,
               layout_config: null,
+              folder_path: null,
             });
           }}
         >

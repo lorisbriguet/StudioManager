@@ -20,8 +20,16 @@
   --color-chart-6: #06b6d4;
   --color-chart-7: #ec4899;
   --color-chart-8: #84cc16;
+  --color-bg: #ffffff;
+  --color-text: #111827;
+  --color-text-secondary: #374151;
   --color-surface: #ffffff;
   --color-border: #e5e5e5;
+  --color-border-divider: #f7f7f7;
+  --color-border-header: #f0f0f0;
+  --color-input-bg: #f5f5f5;
+  --color-input-border: #e5e5e5;
+  --color-hover-row: #f8f8f8;
 }
 
 body {
@@ -81,8 +89,16 @@ body {
   --color-chart-6: #22d3ee;
   --color-chart-7: #f472b6;
   --color-chart-8: #a3e635;
-  --color-surface: #252525;
+  --color-bg: #111111;
+  --color-text: #e5e5e5;
+  --color-text-secondary: #d4d4d4;
+  --color-surface: #161616;
   --color-border: #333333;
+  --color-border-divider: #1f1f1f;
+  --color-border-header: #2a2a2a;
+  --color-input-bg: #1a1a1a;
+  --color-input-border: #2a2a2a;
+  --color-hover-row: #1a1a1a;
 }
 
 .dark input,
@@ -105,8 +121,8 @@ body {
 
 /* ─── FullCalendar overrides ─── */
 .fc-studio .fc {
-  --fc-border-color: #e5e5e5;
-  --fc-today-bg-color: color-mix(in srgb, var(--color-accent) 6%, transparent);
+  --fc-border-color: var(--color-border-divider);
+  --fc-today-bg-color: transparent;
   --fc-now-indicator-color: #dc2626;
   --fc-event-border-color: transparent;
   --fc-event-bg-color: color-mix(in srgb, var(--color-accent) 15%, white);
@@ -151,10 +167,11 @@ body {
 
 .fc-studio .fc .fc-col-header-cell {
   padding: 8px 0;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
   text-transform: uppercase;
-  color: #6b7280;
+  letter-spacing: 0.5px;
+  color: var(--color-muted);
 }
 
 .fc-studio .fc .fc-daygrid-day-number {
@@ -167,6 +184,22 @@ body {
   cursor: grab;
   border: none;
   padding: 1px 4px;
+}
+
+.fc-studio .fc .fc-timegrid-event {
+  border-radius: 99px;
+}
+
+/* Today: accent text only, no filled circle */
+.fc-studio .fc .fc-day-today .fc-daygrid-day-number {
+  background: transparent;
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* Other month days: faded */
+.fc-studio .fc .fc-day-other {
+  opacity: 0.3;
 }
 
 .fc-studio .fc .fc-event.fc-event-dragging,
@@ -216,8 +249,8 @@ body {
 
 /* Dark mode */
 .dark .fc-studio .fc {
-  --fc-border-color: #333333;
-  --fc-today-bg-color: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  --fc-border-color: var(--color-border-divider);
+  --fc-today-bg-color: transparent;
   --fc-page-bg-color: #111111;
   --fc-neutral-bg-color: #1a1a1a;
   --fc-event-bg-color: color-mix(in srgb, var(--color-accent) 25%, #1a1a1a);
@@ -430,6 +463,18 @@ button, a, select, [role="button"] {
 .peek-exit {
   animation: peek-out var(--duration-slow) var(--ease-out) forwards;
   pointer-events: none;
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--color-input-bg) 25%, var(--color-surface) 37%, var(--color-input-bg) 63%);
+  background-size: 800px 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
 }
 
 /* Drag item lift */

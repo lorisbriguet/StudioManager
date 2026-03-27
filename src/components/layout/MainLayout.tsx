@@ -75,7 +75,7 @@ export function MainLayout() {
           </div>
         )}
         <TabBar />
-        <div key={location.pathname} className="page-transition p-8 w-full flex-1 overflow-y-auto flex flex-col min-h-0">
+        <div key={location.pathname} className="page-transition p-8 w-full flex-1 overflow-y-auto flex flex-col min-h-0 bg-[var(--color-bg)]">
           <Outlet />
         </div>
       </main>
