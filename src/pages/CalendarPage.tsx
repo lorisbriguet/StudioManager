@@ -323,7 +323,7 @@ export function CalendarPage() {
 
       {peekId !== null && (
         <div
-          className={`shrink-0 border-l border-gray-200 h-[calc(100vh-6rem)] ${closingPeek ? "peek-exit overflow-hidden" : "peek-enter overflow-y-auto"}`}
+          className={`shrink-0 border-l border-[var(--color-border-divider)] h-[calc(100vh-6rem)] ${closingPeek ? "peek-exit overflow-hidden" : "peek-enter overflow-y-auto"}`}
           style={closingPeek ? undefined : { width: '50%', minWidth: 0 }}
           onAnimationEnd={() => { if (closingPeek) { setPeekId(null); setClosingPeek(false); } }}
         >

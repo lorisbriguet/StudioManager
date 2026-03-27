@@ -200,7 +200,7 @@ export function Sidebar() {
         {allVisible.map((item, i) => {
           if ("divider" in item) {
             return (
-              <div key={`d-${i}`} className="my-2 mx-3 border-t border-sidebar-border" />
+              <div key={`d-${i}`} className="my-2 mx-3 border-t border-[var(--color-border-divider)]" />
             );
           }
           const currentLinkIdx = linkIndexMap.get(i) ?? -1;
@@ -223,7 +223,7 @@ export function Sidebar() {
                 `flex items-center gap-3 px-4 py-2 mx-2 rounded-md text-sm transition-colors ${
                   isActive
                     ? "bg-accent-light text-accent font-medium"
-                    : "text-muted hover:bg-gray-100 dark:hover:bg-gray-200 hover:text-gray-900 dark:hover:text-gray-800"
+                    : "text-muted hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
                 }${isFocused ? " ring-2 ring-accent/40 ring-inset" : ""}`
               }
             >
@@ -292,7 +292,7 @@ function TimerIndicator({ collapsed }: { collapsed: boolean }) {
             </div>
             <button
               onClick={() => stopAndSave()}
-              className="shrink-0 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-200 text-red-500 hover:text-red-600"
+              className="shrink-0 p-1 rounded hover:bg-[var(--color-hover-row)] text-red-500 hover:text-red-600"
               title={t.stop_timer}
             >
               <Square size={12} />
