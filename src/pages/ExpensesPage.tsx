@@ -218,8 +218,8 @@ export function ExpensesPage() {
       )}
 
       {parsing && (
-        <div className="absolute inset-0 z-40 flex items-center justify-center bg-gray-100/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg">
-          <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gray-100 border border-gray-200 shadow-sm">
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-[var(--color-surface)]/60 backdrop-blur-sm rounded-lg">
+          <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-input-border)] shadow-sm">
             <div className="h-4 w-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
             <span className="text-sm text-muted">{t.analyzing_receipt}</span>
           </div>
@@ -492,16 +492,16 @@ function ReceiptPreview({
       onClick={onClose}
     >
       <div
-        className="bg-gray-100 rounded-lg shadow-xl w-[80vw] h-[85vh] flex flex-col overflow-hidden"
+        className="bg-[var(--color-surface)] rounded-lg shadow-xl w-[80vw] h-[85vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-input-border)]">
           <h2 className="text-sm font-semibold">{reference}</h2>
-          <button onClick={onClose} className="text-muted hover:text-gray-900 dark:hover:text-gray-200">
+          <button onClick={onClose} className="text-muted hover:text-[var(--color-text)]">
             <X size={18} />
           </button>
         </div>
-        <div className="flex-1 overflow-auto bg-gray-100 flex items-center justify-center">
+        <div className="flex-1 overflow-auto bg-[var(--color-surface)] flex items-center justify-center">
           {!blobUrl ? (
             <span className="text-sm text-muted">Loading...</span>
           ) : isImage ? (
@@ -651,13 +651,13 @@ function NewExpenseForm({
             autoComplete="off"
           />
           {showSuggestions && suggestions.length > 0 && (
-            <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-gray-100 border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+            <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-[var(--color-surface)] border border-[var(--color-input-border)] rounded-md shadow-lg max-h-48 overflow-y-auto">
               {suggestions.map((s) => (
                 <button
                   key={s.supplier}
                   type="button"
                   onMouseDown={() => selectSupplier(s)}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-200 flex items-center justify-between"
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-hover-row)] flex items-center justify-between"
                 >
                   <span>{s.supplier}</span>
                   <span className="text-xs text-muted">

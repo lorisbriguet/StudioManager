@@ -181,7 +181,7 @@ export function ResourcesPage() {
             placeholder={t.search_resources}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setActiveFilterId(null); }}
-            className="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-md text-sm"
+            className="w-full pl-8 pr-3 py-1.5 border border-[var(--color-input-border)] rounded-md text-sm"
           />
         </div>
         {(allTags ?? []).length > 0 && (
@@ -334,7 +334,7 @@ function NewResourceForm({
           placeholder={t.name}
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="border border-gray-200 rounded-md px-3 py-1.5 text-sm"
+          className="border border-[var(--color-input-border)] rounded-md px-3 py-1.5 text-sm"
           autoFocus
         />
         <input
@@ -342,12 +342,12 @@ function NewResourceForm({
           placeholder="URL"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          className="border border-gray-200 rounded-md px-3 py-1.5 text-sm"
+          className="border border-[var(--color-input-border)] rounded-md px-3 py-1.5 text-sm"
         />
         <select
           value={price}
           onChange={(e) => setPrice(e.target.value)}
-          className="border border-gray-200 rounded-md px-3 py-1.5 text-sm"
+          className="border border-[var(--color-input-border)] rounded-md px-3 py-1.5 text-sm"
         >
           <option value="">{t.price_label}</option>
           <option value="free">{t.price_free}</option>
@@ -367,7 +367,7 @@ function NewResourceForm({
                 }
               }}
               list="tag-suggestions"
-              className="w-full border border-gray-200 rounded-md px-3 py-1.5 text-sm"
+              className="w-full border border-[var(--color-input-border)] rounded-md px-3 py-1.5 text-sm"
             />
             <datalist id="tag-suggestions">
               {allTags.filter((t) => !tags.includes(t)).map((t) => (
@@ -407,7 +407,7 @@ function NewResourceForm({
         >
           {t.save}
         </button>
-        <button onClick={onCancel} className="px-3 py-1.5 text-sm text-muted hover:text-gray-900 dark:hover:text-gray-200">
+        <button onClick={onCancel} className="px-3 py-1.5 text-sm text-muted hover:text-[var(--color-text)]">
           {t.cancel}
         </button>
       </div>
@@ -470,7 +470,7 @@ function ResourceTableRow({
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="border border-gray-200 rounded px-2 py-1 text-sm w-full"
+            className="border border-[var(--color-input-border)] rounded px-2 py-1 text-sm w-full"
             autoFocus
           />
         </td>
@@ -509,7 +509,7 @@ function ResourceTableRow({
           </div>
         </td>
         <td className="px-3 py-2">
-          <select value={price} onChange={(e) => setPrice(e.target.value)} className="border border-gray-200 rounded px-2 py-1 text-sm">
+          <select value={price} onChange={(e) => setPrice(e.target.value)} className="border border-[var(--color-input-border)] rounded px-2 py-1 text-sm">
             <option value="">—</option>
             <option value="free">{t.price_free}</option>
             <option value="paid">{t.price_paid}</option>
@@ -519,7 +519,7 @@ function ResourceTableRow({
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            className="border border-gray-200 rounded px-2 py-1 text-sm w-full"
+            className="border border-[var(--color-input-border)] rounded px-2 py-1 text-sm w-full"
           />
         </td>
         <td className="px-3 py-2">
@@ -530,7 +530,7 @@ function ResourceTableRow({
             >
               {t.save}
             </button>
-            <button onClick={onCancelEdit} className="text-xs text-muted hover:text-gray-900 dark:hover:text-gray-200">
+            <button onClick={onCancelEdit} className="text-xs text-muted hover:text-[var(--color-text)]">
               {t.cancel}
             </button>
           </div>

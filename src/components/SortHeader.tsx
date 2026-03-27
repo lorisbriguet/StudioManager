@@ -19,7 +19,7 @@ export function SortHeader<K extends string>({
   const active = current.key === sortKey;
   return (
     <th
-      className={`${align === "right" ? "text-right" : "text-left"} px-4 py-2 text-xs font-medium text-muted select-none cursor-pointer hover:text-gray-700 transition-colors`}
+      className={`${align === "right" ? "text-right" : "text-left"} px-4 py-2 text-xs font-medium text-muted select-none cursor-pointer hover:text-[var(--color-text-secondary)] transition-colors`}
       onClick={() =>
         onSort({
           key: sortKey,

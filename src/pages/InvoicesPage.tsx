@@ -191,7 +191,7 @@ export function InvoicesPage() {
         >
           {t.recurring}
           {(templates?.length ?? 0) > 0 && (
-            <span className="ml-1 text-xs bg-gray-200 text-gray-600 rounded-full px-1.5 py-0.5">
+            <span className="ml-1 text-xs bg-[var(--color-input-bg)] text-[var(--color-muted)] rounded-full px-1.5 py-0.5">
               {templates?.length}
             </span>
           )}
@@ -206,7 +206,7 @@ export function InvoicesPage() {
         <Card className="mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-medium">{t.recurring_invoices}</h2>
-            <button type="button" onClick={() => setShowRecurring(false)} className="text-muted hover:text-gray-900 dark:hover:text-gray-200">
+            <button type="button" onClick={() => setShowRecurring(false)} className="text-muted hover:text-[var(--color-text)]">
               <X size={14} />
             </button>
           </div>
@@ -235,7 +235,7 @@ export function InvoicesPage() {
                         onChange={(e) =>
                           updateTemplate.mutate({ id: tmpl.id, data: { frequency: e.target.value as RecurringFrequency } })
                         }
-                        className="text-xs border border-gray-200 rounded px-1.5 py-0.5"
+                        className="text-xs border border-[var(--color-input-border)] rounded px-1.5 py-0.5"
                       >
                         {FREQUENCIES.map((f) => (
                           <option key={f} value={f}>{t[f] ?? f}</option>
@@ -250,7 +250,7 @@ export function InvoicesPage() {
                         className={`text-xs px-2 py-0.5 rounded-full ${
                           tmpl.active
                             ? "bg-green-100 text-green-700"
-                            : "bg-gray-100 text-gray-500"
+                            : "bg-[var(--color-input-bg)] text-[var(--color-muted)]"
                         }`}
                       >
                         {tmpl.active ? t.active : t.inactive}

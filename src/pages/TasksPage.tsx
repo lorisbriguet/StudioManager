@@ -222,7 +222,7 @@ export function TasksPage() {
               className={`px-3 py-1 text-xs rounded-full border ${
                 filter === tab.value
                   ? "bg-accent text-white border-accent"
-                  : "border-gray-200 text-muted hover:bg-[var(--color-hover-row)]"
+                  : "border-[var(--color-input-border)] text-muted hover:bg-[var(--color-hover-row)]"
               }`}
             >
               {tab.label}
@@ -308,7 +308,7 @@ export function TasksPage() {
                           next.has(tk.id) ? next.delete(tk.id) : next.add(tk.id);
                           setExpandedTasks(next);
                         }}
-                        className="text-muted hover:text-gray-700 p-0.5"
+                        className="text-muted hover:text-[var(--color-text-secondary)] p-0.5"
                       >
                         <ChevronRight
                           size={14}
@@ -352,7 +352,7 @@ export function TasksPage() {
                             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                             if (e.key === "Escape") setEditingTask(null);
                           }}
-                          className="flex-1 text-sm border border-gray-200 rounded px-1 py-0.5"
+                          className="flex-1 text-sm border border-[var(--color-input-border)] rounded px-1 py-0.5"
                         />
                       ) : (
                         <span
@@ -453,7 +453,7 @@ export function TasksPage() {
                                   if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                                   if (e.key === "Escape") setEditingSubtask(null);
                                 }}
-                                className="flex-1 text-xs border border-gray-200 rounded px-1 py-0.5"
+                                className="flex-1 text-xs border border-[var(--color-input-border)] rounded px-1 py-0.5"
                               />
                             ) : (
                               <span
@@ -517,7 +517,7 @@ export function TasksPage() {
                                 );
                               }
                             }}
-                            className="flex-1 border border-gray-200 rounded px-2 py-1 text-xs"
+                            className="flex-1 border border-[var(--color-input-border)] rounded px-2 py-1 text-xs"
                           />
                           <button
                             onClick={() => {
@@ -590,7 +590,7 @@ export function TasksPage() {
                     );
                   }
                 }}
-                className="flex-1 border border-gray-200 rounded-md px-3 py-1.5 text-sm"
+                className="flex-1 border border-[var(--color-input-border)] rounded-md px-3 py-1.5 text-sm"
               />
               <button
                 onClick={() => {
@@ -706,7 +706,7 @@ function DragHandle({ attributes, listeners }: { attributes: SortableReturn["att
     <div
       {...attributes}
       {...listeners}
-      className="cursor-grab text-gray-300 hover:text-gray-600 shrink-0 -my-1 p-0.5"
+      className="cursor-grab text-muted hover:text-[var(--color-text-secondary)] shrink-0 -my-1 p-0.5"
       aria-label={t.drag_to_reorder}
     >
       <GripVertical size={14} />

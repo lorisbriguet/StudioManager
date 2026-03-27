@@ -83,7 +83,7 @@ export function ClientDetailPage() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(-1)} className="text-muted hover:text-gray-900 dark:hover:text-gray-200">
+        <button onClick={() => navigate(-1)} className="text-muted hover:text-[var(--color-text)]">
           <ArrowLeft size={18} />
         </button>
         <h1 className="text-xl font-semibold">{client.name}</h1>
@@ -349,7 +349,7 @@ function ContactsSection({
         {drafts.map((d, idx) => (
           <div
             key={`draft-${idx}`}
-            className="border border-dashed border-gray-300 rounded-md p-3 space-y-2"
+            className="border border-dashed border-[var(--color-input-border)] rounded-md p-3 space-y-2"
           >
             <div className="grid grid-cols-3 gap-2">
               <MiniField
@@ -627,7 +627,7 @@ function AddressesSection({
         {drafts.map((d, idx) => (
           <div
             key={`draft-addr-${idx}`}
-            className="border border-dashed border-gray-300 rounded-md p-3 space-y-2"
+            className="border border-dashed border-[var(--color-input-border)] rounded-md p-3 space-y-2"
           >
             <div className="grid grid-cols-2 gap-2">
               <MiniField
@@ -825,7 +825,7 @@ function EditableText({
       }}
       className={`cursor-pointer hover:text-accent ${className ?? ""}`}
     >
-      {value || <span className="text-gray-400 italic">{placeholder}</span>}
+      {value || <span className="text-muted italic">{placeholder}</span>}
     </span>
   );
 }

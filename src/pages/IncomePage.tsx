@@ -319,7 +319,7 @@ export function IncomePage() {
                         <td className="px-4 py-2.5 font-medium">{inc.reference}</td>
                         <td className="px-4 py-2.5">{inc.source}</td>
                         <td className="px-4 py-2.5">
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100">
+                          <span className="px-2 py-0.5 text-xs rounded-full bg-[var(--color-input-bg)]">
                             {inc.category}
                           </span>
                           {inc.description && (
@@ -441,16 +441,16 @@ function ReceiptPreview({
       onClick={onClose}
     >
       <div
-        className="bg-gray-100 rounded-lg shadow-xl w-[80vw] h-[85vh] flex flex-col overflow-hidden"
+        className="bg-[var(--color-input-bg)] rounded-lg shadow-xl w-[80vw] h-[85vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-input-border)]">
           <h2 className="text-sm font-semibold">{reference}</h2>
-          <button onClick={onClose} className="text-muted hover:text-gray-900 dark:hover:text-gray-200">
+          <button onClick={onClose} className="text-muted hover:text-[var(--color-text)]">
             <X size={18} />
           </button>
         </div>
-        <div className="flex-1 overflow-auto bg-gray-100 flex items-center justify-center">
+        <div className="flex-1 overflow-auto bg-[var(--color-input-bg)] flex items-center justify-center">
           {!blobUrl ? (
             <span className="text-sm text-muted">Loading...</span>
           ) : isImage ? (
@@ -571,7 +571,7 @@ function NewIncomeForm({
         </button>
         <button
           onClick={onCancel}
-          className="px-3 py-1.5 border border-gray-200 text-sm rounded-md hover:bg-gray-50 dark:hover:bg-gray-200"
+          className="px-3 py-1.5 border border-[var(--color-input-border)] text-sm rounded-md hover:bg-[var(--color-hover-row)]"
         >
           {t.cancel}
         </button>

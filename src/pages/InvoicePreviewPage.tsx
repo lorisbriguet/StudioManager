@@ -164,7 +164,7 @@ export function InvoicePreviewPage() {
       <div className="flex items-center gap-3 px-6 py-3 border-b border-[var(--color-border-divider)] bg-[var(--color-surface)]">
         <button
           onClick={() => navigate(-1)}
-          className="text-muted hover:text-gray-900 dark:hover:text-gray-200"
+          className="text-muted hover:text-[var(--color-text)]"
         >
           <ArrowLeft size={18} />
         </button>
@@ -175,7 +175,7 @@ export function InvoicePreviewPage() {
           {t.download_pdf}
         </Button>
       </div>
-      <div className="flex-1 bg-gray-100">
+      <div className="flex-1 bg-[var(--color-bg)]">
         {storedPdfUrl ? (
           <iframe
             src={storedPdfUrl}

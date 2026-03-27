@@ -32,7 +32,7 @@ export function BulkActionBar({ count, actions, onClear }: Props) {
           className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors ${
             action.danger
               ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-              : "text-gray-700 hover:bg-gray-200"
+              : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
           }`}
         >
           {action.icon}
@@ -41,7 +41,7 @@ export function BulkActionBar({ count, actions, onClear }: Props) {
       ))}
       <button
         onClick={onClear}
-        className="p-1 text-muted hover:text-gray-700"
+        className="p-1 text-muted hover:text-[var(--color-text-secondary)]"
         title={t.cancel}
       >
         <X size={14} />

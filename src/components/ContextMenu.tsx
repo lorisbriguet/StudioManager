@@ -57,7 +57,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     >
       {items.map((item, i) => {
         if (item.divider) {
-          return <div key={i} className="my-1 border-t border-gray-100" />;
+          return <div key={i} className="my-1 border-t border-[var(--color-border-divider)]" />;
         }
         return (
           <button
@@ -71,10 +71,10 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
             disabled={item.disabled}
             className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left transition-colors ${
               item.disabled
-                ? "text-gray-300 cursor-not-allowed"
+                ? "text-muted opacity-50 cursor-not-allowed"
                 : item.danger
                   ? "text-red-600 hover:bg-red-50"
-                  : "text-gray-700 hover:bg-gray-50 dark:hover:bg-gray-200"
+                  : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
             }`}
           >
             {item.icon && <span className="w-4 h-4 flex items-center justify-center">{item.icon}</span>}

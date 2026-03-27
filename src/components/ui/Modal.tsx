@@ -41,9 +41,9 @@ export function Modal({ open, onClose, title, children, footer, size = "sm" }: M
         onClick={(e) => e.stopPropagation()}
       >
         {title && (
-          <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--color-border-divider)]">
             <h3 className="text-sm font-medium">{title}</h3>
-            <button onClick={onClose} className="text-muted hover:text-gray-700 dark:hover:text-gray-200">
+            <button onClick={onClose} className="text-muted hover:text-[var(--color-text-secondary)]">
               <X size={16} />
             </button>
           </div>
@@ -52,7 +52,7 @@ export function Modal({ open, onClose, title, children, footer, size = "sm" }: M
           {children}
         </div>
         {footer && (
-          <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-100">
+          <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-[var(--color-border-divider)]">
             {footer}
           </div>
         )}

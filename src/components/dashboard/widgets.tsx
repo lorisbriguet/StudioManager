@@ -46,12 +46,12 @@ function formatCHF(amount: number): string {
 }
 
 function PriorityDot({ priority }: { priority: string }) {
-  const color = priority === "high" ? "bg-danger" : priority === "medium" ? "bg-yellow-500" : "bg-gray-300";
+  const color = priority === "high" ? "bg-danger" : priority === "medium" ? "bg-warning" : "bg-[var(--color-input-bg)]";
   return <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${color}`} />;
 }
 
 function StatusDot({ status }: { status: string }) {
-  const color = status === "paid" ? "bg-success" : status === "overdue" ? "bg-danger" : "bg-gray-300";
+  const color = status === "paid" ? "bg-success" : status === "overdue" ? "bg-danger" : "bg-[var(--color-input-bg)]";
   return <span className={`inline-block w-1.5 h-1.5 rounded-full ml-2 ${color}`} />;
 }
 
@@ -168,7 +168,7 @@ function RecentInvoices() {
           <Link
             key={inv.id}
             to={`/invoices/${inv.id}/edit`}
-            className="flex justify-between items-center text-sm hover:bg-gray-50 dark:hover:bg-gray-200 rounded px-2 py-1.5 -mx-2"
+            className="flex justify-between items-center text-sm hover:bg-[var(--color-hover-row)] rounded px-2 py-1.5 -mx-2"
           >
             <div className="min-w-0 flex-1">
               <span className="font-medium">{inv.reference.startsWith("DRAFT") ? t.draft : inv.reference}</span>
@@ -213,7 +213,7 @@ function TodayTasks() {
       <h2 className="text-sm font-medium mb-3">{t.today}</h2>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {todayTasks.map((task) => (
-          <Link key={`t-${task.id}`} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-200 rounded px-2 py-1 -mx-2">
+          <Link key={`t-${task.id}`} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded px-2 py-1 -mx-2">
             <PriorityDot priority={effectivePriority(task.priority, task.due_date, task.end_date)} />
             <span className="text-muted text-xs shrink-0">{projectName(task.project_id)}</span>
             <span className="truncate">{task.title}</span>
@@ -221,7 +221,7 @@ function TodayTasks() {
           </Link>
         ))}
         {todaySubtasks.map((s) => (
-          <Link key={`s-${s.id}`} to={`/projects/${s.project_id}`} className="flex items-center gap-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-200 rounded px-2 py-1 -mx-2">
+          <Link key={`s-${s.id}`} to={`/projects/${s.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded px-2 py-1 -mx-2">
             <PriorityDot priority="high" />
             <span className="text-muted text-xs shrink-0">{projectName(s.project_id)}</span>
             <span className="truncate opacity-70">↳ {s.title}</span>
@@ -261,7 +261,7 @@ function OverdueTasks() {
       <h2 className="text-sm font-medium mb-3 text-danger">{t.overdue}</h2>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {overdueTasks.map((task) => (
-          <Link key={`t-${task.id}`} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-200 rounded px-2 py-1 -mx-2">
+          <Link key={`t-${task.id}`} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded px-2 py-1 -mx-2">
             <PriorityDot priority="high" />
             <span className="text-muted text-xs shrink-0">{projectName(task.project_id)}</span>
             <span className="truncate">{task.title}</span>
@@ -269,7 +269,7 @@ function OverdueTasks() {
           </Link>
         ))}
         {overdueSubtasks.map((s) => (
-          <Link key={`s-${s.id}`} to={`/projects/${s.project_id}`} className="flex items-center gap-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-200 rounded px-2 py-1 -mx-2">
+          <Link key={`s-${s.id}`} to={`/projects/${s.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded px-2 py-1 -mx-2">
             <PriorityDot priority="high" />
             <span className="text-muted text-xs shrink-0">{projectName(s.project_id)}</span>
             <span className="truncate opacity-70">↳ {s.title}</span>
@@ -311,12 +311,12 @@ function ProjectProgress() {
       <h2 className="text-sm font-medium mb-3">{t.progress}</h2>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-3">
         {activeProjects.map((p) => (
-          <Link key={p.id} to={`/projects/${p.id}`} className="block hover:bg-gray-50 dark:hover:bg-gray-200 rounded px-2 py-1 -mx-2">
+          <Link key={p.id} to={`/projects/${p.id}`} className="block hover:bg-[var(--color-hover-row)] rounded px-2 py-1 -mx-2">
             <div className="flex items-center justify-between text-sm mb-1">
               <span className="truncate">{p.name}</span>
               <span className="text-xs text-muted shrink-0 ml-2">{p.done}/{p.total}</span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-1.5">
+            <div className="w-full bg-[var(--color-input-bg)] rounded-full h-1.5">
               <div
                 className="bg-accent rounded-full h-1.5 transition-all"
                 style={{ width: `${p.pct}%` }}
@@ -355,7 +355,7 @@ function UpcomingDeadlines() {
       <h2 className="text-sm font-medium mb-3">{t.deadline}</h2>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {upcoming.map((task) => (
-          <Link key={task.id} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-200 rounded px-2 py-1 -mx-2">
+          <Link key={task.id} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded px-2 py-1 -mx-2">
             <PriorityDot priority={effectivePriority(task.priority, task.due_date, task.end_date)} />
             <span className="text-muted text-xs shrink-0">{projectName(task.project_id)}</span>
             <span className="truncate">{task.title}</span>
@@ -402,7 +402,7 @@ function RevenueByActivity() {
                 <span className="truncate">{r.label}</span>
                 <span className="text-xs text-muted shrink-0 ml-2">{formatCHF(r.total)} ({pct}%)</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-1.5">
+              <div className="w-full bg-[var(--color-input-bg)] rounded-full h-1.5">
                 <div className="rounded-full h-1.5 transition-all" style={{ width: `${pct}%`, backgroundColor: COLORS[i % COLORS.length] }} />
               </div>
             </div>
@@ -435,7 +435,7 @@ function RevenueByClient() {
                 <span className="truncate">{r.label}</span>
                 <span className="text-xs text-muted shrink-0 ml-2">{formatCHF(r.total)} ({pct}%)</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-1.5">
+              <div className="w-full bg-[var(--color-input-bg)] rounded-full h-1.5">
                 <div className="rounded-full h-1.5 transition-all" style={{ width: `${pct}%`, backgroundColor: COLORS[i % COLORS.length] }} />
               </div>
             </div>
@@ -485,7 +485,7 @@ function ThisWeekEvents() {
       <h2 className="text-sm font-medium mb-3">{t.this_week}</h2>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {weekEvents.map((task) => (
-          <Link key={task.id} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-200 rounded px-2 py-1 -mx-2">
+          <Link key={task.id} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded px-2 py-1 -mx-2">
             <PriorityDot priority={effectivePriority(task.priority, task.due_date, task.end_date)} />
             <span className="text-muted text-xs shrink-0">{dayLabel(task.due_date!)}</span>
             <span className="text-muted text-xs shrink-0">{projectName(task.project_id)}</span>
@@ -525,7 +525,7 @@ function UnpaidInvoices() {
       <h2 className="text-sm font-medium mb-3">{t.unpaid_invoices}</h2>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2">
         {unpaid.map((inv) => (
-          <Link key={inv.id} to={`/invoices/${inv.id}/edit`} className="flex justify-between items-center text-sm hover:bg-gray-50 dark:hover:bg-gray-200 rounded px-2 py-1.5 -mx-2">
+          <Link key={inv.id} to={`/invoices/${inv.id}/edit`} className="flex justify-between items-center text-sm hover:bg-[var(--color-hover-row)] rounded px-2 py-1.5 -mx-2">
             <div className="min-w-0 flex-1">
               <span className="font-medium">{inv.reference}</span>
               <StatusDot status={inv.status} />
@@ -811,7 +811,7 @@ function StaleTasks() {
       <h2 className="text-sm font-medium mb-3 text-warning">{t.stale_tasks}</h2>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {stale.map((task) => (
-          <Link key={task.id} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-200 rounded px-2 py-1 -mx-2">
+          <Link key={task.id} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded px-2 py-1 -mx-2">
             <span className="text-muted text-xs shrink-0">{projectName(task.project_id)}</span>
             <span className="truncate">{task.title}</span>
             <span className="text-xs text-warning ml-auto shrink-0">{task.daysInactive}{t.days_inactive}</span>
@@ -845,7 +845,7 @@ function ProjectsWithoutDeadline() {
       <h2 className="text-sm font-medium mb-3">{t.projects_no_deadline}</h2>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {noDeadline.map((p) => (
-          <Link key={p.id} to={`/projects/${p.id}`} className="flex items-center text-sm hover:bg-gray-50 dark:hover:bg-gray-200 rounded px-2 py-1 -mx-2">
+          <Link key={p.id} to={`/projects/${p.id}`} className="flex items-center text-sm hover:bg-[var(--color-hover-row)] rounded px-2 py-1 -mx-2">
             <span className="truncate">{p.name}</span>
           </Link>
         ))}
@@ -916,7 +916,7 @@ function UpcomingReminders() {
       <h2 className="text-sm font-medium mb-3">{t.upcoming_reminders}</h2>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2">
         {upcoming.map((inv) => (
-          <Link key={inv.id} to={`/invoices/${inv.id}/edit`} className="flex justify-between items-center text-sm hover:bg-gray-50 dark:hover:bg-gray-200 rounded px-2 py-1.5 -mx-2">
+          <Link key={inv.id} to={`/invoices/${inv.id}/edit`} className="flex justify-between items-center text-sm hover:bg-[var(--color-hover-row)] rounded px-2 py-1.5 -mx-2">
             <div className="min-w-0 flex-1">
               <span className="font-medium">{inv.reference}</span>
               <span className="text-xs text-muted ml-2">{clientName(inv.client_id)}</span>
@@ -954,7 +954,7 @@ function RecentlyCompleted() {
       <h2 className="text-sm font-medium mb-3">{t.recently_completed}</h2>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {completed.map((task) => (
-          <Link key={task.id} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-200 rounded px-2 py-1 -mx-2">
+          <Link key={task.id} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded px-2 py-1 -mx-2">
             <span className="text-success text-xs shrink-0">&#10003;</span>
             <span className="text-muted text-xs shrink-0">{projectName(task.project_id)}</span>
             <span className="truncate">{task.title}</span>
@@ -993,7 +993,7 @@ function StaleProjects() {
       <h2 className="text-sm font-medium mb-3 text-warning">{t.stale_projects}</h2>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {stale.map((p) => (
-          <Link key={p.id} to={`/projects/${p.id}`} className="flex items-center justify-between text-sm hover:bg-gray-50 dark:hover:bg-gray-200 rounded px-2 py-1 -mx-2">
+          <Link key={p.id} to={`/projects/${p.id}`} className="flex items-center justify-between text-sm hover:bg-[var(--color-hover-row)] rounded px-2 py-1 -mx-2">
             <span className="truncate">{p.name}</span>
             <span className="text-xs text-warning shrink-0 ml-2">{p.daysInactive}{t.days_inactive}</span>
           </Link>

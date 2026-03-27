@@ -421,7 +421,7 @@ export function SettingsPage() {
                       className={`flex flex-col rounded-lg overflow-hidden border-2 transition-colors ${
                         themeId === theme.id
                           ? "border-accent shadow-sm"
-                          : "border-gray-100 hover:border-gray-300"
+                          : "border-[var(--color-border-divider)] hover:border-[var(--color-input-border)]"
                       }`}
                       title={theme.name}
                     >
@@ -613,7 +613,7 @@ export function SettingsPage() {
               <SettingRow label={t.backup_directory}>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-muted truncate max-w-[180px]" title={backupPath}>{backupPath || t.not_set}</span>
-                  <button type="button" onClick={() => browseBackupDir()} className="flex items-center gap-1 px-2 py-1 border border-gray-200 rounded text-xs hover:bg-gray-50 dark:hover:bg-gray-200">
+                  <button type="button" onClick={() => browseBackupDir()} className="flex items-center gap-1 px-2 py-1 border border-[var(--color-input-border)] rounded text-xs hover:bg-[var(--color-hover-row)]">
                     <FolderOpen size={12} /> {t.browse}
                   </button>
                 </div>
@@ -621,11 +621,11 @@ export function SettingsPage() {
               <SettingRow label={t.backup_directory_2}>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-muted truncate max-w-[180px]" title={backupPath2}>{backupPath2 || t.not_set}</span>
-                  <button type="button" onClick={() => browseBackupDir(true)} className="flex items-center gap-1 px-2 py-1 border border-gray-200 rounded text-xs hover:bg-gray-50 dark:hover:bg-gray-200">
+                  <button type="button" onClick={() => browseBackupDir(true)} className="flex items-center gap-1 px-2 py-1 border border-[var(--color-input-border)] rounded text-xs hover:bg-[var(--color-hover-row)]">
                     <FolderOpen size={12} /> {t.browse}
                   </button>
                   {backupPath2 && (
-                    <button type="button" onClick={() => setBackupPath2("")} className="text-muted hover:text-gray-900 dark:hover:text-gray-200 text-xs">✕</button>
+                    <button type="button" onClick={() => setBackupPath2("")} className="text-muted hover:text-[var(--color-text)] text-xs">✕</button>
                   )}
                 </div>
               </SettingRow>
@@ -870,7 +870,7 @@ function ExpenseCategoryManager() {
                     <button type="button" onClick={handleSaveEdit} className="px-2 py-1 bg-accent text-white text-xs rounded hover:bg-accent-hover">
                       {t.save}
                     </button>
-                    <button type="button" onClick={() => setEditingCode(null)} className="px-2 py-1 border border-gray-200 text-xs rounded hover:bg-gray-50 dark:hover:bg-gray-200">
+                    <button type="button" onClick={() => setEditingCode(null)} className="px-2 py-1 border border-[var(--color-input-border)] text-xs rounded hover:bg-[var(--color-hover-row)]">
                       {t.cancel}
                     </button>
                   </td>
@@ -884,7 +884,7 @@ function ExpenseCategoryManager() {
                     {cat.pl_section === "operating" ? t.pl_operating : t.pl_social_charges}
                   </td>
                   <td className="py-2 flex gap-1">
-                    <button type="button" onClick={() => startEdit(cat)} className="px-2 py-1 border border-gray-200 text-xs rounded hover:bg-gray-50 dark:hover:bg-gray-200">
+                    <button type="button" onClick={() => startEdit(cat)} className="px-2 py-1 border border-[var(--color-input-border)] text-xs rounded hover:bg-[var(--color-hover-row)]">
                       {t.edit}
                     </button>
                     {isDefaultCategory(cat.code) ? (
@@ -932,7 +932,7 @@ function ExpenseCategoryManager() {
                 <button type="button" onClick={handleSaveNew} className="px-2 py-1 bg-accent text-white text-xs rounded hover:bg-accent-hover">
                   {t.save}
                 </button>
-                <button type="button" onClick={() => setAdding(false)} className="px-2 py-1 border border-gray-200 text-xs rounded hover:bg-gray-50 dark:hover:bg-gray-200">
+                <button type="button" onClick={() => setAdding(false)} className="px-2 py-1 border border-[var(--color-input-border)] text-xs rounded hover:bg-[var(--color-hover-row)]">
                   {t.cancel}
                 </button>
               </td>
