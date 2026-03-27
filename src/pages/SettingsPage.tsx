@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
-import { FolderOpen, HardDrive, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield } from "lucide-react";
+import { FolderOpen, HardDrive, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield, X } from "lucide-react";
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { purgeAllCalendarEvents, syncAllExisting, listWritableCalendars } from "../lib/appleCalendar";
 import { createBackup, listBackups, restoreFromBackup, validateBackupPath, isBackupRunning, setBackupRunning } from "../lib/backup";
@@ -279,25 +279,25 @@ export function SettingsPage() {
     {
       label: "Preferences",
       items: [
-        { key: "general", label: t.general, icon: <Settings2 size={15} /> },
-        { key: "appearance", label: t.appearance, icon: <Palette size={15} /> },
-        { key: "behavior", label: t.behavior, icon: <SlidersHorizontal size={15} /> },
-        { key: "calendar", label: t.calendar_sync, icon: <CalendarDays size={15} /> },
-        { key: "workload", label: t.workload_templates, icon: <LayoutList size={15} /> },
+        { key: "general", label: t.general, icon: <Settings2 size={14} /> },
+        { key: "appearance", label: t.appearance, icon: <Palette size={14} /> },
+        { key: "behavior", label: t.behavior, icon: <SlidersHorizontal size={14} /> },
+        { key: "calendar", label: t.calendar_sync, icon: <CalendarDays size={14} /> },
+        { key: "workload", label: t.workload_templates, icon: <LayoutList size={14} /> },
       ],
     },
     {
       label: "Data",
       items: [
-        { key: "categories", label: t.expense_categories, icon: <Tags size={15} /> },
-        { key: "backup", label: t.backup, icon: <Archive size={15} /> },
-        { key: "sandbox", label: t.test_mode, icon: <Shield size={15} /> },
+        { key: "categories", label: t.expense_categories, icon: <Tags size={14} /> },
+        { key: "backup", label: t.backup, icon: <Archive size={14} /> },
+        { key: "sandbox", label: t.test_mode, icon: <Shield size={14} /> },
       ],
     },
     {
       label: "App",
       items: [
-        { key: "updates", label: t.updates, icon: <Download size={15} /> },
+        { key: "updates", label: t.updates, icon: <Download size={14} /> },
       ],
     },
   ];
@@ -625,7 +625,7 @@ export function SettingsPage() {
                     <FolderOpen size={12} /> {t.browse}
                   </button>
                   {backupPath2 && (
-                    <button type="button" onClick={() => setBackupPath2("")} className="text-muted hover:text-[var(--color-text)] text-xs">✕</button>
+                    <button type="button" onClick={() => setBackupPath2("")} className="text-muted hover:text-[var(--color-text)]"><X size={12} /></button>
                   )}
                 </div>
               </SettingRow>

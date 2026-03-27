@@ -337,7 +337,7 @@ export function IncomePage() {
                                 onClick={() => setPreview({ path: inc.receipt_path!, reference: inc.reference })}
                                 className="text-xs text-accent hover:underline flex items-center gap-1"
                               >
-                                <Eye size={14} /> View
+                                <Eye size={14} /> {t.view}
                               </button>
                               <span className="text-xs text-success flex items-center gap-1">
                                 <Paperclip size={12} />
@@ -348,7 +348,7 @@ export function IncomePage() {
                               onClick={() => attachReceipt(inc.id, inc.reference, inc.source)}
                               className="text-xs text-accent hover:underline flex items-center gap-1"
                             >
-                              <Paperclip size={12} /> Attach
+                              <Paperclip size={12} /> {t.attach}
                             </button>
                           )}
                         </td>
@@ -447,7 +447,7 @@ function ReceiptPreview({
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-input-border)]">
           <h2 className="text-sm font-semibold">{reference}</h2>
           <button onClick={onClose} className="text-muted hover:text-[var(--color-text)]">
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
         <div className="flex-1 overflow-auto bg-[var(--color-input-bg)] flex items-center justify-center">

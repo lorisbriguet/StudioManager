@@ -18,6 +18,8 @@ const ui = {
 
     // Common actions
     save: "Save",
+    view: "View",
+    attach: "Attach",
     cancel: "Cancel",
     delete: "Delete",
     edit: "Edit",
@@ -630,6 +632,8 @@ const ui = {
 
     // Common actions
     save: "Enregistrer",
+    view: "Voir",
+    attach: "Joindre",
     cancel: "Annuler",
     delete: "Supprimer",
     edit: "Modifier",
