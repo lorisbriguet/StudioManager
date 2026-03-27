@@ -47,12 +47,12 @@ function formatCHF(amount: number): string {
 
 function PriorityDot({ priority }: { priority: string }) {
   const color = priority === "high" ? "bg-danger" : priority === "medium" ? "bg-warning" : "bg-[var(--color-input-bg)]";
-  return <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${color}`} />;
+  return <span className={`dot-sm ${color}`} />;
 }
 
 function StatusDot({ status }: { status: string }) {
   const color = status === "paid" ? "bg-success" : status === "overdue" ? "bg-danger" : "bg-[var(--color-input-bg)]";
-  return <span className={`inline-block w-1.5 h-1.5 rounded-full ml-2 ${color}`} />;
+  return <span className={`dot-sm ml-2 ${color}`} />;
 }
 
 // ── KPI widgets ──

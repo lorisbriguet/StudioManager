@@ -113,6 +113,10 @@ body {
   color: #525252;
 }
 
+/* ─── Indicator dots (status, priority, legend) ─── */
+.dot-sm { width: 6px; height: 6px; border-radius: 99px; display: inline-block; flex-shrink: 0; }
+.dot    { width: 8px; height: 8px; border-radius: 99px; display: inline-block; flex-shrink: 0; }
+
 /* ─── Focus ring that follows accent at runtime ─── */
 .focus-accent:focus-visible {
   outline: none;

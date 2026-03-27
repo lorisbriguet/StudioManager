@@ -84,7 +84,7 @@ export function NotificationsPage() {
                       {n.title}
                     </span>
                     {!n.read && (
-                      <span className="w-2 h-2 rounded-full bg-accent flex-shrink-0" />
+                      <span className="dot bg-accent" />
                     )}
                   </div>
                   {n.message && (
