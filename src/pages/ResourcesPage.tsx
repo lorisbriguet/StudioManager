@@ -567,14 +567,15 @@ function ResourceTableRow({
         </div>
       </td>
       <td className="px-3 py-2">
-        {resource.price && (() => {
-          const c = getTagColor(resource.price, darkMode);
-          return (
-            <span style={{ background: c.bg, color: c.text }} className="px-2 py-0.5 text-xs rounded-full font-medium">
-              {resource.price === "free" ? t.price_free : t.price_paid}
-            </span>
-          );
-        })()}
+        {resource.price && (
+          <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
+            resource.price === "free"
+              ? "bg-[#052e16] text-[#4ade80] dark:bg-[#052e16] dark:text-[#4ade80]"
+              : "bg-[#2a1215] text-[#f87171] dark:bg-[#2a1215] dark:text-[#f87171]"
+          }`}>
+            {resource.price === "free" ? t.price_free : t.price_paid}
+          </span>
+        )}
       </td>
       <td className="px-3 py-2">
         {resource.url && (

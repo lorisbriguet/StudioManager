@@ -104,11 +104,11 @@ export function WorkloadTemplateManager() {
             className={`border rounded-lg overflow-hidden transition-colors ${
               editingTemplateId === tpl.id
                 ? "border-accent"
-                : "border-gray-200"
+                : "border-[var(--color-border-divider)]"
             }`}
           >
             {/* Template header */}
-            <div className="flex items-center gap-2 px-3 py-2 bg-gray-50">
+            <div className="flex items-center gap-2 px-3 py-2 bg-[var(--color-surface)]">
               {renamingId === tpl.id ? (
                 <input
                   autoFocus
@@ -119,7 +119,7 @@ export function WorkloadTemplateManager() {
                     if (e.key === "Enter") handleRenameCommit(tpl.id);
                     if (e.key === "Escape") setRenamingId(null);
                   }}
-                  className="flex-1 text-sm border border-gray-200 rounded px-2 py-0.5 bg-transparent"
+                  className="flex-1 text-sm border border-[var(--color-border-divider)] rounded px-2 py-0.5 bg-transparent"
                 />
               ) : (
                 <button

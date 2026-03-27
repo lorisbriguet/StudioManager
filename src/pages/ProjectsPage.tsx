@@ -184,7 +184,7 @@ export function ProjectsPage() {
           />
         )}
 
-        <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+        <div className="grid gap-4 p-px" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
           {filtered.map((p) => {
             const stats = taskStats[p.id] ?? { total: 0, pct: 0, maxPriority: "low" as TaskPriority };
             const pct = stats.pct;
@@ -200,7 +200,7 @@ export function ProjectsPage() {
                     : "bg-[var(--color-surface)] hover:bg-[var(--color-hover-row)]"
                 }`}
               >
-                <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-medium leading-tight">{p.name}</h3>
                   <Badge variant={statusBadgeVariant[p.status]} className="shrink-0 ml-2">
                     {t[statusKeys[p.status]]}

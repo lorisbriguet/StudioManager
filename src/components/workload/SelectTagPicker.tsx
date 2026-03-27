@@ -78,7 +78,7 @@ export function SelectTagPicker({
   const dropdown = (
     <div
       ref={ref}
-      className={`${anchorRef ? "fixed" : "absolute mt-1"} z-50 w-52 bg-gray-100 border border-gray-100 rounded-lg shadow-lg overflow-hidden`}
+      className={`${anchorRef ? "fixed" : "absolute mt-1"} z-50 w-52 bg-[var(--color-surface)] border border-gray-100 rounded-lg shadow-lg overflow-hidden`}
       style={pos ? { top: pos.top, left: pos.left } : undefined}
     >
       <div className="p-1.5">
@@ -93,7 +93,7 @@ export function SelectTagPicker({
             if (e.key === "Escape") onClose();
           }}
           placeholder="Search or create..."
-          className="w-full text-sm px-2 py-1 border border-gray-200 rounded"
+          className="w-full text-sm px-2 py-1 border border-[var(--color-border-divider)] rounded"
         />
       </div>
       <div className="max-h-48 overflow-y-auto">
@@ -105,7 +105,7 @@ export function SelectTagPicker({
               key={opt.value}
               onClick={() => toggle(opt.value)}
               className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-200 ${
-                selected ? "bg-gray-50" : ""
+                selected ? "bg-[var(--color-hover-row)]" : ""
               }`}
             >
               <span
