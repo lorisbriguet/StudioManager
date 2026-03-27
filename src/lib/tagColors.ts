@@ -40,3 +40,9 @@ export function getTagColor(name: string, dark: boolean): TagColor {
   const index = tagHash(name);
   return dark ? TAG_COLORS_DARK[index] : TAG_COLORS_LIGHT[index];
 }
+
+/** Named color access for fixed semantic uses (free/paid, etc.) */
+export function getNamedTagColor(colorName: "green" | "red" | "blue" | "purple" | "yellow" | "cyan" | "orange" | "teal" | "gray", dark: boolean): TagColor {
+  const idx = { blue: 0, purple: 1, green: 2, red: 3, yellow: 4, cyan: 5, orange: 6, teal: 7, gray: 8 }[colorName];
+  return dark ? TAG_COLORS_DARK[idx] : TAG_COLORS_LIGHT[idx];
+}
