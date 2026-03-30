@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { useWikiArticlesByProject, useWikiArticles, useUpdateWikiArticle } from "../db/hooks/useWiki";
 import { Plus, ChevronRight, Trash2, GripVertical, ExternalLink, Bookmark, X, Play, Square, FolderOpen, BookOpen } from "lucide-react";
@@ -190,14 +191,15 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
               projectId={projectId}
               onEditColumn={(col, idx) => setEditingColumn({ column: col, index: idx })}
             />
-            {editingColumn !== null && (
+            {editingColumn !== null && createPortal(
               <WorkloadColumnEditor
                 column={editingColumn.column}
                 existingKeys={wlColumns.map((c) => c.key)}
                 onSave={handleSaveColumn}
                 onDelete={editingColumn.column ? handleDeleteColumn : undefined}
                 onClose={() => setEditingColumn(null)}
-              />
+              />,
+              document.body
             )}
           </>
         );
