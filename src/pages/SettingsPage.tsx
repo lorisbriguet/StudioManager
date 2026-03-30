@@ -17,7 +17,7 @@ import { useT } from "../i18n/useT";
 import type { AppLanguage } from "../i18n/ui";
 import { UpdateChecker } from "../components/UpdateChecker";
 import { WorkloadTemplateManager } from "../components/workload/WorkloadTemplateManager";
-import { Input, Select } from "../components/ui";
+import { Input, Select, Button } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
 
@@ -402,6 +402,27 @@ export function SettingsPage() {
                   <option value="MM/dd/yyyy">03/05/2026</option>
                   <option value="yyyy-MM-dd">2026-03-05</option>
                 </Select>
+              </SettingRow>
+
+              <SectionHeader title={t.wiki} />
+              <SettingRow label={t.reset_user_guide} desc={t.reset_user_guide_desc}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={async () => {
+                    if (!(await ask(t.reset_user_guide_confirm ?? "Reset the User Guide to default? This will delete the current guide and re-create it.", { kind: "warning" }))) return;
+                    try {
+                      const db = await import("../db").then((m) => m.getDb());
+                      const { resetUserGuide } = await import("../db/seeds/user-guide");
+                      await resetUserGuide(db);
+                      toast.success(t.reset_user_guide_done ?? "User Guide reset");
+                    } catch (e) {
+                      toast.error(String(e));
+                    }
+                  }}
+                >
+                  {t.reset_user_guide_btn ?? "Reset"}
+                </Button>
               </SettingRow>
             </div>
           )}

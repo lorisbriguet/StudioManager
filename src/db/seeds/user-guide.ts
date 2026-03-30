@@ -698,3 +698,18 @@ export async function seedUserGuide(db: Database): Promise<void> {
     }
   }
 }
+
+/** Delete the existing "User Guide" folder and all its articles, then re-seed. */
+export async function resetUserGuide(db: Database): Promise<void> {
+  // Find existing User Guide folder(s)
+  const folders = await db.select<{ id: number }[]>(
+    "SELECT id FROM wiki_folders WHERE name = 'User Guide'"
+  );
+  for (const f of folders) {
+    // Delete articles in this folder (tags cascade via ON DELETE CASCADE)
+    await db.execute("DELETE FROM wiki_articles WHERE folder_id = $1", [f.id]);
+    await db.execute("DELETE FROM wiki_folders WHERE id = $1", [f.id]);
+  }
+  // Re-seed
+  await seedUserGuide(db);
+}
