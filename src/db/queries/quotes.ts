@@ -16,6 +16,16 @@ export async function getQuote(id: number): Promise<Quote | null> {
   return rows[0] ?? null;
 }
 
+export async function getQuotesByProject(
+  projectId: number
+): Promise<Quote[]> {
+  const db = await getDb();
+  return db.select<Quote[]>(
+    "SELECT * FROM quotes WHERE project_id = $1 ORDER BY quote_date DESC",
+    [projectId]
+  );
+}
+
 export async function getNextQuoteReference(year: number): Promise<string> {
   return getNextReference("quotes", "reference", `D-${year}-`);
 }

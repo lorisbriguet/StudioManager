@@ -524,6 +524,9 @@ export function SettingsPage() {
                   }}
                 />
               </SettingRow>
+              <SettingRow label={t.calendar_color_hint_label} desc={t.calendar_color_hint_desc}>
+                <span />
+              </SettingRow>
             </div>
           )}
 

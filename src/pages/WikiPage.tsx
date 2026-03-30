@@ -23,8 +23,7 @@ import { toast } from "sonner";
 import { useT } from "../i18n/useT";
 import { useAppStore } from "../stores/app-store";
 import { getTagColor } from "../lib/tagColors";
-import { SearchBar } from "../components/ui/SearchBar";
-import { Button } from "../components/ui/Button";
+import { PageHeader, SearchBar, Button } from "../components/ui";
 import { Select } from "../components/ui/Select";
 import {
   useWikiFolders,
@@ -80,9 +79,20 @@ const SLASH_COMMANDS: SlashMenuItem[] = [
     label: "Link",
     icon: LinkIcon,
     action: (editor) => {
+      if (!editor) return;
       const url = window.prompt("URL");
-      if (url) {
-        editor?.chain().focus().setLink({ href: url }).run();
+      if (!url) return;
+      const { from, to } = editor.state.selection;
+      if (from === to) {
+        // No text selected: insert placeholder link text
+        editor
+          .chain()
+          .focus()
+          .insertContent(`<a href="${url}">link</a>`)
+          .run();
+      } else {
+        // Wrap selected text in a link
+        editor.chain().focus().setLink({ href: url }).run();
       }
     },
   },
@@ -491,8 +501,8 @@ function FolderSidebar({
   );
 
   return (
-    <div className="w-48 shrink-0 border-r border-[var(--color-border-divider)] flex flex-col h-full py-5">
-      <div className="flex items-center justify-between px-3 mb-3">
+    <div className="w-48 shrink-0 border-r border-[var(--color-border-divider)] flex flex-col h-full py-4">
+      <div className="flex items-center justify-between px-3 mb-1">
         <span className="text-[9px] font-medium uppercase tracking-widest text-muted">
           {t.folder}
         </span>
@@ -508,10 +518,10 @@ function FolderSidebar({
         {/* All articles */}
         <button
           onClick={() => onSelectFolder(null)}
-          className={`w-full text-left px-3 py-1.5 mx-1 rounded-md text-xs transition-colors flex items-center gap-2 ${
+          className={`w-full text-left flex items-center gap-2 px-3 py-1.5 mx-1 rounded-md text-xs cursor-pointer transition-colors ${
             selectedFolderId === null
               ? "bg-accent-light text-accent font-medium"
-              : "text-muted hover:bg-[var(--color-hover-row)]"
+              : "text-muted hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
           }`}
         >
           <BookOpen size={14} />
@@ -547,10 +557,10 @@ function FolderSidebar({
                   e.preventDefault();
                   setContextMenu({ folderId: folder.id, x: e.clientX, y: e.clientY });
                 }}
-                className={`w-full text-left px-3 py-1.5 mx-1 rounded-md text-xs transition-colors flex items-center gap-2 ${
+                className={`w-full text-left flex items-center gap-2 px-3 py-1.5 mx-1 rounded-md text-xs cursor-pointer transition-colors ${
                   selectedFolderId === folder.id
                     ? "bg-accent-light text-accent font-medium"
-                    : "text-muted hover:bg-[var(--color-hover-row)]"
+                    : "text-muted hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
                 }`}
               >
                 <FolderOpen size={14} />
@@ -768,7 +778,7 @@ export function WikiPage() {
   }, []);
 
   return (
-    <div className="flex h-full page-transition">
+    <div className="flex h-full -m-8 page-transition">
       {/* Folder sidebar */}
       <FolderSidebar
         selectedFolderId={selectedFolderId}
@@ -790,8 +800,17 @@ export function WikiPage() {
           />
         ) : (
           <>
-            {/* Top bar */}
-            <div className="flex items-center gap-3 px-6 py-3 border-b border-[var(--color-border-divider)]">
+            {/* Page header */}
+            <div className="px-8 pt-6">
+              <PageHeader title={t.wiki}>
+                <Button icon={<Plus size={16} />} onClick={handleNewArticle}>
+                  {t.new_article}
+                </Button>
+              </PageHeader>
+            </div>
+
+            {/* Filter bar */}
+            <div className="flex items-center gap-3 px-8 pb-4">
               <SearchBar
                 value={search}
                 onChange={setSearch}
@@ -818,14 +837,6 @@ export function WikiPage() {
                   );
                 })}
               </div>
-              <Button
-                variant="primary"
-                size="sm"
-                icon={<Plus size={14} />}
-                onClick={handleNewArticle}
-              >
-                {t.new_article}
-              </Button>
             </div>
 
             {/* Article list */}
