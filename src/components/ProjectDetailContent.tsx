@@ -99,12 +99,12 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
 
   // Unassigned invoices/quotes for this client (no project_id or different project)
   const unlinkedInvoices = useMemo(() =>
-    (allInvoices ?? []).filter((inv) => inv.client_id === project?.client_id && inv.project_id !== projectId),
-    [allInvoices, project?.client_id, projectId]
+    (allInvoices ?? []).filter((inv) => inv.client_id === project?.client_id && inv.project_id == null),
+    [allInvoices, project?.client_id]
   );
   const unlinkedQuotes = useMemo(() =>
-    (allQuotes ?? []).filter((qt) => qt.client_id === project?.client_id && qt.project_id !== projectId),
-    [allQuotes, project?.client_id, projectId]
+    (allQuotes ?? []).filter((qt) => qt.client_id === project?.client_id && qt.project_id == null),
+    [allQuotes, project?.client_id]
   );
 
   const wlColumns = wlConfig?.columns ?? DEFAULT_WORKLOAD_COLUMNS;
