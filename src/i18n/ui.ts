@@ -36,6 +36,8 @@ const ui = {
     save_filter: "Save filter",
     filter_name: "Filter name",
     filter_saved: "Filter saved",
+    filter_updated: "Filter updated",
+    edit_conditions: "Edit conditions",
     add_condition: "Add condition",
     field: "Field",
     operator: "Operator",
@@ -627,6 +629,7 @@ const ui = {
     folder_deleted: "Folder deleted — articles moved to All",
     start_writing: "Start writing... Use / for commands",
     no_wiki_articles_linked: "No wiki articles linked",
+    link_article: "Link article",
     updated: "Updated",
 
     add_tag: "Add tag...",
@@ -687,6 +690,8 @@ const ui = {
     save_filter: "Enregistrer le filtre",
     filter_name: "Nom du filtre",
     filter_saved: "Filtre enregistre",
+    filter_updated: "Filtre mis a jour",
+    edit_conditions: "Modifier les conditions",
     add_condition: "Ajouter une condition",
     field: "Champ",
     operator: "Operateur",
@@ -1278,6 +1283,7 @@ const ui = {
     folder_deleted: "Dossier supprime — articles deplaces vers Tous",
     start_writing: "Commencez a ecrire... Utilisez / pour les commandes",
     no_wiki_articles_linked: "Aucun article wiki lie",
+    link_article: "Lier un article",
     updated: "Modifie",
 
     add_tag: "Ajouter un tag...",

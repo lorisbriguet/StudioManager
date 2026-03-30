@@ -33,6 +33,17 @@ export async function renameSavedFilter(id: number, name: string): Promise<void>
   await db.execute("UPDATE saved_filters SET name = $1 WHERE id = $2", [name, id]);
 }
 
+export async function updateSavedFilterData(
+  id: number,
+  filters: Record<string, unknown>
+): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE saved_filters SET filters = $1 WHERE id = $2", [
+    JSON.stringify(filters),
+    id,
+  ]);
+}
+
 export async function deleteSavedFilter(id: number): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM saved_filters WHERE id = $1", [id]);

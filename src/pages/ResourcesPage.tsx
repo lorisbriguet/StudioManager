@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
-import { Plus, Search, ExternalLink, Trash2, X, Tag } from "lucide-react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { Plus, Search, ExternalLink, Trash2, X } from "lucide-react";
 import { PageHeader, Button, EmptyState } from "../components/ui";
 import { Skeleton } from "../components/ui/Skeleton";
 import { SavedFilterBar } from "../components/SavedFilterBar";
@@ -189,33 +189,25 @@ export function ResourcesPage() {
         </div>
         {(allTags ?? []).length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">
-            <Tag size={14} className="text-muted" />
-            {tagFilter && (() => {
-              const c = getTagColor(tagFilter, darkMode);
+            {(allTags ?? []).map((tag) => {
+              const c = getTagColor(tag, darkMode);
+              const active = tagFilter === tag;
               return (
                 <button
-                  onClick={() => { setTagFilter(null); setActiveFilterId(null); }}
-                  style={{ background: c.bg, color: c.text }}
-                  className="px-2 py-0.5 text-xs rounded-full font-medium flex items-center gap-1"
+                  key={tag}
+                  onClick={() => { setTagFilter(active ? null : tag); setActiveFilterId(null); }}
+                  style={{
+                    background: active ? c.bg : "transparent",
+                    color: active ? c.text : "var(--color-muted)",
+                    borderColor: active ? c.text : "var(--color-border-divider)",
+                  }}
+                  className="px-2 py-0.5 text-xs rounded-full font-medium border transition-colors flex items-center gap-1"
                 >
-                  {tagFilter} <X size={10} />
+                  {tag}
+                  {active && <X size={10} />}
                 </button>
               );
-            })()}
-            {!tagFilter &&
-              (allTags ?? []).map((tag) => {
-                const c = getTagColor(tag, darkMode);
-                return (
-                  <button
-                    key={tag}
-                    onClick={() => { setTagFilter(tag); setActiveFilterId(null); }}
-                    style={{ background: c.bg, color: c.text }}
-                    className="px-2 py-0.5 text-xs rounded-full font-medium hover:opacity-80 transition-opacity"
-                  >
-                    {tag}
-                  </button>
-                );
-              })}
+            })}
           </div>
         )}
       </div>
@@ -450,6 +442,8 @@ function ResourceTableRow({
   const [price, setPrice] = useState(resource.price);
   const [tags, setTags] = useState(resource.tags);
   const [tagInput, setTagInput] = useState("");
+  const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savingRef = useRef(false);
 
   useEffect(() => {
     setName(resource.name);
@@ -458,9 +452,45 @@ function ResourceTableRow({
     setTags(resource.tags);
   }, [resource, isEditing]);
 
+  // Clean up blur timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+    };
+  }, []);
+
+  const doSave = useCallback(() => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    onSave({ name, url, price }, tags);
+    // Reset after a tick so the flag doesn't block future edits
+    setTimeout(() => { savingRef.current = false; }, 100);
+  }, [name, url, price, tags, onSave]);
+
+  const handleBlur = useCallback((e: React.FocusEvent<HTMLTableRowElement>) => {
+    // If focus moves to another element inside the same row, don't save
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    // Small delay to allow explicit Save/Cancel button clicks to fire first
+    blurTimeoutRef.current = setTimeout(() => {
+      doSave();
+    }, 150);
+  }, [doSave]);
+
+  const handleFocus = useCallback(() => {
+    // Cancel pending blur-save when focus returns inside the row
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = null;
+    }
+  }, []);
+
   if (isEditing) {
     return (
-      <tr className="border-b border-[var(--color-border-divider)] bg-accent-light/30">
+      <tr
+        className="border-b border-[var(--color-border-divider)] bg-accent-light/30"
+        onBlur={handleBlur}
+        onFocus={handleFocus}
+      >
         <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
           <input
             type="checkbox"
@@ -528,12 +558,12 @@ function ResourceTableRow({
         <td className="px-3 py-2">
           <div className="flex gap-1">
             <button
-              onClick={() => onSave({ name, url, price }, tags)}
+              onClick={() => { if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current); doSave(); }}
               className="text-xs text-accent hover:underline"
             >
               {t.save}
             </button>
-            <button onClick={onCancelEdit} className="text-xs text-muted hover:text-[var(--color-text)]">
+            <button onClick={() => { if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current); onCancelEdit(); }} className="text-xs text-muted hover:text-[var(--color-text)]">
               {t.cancel}
             </button>
           </div>

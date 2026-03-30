@@ -3,6 +3,7 @@ import {
   getSavedFilters,
   createSavedFilter,
   renameSavedFilter,
+  updateSavedFilterData,
   deleteSavedFilter,
 } from "../queries/savedFilters";
 import type { SavedFilterData } from "../../types/saved-filter";
@@ -27,6 +28,15 @@ export function useRenameSavedFilter(page: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, name }: { id: number; name: string }) => renameSavedFilter(id, name),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["saved-filters", page] }),
+  });
+}
+
+export function useUpdateSavedFilter(page: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, filters }: { id: number; filters: SavedFilterData }) =>
+      updateSavedFilterData(id, filters as Record<string, unknown>),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["saved-filters", page] }),
   });
 }
