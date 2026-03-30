@@ -441,6 +441,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
             <option value="__save__">{t.save_as_template}</option>
           )}
         </select>
+        <div className="flex-1" />
         <button
           onClick={() => onEditColumn?.(null, columns.length)}
           className="p-1 text-muted hover:text-accent"
