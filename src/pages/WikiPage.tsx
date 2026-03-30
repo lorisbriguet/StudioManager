@@ -47,6 +47,8 @@ interface SlashMenuItem {
   label: string;
   icon: typeof Heading1;
   action: (editor: ReturnType<typeof useEditor>) => void;
+  /** If true, the action is handled specially by the ArticleEditor */
+  special?: string;
 }
 
 const SLASH_COMMANDS: SlashMenuItem[] = [
@@ -78,25 +80,141 @@ const SLASH_COMMANDS: SlashMenuItem[] = [
   {
     label: "Link",
     icon: LinkIcon,
-    action: (editor) => {
-      if (!editor) return;
-      const url = window.prompt("URL");
-      if (!url) return;
-      const { from, to } = editor.state.selection;
-      if (from === to) {
-        // No text selected: insert placeholder link text
-        editor
-          .chain()
-          .focus()
-          .insertContent(`<a href="${url}">link</a>`)
-          .run();
-      } else {
-        // Wrap selected text in a link
-        editor.chain().focus().setLink({ href: url }).run();
-      }
-    },
+    action: () => { /* handled specially via LinkInsertPopup */ },
+    special: "link",
   },
 ];
+
+// ─── Link Insert Popup ───────────────────────────────────────────
+function LinkInsertPopup({
+  position,
+  articles,
+  currentArticleId,
+  onInsert,
+  onClose,
+}: {
+  position: { top: number; left: number };
+  articles: { id: number; title: string }[];
+  currentArticleId: number;
+  onInsert: (href: string, text: string) => void;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const [query, setQuery] = useState("");
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  const isUrl = /^https?:\/\//.test(query.trim());
+
+  const matchedArticles = useMemo(() => {
+    if (!query.trim() || isUrl) return [];
+    const q = query.toLowerCase();
+    return articles
+      .filter((a) => a.id !== currentArticleId && a.title.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [query, isUrl, articles, currentArticleId]);
+
+  useEffect(() => {
+    setSelectedIdx(0);
+  }, [query]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      onClose();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (isUrl) {
+        onInsert(query.trim(), "link");
+      } else if (matchedArticles.length > 0) {
+        const article = matchedArticles[selectedIdx];
+        onInsert(`/wiki?article=${article.id}`, article.title);
+      }
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (matchedArticles.length > 0) {
+        setSelectedIdx((i) => (i + 1) % matchedArticles.length);
+      }
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (matchedArticles.length > 0) {
+        setSelectedIdx((i) => (i - 1 + matchedArticles.length) % matchedArticles.length);
+      }
+    }
+  };
+
+  return (
+    <div
+      ref={popupRef}
+      className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] min-w-[280px] overflow-hidden"
+      style={{ top: position.top, left: position.left }}
+    >
+      <div className="px-3 pt-3 pb-2">
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={t.link_url_or_article ?? "URL or article name..."}
+          className="w-full border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-3 py-1.5 text-sm placeholder:text-muted outline-none"
+        />
+      </div>
+      {isUrl && (
+        <div className="px-3 pb-2">
+          <span className="text-xs text-muted">{t.press_enter_to_insert ?? "Press Enter to insert link"}</span>
+        </div>
+      )}
+      {!isUrl && query.trim() && matchedArticles.length > 0 && (
+        <div className="border-t border-[var(--color-border-divider)] py-1 max-h-48 overflow-y-auto">
+          <div className="px-3 py-1">
+            <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{t.wiki_articles ?? "Wiki articles"}</span>
+          </div>
+          {matchedArticles.map((article, i) => (
+            <button
+              key={article.id}
+              className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] ${
+                i === selectedIdx ? "bg-[var(--color-hover-row)]" : ""
+              } hover:bg-[var(--color-hover-row)]`}
+              onMouseEnter={() => setSelectedIdx(i)}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onInsert(`/wiki?article=${article.id}`, article.title);
+              }}
+            >
+              <BookOpen size={14} className="text-muted shrink-0" />
+              <span className="truncate">{article.title}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {!isUrl && query.trim() && matchedArticles.length === 0 && (
+        <div className="px-3 pb-2">
+          <span className="text-xs text-muted">{t.no_results ?? "No results"}</span>
+        </div>
+      )}
+      {!query.trim() && (
+        <div className="px-3 pb-2">
+          <span className="text-xs text-muted">{t.link_hint ?? "Type a URL (http...) or search wiki articles"}</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function SlashCommandMenu({
   position,
@@ -177,10 +295,13 @@ function ArticleEditor({
   const deleteArticle = useDeleteWikiArticle();
   const setTags = useSetWikiArticleTags();
 
+  const { data: allArticlesForLink = [] } = useWikiArticles();
+
   const [title, setTitle] = useState("");
   const [projectId, setProjectId] = useState<number | null>(null);
   const [tagInput, setTagInput] = useState("");
   const [slashMenu, setSlashMenu] = useState<{ top: number; left: number } | null>(null);
+  const [linkPopup, setLinkPopup] = useState<{ top: number; left: number } | null>(null);
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -309,8 +430,37 @@ function ArticleEditor({
         from: editor.state.selection.from - 1,
         to: editor.state.selection.from,
       }).run();
+
+      if (item.special === "link") {
+        // Show link insert popup at cursor position
+        if (editor) {
+          const coords = editor.view.coordsAtPos(editor.state.selection.from);
+          setLinkPopup({ top: coords.bottom + 4, left: coords.left });
+        }
+        setSlashMenu(null);
+        return;
+      }
+
       item.action(editor);
       setSlashMenu(null);
+    },
+    [editor]
+  );
+
+  const handleLinkInsert = useCallback(
+    (href: string, text: string) => {
+      if (!editor) return;
+      const { from, to } = editor.state.selection;
+      if (from === to) {
+        editor
+          .chain()
+          .focus()
+          .insertContent(`<a href="${href}">${text}</a>`)
+          .run();
+      } else {
+        editor.chain().focus().setLink({ href }).run();
+      }
+      setLinkPopup(null);
     },
     [editor]
   );
@@ -416,6 +566,15 @@ function ArticleEditor({
               position={slashMenu}
               onSelect={handleSlashSelect}
               onClose={() => setSlashMenu(null)}
+            />
+          )}
+          {linkPopup && (
+            <LinkInsertPopup
+              position={linkPopup}
+              articles={allArticlesForLink.map((a) => ({ id: a.id, title: a.title }))}
+              currentArticleId={articleId}
+              onInsert={handleLinkInsert}
+              onClose={() => setLinkPopup(null)}
             />
           )}
         </div>

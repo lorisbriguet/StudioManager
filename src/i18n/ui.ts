@@ -636,6 +636,10 @@ const ui = {
     start_writing: "Start writing... Use / for commands",
     no_wiki_articles_linked: "No wiki articles linked",
     link_article: "Link article",
+    link_url_or_article: "URL or article name...",
+    press_enter_to_insert: "Press Enter to insert link",
+    wiki_articles: "Wiki articles",
+    link_hint: "Type a URL (http...) or search wiki articles",
     updated: "Updated",
 
     add_tag: "Add tag...",
@@ -1296,6 +1300,10 @@ const ui = {
     start_writing: "Commencez a ecrire... Utilisez / pour les commandes",
     no_wiki_articles_linked: "Aucun article wiki lie",
     link_article: "Lier un article",
+    link_url_or_article: "URL ou nom d'article...",
+    press_enter_to_insert: "Appuyez sur Entree pour inserer le lien",
+    wiki_articles: "Articles wiki",
+    link_hint: "Tapez une URL (http...) ou cherchez un article wiki",
     updated: "Modifie",
 
     add_tag: "Ajouter un tag...",

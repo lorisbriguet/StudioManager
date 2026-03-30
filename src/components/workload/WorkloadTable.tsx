@@ -413,7 +413,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
   return (
     <div>
       {/* Toolbar */}
-      <div className="flex items-center justify-end gap-2 mb-3 select-none">
+      <div className="flex items-center gap-2 mb-3 select-none">
         <select
           value={templateId ?? ""}
           onChange={(e) => {

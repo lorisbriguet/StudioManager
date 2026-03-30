@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Plus, Trash2, GripVertical, ChevronDown, ChevronRight, Pencil, X } from "lucide-react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
@@ -35,7 +36,9 @@ export function NamedTable({ table, projectId }: Props) {
   const [editingCell, setEditingCell] = useState<{ rowId: number; colId: string } | null>(null);
   const [editValue, setEditValue] = useState("");
   const [showColPicker, setShowColPicker] = useState(false);
+  const [colPickerPos, setColPickerPos] = useState<{ top: number; left: number } | null>(null);
   const [editingCol, setEditingCol] = useState<string | null>(null);
+  const [colEditorPos, setColEditorPos] = useState<{ top: number; left: number } | null>(null);
   const [colName, setColName] = useState("");
   const [colOptions, setColOptions] = useState<string[]>([]);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -108,10 +111,14 @@ export function NamedTable({ table, projectId }: Props) {
     return () => document.removeEventListener("mousedown", handler);
   }, [editingCol, colName, colOptions]);
 
-  const openColEditor = (col: TableColumnDef) => {
+  const openColEditor = (col: TableColumnDef, e?: React.MouseEvent) => {
     setEditingCol(col.id);
     setColName(col.name);
     setColOptions(col.options ?? []);
+    if (e) {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      setColEditorPos({ top: rect.bottom + 4, left: rect.left });
+    }
   };
 
   const commitColEdit = () => {
@@ -121,12 +128,14 @@ export function NamedTable({ table, projectId }: Props) {
     );
     updateTable.mutate({ id: table.id, data: { column_config: updated } });
     setEditingCol(null);
+    setColEditorPos(null);
   };
 
   const deleteColumn = (colId: string) => {
     const updated = cols.filter((c) => c.id !== colId);
     updateTable.mutate({ id: table.id, data: { column_config: updated } });
     setEditingCol(null);
+    setColEditorPos(null);
   };
 
   const addColumn = (type: TableColumnDef["type"]) => {
@@ -199,15 +208,16 @@ export function NamedTable({ table, projectId }: Props) {
                   >
                     <button
                       type="button"
-                      onClick={() => openColEditor(col)}
+                      onClick={(e) => openColEditor(col, e)}
                       className="hover:text-accent cursor-pointer"
                     >
                       {col.name}
                     </button>
-                    {editingCol === col.id && (
+                    {editingCol === col.id && colEditorPos && createPortal(
                       <div
                         ref={colEditorRef}
-                        className="absolute left-0 top-full mt-1 z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] p-3 min-w-[200px]"
+                        className="fixed z-[9999] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] p-3 min-w-[200px]"
+                        style={{ top: colEditorPos.top, left: colEditorPos.left }}
                       >
                         <label className="block text-[10px] text-muted mb-1">{t.rename}</label>
                         <input
@@ -265,22 +275,28 @@ export function NamedTable({ table, projectId }: Props) {
                             {t.save}
                           </button>
                         </div>
-                      </div>
+                      </div>,
+                      document.body
                     )}
                   </th>
                 ))}
                 <th className="w-10 relative">
                   <button
-                    onClick={() => setShowColPicker((v) => !v)}
+                    onClick={(e) => {
+                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                      setColPickerPos({ top: rect.bottom + 4, left: rect.right - 140 });
+                      setShowColPicker((v) => !v);
+                    }}
                     className="text-muted hover:text-accent transition-colors p-0.5 rounded hover:bg-[var(--color-hover-row)]"
                     title={t.add_column}
                   >
                     <Plus size={14} />
                   </button>
-                  {showColPicker && (
+                  {showColPicker && colPickerPos && createPortal(
                     <div
                       ref={colPickerRef}
-                      className="absolute right-0 top-full mt-1 z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[140px]"
+                      className="fixed z-[9999] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[140px]"
+                      style={{ top: colPickerPos.top, left: colPickerPos.left }}
                     >
                       {(["text", "number", "checkbox", "select", "tags", "date"] as const).map((type) => (
                         <button
@@ -291,7 +307,8 @@ export function NamedTable({ table, projectId }: Props) {
                           {type}
                         </button>
                       ))}
-                    </div>
+                    </div>,
+                    document.body
                   )}
                 </th>
                 <th className="w-8" />
