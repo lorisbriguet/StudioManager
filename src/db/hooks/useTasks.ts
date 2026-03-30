@@ -140,7 +140,10 @@ export function useCreateTask() {
       });
       return id;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["workload-rows"] });
+    },
     onError: (e) => { toast.error(String(e)); },
   });
 }
@@ -180,7 +183,10 @@ export function useUpdateTask() {
       await q.updateTask(id, data);
       syncTaskCalendar(id);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["workload-rows"] });
+    },
     onError: (e) => { toast.error(String(e)); },
   });
 }
@@ -207,7 +213,10 @@ export function useDeleteTask() {
         });
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["workload-rows"] });
+    },
     onError: (e) => { toast.error(String(e)); },
   });
 }
