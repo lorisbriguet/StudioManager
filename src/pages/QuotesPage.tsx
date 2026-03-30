@@ -94,7 +94,7 @@ export function QuotesPage() {
       : enriched;
     rows = applyFilterConditions(rows, filterConditions, filterLogic);
     return sortRows(rows, sort.key, sort.dir);
-  }, [enriched, search, sort, filterConditions]);
+  }, [enriched, search, sort, filterConditions, filterLogic]);
 
   const bulk = useBulkSelect(filtered);
 

@@ -17,6 +17,8 @@ import {
   Link as LinkIcon,
   Minus,
 } from "lucide-react";
+import { ask } from "@tauri-apps/plugin-dialog";
+import { toast } from "sonner";
 import { useT } from "../i18n/useT";
 import { useAppStore } from "../stores/app-store";
 import { getTagColor } from "../lib/tagColors";
@@ -32,7 +34,7 @@ import {
   useWikiArticle,
   useCreateWikiArticle,
   useUpdateWikiArticle,
-
+  useDeleteWikiArticle,
   useWikiArticleTags,
   useSetWikiArticleTags,
   useAllWikiTags,
@@ -161,6 +163,7 @@ function ArticleEditor({
   const { data: allTags = [] } = useAllWikiTags();
   const { data: projects = [] } = useProjects();
   const updateArticle = useUpdateWikiArticle();
+  const deleteArticle = useDeleteWikiArticle();
   const setTags = useSetWikiArticleTags();
 
   const [title, setTitle] = useState("");
@@ -268,6 +271,26 @@ function ArticleEditor({
     [articleId, updateArticle]
   );
 
+  const handleDeleteArticle = useCallback(async () => {
+    const confirmed = await ask(t.delete + "?", { kind: "warning" });
+    if (confirmed) {
+      deleteArticle.mutate(articleId);
+      onBack();
+    }
+  }, [articleId, deleteArticle, onBack, t.delete]);
+
+  // Flush pending debounced save on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        if (editor) {
+          updateArticle.mutate({ id: articleId, data: { content: editor.getHTML() } });
+        }
+      }
+    };
+  }, [articleId]);
+
   const handleSlashSelect = useCallback(
     (item: SlashMenuItem) => {
       // Delete the "/" character
@@ -285,7 +308,7 @@ function ArticleEditor({
 
   return (
     <div className="flex-1 flex flex-col min-h-0 page-transition">
-      {/* Back button */}
+      {/* Top bar */}
       <div className="flex items-center gap-2 px-6 py-3 border-b border-[var(--color-border-divider)]">
         <button
           onClick={onBack}
@@ -294,6 +317,14 @@ function ArticleEditor({
           <ArrowLeft size={18} />
         </button>
         <span className="text-sm text-muted">{t.back}</span>
+        <div className="flex-1" />
+        <button
+          onClick={handleDeleteArticle}
+          className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-red-500/10 hover:text-red-500 transition-colors"
+          title={t.delete}
+        >
+          <Trash2 size={16} />
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -447,11 +478,15 @@ function FolderSidebar({
 
   const handleDeleteFolder = useCallback(
     (id: number) => {
-      deleteFolder.mutate(id);
+      deleteFolder.mutate(id, {
+        onSuccess: () => {
+          toast.success(t.folder_deleted ?? "Folder deleted");
+        },
+      });
       if (selectedFolderId === id) onSelectFolder(null);
       setContextMenu(null);
     },
-    [deleteFolder, selectedFolderId, onSelectFolder]
+    [deleteFolder, selectedFolderId, onSelectFolder, t.folder_deleted]
   );
 
   return (
@@ -554,14 +589,29 @@ function ArticleList({
   search,
   tagFilter,
   onSelectArticle,
+  onDeleteArticle,
 }: {
   articles: WikiArticleWithTags[];
   search: string;
   tagFilter: string[];
   onSelectArticle: (id: number) => void;
+  onDeleteArticle: (id: number) => void;
 }) {
   const t = useT();
   const darkMode = useAppStore((s) => s.darkMode);
+  const [ctxMenu, setCtxMenu] = useState<{ id: number; x: number; y: number } | null>(null);
+  const ctxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (ctxRef.current && !ctxRef.current.contains(e.target as Node)) {
+        setCtxMenu(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [ctxMenu]);
 
   const filtered = useMemo(() => {
     let list = articles;
@@ -613,6 +663,10 @@ function ArticleList({
           <tr
             key={article.id}
             onClick={() => onSelectArticle(article.id)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setCtxMenu({ id: article.id, x: e.clientX, y: e.clientY });
+            }}
             className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] cursor-pointer"
           >
             <td className="px-4 py-2.5 font-medium">{article.title}</td>
@@ -643,6 +697,24 @@ function ArticleList({
           </tr>
         ))}
       </tbody>
+      {ctxMenu && (
+        <div
+          ref={ctxRef}
+          className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[160px]"
+          style={{ top: ctxMenu.y, left: ctxMenu.x }}
+        >
+          <button
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-[var(--color-hover-row)]"
+            onClick={() => {
+              onDeleteArticle(ctxMenu.id);
+              setCtxMenu(null);
+            }}
+          >
+            <Trash2 size={14} />
+            {t.delete}
+          </button>
+        </div>
+      )}
     </table>
   );
 }
@@ -660,6 +732,14 @@ export function WikiPage() {
   const { data: allArticles = [] } = useWikiArticles();
   const { data: allTags = [] } = useAllWikiTags();
   const createArticle = useCreateWikiArticle();
+  const deleteArticle = useDeleteWikiArticle();
+
+  const handleDeleteArticle = useCallback(async (id: number) => {
+    const confirmed = await ask(t.delete + "?", { kind: "warning" });
+    if (confirmed) {
+      deleteArticle.mutate(id);
+    }
+  }, [deleteArticle, t.delete]);
 
   // Filter articles by selected folder
   const visibleArticles = useMemo(() => {
@@ -694,6 +774,8 @@ export function WikiPage() {
         onSelectFolder={(id) => {
           setSelectedFolderId(id);
           setSelectedArticleId(null);
+          setSearch("");
+          setTagFilter([]);
         }}
         articles={allArticles}
       />
@@ -751,6 +833,7 @@ export function WikiPage() {
                 search={search}
                 tagFilter={tagFilter}
                 onSelectArticle={setSelectedArticleId}
+                onDeleteArticle={handleDeleteArticle}
               />
             </div>
           </>

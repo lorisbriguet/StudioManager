@@ -94,7 +94,7 @@ export function ExpensesPage() {
       : expenses;
     rows = applyFilterConditions(rows, filterConditions, filterLogic);
     return sortRows(rows, sort.key, sort.dir);
-  }, [expenses, search, sort, filterConditions]);
+  }, [expenses, search, sort, filterConditions, filterLogic]);
 
   const { expandedYears, groupedByYear, toggleYear } = useYearGrouping(
     filtered,
@@ -209,7 +209,7 @@ export function ExpensesPage() {
         { onSuccess: () => toast.success(t.receipt_attached) }
       );
     } catch {
-      toast.error("Failed to attach receipt");
+      toast.error(t.attach_failed);
     }
   };
 
@@ -281,7 +281,7 @@ export function ExpensesPage() {
               { ...data, reference, receipt_path: receiptPath },
               {
                 onSuccess: () => {
-                  toast.success("Expense created");
+                  toast.success(t.expense_created);
                   setShowForm(false);
                   setPrefill(null);
                 },
@@ -300,11 +300,11 @@ export function ExpensesPage() {
                 <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
               </th>
               <th className="w-8" />
-              <SortHeader label="Reference" sortKey="reference" current={sort} onSort={setSort} />
+              <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
               <SortHeader label={t.supplier} sortKey="supplier" current={sort} onSort={setSort} />
               <SortHeader label={t.category} sortKey="category_code" current={sort} onSort={setSort} />
               <SortHeader label={t.date} sortKey="invoice_date" current={sort} onSort={setSort} />
-              <SortHeader label="Paid" sortKey="paid_date" current={sort} onSort={setSort} />
+              <SortHeader label={t.paid} sortKey="paid_date" current={sort} onSort={setSort} />
               <th className="px-4 py-2.5 font-medium text-muted text-left">{t.receipt}</th>
               <SortHeader label={t.amount} sortKey="amount" current={sort} onSort={setSort} align="right" />
             </tr>
@@ -327,7 +327,7 @@ export function ExpensesPage() {
                         />
                         <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{year}</span>
                         <span className="text-xs text-muted">
-                          {yearExpenses.length} expense{yearExpenses.length !== 1 ? "s" : ""}
+                          {yearExpenses.length} {yearExpenses.length !== 1 ? t.expenses_count_plural : t.expenses_count_singular}
                         </span>
                         <span className="ml-auto text-sm font-medium">
                           CHF {yearTotal.toFixed(2)}
@@ -384,7 +384,7 @@ export function ExpensesPage() {
                                     id: exp.id,
                                     data: { paid_date: e.target.value || null },
                                   },
-                                  { onSuccess: () => toast.success(e.target.value ? "Paid date updated" : "Marked as unpaid") }
+                                  { onSuccess: () => toast.success(e.target.value ? t.paid_date_updated : t.marked_as_unpaid) }
                                 )
                               }
                               className={`px-1.5 py-0.5 text-xs rounded w-[110px] ${
@@ -399,7 +399,7 @@ export function ExpensesPage() {
                                       id: exp.id,
                                       data: { paid_date: format(new Date(), "yyyy-MM-dd") },
                                     },
-                                    { onSuccess: () => toast.success("Marked as paid") }
+                                    { onSuccess: () => toast.success(t.marked_as_paid) }
                                   )
                                 }
                                 className="px-1.5 py-0.5 text-[10px] rounded bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 shrink-0"
@@ -513,7 +513,7 @@ function ReceiptPreview({
       onClick={onClose}
     >
       <div
-        className="bg-[var(--color-surface)] rounded-lg shadow-xl w-[80vw] h-[85vh] flex flex-col overflow-hidden"
+        className="bg-[var(--color-surface)] rounded-xl shadow-xl w-[80vw] h-[85vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-input-border)]">
@@ -672,7 +672,7 @@ function NewExpenseForm({
             autoComplete="off"
           />
           {showSuggestions && suggestions.length > 0 && (
-            <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-[var(--color-surface)] border border-[var(--color-input-border)] rounded-md shadow-lg max-h-48 overflow-y-auto">
+            <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-[var(--color-surface)] border border-[var(--color-input-border)] rounded-xl shadow-lg max-h-48 overflow-y-auto">
               {suggestions.map((s) => (
                 <button
                   key={s.supplier}
@@ -729,8 +729,8 @@ function NewExpenseForm({
       <div className="flex gap-2">
         <Button
           onClick={() => {
-            if (!form.supplier.trim()) return toast.error("Supplier is required");
-            if (!form.amount) return toast.error("Amount is required");
+            if (!form.supplier.trim()) return toast.error(t.supplier_required);
+            if (!form.amount) return toast.error(t.amount_required);
             onSave({
               ...form,
               due_date: prefill?.due_date ?? null,

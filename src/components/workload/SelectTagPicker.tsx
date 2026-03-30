@@ -78,7 +78,7 @@ export function SelectTagPicker({
   const dropdown = (
     <div
       ref={ref}
-      className={`${anchorRef ? "fixed" : "absolute mt-1"} z-50 w-52 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-lg shadow-lg overflow-hidden`}
+      className={`${anchorRef ? "fixed" : "absolute mt-1"} z-50 w-52 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-lg overflow-hidden`}
       style={pos ? { top: pos.top, left: pos.left } : undefined}
     >
       <div className="p-1.5">

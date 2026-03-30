@@ -89,7 +89,7 @@ export function InvoicesPage() {
       : enriched;
     rows = applyFilterConditions(rows, filterConditions, filterLogic);
     return sortRows(rows, sort.key, sort.dir);
-  }, [enriched, search, sort, filterConditions]);
+  }, [enriched, search, sort, filterConditions, filterLogic]);
 
   const bulk = useBulkSelect(filtered);
 
@@ -325,7 +325,7 @@ export function InvoicesPage() {
                         />
                         <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{year}</span>
                         <span className="text-xs text-muted">
-                          {yearInvoices.length} invoice{yearInvoices.length !== 1 ? "s" : ""}
+                          {yearInvoices.length} {yearInvoices.length !== 1 ? t.invoices_count_plural : t.invoices_count_singular}
                         </span>
                         <span className="ml-auto text-sm font-medium">
                           CHF {yearTotal.toFixed(2)}

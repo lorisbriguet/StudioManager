@@ -130,8 +130,8 @@ export function CalendarPage() {
   const calSetView = (v: "dayGridMonth" | "timeGridWeek") => { calApi()?.changeView(v); setCalView(v); syncTitle(); };
 
   useEffect(() => {
-    const t = setTimeout(() => { calRef.current?.getApi()?.updateSize(); syncTitle(); }, 100);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => { calRef.current?.getApi()?.updateSize(); syncTitle(); }, 100);
+    return () => clearTimeout(timer);
   }, [peekId]);
 
   const events = useMemo<EventInput[]>(() => {

@@ -486,7 +486,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                 >
                   <div className="flex items-center gap-1">
                     <span className="truncate">{t.tasks}</span>
-                    {sortKey === "__title" && <span className="text-[10px] ml-auto">{sortDir === "asc" ? "\u2191" : "\u2193"}</span>}
+                    {sortKey === "__title" && <span className="ml-auto">{sortDir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />}</span>}
                   </div>
                   {/* Resize handle */}
                   <div
@@ -507,7 +507,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                 >
                   <div className="flex items-center gap-1">
                     <span className="truncate">{t.duration}</span>
-                    {sortKey === "__duration" && <span className="text-[10px] ml-auto">{sortDir === "asc" ? "\u2191" : "\u2193"}</span>}
+                    {sortKey === "__duration" && <span className="ml-auto">{sortDir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />}</span>}
                   </div>
                 </th>
                 {/* System: Planned */}
@@ -523,7 +523,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                 >
                   <div className="flex items-center gap-1">
                     <span className="truncate">{t.planned}</span>
-                    {sortKey === "__planned" && <span className="text-[10px] ml-auto">{sortDir === "asc" ? "\u2191" : "\u2193"}</span>}
+                    {sortKey === "__planned" && <span className="ml-auto">{sortDir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />}</span>}
                   </div>
                 </th>
                 {/* Custom columns */}
@@ -550,8 +550,8 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                           <span className="truncate">{col.name}</span>
                         )}
                         {sortKey === col.key && (
-                          <span className="text-[10px] ml-auto">
-                            {sortDir === "asc" ? "\u2191" : "\u2193"}
+                          <span className="ml-auto">
+                            {sortDir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />}
                           </span>
                         )}
                       </div>

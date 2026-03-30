@@ -149,7 +149,7 @@ export function TasksPage() {
       });
     }
     return result;
-  }, [tasks, projects, clients, filter, search, projectOrder, filterConditions]);
+  }, [tasks, projects, clients, filter, search, projectOrder, filterConditions, filterLogic]);
 
   const flatTasks = useMemo(() => grouped.flatMap((g) => g.tasks), [grouped]);
   const bulk = useBulkSelect(flatTasks);
