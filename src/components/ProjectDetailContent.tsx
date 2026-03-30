@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useWikiArticlesByProject, useWikiArticles, useUpdateWikiArticle } from "../db/hooks/useWiki";
 import { Plus, ChevronRight, Trash2, GripVertical, ExternalLink, Bookmark, X, Play, Square, FolderOpen, BookOpen } from "lucide-react";
@@ -54,8 +54,8 @@ import { DEFAULT_WORKLOAD_COLUMNS } from "../types/workload";
 import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu";
-import { useInvoicesByProject } from "../db/hooks/useInvoices";
-import { useQuotesByProject } from "../db/hooks/useQuotes";
+import { useInvoices, useInvoicesByProject, useUpdateInvoice } from "../db/hooks/useInvoices";
+import { useQuotes, useQuotesByProject, useUpdateQuote } from "../db/hooks/useQuotes";
 import { Badge } from "./ui";
 import { invoiceStatusVariant, quoteStatusVariant } from "../lib/statusColors";
 import { useTabStore } from "../stores/tab-store";
@@ -91,7 +91,21 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
 
   const { data: projectInvoices } = useInvoicesByProject(projectId);
   const { data: projectQuotes } = useQuotesByProject(projectId);
+  const { data: allInvoices } = useInvoices();
+  const { data: allQuotes } = useQuotes();
+  const updateInvoice = useUpdateInvoice();
+  const updateQuote = useUpdateQuote();
   const navigate = useNavigate();
+
+  // Unassigned invoices/quotes for this client (no project_id or different project)
+  const unlinkedInvoices = useMemo(() =>
+    (allInvoices ?? []).filter((inv) => inv.client_id === project?.client_id && inv.project_id !== projectId),
+    [allInvoices, project?.client_id, projectId]
+  );
+  const unlinkedQuotes = useMemo(() =>
+    (allQuotes ?? []).filter((qt) => qt.client_id === project?.client_id && qt.project_id !== projectId),
+    [allQuotes, project?.client_id, projectId]
+  );
 
   const wlColumns = wlConfig?.columns ?? DEFAULT_WORKLOAD_COLUMNS;
   const wlTemplateId = wlConfig?.template_id ?? null;
@@ -211,9 +225,25 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                 ))}
               </div>
             )}
-            <Link to={`/invoices?project=${projectId}`} className="flex items-center gap-1 text-xs text-accent hover:underline mt-1">
-              {t.view_all}
-            </Link>
+            {unlinkedInvoices.length > 0 && (
+              <div className="mt-2">
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const id = Number(e.target.value);
+                    if (id) updateInvoice.mutate({ id, data: { project_id: projectId } });
+                  }}
+                  className="text-xs border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1 w-full"
+                >
+                  <option value="">{t.link_invoice}</option>
+                  {unlinkedInvoices.map((inv) => (
+                    <option key={inv.id} value={inv.id}>
+                      {inv.reference.startsWith("DRAFT") ? t.draft : inv.reference} — {inv.total.toFixed(2)} CHF
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         );
       case "quotes":
@@ -236,9 +266,25 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                 ))}
               </div>
             )}
-            <Link to={`/quotes?project=${projectId}`} className="flex items-center gap-1 text-xs text-accent hover:underline mt-1">
-              {t.view_all}
-            </Link>
+            {unlinkedQuotes.length > 0 && (
+              <div className="mt-2">
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const id = Number(e.target.value);
+                    if (id) updateQuote.mutate({ id, data: { project_id: projectId } });
+                  }}
+                  className="text-xs border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1 w-full"
+                >
+                  <option value="">{t.link_quote}</option>
+                  {unlinkedQuotes.map((qt) => (
+                    <option key={qt.id} value={qt.id}>
+                      {qt.reference.startsWith("DRAFT") ? t.draft : qt.reference} — {qt.total.toFixed(2)} CHF
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         );
       case "wiki":
