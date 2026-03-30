@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useWikiArticlesByProject, useWikiArticles, useUpdateWikiArticle } from "../db/hooks/useWiki";
-import { Plus, ChevronRight, ChevronDown, Trash2, GripVertical, ExternalLink, Bookmark, X, Play, Square, FolderOpen, BookOpen } from "lucide-react";
+import { Plus, ChevronRight, Trash2, GripVertical, ExternalLink, Bookmark, X, Play, Square, FolderOpen, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -54,6 +54,10 @@ import { DEFAULT_WORKLOAD_COLUMNS } from "../types/workload";
 import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu";
+import { useInvoicesByProject } from "../db/hooks/useInvoices";
+import { useQuotesByProject } from "../db/hooks/useQuotes";
+import { Badge } from "./ui";
+import { invoiceStatusVariant, quoteStatusVariant } from "../lib/statusColors";
 import { useTabStore } from "../stores/tab-store";
 import { useTimerActions } from "../hooks/useTimerActions";
 import { open as openDirectory } from "@tauri-apps/plugin-dialog";
@@ -84,6 +88,10 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
   const { data: wlConfig } = useProjectWorkloadConfig(projectId);
   const setWlConfig = useSetProjectWorkloadConfig(projectId);
   const t = useT();
+
+  const { data: projectInvoices } = useInvoicesByProject(projectId);
+  const { data: projectQuotes } = useQuotesByProject(projectId);
+  const navigate = useNavigate();
 
   const wlColumns = wlConfig?.columns ?? DEFAULT_WORKLOAD_COLUMNS;
   const wlTemplateId = wlConfig?.template_id ?? null;
@@ -185,17 +193,51 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
         return <ProjectNamedTables projectId={projectId} />;
       case "invoices":
         return (
-          <div className="text-sm text-muted">
-            <Link to={`/invoices?project=${projectId}`} className="text-accent hover:underline">
-              {t.invoices}
+          <div className="text-sm">
+            {(!projectInvoices || projectInvoices.length === 0) ? (
+              <div className="text-muted">{t.no_invoices_yet}</div>
+            ) : (
+              <div className="divide-y divide-[var(--color-border-divider)]">
+                {projectInvoices.map((inv) => (
+                  <button
+                    key={inv.id}
+                    onClick={() => navigate(`/invoices/${inv.id}/preview`)}
+                    className="w-full flex items-center gap-2 py-1.5 text-left hover:bg-[var(--color-hover-row)] rounded-md px-1 transition-colors"
+                  >
+                    <span className="text-sm truncate">{inv.reference}</span>
+                    <span className="text-xs text-muted">{inv.total.toFixed(2)} {inv.currency ?? "CHF"}</span>
+                    <Badge variant={invoiceStatusVariant(inv.status)} className="ml-auto">{inv.status}</Badge>
+                  </button>
+                ))}
+              </div>
+            )}
+            <Link to={`/invoices?project=${projectId}`} className="flex items-center gap-1 text-xs text-accent hover:underline mt-1">
+              {t.view_all}
             </Link>
           </div>
         );
       case "quotes":
         return (
-          <div className="text-sm text-muted">
-            <Link to={`/quotes?project=${projectId}`} className="text-accent hover:underline">
-              {t.quotes}
+          <div className="text-sm">
+            {(!projectQuotes || projectQuotes.length === 0) ? (
+              <div className="text-muted">{t.no_quotes_yet}</div>
+            ) : (
+              <div className="divide-y divide-[var(--color-border-divider)]">
+                {projectQuotes.map((qt) => (
+                  <button
+                    key={qt.id}
+                    onClick={() => navigate(`/quotes/${qt.id}/preview`)}
+                    className="w-full flex items-center gap-2 py-1.5 text-left hover:bg-[var(--color-hover-row)] rounded-md px-1 transition-colors"
+                  >
+                    <span className="text-sm truncate">{qt.reference}</span>
+                    <span className="text-xs text-muted">{qt.total.toFixed(2)}</span>
+                    <Badge variant={quoteStatusVariant(qt.status)} className="ml-auto">{qt.status}</Badge>
+                  </button>
+                ))}
+              </div>
+            )}
+            <Link to={`/quotes?project=${projectId}`} className="flex items-center gap-1 text-xs text-accent hover:underline mt-1">
+              {t.view_all}
             </Link>
           </div>
         );
@@ -329,7 +371,6 @@ function ProjectResources({ projectId }: { projectId: number }) {
   const unlinkResource = useUnlinkResourceFromProject();
   const [showPicker, setShowPicker] = useState(false);
   const [allResources, setAllResources] = useState<{ id: number; name: string; url: string }[]>([]);
-  const [collapsed, setCollapsed] = useState(true);
 
   useEffect(() => {
     if (showPicker) {
@@ -341,81 +382,69 @@ function ProjectResources({ projectId }: { projectId: number }) {
   const unlinked = allResources.filter((r) => !linkedIds.has(r.id));
 
   return (
-    <div className="mt-4">
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        className="flex items-center gap-1.5 text-sm font-medium mb-2"
-      >
-        {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-        <Bookmark size={14} />
-        {t.resources} {linked && linked.length > 0 && <span className="text-muted font-normal">({linked.length})</span>}
-      </button>
-      {!collapsed && (
-        <div className="pl-5">
-          {(linked ?? []).length === 0 && !showPicker && (
-            <div className="text-xs text-muted mb-2">{t.no_resources_yet}</div>
-          )}
-          {(linked ?? []).map((r) => (
-            <div key={r.id} className="flex items-center gap-2 py-1 group text-sm">
-              <button
-                onClick={() => {
-                  let u = r.url;
-                  if (u && !u.startsWith("http://") && !u.startsWith("https://")) u = "https://" + u;
-                  import("@tauri-apps/plugin-shell").then((m) => m.open(u));
-                }}
-                className="flex items-center gap-1 text-accent hover:underline truncate max-w-[300px]"
-              >
-                <ExternalLink size={12} />
-                {r.name}
-              </button>
-              <span className="text-xs text-muted truncate max-w-[200px]">
-                {r.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
-              </span>
-              <button
-                onClick={() => unlinkResource.mutate({ resourceId: r.id, projectId })}
-                className="text-danger opacity-0 group-hover:opacity-100"
-              >
-                <X size={12} />
-              </button>
-            </div>
-          ))}
-          {showPicker ? (
-            <div className="mt-2 border border-[var(--color-border-divider)] rounded-xl p-2">
-              {unlinked.length === 0 ? (
-                <div className="text-xs text-muted">{t.no_matching_resources}</div>
-              ) : (
-                <div className="max-h-32 overflow-y-auto space-y-1">
-                  {unlinked.map((r) => (
-                    <button
-                      key={r.id}
-                      onClick={() => {
-                        linkResource.mutate({ resourceId: r.id, projectId });
-                        setShowPicker(false);
-                      }}
-                      className="w-full text-left px-2 py-1 text-sm hover:bg-[var(--color-hover-row)] rounded-md flex items-center gap-2"
-                    >
-                      <Bookmark size={12} className="text-muted" />
-                      {r.name}
-                      <span className="text-xs text-muted ml-auto truncate max-w-[150px]">
-                        {r.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              <button onClick={() => setShowPicker(false)} className="text-xs text-muted mt-1 hover:text-[var(--color-text)]">
-                {t.cancel}
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowPicker(true)}
-              className="flex items-center gap-1 text-xs text-accent hover:underline mt-1"
-            >
-              <Plus size={12} /> {t.add}
-            </button>
-          )}
+    <div>
+      {(linked ?? []).length === 0 && !showPicker && (
+        <div className="text-xs text-muted mb-2">{t.no_resources_yet}</div>
+      )}
+      {(linked ?? []).map((r) => (
+        <div key={r.id} className="flex items-center gap-2 py-1 group text-sm">
+          <button
+            onClick={() => {
+              let u = r.url;
+              if (u && !u.startsWith("http://") && !u.startsWith("https://")) u = "https://" + u;
+              import("@tauri-apps/plugin-shell").then((m) => m.open(u));
+            }}
+            className="flex items-center gap-1 text-accent hover:underline truncate max-w-[300px]"
+          >
+            <ExternalLink size={12} />
+            {r.name}
+          </button>
+          <span className="text-xs text-muted truncate max-w-[200px]">
+            {r.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+          </span>
+          <button
+            onClick={() => unlinkResource.mutate({ resourceId: r.id, projectId })}
+            className="text-danger opacity-0 group-hover:opacity-100"
+          >
+            <X size={12} />
+          </button>
         </div>
+      ))}
+      {showPicker ? (
+        <div className="mt-2 border border-[var(--color-border-divider)] rounded-xl p-2">
+          {unlinked.length === 0 ? (
+            <div className="text-xs text-muted">{t.no_matching_resources}</div>
+          ) : (
+            <div className="max-h-32 overflow-y-auto space-y-1">
+              {unlinked.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => {
+                    linkResource.mutate({ resourceId: r.id, projectId });
+                    setShowPicker(false);
+                  }}
+                  className="w-full text-left px-2 py-1 text-sm hover:bg-[var(--color-hover-row)] rounded-md flex items-center gap-2"
+                >
+                  <Bookmark size={12} className="text-muted" />
+                  {r.name}
+                  <span className="text-xs text-muted ml-auto truncate max-w-[150px]">
+                    {r.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          <button onClick={() => setShowPicker(false)} className="text-xs text-muted mt-1 hover:text-[var(--color-text)]">
+            {t.cancel}
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowPicker(true)}
+          className="flex items-center gap-1 text-xs text-accent hover:underline mt-1"
+        >
+          <Plus size={12} /> {t.add}
+        </button>
       )}
     </div>
   );
@@ -837,17 +866,10 @@ function ProjectNamedTables({ projectId }: { projectId: number }) {
   const t = useT();
   const { data: tables } = useProjectTables(projectId);
   const createTable = useCreateProjectTable(projectId);
-  const [collapsed, setCollapsed] = useState(true);
 
   return (
-    <div className="mt-6">
+    <div>
       <div className="flex items-center gap-2 mb-2">
-        <button onClick={() => setCollapsed(!collapsed)} className="text-muted hover:text-[var(--color-text-secondary)]">
-          {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-        </button>
-        <h2 className="text-sm font-medium">
-          {t.custom_tables} {tables && tables.length > 0 && <span className="text-muted font-normal">({tables.length})</span>}
-        </h2>
         <button
           onClick={() => createTable.mutate({ name: "Untitled" })}
           className="text-muted hover:text-accent"
@@ -856,16 +878,14 @@ function ProjectNamedTables({ projectId }: { projectId: number }) {
           <Plus size={14} />
         </button>
       </div>
-      {!collapsed && (
-        <div className="space-y-3">
-          {(!tables || tables.length === 0) && (
-            <div className="text-xs text-muted">{t.no_tables_yet}</div>
-          )}
-          {(tables ?? []).map((tbl) => (
-            <NamedTable key={tbl.id} table={tbl} projectId={projectId} />
-          ))}
-        </div>
-      )}
+      <div className="space-y-3">
+        {(!tables || tables.length === 0) && (
+          <div className="text-xs text-muted">{t.no_tables_yet}</div>
+        )}
+        {(tables ?? []).map((tbl) => (
+          <NamedTable key={tbl.id} table={tbl} projectId={projectId} />
+        ))}
+      </div>
     </div>
   );
 }

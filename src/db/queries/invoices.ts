@@ -28,6 +28,16 @@ export async function getInvoicesByClient(
   );
 }
 
+export async function getInvoicesByProject(
+  projectId: number
+): Promise<Invoice[]> {
+  const db = await getDb();
+  return db.select<Invoice[]>(
+    "SELECT * FROM invoices WHERE project_id = $1 ORDER BY invoice_date DESC",
+    [projectId]
+  );
+}
+
 export async function getNextInvoiceReference(year: number): Promise<string> {
   return getNextReference("invoices", "reference", `${year}-`);
 }

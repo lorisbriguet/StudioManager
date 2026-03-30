@@ -12,9 +12,9 @@ export type LayoutConfig = LayoutBlock[];
 
 export const STANDARD_LAYOUT: LayoutConfig = [
   { type: "tasks" },
-  { type: "notes" },
+  { type: "notes", width: "half" },
+  { type: "resources", width: "half" },
   { type: "workload" },
-  { type: "resources" },
   { type: "named_tables" },
   { type: "invoices", width: "half" },
   { type: "quotes", width: "half" },

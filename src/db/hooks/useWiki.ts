@@ -14,6 +14,7 @@ import {
   getAllWikiTags,
   getWikiArticlesByProject,
 } from "../queries/wiki";
+import { useUndoStore } from "../../stores/undo-store";
 
 // ── Folders ──────────────────────────────────────────────────
 
@@ -106,13 +107,43 @@ export function useUpdateWikiArticle() {
 
 export function useDeleteWikiArticle() {
   const qc = useQueryClient();
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["wiki-articles"] });
+    qc.invalidateQueries({ queryKey: ["wiki-articles-by-project"] });
+    qc.invalidateQueries({ queryKey: ["wiki-tags"] });
+  };
   return useMutation({
-    mutationFn: (id: number) => deleteWikiArticle(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["wiki-articles"] });
-      qc.invalidateQueries({ queryKey: ["wiki-articles-by-project"] });
-      qc.invalidateQueries({ queryKey: ["wiki-tags"] });
+    mutationFn: async (id: number) => {
+      const prev = await getWikiArticle(id);
+      const prevTags = await getWikiArticleTags(id);
+      await deleteWikiArticle(id);
+      if (prev) {
+        useUndoStore.getState().push({
+          label: `Article deleted`,
+          execute: async () => {
+            const newId = await createWikiArticle({
+              folder_id: prev.folder_id,
+              project_id: prev.project_id,
+              title: prev.title,
+            });
+            await updateWikiArticle(newId, { content: prev.content });
+            await setWikiArticleTags(newId, prevTags);
+            invalidate();
+          },
+          redo: async () => {
+            const articles = await getWikiArticles();
+            const restored = articles.find(
+              (a) => a.title === prev.title && a.folder_id === prev.folder_id
+            );
+            if (restored) {
+              await deleteWikiArticle(restored.id);
+              invalidate();
+            }
+          },
+        });
+      }
     },
+    onSuccess: invalidate,
   });
 }
 

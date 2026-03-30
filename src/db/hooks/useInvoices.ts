@@ -27,6 +27,14 @@ export function useInvoicesByClient(clientId: string) {
   });
 }
 
+export function useInvoicesByProject(projectId: number) {
+  return useQuery({
+    queryKey: ["invoices", "project", projectId],
+    queryFn: () => q.getInvoicesByProject(projectId),
+    enabled: !!projectId,
+  });
+}
+
 export function useInvoiceLineItems(invoiceId: number) {
   return useQuery({
     queryKey: ["invoice-line-items", invoiceId],

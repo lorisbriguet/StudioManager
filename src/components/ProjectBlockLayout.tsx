@@ -237,7 +237,7 @@ export function ProjectBlockLayout({ project, projectId, renderBlock }: Props) {
             <Plus size={14} /> {t.add_block}
           </button>
           {showAddMenu && (
-            <div className="absolute z-20 mt-1 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[160px]">
+            <div className="absolute z-20 bottom-full mb-1 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[160px]">
               {availableBlocks.map((type) => (
                 <button
                   key={type}

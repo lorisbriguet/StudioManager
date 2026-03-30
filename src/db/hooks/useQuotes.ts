@@ -17,6 +17,14 @@ export function useQuote(id: number) {
   });
 }
 
+export function useQuotesByProject(projectId: number) {
+  return useQuery({
+    queryKey: ["quotes", "project", projectId],
+    queryFn: () => q.getQuotesByProject(projectId),
+    enabled: !!projectId,
+  });
+}
+
 export function useQuoteLineItems(quoteId: number) {
   return useQuery({
     queryKey: ["quote-line-items", quoteId],

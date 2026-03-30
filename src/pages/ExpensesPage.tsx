@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
-import { Plus, Paperclip, Eye, X, ChevronRight, Upload, Trash2, CheckCircle, Receipt, Settings2 } from "lucide-react";
-import { Button, Input, Select, PageHeader, SearchBar, PageSpinner, EmptyState, Card } from "../components/ui";
+import { Plus, Paperclip, Eye, X, ChevronRight, Upload, Trash2, CheckCircle, Receipt, Settings2, XCircle, Pencil } from "lucide-react";
+import { Button, Input, Select, PageHeader, SearchBar, PageSpinner, EmptyState, Card, Modal } from "../components/ui";
 import { SavedFilterBar } from "../components/SavedFilterBar";
 import { getTagColor, getNamedTagColor } from "../lib/tagColors";
 import type { TagColorName } from "../types/expense";
@@ -57,6 +57,8 @@ export function ExpensesPage() {
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
   const [filterLogic, setFilterLogic] = useState<ConditionLogic>("and");
+  const [editDateExpense, setEditDateExpense] = useState<Expense | null>(null);
+  const [editDateValue, setEditDateValue] = useState("");
 
   const applyFilter = useCallback((filters: SavedFilterData) => {
     if (typeof filters.search === "string") setSearch(filters.search);
@@ -372,43 +374,8 @@ export function ExpensesPage() {
                           <span className="ml-1 text-xs text-muted">{categoryName(exp.category_code)}</span>
                         </td>
                         <td className="px-4 py-2.5 text-muted">{formatDisplayDate(exp.invoice_date)}</td>
-                        <td className="px-4 py-2.5">
-                          <div className="flex items-center gap-1">
-                            <Input
-                              type="date"
-                              fullWidth={false}
-                              value={exp.paid_date ?? ""}
-                              onChange={(e) =>
-                                updateExpense.mutate(
-                                  {
-                                    id: exp.id,
-                                    data: { paid_date: e.target.value || null },
-                                  },
-                                  { onSuccess: () => toast.success(e.target.value ? t.paid_date_updated : t.marked_as_unpaid) }
-                                )
-                              }
-                              className={`px-1.5 py-0.5 text-xs rounded w-[110px] ${
-                                exp.paid_date ? "text-green-700 dark:text-green-300" : "text-red-600 dark:text-red-300"
-                              }`}
-                            />
-                            {!exp.paid_date && (
-                              <button
-                                onClick={() =>
-                                  updateExpense.mutate(
-                                    {
-                                      id: exp.id,
-                                      data: { paid_date: format(new Date(), "yyyy-MM-dd") },
-                                    },
-                                    { onSuccess: () => toast.success(t.marked_as_paid) }
-                                  )
-                                }
-                                className="px-1.5 py-0.5 text-[10px] rounded bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 shrink-0"
-                                title="Mark as paid today"
-                              >
-                                {t.today ?? "Today"}
-                              </button>
-                            )}
-                          </div>
+                        <td className={`px-4 py-2.5 ${exp.paid_date ? "text-green-700 dark:text-green-300" : "text-red-600 dark:text-red-300"}`}>
+                          {exp.paid_date ? formatDisplayDate(exp.paid_date) : "\u2014"}
                         </td>
                         <td className="px-4 py-2.5">
                           {exp.receipt_path ? (
@@ -461,11 +428,39 @@ export function ExpensesPage() {
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
-            ...(!ctxMenu.item.paid_date ? [{ label: t.mark_paid, icon: <CheckCircle size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: new Date().toISOString().split("T")[0] } }) }] : []),
+            ...(!ctxMenu.item.paid_date
+              ? [{ label: t.mark_as_paid_today, icon: <CheckCircle size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: new Date().toISOString().split("T")[0] } }, { onSuccess: () => toast.success(t.marked_as_paid) }) }]
+              : [{ label: t.mark_as_unpaid, icon: <XCircle size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: null } }, { onSuccess: () => toast.success(t.marked_as_unpaid) }) }]),
+            { label: t.edit_paid_date, icon: <Pencil size={14} />, onClick: () => { setEditDateValue(ctxMenu.item.paid_date ?? format(new Date(), "yyyy-MM-dd")); setEditDateExpense(ctxMenu.item); } },
             { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteExpense.mutate(ctxMenu.item.id) },
           ]}
         />
       )}
+      <Modal
+        open={!!editDateExpense}
+        onClose={() => setEditDateExpense(null)}
+        title={t.edit_paid_date}
+        footer={
+          <div className="flex gap-2 justify-end">
+            <Button variant="secondary" onClick={() => setEditDateExpense(null)}>{t.cancel}</Button>
+            <Button onClick={() => {
+              if (!editDateExpense) return;
+              updateExpense.mutate(
+                { id: editDateExpense.id, data: { paid_date: editDateValue || null } },
+                { onSuccess: () => { toast.success(editDateValue ? t.paid_date_updated : t.marked_as_unpaid); setEditDateExpense(null); } }
+              );
+            }}>{t.save}</Button>
+          </div>
+        }
+      >
+        <Input
+          type="date"
+          fullWidth
+          value={editDateValue}
+          onChange={(e) => setEditDateValue(e.target.value)}
+          autoFocus
+        />
+      </Modal>
       <BulkActionBar
         count={bulk.count}
         onClear={bulk.clearSelection}

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { Plus, Trash2, GripVertical, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Settings2, X, ChevronRight, ChevronDown, Copy, Download, Sigma, Pin, Play, Square } from "lucide-react";
+import { Plus, Trash2, GripVertical, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Settings2, X, Copy, Download, Sigma, Pin, Play, Square } from "lucide-react";
 import { Button } from "../ui";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
@@ -83,7 +83,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
 
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [isOpen, setIsOpen] = useState(true);
+  // Collapse is now handled by ProjectBlockLayout
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveTemplateName, setSaveTemplateName] = useState("");
   const [headerMenu, setHeaderMenu] = useState<{ ci: number; pos: { top: number; left: number }; isSystem?: boolean } | null>(null);
@@ -411,63 +411,49 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
   }, [sortedRows, columns]);
 
   return (
-    <div className="rounded-xl bg-[var(--color-surface)] p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3 select-none">
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          onContextMenu={(e) => { e.preventDefault(); setSectionMenu({ x: e.clientX, y: e.clientY }); }}
-          className="flex items-center gap-1 text-sm font-medium hover:text-accent"
+    <div>
+      {/* Toolbar */}
+      <div className="flex items-center justify-end gap-2 mb-3 select-none">
+        <select
+          value={templateId ?? ""}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (val === "__save__") {
+              handleSaveAsTemplate();
+            } else if (val === "__update__") {
+              handleUpdateTemplate();
+            } else {
+              handleTemplateChange(val ? Number(val) : null);
+            }
+          }}
+          className="text-xs border border-[var(--color-border-divider)] rounded-lg px-2 py-1"
         >
-          {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          {t.workload}
+          <option value="">{t.select_template}</option>
+          {templates?.map((tpl) => (
+            <option key={tpl.id} value={tpl.id}>
+              {tpl.name}{tpl.is_system ? " *" : ""}
+            </option>
+          ))}
+          {templateId && columns.length > 0 && (
+            <option value="__update__">{t.update_template}</option>
+          )}
+          {columns.length > 0 && (
+            <option value="__save__">{t.save_as_template}</option>
+          )}
+        </select>
+        <button
+          onClick={() => onEditColumn?.(null, columns.length)}
+          className="p-1 text-muted hover:text-accent"
+          title={t.add_column}
+        >
+          <Plus size={16} />
         </button>
-        {isOpen && (
-          <div className="flex items-center gap-2">
-            <select
-              value={templateId ?? ""}
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val === "__save__") {
-                  handleSaveAsTemplate();
-                } else if (val === "__update__") {
-                  handleUpdateTemplate();
-                } else {
-                  handleTemplateChange(val ? Number(val) : null);
-                }
-              }}
-              className="text-xs border border-[var(--color-border-divider)] rounded-lg px-2 py-1"
-            >
-              <option value="">{t.select_template}</option>
-              {templates?.map((tpl) => (
-                <option key={tpl.id} value={tpl.id}>
-                  {tpl.name}{tpl.is_system ? " *" : ""}
-                </option>
-              ))}
-              {templateId && columns.length > 0 && (
-                <option value="__update__">{t.update_template}</option>
-              )}
-              {columns.length > 0 && (
-                <option value="__save__">{t.save_as_template}</option>
-              )}
-            </select>
-            <button
-              onClick={() => onEditColumn?.(null, columns.length)}
-              className="p-1 text-muted hover:text-accent"
-              title={t.add_column}
-            >
-              <Plus size={16} />
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Table */}
-      {isOpen && (<>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
-      <div className="overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="overflow-x-auto">
           <table className="text-sm" style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}>
             <thead>
               <tr className="border-b border-[var(--color-border-header)] select-none">
@@ -633,10 +619,8 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
           <Plus size={14} />
           {t.new_row}
         </button>
-      </div>
       </SortableContext>
       </DndContext>
-      </>)}
 
       {/* Column header menu — system columns (sort-only) */}
       {headerMenu && headerMenu.isSystem && (() => {
