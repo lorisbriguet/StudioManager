@@ -6,6 +6,7 @@ import {
   useSavedFilters,
   useCreateSavedFilter,
   useRenameSavedFilter,
+  useUpdateSavedFilter,
   useDeleteSavedFilter,
 } from "../db/hooks/useSavedFilters";
 import { useT } from "../i18n/useT";
@@ -121,6 +122,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
   const { data: filters } = useSavedFilters(page);
   const createFilter = useCreateSavedFilter(page);
   const renameFilter = useRenameSavedFilter(page);
+  const updateFilter = useUpdateSavedFilter(page);
   const deleteFilter = useDeleteSavedFilter(page);
   const [naming, setNaming] = useState(false);
   const [nameInput, setNameInput] = useState("");
@@ -130,6 +132,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
   const [conditions, setConditions] = useState<FilterCondition[]>([]);
   const [conditionLogic, setConditionLogic] = useState<ConditionLogic>("and");
   const [showConditions, setShowConditions] = useState(false);
+  const [editingFilterId, setEditingFilterId] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
 
@@ -211,6 +214,37 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
     onApply({ ...currentFilters, conditions: [] });
   };
 
+  const handleStartEditConditions = (filter: SavedFilter) => {
+    setEditingFilterId(filter.id);
+    setConditions(filter.filters.conditions ?? []);
+    setConditionLogic(filter.filters.conditionLogic ?? "and");
+    setShowConditions(true);
+    onActiveChange(filter.id);
+    onApply(filter.filters);
+  };
+
+  const handleUpdateFilter = () => {
+    if (editingFilterId == null) return;
+    const f = filters?.find((f) => f.id === editingFilterId);
+    if (!f) return;
+    const updatedFilters: SavedFilterData = {
+      ...f.filters,
+      conditions: conditions.filter((c) => c.value.trim() !== ""),
+      conditionLogic,
+    };
+    updateFilter.mutate(
+      { id: editingFilterId, filters: updatedFilters },
+      {
+        onSuccess: () => {
+          toast.success(t.filter_updated);
+          onApply(updatedFilters);
+          setEditingFilterId(null);
+          setShowConditions(false);
+        },
+      }
+    );
+  };
+
   const addCondition = () => {
     if (!fields || fields.length === 0) return;
     const firstField = fields[0];
@@ -237,13 +271,13 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
             <select
               value={conditionLogic}
               onChange={(e) => setConditionLogic(e.target.value as ConditionLogic)}
-              className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--color-input-border)] bg-[var(--color-input-bg)] text-muted w-12"
+              className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--color-input-border)] bg-[var(--color-input-bg)] text-muted min-w-fit w-14"
             >
               <option value="and">AND</option>
               <option value="or">OR</option>
             </select>
           )}
-          {i === 0 && <div className="w-12" />}
+          {i === 0 && <div className="w-14" />}
           <div className="flex-1">
             <ConditionRow
               condition={c}
@@ -255,13 +289,31 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
           </div>
         </div>
       ))}
-      <button
-        onClick={addCondition}
-        className="flex items-center gap-1 text-xs text-muted hover:text-accent transition-colors self-start ml-[52px]"
-      >
-        <Plus size={10} />
-        {t.add_condition}
-      </button>
+      <div className="flex items-center gap-2 ml-[58px]">
+        <button
+          onClick={addCondition}
+          className="flex items-center gap-1 text-xs text-muted hover:text-accent transition-colors"
+        >
+          <Plus size={10} />
+          {t.add_condition}
+        </button>
+        {editingFilterId != null && (
+          <>
+            <button
+              onClick={handleUpdateFilter}
+              className="text-xs text-accent hover:text-accent-hover px-1"
+            >
+              {t.save}
+            </button>
+            <button
+              onClick={() => { setEditingFilterId(null); setShowConditions(false); }}
+              className="text-muted hover:text-[var(--color-text-secondary)]"
+            >
+              <X size={12} />
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 
@@ -333,8 +385,20 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
             <button
               key={f.id}
               onClick={() => {
-                onActiveChange(f.id);
-                onApply(f.filters);
+                if (activeFilterId === f.id && fields && fields.length > 0) {
+                  // Already active — toggle condition editor
+                  if (editingFilterId === f.id) {
+                    setEditingFilterId(null);
+                    setShowConditions(false);
+                  } else {
+                    handleStartEditConditions(f);
+                  }
+                } else {
+                  onActiveChange(f.id);
+                  onApply(f.filters);
+                  setEditingFilterId(null);
+                  setShowConditions(false);
+                }
               }}
               onContextMenu={(e) => {
                 e.preventDefault();
@@ -430,6 +494,17 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
             >
               <Pencil size={12} /> {t.rename}
             </button>
+            {fields && fields.length > 0 && (
+              <button
+                className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-left hover:bg-[var(--color-hover-row)]"
+                onClick={() => {
+                  handleStartEditConditions(ctxMenu.filter);
+                  setCtxMenu(null);
+                }}
+              >
+                <Filter size={12} /> {t.edit_conditions}
+              </button>
+            )}
             <button
               className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
               onClick={() => {

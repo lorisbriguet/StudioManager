@@ -7,6 +7,7 @@ import {
   Plus,
   ArrowLeft,
   FolderOpen,
+  BookOpen,
   FileText,
   X,
   Trash2,
@@ -490,9 +491,9 @@ function FolderSidebar({
   );
 
   return (
-    <div className="w-[200px] shrink-0 bg-[var(--color-surface)] border-r border-[var(--color-border-divider)] flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-[var(--color-border-divider)]">
-        <span className="text-[10px] font-medium uppercase tracking-widest text-muted">
+    <div className="w-48 shrink-0 border-r border-[var(--color-border-divider)] flex flex-col h-full py-5">
+      <div className="flex items-center justify-between px-3 mb-3">
+        <span className="text-[9px] font-medium uppercase tracking-widest text-muted">
           {t.folder}
         </span>
         <button
@@ -503,18 +504,18 @@ function FolderSidebar({
         </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-1">
+      <nav className="flex-1 overflow-y-auto space-y-px px-1">
         {/* All articles */}
         <button
           onClick={() => onSelectFolder(null)}
-          className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors ${
+          className={`w-full text-left px-3 py-1.5 mx-1 rounded-md text-xs transition-colors flex items-center gap-2 ${
             selectedFolderId === null
               ? "bg-accent-light text-accent font-medium"
-              : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
+              : "text-muted hover:bg-[var(--color-hover-row)]"
           }`}
         >
-          <FileText size={14} />
-          <span className="flex-1 text-left truncate">{t.all_articles}</span>
+          <BookOpen size={14} />
+          <span className="flex-1 truncate">{t.all_articles}</span>
           <span className="text-xs text-muted">{allCount}</span>
         </button>
 
@@ -546,14 +547,14 @@ function FolderSidebar({
                   e.preventDefault();
                   setContextMenu({ folderId: folder.id, x: e.clientX, y: e.clientY });
                 }}
-                className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors ${
+                className={`w-full text-left px-3 py-1.5 mx-1 rounded-md text-xs transition-colors flex items-center gap-2 ${
                   selectedFolderId === folder.id
                     ? "bg-accent-light text-accent font-medium"
-                    : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
+                    : "text-muted hover:bg-[var(--color-hover-row)]"
                 }`}
               >
                 <FolderOpen size={14} />
-                <span className="flex-1 text-left truncate">{folder.name}</span>
+                <span className="flex-1 truncate">{folder.name}</span>
                 <span className="text-xs text-muted">
                   {folderCounts.get(folder.id) || 0}
                 </span>
@@ -809,9 +810,10 @@ export function WikiPage() {
                         color: active ? color.text : "var(--color-muted)",
                         borderColor: active ? color.text : "var(--color-border-divider)",
                       }}
-                      className="px-2 py-0.5 text-xs rounded-full font-medium border transition-colors"
+                      className="px-2 py-0.5 text-xs rounded-full font-medium border transition-colors flex items-center gap-1"
                     >
                       {tag}
+                      {active && <X size={10} />}
                     </button>
                   );
                 })}
