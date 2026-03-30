@@ -257,8 +257,8 @@ function SlashCommandMenu({
         onClose();
       }
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
   }, [selectedIdx, filtered, onSelect, onClose]);
 
   if (filtered.length === 0) return null;
