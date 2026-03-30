@@ -46,7 +46,7 @@ function formatCHF(amount: number): string {
 }
 
 function PriorityDot({ priority }: { priority: string }) {
-  const color = priority === "high" ? "bg-danger" : priority === "medium" ? "bg-warning" : "bg-[var(--color-input-bg)]";
+  const color = priority === "high" ? "bg-danger" : priority === "medium" ? "bg-warning" : "bg-success";
   return <span className={`dot-sm ${color}`} />;
 }
 
@@ -296,6 +296,9 @@ function ProjectProgress() {
   const { data: tasks } = useAllTasks();
   const t = useT();
 
+  // NOTE: Progress is task-level only. Subtask progress is not included here
+  // because subtask data is not loaded in the global task query. For accurate
+  // weighted progress (tasks + subtasks), a dedicated query would be needed.
   const activeProjects = useMemo(() => {
     if (!projects) return [];
     return projects

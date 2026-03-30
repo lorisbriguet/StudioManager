@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, X, Eye, Trash2, ExternalLink, Pencil, Maximize2 } from "lucide-react";
+import { Plus, X, Eye, Trash2, ExternalLink, Maximize2 } from "lucide-react";
 import { toast } from "sonner";
 import { useProjects, useCreateProject, useDeleteProject } from "../db/hooks/useProjects";
 import { useClients } from "../db/hooks/useClients";
@@ -275,13 +275,6 @@ export function ProjectsPage() {
               <X size={14} />
             </button>
             <div className="flex-1" />
-            <Link
-              to={`/projects/${peekId}`}
-              className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
-              title={t.open_full_page}
-            >
-              <Pencil size={14} />
-            </Link>
             <Link
               to={`/projects/${peekId}`}
               className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"

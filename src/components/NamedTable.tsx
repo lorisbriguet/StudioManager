@@ -379,7 +379,7 @@ export function NamedTable({ table, projectId }: Props) {
                 >
                   {tag}
                   <button type="button" onClick={() => removeTag(tag)} className="hover:text-danger">
-                    <X size={8} />
+                    <X size={10} />
                   </button>
                 </span>
               );

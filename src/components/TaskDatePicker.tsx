@@ -195,7 +195,7 @@ export function TaskDatePicker({
       {open && popoverPos && createPortal(
         <div
           ref={popoverRef}
-          className="fixed z-[9999] bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-lg shadow-lg p-3 w-[300px]"
+          className="fixed z-[9999] bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-lg p-3 w-[300px]"
           style={{ top: popoverPos.top, left: popoverPos.left }}
         >
           {/* Quick shortcuts */}

@@ -157,6 +157,8 @@ const ui = {
     new_invoice: "New Invoice",
     search_invoices: "Search invoices...",
     no_matching_invoices: "No matching invoices",
+    invoices_count_singular: "invoice",
+    invoices_count_plural: "invoices",
 
     // Quotes
     new_quote: "New Quote",
@@ -187,6 +189,15 @@ const ui = {
     search_expenses: "Search expenses...",
     no_matching_expenses: "No matching expenses",
     no_expenses_yet: "No expenses yet",
+    expenses_count_singular: "expense",
+    expenses_count_plural: "expenses",
+    expense_created: "Expense created",
+    supplier_required: "Supplier is required",
+    amount_required: "Amount is required",
+    paid_date_updated: "Paid date updated",
+    marked_as_unpaid: "Marked as unpaid",
+    marked_as_paid: "Marked as paid",
+    attach_failed: "Failed to attach receipt",
     export_trustee: "Export for Trustee",
 
     // Finances
@@ -613,6 +624,7 @@ const ui = {
     no_articles_yet: "No articles yet",
     search_articles: "Search articles...",
     new_folder: "New folder",
+    folder_deleted: "Folder deleted — articles moved to All",
     start_writing: "Start writing... Use / for commands",
     no_wiki_articles_linked: "No wiki articles linked",
     updated: "Updated",
@@ -796,6 +808,8 @@ const ui = {
     new_invoice: "Nouvelle facture",
     search_invoices: "Rechercher des factures...",
     no_matching_invoices: "Aucune facture correspondante",
+    invoices_count_singular: "facture",
+    invoices_count_plural: "factures",
 
     // Quotes
     new_quote: "Nouvelle offre",
@@ -826,6 +840,15 @@ const ui = {
     search_expenses: "Rechercher des depenses...",
     no_matching_expenses: "Aucune depense correspondante",
     no_expenses_yet: "Aucune depense",
+    expenses_count_singular: "depense",
+    expenses_count_plural: "depenses",
+    expense_created: "Depense creee",
+    supplier_required: "Le fournisseur est requis",
+    amount_required: "Le montant est requis",
+    paid_date_updated: "Date de paiement mise a jour",
+    marked_as_unpaid: "Marque comme impaye",
+    marked_as_paid: "Marque comme paye",
+    attach_failed: "Echec de l'attachement du recu",
     export_trustee: "Export fiduciaire",
 
     // Finances
@@ -1252,6 +1275,7 @@ const ui = {
     no_articles_yet: "Aucun article",
     search_articles: "Rechercher des articles...",
     new_folder: "Nouveau dossier",
+    folder_deleted: "Dossier supprime — articles deplaces vers Tous",
     start_writing: "Commencez a ecrire... Utilisez / pour les commandes",
     no_wiki_articles_linked: "Aucun article wiki lie",
     updated: "Modifie",

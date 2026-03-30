@@ -292,26 +292,20 @@ const articles: ArticleSeed[] = [
  */
 export async function seedUserGuide(db: Database): Promise<void> {
   // Create the User Guide folder
-  await db.execute(
+  const folderResult = await db.execute(
     "INSERT INTO wiki_folders (name, sort_order) VALUES ($1, $2)",
     ["User Guide", 0]
   );
-  const folderRows = await db.select<{ id: number }[]>(
-    "SELECT last_insert_rowid() as id"
-  );
-  const folderId = folderRows[0]?.id;
+  const folderId = folderResult.lastInsertId;
   if (!folderId) return;
 
   for (let i = 0; i < articles.length; i++) {
     const article = articles[i];
-    await db.execute(
+    const articleResult = await db.execute(
       "INSERT INTO wiki_articles (folder_id, title, content, sort_order) VALUES ($1, $2, $3, $4)",
       [folderId, article.title, article.content, i]
     );
-    const articleRows = await db.select<{ id: number }[]>(
-      "SELECT last_insert_rowid() as id"
-    );
-    const articleId = articleRows[0]?.id;
+    const articleId = articleResult.lastInsertId;
     if (articleId) {
       for (const tag of article.tags) {
         await db.execute(

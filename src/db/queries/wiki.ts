@@ -120,10 +120,9 @@ export async function createWikiArticle(data: {
   const projectId = data.project_id ?? null;
   const title = data.title ?? "Untitled";
 
-  const maxOrder = await db.select<{ m: number | null }[]>(
-    "SELECT MAX(sort_order) as m FROM wiki_articles WHERE folder_id IS $1",
-    [folderId]
-  );
+  const maxOrder = folderId != null
+    ? await db.select<[{ m: number }]>("SELECT COALESCE(MAX(sort_order), -1) as m FROM wiki_articles WHERE folder_id = $1", [folderId])
+    : await db.select<[{ m: number }]>("SELECT COALESCE(MAX(sort_order), -1) as m FROM wiki_articles WHERE folder_id IS NULL");
   const nextOrder = (maxOrder[0]?.m ?? -1) + 1;
 
   const result = await db.execute(

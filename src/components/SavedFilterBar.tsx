@@ -148,6 +148,12 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
     return () => window.removeEventListener("click", close);
   }, [ctxMenu]);
 
+  // Sync internal conditions state when parent filters change (e.g. saved filter loaded)
+  useEffect(() => {
+    setConditions(currentFilters.conditions ?? []);
+    setConditionLogic(currentFilters.conditionLogic ?? "and");
+  }, [currentFilters.conditions, currentFilters.conditionLogic]);
+
   const handleStartNaming = () => {
     setNaming(true);
     // Pre-populate conditions from current active filter conditions if any

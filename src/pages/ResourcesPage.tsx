@@ -99,7 +99,7 @@ export function ResourcesPage() {
     }
     list = applyFilterConditions(list, filterConditions, filterLogic);
     return sortRows(list, sort.key, sort.dir);
-  }, [rows, search, tagFilter, sort, filterConditions]);
+  }, [rows, search, tagFilter, sort, filterConditions, filterLogic]);
 
   const bulk = useBulkSelect(filtered);
 

@@ -85,7 +85,7 @@ export function IncomePage() {
       : incomes;
     rows = applyFilterConditions(rows, filterConditions, filterLogic);
     return sortRows(rows, sort.key, sort.dir);
-  }, [incomes, search, sort, filterConditions]);
+  }, [incomes, search, sort, filterConditions, filterLogic]);
 
   const bulk = useBulkSelect(filtered);
 

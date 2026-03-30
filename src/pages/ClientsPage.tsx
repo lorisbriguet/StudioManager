@@ -86,7 +86,7 @@ export function ClientsPage() {
       : withStatus;
     rows = applyFilterConditions(rows, filterConditions, filterLogic);
     return sortRows(rows, sort.key, sort.dir);
-  }, [clients, search, sort, activeClientIds, filterConditions]);
+  }, [clients, search, sort, activeClientIds, filterConditions, filterLogic]);
 
   const bulk = useBulkSelect(filtered);
 
