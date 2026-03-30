@@ -444,27 +444,31 @@ function ArticleEditor({
 
   const handleSlashSelect = useCallback(
     (item: SlashMenuItem) => {
+      if (!editor) return;
+
       // Delete the "/command" text
-      const deleteLen = 1 + slashFilter.length; // "/" + typed filter text
-      editor?.chain().focus().deleteRange({
+      const deleteLen = 1 + slashFilter.length;
+      editor.chain().focus().deleteRange({
         from: editor.state.selection.from - deleteLen,
         to: editor.state.selection.from,
       }).run();
 
+      // Close slash menu first
+      setSlashMenu(null);
+      setSlashFilter("");
+
       if (item.special === "link") {
-        // Show link insert popup at cursor position
-        if (editor) {
+        // Show link popup after a tick (let editor settle after deleteRange)
+        setTimeout(() => {
           const coords = editor.view.coordsAtPos(editor.state.selection.from);
           setLinkPopup({ top: coords.bottom + 4, left: coords.left });
-        }
-        setSlashMenu(null);
+        }, 0);
         return;
       }
 
       item.action(editor);
-      setSlashMenu(null);
     },
-    [editor]
+    [editor, slashFilter]
   );
 
   const handleLinkInsert = useCallback(
