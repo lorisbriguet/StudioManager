@@ -218,27 +218,40 @@ function LinkInsertPopup({
 
 function SlashCommandMenu({
   position,
+  filter,
   onSelect,
   onClose,
 }: {
   position: { top: number; left: number };
+  filter: string;
   onSelect: (item: SlashMenuItem) => void;
   onClose: () => void;
 }) {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  const filtered = useMemo(() => {
+    if (!filter) return SLASH_COMMANDS;
+    const q = filter.toLowerCase();
+    return SLASH_COMMANDS.filter((cmd) => cmd.label.toLowerCase().includes(q));
+  }, [filter]);
+
+  useEffect(() => {
+    setSelectedIdx(0);
+  }, [filter]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (filtered.length === 0) { if (e.key === "Escape") onClose(); return; }
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSelectedIdx((i) => (i + 1) % SLASH_COMMANDS.length);
+        setSelectedIdx((i) => (i + 1) % filtered.length);
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
-        setSelectedIdx((i) => (i - 1 + SLASH_COMMANDS.length) % SLASH_COMMANDS.length);
+        setSelectedIdx((i) => (i - 1 + filtered.length) % filtered.length);
       } else if (e.key === "Enter") {
         e.preventDefault();
-        onSelect(SLASH_COMMANDS[selectedIdx]);
+        onSelect(filtered[selectedIdx]);
       } else if (e.key === "Escape") {
         e.preventDefault();
         onClose();
@@ -246,7 +259,9 @@ function SlashCommandMenu({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selectedIdx, onSelect, onClose]);
+  }, [selectedIdx, filtered, onSelect, onClose]);
+
+  if (filtered.length === 0) return null;
 
   return (
     <div
@@ -254,7 +269,7 @@ function SlashCommandMenu({
       className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[180px]"
       style={{ top: position.top, left: position.left }}
     >
-      {SLASH_COMMANDS.map((cmd, i) => {
+      {filtered.map((cmd, i) => {
         const Icon = cmd.icon;
         return (
           <button
@@ -301,6 +316,7 @@ function ArticleEditor({
   const [projectId, setProjectId] = useState<number | null>(null);
   const [tagInput, setTagInput] = useState("");
   const [slashMenu, setSlashMenu] = useState<{ top: number; left: number } | null>(null);
+  const [slashFilter, setSlashFilter] = useState("");
   const [linkPopup, setLinkPopup] = useState<{ top: number; left: number } | null>(null);
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -337,19 +353,22 @@ function ArticleEditor({
         const html = ed.getHTML();
         debouncedSave(html);
 
-        // Slash command detection
+        // Slash command detection — look for "/" at start of line or after whitespace
         const { state } = ed;
         const { from } = state.selection;
-        const textBefore = state.doc.textBetween(
-          Math.max(0, from - 1),
-          from,
-          "\0"
-        );
-        if (textBefore === "/") {
-          const coords = ed.view.coordsAtPos(from);
+        // Get text from start of current line to cursor
+        const $pos = state.doc.resolve(from);
+        const lineStart = $pos.start();
+        const textInLine = state.doc.textBetween(lineStart, from, "\0");
+        // Check if there's a "/" with optional command text after it
+        const slashMatch = textInLine.match(/\/(\w*)$/);
+        if (slashMatch) {
+          const coords = ed.view.coordsAtPos(lineStart + textInLine.lastIndexOf("/"));
           setSlashMenu({ top: coords.bottom + 4, left: coords.left });
+          setSlashFilter(slashMatch[1] ?? "");
         } else {
           setSlashMenu(null);
+          setSlashFilter("");
         }
       },
     },
@@ -425,9 +444,10 @@ function ArticleEditor({
 
   const handleSlashSelect = useCallback(
     (item: SlashMenuItem) => {
-      // Delete the "/" character
+      // Delete the "/command" text
+      const deleteLen = 1 + slashFilter.length; // "/" + typed filter text
       editor?.chain().focus().deleteRange({
-        from: editor.state.selection.from - 1,
+        from: editor.state.selection.from - deleteLen,
         to: editor.state.selection.from,
       }).run();
 
@@ -564,8 +584,9 @@ function ArticleEditor({
           {slashMenu && (
             <SlashCommandMenu
               position={slashMenu}
+              filter={slashFilter}
               onSelect={handleSlashSelect}
-              onClose={() => setSlashMenu(null)}
+              onClose={() => { setSlashMenu(null); setSlashFilter(""); }}
             />
           )}
           {linkPopup && (
