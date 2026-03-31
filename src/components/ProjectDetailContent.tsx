@@ -359,8 +359,8 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
           </div>
           {project.folder_path ? (
             <button
-              onClick={() => openUrl(project.folder_path!)}
-              className="text-muted hover:text-[var(--color-text-secondary)] text-xs flex items-center gap-1"
+              onClick={() => openUrl(project.folder_path!).catch(() => toast.error("Failed to open folder"))}
+              className="text-muted hover:text-[var(--color-text-secondary)] text-xs flex items-center gap-1 cursor-pointer"
             >
               <FolderOpen size={12} />
               {t.folder}
