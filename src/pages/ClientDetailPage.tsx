@@ -186,7 +186,7 @@ export function ClientDetailPage() {
 
           <ContactsSection clientId={id!} contacts={contacts ?? []} />
 
-          <AddressesSection clientId={id!} addresses={addresses ?? []} />
+          <AddressesSection clientId={id!} addresses={addresses ?? []} client={client} />
 
           <Section title={t.notes}>
             <textarea
@@ -277,6 +277,18 @@ function ContactsSection({
   const t = useT();
 
   const [drafts, setDrafts] = useState<ContactRow[]>([]);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<ContactRow>({ first_name: "", last_name: "", email: "", phone: "", role: "" });
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; contactId: number } | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Close context menu on click outside
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handler = () => setContextMenu(null);
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [contextMenu]);
 
   const addDraft = () =>
     setDrafts((prev) => [
@@ -301,19 +313,48 @@ function ContactsSection({
   const removeDraft = (idx: number) =>
     setDrafts((prev) => prev.filter((_, i) => i !== idx));
 
-  const updateField = (
-    contact: ClientContact,
-    field: keyof Omit<ClientContact, "id" | "client_id">,
-    value: string
-  ) => {
-    updateContact.mutate({
-      id: contact.id,
-      clientId,
-      data: { [field]: value },
+  const startEditing = (contact: ClientContact) => {
+    setEditingId(contact.id);
+    setEditForm({
+      first_name: contact.first_name,
+      last_name: contact.last_name,
+      email: contact.email,
+      phone: contact.phone,
+      role: contact.role,
     });
   };
 
+  const saveEdit = (contact: ClientContact) => {
+    const fields: (keyof Omit<ClientContact, "id" | "client_id">)[] = ["first_name", "last_name", "email", "phone", "role"];
+    for (const field of fields) {
+      if (editForm[field] !== contact[field]) {
+        updateContact.mutate({
+          id: contact.id,
+          clientId,
+          data: { [field]: editForm[field] },
+        });
+      }
+    }
+    setEditingId(null);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const handleEditBlur = (contact: ClientContact) => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      if (editingId === contact.id) saveEdit(contact);
+    }, 200);
+  };
+
+  const handleEditFocus = () => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+  };
+
   const removeContact = (contact: ClientContact) => {
+    if (editingId === contact.id) setEditingId(null);
     deleteContact.mutate(
       { id: contact.id, clientId },
       { onSuccess: () => toast.success(t.contact_removed) }
@@ -336,20 +377,144 @@ function ContactsSection({
         <div className="text-sm text-muted">{t.no_contacts}</div>
       )}
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {contacts.map((c) => (
-          <ContactCard
-            key={c.id}
-            contact={c}
-            onUpdate={(field, value) => updateField(c, field, value)}
-            onDelete={() => removeContact(c)}
-          />
+          editingId === c.id ? (
+            <div
+              key={c.id}
+              className="border border-[var(--color-input-border)] rounded-xl bg-[var(--color-surface)] p-3 space-y-2"
+            >
+              <div className="grid grid-cols-3 gap-2">
+                <MiniField
+                  label={t.first_name}
+                  value={editForm.first_name}
+                  onChange={(v) => setEditForm((prev) => ({ ...prev, first_name: v }))}
+                  onBlurCb={() => handleEditBlur(c)}
+                  onFocusCb={handleEditFocus}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") cancelEdit();
+                    if (e.key === "Enter") saveEdit(c);
+                  }}
+                />
+                <MiniField
+                  label={t.last_name}
+                  value={editForm.last_name}
+                  onChange={(v) => setEditForm((prev) => ({ ...prev, last_name: v }))}
+                  onBlurCb={() => handleEditBlur(c)}
+                  onFocusCb={handleEditFocus}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") cancelEdit();
+                    if (e.key === "Enter") saveEdit(c);
+                  }}
+                />
+                <MiniField
+                  label={t.role}
+                  value={editForm.role}
+                  onChange={(v) => setEditForm((prev) => ({ ...prev, role: v }))}
+                  onBlurCb={() => handleEditBlur(c)}
+                  onFocusCb={handleEditFocus}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") cancelEdit();
+                    if (e.key === "Enter") saveEdit(c);
+                  }}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <MiniField
+                  label={t.email}
+                  value={editForm.email}
+                  onChange={(v) => setEditForm((prev) => ({ ...prev, email: v }))}
+                  onBlurCb={() => handleEditBlur(c)}
+                  onFocusCb={handleEditFocus}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") cancelEdit();
+                    if (e.key === "Enter") saveEdit(c);
+                  }}
+                />
+                <MiniField
+                  label={t.phone}
+                  value={editForm.phone}
+                  onChange={(v) => setEditForm((prev) => ({ ...prev, phone: v }))}
+                  onBlurCb={() => handleEditBlur(c)}
+                  onFocusCb={handleEditFocus}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") cancelEdit();
+                    if (e.key === "Enter") saveEdit(c);
+                  }}
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button onClick={cancelEdit} className="text-xs text-muted hover:text-danger">{t.cancel}</button>
+                <button onClick={() => saveEdit(c)} className="text-xs text-accent hover:text-accent-hover font-medium">{t.save}</button>
+              </div>
+            </div>
+          ) : (
+            <div
+              key={c.id}
+              className="relative border border-[var(--color-border-divider)] rounded-xl bg-[var(--color-surface)] px-3 py-2.5 group cursor-default"
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenu({ x: e.clientX, y: e.clientY, contactId: c.id });
+              }}
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-medium">
+                  {c.first_name} {c.last_name}
+                </span>
+                {c.role && (
+                  <span className="text-xs text-muted">— {c.role}</span>
+                )}
+              </div>
+              {(c.email || c.phone) && (
+                <div className="flex items-center gap-3 mt-0.5">
+                  {c.email && <span className="text-xs text-muted">{c.email}</span>}
+                  {c.phone && <span className="text-xs text-muted">{c.phone}</span>}
+                </div>
+              )}
+              <button
+                onClick={() => startEditing(c)}
+                className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
+              >
+                <Pencil size={14} />
+              </button>
+            </div>
+          )
         ))}
+
+        {/* Context menu */}
+        {contextMenu && (
+          <div
+            className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[160px]"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <button
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
+              onClick={() => {
+                const contact = contacts.find((c) => c.id === contextMenu.contactId);
+                if (contact) startEditing(contact);
+                setContextMenu(null);
+              }}
+            >
+              <Pencil size={14} /> {t.edit}
+            </button>
+            <div className="my-1 border-t border-[var(--color-border-divider)]" />
+            <button
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+              onClick={() => {
+                const contact = contacts.find((c) => c.id === contextMenu.contactId);
+                if (contact) removeContact(contact);
+                setContextMenu(null);
+              }}
+            >
+              <Trash2 size={14} /> {t.delete}
+            </button>
+          </div>
+        )}
 
         {drafts.map((d, idx) => (
           <div
             key={`draft-${idx}`}
-            className="border border-dashed border-[var(--color-input-border)] rounded-md p-3 space-y-2"
+            className="border border-dashed border-[var(--color-input-border)] rounded-xl p-3 space-y-2"
           >
             <div className="grid grid-cols-3 gap-2">
               <MiniField
@@ -421,79 +586,6 @@ function ContactsSection({
   );
 }
 
-function ContactCard({
-  contact,
-  onUpdate,
-  onDelete,
-}: {
-  contact: ClientContact;
-  onUpdate: (
-    field: keyof Omit<ClientContact, "id" | "client_id">,
-    value: string
-  ) => void;
-  onDelete: () => void;
-}) {
-  const t = useT();
-
-  return (
-    <div className="border border-[var(--color-border-divider)] rounded-lg p-3 group">
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <EditableText
-            value={contact.first_name}
-            placeholder="First"
-            onCommit={(v) => onUpdate("first_name", v)}
-          />
-          <EditableText
-            value={contact.last_name}
-            placeholder="Last"
-            onCommit={(v) => onUpdate("last_name", v)}
-          />
-          {contact.role && (
-            <span className="text-xs text-muted font-normal">
-              —{" "}
-              <EditableText
-                value={contact.role}
-                placeholder="Role"
-                onCommit={(v) => onUpdate("role", v)}
-              />
-            </span>
-          )}
-          {!contact.role && (
-            <EditableText
-              value=""
-              placeholder="Role"
-              className="text-xs text-muted font-normal"
-              onCommit={(v) => onUpdate("role", v)}
-            />
-          )}
-        </div>
-        <button
-          onClick={onDelete}
-          title={t.delete}
-          className="opacity-0 group-hover:opacity-100 text-muted hover:text-danger transition-opacity"
-        >
-          <Trash2 size={14} />
-        </button>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <MiniField
-          label={t.email}
-          value={contact.email}
-          onChange={(v) => onUpdate("email", v)}
-          onBlur
-        />
-        <MiniField
-          label={t.phone}
-          value={contact.phone}
-          onChange={(v) => onUpdate("phone", v)}
-          onBlur
-        />
-      </div>
-    </div>
-  );
-}
-
 /* ── Addresses Section ── */
 
 interface AddressRow {
@@ -507,9 +599,11 @@ interface AddressRow {
 function AddressesSection({
   clientId,
   addresses,
+  client,
 }: {
   clientId: string;
   addresses: ClientAddress[];
+  client: Client;
 }) {
   const createAddress = useCreateClientAddress();
   const updateAddress = useUpdateClientAddress();
@@ -572,11 +666,22 @@ function AddressesSection({
         </button>
       </div>
 
-      {addresses.length === 0 && drafts.length === 0 && (
-        <div className="text-sm text-muted">{t.no_addresses}</div>
-      )}
-
       <div className="space-y-3">
+        {/* Main address — read-only card from client fields */}
+        {(client.address_line1 || client.postal_city) && (
+          <div className="border border-[var(--color-border-divider)] rounded-xl bg-[var(--color-surface)] p-3 opacity-80">
+            <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{t.main_address}</span>
+            <div className="mt-1 text-sm">
+              {(client.billing_name || client.name) && (
+                <div className="font-medium">{client.billing_name || client.name}</div>
+              )}
+              {client.address_line1 && <div className="text-muted">{client.address_line1}</div>}
+              {client.address_line2 && <div className="text-muted">{client.address_line2}</div>}
+              {client.postal_city && <div className="text-muted">{client.postal_city}</div>}
+            </div>
+          </div>
+        )}
+
         {addresses.map((a) => (
           <div key={a.id} className="border border-[var(--color-border-divider)] rounded-lg p-3 group">
             <div className="flex items-start justify-between mb-2">
@@ -747,11 +852,17 @@ function MiniField({
   value,
   onChange,
   onBlur,
+  onBlurCb,
+  onFocusCb,
+  onKeyDown,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   onBlur?: boolean;
+  onBlurCb?: () => void;
+  onFocusCb?: () => void;
+  onKeyDown?: (e: React.KeyboardEvent) => void;
 }) {
   const [local, setLocal] = useState(value);
 
@@ -770,7 +881,10 @@ function MiniField({
         }}
         onBlur={() => {
           if (onBlur && local !== value) onChange(local);
+          onBlurCb?.();
         }}
+        onFocus={onFocusCb}
+        onKeyDown={onKeyDown}
         className="px-2 py-1"
       />
     </div>

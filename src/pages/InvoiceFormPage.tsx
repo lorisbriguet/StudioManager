@@ -372,15 +372,15 @@ export function InvoiceFormPage() {
               ))}
             </Select>
           </div>
-          {clientAddresses && clientAddresses.length >= 1 && (
+          {clientId && (
             <div>
               <label className="block text-xs font-medium text-muted mb-1">{t.billing_address}</label>
               <Select
                 value={billingAddressId ?? ""}
                 onChange={(e) => setBillingAddressId(e.target.value ? Number(e.target.value) : null)}
               >
-                <option value="">{t.none}</option>
-                {clientAddresses.map((a) => (
+                <option value="">{t.main_address}</option>
+                {clientAddresses?.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.label}{a.billing_name ? ` — ${a.billing_name}` : ""}
                   </option>

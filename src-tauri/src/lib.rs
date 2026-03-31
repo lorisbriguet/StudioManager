@@ -268,6 +268,30 @@ fn get_active_db(app: tauri::AppHandle) -> Result<String, String> {
     Ok(name)
 }
 
+/// Open Apple Mail with a new message containing the PDF as attachment.
+#[tauri::command]
+async fn share_pdf_via_mail(path: String, to: String, subject: String) -> Result<(), String> {
+    let script = format!(
+        r#"tell application "Mail"
+            set newMessage to make new outgoing message with properties {{subject:"{}", visible:true}}
+            tell newMessage
+                make new to recipient at end of to recipients with properties {{address:"{}"}}
+                set mailAttachment to make new attachment with properties {{file name:POSIX file "{}"}} at after the last paragraph of content
+            end tell
+            activate
+        end tell"#,
+        subject.replace("\"", "\\\""),
+        to.replace("\"", "\\\""),
+        path.replace("\"", "\\\"")
+    );
+    std::process::Command::new("osascript")
+        .arg("-e")
+        .arg(&script)
+        .output()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let migrations = vec![
@@ -327,6 +351,7 @@ pub fn run() {
             restore_snapshot,
             has_snapshot,
             get_active_db,
+            share_pdf_via_mail,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

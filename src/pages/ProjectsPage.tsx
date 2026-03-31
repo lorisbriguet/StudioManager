@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus, X, Eye, Trash2, ExternalLink, Maximize2 } from "lucide-react";
 import { toast } from "sonner";
@@ -51,7 +51,51 @@ export function ProjectsPage() {
   const [search, setSearch] = useState("");
   const [peekId, setPeekId] = useState<number | null>(null);
   const [closingPeek, setClosingPeek] = useState(false);
+  const [peekWidth, setPeekWidth] = useState(() => {
+    const saved = localStorage.getItem("peekWidth");
+    return saved ? Math.max(20, Math.min(70, Number(saved))) : 50;
+  });
+  const peekRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
   const t = useT();
+
+  const handleDividerPointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    draggingRef.current = true;
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onPointerMove = (ev: PointerEvent) => {
+      if (!draggingRef.current || !container) return;
+      const rect = container.getBoundingClientRect();
+      const offsetFromRight = rect.right - ev.clientX;
+      const pct = Math.max(20, Math.min(70, (offsetFromRight / rect.width) * 100));
+      if (peekRef.current) {
+        peekRef.current.style.width = `${pct}%`;
+      }
+    };
+
+    const onPointerUp = (ev: PointerEvent) => {
+      draggingRef.current = false;
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        const offsetFromRight = rect.right - ev.clientX;
+        const pct = Math.max(20, Math.min(70, (offsetFromRight / rect.width) * 100));
+        setPeekWidth(pct);
+        localStorage.setItem("peekWidth", String(Math.round(pct)));
+      }
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+  }, []);
 
   const clientName = (clientId: string) =>
     clients?.find((c) => c.id === clientId)?.name ?? clientId;
@@ -144,7 +188,7 @@ export function ProjectsPage() {
   if (isLoading) return <PageSpinner />;
 
   return (
-    <div className="flex flex-1 min-h-0">
+    <div ref={containerRef} className="flex flex-1 min-h-0">
       <div className="min-w-0 overflow-y-auto flex-1">
         <PageHeader title={t.projects}>
           <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>{t.new_project}</Button>
@@ -262,8 +306,15 @@ export function ProjectsPage() {
 
       {/* Side Peek Panel */}
       {peekId !== null && (
+        <>
         <div
-          className={`shrink-0 w-1/2 border-l border-[var(--color-border-divider)] overflow-y-auto ${closingPeek ? "peek-exit" : "peek-enter"}`}
+          onPointerDown={handleDividerPointerDown}
+          className="shrink-0 w-1 cursor-col-resize hover:bg-accent/30 transition-colors"
+        />
+        <div
+          ref={peekRef}
+          className={`shrink-0 border-l border-[var(--color-border-divider)] overflow-y-auto ${closingPeek ? "peek-exit" : "peek-enter"}`}
+          style={{ width: `${peekWidth}%` }}
           onClick={(e) => e.stopPropagation()}
           onAnimationEnd={() => { if (closingPeek) { setPeekId(null); setClosingPeek(false); } }}
         >
@@ -287,6 +338,7 @@ export function ProjectsPage() {
             <ProjectDetailContent key={peekId} projectId={peekId} compact />
           </div>
         </div>
+        </>
       )}
     </div>
   );

@@ -117,6 +117,13 @@ export function CalendarPage() {
   const [quickCreate, setQuickCreate] = useState<QuickCreateState | null>(null);
   const [peekId, setPeekId] = useState<number | null>(null);
   const [closingPeek, setClosingPeek] = useState(false);
+  const [peekWidth, setPeekWidth] = useState(() => {
+    const saved = localStorage.getItem("peekWidth");
+    return saved ? Math.max(20, Math.min(70, Number(saved))) : 50;
+  });
+  const peekRef = useRef<HTMLDivElement>(null);
+  const calContainerRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
   const lastClickRef = useRef<{ time: number; date: string }>({ time: 0, date: "" });
   const calRef = useRef<FullCalendar>(null);
   const [calTitle, setCalTitle] = useState("");
@@ -376,8 +383,45 @@ export function CalendarPage() {
     [projects]
   );
 
+  const handleDividerPointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    draggingRef.current = true;
+    const container = calContainerRef.current;
+    if (!container) return;
+
+    const onPointerMove = (ev: PointerEvent) => {
+      if (!draggingRef.current || !container) return;
+      const rect = container.getBoundingClientRect();
+      const offsetFromRight = rect.right - ev.clientX;
+      const pct = Math.max(20, Math.min(70, (offsetFromRight / rect.width) * 100));
+      if (peekRef.current) {
+        peekRef.current.style.width = `${pct}%`;
+      }
+    };
+
+    const onPointerUp = (ev: PointerEvent) => {
+      draggingRef.current = false;
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        const offsetFromRight = rect.right - ev.clientX;
+        const pct = Math.max(20, Math.min(70, (offsetFromRight / rect.width) * 100));
+        setPeekWidth(pct);
+        localStorage.setItem("peekWidth", String(Math.round(pct)));
+      }
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+  }, []);
+
   return (
-    <div className="flex h-full">
+    <div ref={calContainerRef} className="flex h-full">
       <div className="min-w-0 flex-1">
         {/* Custom toolbar */}
         <div className="flex items-center gap-3 mb-4">
@@ -445,9 +489,15 @@ export function CalendarPage() {
       </div>
 
       {peekId !== null && (
+        <>
         <div
+          onPointerDown={handleDividerPointerDown}
+          className="shrink-0 w-1 cursor-col-resize hover:bg-accent/30 transition-colors"
+        />
+        <div
+          ref={peekRef}
           className={`shrink-0 border-l border-[var(--color-border-divider)] h-[calc(100vh-6rem)] ${closingPeek ? "peek-exit overflow-hidden" : "peek-enter overflow-y-auto"}`}
-          style={closingPeek ? undefined : { width: '50%', minWidth: 0 }}
+          style={closingPeek ? undefined : { width: `${peekWidth}%`, minWidth: 0 }}
           onAnimationEnd={() => { if (closingPeek) { setPeekId(null); setClosingPeek(false); } }}
         >
           <div className="flex items-center justify-between mb-4">
@@ -466,6 +516,7 @@ export function CalendarPage() {
           </div>
           <ProjectDetailContent projectId={peekId} compact />
         </div>
+        </>
       )}
     </div>
   );
