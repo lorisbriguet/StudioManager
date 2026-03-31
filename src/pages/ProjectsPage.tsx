@@ -308,16 +308,20 @@ export function ProjectsPage() {
       {peekId !== null && (
         <>
         <div
-          onPointerDown={handleDividerPointerDown}
-          className="shrink-0 w-1 cursor-col-resize hover:bg-accent/30 transition-colors"
-        />
-        <div
           ref={peekRef}
-          className={`shrink-0 border-l border-[var(--color-border-divider)] overflow-y-auto ${closingPeek ? "peek-exit" : "peek-enter"}`}
+          className={`shrink-0 overflow-y-auto relative ${closingPeek ? "peek-exit" : "peek-enter"}`}
           style={{ width: `${peekWidth}%` }}
           onClick={(e) => e.stopPropagation()}
           onAnimationEnd={() => { if (closingPeek) { setPeekId(null); setClosingPeek(false); } }}
         >
+          {/* Drag handle — overlays the left border */}
+          <div
+            onPointerDown={handleDividerPointerDown}
+            className="absolute left-0 top-0 bottom-0 w-2 cursor-col-resize z-10 hover:bg-accent/20 transition-colors"
+            style={{ marginLeft: "-4px" }}
+          />
+          {/* Visible border */}
+          <div className="absolute left-0 top-0 bottom-0 w-px bg-[var(--color-border-divider)]" />
           <div className="flex items-center gap-1 p-2 border-b border-[var(--color-border-header)]">
             <button
               onClick={handleClosePeek}

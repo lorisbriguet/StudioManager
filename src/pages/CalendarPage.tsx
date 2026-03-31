@@ -491,15 +491,19 @@ export function CalendarPage() {
       {peekId !== null && (
         <>
         <div
-          onPointerDown={handleDividerPointerDown}
-          className="shrink-0 w-1 cursor-col-resize hover:bg-accent/30 transition-colors"
-        />
-        <div
           ref={peekRef}
-          className={`shrink-0 border-l border-[var(--color-border-divider)] h-[calc(100vh-6rem)] ${closingPeek ? "peek-exit overflow-hidden" : "peek-enter overflow-y-auto"}`}
+          className={`shrink-0 relative h-[calc(100vh-6rem)] ${closingPeek ? "peek-exit overflow-hidden" : "peek-enter overflow-y-auto"}`}
           style={closingPeek ? undefined : { width: `${peekWidth}%`, minWidth: 0 }}
           onAnimationEnd={() => { if (closingPeek) { setPeekId(null); setClosingPeek(false); } }}
         >
+          {/* Drag handle */}
+          <div
+            onPointerDown={handleDividerPointerDown}
+            className="absolute left-0 top-0 bottom-0 w-2 cursor-col-resize z-10 hover:bg-accent/20 transition-colors"
+            style={{ marginLeft: "-4px" }}
+          />
+          {/* Visible border */}
+          <div className="absolute left-0 top-0 bottom-0 w-px bg-[var(--color-border-divider)]" />
           <div className="flex items-center justify-between mb-4">
             <Link
               to={`/projects/${peekId}`}
