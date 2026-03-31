@@ -150,6 +150,10 @@ export function InvoicesPage() {
   );
 
   const handleDownloadPdf = async (inv: Invoice & { client_name: string }) => {
+    if (inv.reference.startsWith("DRAFT")) {
+      const proceed = await ask(t.export_draft_warning, { kind: "warning", okLabel: t.download_pdf, cancelLabel: t.cancel });
+      if (!proceed) return;
+    }
     try {
       const [fullInvoice, lineItems, client, profile] = await Promise.all([
         getInvoice(inv.id),
@@ -207,6 +211,10 @@ export function InvoicesPage() {
   };
 
   const handleEmailPdf = async (inv: Invoice & { client_name: string }) => {
+    if (inv.reference.startsWith("DRAFT")) {
+      const proceed = await ask(t.export_draft_warning, { kind: "warning", okLabel: t.email_pdf, cancelLabel: t.cancel });
+      if (!proceed) return;
+    }
     try {
       const [fullInvoice, lineItems, client, profile] = await Promise.all([
         getInvoice(inv.id),
