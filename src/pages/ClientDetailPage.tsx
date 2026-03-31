@@ -659,7 +659,7 @@ function AddressCard({
     >
       <div className="flex items-start justify-between">
         <div>
-          {a.label && <span className="text-xs font-medium text-accent">{a.label}</span>}
+          {a.label && <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{a.label}</span>}
           <div className="mt-1 text-sm">
             {a.billing_name && <div className="font-medium">{a.billing_name}</div>}
             {a.address_line1 && <div className="text-muted">{a.address_line1}</div>}
