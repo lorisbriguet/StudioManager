@@ -2,6 +2,7 @@ import { Bell, Check, CheckCheck, Trash2, AlertTriangle, Info, AlertCircle, Copy
 import { PageHeader, Button } from "../components/ui";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { open as openInFinder } from "@tauri-apps/plugin-shell";
 import {
   useNotifications,
 
@@ -35,7 +36,14 @@ export function NotificationsPage() {
 
   function handleClick(n: AppNotification) {
     if (!n.read) markRead.mutate(n.id);
-    if (n.link) navigate(n.link);
+    if (n.link) {
+      if (n.link.startsWith("/")) {
+        navigate(n.link);
+      } else {
+        // External path (e.g., backup folder) — open in Finder
+        openInFinder(n.link).catch(() => {});
+      }
+    }
   }
 
   return (

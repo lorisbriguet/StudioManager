@@ -47,7 +47,7 @@ export function useAutoBackup() {
               title: "Auto-backup",
               message: fileName,
               read: 0,
-              link: null,
+              link: backupPath,
             });
             queryClient.invalidateQueries({ queryKey: ["notifications"] });
             sendNativeNotification("Auto-backup", fileName);
