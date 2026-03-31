@@ -34,15 +34,25 @@ export function NotificationsPage() {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
+  function isFilePath(link: string): boolean {
+    return /^\/Users\/|^\/Volumes\/|^\/tmp\/|^~\/|^\/var\//.test(link);
+  }
+
   function handleClick(n: AppNotification) {
     if (!n.read) markRead.mutate(n.id);
-    if (n.link) {
-      if (n.link.startsWith("/")) {
-        navigate(n.link);
-      } else {
-        // External path (e.g., backup folder) — open in Finder
-        invoke("open_in_finder", { path: n.link }).catch(() => {});
-      }
+    if (!n.link) return;
+    if (isFilePath(n.link)) {
+      // File system path (e.g., backup folder) — open in Finder
+      invoke("open_in_finder", { path: n.link }).catch((err) => {
+        toast.error(t.could_not_open_path ?? `Could not open path: ${String(err)}`);
+      });
+    } else if (n.link.startsWith("/")) {
+      navigate(n.link);
+    } else {
+      // Fallback for any other external path
+      invoke("open_in_finder", { path: n.link }).catch((err) => {
+        toast.error(t.could_not_open_path ?? `Could not open path: ${String(err)}`);
+      });
     }
   }
 

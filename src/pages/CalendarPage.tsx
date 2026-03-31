@@ -504,6 +504,7 @@ export function CalendarPage() {
           style={closingPeek ? undefined : { width: `${peekWidth}%`, minWidth: 0 }}
           onAnimationEnd={() => { if (closingPeek) { setPeekId(null); setClosingPeek(false); } }}
         >
+          <div className="p-4">
           <div className="flex items-center justify-between mb-4">
             <Link
               to={`/projects/${peekId}`}
@@ -519,6 +520,7 @@ export function CalendarPage() {
             </button>
           </div>
           <ProjectDetailContent projectId={peekId} compact />
+          </div>
         </div>
         </>
       )}
