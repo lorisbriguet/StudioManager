@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Save, Plus, Trash2, Eye, Pencil } from "lucide-react";
 import { toast } from "sonner";
@@ -596,6 +597,101 @@ interface AddressRow {
   postal_city: string;
 }
 
+function AddressCard({
+  address: a,
+  onUpdate,
+  onDelete,
+  t,
+}: {
+  address: ClientAddress;
+  onUpdate: (field: keyof Omit<ClientAddress, "id" | "client_id">, value: string) => void;
+  onDelete: () => void;
+  t: Record<string, string>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    label: a.label,
+    billing_name: a.billing_name,
+    address_line1: a.address_line1,
+    address_line2: a.address_line2,
+    postal_city: a.postal_city,
+  });
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [ctxMenu]);
+
+  const save = () => {
+    if (form.label !== a.label) onUpdate("label", form.label);
+    if (form.billing_name !== a.billing_name) onUpdate("billing_name", form.billing_name);
+    if (form.address_line1 !== a.address_line1) onUpdate("address_line1", form.address_line1);
+    if (form.address_line2 !== a.address_line2) onUpdate("address_line2", form.address_line2);
+    if (form.postal_city !== a.postal_city) onUpdate("postal_city", form.postal_city);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="rounded-xl bg-[var(--color-surface)] p-3 space-y-2">
+        <div className="grid grid-cols-2 gap-2">
+          <MiniField label={t.label} value={form.label} onChange={(v) => setForm({ ...form, label: v })} />
+          <MiniField label={t.billing_name} value={form.billing_name} onChange={(v) => setForm({ ...form, billing_name: v })} />
+          <MiniField label={t.address_line_1} value={form.address_line1} onChange={(v) => setForm({ ...form, address_line1: v })} />
+          <MiniField label={t.address_line_2} value={form.address_line2} onChange={(v) => setForm({ ...form, address_line2: v })} />
+          <MiniField label={t.postal_city} value={form.postal_city} onChange={(v) => setForm({ ...form, postal_city: v })} />
+        </div>
+        <div className="flex gap-2 justify-end">
+          <button onClick={() => { setForm({ label: a.label, billing_name: a.billing_name, address_line1: a.address_line1, address_line2: a.address_line2, postal_city: a.postal_city }); setEditing(false); }} className="text-xs text-muted hover:text-[var(--color-text-secondary)]">{t.cancel}</button>
+          <button onClick={save} className="text-xs text-accent hover:text-accent-hover">{t.save}</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="rounded-xl bg-[var(--color-surface)] p-3 group relative"
+      onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); }}
+    >
+      <div className="flex items-start justify-between">
+        <div>
+          {a.label && <span className="text-xs font-medium text-accent">{a.label}</span>}
+          <div className="mt-1 text-sm">
+            {a.billing_name && <div className="font-medium">{a.billing_name}</div>}
+            {a.address_line1 && <div className="text-muted">{a.address_line1}</div>}
+            {a.address_line2 && <div className="text-muted">{a.address_line2}</div>}
+            {a.postal_city && <div className="text-muted">{a.postal_city}</div>}
+          </div>
+        </div>
+        <button
+          onClick={() => setEditing(true)}
+          className="opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
+        >
+          <Pencil size={14} />
+        </button>
+      </div>
+      {ctxMenu && createPortal(
+        <div
+          className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[140px]"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+        >
+          <button onClick={() => { setEditing(true); setCtxMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]">
+            <Pencil size={14} /> {t.edit}
+          </button>
+          <button onClick={() => { onDelete(); setCtxMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">
+            <Trash2 size={14} /> {t.delete}
+          </button>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
 function AddressesSection({
   clientId,
   addresses,
@@ -683,50 +779,13 @@ function AddressesSection({
         )}
 
         {addresses.map((a) => (
-          <div key={a.id} className="border border-[var(--color-border-divider)] rounded-lg p-3 group">
-            <div className="flex items-start justify-between mb-2">
-              <span className="text-xs font-medium text-accent">
-                <EditableText
-                  value={a.label}
-                  placeholder="Label"
-                  onCommit={(v) => updateField(a, "label", v)}
-                />
-              </span>
-              <button
-                onClick={() => removeAddress(a)}
-                title={t.delete}
-                className="opacity-0 group-hover:opacity-100 text-muted hover:text-danger transition-opacity"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <MiniField
-                label={t.billing_name}
-                value={a.billing_name}
-                onChange={(v) => updateField(a, "billing_name", v)}
-                onBlur
-              />
-              <MiniField
-                label={t.address_line_1}
-                value={a.address_line1}
-                onChange={(v) => updateField(a, "address_line1", v)}
-                onBlur
-              />
-              <MiniField
-                label={t.address_line_2}
-                value={a.address_line2}
-                onChange={(v) => updateField(a, "address_line2", v)}
-                onBlur
-              />
-              <MiniField
-                label={t.postal_city}
-                value={a.postal_city}
-                onChange={(v) => updateField(a, "postal_city", v)}
-                onBlur
-              />
-            </div>
-          </div>
+          <AddressCard
+            key={a.id}
+            address={a}
+            onUpdate={(field, value) => updateField(a, field, value)}
+            onDelete={() => removeAddress(a)}
+            t={t}
+          />
         ))}
 
         {drafts.map((d, idx) => (
@@ -891,55 +950,3 @@ function MiniField({
   );
 }
 
-function EditableText({
-  value,
-  placeholder,
-  className,
-  onCommit,
-}: {
-  value: string;
-  placeholder: string;
-  className?: string;
-  onCommit: (v: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [local, setLocal] = useState(value);
-
-  if (editing) {
-    return (
-      <input
-        autoFocus
-        value={local}
-        onChange={(e) => setLocal(e.target.value)}
-        onBlur={() => {
-          setEditing(false);
-          if (local !== value) onCommit(local);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            setEditing(false);
-            if (local !== value) onCommit(local);
-          }
-          if (e.key === "Escape") {
-            setEditing(false);
-            setLocal(value);
-          }
-        }}
-        className="border-b border-accent bg-transparent outline-none text-sm px-0 py-0 w-20"
-        placeholder={placeholder}
-      />
-    );
-  }
-
-  return (
-    <span
-      onClick={() => {
-        setLocal(value);
-        setEditing(true);
-      }}
-      className={`cursor-pointer hover:text-accent ${className ?? ""}`}
-    >
-      {value || <span className="text-muted italic">{placeholder}</span>}
-    </span>
-  );
-}
