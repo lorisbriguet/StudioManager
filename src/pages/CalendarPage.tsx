@@ -421,8 +421,8 @@ export function CalendarPage() {
   }, []);
 
   return (
-    <div ref={calContainerRef} className="flex h-full">
-      <div className="min-w-0 flex-1">
+    <div ref={calContainerRef} className="flex h-full -m-8">
+      <div className="min-w-0 flex-1 p-8">
         {/* Custom toolbar */}
         <div className="flex items-center gap-3 mb-4">
           <button onClick={calPrev} className="p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors">
