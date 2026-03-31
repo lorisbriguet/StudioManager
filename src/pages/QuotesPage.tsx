@@ -72,6 +72,10 @@ export function QuotesPage() {
   const [wizardLineItems, setWizardLineItems] = useState<QuoteLineItem[]>([]);
 
   const handleDownloadPdf = async (q: Quote & { client_name: string }) => {
+    if (q.reference.startsWith("DRAFT")) {
+      const proceed = await ask(t.export_draft_warning, { kind: "warning", okLabel: t.download_pdf, cancelLabel: t.cancel });
+      if (!proceed) return;
+    }
     try {
       const [fullQuote, lineItems, client, profile] = await Promise.all([
         getQuote(q.id),
@@ -115,6 +119,10 @@ export function QuotesPage() {
   };
 
   const handleEmailPdf = async (q: Quote & { client_name: string }) => {
+    if (q.reference.startsWith("DRAFT")) {
+      const proceed = await ask(t.export_draft_warning, { kind: "warning", okLabel: t.email_pdf, cancelLabel: t.cancel });
+      if (!proceed) return;
+    }
     try {
       const [fullQuote, lineItems, client, profile] = await Promise.all([
         getQuote(q.id),
