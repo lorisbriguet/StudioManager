@@ -2,8 +2,8 @@ import { useCallback } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../stores/app-store";
-import { updateWorkloadRow } from "../db/queries/workload";
 import { getTaskById } from "../db/queries/tasks";
+import { createTimeEntry } from "../db/queries/timeEntries";
 import { useT } from "../i18n/useT";
 
 function fmtDuration(mins: number) {
@@ -11,10 +11,10 @@ function fmtDuration(mins: number) {
 }
 
 /**
- * Shared timer actions: stopAndSave writes elapsed time to tasks.tracked_minutes.
+ * Shared timer actions: stopAndSave creates a time_entry and updates tasks.tracked_minutes.
  *
- * When stopping a timer, the duration is added to the task's existing tracked_minutes.
- * Starting again on the same task resumes accumulation — no duplicate entries.
+ * When stopping a timer, a new time_entry is created with the elapsed duration.
+ * The task's tracked_minutes is also incremented via createTimeEntry.
  */
 export function useTimerActions() {
   const activeTimer = useAppStore((s) => s.activeTimer);
@@ -23,21 +23,33 @@ export function useTimerActions() {
   const qc = useQueryClient();
   const t = useT();
 
-  /** Stop active timer and save tracked_minutes to task. Returns true if saved. */
+  /** Stop active timer, create time entry, and update tracked_minutes. Returns true if saved. */
   const stopAndSave = useCallback(async (): Promise<boolean> => {
     const result = stopTimer();
     if (!result || result.durationMinutes <= 0) return false;
 
-    // Get current tracked_minutes and add elapsed time
+    const today = new Date().toISOString().slice(0, 10);
+
+    // Create time entry (also updates task.tracked_minutes via createTimeEntry)
+    await createTimeEntry({
+      task_id: result.taskId,
+      project_id: result.projectId,
+      duration_minutes: result.durationMinutes,
+      date: today,
+    });
+
+    // Get the new total for the toast
     const task = await getTaskById(result.taskId);
-    const prev = task?.tracked_minutes ?? 0;
-    const newTotal = prev + result.durationMinutes;
+    const newTotal = task?.tracked_minutes ?? result.durationMinutes;
 
-    await updateWorkloadRow(result.taskId, { tracked_minutes: newTotal });
-
-    // Invalidate both workload and task queries
+    // Invalidate workload, task, and time-entries queries
     qc.invalidateQueries({ queryKey: ["workload-rows", result.projectId] });
     qc.invalidateQueries({ queryKey: ["tasks"] });
+    qc.invalidateQueries({ queryKey: ["time-entries"] });
+    qc.invalidateQueries({ queryKey: ["time-this-week"] });
+    qc.invalidateQueries({ queryKey: ["weekly-trend"] });
+    qc.invalidateQueries({ queryKey: ["top-time-consumers"] });
+    qc.invalidateQueries({ queryKey: ["project-time-distribution"] });
 
     toast.success(`${t.stop_timer}: +${fmtDuration(result.durationMinutes)} → ${fmtDuration(newTotal)}`);
     return true;

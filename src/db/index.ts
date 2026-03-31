@@ -560,6 +560,39 @@ async function ensureSchema(db: Database) {
     await seedUserGuide(db);
   }
 
+  // ── Time entries table (created by TimeTrackingPage migration) ──
+  // Ensure it exists for fresh installs
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS time_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
+      description TEXT NOT NULL DEFAULT '',
+      duration_minutes INTEGER NOT NULL DEFAULT 0,
+      date TEXT NOT NULL,
+      hourly_rate REAL DEFAULT NULL,
+      invoiced INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  // One-time migration: backfill time_entries from tasks.tracked_minutes
+  // for tasks that have tracked time but no corresponding time_entries yet
+  const tasksNeedingMigration = await db.select<{ id: number; project_id: number; tracked_minutes: number; updated_at: string }[]>(
+    `SELECT t.id, t.project_id, t.tracked_minutes, t.updated_at
+     FROM tasks t
+     WHERE t.tracked_minutes > 0
+       AND t.id NOT IN (SELECT DISTINCT task_id FROM time_entries WHERE task_id IS NOT NULL)`
+  );
+  for (const tt of tasksNeedingMigration) {
+    const entryDate = tt.updated_at ? tt.updated_at.slice(0, 10) : new Date().toISOString().slice(0, 10);
+    await db.execute(
+      "INSERT INTO time_entries (task_id, project_id, duration_minutes, date, description) VALUES ($1, $2, $3, $4, $5)",
+      [tt.id, tt.project_id, tt.tracked_minutes, entryDate, "Migrated from tracked_minutes"]
+    );
+  }
+
   // ── Migrate workload_rows → tasks (one-time) ─────────────
   const hasWorkloadRows = await db.select<{ cnt: number }[]>(
     "SELECT COUNT(*) as cnt FROM workload_rows"

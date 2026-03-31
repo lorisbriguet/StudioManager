@@ -681,6 +681,15 @@ const ui = {
     failed_open_folder: "Failed to open folder",
     default_option_1: "Option 1",
     default_option_2: "Option 2",
+
+    // Log past time
+    log_time: "Log time",
+    hours_label: "Hours",
+    minutes_label: "Minutes",
+    time_logged: "Time logged",
+    time_entries: "Time entries",
+    note: "Note",
+    no_time_entries: "No time entries",
   },
   FR: {
     // Sidebar / Nav
@@ -1362,6 +1371,15 @@ const ui = {
     failed_open_folder: "Impossible d'ouvrir le dossier",
     default_option_1: "Option 1",
     default_option_2: "Option 2",
+
+    // Log past time
+    log_time: "Saisir du temps",
+    hours_label: "Heures",
+    minutes_label: "Minutes",
+    time_logged: "Temps saisi",
+    time_entries: "Saisies de temps",
+    note: "Note",
+    no_time_entries: "Aucune saisie de temps",
   },
 } as const;
 

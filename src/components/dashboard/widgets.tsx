@@ -27,12 +27,15 @@ import { useExpenses } from "../../db/hooks/useExpenses";
 import { useClients } from "../../db/hooks/useClients";
 import {
   getSubtasksWithDueDate,
-  getTimeThisWeek,
   getPlannedVsActual,
+} from "../../db/queries/tasks";
+import {
+  getTimeThisWeek,
   getTopTimeConsumers,
   getWeeklyTrend,
   getProjectTimeDistribution,
-} from "../../db/queries/tasks";
+  getBillableSummary,
+} from "../../db/queries/timeEntries";
 import { useDashboardStore } from "../../stores/dashboard-store";
 import { effectivePriority } from "../../types/task";
 import { useChartTheme } from "../../hooks/useChartTheme";
@@ -1279,9 +1282,8 @@ function TopTimeConsumers() {
 
 function BillableSummary() {
   const t = useT();
-  const { data: tasks } = useAllTasks();
-  const totalMin = useMemo(() => (tasks ?? []).reduce((s, tk) => s + (tk.tracked_minutes ?? 0), 0), [tasks]);
-  const totalHours = Math.round(totalMin / 60 * 10) / 10;
+  const { data } = useQuery({ queryKey: ["billable-summary"], queryFn: getBillableSummary });
+  const totalHours = Math.round((data?.total_minutes ?? 0) / 60 * 10) / 10;
   const animated = useCountUp(totalHours);
 
   return (
