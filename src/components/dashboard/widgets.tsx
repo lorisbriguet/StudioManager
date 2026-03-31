@@ -589,7 +589,7 @@ function ExpenseBreakdown() {
               <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="80%" innerRadius="40%" paddingAngle={2}>
                 {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
               </Pie>
-              <Tooltip formatter={(value) => [`CHF ${Number(value).toFixed(2)}`, ""]} contentStyle={chart.tooltipStyle} itemStyle={chart.pieItemStyle} />
+              <Tooltip formatter={(value) => [`CHF ${Number(value).toFixed(2)}`, ""]} contentStyle={chart.tooltipStyle} itemStyle={chart.pieItemStyle} labelStyle={{ color: "var(--color-text)" }} />
             </PieChart>
           </ResponsiveContainer>
         ) : (
@@ -1357,9 +1357,10 @@ function ProjectTimeDistribution() {
               cx="50%"
               cy="50%"
               outerRadius="70%"
-              label={({ name, percent }) => {
+              label={({ name, percent, x, y, textAnchor }) => {
                 const n = String(name ?? "");
-                return `${n.length > 12 ? n.slice(0, 11) + "…" : n} ${((percent ?? 0) * 100).toFixed(0)}%`;
+                const label = `${n.length > 12 ? n.slice(0, 11) + "…" : n} ${((percent ?? 0) * 100).toFixed(0)}%`;
+                return <text x={x} y={y} textAnchor={textAnchor} fill="var(--color-text)" fontSize={12}>{label}</text>;
               }}
               labelLine
             >
@@ -1367,7 +1368,7 @@ function ProjectTimeDistribution() {
                 <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
               ))}
             </Pie>
-            <Tooltip formatter={(value) => fmtHours(Number(value ?? 0))} contentStyle={chart.tooltipStyle} />
+            <Tooltip formatter={(value) => fmtHours(Number(value ?? 0))} contentStyle={chart.tooltipStyle} itemStyle={chart.pieItemStyle} labelStyle={{ color: "var(--color-text)" }} />
           </PieChart>
         </ResponsiveContainer>
       </div>

@@ -12,8 +12,8 @@ export function useChartTheme() {
         fontSize: 12,
         borderRadius: 8,
         border: "none",
-        backgroundColor: dark ? "#161616" : "#ffffff",
-        color: dark ? "#e5e5e5" : undefined,
+        backgroundColor: "var(--color-surface)",
+        color: "var(--color-text)",
         boxShadow: dark
           ? "0 4px 12px rgba(0,0,0,0.4)"
           : "0 4px 12px rgba(0,0,0,0.08)",
