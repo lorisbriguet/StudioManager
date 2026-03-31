@@ -1,12 +1,20 @@
 import { useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Eye, Pencil, FileOutput, Trash2, Send, ExternalLink, FolderPlus, FileText, Settings2 } from "lucide-react";
+import { Plus, Eye, Pencil, FileOutput, Trash2, Send, ExternalLink, FolderPlus, FileText, Settings2, Download, Mail } from "lucide-react";
 import { toast } from "sonner";
+import { pdf } from "@react-pdf/renderer";
+import { invoke } from "@tauri-apps/api/core";
+import { appDataDir } from "@tauri-apps/api/path";
+import { writeFile } from "@tauri-apps/plugin-fs";
 import { undoable } from "../lib/undo";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useClients } from "../db/hooks/useClients";
 import { useQuotes, useUpdateQuote, useDeleteQuote } from "../db/hooks/useQuotes";
-import { getQuoteLineItems } from "../db/queries/quotes";
+import { getQuote, getQuoteLineItems } from "../db/queries/quotes";
+import { getClient, getClientAddresses } from "../db/queries/clients";
+import { getBusinessProfile } from "../db/queries/business-profile";
+import { getProject } from "../db/queries/projects";
+import { QuotePDF } from "../components/quote/QuotePDF";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
 import { formatDisplayDate } from "../utils/formatDate";
 import { useT } from "../i18n/useT";
@@ -62,6 +70,97 @@ export function QuotesPage() {
 
   const [wizardQuote, setWizardQuote] = useState<(Quote & { client_name: string }) | null>(null);
   const [wizardLineItems, setWizardLineItems] = useState<QuoteLineItem[]>([]);
+
+  const handleDownloadPdf = async (q: Quote & { client_name: string }) => {
+    try {
+      const [fullQuote, lineItems, client, profile] = await Promise.all([
+        getQuote(q.id),
+        getQuoteLineItems(q.id),
+        getClient(q.client_id),
+        getBusinessProfile(),
+      ]);
+      if (!fullQuote || !client || !profile) {
+        toast.error(t.quote_not_found);
+        return;
+      }
+      const [addresses, project] = await Promise.all([
+        getClientAddresses(q.client_id),
+        fullQuote.project_id ? getProject(fullQuote.project_id) : Promise.resolve(null),
+      ]);
+      const billingAddress = fullQuote.billing_address_id
+        ? addresses?.find((a) => a.id === fullQuote.billing_address_id) ?? null
+        : null;
+
+      const doc = (
+        <QuotePDF
+          quote={fullQuote}
+          lineItems={lineItems}
+          client={client}
+          profile={profile}
+          billingAddress={billingAddress}
+          projectName={project?.name}
+        />
+      );
+      const blob = await pdf(doc).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${fullQuote.reference.startsWith("DRAFT") ? "DRAFT" : fullQuote.reference}_${client.name}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(t.download_pdf);
+    } catch (err) {
+      toast.error(String(err));
+    }
+  };
+
+  const handleEmailPdf = async (q: Quote & { client_name: string }) => {
+    try {
+      const [fullQuote, lineItems, client, profile] = await Promise.all([
+        getQuote(q.id),
+        getQuoteLineItems(q.id),
+        getClient(q.client_id),
+        getBusinessProfile(),
+      ]);
+      if (!fullQuote || !client || !profile) {
+        toast.error(t.quote_not_found);
+        return;
+      }
+      const [addresses, project] = await Promise.all([
+        getClientAddresses(q.client_id),
+        fullQuote.project_id ? getProject(fullQuote.project_id) : Promise.resolve(null),
+      ]);
+      const billingAddress = fullQuote.billing_address_id
+        ? addresses?.find((a) => a.id === fullQuote.billing_address_id) ?? null
+        : null;
+
+      const doc = (
+        <QuotePDF
+          quote={fullQuote}
+          lineItems={lineItems}
+          client={client}
+          profile={profile}
+          billingAddress={billingAddress}
+          projectName={project?.name}
+        />
+      );
+      const blob = await pdf(doc).toBlob();
+      const pdfBytes = new Uint8Array(await blob.arrayBuffer());
+
+      const dataDir = await appDataDir();
+      const tempFileName = `${fullQuote.reference.startsWith("DRAFT") ? "DRAFT" : fullQuote.reference}_${client.name}.pdf`.replace(/[/\\]/g, "_");
+      const tempPath = `${dataDir}/temp_${tempFileName}`;
+      await writeFile(tempPath, pdfBytes);
+
+      await invoke("share_pdf_via_mail", {
+        path: tempPath,
+        to: client.email ?? "",
+        subject: fullQuote.reference.startsWith("DRAFT") ? "DRAFT" : fullQuote.reference,
+      });
+    } catch (err) {
+      toast.error(String(err));
+    }
+  };
 
   const openWizard = async (quote: Quote & { client_name: string }) => {
     if (quote.converted_to_project_id) {
@@ -222,6 +321,8 @@ export function QuotesPage() {
           items={[
             { label: t.edit, icon: <Pencil size={14} />, onClick: () => navigate(`/quotes/${ctxMenu.item.id}/edit`) },
             { label: t.preview_pdf, icon: <Eye size={14} />, onClick: () => navigate(`/quotes/${ctxMenu.item.id}/preview`) },
+            { label: t.download_pdf, icon: <Download size={14} />, onClick: () => handleDownloadPdf(ctxMenu.item) },
+            { label: t.email_pdf, icon: <Mail size={14} />, onClick: () => handleEmailPdf(ctxMenu.item) },
             { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/quotes/${ctxMenu.item.id}/edit`, ctxMenu.item.reference.startsWith("DRAFT") ? t.draft : ctxMenu.item.reference) },
             { label: "", divider: true, onClick: () => {} },
             ...(ctxMenu.item.status === "draft" ? [{ label: t.mark_sent, icon: <Send size={14} />, onClick: () => updateQuote.mutate({ id: ctxMenu.item.id, data: { status: "sent" as QuoteStatus } }) }] : []),

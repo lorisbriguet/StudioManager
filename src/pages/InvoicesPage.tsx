@@ -1,11 +1,21 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Eye, ChevronRight, Pencil, Trash2, CheckCircle, Send, Repeat, X, AlertTriangle, ExternalLink, FileText, Settings2 } from "lucide-react";
+import { Plus, Eye, ChevronRight, Pencil, Trash2, CheckCircle, Send, Repeat, X, AlertTriangle, ExternalLink, FileText, Settings2, Download, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { ask } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
+import { appDataDir } from "@tauri-apps/api/path";
+import { writeFile } from "@tauri-apps/plugin-fs";
 import { addMonths, format } from "date-fns";
+import { pdf } from "@react-pdf/renderer";
 import { undoable } from "../lib/undo";
 import { useInvoices, useUpdateInvoice, useDeleteInvoice } from "../db/hooks/useInvoices";
+import { getInvoice, getInvoiceLineItems } from "../db/queries/invoices";
+import { getClient, getClientContacts, getClientAddresses } from "../db/queries/clients";
+import { getBusinessProfile } from "../db/queries/business-profile";
+import { getProject } from "../db/queries/projects";
+import { InvoicePDF } from "../components/invoice/InvoicePDF";
+import { postProcessInvoicePdf } from "../lib/pdfPostProcess";
 import { useClients } from "../db/hooks/useClients";
 import { useRecurringTemplates, useCreateRecurringTemplate, useDeleteRecurringTemplate, useUpdateRecurringTemplate } from "../db/hooks/useRecurring";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
@@ -138,6 +148,123 @@ export function InvoicesPage() {
     filtered,
     useCallback((inv: (typeof filtered)[0]) => inv.invoice_date, [])
   );
+
+  const handleDownloadPdf = async (inv: Invoice & { client_name: string }) => {
+    try {
+      const [fullInvoice, lineItems, client, profile] = await Promise.all([
+        getInvoice(inv.id),
+        getInvoiceLineItems(inv.id),
+        getClient(inv.client_id),
+        getBusinessProfile(),
+      ]);
+      if (!fullInvoice || !client || !profile) {
+        toast.error(t.invoice_not_found);
+        return;
+      }
+      const [contacts, addresses, project] = await Promise.all([
+        getClientContacts(inv.client_id),
+        getClientAddresses(inv.client_id),
+        fullInvoice.project_id ? getProject(fullInvoice.project_id) : Promise.resolve(null),
+      ]);
+      const selectedContact = fullInvoice.contact_id
+        ? contacts?.find((c) => c.id === fullInvoice.contact_id)
+        : null;
+      const contactName = selectedContact
+        ? `${selectedContact.first_name} ${selectedContact.last_name}`.trim()
+        : undefined;
+      const billingAddress = fullInvoice.billing_address_id
+        ? addresses?.find((a) => a.id === fullInvoice.billing_address_id) ?? null
+        : null;
+
+      const doc = (
+        <InvoicePDF
+          invoice={fullInvoice}
+          lineItems={lineItems}
+          client={client}
+          profile={profile}
+          contactName={contactName}
+          billingAddress={billingAddress}
+          projectName={project?.name}
+          reminderCount={fullInvoice.reminder_count}
+        />
+      );
+      const blob = await pdf(doc).toBlob();
+      const rawBytes = new Uint8Array(await blob.arrayBuffer());
+      const processed = await postProcessInvoicePdf(rawBytes, {
+        isCancelled: fullInvoice.status === "cancelled",
+      });
+      const processedBlob = new Blob([new Uint8Array(processed)], { type: "application/pdf" });
+      const url = URL.createObjectURL(processedBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${fullInvoice.reference}_${client.name}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(t.download_pdf);
+    } catch (err) {
+      toast.error(String(err));
+    }
+  };
+
+  const handleEmailPdf = async (inv: Invoice & { client_name: string }) => {
+    try {
+      const [fullInvoice, lineItems, client, profile] = await Promise.all([
+        getInvoice(inv.id),
+        getInvoiceLineItems(inv.id),
+        getClient(inv.client_id),
+        getBusinessProfile(),
+      ]);
+      if (!fullInvoice || !client || !profile) {
+        toast.error(t.invoice_not_found);
+        return;
+      }
+      const [contacts, addresses, project] = await Promise.all([
+        getClientContacts(inv.client_id),
+        getClientAddresses(inv.client_id),
+        fullInvoice.project_id ? getProject(fullInvoice.project_id) : Promise.resolve(null),
+      ]);
+      const selectedContact = fullInvoice.contact_id
+        ? contacts?.find((c) => c.id === fullInvoice.contact_id)
+        : null;
+      const contactName = selectedContact
+        ? `${selectedContact.first_name} ${selectedContact.last_name}`.trim()
+        : undefined;
+      const billingAddress = fullInvoice.billing_address_id
+        ? addresses?.find((a) => a.id === fullInvoice.billing_address_id) ?? null
+        : null;
+
+      const doc = (
+        <InvoicePDF
+          invoice={fullInvoice}
+          lineItems={lineItems}
+          client={client}
+          profile={profile}
+          contactName={contactName}
+          billingAddress={billingAddress}
+          projectName={project?.name}
+          reminderCount={fullInvoice.reminder_count}
+        />
+      );
+      const blob = await pdf(doc).toBlob();
+      const rawBytes = new Uint8Array(await blob.arrayBuffer());
+      const processed = await postProcessInvoicePdf(rawBytes, {
+        isCancelled: fullInvoice.status === "cancelled",
+      });
+
+      const dataDir = await appDataDir();
+      const tempFileName = `${fullInvoice.reference}_${client.name}.pdf`.replace(/[/\\]/g, "_");
+      const tempPath = `${dataDir}/temp_${tempFileName}`;
+      await writeFile(tempPath, new Uint8Array(processed));
+
+      await invoke("share_pdf_via_mail", {
+        path: tempPath,
+        to: client.email ?? "",
+        subject: fullInvoice.reference,
+      });
+    } catch (err) {
+      toast.error(String(err));
+    }
+  };
 
   const handleCreateRecurring = (inv: Invoice & { client_name: string }) => {
     const nextDue = format(addMonths(new Date(), 1), "yyyy-MM-dd");
@@ -430,6 +557,8 @@ export function InvoicesPage() {
           items={[
             { label: t.edit, icon: <Pencil size={14} />, onClick: () => navigate(`/invoices/${ctxMenu.item.id}/edit`) },
             { label: t.preview_pdf, icon: <Eye size={14} />, onClick: () => navigate(`/invoices/${ctxMenu.item.id}/preview`) },
+            { label: t.download_pdf, icon: <Download size={14} />, onClick: () => handleDownloadPdf(ctxMenu.item) },
+            { label: t.email_pdf, icon: <Mail size={14} />, onClick: () => handleEmailPdf(ctxMenu.item) },
             { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/invoices/${ctxMenu.item.id}/edit`, ctxMenu.item.reference.startsWith("DRAFT") ? t.draft : ctxMenu.item.reference) },
             { label: "", divider: true, onClick: () => {} },
             ...(ctxMenu.item.status === "draft" ? [{ label: t.mark_sent, icon: <Send size={14} />, onClick: () => updateInvoice.mutate({ id: ctxMenu.item.id, data: { status: "sent" } }) }] : []),
