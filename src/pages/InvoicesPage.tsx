@@ -203,7 +203,7 @@ export function InvoicesPage() {
       a.href = url;
       a.download = `${fullInvoice.reference}_${client.name}.pdf`;
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
       toast.success(t.download_pdf);
     } catch (err) {
       toast.error(String(err));

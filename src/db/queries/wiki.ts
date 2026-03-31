@@ -1,4 +1,4 @@
-import { getDb } from "../index";
+import { getDb, validateFields } from "../index";
 import type { WikiFolder, WikiArticle, WikiArticleWithTags } from "../../types/wiki";
 
 // ── Folders ──────────────────────────────────────────────────
@@ -31,15 +31,19 @@ export async function updateWikiFolder(
   const values: unknown[] = [];
   let idx = 1;
 
+  const fieldNames: string[] = [];
   if (data.name !== undefined) {
+    fieldNames.push("name");
     fields.push(`name = $${idx++}`);
     values.push(data.name);
   }
   if (data.sort_order !== undefined) {
+    fieldNames.push("sort_order");
     fields.push(`sort_order = $${idx++}`);
     values.push(data.sort_order);
   }
   if (fields.length === 0) return;
+  validateFields(fieldNames);
 
   values.push(id);
   const db = await getDb();
@@ -59,8 +63,9 @@ export async function deleteWikiFolder(id: number): Promise<void> {
 export async function getWikiArticles(folderId?: number): Promise<WikiArticleWithTags[]> {
   const db = await getDb();
   let sql = `
-    SELECT a.*, p.name AS project_name
+    SELECT a.*, GROUP_CONCAT(t.tag, ',') AS tags_csv, p.name AS project_name
     FROM wiki_articles a
+    LEFT JOIN wiki_article_tags t ON t.article_id = a.id
     LEFT JOIN projects p ON p.id = a.project_id
   `;
   const params: unknown[] = [];
@@ -68,24 +73,15 @@ export async function getWikiArticles(folderId?: number): Promise<WikiArticleWit
     sql += " WHERE a.folder_id = $1";
     params.push(folderId);
   }
-  sql += " ORDER BY a.sort_order ASC, a.updated_at DESC";
+  sql += " GROUP BY a.id ORDER BY a.sort_order ASC, a.updated_at DESC";
 
-  const rows = await db.select<(WikiArticle & { project_name: string | null })[]>(sql, params);
+  const rows = await db.select<(WikiArticle & { project_name: string | null; tags_csv: string | null })[]>(sql, params);
 
-  // Attach tags for each article
-  const articles: WikiArticleWithTags[] = [];
-  for (const row of rows) {
-    const tagRows = await db.select<{ tag: string }[]>(
-      "SELECT tag FROM wiki_article_tags WHERE article_id = $1",
-      [row.id]
-    );
-    articles.push({
-      ...row,
-      project_name: row.project_name ?? undefined,
-      tags: tagRows.map((t) => t.tag),
-    });
-  }
-  return articles;
+  return rows.map((row) => ({
+    ...row,
+    project_name: row.project_name ?? undefined,
+    tags: row.tags_csv ? row.tags_csv.split(",") : [],
+  }));
 }
 
 export async function getWikiArticle(id: number): Promise<WikiArticleWithTags | null> {
@@ -143,30 +139,37 @@ export async function updateWikiArticle(
   }
 ): Promise<void> {
   const fields: string[] = [];
+  const fieldNames: string[] = [];
   const values: unknown[] = [];
   let idx = 1;
 
   if (data.folder_id !== undefined) {
+    fieldNames.push("folder_id");
     fields.push(`folder_id = $${idx++}`);
     values.push(data.folder_id);
   }
   if (data.project_id !== undefined) {
+    fieldNames.push("project_id");
     fields.push(`project_id = $${idx++}`);
     values.push(data.project_id);
   }
   if (data.title !== undefined) {
+    fieldNames.push("title");
     fields.push(`title = $${idx++}`);
     values.push(data.title);
   }
   if (data.content !== undefined) {
+    fieldNames.push("content");
     fields.push(`content = $${idx++}`);
     values.push(data.content);
   }
   if (data.sort_order !== undefined) {
+    fieldNames.push("sort_order");
     fields.push(`sort_order = $${idx++}`);
     values.push(data.sort_order);
   }
   if (fields.length === 0) return;
+  validateFields(fieldNames);
 
   fields.push(`updated_at = datetime('now')`);
   values.push(id);
@@ -196,12 +199,19 @@ export async function getWikiArticleTags(articleId: number): Promise<string[]> {
 
 export async function setWikiArticleTags(articleId: number, tags: string[]): Promise<void> {
   const db = await getDb();
-  await db.execute("DELETE FROM wiki_article_tags WHERE article_id = $1", [articleId]);
-  for (const tag of tags) {
-    await db.execute(
-      "INSERT INTO wiki_article_tags (article_id, tag) VALUES ($1, $2)",
-      [articleId, tag]
-    );
+  await db.execute("BEGIN", []);
+  try {
+    await db.execute("DELETE FROM wiki_article_tags WHERE article_id = $1", [articleId]);
+    for (const tag of tags) {
+      await db.execute(
+        "INSERT INTO wiki_article_tags (article_id, tag) VALUES ($1, $2)",
+        [articleId, tag]
+      );
+    }
+    await db.execute("COMMIT", []);
+  } catch (e) {
+    await db.execute("ROLLBACK", []);
+    throw e;
   }
 }
 
@@ -217,25 +227,19 @@ export async function getAllWikiTags(): Promise<string[]> {
 
 export async function getWikiArticlesByProject(projectId: number): Promise<WikiArticleWithTags[]> {
   const db = await getDb();
-  const rows = await db.select<(WikiArticle & { project_name: string | null })[]>(
-    `SELECT a.*, p.name AS project_name
+  const rows = await db.select<(WikiArticle & { project_name: string | null; tags_csv: string | null })[]>(
+    `SELECT a.*, GROUP_CONCAT(t.tag, ',') AS tags_csv, p.name AS project_name
      FROM wiki_articles a
+     LEFT JOIN wiki_article_tags t ON t.article_id = a.id
      LEFT JOIN projects p ON p.id = a.project_id
      WHERE a.project_id = $1
+     GROUP BY a.id
      ORDER BY a.sort_order ASC, a.updated_at DESC`,
     [projectId]
   );
-  const articles: WikiArticleWithTags[] = [];
-  for (const row of rows) {
-    const tagRows = await db.select<{ tag: string }[]>(
-      "SELECT tag FROM wiki_article_tags WHERE article_id = $1",
-      [row.id]
-    );
-    articles.push({
-      ...row,
-      project_name: row.project_name ?? undefined,
-      tags: tagRows.map((t) => t.tag),
-    });
-  }
-  return articles;
+  return rows.map((row) => ({
+    ...row,
+    project_name: row.project_name ?? undefined,
+    tags: row.tags_csv ? row.tags_csv.split(",") : [],
+  }));
 }

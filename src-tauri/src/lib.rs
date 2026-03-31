@@ -268,21 +268,29 @@ fn get_active_db(app: tauri::AppHandle) -> Result<String, String> {
     Ok(name)
 }
 
+/// Escape a string for safe interpolation into AppleScript double-quoted strings.
+fn escape_applescript(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
 /// Open Apple Mail with a new message containing the PDF as attachment.
 #[tauri::command]
 async fn share_pdf_via_mail(path: String, to: String, subject: String) -> Result<(), String> {
+    if !std::path::Path::new(&path).exists() {
+        return Err(format!("Attachment not found: {path}"));
+    }
+    let safe_subject = escape_applescript(&subject);
+    let safe_to = escape_applescript(&to);
+    let safe_path = escape_applescript(&path);
     let script = format!(
         r#"tell application "Mail"
-            set newMessage to make new outgoing message with properties {{subject:"{}", visible:true}}
+            set newMessage to make new outgoing message with properties {{subject:"{safe_subject}", visible:true}}
             tell newMessage
-                make new to recipient at end of to recipients with properties {{address:"{}"}}
-                set mailAttachment to make new attachment with properties {{file name:POSIX file "{}"}} at after the last paragraph of content
+                make new to recipient at end of to recipients with properties {{address:"{safe_to}"}}
+                set mailAttachment to make new attachment with properties {{file name:POSIX file "{safe_path}"}} at after the last paragraph of content
             end tell
             activate
-        end tell"#,
-        subject.replace("\"", "\\\""),
-        to.replace("\"", "\\\""),
-        path.replace("\"", "\\\"")
+        end tell"#
     );
     std::process::Command::new("osascript")
         .arg("-e")

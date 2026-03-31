@@ -430,17 +430,24 @@ function ArticleEditor({
     }
   }, [articleId, deleteArticle, onBack, t.delete]);
 
+  // Keep refs for unmount cleanup to avoid stale closures
+  const editorRef = useRef(editor);
+  editorRef.current = editor;
+  const articleIdRef = useRef(articleId);
+  articleIdRef.current = articleId;
+
   // Flush pending debounced save on unmount
   useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
-        if (editor) {
-          updateArticle.mutate({ id: articleId, data: { content: editor.getHTML() } });
+        const ed = editorRef.current;
+        if (ed) {
+          updateArticle.mutate({ id: articleIdRef.current, data: { content: ed.getHTML() } });
         }
       }
     };
-  }, [articleId]);
+  }, []);
 
   const handleSlashSelect = useCallback(
     (item: SlashMenuItem) => {
@@ -479,7 +486,11 @@ function ArticleEditor({
         editor
           .chain()
           .focus()
-          .insertContent(`<a href="${href}">${text}</a>`)
+          .insertContent({
+            type: 'text',
+            text: text,
+            marks: [{ type: 'link', attrs: { href } }],
+          })
           .run();
       } else {
         editor.chain().focus().setLink({ href }).run();
@@ -573,7 +584,7 @@ function ArticleEditor({
             fullWidth={false}
             className="text-xs w-48"
           >
-            <option value="">No project</option>
+            <option value="">{t.no_project}</option>
             {projects.map((p: { id: number; name: string }) => (
               <option key={p.id} value={p.id.toString()}>
                 {p.name}

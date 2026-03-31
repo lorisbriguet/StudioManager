@@ -190,7 +190,7 @@ export function SettingsPage() {
       try {
         await purgeAllCalendarEvents();
         const count = await syncAllExisting();
-        if (count > 0) toast.success(`Synced ${count} events to Apple Calendar`);
+        if (count > 0) toast.success(t.synced_events.replace("{count}", String(count)));
       } catch (e) {
         logError("Sync failed:", e);
         toast.error(t.toast_failed_sync);
@@ -229,9 +229,9 @@ export function SettingsPage() {
       if (backupPath2) {
         await createBackup(backupPath2, maxBackups);
       }
-      toast.success(`Backup created: ${path.split("/").pop()}`);
+      toast.success(t.backup_created.replace("{name}", path.split("/").pop() ?? ""));
     } catch (e) {
-      toast.error(`Backup failed: ${String(e)}`);
+      toast.error(t.backup_failed.replace("{error}", String(e)));
     } finally {
       setBacking(false);
       setBackupRunning(false);

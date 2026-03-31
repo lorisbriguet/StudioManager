@@ -65,7 +65,7 @@ export function NotificationsPage() {
         <p className="text-muted text-sm">{t.loading}</p>
       ) : notifications.length === 0 ? (
         <div className="text-center py-16 text-muted">
-          <Bell size={40} className="mx-auto mb-3 opacity-30" />
+          <Bell size={32} className="mx-auto mb-3 opacity-30" />
           <p className="text-sm">{t.no_notifications}</p>
         </div>
       ) : (
