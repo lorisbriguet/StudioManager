@@ -62,7 +62,7 @@ import { invoiceStatusVariant, quoteStatusVariant } from "../lib/statusColors";
 import { useTabStore } from "../stores/tab-store";
 import { useTimerActions } from "../hooks/useTimerActions";
 import { open as openDirectory } from "@tauri-apps/plugin-dialog";
-import { open as openUrl } from "@tauri-apps/plugin-shell";
+import { invoke } from "@tauri-apps/api/core";
 import { useT } from "../i18n/useT";
 import { getTagColor } from "../lib/tagColors";
 import { useAppStore } from "../stores/app-store";
@@ -359,7 +359,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
           </div>
           {project.folder_path ? (
             <button
-              onClick={() => openUrl(project.folder_path!).catch(() => toast.error("Failed to open folder"))}
+              onClick={() => invoke("open_in_finder", { path: project.folder_path! }).catch(() => toast.error("Failed to open folder"))}
               className="text-muted hover:text-[var(--color-text-secondary)] text-xs flex items-center gap-1 cursor-pointer"
             >
               <FolderOpen size={12} />

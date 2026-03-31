@@ -292,6 +292,16 @@ async fn share_pdf_via_mail(path: String, to: String, subject: String) -> Result
     Ok(())
 }
 
+/// Open a file or folder in Finder (macOS `open` command).
+#[tauri::command]
+async fn open_in_finder(path: String) -> Result<(), String> {
+    std::process::Command::new("open")
+        .arg(&path)
+        .output()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let migrations = vec![
@@ -352,6 +362,7 @@ pub fn run() {
             has_snapshot,
             get_active_db,
             share_pdf_via_mail,
+            open_in_finder,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {
