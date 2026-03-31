@@ -673,6 +673,13 @@ const ui = {
     delete_preset: "Delete preset",
     preset_name: "Preset name",
     presets: "Presets",
+    no_project: "No project",
+    synced_events: "Synced {count} events to Apple Calendar",
+    backup_created: "Backup created: {name}",
+    backup_failed: "Backup failed: {error}",
+    failed_open_folder: "Failed to open folder",
+    default_option_1: "Option 1",
+    default_option_2: "Option 2",
   },
   FR: {
     // Sidebar / Nav
@@ -1346,6 +1353,13 @@ const ui = {
     delete_preset: "Supprimer le preset",
     preset_name: "Nom du preset",
     presets: "Presets",
+    no_project: "Aucun projet",
+    synced_events: "{count} evenements synchronises avec Apple Calendar",
+    backup_created: "Backup cree : {name}",
+    backup_failed: "Echec du backup : {error}",
+    failed_open_folder: "Impossible d'ouvrir le dossier",
+    default_option_1: "Option 1",
+    default_option_2: "Option 2",
   },
 } as const;
 

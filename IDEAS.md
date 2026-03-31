@@ -1,6 +1,7 @@
 # StudioManager — Ideas & Backlog
 
 ## V1.7.1 — Done
+
 - [x] Resizable side peek (drag to adjust width)
 - [x] Billing address in client should show the default filled one
 - [x] Rework contacts UI in clients (read-only cards with edit icon/context menu)
@@ -12,9 +13,12 @@
 - [x] Billing address label style matches main address (muted uppercase)
 
 ## Still TODO
+
 - [ ] Update presentation mode to show off all new features
 
 ## Future Ideas
+
 - [ ] Complete UX audit + rethink
 - [ ] Mobile app companion
 - [ ] Resizable side peek snap positions (optional)
+- [ ] Define some button sizes, some margins and padding sizes, to be sure it's consistent across the app. Update UI design system

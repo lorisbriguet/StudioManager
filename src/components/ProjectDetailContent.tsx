@@ -359,7 +359,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
           </div>
           {project.folder_path ? (
             <button
-              onClick={() => invoke("open_in_finder", { path: project.folder_path! }).catch(() => toast.error("Failed to open folder"))}
+              onClick={() => invoke("open_in_finder", { path: project.folder_path! }).catch(() => toast.error(t.failed_open_folder))}
               className="text-muted hover:text-[var(--color-text-secondary)] text-xs flex items-center gap-1 cursor-pointer"
             >
               <FolderOpen size={12} />
@@ -919,7 +919,7 @@ function ProjectNamedTables({ projectId }: { projectId: number }) {
     <div>
       <div className="flex items-center gap-2 mb-2">
         <button
-          onClick={() => createTable.mutate({ name: "Untitled" })}
+          onClick={() => createTable.mutate({ name: t.untitled })}
           className="text-muted hover:text-accent"
           title={t.add_table}
         >

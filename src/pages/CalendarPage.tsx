@@ -208,7 +208,7 @@ export function CalendarPage() {
       if (!p.deadline) continue;
       items.push({
         id: `dl-${p.id}`,
-        title: `Deadline: ${p.name}`,
+        title: `${t.deadline}: ${p.name}`,
         start: p.deadline,
         allDay: true,
         extendedProps: { type: "deadline", itemId: p.id, projectId: p.id, isDeadline: true },

@@ -140,9 +140,9 @@ export function NamedTable({ table, projectId }: Props) {
 
   const addColumn = (type: TableColumnDef["type"]) => {
     const id = `col_${Date.now()}`;
-    const name = type.charAt(0).toUpperCase() + type.slice(1);
+    const name = (t as Record<string, string>)[`col_type_${type}`] ?? (type.charAt(0).toUpperCase() + type.slice(1));
     const newCol: TableColumnDef = { id, name, type };
-    if (type === "select" || type === "tags") newCol.options = ["Option 1", "Option 2"];
+    if (type === "select" || type === "tags") newCol.options = [t.default_option_1, t.default_option_2];
     updateTable.mutate({ id: table.id, data: { column_config: [...table.column_config, newCol] } });
     setShowColPicker(false);
   };

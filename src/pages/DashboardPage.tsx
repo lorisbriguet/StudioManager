@@ -77,7 +77,7 @@ function PresetDropdown() {
     deletePreset.mutate(id);
     if (activePresetId === id) {
       // Revert to "Custom" since active preset was deleted
-      setActivePreset(null, "Custom", widgets, layout);
+      setActivePreset(null, t.custom_layout, widgets, layout);
     }
   };
 
