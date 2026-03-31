@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.7.1-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.8.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="Platform">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
@@ -47,7 +47,8 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Task filters: todo, done, all — applied globally
 - Workload tracker with custom columns (text, number, checkbox, select, formula)
 - Named tables per project with configurable columns (text, number, checkbox, select, tags, date)
-- Time tracking — start/stop timer per task, tracked minutes accumulate
+- Time tracking — start/stop timer per task, or log past time with a date picker
+- Per-task time entry log with expandable history and delete support
 
 ### Calendar
 - Monthly and weekly calendar views (FullCalendar)
