@@ -19,6 +19,7 @@ export interface Quote {
   converted_to_invoice_id: number | null;
   converted_to_project_id: number | null;
   notes: string;
+  template_id: number | null;
   created_at: string;
   updated_at: string;
 }

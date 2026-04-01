@@ -5,6 +5,7 @@ import { Button, Input, Select } from "../components/ui";
 import { toast } from "sonner";
 import { addDays, format } from "date-fns";
 import { useQuote, useCreateQuote, useUpdateQuote } from "../db/hooks/useQuotes";
+import { useInvoiceTemplates, useDefaultTemplate } from "../db/hooks/useInvoiceTemplates";
 import { useClients, useClientAddresses } from "../db/hooks/useClients";
 import { useProjects } from "../db/hooks/useProjects";
 import { getQuoteLineItems } from "../db/queries/quotes";
@@ -38,6 +39,10 @@ export function QuoteFormPage() {
     if (formLoadedRef.current) setFormDirty(true);
   }, []);
   useUnsavedChangesWarning(formDirty);
+
+  const { data: invoiceTemplates } = useInvoiceTemplates();
+  const { data: defaultTemplate } = useDefaultTemplate();
+  const [templateId, setTemplateId] = useState<number | null>(null);
 
   const [clientId, setClientId] = useState("");
   const [billingAddressId, setBillingAddressId] = useState<number | null>(null);
@@ -117,6 +122,20 @@ export function QuoteFormPage() {
     }
   }, [profileActivities, isEdit]);
 
+  // Pre-select default template for new quotes
+  useEffect(() => {
+    if (!isEdit && !templateId && defaultTemplate) {
+      setTemplateId(defaultTemplate.id);
+    }
+  }, [defaultTemplate, isEdit, templateId]);
+
+  // Load template_id from existing quote
+  useEffect(() => {
+    if (existingQuote && "template_id" in existingQuote) {
+      setTemplateId((existingQuote as { template_id?: number | null }).template_id ?? null);
+    }
+  }, [existingQuote]);
+
   // Arm dirty tracking for new quotes (no existing data to load)
   useEffect(() => {
     if (!isEdit) {
@@ -166,6 +185,7 @@ export function QuoteFormPage() {
               discount_rate: discountRate,
               total,
               notes,
+              template_id: templateId,
             },
             lineItems,
           },
@@ -200,6 +220,7 @@ export function QuoteFormPage() {
               converted_to_invoice_id: null,
               converted_to_project_id: null,
               notes,
+              template_id: templateId,
             },
             lineItems,
           },
@@ -228,6 +249,27 @@ export function QuoteFormPage() {
       </div>
 
       <div className="space-y-4 max-w-3xl" onChange={markDirty} onInput={markDirty}>
+        {/* Template selector */}
+        {invoiceTemplates && invoiceTemplates.length > 0 && (
+          <div className="max-w-xs">
+            <label className="block text-xs font-medium text-muted mb-1">
+              {t.select_invoice_template}
+            </label>
+            <Select
+              value={templateId ?? ""}
+              onChange={(e) => setTemplateId(e.target.value ? Number(e.target.value) : null)}
+              className="py-2"
+            >
+              <option value="">{t.none}</option>
+              {invoiceTemplates.map((tmpl) => (
+                <option key={tmpl.id} value={tmpl.id}>
+                  {tmpl.name}{tmpl.is_default ? " (default)" : ""}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-muted mb-1">{t.client}</label>

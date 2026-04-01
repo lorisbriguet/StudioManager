@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Palette, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   useBusinessProfile,
@@ -11,10 +11,16 @@ import type { BusinessProfile } from "../types/business-profile";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
 import { Button, Input, PageSpinner } from "../components/ui";
+import { TemplateEditor } from "../components/invoice/TemplateEditor";
+import {
+  useInvoiceTemplates,
+  useDeleteInvoiceTemplate,
+} from "../db/hooks/useInvoiceTemplates";
+import type { InvoiceTemplate } from "../types/invoice-template";
 
 type FormData = Omit<BusinessProfile, "id">;
 
-type ProfileCategory = "business" | "bank" | "invoicing";
+type ProfileCategory = "business" | "bank" | "invoicing" | "templates";
 
 const profileFields: { key: keyof FormData; labelKey: UIKey; type?: string }[] = [
   { key: "owner_name", labelKey: "owner_name" },
@@ -46,6 +52,11 @@ export function ProfilePage() {
   const [activities, setActivities] = useState<string[]>([]);
   const [newActivity, setNewActivity] = useState("");
   const [activeCategory, setActiveCategory] = useState<ProfileCategory>("business");
+
+  // Templates state
+  const { data: invoiceTemplates } = useInvoiceTemplates();
+  const deleteTemplate = useDeleteInvoiceTemplate();
+  const [editingTemplate, setEditingTemplate] = useState<InvoiceTemplate | null | "new">(null);
 
   useEffect(() => {
     if (profile) {
@@ -88,10 +99,11 @@ export function ProfilePage() {
     saveActivities(activities.filter((_, i) => i !== idx));
   };
 
-  const categories: { key: ProfileCategory; label: string }[] = [
+  const categories: Array<{ key: ProfileCategory; label: string; icon?: React.ReactNode }> = [
     { key: "business", label: t.business_profile },
     { key: "bank", label: t.bank_details },
     { key: "invoicing", label: t.invoice_defaults },
+    { key: "templates", label: t.templates, icon: <Palette size={14} /> },
   ];
 
   // Keyboard navigation for profile sidebar
@@ -133,13 +145,17 @@ export function ProfilePage() {
             <button
               key={cat.key}
               type="button"
-              onClick={() => setActiveCategory(cat.key)}
-              className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+              onClick={() => {
+                setActiveCategory(cat.key);
+                setEditingTemplate(null);
+              }}
+              className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 ${
                 activeCategory === cat.key
                   ? "bg-accent-light text-accent font-medium"
                   : "text-muted hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text)]"
               }`}
             >
+              {cat.icon && <span className="shrink-0">{cat.icon}</span>}
               {cat.label}
             </button>
           ))}
@@ -147,6 +163,70 @@ export function ProfilePage() {
       </div>
 
       {/* Content */}
+      {activeCategory === "templates" ? (
+        <div className="flex-1 overflow-hidden flex flex-col">
+          {editingTemplate !== null ? (
+            <div className="flex-1">
+              <TemplateEditor
+                template={editingTemplate === "new" ? null : editingTemplate}
+                onSaved={() => setEditingTemplate(null)}
+              />
+            </div>
+          ) : (
+            <div className="p-8">
+              <div className="flex items-center justify-between mb-4 max-w-lg">
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
+                  {t.templates}
+                </h2>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon={<Plus size={14} />}
+                  onClick={() => setEditingTemplate("new")}
+                >
+                  {t.new_invoice_template}
+                </Button>
+              </div>
+              <div className="space-y-1.5 max-w-lg">
+                {invoiceTemplates && invoiceTemplates.length > 0 ? (
+                  invoiceTemplates.map((tmpl) => (
+                    <div
+                      key={tmpl.id}
+                      className="flex items-center gap-2 border border-[var(--color-border-divider)] rounded-lg px-3 py-2"
+                    >
+                      <button
+                        type="button"
+                        className="flex-1 text-left text-sm hover:text-accent"
+                        onClick={() => setEditingTemplate(tmpl)}
+                      >
+                        <span>{tmpl.name}</span>
+                        {!!tmpl.is_default && (
+                          <span className="ml-2 text-xs text-muted">(default)</span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!!tmpl.is_default}
+                        onClick={() => {
+                          deleteTemplate.mutate(tmpl.id, {
+                            onError: (e) => toast.error(String(e)),
+                          });
+                        }}
+                        className="text-muted hover:text-[var(--color-danger-text)] disabled:opacity-30"
+                        aria-label="Delete template"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted">{t.no_templates}</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
       <div className="flex-1 overflow-y-auto p-8">
         <form onSubmit={handleSubmit(onSubmit)} className="max-w-2xl space-y-8">
           {activeCategory === "business" && (
@@ -269,6 +349,7 @@ export function ProfilePage() {
           )}
         </form>
       </div>
+      )}
     </div>
   );
 }

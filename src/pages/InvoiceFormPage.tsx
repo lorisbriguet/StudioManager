@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { addDays, format } from "date-fns";
 import { useT } from "../i18n/useT";
 import { useInvoice, useCreateInvoice, useUpdateInvoice, useDeleteInvoice } from "../db/hooks/useInvoices";
+import { useInvoiceTemplates, useDefaultTemplate } from "../db/hooks/useInvoiceTemplates";
 import { useQueryClient } from "@tanstack/react-query";
 import { useClients, useClientContacts, useClientAddresses } from "../db/hooks/useClients";
 import { useProjectsByClient } from "../db/hooks/useProjects";
@@ -48,6 +49,10 @@ export function InvoiceFormPage() {
     if (formLoadedRef.current) setFormDirty(true);
   }, []);
   useUnsavedChangesWarning(formDirty);
+
+  const { data: invoiceTemplates } = useInvoiceTemplates();
+  const { data: defaultTemplate } = useDefaultTemplate();
+  const [templateId, setTemplateId] = useState<number | null>(null);
 
   const [clientId, setClientId] = useState("");
   const [contactId, setContactId] = useState<number | null>(null);
@@ -149,6 +154,20 @@ export function InvoiceFormPage() {
       setActivity(profileActivities[0]);
     }
   }, [profileActivities, isEdit, fromQuoteId]);
+
+  // Pre-select default template for new invoices
+  useEffect(() => {
+    if (!isEdit && !templateId && defaultTemplate) {
+      setTemplateId(defaultTemplate.id);
+    }
+  }, [defaultTemplate, isEdit, templateId]);
+
+  // Load template_id from existing invoice
+  useEffect(() => {
+    if (existingInvoice && "template_id" in existingInvoice) {
+      setTemplateId((existingInvoice as { template_id?: number | null }).template_id ?? null);
+    }
+  }, [existingInvoice]);
 
   // Arm dirty tracking for new invoices (no existing data to load)
   useEffect(() => {
@@ -264,6 +283,7 @@ export function InvoiceFormPage() {
               currency,
               exchange_rate: exchangeRate,
               chf_equivalent: chfEquivalent,
+              template_id: templateId,
             },
             lineItems,
           },
@@ -308,6 +328,7 @@ export function InvoiceFormPage() {
               chf_equivalent: chfEquivalent,
               reminder_count: 0,
               last_reminder_date: null,
+              template_id: templateId,
             },
             lineItems,
           },
@@ -340,6 +361,26 @@ export function InvoiceFormPage() {
       </div>
 
       <div className="space-y-4 max-w-3xl" onChange={markDirty} onInput={markDirty}>
+        {/* Template selector */}
+        {invoiceTemplates && invoiceTemplates.length > 0 && (
+          <div className="max-w-xs">
+            <label className="block text-xs font-medium text-muted mb-1">
+              {t.select_invoice_template}
+            </label>
+            <Select
+              value={templateId ?? ""}
+              onChange={(e) => setTemplateId(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">{t.none}</option>
+              {invoiceTemplates.map((tmpl) => (
+                <option key={tmpl.id} value={tmpl.id}>
+                  {tmpl.name}{tmpl.is_default ? " (default)" : ""}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-muted mb-1">{t.client}</label>

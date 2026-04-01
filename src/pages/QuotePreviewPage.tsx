@@ -9,6 +9,7 @@ import { useClient, useClientAddresses } from "../db/hooks/useClients";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { useProject } from "../db/hooks/useProjects";
 import { QuotePDF } from "../components/quote/QuotePDF";
+import { useInvoiceTemplate } from "../db/hooks/useInvoiceTemplates";
 import { QuoteToProjectWizard } from "../components/QuoteToProjectWizard";
 import { toast } from "sonner";
 import { useT } from "../i18n/useT";
@@ -24,6 +25,10 @@ export function QuotePreviewPage() {
   const { data: addresses } = useClientAddresses(quote?.client_id ?? "");
   const { data: profile } = useBusinessProfile();
   const { data: project } = useProject(quote?.project_id ?? 0);
+  const quoteTemplateId = quote && "template_id" in quote
+    ? (quote as { template_id?: number | null }).template_id ?? null
+    : null;
+  const { data: quoteTemplate } = useInvoiceTemplate(quoteTemplateId ?? 0);
   const [showDraftWarning, setShowDraftWarning] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
   const updateQuote = useUpdateQuote();
@@ -47,6 +52,7 @@ export function QuotePreviewPage() {
       profile={profile}
       billingAddress={billingAddress}
       projectName={project?.name}
+      template={quoteTemplate ?? undefined}
     />
   );
 

@@ -730,6 +730,25 @@ const ui = {
     // Resource duplicate warning
     resource_duplicate_warning: "A resource with this URL already exists: {name}",
 
+    // Invoice Templates
+    templates: "Templates",
+    template_editor: "Template Editor",
+    invoice_template_accent_color: "Accent color",
+    font_family: "Font",
+    logo_position: "Logo position",
+    margins: "Margins (mm)",
+    show_notes: "Show notes",
+    show_project_name: "Show project name",
+    show_po_number: "Show PO number",
+    show_bank_details: "Show bank details",
+    show_qr_bill: "Show QR bill",
+    show_footer: "Show footer",
+    column_order: "Column order",
+    set_as_default: "Set as default",
+    new_invoice_template: "New template",
+    template_saved: "Template saved",
+    select_invoice_template: "Template",
+
     // Custom Lists
     custom_lists: "Custom Lists",
     new_list: "New list",
@@ -1472,6 +1491,25 @@ const ui = {
     invoice_aging: "Anciennete des factures",
     // Resource duplicate warning
     resource_duplicate_warning: "Une ressource avec cette URL existe deja : {name}",
+
+    // Invoice Templates
+    templates: "Modeles",
+    template_editor: "Editeur de modele",
+    invoice_template_accent_color: "Couleur d'accent",
+    font_family: "Police",
+    logo_position: "Position du logo",
+    margins: "Marges (mm)",
+    show_notes: "Afficher les notes",
+    show_project_name: "Afficher le nom du projet",
+    show_po_number: "Afficher le numero de commande",
+    show_bank_details: "Afficher les coordonnees bancaires",
+    show_qr_bill: "Afficher le QR",
+    show_footer: "Afficher le pied de page",
+    column_order: "Ordre des colonnes",
+    set_as_default: "Definir par defaut",
+    new_invoice_template: "Nouveau modele",
+    template_saved: "Modele enregistre",
+    select_invoice_template: "Modele",
 
     // Custom Lists
     custom_lists: "Listes personnalisees",
