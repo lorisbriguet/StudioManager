@@ -61,6 +61,9 @@ export async function updateProject(
 
 export async function deleteProject(id: number): Promise<void> {
   const db = await getDb();
+  // Unlink invoices and quotes (financial records survive project deletion)
+  await db.execute("UPDATE invoices SET project_id = NULL WHERE project_id = $1", [id]);
+  await db.execute("UPDATE quotes SET project_id = NULL WHERE project_id = $1", [id]);
   await db.execute("DELETE FROM projects WHERE id = $1", [id]);
 }
 
