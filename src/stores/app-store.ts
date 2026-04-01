@@ -113,6 +113,7 @@ function getInitialAccent(): AccentPreset {
 
 export interface AppState {
   commandPaletteOpen: boolean;
+  quickTimerOpen: boolean;
   sidebarCollapsed: boolean;
   darkMode: boolean;
   themeId: string;
@@ -157,6 +158,8 @@ export interface AppState {
   openCommandPalette: () => void;
   closeCommandPalette: () => void;
   toggleCommandPalette: () => void;
+  toggleQuickTimer: () => void;
+  closeQuickTimer: () => void;
   toggleSidebar: () => void;
   toggleDarkMode: () => void;
   setDateFormat: (fmt: DateFormatOption) => void;
@@ -216,6 +219,7 @@ const effectiveInitialAccent = getInitialAccentForTheme();
 
 export const useAppStore = create<AppState>((set, get) => ({
   commandPaletteOpen: false,
+  quickTimerOpen: false,
   sidebarCollapsed: false,
   darkMode: initialDark,
   themeId: localStorage.getItem("themeId") ?? "default-light",
@@ -282,6 +286,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   closeCommandPalette: () => set({ commandPaletteOpen: false }),
   toggleCommandPalette: () =>
     set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
+  toggleQuickTimer: () => set((s) => ({ quickTimerOpen: !s.quickTimerOpen })),
+  closeQuickTimer: () => set({ quickTimerOpen: false }),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   toggleDarkMode: () =>
     set((s) => {

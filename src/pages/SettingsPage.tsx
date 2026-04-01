@@ -2,12 +2,14 @@ import { useState, useEffect, useCallback } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
-import { FolderOpen, HardDrive, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield, X } from "lucide-react";
+import { FolderOpen, HardDrive, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield, X, Clock, Pencil, Trash2, Check } from "lucide-react";
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { purgeAllCalendarEvents, syncAllExisting, listWritableCalendars } from "../lib/appleCalendar";
 import { createBackup, listBackups, restoreFromBackup, validateBackupPath, isBackupRunning, setBackupRunning } from "../lib/backup";
 import { switchDb, resetDb, seedPresentationDb } from "../db";
 import { useExpenseCategories, useCreateExpenseCategory, useUpdateExpenseCategory, useDeleteExpenseCategory, isDefaultCategory } from "../db/hooks/useExpenses";
+import { useTimeEntriesWithDetails, useUpdateTimeEntry, useDeleteTimeEntry } from "../db/hooks/useTimeEntries";
+import { useProjects } from "../db/hooks/useProjects";
 import { isCategoryInUse } from "../db/queries/expenses";
 import type { ExpenseCategory, TagColorName } from "../types/expense";
 import { getNamedTagColor } from "../lib/tagColors";
@@ -21,7 +23,7 @@ import { Input, Select, Button } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
 
-type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "workload" | "categories" | "updates" | "backup" | "sandbox";
+type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "workload" | "categories" | "time_entries" | "updates" | "backup" | "sandbox";
 
 export function SettingsPage() {
   const dateFormat = useAppStore((s) => s.dateFormat);
@@ -289,6 +291,7 @@ export function SettingsPage() {
       label: "Data",
       items: [
         { key: "categories", label: t.expense_categories, icon: <Tags size={14} /> },
+        { key: "time_entries", label: t.time_entries_management, icon: <Clock size={14} /> },
         { key: "backup", label: t.backup, icon: <Archive size={14} /> },
         { key: "sandbox", label: t.test_mode, icon: <Shield size={14} /> },
       ],
@@ -563,6 +566,10 @@ export function SettingsPage() {
               <SectionHeader title={t.expense_categories} desc={t.expense_categories_desc} />
               <ExpenseCategoryManager />
             </div>
+          )}
+
+          {activeCategory === "time_entries" && (
+            <TimeEntriesManager />
           )}
 
           {activeCategory === "updates" && (
@@ -1008,6 +1015,263 @@ function ExpenseCategoryManager() {
         >
           + {t.add_category}
         </button>
+      )}
+    </div>
+  );
+}
+
+function formatDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h`;
+  return `${m}m`;
+}
+
+function TimeEntriesManager() {
+  const t = useT();
+  const { data: projects } = useProjects();
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [projectFilter, setProjectFilter] = useState<number | undefined>(undefined);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<{ date: string; hours: number; minutes: number; description: string }>({
+    date: "",
+    hours: 0,
+    minutes: 0,
+    description: "",
+  });
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+
+  const { data: entries, isLoading } = useTimeEntriesWithDetails(
+    startDate || undefined,
+    endDate || undefined,
+    projectFilter
+  );
+  const updateEntry = useUpdateTimeEntry();
+  const deleteEntry = useDeleteTimeEntry();
+
+  const rows = entries ?? [];
+  const totalMinutes = rows.reduce((sum, e) => sum + e.duration_minutes, 0);
+
+  const startEdit = (entry: { id: number; date: string; duration_minutes: number; description: string }) => {
+    setEditingId(entry.id);
+    setEditForm({
+      date: entry.date,
+      hours: Math.floor(entry.duration_minutes / 60),
+      minutes: entry.duration_minutes % 60,
+      description: entry.description,
+    });
+  };
+
+  const saveEdit = () => {
+    if (editingId === null) return;
+    const duration_minutes = editForm.hours * 60 + editForm.minutes;
+    updateEntry.mutate(
+      { id: editingId, data: { date: editForm.date, duration_minutes, description: editForm.description } },
+      { onSuccess: () => setEditingId(null) }
+    );
+  };
+
+  const handleDelete = (id: number) => {
+    deleteEntry.mutate(id, { onSuccess: () => setConfirmDeleteId(null) });
+  };
+
+  return (
+    <div>
+      <SectionHeader title={t.time_entries_management} />
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-end gap-3 mb-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] text-muted">{t.start}</label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1 text-xs text-[var(--color-text)]"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] text-muted">{t.end_date}</label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1 text-xs text-[var(--color-text)]"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] text-muted">{t.filter_by_project}</label>
+          <select
+            value={projectFilter ?? ""}
+            onChange={(e) => setProjectFilter(e.target.value ? Number(e.target.value) : undefined)}
+            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1 text-xs text-[var(--color-text)]"
+          >
+            <option value="">{t.all_projects}</option>
+            {(projects ?? []).map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+        {(startDate || endDate || projectFilter) && (
+          <button
+            type="button"
+            onClick={() => { setStartDate(""); setEndDate(""); setProjectFilter(undefined); }}
+            className="text-xs text-muted hover:text-[var(--color-text)] flex items-center gap-1 self-end pb-1"
+          >
+            <X size={12} /> {t.cancel}
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+      {isLoading ? (
+        <p className="text-xs text-muted py-4">{t.loading}</p>
+      ) : rows.length === 0 ? (
+        <p className="text-xs text-muted py-4">{t.no_entries_found}</p>
+      ) : (
+        <div className="rounded-xl border border-[var(--color-border-divider)] overflow-hidden">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-[var(--color-border-divider)] bg-[var(--color-surface)]">
+                <th className="text-left px-3 py-2 font-medium text-muted">{t.date}</th>
+                <th className="text-left px-3 py-2 font-medium text-muted">{t.project}</th>
+                <th className="text-left px-3 py-2 font-medium text-muted">{t.tasks}</th>
+                <th className="text-left px-3 py-2 font-medium text-muted">{t.duration}</th>
+                <th className="text-left px-3 py-2 font-medium text-muted">{t.description}</th>
+                <th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((entry) => (
+                <tr key={entry.id} className="border-b border-[var(--color-border-divider)] last:border-0 hover:bg-[var(--color-hover-row)]">
+                  {editingId === entry.id ? (
+                    <>
+                      <td className="px-3 py-1.5">
+                        <input
+                          type="date"
+                          value={editForm.date}
+                          onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                          className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded px-1.5 py-1 text-xs w-full"
+                        />
+                      </td>
+                      <td className="px-3 py-1.5 text-muted">{entry.project_name}</td>
+                      <td className="px-3 py-1.5 text-muted">{entry.task_title ?? "—"}</td>
+                      <td className="px-3 py-1.5">
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            max={23}
+                            value={editForm.hours}
+                            onChange={(e) => setEditForm({ ...editForm, hours: Math.max(0, Number(e.target.value)) })}
+                            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded px-1.5 py-1 text-xs w-12"
+                          />
+                          <span className="text-muted">h</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={59}
+                            value={editForm.minutes}
+                            onChange={(e) => setEditForm({ ...editForm, minutes: Math.max(0, Math.min(59, Number(e.target.value))) })}
+                            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded px-1.5 py-1 text-xs w-12"
+                          />
+                          <span className="text-muted">m</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <input
+                          type="text"
+                          value={editForm.description}
+                          onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                          className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded px-1.5 py-1 text-xs w-full"
+                          placeholder={t.description}
+                        />
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={saveEdit}
+                            disabled={updateEntry.isPending}
+                            className="p-1 text-accent hover:bg-accent-light rounded"
+                            title={t.save}
+                          >
+                            <Check size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingId(null)}
+                            className="p-1 text-muted hover:bg-[var(--color-hover-row)] rounded"
+                            title={t.cancel}
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-3 py-2 tabular-nums">{entry.date}</td>
+                      <td className="px-3 py-2">{entry.project_name}</td>
+                      <td className="px-3 py-2 text-muted">{entry.task_title ?? "—"}</td>
+                      <td className="px-3 py-2 tabular-nums">{formatDuration(entry.duration_minutes)}</td>
+                      <td className="px-3 py-2 text-muted max-w-[160px] truncate" title={entry.description}>{entry.description || "—"}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => startEdit(entry)}
+                            className="p-1 text-muted hover:text-[var(--color-text)] hover:bg-[var(--color-hover-row)] rounded"
+                            title={t.edit_entry}
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          {confirmDeleteId === entry.id ? (
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(entry.id)}
+                                disabled={deleteEntry.isPending}
+                                className="px-1.5 py-0.5 bg-red-500 text-white rounded text-[10px] hover:bg-red-600"
+                              >
+                                {t.delete}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="p-1 text-muted hover:bg-[var(--color-hover-row)] rounded"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(entry.id)}
+                              className="p-1 text-muted hover:text-[var(--color-danger-text)] hover:bg-[var(--color-hover-row)] rounded"
+                              title={t.delete}
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Total */}
+      {rows.length > 0 && (
+        <div className="mt-3 text-xs text-muted text-right">
+          {t.total_hours}: <span className="font-medium text-[var(--color-text)]">{formatDuration(totalMinutes)}</span>
+        </div>
       )}
     </div>
   );

@@ -88,6 +88,59 @@ export async function deleteTimeEntry(id: number): Promise<void> {
   }
 }
 
+// ── Management queries ──
+
+export interface TimeEntryWithDetails {
+  id: number;
+  task_id: number | null;
+  project_id: number;
+  description: string;
+  duration_minutes: number;
+  date: string;
+  created_at: string;
+  task_title: string | null;
+  project_name: string;
+}
+
+export async function getTimeEntriesWithDetails(startDate?: string, endDate?: string, projectId?: number): Promise<TimeEntryWithDetails[]> {
+  const db = await getDb();
+  let sql = `SELECT te.id, te.task_id, te.project_id, te.description, te.duration_minutes, te.date, te.created_at,
+             t.title as task_title, p.name as project_name
+             FROM time_entries te
+             LEFT JOIN tasks t ON te.task_id = t.id
+             LEFT JOIN projects p ON te.project_id = p.id
+             WHERE 1=1`;
+  const params: any[] = [];
+  let idx = 1;
+  if (startDate) { sql += ` AND te.date >= $${idx++}`; params.push(startDate); }
+  if (endDate) { sql += ` AND te.date <= $${idx++}`; params.push(endDate); }
+  if (projectId) { sql += ` AND te.project_id = $${idx++}`; params.push(projectId); }
+  sql += ` ORDER BY te.date DESC, te.created_at DESC`;
+  return db.select<TimeEntryWithDetails[]>(sql, params);
+}
+
+export async function updateTimeEntry(id: number, data: { date?: string; duration_minutes?: number; description?: string }): Promise<void> {
+  const db = await getDb();
+  // If duration changed, adjust task.tracked_minutes
+  if (data.duration_minutes !== undefined) {
+    const entry = (await db.select<TimeEntry[]>("SELECT * FROM time_entries WHERE id = $1", [id]))[0];
+    if (entry && entry.task_id) {
+      const diff = data.duration_minutes - entry.duration_minutes;
+      await db.execute("UPDATE tasks SET tracked_minutes = MAX(0, tracked_minutes + $1) WHERE id = $2", [diff, entry.task_id]);
+    }
+  }
+  const fields: string[] = [];
+  const values: any[] = [];
+  let idx = 1;
+  if (data.date !== undefined) { fields.push(`date = $${idx++}`); values.push(data.date); }
+  if (data.duration_minutes !== undefined) { fields.push(`duration_minutes = $${idx++}`); values.push(data.duration_minutes); }
+  if (data.description !== undefined) { fields.push(`description = $${idx++}`); values.push(data.description); }
+  if (fields.length === 0) return;
+  fields.push(`updated_at = datetime('now')`);
+  values.push(id);
+  await db.execute(`UPDATE time_entries SET ${fields.join(", ")} WHERE id = $${idx}`, values);
+}
+
 // ── Dashboard aggregation queries (read from time_entries) ──
 
 export interface DayTimeEntry {

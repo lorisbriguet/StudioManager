@@ -62,3 +62,25 @@ export function useDeleteTimeEntry() {
     },
   });
 }
+
+export function useTimeEntriesWithDetails(startDate?: string, endDate?: string, projectId?: number) {
+  return useQuery({
+    queryKey: ["time-entries", "details", startDate, endDate, projectId],
+    queryFn: () => q.getTimeEntriesWithDetails(startDate, endDate, projectId),
+  });
+}
+
+export function useUpdateTimeEntry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { id: number; data: { date?: string; duration_minutes?: number; description?: string } }) =>
+      q.updateTimeEntry(args.id, args.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["time-entries"] });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["time-this-week"] });
+      qc.invalidateQueries({ queryKey: ["weekly-trend"] });
+    },
+    onError: (e) => toast.error(String(e)),
+  });
+}

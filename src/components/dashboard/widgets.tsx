@@ -29,6 +29,7 @@ import {
   getSubtasksWithDueDate,
   getPlannedVsActual,
 } from "../../db/queries/tasks";
+import { getInvoiceAging } from "../../db/queries/invoices";
 import {
   getTimeThisWeek,
   getTopTimeConsumers,
@@ -1378,6 +1379,66 @@ function ProjectTimeDistribution() {
   );
 }
 
+// ── Invoice aging ──
+
+const AGING_BRACKETS = ["0-30", "31-60", "61-90", "90+"];
+
+function InvoiceAging() {
+  const t = useT();
+  const chart = useChartTheme();
+  const { data } = useQuery({ queryKey: ["invoice-aging"], queryFn: getInvoiceAging });
+
+  const chartData = useMemo(() => {
+    return AGING_BRACKETS.map((bracket) => {
+      const row = data?.find((r) => r.bracket === bracket);
+      return { bracket, count: row?.count ?? 0, total: row?.total ?? 0 };
+    });
+  }, [data]);
+
+  const hasData = chartData.some((d) => d.count > 0);
+
+  if (!hasData) {
+    return (
+      <div className="h-full flex flex-col p-4">
+        <h2 className="text-sm font-medium mb-3">{t.invoice_aging}</h2>
+        <div className="flex-1 flex items-center justify-center text-xs text-muted">{t.no_data}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full flex flex-col p-4">
+      <h2 className="text-sm font-medium mb-3">{t.invoice_aging}</h2>
+      <div className="flex-1 min-h-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} vertical={false} />
+            <XAxis dataKey="bracket" tick={{ fontSize: 10, fill: chart.tickFill }} axisLine={false} tickLine={false} unit="d" />
+            <YAxis tick={{ fontSize: 10, fill: chart.tickFill }} axisLine={false} tickLine={false} allowDecimals={false} />
+            <Tooltip
+              contentStyle={chart.tooltipStyle}
+              cursor={{ fill: chart.cursorFill }}
+              formatter={(value, name) => {
+                if (name === "count") return [String(value), t.invoices_count_plural];
+                return [`CHF ${Number(value ?? 0).toFixed(2)}`, t.total];
+              }}
+            />
+            <Bar dataKey="count" fill="var(--color-chart-4)" radius={[4, 4, 0, 0]} name="count" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="mt-2 space-y-1">
+        {chartData.filter((d) => d.count > 0).map((d) => (
+          <div key={d.bracket} className="flex items-center justify-between text-xs">
+            <span className="text-muted">{d.bracket}d</span>
+            <span className="font-medium text-danger">{d.count} — CHF {d.total.toFixed(2)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Widget renderer ──
 
 export function renderWidget(type: WidgetType) {
@@ -1422,6 +1483,7 @@ export function renderWidget(type: WidgetType) {
     case "billable-summary": return <BillableSummary />;
     case "weekly-trend": return <WeeklyTrendWidget />;
     case "project-time-distribution": return <ProjectTimeDistribution />;
+    case "invoice-aging": return <InvoiceAging />;
     default: return <div className="p-4 text-muted text-sm">Unknown widget</div>;
   }
 }

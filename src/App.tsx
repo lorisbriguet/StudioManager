@@ -23,17 +23,18 @@ import { InvoicePreviewPage } from "./pages/InvoicePreviewPage";
 import { QuotePreviewPage } from "./pages/QuotePreviewPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
 import { WikiPage } from "./pages/WikiPage";
-import { TimeTrackingPage } from "./pages/TimeTrackingPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { CommandPalette } from "./components/CommandPalette";
+import { QuickTimerModal } from "./components/QuickTimerModal";
 import { useOverdueCheck } from "./hooks/useOverdueCheck";
 import { useRecurringCheck } from "./hooks/useRecurringCheck";
 import { useAutoBackup } from "./hooks/useAutoBackup";
 import { useErrorNotifications } from "./hooks/useErrorNotifications";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useUndoStore } from "./stores/undo-store";
+import { useAppStore } from "./stores/app-store";
 import { logError } from "./lib/log";
 import { requestNotificationPermission } from "./lib/nativeNotification";
 import { useT } from "./i18n/useT";
@@ -118,6 +119,17 @@ function StartupChecks() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "T") {
+        e.preventDefault();
+        useAppStore.getState().toggleQuickTimer();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   return null;
 }
 
@@ -144,7 +156,6 @@ export default function App() {
               <Route path="quotes/new" element={<QuoteFormPage />} />
               <Route path="quotes/:id/edit" element={<QuoteFormPage />} />
               <Route path="quotes/:id/preview" element={<QuotePreviewPage />} />
-              <Route path="time-tracking" element={<TimeTrackingPage />} />
               <Route path="expenses" element={<ExpensesPage />} />
               <Route path="income" element={<IncomePage />} />
               <Route path="finances" element={<FinancesPage />} />
@@ -156,6 +167,7 @@ export default function App() {
             </Route>
           </Routes>
           <CommandPalette />
+          <QuickTimerModal />
         </ErrorBoundary>
       </BrowserRouter>
       <Toaster position="bottom-right" />

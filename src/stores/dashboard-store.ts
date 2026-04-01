@@ -48,7 +48,8 @@ export type WidgetType =
   | "top-time-consumers"
   | "billable-summary"
   | "weekly-trend"
-  | "project-time-distribution";
+  | "project-time-distribution"
+  | "invoice-aging";
 
 export interface DashboardWidget {
   id: string;
@@ -104,6 +105,8 @@ export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
   // Phase 18 — Utility
   { type: "quick-create", labelKey: "quick_create", category: "utility", defaultW: 2, defaultH: 2, minW: 2, minH: 2 },
   { type: "pinned-notes", labelKey: "pinned_notes", category: "utility", defaultW: 3, defaultH: 3, minW: 3, minH: 3 },
+  // Financial — Invoice aging
+  { type: "invoice-aging", labelKey: "invoice_aging", category: "financial", defaultW: 4, defaultH: 4, minW: 3, minH: 3 },
   // Phase 13 — Time tracking
   { type: "time-this-week", labelKey: "time_this_week", category: "productivity", defaultW: 4, defaultH: 4, minW: 3, minH: 3 },
   { type: "planned-vs-actual", labelKey: "planned_vs_actual", category: "productivity", defaultW: 4, defaultH: 4, minW: 3, minH: 3 },

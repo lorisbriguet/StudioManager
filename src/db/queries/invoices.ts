@@ -2,6 +2,30 @@ import { getDb, validateFields, TransactionBatch } from "../index";
 import { getNextReference } from "./referenceGenerator";
 import type { Invoice, InvoiceLineItem } from "../../types/invoice";
 
+export interface InvoiceAgingRow {
+  bracket: string;
+  count: number;
+  total: number;
+}
+
+export async function getInvoiceAging(): Promise<InvoiceAgingRow[]> {
+  const db = await getDb();
+  return db.select<InvoiceAgingRow[]>(`
+    SELECT
+      CASE
+        WHEN julianday('now') - julianday(due_date) BETWEEN 0 AND 30 THEN '0-30'
+        WHEN julianday('now') - julianday(due_date) BETWEEN 31 AND 60 THEN '31-60'
+        WHEN julianday('now') - julianday(due_date) BETWEEN 61 AND 90 THEN '61-90'
+        ELSE '90+'
+      END as bracket,
+      COUNT(*) as count,
+      SUM(total) as total
+    FROM invoices
+    WHERE status IN ('sent', 'overdue') AND due_date < date('now')
+    GROUP BY bracket
+  `);
+}
+
 export async function getInvoices(): Promise<Invoice[]> {
   const db = await getDb();
   return db.select<Invoice[]>(

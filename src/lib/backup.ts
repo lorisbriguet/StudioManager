@@ -163,22 +163,29 @@ async function rotateBackups(
   backupDir: string,
   maxBackups: number
 ): Promise<void> {
-  if (maxBackups <= 0) return;
+  const limit = Number(maxBackups);
+  if (!Number.isFinite(limit) || limit <= 0) return;
   try {
     const entries = await readDir(backupDir);
+    // Use name prefix as primary filter — isFile may be unreliable in Tauri v2 DirEntry
     const backups = entries
-      .filter((e) => !e.isFile && e.name?.startsWith("backup-"))
+      .filter((e) => e.name?.startsWith("backup-"))
       .map((e) => e.name as string)
       .sort();
 
-    while (backups.length > maxBackups) {
+    while (backups.length > limit) {
       const oldest = backups.shift();
       if (!oldest) break;
       const safe = safeName(oldest);
-      if (safe) await remove(`${backupDir}/${safe}`, { recursive: true });
+      if (!safe) continue;
+      try {
+        await remove(`${backupDir}/${safe}`, { recursive: true });
+      } catch (e) {
+        logWarn(`rotateBackups: failed to delete ${safe}:`, String(e));
+      }
     }
-  } catch {
-    // rotation failure is non-critical
+  } catch (e) {
+    logWarn("rotateBackups: could not read backup directory:", String(e));
   }
 }
 
@@ -188,7 +195,7 @@ export async function listBackups(backupDir: string): Promise<string[]> {
   try {
     const entries = await readDir(backupDir);
     return entries
-      .filter((e) => !e.isFile && e.name?.startsWith("backup-"))
+      .filter((e) => e.name?.startsWith("backup-"))
       .map((e) => e.name as string)
       .sort()
       .reverse();

@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { useWikiArticlesByProject, useWikiArticles, useUpdateWikiArticle } from "../db/hooks/useWiki";
-import { Plus, ChevronRight, Trash2, GripVertical, ExternalLink, Bookmark, X, Play, Square, FolderOpen, BookOpen, Clock } from "lucide-react";
+import { Plus, ChevronRight, Trash2, GripVertical, ExternalLink, Bookmark, X, Play, Square, FolderOpen, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -66,7 +66,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { useT } from "../i18n/useT";
 import { getTagColor } from "../lib/tagColors";
 import { useAppStore } from "../stores/app-store";
-import { useCreateTimeEntry, useTimeEntriesByTask, useDeleteTimeEntry } from "../db/hooks/useTimeEntries";
 
 interface Props {
   projectId: number;
@@ -625,8 +624,6 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
   const [newSubtaskText, setNewSubtaskText] = useState<Record<number, string>>({});
   const [editingTask, setEditingTask] = useState<number | null>(null);
   const [editingSubtask, setEditingSubtask] = useState<number | null>(null);
-  const [logTimeTaskId, setLogTimeTaskId] = useState<number | null>(null);
-  const [logTimeAnchorRect, setLogTimeAnchorRect] = useState<DOMRect | null>(null);
 
   const totalCount = tasks.length;
 
@@ -758,17 +755,6 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
                   compact
                 />
                 <button
-                  onClick={(e) => {
-                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                    setLogTimeAnchorRect(rect);
-                    setLogTimeTaskId(tk.id);
-                  }}
-                  className="shrink-0 opacity-0 pointer-events-none group-hover/task:opacity-100 group-hover/task:pointer-events-auto text-muted hover:text-accent transition-opacity p-0.5"
-                  title={t.log_time}
-                >
-                  <Clock size={14} />
-                </button>
-                <button
                   onClick={() => handleTimerToggle(tk.id)}
                   className={`shrink-0 p-0.5 transition-opacity ${
                     activeTimer?.taskId === tk.id
@@ -787,15 +773,6 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
                   <Trash2 size={14} />
                 </button>
               </div>
-              <TimeEntryLog taskId={tk.id} />
-              {logTimeTaskId === tk.id && (
-                <LogTimePopup
-                  taskId={tk.id}
-                  projectId={projectId}
-                  anchorRect={logTimeAnchorRect}
-                  onClose={() => { setLogTimeTaskId(null); setLogTimeAnchorRect(null); }}
-                />
-              )}
               {isExpanded && (
                 <div className="ml-9 border-l border-[var(--color-border-divider)] pl-3 pb-1">
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(event: DragEndEvent) => {
@@ -927,184 +904,6 @@ function SortableSubtaskRow({ id, children }: { id: number; children: React.Reac
         <GripVertical size={14} />
       </div>
       {children}
-    </div>
-  );
-}
-
-/* ---------- Log Time Popup ---------- */
-
-function LogTimePopup({
-  taskId,
-  projectId,
-  onClose,
-  anchorRect,
-}: {
-  taskId: number;
-  projectId: number;
-  onClose: () => void;
-  anchorRect: DOMRect | null;
-}) {
-  const t = useT();
-  const createTimeEntry = useCreateTimeEntry();
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [hours, setHours] = useState(0);
-  const [minutes, setMinutes] = useState(0);
-  const [note, setNote] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    const keyHandler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("keydown", keyHandler);
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("keydown", keyHandler);
-    };
-  }, [onClose]);
-
-  const totalMinutes = hours * 60 + minutes;
-
-  const handleSave = () => {
-    if (totalMinutes <= 0) return;
-    createTimeEntry.mutate(
-      { task_id: taskId, project_id: projectId, duration_minutes: totalMinutes, date, description: note.trim() || undefined },
-      { onSuccess: () => { toast.success(t.time_logged); onClose(); } }
-    );
-  };
-
-  // Position below the anchor button, clamped to viewport
-  const style: React.CSSProperties = (() => {
-    if (!anchorRect) return { position: "fixed" as const, top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 9999 };
-    const popupW = 256, popupH = 320; // w-64 = 256px, estimated height
-    const top = anchorRect.bottom + 4 + popupH > window.innerHeight
-      ? Math.max(8, anchorRect.top - popupH - 4)
-      : anchorRect.bottom + 4;
-    const left = Math.min(anchorRect.left, window.innerWidth - popupW - 8);
-    return { position: "fixed" as const, top, left, zIndex: 9999 };
-  })();
-
-  return createPortal(
-    <div ref={ref} style={style} className="bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] p-4 w-64 animate-in">
-      <div className="text-sm font-semibold tracking-tight mb-3">{t.log_time}</div>
-
-      <label className="block text-xs text-muted mb-1">{t.date}</label>
-      <input
-        type="date"
-        value={date}
-        onChange={(e) => setDate(e.target.value)}
-        className="w-full border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1.5 text-sm mb-3"
-      />
-
-      <div className="flex gap-2 mb-3">
-        <div className="flex-1">
-          <label className="block text-xs text-muted mb-1">{t.hours_label}</label>
-          <input
-            type="number"
-            min={0}
-            max={23}
-            value={hours}
-            onChange={(e) => setHours(Math.max(0, parseInt(e.target.value) || 0))}
-            className="w-full border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1.5 text-sm"
-          />
-        </div>
-        <div className="flex-1">
-          <label className="block text-xs text-muted mb-1">{t.minutes_label}</label>
-          <input
-            type="number"
-            min={0}
-            max={59}
-            value={minutes}
-            onChange={(e) => setMinutes(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
-            className="w-full border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1.5 text-sm"
-          />
-        </div>
-      </div>
-
-      {totalMinutes > 0 && (
-        <div className="text-xs text-muted mb-3">
-          = {Math.floor(totalMinutes / 60)}h {totalMinutes % 60}m
-        </div>
-      )}
-
-      <label className="block text-xs text-muted mb-1">{t.note}</label>
-      <input
-        type="text"
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
-        placeholder={t.note}
-        className="w-full border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1.5 text-sm mb-3"
-      />
-
-      <div className="flex justify-end gap-2">
-        <button
-          onClick={onClose}
-          className="px-3 py-1.5 text-xs rounded-lg border border-[var(--color-input-border)] text-muted hover:bg-[var(--color-hover-row)] transition-colors"
-        >
-          {t.cancel}
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={totalMinutes <= 0}
-          className="px-3 py-1.5 text-xs rounded-lg bg-accent text-white hover:opacity-90 transition-colors disabled:opacity-40"
-        >
-          {t.save}
-        </button>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-/* ---------- Time Entry Log ---------- */
-
-function TimeEntryLog({ taskId }: { taskId: number }) {
-  const t = useT();
-  const { data: entries } = useTimeEntriesByTask(taskId);
-  const deleteEntry = useDeleteTimeEntry();
-  const [expanded, setExpanded] = useState(false);
-
-  if (!entries || entries.length === 0) return null;
-
-  const totalMinutes = entries.reduce((sum, e) => sum + e.duration_minutes, 0);
-
-  return (
-    <div className="ml-9 mb-1">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1.5 text-xs text-muted hover:text-[var(--color-text-secondary)] transition-colors"
-      >
-        <Clock size={12} />
-        <span>
-          {t.time_entries} ({entries.length}) — {Math.floor(totalMinutes / 60)}h {totalMinutes % 60}m
-        </span>
-        <ChevronRight size={12} className={`transition-transform ${expanded ? "rotate-90" : ""}`} />
-      </button>
-      {expanded && (
-        <div className="mt-1 divide-y divide-[var(--color-border-divider)]">
-          {entries.map((entry) => (
-            <div key={entry.id} className="flex items-center gap-2 py-1 text-xs group/entry">
-              <span className="text-muted w-20 shrink-0">{entry.date}</span>
-              <span className="font-medium">
-                {Math.floor(entry.duration_minutes / 60)}h {entry.duration_minutes % 60}m
-              </span>
-              {entry.description && <span className="text-muted truncate flex-1">{entry.description}</span>}
-              <button
-                onClick={() => deleteEntry.mutate(entry.id)}
-                className="shrink-0 opacity-0 pointer-events-none group-hover/entry:opacity-100 group-hover/entry:pointer-events-auto text-muted hover:text-[var(--color-danger-text)] transition-opacity p-0.5"
-                title={t.delete}
-              >
-                <Trash2 size={12} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
