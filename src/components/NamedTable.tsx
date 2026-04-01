@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Trash2, GripVertical, ChevronDown, ChevronRight, Pencil, X } from "lucide-react";
+import { Plus, Trash2, GripVertical, ChevronDown, ChevronRight, Pencil, X, Link, Unlink } from "lucide-react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
   useProjectTableRows,
@@ -10,9 +10,11 @@ import {
   useUpdateProjectTable,
   useDeleteProjectTable,
 } from "../db/hooks/useProjectTables";
+import { useCustomLists, useCustomListItems, useCreateCustomList, useSetCustomListItems } from "../db/hooks/useCustomLists";
 import { useT } from "../i18n/useT";
 import { getTagColor } from "../lib/tagColors";
 import { useAppStore } from "../stores/app-store";
+import { toast } from "sonner";
 import type { ProjectTable, TableColumnDef, ProjectTableRow } from "../types/project-table";
 
 interface Props {
@@ -41,10 +43,20 @@ export function NamedTable({ table, projectId }: Props) {
   const [colEditorPos, setColEditorPos] = useState<{ top: number; left: number } | null>(null);
   const [colName, setColName] = useState("");
   const [colOptions, setColOptions] = useState<string[]>([]);
+  const [colLinkedListId, setColLinkedListId] = useState<number | undefined>(undefined);
+  const [showImportListDropdown, setShowImportListDropdown] = useState(false);
+  const [saveAsListName, setSaveAsListName] = useState("");
+  const [showSaveAsListInput, setShowSaveAsListInput] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const cellInputRef = useRef<HTMLInputElement>(null);
   const colPickerRef = useRef<HTMLDivElement>(null);
   const colEditorRef = useRef<HTMLDivElement>(null);
+
+  const { data: customLists } = useCustomLists();
+  const [importListId, setImportListId] = useState<number | null>(null);
+  const { data: importListItems } = useCustomListItems(importListId);
+  const createCustomList = useCreateCustomList();
+  const setCustomListItems = useSetCustomListItems();
 
   useEffect(() => {
     if (editingName) nameInputRef.current?.focus();
@@ -111,10 +123,41 @@ export function NamedTable({ table, projectId }: Props) {
     return () => document.removeEventListener("mousedown", handler);
   }, [editingCol, colName, colOptions]);
 
+  // When import list items arrive, apply them
+  useEffect(() => {
+    if (!importListItems || importListId === null) return;
+    setColOptions(importListItems.map((i) => i.value));
+    setColLinkedListId(importListId);
+    setImportListId(null);
+    setShowImportListDropdown(false);
+  }, [importListItems, importListId]);
+
+  const handleImportFromList = (listId: number) => {
+    setImportListId(listId);
+  };
+
+  const handleUnlinkList = () => {
+    setColLinkedListId(undefined);
+  };
+
+  const handleSaveAsList = async () => {
+    const name = saveAsListName.trim();
+    if (!name || colOptions.length === 0) return;
+    const id = await createCustomList.mutateAsync(name);
+    await setCustomListItems.mutateAsync({ listId: id, items: colOptions.map((v) => ({ value: v })) });
+    setShowSaveAsListInput(false);
+    setSaveAsListName("");
+    toast.success(t.list_created ?? "List created");
+  };
+
   const openColEditor = (col: TableColumnDef, e?: React.MouseEvent) => {
     setEditingCol(col.id);
     setColName(col.name);
     setColOptions(col.options ?? []);
+    setColLinkedListId(col.linked_list_id);
+    setShowImportListDropdown(false);
+    setShowSaveAsListInput(false);
+    setSaveAsListName("");
     if (e) {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       setColEditorPos({ top: rect.bottom + 4, left: rect.left });
@@ -123,9 +166,19 @@ export function NamedTable({ table, projectId }: Props) {
 
   const commitColEdit = () => {
     if (!editingCol) return;
-    const updated = cols.map((c) =>
-      c.id === editingCol ? { ...c, name: colName.trim() || c.name, options: (c.type === "select" || c.type === "tags") ? colOptions.filter((o) => o.trim()) : c.options } : c
-    );
+    const updated = cols.map((c) => {
+      if (c.id !== editingCol) return c;
+      const base: TableColumnDef = { ...c, name: colName.trim() || c.name };
+      if (c.type === "select" || c.type === "tags") {
+        base.options = colOptions.filter((o) => o.trim());
+        if (colLinkedListId !== undefined) {
+          base.linked_list_id = colLinkedListId;
+        } else {
+          delete base.linked_list_id;
+        }
+      }
+      return base;
+    });
     updateTable.mutate({ id: table.id, data: { column_config: updated } });
     setEditingCol(null);
     setColEditorPos(null);
@@ -229,34 +282,106 @@ export function NamedTable({ table, projectId }: Props) {
                         />
                         {(col.type === "select" || col.type === "tags") && (
                           <>
-                            <label className="block text-[10px] text-muted mb-1">{t.options ?? "Options"}</label>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[10px] text-muted">{t.options ?? "Options"}</label>
+                              {colLinkedListId ? (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-accent flex items-center gap-0.5">
+                                    <Link size={9} />
+                                    {(customLists ?? []).find((l) => l.id === colLinkedListId)?.name ?? ""}
+                                  </span>
+                                  <button type="button" onClick={handleUnlinkList} className="text-[10px] text-muted hover:text-[var(--color-danger-text)] flex items-center gap-0.5">
+                                    <Unlink size={9} /> {t.unlink_list}
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="relative">
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowImportListDropdown((v) => !v)}
+                                    className="text-[10px] text-accent hover:underline flex items-center gap-0.5"
+                                  >
+                                    <Link size={9} /> {t.import_from_list}
+                                  </button>
+                                  {showImportListDropdown && (
+                                    <div className="absolute right-0 top-full mt-1 z-[10000] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-lg shadow-lg py-1 min-w-[140px]">
+                                      {(customLists ?? []).length === 0 ? (
+                                        <p className="text-[10px] text-muted px-3 py-1">{t.no_lists}</p>
+                                      ) : (
+                                        (customLists ?? []).map((list) => (
+                                          <button
+                                            key={list.id}
+                                            type="button"
+                                            onClick={() => handleImportFromList(list.id)}
+                                            className="w-full text-left px-3 py-1 text-[11px] hover:bg-[var(--color-hover-row)]"
+                                          >
+                                            {list.name}
+                                          </button>
+                                        ))
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                             {colOptions.map((opt, i) => (
                               <div key={i} className="flex items-center gap-1 mb-1">
                                 <input
                                   value={opt}
                                   onChange={(e) => {
+                                    if (colLinkedListId) return; // read-only when linked
                                     const next = [...colOptions];
                                     next[i] = e.target.value;
                                     setColOptions(next);
                                   }}
-                                  className="flex-1 border border-[var(--color-input-border)] rounded px-2 py-0.5 text-xs"
+                                  readOnly={!!colLinkedListId}
+                                  className={`flex-1 border border-[var(--color-input-border)] rounded px-2 py-0.5 text-xs ${colLinkedListId ? "opacity-60 cursor-not-allowed" : ""}`}
                                 />
-                                <button
-                                  type="button"
-                                  onClick={() => setColOptions(colOptions.filter((_, j) => j !== i))}
-                                  className="text-muted hover:text-[var(--color-danger-text)]"
-                                >
-                                  <Trash2 size={10} />
-                                </button>
+                                {!colLinkedListId && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setColOptions(colOptions.filter((_, j) => j !== i))}
+                                    className="text-muted hover:text-[var(--color-danger-text)]"
+                                  >
+                                    <Trash2 size={10} />
+                                  </button>
+                                )}
                               </div>
                             ))}
-                            <button
-                              type="button"
-                              onClick={() => setColOptions([...colOptions, ""])}
-                              className="text-[10px] text-accent hover:underline flex items-center gap-0.5"
-                            >
-                              <Plus size={10} /> {t.add_row}
-                            </button>
+                            {!colLinkedListId && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setColOptions([...colOptions, ""])}
+                                  className="text-[10px] text-accent hover:underline flex items-center gap-0.5"
+                                >
+                                  <Plus size={10} /> {t.add_row}
+                                </button>
+                                <div className="border-t border-[var(--color-border-divider)] mt-2 pt-2">
+                                  {showSaveAsListInput ? (
+                                    <div className="flex gap-1">
+                                      <input
+                                        value={saveAsListName}
+                                        onChange={(e) => setSaveAsListName(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === "Enter") handleSaveAsList(); if (e.key === "Escape") setShowSaveAsListInput(false); }}
+                                        placeholder={t.list_name}
+                                        className="flex-1 border border-[var(--color-input-border)] rounded px-2 py-0.5 text-[10px]"
+                                        autoFocus
+                                      />
+                                      <button type="button" onClick={handleSaveAsList} className="text-[10px] text-accent hover:underline">{t.save}</button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowSaveAsListInput(true)}
+                                      className="text-[10px] text-muted hover:text-accent flex items-center gap-0.5"
+                                    >
+                                      <Link size={9} /> {t.save_as_list}
+                                    </button>
+                                  )}
+                                </div>
+                              </>
+                            )}
                           </>
                         )}
                         <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--color-border-divider)]">

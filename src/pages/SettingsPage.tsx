@@ -2,12 +2,14 @@ import { useState, useEffect, useCallback } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
-import { FolderOpen, HardDrive, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield, X, Clock, Pencil, Trash2, Check } from "lucide-react";
+import { FolderOpen, HardDrive, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield, X, Clock, Pencil, Trash2, Check, Plus } from "lucide-react";
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { purgeAllCalendarEvents, syncAllExisting, listWritableCalendars } from "../lib/appleCalendar";
 import { createBackup, listBackups, restoreFromBackup, validateBackupPath, isBackupRunning, setBackupRunning } from "../lib/backup";
 import { switchDb, resetDb, seedPresentationDb } from "../db";
 import { useExpenseCategories, useCreateExpenseCategory, useUpdateExpenseCategory, useDeleteExpenseCategory, isDefaultCategory } from "../db/hooks/useExpenses";
+import { useCustomLists, useCustomListItems, useCreateCustomList, useUpdateCustomList, useDeleteCustomList, useSetCustomListItems } from "../db/hooks/useCustomLists";
+import { TAG_COLOR_NAMES as WORKLOAD_COLOR_NAMES } from "../types/workload";
 import { useTimeEntriesWithDetails, useUpdateTimeEntry, useDeleteTimeEntry } from "../db/hooks/useTimeEntries";
 import { useProjects } from "../db/hooks/useProjects";
 import { isCategoryInUse } from "../db/queries/expenses";
@@ -23,7 +25,7 @@ import { Input, Select, Button } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
 
-type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "workload" | "categories" | "time_entries" | "updates" | "backup" | "sandbox";
+type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "workload" | "categories" | "lists" | "time_entries" | "updates" | "backup" | "sandbox";
 
 export function SettingsPage() {
   const dateFormat = useAppStore((s) => s.dateFormat);
@@ -291,6 +293,7 @@ export function SettingsPage() {
       label: "Data",
       items: [
         { key: "categories", label: t.expense_categories, icon: <Tags size={14} /> },
+        { key: "lists", label: t.custom_lists, icon: <LayoutList size={14} /> },
         { key: "time_entries", label: t.time_entries_management, icon: <Clock size={14} /> },
         { key: "backup", label: t.backup, icon: <Archive size={14} /> },
         { key: "sandbox", label: t.test_mode, icon: <Shield size={14} /> },
@@ -565,6 +568,13 @@ export function SettingsPage() {
             <div>
               <SectionHeader title={t.expense_categories} desc={t.expense_categories_desc} />
               <ExpenseCategoryManager />
+            </div>
+          )}
+
+          {activeCategory === "lists" && (
+            <div>
+              <SectionHeader title={t.custom_lists} />
+              <CustomListsManager />
             </div>
           )}
 
@@ -1016,6 +1026,213 @@ function ExpenseCategoryManager() {
           + {t.add_category}
         </button>
       )}
+    </div>
+  );
+}
+
+function CustomListsManager() {
+  const t = useT();
+  const { data: lists } = useCustomLists();
+  const createList = useCreateCustomList();
+  const updateList = useUpdateCustomList();
+  const deleteList = useDeleteCustomList();
+  const setItems = useSetCustomListItems();
+
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const { data: items } = useCustomListItems(selectedId);
+
+  const [renamingId, setRenamingId] = useState<number | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [newListName, setNewListName] = useState("");
+  const [addingList, setAddingList] = useState(false);
+
+  // Local editable items for the selected list
+  const [localItems, setLocalItems] = useState<{ value: string; color: string }[]>([]);
+  const [newItemValue, setNewItemValue] = useState("");
+  const [newItemColor, setNewItemColor] = useState("gray");
+  const [dirty, setDirty] = useState(false);
+
+  // Sync local items when selection or remote items change
+  useEffect(() => {
+    setLocalItems((items ?? []).map((i) => ({ value: i.value, color: i.color ?? "gray" })));
+    setDirty(false);
+  }, [items, selectedId]);
+
+  const handleCreateList = async () => {
+    const name = newListName.trim();
+    if (!name) return;
+    const id = await createList.mutateAsync(name);
+    setNewListName("");
+    setAddingList(false);
+    setSelectedId(id);
+    toast.success(t.list_created);
+  };
+
+  const handleDeleteList = async (id: number) => {
+    const confirmed = await ask(t.delete_list_confirm, { kind: "warning" });
+    if (!confirmed) return;
+    await deleteList.mutateAsync(id);
+    if (selectedId === id) setSelectedId(null);
+    toast.success(t.list_deleted);
+  };
+
+  const commitRename = async () => {
+    if (renamingId === null) return;
+    const name = renameValue.trim();
+    if (name) await updateList.mutateAsync({ id: renamingId, name });
+    setRenamingId(null);
+  };
+
+  const addItem = () => {
+    const val = newItemValue.trim();
+    if (!val) return;
+    setLocalItems([...localItems, { value: val, color: newItemColor }]);
+    setNewItemValue("");
+    setDirty(true);
+  };
+
+  const removeItem = (idx: number) => {
+    setLocalItems(localItems.filter((_, i) => i !== idx));
+    setDirty(true);
+  };
+
+  const updateItemColor = (idx: number, color: string) => {
+    const next = [...localItems];
+    next[idx] = { ...next[idx], color };
+    setLocalItems(next);
+    setDirty(true);
+  };
+
+  const saveItems = async () => {
+    if (selectedId === null) return;
+    await setItems.mutateAsync({ listId: selectedId, items: localItems });
+    setDirty(false);
+    toast.success(t.list_saved);
+  };
+
+  const allLists = lists ?? [];
+
+  return (
+    <div className="flex gap-6 min-h-[320px]">
+      {/* Left: list of custom lists */}
+      <div className="w-48 shrink-0 border-r border-[var(--color-border-divider)] pr-4">
+        <div className="space-y-px">
+          {allLists.length === 0 && !addingList && (
+            <p className="text-xs text-muted py-2">{t.no_lists}</p>
+          )}
+          {allLists.map((list) => (
+            <div key={list.id} className={`flex items-center gap-1 rounded-md px-2 py-1.5 group cursor-pointer ${selectedId === list.id ? "bg-accent-light text-accent" : "hover:bg-[var(--color-hover-row)]"}`}>
+              {renamingId === list.id ? (
+                <input
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onBlur={commitRename}
+                  onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenamingId(null); }}
+                  className="flex-1 text-xs bg-transparent border-b border-accent outline-none"
+                  autoFocus
+                />
+              ) : (
+                <span
+                  className="flex-1 text-xs truncate"
+                  onClick={() => setSelectedId(list.id)}
+                  onDoubleClick={() => { setRenamingId(list.id); setRenameValue(list.name); }}
+                >
+                  {list.name}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => handleDeleteList(list.id)}
+                className="opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-danger-text)] shrink-0"
+              >
+                <Trash2 size={11} />
+              </button>
+            </div>
+          ))}
+        </div>
+        {addingList ? (
+          <div className="mt-2 flex gap-1">
+            <input
+              value={newListName}
+              onChange={(e) => setNewListName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleCreateList(); if (e.key === "Escape") setAddingList(false); }}
+              placeholder={t.list_name}
+              className="flex-1 border border-[var(--color-input-border)] rounded px-2 py-1 text-xs"
+              autoFocus
+            />
+            <button type="button" onClick={handleCreateList} className="px-2 py-1 bg-accent text-white text-xs rounded hover:bg-accent-hover">
+              <Check size={12} />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAddingList(true)}
+            className="mt-2 w-full text-left text-xs text-accent hover:underline flex items-center gap-1 px-2 py-1"
+          >
+            <Plus size={12} /> {t.new_list}
+          </button>
+        )}
+      </div>
+
+      {/* Right: items for selected list */}
+      <div className="flex-1">
+        {selectedId === null ? (
+          <p className="text-xs text-muted py-2">{allLists.length > 0 ? "Select a list to edit its items" : ""}</p>
+        ) : (
+          <div>
+            <div className="space-y-1.5 mb-3">
+              {localItems.map((item, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="flex-1 text-xs truncate border border-[var(--color-border-divider)] rounded px-2 py-1">{item.value}</span>
+                  <select
+                    value={item.color}
+                    onChange={(e) => updateItemColor(i, e.target.value)}
+                    className="text-xs border border-[var(--color-border-divider)] rounded px-1 py-1"
+                  >
+                    {WORKLOAD_COLOR_NAMES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={() => removeItem(i)} className="text-muted hover:text-[var(--color-danger-text)]">
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 mb-3">
+              <input
+                value={newItemValue}
+                onChange={(e) => setNewItemValue(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addItem()}
+                placeholder="New item..."
+                className="flex-1 border border-[var(--color-border-divider)] rounded px-2 py-1.5 text-sm"
+              />
+              <select
+                value={newItemColor}
+                onChange={(e) => setNewItemColor(e.target.value)}
+                className="text-sm border border-[var(--color-border-divider)] rounded px-2 py-1.5"
+              >
+                {WORKLOAD_COLOR_NAMES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <button type="button" onClick={addItem} className="p-1.5 text-muted hover:text-accent">
+                <Plus size={16} />
+              </button>
+            </div>
+            {dirty && (
+              <button
+                type="button"
+                onClick={saveItems}
+                className="px-3 py-1.5 bg-accent text-white text-xs rounded hover:bg-accent-hover"
+              >
+                {t.save}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

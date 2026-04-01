@@ -4,6 +4,7 @@ export interface TableColumnDef {
   type: "text" | "number" | "checkbox" | "select" | "tags" | "date";
   options?: string[];
   width?: number;
+  linked_list_id?: number;
 }
 
 export interface ProjectTable {

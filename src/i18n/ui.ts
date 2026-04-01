@@ -729,6 +729,20 @@ const ui = {
     invoice_aging: "Invoice Aging",
     // Resource duplicate warning
     resource_duplicate_warning: "A resource with this URL already exists: {name}",
+
+    // Custom Lists
+    custom_lists: "Custom Lists",
+    new_list: "New list",
+    import_from_list: "Import from list",
+    save_as_list: "Save as list",
+    unlink_list: "Unlink",
+    linked_to_list: "Linked to: {name}",
+    delete_list_confirm: "Delete this list?",
+    list_name: "List name",
+    no_lists: "No custom lists yet",
+    list_created: "List created",
+    list_deleted: "List deleted",
+    list_saved: "List saved",
   },
   FR: {
     // Sidebar / Nav
@@ -1458,6 +1472,20 @@ const ui = {
     invoice_aging: "Anciennete des factures",
     // Resource duplicate warning
     resource_duplicate_warning: "Une ressource avec cette URL existe deja : {name}",
+
+    // Custom Lists
+    custom_lists: "Listes personnalisees",
+    new_list: "Nouvelle liste",
+    import_from_list: "Importer d'une liste",
+    save_as_list: "Enregistrer comme liste",
+    unlink_list: "Dissocier",
+    linked_to_list: "Liee a : {name}",
+    delete_list_confirm: "Supprimer cette liste ?",
+    list_name: "Nom de la liste",
+    no_lists: "Aucune liste personnalisee",
+    list_created: "Liste creee",
+    list_deleted: "Liste supprimee",
+    list_saved: "Liste enregistree",
   },
 } as const;
 
