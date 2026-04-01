@@ -593,6 +593,25 @@ async function ensureSchema(db: Database) {
     );
   }
 
+  // ── Custom Lists ─────────────────────────────────────────
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS custom_lists (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS custom_list_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      list_id INTEGER NOT NULL REFERENCES custom_lists(id) ON DELETE CASCADE,
+      value TEXT NOT NULL,
+      color TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+
   // ── Migrate workload_rows → tasks (one-time) ─────────────
   const hasWorkloadRows = await db.select<{ cnt: number }[]>(
     "SELECT COUNT(*) as cnt FROM workload_rows"

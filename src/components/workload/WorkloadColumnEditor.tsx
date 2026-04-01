@@ -1,11 +1,13 @@
-import { useState } from "react";
-import { X, Plus, Trash2, Calendar } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, Plus, Trash2, Calendar, Link, Unlink } from "lucide-react";
 import { Button } from "../ui";
+import { toast } from "sonner";
 import type { WorkloadColumn, WorkloadColumnType, SelectOption } from "../../types/workload";
 import { TAG_COLORS, TAG_COLOR_NAMES } from "../../types/workload";
 import { COLUMN_ICONS, COLUMN_ICON_NAMES } from "./columnIcons";
 import { evaluateFormula } from "../../lib/formulaEval";
 import { useT } from "../../i18n/useT";
+import { useCustomLists, useCustomListItems, useCreateCustomList, useSetCustomListItems } from "../../db/hooks/useCustomLists";
 
 interface Props {
   column: WorkloadColumn | null; // null = creating new
@@ -39,6 +41,25 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
   const [newOptValue, setNewOptValue] = useState("");
   const [newOptColor, setNewOptColor] = useState("gray");
   const [formulaError, setFormulaError] = useState("");
+  const [linkedListId, setLinkedListId] = useState<number | undefined>(column?.linked_list_id);
+  const [showImportListDropdown, setShowImportListDropdown] = useState(false);
+  const [saveAsListName, setSaveAsListName] = useState("");
+  const [showSaveAsListInput, setShowSaveAsListInput] = useState(false);
+  const [importListId, setImportListId] = useState<number | null>(null);
+
+  const { data: customLists } = useCustomLists();
+  const { data: importListItems } = useCustomListItems(importListId);
+  const createCustomList = useCreateCustomList();
+  const setCustomListItems = useSetCustomListItems();
+
+  // When import list items arrive, apply them
+  useEffect(() => {
+    if (!importListItems || importListId === null) return;
+    setOptions(importListItems.map((i) => ({ value: i.value, color: i.color ?? "gray" })));
+    setLinkedListId(importListId);
+    setImportListId(null);
+    setShowImportListDropdown(false);
+  }, [importListItems, importListId]);
 
   const validateFormula = (f: string): string => {
     if (!f.trim()) return "";
@@ -79,6 +100,9 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
     }
     if (type === "select" || type === "multi_select") {
       col.options = options;
+      if (linkedListId !== undefined) {
+        col.linked_list_id = linkedListId;
+      }
     }
     if (type === "formula") {
       col.formula = formula;
@@ -95,6 +119,16 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
     if (!val || options.some((o) => o.value === val)) return;
     setOptions([...options, { value: val, color: newOptColor }]);
     setNewOptValue("");
+  };
+
+  const handleSaveAsList = async () => {
+    const name = saveAsListName.trim();
+    if (!name || options.length === 0) return;
+    const id = await createCustomList.mutateAsync(name);
+    await setCustomListItems.mutateAsync({ listId: id, items: options.map((o) => ({ value: o.value, color: o.color })) });
+    setShowSaveAsListInput(false);
+    setSaveAsListName("");
+    toast.success(t.list_created ?? "List created");
   };
 
   return (
@@ -214,7 +248,52 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
           {/* Select options */}
           {(type === "select" || type === "multi_select") && (
             <div>
-              <label className="text-xs text-muted block mb-1">{t.options}</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-muted">{t.options}</label>
+                {linkedListId ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-accent flex items-center gap-0.5">
+                      <Link size={11} />
+                      {(customLists ?? []).find((l) => l.id === linkedListId)?.name ?? ""}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setLinkedListId(undefined)}
+                      className="text-xs text-muted hover:text-[var(--color-danger-text)] flex items-center gap-0.5"
+                    >
+                      <Unlink size={11} /> {t.unlink_list}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowImportListDropdown((v) => !v)}
+                      className="text-xs text-accent hover:underline flex items-center gap-0.5"
+                    >
+                      <Link size={11} /> {t.import_from_list}
+                    </button>
+                    {showImportListDropdown && (
+                      <div className="absolute right-0 top-full mt-1 z-[10000] bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-lg shadow-lg py-1 min-w-[150px]">
+                        {(customLists ?? []).length === 0 ? (
+                          <p className="text-xs text-muted px-3 py-1.5">{t.no_lists}</p>
+                        ) : (
+                          (customLists ?? []).map((list) => (
+                            <button
+                              key={list.id}
+                              type="button"
+                              onClick={() => setImportListId(list.id)}
+                              className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-hover-row)]"
+                            >
+                              {list.name}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               <div className="space-y-1.5 mb-2">
                 {options.map((opt, i) => {
                   const c = TAG_COLORS[opt.color] ?? TAG_COLORS.gray;
@@ -228,11 +307,13 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                       <select
                         value={opt.color}
                         onChange={(e) => {
+                          if (linkedListId) return;
                           const next = [...options];
                           next[i] = { ...next[i], color: e.target.value };
                           setOptions(next);
                         }}
-                        className="text-xs border border-[var(--color-border-divider)] rounded px-1 py-0.5"
+                        disabled={!!linkedListId}
+                        className="text-xs border border-[var(--color-border-divider)] rounded px-1 py-0.5 disabled:opacity-60"
                       >
                         {TAG_COLOR_NAMES.map((c) => (
                           <option key={c} value={c}>
@@ -240,42 +321,72 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                           </option>
                         ))}
                       </select>
-                      <button
-                        onClick={() => setOptions(options.filter((_, j) => j !== i))}
-                        className="text-muted hover:text-[var(--color-danger-text)] ml-auto"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {!linkedListId && (
+                        <button
+                          onClick={() => setOptions(options.filter((_, j) => j !== i))}
+                          className="text-muted hover:text-[var(--color-danger-text)] ml-auto"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   );
                 })}
               </div>
-              <div className="flex gap-2">
-                <input
-                  value={newOptValue}
-                  onChange={(e) => setNewOptValue(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addOption()}
-                  placeholder={t.new_option}
-                  className="flex-1 border border-[var(--color-border-divider)] rounded px-2 py-1.5 text-sm"
-                />
-                <select
-                  value={newOptColor}
-                  onChange={(e) => setNewOptColor(e.target.value)}
-                  className="text-sm border border-[var(--color-border-divider)] rounded px-2 py-1.5"
-                >
-                  {TAG_COLOR_NAMES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={addOption}
-                  className="p-1.5 text-muted hover:text-accent"
-                >
-                  <Plus size={16} />
-                </button>
-              </div>
+              {!linkedListId && (
+                <>
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      value={newOptValue}
+                      onChange={(e) => setNewOptValue(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && addOption()}
+                      placeholder={t.new_option}
+                      className="flex-1 border border-[var(--color-border-divider)] rounded px-2 py-1.5 text-sm"
+                    />
+                    <select
+                      value={newOptColor}
+                      onChange={(e) => setNewOptColor(e.target.value)}
+                      className="text-sm border border-[var(--color-border-divider)] rounded px-2 py-1.5"
+                    >
+                      {TAG_COLOR_NAMES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={addOption}
+                      className="p-1.5 text-muted hover:text-accent"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                  <div className="border-t border-[var(--color-border-divider)] pt-2">
+                    {showSaveAsListInput ? (
+                      <div className="flex gap-2">
+                        <input
+                          value={saveAsListName}
+                          onChange={(e) => setSaveAsListName(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") handleSaveAsList(); if (e.key === "Escape") setShowSaveAsListInput(false); }}
+                          placeholder={t.list_name}
+                          className="flex-1 border border-[var(--color-border-divider)] rounded px-2 py-1.5 text-sm"
+                          autoFocus
+                        />
+                        <button type="button" onClick={handleSaveAsList} className="px-3 text-sm text-accent hover:underline">{t.save}</button>
+                        <button type="button" onClick={() => setShowSaveAsListInput(false)} className="px-2 text-muted hover:text-[var(--color-text-secondary)]"><X size={14} /></button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowSaveAsListInput(true)}
+                        className="text-xs text-muted hover:text-accent flex items-center gap-1"
+                      >
+                        <Link size={12} /> {t.save_as_list}
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

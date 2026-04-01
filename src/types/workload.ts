@@ -23,6 +23,7 @@ export interface WorkloadColumn {
   formula?: string;
   showSum?: boolean;
   calendarColor?: boolean;
+  linked_list_id?: number;
 }
 
 export interface WorkloadTemplate {
