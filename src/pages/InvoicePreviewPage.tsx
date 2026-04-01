@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Download } from "lucide-react";
-import { Button } from "../components/ui";
+import { Button, PageSpinner } from "../components/ui";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useInvoice, useInvoiceLineItems, useUpdateInvoice } from "../db/hooks/useInvoices";
@@ -95,7 +95,7 @@ export function InvoicePreviewPage() {
     };
   }, [invoice, lineItems, client, profile, contactName, addresses, project, needsPostProcess]);
 
-  if (isLoading) return <div className="text-muted text-sm">{t.loading}</div>;
+  if (isLoading) return <PageSpinner />;
   if (!invoice || !lineItems || !client || !profile)
     return <div className="text-muted text-sm">{t.invoice_not_found}</div>;
 
@@ -123,7 +123,7 @@ export function InvoicePreviewPage() {
         a.href = storedPdfUrl;
         a.download = `${invoice.reference}_${client.name}.pdf`;
         a.click();
-        toast.success("PDF downloaded");
+        toast.success(t.pdf_downloaded);
         return;
       }
       const blob = await pdf(pdfDocument).toBlob();
@@ -138,9 +138,9 @@ export function InvoicePreviewPage() {
       a.download = `${invoice.reference}_${client.name}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success("PDF downloaded");
+      toast.success(t.pdf_downloaded);
     } catch {
-      toast.error("Failed to generate PDF");
+      toast.error(t.failed_to_generate_pdf);
     }
   };
 

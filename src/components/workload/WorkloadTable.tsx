@@ -878,7 +878,7 @@ function SortableRow({
             onClick={() => toggleTimer(row.id, projectId)}
             className={`shrink-0 p-0.5 rounded ${
               isTimerActive
-                ? "text-red-500 hover:text-red-600"
+                ? "text-[var(--color-danger-text)] hover:text-[var(--color-danger-text)]"
                 : "text-muted opacity-0 group-hover/row:opacity-100 hover:text-accent"
             }`}
             title={isTimerActive ? t.stop_timer : t.start_timer}
@@ -943,7 +943,7 @@ function SortableRow({
           </button>
           <button
             onClick={() => deleteRow.mutate(row.id)}
-            className="p-0.5 text-muted hover:text-red-600"
+            className="p-0.5 text-muted hover:text-[var(--color-danger-text)]"
             title={t.delete}
           >
             <Trash2 size={14} />
@@ -1044,7 +1044,7 @@ function InlineDuration({
 
   return (
     <span
-      className={`text-sm text-right block cursor-text ${isTimerActive ? "text-red-500 font-medium" : ""}`}
+      className={`text-sm text-right block cursor-text ${isTimerActive ? "text-[var(--color-danger-text)] font-medium" : ""}`}
       onDoubleClick={() => {
         setDraft(fmtMin(value) || "0");
         setEditing(true);

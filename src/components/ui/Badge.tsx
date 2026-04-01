@@ -7,13 +7,13 @@ interface BadgeProps {
 }
 
 export const variantClasses: Record<BadgeVariant, string> = {
-  success: "bg-green-100 text-green-700 dark:bg-[#052e16] dark:text-[#4ade80]",
-  warning: "bg-yellow-100 text-yellow-700 dark:bg-[#1c1917] dark:text-[#fbbf24]",
-  danger: "bg-red-100 text-red-700 dark:bg-[#2a1215] dark:text-[#f87171]",
+  success: "bg-[var(--color-success-bg)] text-[var(--color-success-text)]",
+  warning: "bg-[var(--color-warning-bg)] text-[var(--color-warning-text)]",
+  danger: "bg-[var(--color-danger-bg)] text-[var(--color-danger-text)]",
   neutral: "bg-[var(--color-input-bg)] text-[var(--color-muted)]",
   accent: "bg-accent-light text-accent",
-  info: "bg-blue-100 text-blue-700 dark:bg-[#0c1a2e] dark:text-[#38bdf8]",
-  indigo: "bg-indigo-100 text-indigo-700 dark:bg-[#1a1a2e] dark:text-[#818cf8]",
+  info: "bg-[var(--color-info-bg)] text-[var(--color-info-text)]",
+  indigo: "bg-[var(--color-indigo-bg)] text-[var(--color-indigo-text)]",
 };
 
 export function Badge({ variant, children, className = "" }: BadgeProps) {

@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { X, Plus, Pin, ChevronLeft, ChevronRight } from "lucide-react";
 import { useTabStore, type Tab } from "../../stores/tab-store";
+import { useT } from "../../i18n/useT";
 
 function TabItem({ tab, isActive, onActivate, onClose, onMiddleClick }: {
   tab: Tab;
@@ -26,7 +27,7 @@ function TabItem({ tab, isActive, onActivate, onClose, onMiddleClick }: {
       {!tab.pinned && (
         <span
           onClick={(e) => { e.stopPropagation(); onClose(); }}
-          className="opacity-0 group-hover:opacity-100 hover:text-red-600 shrink-0 ml-0.5"
+          className="opacity-0 group-hover:opacity-100 hover:text-[var(--color-danger-text)] shrink-0 ml-0.5"
         >
           <X size={12} />
         </span>
@@ -36,6 +37,7 @@ function TabItem({ tab, isActive, onActivate, onClose, onMiddleClick }: {
 }
 
 export function TabBar() {
+  const t = useT();
   const { tabs, activeTabId, openTab, closeTab, activateTab } = useTabStore();
   const navigate = useNavigate();
   const location = useLocation();
@@ -97,7 +99,7 @@ export function TabBar() {
           disabled={!canGoBack}
           onClick={() => navigate(-1)}
           className="p-1 rounded text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
-          title="Back"
+          title={t.back}
         >
           <ChevronLeft size={14} />
         </button>
@@ -106,7 +108,7 @@ export function TabBar() {
           disabled={!canGoForward}
           onClick={() => navigate(1)}
           className="p-1 rounded text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
-          title="Forward"
+          title={t.forward}
         >
           <ChevronRight size={14} />
         </button>

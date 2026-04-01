@@ -186,7 +186,7 @@ export function IncomePage() {
         { onSuccess: () => toast.success(t.receipt_attached) }
       );
     } catch {
-      toast.error("Failed to attach receipt");
+      toast.error(t.failed_to_attach_receipt);
     }
   };
 
@@ -361,7 +361,7 @@ export function IncomePage() {
                                 onSuccess: () => toast.success(t.toast_deleted),
                               });
                             }}
-                            className="opacity-0 group-hover:opacity-100 text-muted hover:text-red-600 transition-opacity"
+                            className="opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-danger-text)] transition-opacity"
                             title={t.delete}
                           >
                             <Trash2 size={14} />
@@ -560,8 +560,8 @@ function NewIncomeForm({
       <div className="flex gap-2">
         <button
           onClick={() => {
-            if (!form.source.trim()) return toast.error(t.source + " is required");
-            if (!form.amount) return toast.error(t.amount + " is required");
+            if (!form.source.trim()) return toast.error(t.source + " " + t.field_required);
+            if (!form.amount) return toast.error(t.amount + " " + t.field_required);
             onSave({
               ...form,
               receipt_path: null,

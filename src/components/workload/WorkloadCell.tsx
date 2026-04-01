@@ -256,7 +256,7 @@ function FormulaCell({
   const result = evaluateFormula(formula, cells);
   const isError = result === "#ERR";
   return (
-    <span className={`block text-sm text-right min-h-[28px] leading-[28px] ${isError ? "text-red-500" : "text-muted"}`}>
+    <span className={`block text-sm text-right min-h-[28px] leading-[28px] ${isError ? "text-[var(--color-danger-text)]" : "text-muted"}`}>
       {isError ? "#ERR" : result !== 0 ? result : <span className="text-muted">0</span>}
     </span>
   );

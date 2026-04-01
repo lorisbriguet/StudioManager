@@ -99,7 +99,7 @@ export function ClientDetailPage() {
           )}
           {confirmDelete ? (
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-red-600">{t.confirm_delete_client}</span>
+              <span className="text-[var(--color-danger-text)]">{t.confirm_delete_client}</span>
               <button
                 onClick={() => {
                   deleteClient.mutate(id!, {
@@ -109,7 +109,7 @@ export function ClientDetailPage() {
                     },
                   });
                 }}
-                className="px-2 py-1 bg-red-600 text-white rounded-md text-xs hover:bg-red-700"
+                className="px-2 py-1 bg-[var(--color-danger)] text-white rounded-md text-xs hover:opacity-80"
               >
                 {t.delete}
               </button>
@@ -123,7 +123,7 @@ export function ClientDetailPage() {
           ) : (
             <button
               onClick={() => setConfirmDelete(true)}
-              className="p-1.5 text-muted hover:text-red-600"
+              className="p-1.5 text-muted hover:text-[var(--color-danger-text)]"
               title={t.delete}
             >
               <Trash2 size={16} />
@@ -500,7 +500,7 @@ function ContactsSection({
             </button>
             <div className="my-1 border-t border-[var(--color-border-divider)]" />
             <button
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-danger-text)] hover:bg-red-50"
               onClick={() => {
                 const contact = contacts.find((c) => c.id === contextMenu.contactId);
                 if (contact) removeContact(contact);
@@ -682,7 +682,7 @@ function AddressCard({
           <button onClick={() => { setEditing(true); setCtxMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]">
             <Pencil size={14} /> {t.edit}
           </button>
-          <button onClick={() => { onDelete(); setCtxMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">
+          <button onClick={() => { onDelete(); setCtxMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-danger-text)] hover:bg-red-50">
             <Trash2 size={14} /> {t.delete}
           </button>
         </div>,

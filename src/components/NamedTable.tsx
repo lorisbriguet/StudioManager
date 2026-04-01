@@ -187,7 +187,7 @@ export function NamedTable({ table, projectId }: Props) {
         </button>
         <button
           onClick={async () => { if (await ask(t.confirm_delete_table, { kind: "warning" })) deleteTable.mutate(table.id); }}
-          className="text-muted hover:text-red-500"
+          className="text-muted hover:text-[var(--color-danger-text)]"
           title={t.delete}
         >
           <Trash2 size={12} />
@@ -244,7 +244,7 @@ export function NamedTable({ table, projectId }: Props) {
                                 <button
                                   type="button"
                                   onClick={() => setColOptions(colOptions.filter((_, j) => j !== i))}
-                                  className="text-muted hover:text-red-500"
+                                  className="text-muted hover:text-[var(--color-danger-text)]"
                                 >
                                   <Trash2 size={10} />
                                 </button>
@@ -263,7 +263,7 @@ export function NamedTable({ table, projectId }: Props) {
                           <button
                             type="button"
                             onClick={() => deleteColumn(col.id)}
-                            className="text-[10px] text-red-500 hover:underline"
+                            className="text-[10px] text-[var(--color-danger-text)] hover:underline"
                           >
                             {t.delete_column}
                           </button>
@@ -329,7 +329,7 @@ export function NamedTable({ table, projectId }: Props) {
                   <td className="w-8 text-right pr-2">
                     <button
                       onClick={() => deleteRow.mutate(row.id)}
-                      className="opacity-0 group-hover:opacity-100 text-muted hover:text-red-500 transition-opacity"
+                      className="opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-danger-text)] transition-opacity"
                     >
                       <Trash2 size={12} />
                     </button>

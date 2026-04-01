@@ -212,7 +212,7 @@ export function ProfilePage() {
                         <button
                           type="button"
                           onClick={() => removeActivity(i)}
-                          className="text-muted hover:text-red-600"
+                          className="text-muted hover:text-[var(--color-danger-text)]"
                         >
                           <X size={14} />
                         </button>

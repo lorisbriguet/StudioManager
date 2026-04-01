@@ -16,9 +16,9 @@ import { useT } from "../i18n/useT";
 import type { AppNotification } from "../types/notification";
 
 const typeConfig: Record<string, { icon: typeof Bell; color: string }> = {
-  overdue: { icon: AlertTriangle, color: "text-orange-500" },
-  warning: { icon: AlertTriangle, color: "text-yellow-500" },
-  error: { icon: AlertCircle, color: "text-red-500" },
+  overdue: { icon: AlertTriangle, color: "text-[var(--color-warning-text)]" },
+  warning: { icon: AlertTriangle, color: "text-[var(--color-warning-text)]" },
+  error: { icon: AlertCircle, color: "text-[var(--color-danger-text)]" },
   info: { icon: Info, color: "text-accent" },
 };
 
@@ -137,7 +137,7 @@ export function NotificationsPage() {
                     </button>
                   )}
                   <button
-                    className="p-1 text-muted hover:text-red-500 transition-colors"
+                    className="p-1 text-muted hover:text-[var(--color-danger-text)] transition-colors"
                     onClick={(e) => {
                       e.stopPropagation();
                       deleteNotif.mutate(n.id);

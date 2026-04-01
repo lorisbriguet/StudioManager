@@ -51,39 +51,41 @@ interface SlashMenuItem {
   special?: string;
 }
 
-const SLASH_COMMANDS: SlashMenuItem[] = [
-  {
-    label: "Heading 1",
-    icon: Heading1,
-    action: (editor) => editor?.chain().focus().toggleHeading({ level: 1 }).run(),
-  },
-  {
-    label: "Heading 2",
-    icon: Heading2,
-    action: (editor) => editor?.chain().focus().toggleHeading({ level: 2 }).run(),
-  },
-  {
-    label: "Heading 3",
-    icon: Heading3,
-    action: (editor) => editor?.chain().focus().toggleHeading({ level: 3 }).run(),
-  },
-  {
-    label: "Bullet List",
-    icon: List,
-    action: (editor) => editor?.chain().focus().toggleBulletList().run(),
-  },
-  {
-    label: "Divider",
-    icon: Minus,
-    action: (editor) => editor?.chain().focus().setHorizontalRule().run(),
-  },
-  {
-    label: "Link",
-    icon: LinkIcon,
-    action: () => { /* handled specially via LinkInsertPopup */ },
-    special: "link",
-  },
-];
+function getSlashCommands(t: ReturnType<typeof useT>): SlashMenuItem[] {
+  return [
+    {
+      label: t.heading_1,
+      icon: Heading1,
+      action: (editor) => editor?.chain().focus().toggleHeading({ level: 1 }).run(),
+    },
+    {
+      label: t.heading_2,
+      icon: Heading2,
+      action: (editor) => editor?.chain().focus().toggleHeading({ level: 2 }).run(),
+    },
+    {
+      label: t.heading_3,
+      icon: Heading3,
+      action: (editor) => editor?.chain().focus().toggleHeading({ level: 3 }).run(),
+    },
+    {
+      label: t.bulleted_list,
+      icon: List,
+      action: (editor) => editor?.chain().focus().toggleBulletList().run(),
+    },
+    {
+      label: t.wiki_divider,
+      icon: Minus,
+      action: (editor) => editor?.chain().focus().setHorizontalRule().run(),
+    },
+    {
+      label: t.wiki_link,
+      icon: LinkIcon,
+      action: () => { /* handled specially via LinkInsertPopup */ },
+      special: "link",
+    },
+  ];
+}
 
 // ─── Link Insert Popup ───────────────────────────────────────────
 function LinkInsertPopup({
@@ -227,14 +229,17 @@ function SlashCommandMenu({
   onSelect: (item: SlashMenuItem) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const [selectedIdx, setSelectedIdx] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  const allCommands = useMemo(() => getSlashCommands(t), [t]);
+
   const filtered = useMemo(() => {
-    if (!filter) return SLASH_COMMANDS;
+    if (!filter) return allCommands;
     const q = filter.toLowerCase();
-    return SLASH_COMMANDS.filter((cmd) => cmd.label.toLowerCase().includes(q));
-  }, [filter]);
+    return allCommands.filter((cmd) => cmd.label.toLowerCase().includes(q));
+  }, [filter, allCommands]);
 
   useEffect(() => {
     setSelectedIdx(0);
@@ -516,7 +521,7 @@ function ArticleEditor({
         <div className="flex-1" />
         <button
           onClick={handleDeleteArticle}
-          className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-red-500/10 hover:text-red-500 transition-colors"
+          className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-red-500/10 hover:text-[var(--color-danger-text)] transition-colors"
           title={t.delete}
         >
           <Trash2 size={16} />
@@ -777,7 +782,7 @@ function FolderSidebar({
           style={{ top: contextMenu.y, left: contextMenu.x }}
         >
           <button
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-[var(--color-hover-row)]"
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-hover-row)]"
             onClick={() => handleDeleteFolder(contextMenu.folderId)}
           >
             <Trash2 size={14} />
@@ -910,7 +915,7 @@ function ArticleList({
           style={{ top: ctxMenu.y, left: ctxMenu.x }}
         >
           <button
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-[var(--color-hover-row)]"
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-hover-row)]"
             onClick={() => {
               onDeleteArticle(ctxMenu.id);
               setCtxMenu(null);

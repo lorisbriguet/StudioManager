@@ -53,22 +53,22 @@ export function MainLayout() {
       <Sidebar />
       <main className="flex-1 overflow-hidden flex flex-col">
         {testMode && (
-          <div className="bg-amber-500 text-white text-sm font-semibold py-1.5 px-4 shrink-0 flex items-center justify-center gap-3">
+          <div className="bg-[var(--color-banner-test)] text-white text-sm font-semibold py-1.5 px-4 shrink-0 flex items-center justify-center gap-3">
             <span>{t.test_mode_banner}</span>
             <button
               onClick={exitTestMode}
-              className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-700 text-xs"
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[var(--color-banner-test-hover)] hover:opacity-80 text-xs"
             >
               <X size={12} /> {t.exit_test_mode}
             </button>
           </div>
         )}
         {presentationMode && (
-          <div className="bg-indigo-500 text-white text-sm font-semibold py-1.5 px-4 shrink-0 flex items-center justify-center gap-3">
+          <div className="bg-[var(--color-banner-presentation)] text-white text-sm font-semibold py-1.5 px-4 shrink-0 flex items-center justify-center gap-3">
             <span>{t.presentation_mode_banner}</span>
             <button
               onClick={exitPresentationMode}
-              className="flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-xs"
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[var(--color-banner-presentation-hover)] hover:opacity-80 text-xs"
             >
               <X size={12} /> {t.exit_presentation_mode}
             </button>

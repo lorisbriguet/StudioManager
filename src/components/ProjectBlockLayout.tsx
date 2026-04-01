@@ -87,7 +87,7 @@ function SortableBlock({ block, renderBlock, onToggleCollapse, onRemove, onToggl
           </button>
           <button
             onClick={() => onRemove(block.type)}
-            className="text-[var(--color-muted)] hover:text-red-500 transition-colors"
+            className="text-[var(--color-muted)] hover:text-[var(--color-danger-text)] transition-colors"
             title={t.delete}
           >
             <X size={12} />

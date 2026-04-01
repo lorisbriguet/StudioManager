@@ -204,7 +204,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                 className={`w-full border rounded-md px-3 py-2 text-sm font-mono ${formulaError ? "border-red-400" : "border-[var(--color-border-divider)]"}`}
               />
               {formulaError ? (
-                <p className="text-[10px] text-red-500 mt-1">{formulaError}</p>
+                <p className="text-[10px] text-[var(--color-danger-text)] mt-1">{formulaError}</p>
               ) : (
                 <p className="text-[10px] text-muted mt-1">{t.formula_help}</p>
               )}
@@ -242,7 +242,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                       </select>
                       <button
                         onClick={() => setOptions(options.filter((_, j) => j !== i))}
-                        className="text-muted hover:text-red-600 ml-auto"
+                        className="text-muted hover:text-[var(--color-danger-text)] ml-auto"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -289,7 +289,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                   onDelete();
                   onClose();
                 }}
-                className="text-red-600 hover:text-red-700"
+                className="text-[var(--color-danger-text)] hover:text-red-700"
               >
                 {t.delete_column}
               </Button>

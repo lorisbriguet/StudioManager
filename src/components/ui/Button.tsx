@@ -12,9 +12,9 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 const variantClasses: Record<ButtonVariant, string> = {
   primary: "bg-accent text-white hover:opacity-85 disabled:opacity-50",
   secondary: "bg-[var(--color-input-bg)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] disabled:opacity-50",
-  ghost: "border border-[var(--color-input-border)] text-[var(--color-muted)] hover:border-[#444] hover:text-[var(--color-text)] disabled:opacity-50",
-  danger: "bg-red-50 text-red-600 hover:bg-red-100 dark:bg-[#2a1215] dark:text-[#f87171] dark:hover:bg-[#361a1d] disabled:opacity-50",
-  success: "bg-green-50 text-green-600 hover:bg-green-100 dark:bg-[#052e16] dark:text-[#4ade80] disabled:opacity-50",
+  ghost: "border border-[var(--color-input-border)] text-[var(--color-muted)] hover:border-[var(--color-border)] hover:text-[var(--color-text)] disabled:opacity-50",
+  danger: "bg-[var(--color-danger-bg)] text-[var(--color-danger-text)] hover:opacity-80 disabled:opacity-50",
+  success: "bg-[var(--color-success-bg)] text-[var(--color-success-text)] hover:opacity-80 disabled:opacity-50",
   link: "text-accent hover:underline bg-transparent p-0 disabled:opacity-50",
 };
 
@@ -34,7 +34,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      className={`inline-flex items-center gap-1.5 rounded-lg font-medium transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-lg font-medium transition-colors focus-accent ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       {...props}
     >
       {icon}
