@@ -309,7 +309,7 @@ export function TaskDatePicker({
             <button
               type="button"
               onClick={handleClear}
-              className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-600 w-full justify-center py-1"
+              className="flex items-center gap-1.5 text-xs text-[var(--color-danger-text)] hover:text-[var(--color-danger-text)] w-full justify-center py-1"
             >
               <X size={14} />
               {t.clear_date}

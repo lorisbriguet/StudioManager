@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Download, FolderPlus } from "lucide-react";
-import { Button } from "../components/ui";
+import { Button, PageSpinner } from "../components/ui";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { useQuote, useUpdateQuote } from "../db/hooks/useQuotes";
 import { useQuoteLineItems } from "../db/hooks/useQuoteLineItems";
@@ -31,7 +31,7 @@ export function QuotePreviewPage() {
 
   const isLoading = loadingQuote || loadingItems;
 
-  if (isLoading) return <div className="text-muted text-sm">{t.loading}</div>;
+  if (isLoading) return <PageSpinner />;
   if (!quote || !lineItems || !client || !profile)
     return <div className="text-muted text-sm">{t.quote_not_found}</div>;
 
@@ -59,9 +59,9 @@ export function QuotePreviewPage() {
       a.download = `${quote.reference.startsWith("DRAFT") ? "DRAFT" : quote.reference}_${client.name}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success("PDF downloaded");
+      toast.success(t.pdf_downloaded);
     } catch {
-      toast.error("Failed to generate PDF");
+      toast.error(t.failed_to_generate_pdf);
     }
   };
 

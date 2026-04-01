@@ -401,7 +401,7 @@ export function TasksPage() {
                         onClick={() => handleTimerToggle(tk.id, tk.project_id)}
                         className={`p-0.5 transition-opacity ${
                           activeTimer?.taskId === tk.id
-                            ? "text-red-500"
+                            ? "text-[var(--color-danger-text)]"
                             : "opacity-0 group-hover/task:opacity-100 text-muted hover:text-accent"
                         }`}
                         title={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
@@ -412,7 +412,7 @@ export function TasksPage() {
                         onClick={() => deleteTask.mutate(tk.id, {
                           onSuccess: () => toast.success(t.toast_task_deleted),
                         })}
-                        className="opacity-0 group-hover/task:opacity-100 text-muted hover:text-red-600 transition-opacity p-0.5"
+                        className="opacity-0 group-hover/task:opacity-100 text-muted hover:text-[var(--color-danger-text)] transition-opacity p-0.5"
                         title={t.delete}
                       >
                         <Trash2 size={14} />
@@ -484,7 +484,7 @@ export function TasksPage() {
                               onClick={() => deleteSubtask.mutate(s.id, {
                                 onSuccess: () => toast.success(t.toast_subtask_deleted),
                               })}
-                              className="opacity-0 group-hover/sub:opacity-100 text-muted hover:text-red-600 transition-opacity p-0.5"
+                              className="opacity-0 group-hover/sub:opacity-100 text-muted hover:text-[var(--color-danger-text)] transition-opacity p-0.5"
                               title={t.delete}
                             >
                               <Trash2 size={14} />

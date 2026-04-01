@@ -399,7 +399,7 @@ export function InvoicesPage() {
                         onClick={() => deleteTemplate.mutate(tmpl.id, {
                           onSuccess: () => toast.success(t.template_deleted),
                         })}
-                        className="text-muted hover:text-red-600"
+                        className="text-muted hover:text-[var(--color-danger-text)]"
                       >
                         <Trash2 size={14} />
                       </button>

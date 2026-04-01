@@ -374,7 +374,7 @@ export function ExpensesPage() {
                           <span className="ml-1 text-xs text-muted">{categoryName(exp.category_code)}</span>
                         </td>
                         <td className="px-4 py-2.5 text-muted">{formatDisplayDate(exp.invoice_date)}</td>
-                        <td className={`px-4 py-2.5 ${exp.paid_date ? "text-green-700 dark:text-green-300" : "text-red-600 dark:text-red-300"}`}>
+                        <td className={`px-4 py-2.5 ${exp.paid_date ? "text-[var(--color-success-text)]" : "text-[var(--color-danger-text)]"}`}>
                           {exp.paid_date ? formatDisplayDate(exp.paid_date) : "\u2014"}
                         </td>
                         <td className="px-4 py-2.5">
@@ -481,6 +481,7 @@ function ReceiptPreview({
   reference: string;
   onClose: () => void;
 }) {
+  const t = useT();
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
   const isImage = ["png", "jpg", "jpeg", "webp"].includes(ext);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
@@ -519,7 +520,7 @@ function ReceiptPreview({
         </div>
         <div className="flex-1 overflow-auto bg-[var(--color-surface)] flex items-center justify-center">
           {!blobUrl ? (
-            <span className="text-sm text-muted">Loading...</span>
+            <span className="text-sm text-muted">{t.loading}</span>
           ) : isImage ? (
             <img
               src={blobUrl}
@@ -714,9 +715,9 @@ function NewExpenseForm({
         />
       </div>
       {duplicateWarning && (
-        <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md text-sm">
-          <span className="text-yellow-600 dark:text-yellow-400 font-medium">{t.possible_duplicate}:</span>
-          <span className="text-yellow-700 dark:text-yellow-300">
+        <div className="flex items-center gap-2 p-3 bg-[var(--color-warning-bg)] border border-[var(--color-border-header)] rounded-md text-sm">
+          <span className="text-[var(--color-warning-text)] font-medium">{t.possible_duplicate}:</span>
+          <span className="text-[var(--color-warning-text)]">
             {duplicateWarning.supplier} — {duplicateWarning.amount.toFixed(2)} CHF ({formatDisplayDate(duplicateWarning.date)})
           </span>
         </div>

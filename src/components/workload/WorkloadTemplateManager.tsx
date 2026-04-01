@@ -159,7 +159,7 @@ export function WorkloadTemplateManager() {
               </button>
               <button
                 onClick={() => handleDelete(tpl.id)}
-                className="p-1 text-muted hover:text-red-600"
+                className="p-1 text-muted hover:text-[var(--color-danger-text)]"
                 title={t.delete}
               >
                 <Trash2 size={12} />

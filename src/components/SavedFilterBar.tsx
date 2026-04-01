@@ -110,7 +110,7 @@ function ConditionRow({
           className="text-xs px-1.5 py-1 border border-[var(--color-border-divider)] rounded-lg bg-transparent w-24"
         />
       )}
-      <button onClick={onRemove} className="text-muted hover:text-red-500">
+      <button onClick={onRemove} className="text-muted hover:text-[var(--color-danger-text)]">
         <X size={12} />
       </button>
     </div>
@@ -506,7 +506,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
               </button>
             )}
             <button
-              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-left text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)]"
               onClick={() => {
                 handleDelete(ctxMenu.filter.id);
                 setCtxMenu(null);

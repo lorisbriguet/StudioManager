@@ -143,7 +143,7 @@ function PresetDropdown() {
               <button
                 type="button"
                 onClick={(e) => handleDelete(e, preset.id)}
-                className="opacity-0 group-hover/item:opacity-100 transition-opacity text-muted hover:text-red-600 px-2 py-1.5"
+                className="opacity-0 group-hover/item:opacity-100 transition-opacity text-muted hover:text-[var(--color-danger-text)] px-2 py-1.5"
                 title={t.delete_preset}
               >
                 <Trash2 size={12} />
@@ -307,7 +307,7 @@ export function DashboardPage() {
               <button
                 type="button"
                 onClick={() => removeWidget(widget.id)}
-                className="absolute top-1 right-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-muted hover:text-red-600 p-0.5"
+                className="absolute top-1 right-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-muted hover:text-[var(--color-danger-text)] p-0.5"
               >
                 <X size={12} />
               </button>

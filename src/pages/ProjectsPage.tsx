@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, X, Eye, Trash2, ExternalLink, Maximize2 } from "lucide-react";
+import { Plus, X, Eye, Trash2, ExternalLink, Maximize2, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
 import { useProjects, useCreateProject, useDeleteProject } from "../db/hooks/useProjects";
 import { useClients } from "../db/hooks/useClients";
@@ -17,7 +17,7 @@ import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Button, Badge, Card, PageHeader, SearchBar, PageSpinner, Input } from "../components/ui";
+import { Button, Badge, Card, PageHeader, SearchBar, PageSpinner, Input, EmptyState } from "../components/ui";
 
 import type { BadgeVariant } from "../components/ui/Badge";
 
@@ -283,8 +283,8 @@ export function ProjectsPage() {
             );
           })}
           {filtered.length === 0 && (
-            <div className="col-span-full text-sm text-muted py-8 text-center">
-              {search ? t.no_matching_projects : t.no_projects}
+            <div className="col-span-full">
+              <EmptyState icon={<FolderOpen size={32} />} message={search ? t.no_matching_projects : t.no_projects} />
             </div>
           )}
         </div>

@@ -36,6 +36,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useUndoStore } from "./stores/undo-store";
 import { logError } from "./lib/log";
 import { requestNotificationPermission } from "./lib/nativeNotification";
+import { useT } from "./i18n/useT";
 
 import { queryClient } from "./lib/queryClient";
 // Re-export so existing imports from "./App" still work
@@ -46,6 +47,7 @@ function StartupChecks() {
   useRecurringCheck();
   useAutoBackup();
   useErrorNotifications();
+  const t = useT();
 
   useEffect(() => {
     requestNotificationPermission();
@@ -88,7 +90,7 @@ function StartupChecks() {
             toast.success(`Redo: ${action.label}`);
           }).catch((err) => {
             logError("Redo failed:", err);
-            toast.error("Redo failed");
+            toast.error(t.redo_failed);
           });
         }
       } else {
@@ -107,7 +109,7 @@ function StartupChecks() {
             toast.success(`Undo: ${action.label}`);
           }).catch((err) => {
             logError("Undo failed:", err);
-            toast.error("Undo failed");
+            toast.error(t.undo_failed);
           });
         }
       }

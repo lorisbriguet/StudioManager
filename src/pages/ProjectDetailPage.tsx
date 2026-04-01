@@ -34,7 +34,7 @@ export function ProjectDetailPage() {
         <div className="ml-auto flex items-center gap-2">
           {confirmDelete ? (
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-red-600">{t.confirm_delete_project}</span>
+              <span className="text-[var(--color-danger-text)]">{t.confirm_delete_project}</span>
               <Button
                 variant="danger"
                 size="sm"
@@ -63,7 +63,7 @@ export function ProjectDetailPage() {
               size="sm"
               icon={<Trash2 size={16} />}
               onClick={() => setConfirmDelete(true)}
-              className="p-1.5 text-muted hover:text-red-600"
+              className="p-1.5 text-muted hover:text-[var(--color-danger-text)]"
               title={t.delete}
             />
           )}

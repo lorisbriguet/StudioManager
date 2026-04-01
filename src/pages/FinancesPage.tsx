@@ -125,7 +125,7 @@ export function FinancesPage() {
 
       toast.success(`Exported to ${basePath}`);
     } catch {
-      toast.error("Export failed");
+      toast.error(t.export_failed);
     }
   };
 
@@ -169,8 +169,8 @@ export function FinancesPage() {
               contentStyle={chart.tooltipStyle}
               cursor={{ fill: chart.cursorFill }}
             />
-            <Bar dataKey="revenue" fill="var(--color-chart-2)" radius={[3, 3, 0, 0]} name="Revenue" />
-            <Bar dataKey="expenses" fill="var(--color-chart-4)" radius={[3, 3, 0, 0]} name="Expenses" />
+            <Bar dataKey="revenue" fill="var(--color-chart-2)" radius={[3, 3, 0, 0]} name={t.revenue_label} />
+            <Bar dataKey="expenses" fill="var(--color-chart-4)" radius={[3, 3, 0, 0]} name={t.expenses_label} />
           </BarChart>
         </ResponsiveContainer>
       </Card>

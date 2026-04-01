@@ -116,7 +116,7 @@ export function ResourcesPage() {
       toast.success(`${t.delete}: ${name}`);
     } catch (err) {
       logError("Delete resource failed:", err);
-      toast.error("Delete failed");
+      toast.error(t.delete_failed);
     }
   };
 
@@ -127,7 +127,7 @@ export function ResourcesPage() {
     }
     openUrl(u).catch((err) => {
       logError("Open URL failed:", err);
-      toast.error("Failed to open URL");
+      toast.error(t.failed_to_open_url);
     });
   };
 
@@ -168,7 +168,7 @@ export function ResourcesPage() {
               toast.success(t.save);
             } catch (err) {
               logError("Create resource failed:", err);
-              toast.error("Create failed");
+              toast.error(t.create_failed);
             }
           }}
           onCancel={() => setShowForm(false)}
@@ -256,7 +256,7 @@ export function ResourcesPage() {
                       toast.success(t.save);
                     } catch (err) {
                       logError("Update resource failed:", err);
-                      toast.error("Update failed");
+                      toast.error(t.update_failed);
                     }
                   }}
                   onDelete={() => handleDelete(r.id, r.name)}

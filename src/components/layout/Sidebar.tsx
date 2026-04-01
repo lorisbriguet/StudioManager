@@ -289,14 +289,14 @@ function TimerIndicator({ collapsed }: { collapsed: boolean }) {
         {!collapsed && (
           <>
             <div className="flex flex-col min-w-0 flex-1">
-              <span className="font-medium text-red-500 tabular-nums">{elapsed}</span>
+              <span className="font-medium text-[var(--color-danger-text)] tabular-nums">{elapsed}</span>
               {activeTimer.projectName && (
                 <span className="text-muted truncate">{activeTimer.projectName}</span>
               )}
             </div>
             <button
               onClick={() => stopAndSave()}
-              className="shrink-0 p-1 rounded hover:bg-[var(--color-hover-row)] text-red-500 hover:text-red-600"
+              className="shrink-0 p-1 rounded hover:bg-[var(--color-hover-row)] text-[var(--color-danger-text)] hover:text-[var(--color-danger-text)]"
               title={t.stop_timer}
             >
               <Square size={12} />

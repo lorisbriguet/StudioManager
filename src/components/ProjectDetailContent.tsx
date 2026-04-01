@@ -57,7 +57,7 @@ import { effectivePriority, type TaskPriority } from "../types/task";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu";
 import { useInvoices, useInvoicesByProject, useUpdateInvoice } from "../db/hooks/useInvoices";
 import { useQuotes, useQuotesByProject, useUpdateQuote } from "../db/hooks/useQuotes";
-import { Badge } from "./ui";
+import { Badge, PageSpinner } from "./ui";
 import { invoiceStatusVariant, quoteStatusVariant } from "../lib/statusColors";
 import { useTabStore } from "../stores/tab-store";
 import { useTimerActions } from "../hooks/useTimerActions";
@@ -143,7 +143,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
     if (project) setStatus(project.status);
   }, [project]);
 
-  if (isLoading) return <div className="text-muted text-sm">{t.loading}</div>;
+  if (isLoading) return <PageSpinner />;
   if (!project) return <div className="text-muted text-sm">{t.no_projects}</div>;
 
   const totalCount = tasks?.length ?? 0;
@@ -772,7 +772,7 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
                   onClick={() => handleTimerToggle(tk.id)}
                   className={`shrink-0 p-0.5 transition-opacity ${
                     activeTimer?.taskId === tk.id
-                      ? "text-red-500"
+                      ? "text-[var(--color-danger-text)]"
                       : "opacity-0 pointer-events-none group-hover/task:opacity-100 group-hover/task:pointer-events-auto text-muted hover:text-accent"
                   }`}
                   title={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
@@ -781,7 +781,7 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
                 </button>
                 <button
                   onClick={() => deleteTask.mutate(tk.id, { onSuccess: () => toast.success(t.toast_task_deleted) })}
-                  className="shrink-0 opacity-0 pointer-events-none group-hover/task:opacity-100 group-hover/task:pointer-events-auto text-muted hover:text-red-600 transition-opacity p-0.5"
+                  className="shrink-0 opacity-0 pointer-events-none group-hover/task:opacity-100 group-hover/task:pointer-events-auto text-muted hover:text-[var(--color-danger-text)] transition-opacity p-0.5"
                   title={t.delete}
                 >
                   <Trash2 size={14} />
@@ -854,7 +854,7 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
                       />
                       <button
                         onClick={() => deleteSubtask.mutate(s.id, { onSuccess: () => toast.success(t.toast_subtask_deleted) })}
-                        className="shrink-0 opacity-0 pointer-events-none group-hover/sub:opacity-100 group-hover/sub:pointer-events-auto text-muted hover:text-red-600 transition-opacity p-0.5"
+                        className="shrink-0 opacity-0 pointer-events-none group-hover/sub:opacity-100 group-hover/sub:pointer-events-auto text-muted hover:text-[var(--color-danger-text)] transition-opacity p-0.5"
                         title={t.delete}
                       >
                         <Trash2 size={14} />
@@ -1096,7 +1096,7 @@ function TimeEntryLog({ taskId }: { taskId: number }) {
               {entry.description && <span className="text-muted truncate flex-1">{entry.description}</span>}
               <button
                 onClick={() => deleteEntry.mutate(entry.id)}
-                className="shrink-0 opacity-0 pointer-events-none group-hover/entry:opacity-100 group-hover/entry:pointer-events-auto text-muted hover:text-red-600 transition-opacity p-0.5"
+                className="shrink-0 opacity-0 pointer-events-none group-hover/entry:opacity-100 group-hover/entry:pointer-events-auto text-muted hover:text-[var(--color-danger-text)] transition-opacity p-0.5"
                 title={t.delete}
               >
                 <Trash2 size={12} />

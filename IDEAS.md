@@ -1,7 +1,8 @@
 # StudioManager — Ideas & Backlog
 
-## V1.7.1 — Done
+## V1.8.1 — Done
 
+- [x] Time entries with date-specific tracking and log past time
 - [x] Resizable side peek (drag to adjust width)
 - [x] Billing address in client should show the default filled one
 - [x] Rework contacts UI in clients (read-only cards with edit icon/context menu)
@@ -11,26 +12,29 @@
 - [x] Project folder opens in Finder (open_in_finder Rust command)
 - [x] Backup notifications link to backup folder in Finder
 - [x] Billing address label style matches main address (muted uppercase)
+- [x] Full UX audit — CSS tokens, i18n, accessibility, focus states, loading/empty states, hardcoded colors
 
-## Still TODO
+## Bugs
 
-- [ ] Update presentation mode to show off all new features
-- [ ] Side peek in calendar got weird margins on the peek side (no margins)
+- [ ] "Keep N backups" doesn't seem to work
 
-## Future Ideas
+## High Priority
 
-- [ ] Complete UX audit + rethink
+- [ ] Time tracking UX rethink — rework the full timing experience (timer, log time, timesheet, where it lives, how it connects to projects/tasks/workload)
+- [ ] Weekly timesheet view — grid (days x projects) powered by time_entries
+- [ ] Customizable invoices (template editor)
+- [ ] Global custom lists for multi-select, importable in projects
+- [ ] Dashboard: option to update saved layout with current layout
+- [ ] Invoice aging report — dashboard widget showing overdue by age bracket (30/60/90 days)
+
+## Medium Priority
+
+- [ ] Quick-add from menu bar — Tauri system tray (log time, create expense, start timer)
+- [ ] Workload item → "create task?" popup to prevent orphan entries
+- [ ] Resource duplication warning (same pattern as expense duplicate)
+- [ ] Update presentation mode seeds (3 versions behind)
+
+## Low Priority
+
+- [ ] Resizable side peek snap positions
 - [ ] Mobile app companion
-- [ ] Resizable side peek snap positions (optional)
-- [ ] Define some button sizes, some margins and padding sizes, to be sure it's consistent across the app. Update UI design system. Overall check everything that could be inconsistent and make it into a set of variable
-- [ ] in dashboard option tu update saved layout with current layout
-- [ ] Customizable invoices
-- [ ] Duplication warning in ressources
-- [ ] for multi select, global custom list that can be imported in projects
-- [ ] Items created in workload should show a pop up with "create task" to display it on tasks or not
-- [ ] Problem when filling hours in workload afterwards, you can't choose when thos hours were spent
-
-## BUG Found
-
-- Dashboard, project time distribution, on hover, text is black, should be white
-- Black screen on clicking backup notification
