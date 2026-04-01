@@ -9,6 +9,7 @@ import { invoiceLabels, type InvoiceLanguage } from "../../i18n/invoice-labels";
 import type { Invoice, InvoiceLineItem } from "../../types/invoice";
 import type { Client, ClientAddress } from "../../types/client";
 import type { BusinessProfile } from "../../types/business-profile";
+import type { InvoiceTemplate } from "../../types/invoice-template";
 import { formatDisplayDate } from "../../utils/formatDate";
 import { QRBillCanvas } from "./QRBillSvgRenderer";
 import { buildQRBillData } from "./qr-bill";
@@ -23,6 +24,7 @@ interface InvoicePDFProps {
   projectName?: string;
   /** When > 0, renders a "REMINDER" header with the count */
   reminderCount?: number;
+  template?: InvoiceTemplate;
 }
 
 // A4: 595.28 x 841.89pt — QR bill: 210x105mm = 595.28x297.64pt
@@ -245,10 +247,35 @@ export function InvoicePDF({
   billingAddress,
   projectName,
   reminderCount = 0,
+  template,
 }: InvoicePDFProps) {
   const lang = (invoice.language as InvoiceLanguage) || "FR";
   const t = invoiceLabels[lang];
-  const qrBillData = profile.iban ? buildQRBillData(invoice, client, profile) : null;
+
+  // Template-driven overrides
+  const fontFamily = template?.font_family ?? "Helvetica";
+  const accentColor = template?.accent_color ?? "#1a1a1a";
+  const paddingTop = template?.margins_top ?? 35;
+  const paddingHorizontal = template?.margins_right ?? 50; // use right margin for horizontal
+  // Visibility flags (default to showing everything when no template)
+  const showNotes = template ? !!template.show_notes : true;
+  const showProjectName = template ? !!template.show_project_name : true;
+  const showPoNumber = template ? !!template.show_po_number : true;
+  const showBankDetails = template ? !!template.show_bank_details : true;
+  const showQrBill = template ? !!template.show_qr_bill : true;
+  const showFooter = template ? !!template.show_footer : true;
+  // Column order
+  const columnOrder: string[] = template?.columns
+    ? (() => { try { return JSON.parse(template.columns) as string[]; } catch { return ["designation", "rate", "unit", "qty", "amount"]; } })()
+    : ["designation", "rate", "unit", "qty", "amount"];
+
+  // Dynamic styles that depend on template
+  const dynPage = { fontFamily, fontSize: 9, color: accentColor, flexDirection: "column" as const, height: "100%" };
+  const dynContent = { paddingTop, paddingHorizontal, flex: 1 };
+  const dynAccentBorder = { borderBottomColor: accentColor };
+  const dynGrandTotal = { borderTopColor: accentColor };
+
+  const qrBillData = (profile.iban && showQrBill) ? buildQRBillData(invoice, client, profile) : null;
   const qrBillLang = invoice.language === "EN" ? "EN" as const : "FR" as const;
   // Detect global rate: all items share the same non-null rate and same unit
   const allSameRate = lineItems.length > 0 && lineItems.every((item) => item.rate != null && item.rate === lineItems[0].rate);
@@ -256,6 +283,10 @@ export function InvoicePDF({
   const isGlobalRate = allSameRate && allSameUnit && lineItems[0].rate != null && lineItems[0].unit;
   const hasRate = !isGlobalRate && lineItems.some((item) => item.rate != null);
   const hasUnit = !isGlobalRate && lineItems.some((item) => item.unit != null && item.unit !== "");
+
+  // Determine which columns are visible (template column order controls order + presence)
+  const showCol = (col: string) => columnOrder.includes(col);
+
   const cur = invoice.currency || "CHF";
   const fmt = (amount: number) => formatAmount(amount, cur);
   const paymentDays = invoice.payment_terms_days || profile.default_payment_terms_days || 30;
@@ -271,9 +302,9 @@ export function InvoicePDF({
 
   return (
     <Document>
-      <Page size="A4" style={s.page}>
+      <Page size="A4" style={[s.page, dynPage]}>
         {/* Content area — flex: 1 fills space above QR bill */}
-        <View style={s.content}>
+        <View style={[s.content, dynContent]}>
           {/* Reminder banner */}
           {reminderCount > 0 && (
             <View style={s.reminderBanner}>
@@ -347,14 +378,14 @@ export function InvoicePDF({
                 <Text style={s.metaValue}>{invoice.assignment}</Text>
               </View>
             )}
-            {projectName && (
+            {showProjectName && projectName && (
               <View style={s.metaRow}>
                 <Text style={s.metaLabel}>{t.project}</Text>
                 <Text style={s.metaValue}>{projectName}</Text>
               </View>
             )}
-            {invoice.po_number && <View style={{ height: 6 }} />}
-            {invoice.po_number && (
+            {showPoNumber && invoice.po_number && <View style={{ height: 6 }} />}
+            {showPoNumber && invoice.po_number && (
               <View style={s.metaRow}>
                 <Text style={s.metaLabel}>{t.po_number}</Text>
                 <Text style={s.metaValue}>{invoice.po_number}</Text>
@@ -364,26 +395,26 @@ export function InvoicePDF({
 
           {/* Line items table */}
           <View style={s.table}>
-            <View style={s.tableHeader}>
-              <Text style={[s.thText, s.colDesignation]}>{t.designation}</Text>
-              {hasRate && <Text style={[s.thText, s.colRate]}>{t.rate}</Text>}
-              {hasUnit && <Text style={[s.thText, s.colUnit]}>{t.unit}</Text>}
-              <Text style={[s.thText, s.colQty]}>{t.quantity}</Text>
-              <Text style={[s.thText, s.colAmount]}>{t.amount}</Text>
+            <View style={[s.tableHeader, dynAccentBorder]}>
+              {columnOrder.map((col) => {
+                if (col === "designation") return <Text key={col} style={[s.thText, s.colDesignation]}>{t.designation}</Text>;
+                if (col === "rate" && (hasRate || showCol("rate"))) return hasRate ? <Text key={col} style={[s.thText, s.colRate]}>{t.rate}</Text> : null;
+                if (col === "unit" && (hasUnit || showCol("unit"))) return hasUnit ? <Text key={col} style={[s.thText, s.colUnit]}>{t.unit}</Text> : null;
+                if (col === "qty") return <Text key={col} style={[s.thText, s.colQty]}>{t.quantity}</Text>;
+                if (col === "amount") return <Text key={col} style={[s.thText, s.colAmount]}>{t.amount}</Text>;
+                return null;
+              })}
             </View>
             {lineItems.map((item, i) => (
               <View key={i} style={s.tableRow}>
-                <Text style={s.colDesignation}>{item.designation}</Text>
-                {hasRate && (
-                  <Text style={s.colRate}>
-                    {item.rate != null ? fmt(item.rate) : ""}
-                  </Text>
-                )}
-                {hasUnit && (
-                  <Text style={s.colUnit}>{item.unit || ""}</Text>
-                )}
-                <Text style={s.colQty}>{item.quantity}</Text>
-                <Text style={s.colAmount}>{fmt(item.amount)}</Text>
+                {columnOrder.map((col) => {
+                  if (col === "designation") return <Text key={col} style={s.colDesignation}>{item.designation}</Text>;
+                  if (col === "rate" && hasRate) return <Text key={col} style={s.colRate}>{item.rate != null ? fmt(item.rate) : ""}</Text>;
+                  if (col === "unit" && hasUnit) return <Text key={col} style={s.colUnit}>{item.unit || ""}</Text>;
+                  if (col === "qty") return <Text key={col} style={s.colQty}>{item.quantity}</Text>;
+                  if (col === "amount") return <Text key={col} style={s.colAmount}>{fmt(item.amount)}</Text>;
+                  return null;
+                })}
               </View>
             ))}
           </View>
@@ -396,7 +427,7 @@ export function InvoicePDF({
           )}
 
           {/* Notes */}
-          {invoice.notes ? (
+          {showNotes && invoice.notes ? (
             <View style={s.notesBlock}>
               <Text style={s.notesLabel}>{t.notes}</Text>
               <Text style={s.notesText}>{invoice.notes}</Text>
@@ -418,30 +449,32 @@ export function InvoicePDF({
                 </Text>
               </View>
             )}
-            <View style={s.grandTotalRow}>
+            <View style={[s.grandTotalRow, dynGrandTotal]}>
               <Text style={s.grandTotalLabel}>{t.invoice_total.toUpperCase()}</Text>
               <Text style={s.grandTotalValue}>{fmt(invoice.total)}</Text>
             </View>
           </View>
 
           {/* Footer */}
-          <View style={s.footer}>
-            <View style={s.footerRow}>
-              <View style={s.paymentSection}>
-                <Text style={s.paymentTitle}>{t.payment_terms}</Text>
-                <Text>{paymentTermsText}</Text>
-              </View>
-              {profile.bank_name && (
-                <View style={s.bankSection}>
-                  <Text style={s.bankTitle}>{t.bank_details}</Text>
-                  <Text>{profile.bank_name}</Text>
-                  <Text>IBAN: {profile.iban}</Text>
-                  {profile.bic_swift && <Text>{t.bic}: {profile.bic_swift}</Text>}
+          {showFooter && (
+            <View style={s.footer}>
+              <View style={s.footerRow}>
+                <View style={s.paymentSection}>
+                  <Text style={s.paymentTitle}>{t.payment_terms}</Text>
+                  <Text>{paymentTermsText}</Text>
                 </View>
-              )}
-              <Text style={s.thankYou}>{t.thank_you}</Text>
+                {showBankDetails && profile.bank_name && (
+                  <View style={s.bankSection}>
+                    <Text style={s.bankTitle}>{t.bank_details}</Text>
+                    <Text>{profile.bank_name}</Text>
+                    <Text>IBAN: {profile.iban}</Text>
+                    {profile.bic_swift && <Text>{t.bic}: {profile.bic_swift}</Text>}
+                  </View>
+                )}
+                <Text style={s.thankYou}>{t.thank_you}</Text>
+              </View>
             </View>
-          </View>
+          )}
         </View>
 
         {/* QR-Bill — fixed height at the bottom of the page */}

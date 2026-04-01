@@ -612,6 +612,38 @@ async function ensureSchema(db: Database) {
     )
   `);
 
+  // ── Invoice templates ─────────────────────────────────────
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS invoice_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      accent_color TEXT NOT NULL DEFAULT '#1a1a1a',
+      font_family TEXT NOT NULL DEFAULT 'Helvetica',
+      logo_position TEXT NOT NULL DEFAULT 'left',
+      margins_top REAL NOT NULL DEFAULT 35,
+      margins_right REAL NOT NULL DEFAULT 50,
+      margins_bottom REAL NOT NULL DEFAULT 30,
+      margins_left REAL NOT NULL DEFAULT 50,
+      show_notes INTEGER NOT NULL DEFAULT 1,
+      show_project_name INTEGER NOT NULL DEFAULT 1,
+      show_po_number INTEGER NOT NULL DEFAULT 1,
+      show_bank_details INTEGER NOT NULL DEFAULT 1,
+      show_qr_bill INTEGER NOT NULL DEFAULT 1,
+      show_footer INTEGER NOT NULL DEFAULT 1,
+      columns TEXT NOT NULL DEFAULT '["designation","rate","unit","qty","amount"]',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+  // Seed default template (one-time)
+  await db.execute(
+    `INSERT INTO invoice_templates (name, is_default) SELECT 'Default', 1 WHERE NOT EXISTS (SELECT 1 FROM invoice_templates)`
+  );
+  // Add template_id to invoices and quotes
+  await addColumnIfMissing("invoices", "template_id", "INTEGER REFERENCES invoice_templates(id) ON DELETE SET NULL");
+  await addColumnIfMissing("quotes", "template_id", "INTEGER REFERENCES invoice_templates(id) ON DELETE SET NULL");
+
   // ── Migrate workload_rows → tasks (one-time) ─────────────
   const hasWorkloadRows = await db.select<{ cnt: number }[]>(
     "SELECT COUNT(*) as cnt FROM workload_rows"

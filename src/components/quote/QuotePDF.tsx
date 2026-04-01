@@ -9,6 +9,7 @@ import { invoiceLabels, type InvoiceLanguage } from "../../i18n/invoice-labels";
 import type { Quote, QuoteLineItem } from "../../types/quote";
 import type { Client, ClientAddress } from "../../types/client";
 import type { BusinessProfile } from "../../types/business-profile";
+import type { InvoiceTemplate } from "../../types/invoice-template";
 import { formatDisplayDate } from "../../utils/formatDate";
 
 interface QuotePDFProps {
@@ -19,6 +20,7 @@ interface QuotePDFProps {
   contactName?: string;
   billingAddress?: ClientAddress | null;
   projectName?: string;
+  template?: InvoiceTemplate;
 }
 
 const s = StyleSheet.create({
@@ -210,9 +212,32 @@ export function QuotePDF({
   contactName,
   billingAddress,
   projectName,
+  template,
 }: QuotePDFProps) {
   const lang = (quote.language as InvoiceLanguage) || "FR";
   const t = invoiceLabels[lang];
+
+  // Template-driven overrides
+  const fontFamily = template?.font_family ?? "Helvetica";
+  const accentColor = template?.accent_color ?? "#1a1a1a";
+  const paddingTop = template?.margins_top ?? 35;
+  const paddingHorizontal = template?.margins_right ?? 50;
+  // Visibility flags
+  const showNotes = template ? !!template.show_notes : true;
+  const showProjectName = template ? !!template.show_project_name : true;
+  const showBankDetails = template ? !!template.show_bank_details : true;
+  const showFooter = template ? !!template.show_footer : true;
+  // Column order
+  const columnOrder: string[] = template?.columns
+    ? (() => { try { return JSON.parse(template.columns) as string[]; } catch { return ["designation", "rate", "unit", "qty", "amount"]; } })()
+    : ["designation", "rate", "unit", "qty", "amount"];
+
+  // Dynamic styles
+  const dynPage = { fontFamily, fontSize: 9, color: accentColor, flexDirection: "column" as const, height: "100%" };
+  const dynContent = { paddingTop, paddingHorizontal, flex: 1 };
+  const dynAccentBorder = { borderBottomColor: accentColor };
+  const dynGrandTotal = { borderTopColor: accentColor };
+
   // Detect global rate: all items share the same non-null rate and same unit
   const allSameRate = lineItems.length > 0 && lineItems.every((item) => item.rate != null && item.rate === lineItems[0].rate);
   const allSameUnit = lineItems.length > 0 && lineItems.every((item) => item.unit === lineItems[0].unit);
@@ -229,8 +254,8 @@ export function QuotePDF({
 
   return (
     <Document>
-      <Page size="A4" style={s.page}>
-        <View style={s.content}>
+      <Page size="A4" style={[s.page, dynPage]}>
+        <View style={[s.content, dynContent]}>
           {/* Title */}
           <Text style={s.title}>{t.quote_title.toUpperCase()}</Text>
 
@@ -297,7 +322,7 @@ export function QuotePDF({
                 <Text style={s.metaValue}>{quote.assignment}</Text>
               </View>
             )}
-            {projectName && (
+            {showProjectName && projectName && (
               <View style={s.metaRow}>
                 <Text style={s.metaLabel}>{t.project}</Text>
                 <Text style={s.metaValue}>{projectName}</Text>
@@ -307,26 +332,26 @@ export function QuotePDF({
 
           {/* Line items table */}
           <View style={s.table}>
-            <View style={s.tableHeader}>
-              <Text style={[s.thText, s.colDesignation]}>{t.designation}</Text>
-              {hasRate && <Text style={[s.thText, s.colRate]}>{t.rate}</Text>}
-              {hasUnit && <Text style={[s.thText, s.colUnit]}>{t.unit}</Text>}
-              <Text style={[s.thText, s.colQty]}>{t.quantity}</Text>
-              <Text style={[s.thText, s.colAmount]}>{t.amount}</Text>
+            <View style={[s.tableHeader, dynAccentBorder]}>
+              {columnOrder.map((col) => {
+                if (col === "designation") return <Text key={col} style={[s.thText, s.colDesignation]}>{t.designation}</Text>;
+                if (col === "rate" && hasRate) return <Text key={col} style={[s.thText, s.colRate]}>{t.rate}</Text>;
+                if (col === "unit" && hasUnit) return <Text key={col} style={[s.thText, s.colUnit]}>{t.unit}</Text>;
+                if (col === "qty") return <Text key={col} style={[s.thText, s.colQty]}>{t.quantity}</Text>;
+                if (col === "amount") return <Text key={col} style={[s.thText, s.colAmount]}>{t.amount}</Text>;
+                return null;
+              })}
             </View>
             {lineItems.map((item, i) => (
               <View key={i} style={s.tableRow}>
-                <Text style={s.colDesignation}>{item.designation}</Text>
-                {hasRate && (
-                  <Text style={s.colRate}>
-                    {item.rate != null ? formatCHF(item.rate) : ""}
-                  </Text>
-                )}
-                {hasUnit && (
-                  <Text style={s.colUnit}>{item.unit || ""}</Text>
-                )}
-                <Text style={s.colQty}>{item.quantity}</Text>
-                <Text style={s.colAmount}>{formatCHF(item.amount)}</Text>
+                {columnOrder.map((col) => {
+                  if (col === "designation") return <Text key={col} style={s.colDesignation}>{item.designation}</Text>;
+                  if (col === "rate" && hasRate) return <Text key={col} style={s.colRate}>{item.rate != null ? formatCHF(item.rate) : ""}</Text>;
+                  if (col === "unit" && hasUnit) return <Text key={col} style={s.colUnit}>{item.unit || ""}</Text>;
+                  if (col === "qty") return <Text key={col} style={s.colQty}>{item.quantity}</Text>;
+                  if (col === "amount") return <Text key={col} style={s.colAmount}>{formatCHF(item.amount)}</Text>;
+                  return null;
+                })}
               </View>
             ))}
           </View>
@@ -339,7 +364,7 @@ export function QuotePDF({
           )}
 
           {/* Notes */}
-          {quote.notes ? (
+          {showNotes && quote.notes ? (
             <View style={s.notesBlock}>
               <Text style={s.notesLabel}>{t.notes}</Text>
               <Text style={s.notesText}>{quote.notes}</Text>
@@ -361,22 +386,32 @@ export function QuotePDF({
                 </Text>
               </View>
             )}
-            <View style={s.grandTotalRow}>
+            <View style={[s.grandTotalRow, dynGrandTotal]}>
               <Text style={s.grandTotalLabel}>{t.invoice_total.toUpperCase()}</Text>
               <Text style={s.grandTotalValue}>{formatCHF(quote.total)}</Text>
             </View>
           </View>
 
           {/* Footer */}
-          <View style={s.footer}>
-            <View style={s.footerRow}>
-              <View style={s.validitySection}>
-                <Text style={s.validityTitle}>{t.validity}</Text>
-                <Text>{t.valid_30_days}</Text>
+          {showFooter && (
+            <View style={s.footer}>
+              <View style={s.footerRow}>
+                <View style={s.validitySection}>
+                  <Text style={s.validityTitle}>{t.validity}</Text>
+                  <Text>{t.valid_30_days}</Text>
+                </View>
+                {showBankDetails && profile.bank_name && (
+                  <View style={s.bankSection}>
+                    <Text style={s.bankTitle}>{t.bank_details}</Text>
+                    <Text>{profile.bank_name}</Text>
+                    <Text>IBAN: {profile.iban}</Text>
+                    {profile.bic_swift && <Text>{t.bic}: {profile.bic_swift}</Text>}
+                  </View>
+                )}
+                <Text style={s.thankYou}>{t.thank_you}</Text>
               </View>
-              <Text style={s.thankYou}>{t.thank_you}</Text>
             </View>
-          </View>
+          )}
         </View>
 
         {/* Page numbers — only when multi-page */}

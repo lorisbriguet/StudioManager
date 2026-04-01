@@ -9,6 +9,7 @@ import { useClient, useClientContacts, useClientAddresses } from "../db/hooks/us
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { useProject } from "../db/hooks/useProjects";
 import { InvoicePDF } from "../components/invoice/InvoicePDF";
+import { useInvoiceTemplate } from "../db/hooks/useInvoiceTemplates";
 import { postProcessInvoicePdf } from "../lib/pdfPostProcess";
 import { toast } from "sonner";
 import { useT } from "../i18n/useT";
@@ -25,6 +26,10 @@ export function InvoicePreviewPage() {
   const { data: addresses } = useClientAddresses(invoice?.client_id ?? "");
   const { data: profile } = useBusinessProfile();
   const { data: project } = useProject(invoice?.project_id ?? 0);
+  const invoiceTemplateId = invoice && "template_id" in invoice
+    ? (invoice as { template_id?: number | null }).template_id ?? null
+    : null;
+  const { data: invoiceTemplate } = useInvoiceTemplate(invoiceTemplateId ?? 0);
   const selectedContact = invoice?.contact_id
     ? contacts?.find((c) => c.id === invoice.contact_id)
     : null;
@@ -76,6 +81,7 @@ export function InvoicePreviewPage() {
             : null}
           projectName={project?.name}
           reminderCount={invoice.reminder_count}
+          template={invoiceTemplate ?? undefined}
         />
       );
       const blob = await pdf(doc).toBlob();
@@ -113,6 +119,7 @@ export function InvoicePreviewPage() {
       billingAddress={billingAddress}
       projectName={project?.name}
       reminderCount={invoice.reminder_count}
+      template={invoiceTemplate ?? undefined}
     />
   );
 

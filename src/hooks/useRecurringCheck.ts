@@ -73,6 +73,7 @@ export function useRecurringCheck() {
               notes: baseInvoice.notes,
               reminder_count: 0,
               last_reminder_date: null,
+              template_id: baseInvoice.template_id ?? null,
             },
             baseLineItems.map((li) => ({
               designation: li.designation,

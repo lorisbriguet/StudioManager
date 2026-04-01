@@ -29,6 +29,7 @@ export interface Invoice {
   notes: string;
   reminder_count: number;
   last_reminder_date: string | null;
+  template_id: number | null;
   created_at: string;
   updated_at: string;
 }
