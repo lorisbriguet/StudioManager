@@ -161,6 +161,7 @@ export function ResourcesPage() {
       {showForm && (
         <NewResourceForm
           allTags={allTags ?? []}
+          existingUrls={rows.map((r) => ({ url: r.url, name: r.name }))}
           onSubmit={async (data) => {
             try {
               await createResource.mutateAsync(data);
@@ -298,10 +299,12 @@ export function ResourcesPage() {
 
 function NewResourceForm({
   allTags,
+  existingUrls,
   onSubmit,
   onCancel,
 }: {
   allTags: string[];
+  existingUrls: { url: string; name: string }[];
   onSubmit: (data: { name: string; url: string; price: string; tags: string[] }) => void;
   onCancel: () => void;
 }) {
@@ -312,6 +315,23 @@ function NewResourceForm({
   const [price, setPrice] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  const [pendingSubmit, setPendingSubmit] = useState<{ name: string; url: string; price: string; tags: string[] } | null>(null);
+
+  const normalizeUrl = (u: string) => u.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/$/, "");
+
+  const checkDuplicate = (submitData: { name: string; url: string; price: string; tags: string[] }) => {
+    if (submitData.url.trim()) {
+      const normalized = normalizeUrl(submitData.url);
+      const existing = existingUrls.find((r) => normalizeUrl(r.url) === normalized);
+      if (existing) {
+        setDuplicateWarning(existing.name);
+        setPendingSubmit(submitData);
+        return true;
+      }
+    }
+    return false;
+  };
 
   const addTag = (tag: string) => {
     const trimmed = tag.trim();
@@ -391,11 +411,32 @@ function NewResourceForm({
           })}
         </div>
       )}
+      {duplicateWarning && (
+        <div className="flex items-center gap-2 p-3 mt-2 bg-[var(--color-warning-bg)] border border-[var(--color-border-header)] rounded-md text-sm">
+          <span className="text-[var(--color-warning-text)] font-medium">{t.possible_duplicate}:</span>
+          <span className="text-[var(--color-warning-text)] flex-1">{t.resource_duplicate_warning.replace("{name}", duplicateWarning)}</span>
+          <button
+            onClick={() => { if (pendingSubmit) { onSubmit(pendingSubmit); } setDuplicateWarning(null); setPendingSubmit(null); }}
+            className="text-xs px-2 py-1 rounded bg-[var(--color-warning-text)] text-white hover:opacity-80 shrink-0"
+          >
+            {t.save_anyway}
+          </button>
+          <button
+            onClick={() => { setDuplicateWarning(null); setPendingSubmit(null); }}
+            className="text-xs text-[var(--color-warning-text)] hover:opacity-70 shrink-0"
+          >
+            {t.cancel}
+          </button>
+        </div>
+      )}
       <div className="flex gap-2 mt-3">
         <button
           onClick={() => {
             if (!name.trim()) return;
-            onSubmit({ name: name.trim(), url: url.trim(), price, tags });
+            const data = { name: name.trim(), url: url.trim(), price, tags };
+            if (!checkDuplicate(data)) {
+              onSubmit(data);
+            }
           }}
           disabled={!name.trim()}
           className="px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover disabled:opacity-50"

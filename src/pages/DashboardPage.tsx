@@ -7,7 +7,8 @@ import type { LayoutItem } from "react-grid-layout";
 import { renderWidget } from "../components/dashboard/widgets";
 import { PageHeader, Button } from "../components/ui";
 import { useT } from "../i18n/useT";
-import { useDashboardPresets, useCreateDashboardPreset, useDeleteDashboardPreset } from "../db/hooks/useDashboardPresets";
+import { toast } from "sonner";
+import { useDashboardPresets, useCreateDashboardPreset, useUpdateDashboardPreset, useDeleteDashboardPreset } from "../db/hooks/useDashboardPresets";
 import "react-grid-layout/css/styles.css";
 
 const ROW_HEIGHT = 40;
@@ -25,6 +26,7 @@ function PresetDropdown() {
   const { activePresetName, activePresetId, widgets, layout, setActivePreset } = useDashboardStore();
   const { data: presets } = useDashboardPresets();
   const createPreset = useCreateDashboardPreset();
+  const updatePreset = useUpdateDashboardPreset();
   const deletePreset = useDeleteDashboardPreset();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -70,6 +72,14 @@ function PresetDropdown() {
     setSaveName("");
     setSaving(false);
     setOpen(false);
+  };
+
+  const handleUpdate = async () => {
+    if (activePresetId === null) return;
+    const layoutJson = JSON.stringify({ widgets, layout });
+    await updatePreset.mutateAsync({ id: activePresetId, data: { layout_json: layoutJson } });
+    setOpen(false);
+    toast.success(t.layout_updated);
   };
 
   const handleDelete = (e: React.MouseEvent, id: number) => {
@@ -153,6 +163,18 @@ function PresetDropdown() {
 
           {userPresets.length > 0 && (
             <div className="my-1 border-t border-[var(--color-border-divider)]" />
+          )}
+
+          {/* Update active user preset */}
+          {activePresetId !== null && presets?.find((p) => p.id === activePresetId && p.is_builtin === 0) && (
+            <button
+              type="button"
+              onClick={handleUpdate}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
+            >
+              <Save size={14} className="text-accent" />
+              {t.update_preset}
+            </button>
           )}
 
           {/* Save current layout */}

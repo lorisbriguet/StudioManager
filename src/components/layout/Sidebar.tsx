@@ -12,8 +12,6 @@ import {
   TrendingUp,
   BarChart3,
   BookOpen,
-
-  Clock,
   Database,
   Square,
   Bell,
@@ -36,7 +34,6 @@ const navItems: SidebarItem[] = [
   { to: "/projects", icon: FolderKanban, labelKey: "projects" },
   { to: "/tasks", icon: CheckSquare, labelKey: "tasks" },
   { to: "/calendar", icon: CalendarDays, labelKey: "calendar" },
-  { to: "/time-tracking", icon: Clock, labelKey: "time_tracking" },
   { divider: true },
   { to: "/wiki", icon: BookOpen, labelKey: "wiki" },
   { to: "/resources", icon: Database, labelKey: "resources" },
@@ -56,7 +53,6 @@ export function Sidebar() {
   const collapsed = useAppStore((s) => s.sidebarCollapsed);
   const showTasksPage = useAppStore((s) => s.showTasksPage);
   const showIncome = useAppStore((s) => s.showIncome);
-  const showTimeOverview = useAppStore((s) => s.showTimeOverview);
   const { data: unreadCount = 0 } = useUnreadNotificationCount();
   const openTab = useTabStore((s) => s.openTab);
   const t = useT();
@@ -69,10 +65,9 @@ export function Sidebar() {
       if ("divider" in item) return false;
       if (item.labelKey === "tasks" && !showTasksPage) return false;
       if (item.labelKey === "income" && !showIncome) return false;
-      if (item.labelKey === "time_tracking" && !showTimeOverview) return false;
       return true;
     });
-  }, [showTasksPage, showIncome, showTimeOverview]);
+  }, [showTasksPage, showIncome]);
 
   // Track keyboard focus index (-1 = no keyboard focus)
   const [focusIdx, setFocusIdx] = useState(-1);
@@ -172,10 +167,9 @@ export function Sidebar() {
       if ("divider" in item) return true;
       if (item.labelKey === "tasks" && !showTasksPage) return false;
       if (item.labelKey === "income" && !showIncome) return false;
-      if (item.labelKey === "time_tracking" && !showTimeOverview) return false;
       return true;
     });
-  }, [showTasksPage, showIncome, showTimeOverview]);
+  }, [showTasksPage, showIncome]);
 
   // Map from allVisible index to visibleLinks index (for focus matching)
   const linkIndexMap = useMemo(() => {

@@ -1,7 +1,6 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
+import { useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight, Plus, GripVertical, Trash2, ExternalLink, Play, Square, CheckCircle, Clock } from "lucide-react";
+import { ChevronRight, Plus, GripVertical, Trash2, ExternalLink, Play, Square, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { undoable } from "../lib/undo";
 import { ask } from "@tauri-apps/plugin-dialog";
@@ -34,7 +33,6 @@ import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useTimerActions } from "../hooks/useTimerActions";
 import { useT } from "../i18n/useT";
-import { useCreateTimeEntry } from "../db/hooks/useTimeEntries";
 import { PageHeader, SearchBar, PageSpinner, EmptyState } from "../components/ui";
 import { taskStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Task, Subtask, TaskStatus } from "../types/task";
@@ -66,8 +64,6 @@ export function TasksPage() {
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState<Task> | null>(null);
   const [subCtxMenu, setSubCtxMenu] = useState<ContextMenuState<Subtask> | null>(null);
   const [headerCtxMenu, setHeaderCtxMenu] = useState<ContextMenuState<{ projectId: number; projectName: string }> | null>(null);
-  const [logTimeTask, setLogTimeTask] = useState<{ id: number; projectId: number; rect: DOMRect } | null>(null);
-  const createTimeEntry = useCreateTimeEntry();
   const [collapsedProjects, setCollapsedProjects] = useState<Set<number>>(() => {
     try {
       const stored = localStorage.getItem("tasksCollapsedProjects");
@@ -647,7 +643,6 @@ export function TasksPage() {
           onClose={() => setCtxMenu(null)}
           items={[
             { label: ctxMenu.item.status === "done" ? t.todo : t.done, onClick: () => updateTask.mutate({ id: ctxMenu.item.id, data: { status: ctxMenu.item.status === "done" ? "todo" : "done" } }) },
-            { label: t.log_time, icon: <Clock size={14} />, onClick: () => setLogTimeTask({ id: ctxMenu.item.id, projectId: ctxMenu.item.project_id, rect: new DOMRect(ctxMenu.x, ctxMenu.y, 0, 0) }) },
             { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/projects/${ctxMenu.item.project_id}`, projectName(ctxMenu.item.project_id)) },
             { label: "", divider: true, onClick: () => {} },
             { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteTask.mutate(ctxMenu.item.id) },
@@ -684,15 +679,6 @@ export function TasksPage() {
           { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
         ]}
       />
-      {logTimeTask && (
-        <TasksLogTimePopup
-          taskId={logTimeTask.id}
-          projectId={logTimeTask.projectId}
-          anchorRect={logTimeTask.rect}
-          onClose={() => setLogTimeTask(null)}
-          createTimeEntry={createTimeEntry}
-        />
-      )}
     </div>
   );
 }
@@ -730,133 +716,3 @@ function DragHandle({ attributes, listeners }: { attributes: SortableReturn["att
   );
 }
 
-/* ---------- Log Time Popup (Tasks Page) ---------- */
-
-function TasksLogTimePopup({
-  taskId,
-  projectId,
-  anchorRect,
-  onClose,
-  createTimeEntry,
-}: {
-  taskId: number;
-  projectId: number;
-  anchorRect: DOMRect;
-  onClose: () => void;
-  createTimeEntry: ReturnType<typeof useCreateTimeEntry>;
-}) {
-  const t = useT();
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [hours, setHours] = useState(0);
-  const [minutes, setMinutes] = useState(0);
-  const [note, setNote] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    const keyHandler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("keydown", keyHandler);
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("keydown", keyHandler);
-    };
-  }, [onClose]);
-
-  const totalMinutes = hours * 60 + minutes;
-
-  const handleSave = () => {
-    if (totalMinutes <= 0) return;
-    createTimeEntry.mutate(
-      { task_id: taskId, project_id: projectId, duration_minutes: totalMinutes, date, description: note.trim() || undefined },
-      { onSuccess: () => { toast.success(t.time_logged); onClose(); } }
-    );
-  };
-
-  return createPortal(
-    <div
-      ref={ref}
-      style={(() => {
-        const popupW = 256, popupH = 320;
-        const top = anchorRect.bottom + 4 + popupH > window.innerHeight
-          ? Math.max(8, anchorRect.top - popupH - 4)
-          : anchorRect.bottom + 4;
-        const left = Math.min(anchorRect.left, window.innerWidth - popupW - 8);
-        return { position: "fixed" as const, top, left, zIndex: 9999 };
-      })()}
-      className="bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] p-4 w-64 animate-in"
-    >
-      <div className="text-sm font-semibold tracking-tight mb-3">{t.log_time}</div>
-
-      <label className="block text-xs text-muted mb-1">{t.date}</label>
-      <input
-        type="date"
-        value={date}
-        onChange={(e) => setDate(e.target.value)}
-        className="w-full border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1.5 text-sm mb-3"
-      />
-
-      <div className="flex gap-2 mb-3">
-        <div className="flex-1">
-          <label className="block text-xs text-muted mb-1">{t.hours_label}</label>
-          <input
-            type="number"
-            min={0}
-            max={23}
-            value={hours}
-            onChange={(e) => setHours(Math.max(0, parseInt(e.target.value) || 0))}
-            className="w-full border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1.5 text-sm"
-          />
-        </div>
-        <div className="flex-1">
-          <label className="block text-xs text-muted mb-1">{t.minutes_label}</label>
-          <input
-            type="number"
-            min={0}
-            max={59}
-            value={minutes}
-            onChange={(e) => setMinutes(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
-            className="w-full border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1.5 text-sm"
-          />
-        </div>
-      </div>
-
-      {totalMinutes > 0 && (
-        <div className="text-xs text-muted mb-3">
-          = {Math.floor(totalMinutes / 60)}h {totalMinutes % 60}m
-        </div>
-      )}
-
-      <label className="block text-xs text-muted mb-1">{t.note}</label>
-      <input
-        type="text"
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
-        placeholder={t.note}
-        className="w-full border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1.5 text-sm mb-3"
-      />
-
-      <div className="flex justify-end gap-2">
-        <button
-          onClick={onClose}
-          className="px-3 py-1.5 text-xs rounded-lg border border-[var(--color-input-border)] text-muted hover:bg-[var(--color-hover-row)] transition-colors"
-        >
-          {t.cancel}
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={totalMinutes <= 0}
-          className="px-3 py-1.5 text-xs rounded-lg bg-accent text-white hover:opacity-90 transition-colors disabled:opacity-40"
-        >
-          {t.save}
-        </button>
-      </div>
-    </div>,
-    document.body
-  );
-}

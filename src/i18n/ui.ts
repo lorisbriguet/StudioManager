@@ -273,6 +273,9 @@ const ui = {
     no_date: "No date",
     all_day: "All day",
     select_project: "Select project",
+    select_task: "Select task",
+    quick_timer: "Quick Timer",
+    start_timer_for: "Start timer",
     tomorrow: "Tomorrow",
     end_date: "End date",
     include_time: "Include time",
@@ -690,6 +693,11 @@ const ui = {
     time_entries: "Time entries",
     note: "Note",
     no_time_entries: "No time entries",
+    time_entries_management: "Time Entries",
+    filter_by_project: "Filter by project",
+    all_projects: "All projects",
+    edit_entry: "Edit entry",
+    no_entries_found: "No time entries found",
     // UX audit i18n
     forward: "Forward",
     pdf_downloaded: "PDF downloaded",
@@ -714,6 +722,13 @@ const ui = {
     wiki_link: "Link",
     revenue_label: "Revenue",
     expenses_label: "Expenses",
+    // Dashboard preset update
+    update_preset: "Update current preset",
+    layout_updated: "Layout saved",
+    // Invoice aging widget
+    invoice_aging: "Invoice Aging",
+    // Resource duplicate warning
+    resource_duplicate_warning: "A resource with this URL already exists: {name}",
   },
   FR: {
     // Sidebar / Nav
@@ -987,6 +1002,9 @@ const ui = {
     no_date: "Pas de date",
     all_day: "Journee entiere",
     select_project: "Selectionner un projet",
+    select_task: "Selectionner une tache",
+    quick_timer: "Minuterie rapide",
+    start_timer_for: "Demarrer le minuteur",
     tomorrow: "Demain",
     end_date: "Date de fin",
     include_time: "Inclure l'heure",
@@ -1404,6 +1422,11 @@ const ui = {
     time_entries: "Saisies de temps",
     note: "Note",
     no_time_entries: "Aucune saisie de temps",
+    time_entries_management: "Saisies de temps",
+    filter_by_project: "Filtrer par projet",
+    all_projects: "Tous les projets",
+    edit_entry: "Modifier la saisie",
+    no_entries_found: "Aucune saisie de temps trouvee",
     // UX audit i18n
     forward: "Suivant",
     pdf_downloaded: "PDF telecharge",
@@ -1428,6 +1451,13 @@ const ui = {
     wiki_link: "Lien",
     revenue_label: "Revenus",
     expenses_label: "Depenses",
+    // Dashboard preset update
+    update_preset: "Mettre a jour le preset actuel",
+    layout_updated: "Disposition enregistree",
+    // Invoice aging widget
+    invoice_aging: "Anciennete des factures",
+    // Resource duplicate warning
+    resource_duplicate_warning: "Une ressource avec cette URL existe deja : {name}",
   },
 } as const;
 
