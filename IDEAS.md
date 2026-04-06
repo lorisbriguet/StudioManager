@@ -17,11 +17,28 @@
 - [x] Template selector on invoice/quote forms
 - [x] Full UX audit — CSS tokens, i18n, accessibility, focus states, consistency
 
-## Medium Priority
+## V1.10.0 — Planned
 
-- [ ] Quick-add from menu bar — Tauri system tray (log time, create expense, start timer)
-- [ ] Update presentation mode seeds (many versions behind)
-- [ ] Separate Tasks and meetings (create a new meeting block in projects, time track available for meetings)
+### Meetings block in projects
+- Separate `meetings` table: title, date, start_time, end_time, location, attendees (JSON: contact IDs + free text names), project_id, tracked_minutes
+- Status: upcoming/done — auto-flip based on date
+- Project block: card layout (date, time, attendees, location) in modular project layout
+- Calendar: meetings auto-appear in calendar view
+- Time tracking: manual timer (same as tasks) + auto-log duration (end - start) when meeting is done
+- Attendees: dropdown from client contacts + free text custom names
+- Auto-invoicing: "Add meetings" button on invoice form compiles all project meetings into one line item (total hours x rate)
+
+### System tray quick-add
+- Tauri system tray / menu bar icon
+- Actions: start timer (project → task picker), log time, create expense
+- Accessible without opening the full app window
+
+### Project profitability view
+- Per-project P&L: invoiced amount vs. time cost (hours x rate) vs. expenses
+- Display in project detail or as a dashboard widget
+
+### Update presentation mode seeds
+- Refresh demo data for all features added since V1.6.0
 
 ## Low Priority
 
