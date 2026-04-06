@@ -122,6 +122,17 @@ export async function resetDb(): Promise<void> {
  * numbered .sql migration files under src-tauri/migrations/ instead.
  */
 async function ensureSchema(db: Database) {
+  // Clean up orphan indices (indices referencing dropped tables)
+  try {
+    const orphans = await db.select<{ name: string; tbl_name: string }[]>(
+      `SELECT i.name, i.tbl_name FROM sqlite_master i
+       WHERE i.type = 'index' AND i.tbl_name NOT IN (SELECT name FROM sqlite_master WHERE type = 'table')`
+    );
+    for (const o of orphans) {
+      await db.execute(`DROP INDEX IF EXISTS "${o.name}"`).catch(() => {});
+    }
+  } catch { /* ignore if schema query fails */ }
+
   // Helper: add a column only if it doesn't already exist
   async function addColumnIfMissing(table: string, column: string, definition: string) {
     const cols = await db.select<{ name: string }[]>(
