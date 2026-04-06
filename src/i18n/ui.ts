@@ -752,6 +752,8 @@ const ui = {
     // Custom Lists
     custom_lists: "Custom Lists",
     new_list: "New list",
+    new_list_item: "New item...",
+    select_list_to_edit: "Select a list to edit its items",
     import_from_list: "Import from list",
     save_as_list: "Save as list",
     unlink_list: "Unlink",
@@ -762,6 +764,12 @@ const ui = {
     list_created: "List created",
     list_deleted: "List deleted",
     list_saved: "List saved",
+
+    // Invoice Template margin labels
+    margin_top: "Top",
+    margin_right: "Right",
+    margin_bottom: "Bottom",
+    margin_left: "Left",
   },
   FR: {
     // Sidebar / Nav
@@ -1514,6 +1522,8 @@ const ui = {
     // Custom Lists
     custom_lists: "Listes personnalisees",
     new_list: "Nouvelle liste",
+    new_list_item: "Nouvel element...",
+    select_list_to_edit: "Selectionnez une liste pour modifier ses elements",
     import_from_list: "Importer d'une liste",
     save_as_list: "Enregistrer comme liste",
     unlink_list: "Dissocier",
@@ -1524,6 +1534,12 @@ const ui = {
     list_created: "Liste creee",
     list_deleted: "Liste supprimee",
     list_saved: "Liste enregistree",
+
+    // Invoice Template margin labels
+    margin_top: "Haut",
+    margin_right: "Droite",
+    margin_bottom: "Bas",
+    margin_left: "Gauche",
   },
 } as const;
 

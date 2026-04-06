@@ -28,7 +28,7 @@ export function QuotePreviewPage() {
   const quoteTemplateId = quote && "template_id" in quote
     ? (quote as { template_id?: number | null }).template_id ?? null
     : null;
-  const { data: quoteTemplate } = useInvoiceTemplate(quoteTemplateId ?? 0);
+  const { data: quoteTemplate } = useInvoiceTemplate(quoteTemplateId);
   const [showDraftWarning, setShowDraftWarning] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
   const updateQuote = useUpdateQuote();

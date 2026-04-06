@@ -228,7 +228,7 @@ export function Sidebar() {
               <span className="relative">
                 <Icon size={18} strokeWidth={1.5} />
                 {isNotifications && unreadCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-bold min-w-[14px] h-[14px] flex items-center justify-center rounded-full leading-none">
+                  <span className="absolute -top-1.5 -right-1.5 bg-[var(--color-danger)] text-white text-[9px] font-bold min-w-[14px] h-[14px] flex items-center justify-center rounded-full leading-none">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
@@ -237,7 +237,7 @@ export function Sidebar() {
                 <span className="flex items-center gap-2">
                   {label}
                   {isNotifications && unreadCount > 0 && (
-                    <span className="bg-red-500 text-white text-[10px] font-medium px-1.5 py-0.5 rounded-full leading-none">
+                    <span className="bg-[var(--color-danger)] text-white text-[10px] font-medium px-1.5 py-0.5 rounded-full leading-none">
                       {unreadCount}
                     </span>
                   )}
@@ -277,8 +277,8 @@ function TimerIndicator({ collapsed }: { collapsed: boolean }) {
     <div className="px-3 py-2 border-t border-sidebar-border">
       <div className="flex items-center gap-2 text-xs">
         <span className="relative flex h-2 w-2 shrink-0">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--color-danger)]/60 opacity-75" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--color-danger)]" />
         </span>
         {!collapsed && (
           <>

@@ -14,7 +14,7 @@ export function useInvoiceTemplate(id: number | null | undefined) {
   return useQuery({
     queryKey: ["invoice-templates", id],
     queryFn: () => q.getInvoiceTemplate(id!),
-    enabled: id != null,
+    enabled: !!id,
   });
 }
 

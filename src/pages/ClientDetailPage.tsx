@@ -500,7 +500,7 @@ function ContactsSection({
             </button>
             <div className="my-1 border-t border-[var(--color-border-divider)]" />
             <button
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-danger-text)] hover:bg-red-50"
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)]"
               onClick={() => {
                 const contact = contacts.find((c) => c.id === contextMenu.contactId);
                 if (contact) removeContact(contact);
@@ -682,7 +682,7 @@ function AddressCard({
           <button onClick={() => { setEditing(true); setCtxMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]">
             <Pencil size={14} /> {t.edit}
           </button>
-          <button onClick={() => { onDelete(); setCtxMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-danger-text)] hover:bg-red-50">
+          <button onClick={() => { onDelete(); setCtxMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)]">
             <Trash2 size={14} /> {t.delete}
           </button>
         </div>,

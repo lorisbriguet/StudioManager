@@ -1,4 +1,4 @@
-import { getDb } from "../index";
+import { getDb, validateFields, TransactionBatch } from "../index";
 import type { InvoiceTemplate } from "../../types/invoice-template";
 
 export async function getInvoiceTemplates(): Promise<InvoiceTemplate[]> {
@@ -63,10 +63,11 @@ export async function updateInvoiceTemplate(
   data: Partial<Omit<InvoiceTemplate, "id" | "created_at" | "updated_at">>
 ): Promise<void> {
   const db = await getDb();
-  const fields = Object.keys(data) as (keyof typeof data)[];
+  const fields = Object.keys(data);
   if (fields.length === 0) return;
+  validateFields(fields);
   const setClauses = fields.map((f, i) => `${f} = $${i + 2}`).join(", ");
-  const values = fields.map((f) => data[f]);
+  const values = fields.map((f) => data[f as keyof typeof data]);
   await db.execute(
     `UPDATE invoice_templates SET ${setClauses}, updated_at = datetime('now') WHERE id = $1`,
     [id, ...values]
@@ -87,10 +88,8 @@ export async function deleteInvoiceTemplate(id: number): Promise<void> {
 }
 
 export async function setDefaultTemplate(id: number): Promise<void> {
-  const db = await getDb();
-  await db.execute("UPDATE invoice_templates SET is_default = 0");
-  await db.execute(
-    "UPDATE invoice_templates SET is_default = 1, updated_at = datetime('now') WHERE id = $1",
-    [id]
-  );
+  const batch = new TransactionBatch();
+  batch.add("UPDATE invoice_templates SET is_default = 0");
+  batch.add("UPDATE invoice_templates SET is_default = 1, updated_at = datetime('now') WHERE id = $1", [id]);
+  await batch.commit();
 }

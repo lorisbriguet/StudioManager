@@ -235,7 +235,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                 value={formula}
                 onChange={(e) => handleFormulaChange(e.target.value)}
                 placeholder="e.g. og_scope ? hours : 0"
-                className={`w-full border rounded-md px-3 py-2 text-sm font-mono ${formulaError ? "border-red-400" : "border-[var(--color-border-divider)]"}`}
+                className={`w-full border rounded-md px-3 py-2 text-sm font-mono ${formulaError ? "border-[var(--color-danger-text)]" : "border-[var(--color-border-divider)]"}`}
               />
               {formulaError ? (
                 <p className="text-[10px] text-[var(--color-danger-text)] mt-1">{formulaError}</p>
