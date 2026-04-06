@@ -270,8 +270,9 @@ export function InvoicePDF({
     : ["designation", "rate", "unit", "qty", "amount"];
 
   // Dynamic styles that depend on template
-  const dynPage = { fontFamily, fontSize: 9, color: accentColor, flexDirection: "column" as const, height: "100%" };
+  const dynPage = { fontFamily, fontSize: 9, color: "#1a1a1a", flexDirection: "column" as const, height: "100%" };
   const dynContent = { paddingTop, paddingHorizontal, flex: 1 };
+  const dynTitle = { color: accentColor };
   const dynAccentBorder = { borderBottomColor: accentColor };
   const dynGrandTotal = { borderTopColor: accentColor };
 
@@ -315,7 +316,7 @@ export function InvoicePDF({
           )}
 
           {/* Title */}
-          <Text style={s.title}>{t.invoice_title.toUpperCase()}</Text>
+          <Text style={[s.title, dynTitle]}>{t.invoice_title.toUpperCase()}</Text>
 
           {/* Header: business info left, client right */}
           <View style={s.header}>
