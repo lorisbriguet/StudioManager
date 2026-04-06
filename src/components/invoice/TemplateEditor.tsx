@@ -248,7 +248,7 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
 
   const handleSave = () => {
     if (!name.trim()) {
-      toast.error("Template name is required");
+      toast.error(t.toast_name_required);
       return;
     }
     const data = { ...currentTemplateState };
