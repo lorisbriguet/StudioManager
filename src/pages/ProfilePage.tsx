@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
-import { Plus, X, Palette, Trash2 } from "lucide-react";
+import { Plus, X, Palette, Trash2, Building2, Landmark, FileText } from "lucide-react";
 import { toast } from "sonner";
 import {
   useBusinessProfile,
@@ -100,9 +100,9 @@ export function ProfilePage() {
   };
 
   const categories: Array<{ key: ProfileCategory; label: string; icon?: React.ReactNode }> = [
-    { key: "business", label: t.business_profile },
-    { key: "bank", label: t.bank_details },
-    { key: "invoicing", label: t.invoice_defaults },
+    { key: "business", label: t.business_profile, icon: <Building2 size={14} /> },
+    { key: "bank", label: t.bank_details, icon: <Landmark size={14} /> },
+    { key: "invoicing", label: t.invoice_defaults, icon: <FileText size={14} /> },
     { key: "templates", label: t.templates, icon: <Palette size={14} /> },
   ];
 
