@@ -21,6 +21,7 @@
 
 - [ ] Quick-add from menu bar — Tauri system tray (log time, create expense, start timer)
 - [ ] Update presentation mode seeds (many versions behind)
+- [ ] Separate Tasks and meetings (create a new meeting block in projects, time track available for meetings)
 
 ## Low Priority
 

@@ -54,8 +54,8 @@ export function useTabSync() {
     const handler = (e: KeyboardEvent) => {
       const isMeta = e.metaKey || e.ctrlKey;
 
-      // Cmd+T: new tab
-      if (isMeta && e.key === "t" && !e.shiftKey) {
+      // Cmd+T: new tab (no Shift). e.key is lowercase "t" when Shift is not held.
+      if (isMeta && (e.key === "t" || e.key === "T") && !e.shiftKey) {
         e.preventDefault();
         openTab("/", "Dashboard");
         navigate("/");
@@ -78,8 +78,9 @@ export function useTabSync() {
         return;
       }
 
-      // Cmd+Shift+T: reopen closed tab
-      if (isMeta && e.key === "t" && e.shiftKey) {
+      // Cmd+Shift+T: reopen closed tab. e.key is uppercase "T" when Shift is held.
+      // Note: App.tsx captures this shortcut first for the Quick Timer modal.
+      if (isMeta && (e.key === "T" || e.key === "t") && e.shiftKey) {
         e.preventDefault();
         const tab = reopenClosedTab();
         if (tab) {

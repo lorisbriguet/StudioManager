@@ -32,14 +32,11 @@ export async function getCustomListItems(listId: number): Promise<CustomListItem
 
 export async function createCustomList(name: string): Promise<number> {
   const db = await getDb();
-  await db.execute(
+  const result = await db.execute(
     "INSERT INTO custom_lists (name) VALUES ($1)",
     [name]
   );
-  const rows = await db.select<{ id: number }[]>(
-    "SELECT last_insert_rowid() as id"
-  );
-  return rows[0]?.id ?? 0;
+  return result.lastInsertId ?? 0;
 }
 
 export async function updateCustomList(id: number, name: string): Promise<void> {
@@ -60,18 +57,25 @@ export async function setCustomListItems(
   items: { value: string; color?: string }[]
 ): Promise<void> {
   const db = await getDb();
-  await db.execute("DELETE FROM custom_list_items WHERE list_id = $1", [listId]);
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
+  await db.execute("BEGIN");
+  try {
+    await db.execute("DELETE FROM custom_list_items WHERE list_id = $1", [listId]);
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      await db.execute(
+        "INSERT INTO custom_list_items (list_id, value, color, sort_order) VALUES ($1, $2, $3, $4)",
+        [listId, item.value, item.color ?? null, i]
+      );
+    }
     await db.execute(
-      "INSERT INTO custom_list_items (list_id, value, color, sort_order) VALUES ($1, $2, $3, $4)",
-      [listId, item.value, item.color ?? null, i]
+      "UPDATE custom_lists SET updated_at = datetime('now') WHERE id = $1",
+      [listId]
     );
+    await db.execute("COMMIT");
+  } catch (err) {
+    await db.execute("ROLLBACK");
+    throw err;
   }
-  await db.execute(
-    "UPDATE custom_lists SET updated_at = datetime('now') WHERE id = $1",
-    [listId]
-  );
 }
 
 export async function isListInUse(_listId: number): Promise<boolean> {
