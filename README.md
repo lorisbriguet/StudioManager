@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.8.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.9.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="Platform">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
@@ -47,8 +47,8 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Task filters: todo, done, all — applied globally
 - Workload tracker with custom columns (text, number, checkbox, select, formula)
 - Named tables per project with configurable columns (text, number, checkbox, select, tags, date)
-- Time tracking — start/stop timer per task, or log past time with a date picker
-- Per-task time entry log with expandable history and delete support
+- Time tracking — start/stop timer per task, quick timer picker (Cmd+Shift+T)
+- Time entries management in Settings (filter, edit, delete tracked time)
 
 ### Calendar
 - Monthly and weekly calendar views (FullCalendar)
@@ -70,6 +70,9 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Editable PO number field, VOID overlay for cancelled invoices
 - Draft reference deferral — reference generated only on send
 - Configurable footer text, bank details, and payment terms in PDF
+- Customizable templates — accent color, font, logo position, margins, field visibility, column order
+- Live template editor with real-time PDF preview
+- Invoice aging dashboard widget (0-30/31-60/61-90/90+ day overdue brackets)
 
 ### Quotes
 - Quote creation mirroring the invoice workflow
@@ -127,7 +130,9 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - **Batch Operations** — multi-select with bulk actions on all list pages
 - **Saved Filters** — save and quick-apply filter configurations per page
 - **Client Activity Timeline** — chronological feed of invoices, quotes, and projects
+- **Global Custom Lists** — define reusable option lists in Settings, import/link in Named Table and Workload column editors
 - **Duplicate Expense Warning** — detects similar entries on save
+- **Resource Duplication Warning** — warns when adding a URL that already exists
 - **macOS Native Notifications** — OS-level banners for overdue invoices and backups
 - **Notifications** — persistent in-app notifications with unread badges
 - **Backup System** — automatic and manual backups with configurable paths
