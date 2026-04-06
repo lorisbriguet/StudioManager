@@ -129,7 +129,7 @@ async function ensureSchema(db: Database) {
        WHERE i.type = 'index' AND i.tbl_name NOT IN (SELECT name FROM sqlite_master WHERE type = 'table')`
     );
     for (const o of orphans) {
-      await db.execute(`DROP INDEX IF EXISTS "${o.name}"`).catch(() => {});
+      await db.execute(`DROP INDEX IF EXISTS "${o.name.replace(/"/g, '""')}"`).catch(() => {});
     }
   } catch { /* ignore if schema query fails */ }
 

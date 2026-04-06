@@ -596,7 +596,7 @@ export function SettingsPage() {
                 {testMode ? (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-amber-600 font-medium flex items-center gap-1"><FlaskConical size={12} /> {t.test_mode_active}</span>
-                    <button type="button" onClick={handleExitTestMode} disabled={togglingTestMode} className="px-2 py-1 border border-red-300 text-[var(--color-danger-text)] text-xs rounded hover:bg-red-50 disabled:opacity-50">
+                    <button type="button" onClick={handleExitTestMode} disabled={togglingTestMode} className="px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
                       {t.exit_test_mode}
                     </button>
                   </div>
@@ -614,7 +614,7 @@ export function SettingsPage() {
                 {presentationMode ? (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-indigo-600 font-medium">Presentation active</span>
-                    <button type="button" onClick={handleExitPresentation} disabled={togglingPresentation} className="px-2 py-1 border border-red-300 text-[var(--color-danger-text)] text-xs rounded hover:bg-red-50 disabled:opacity-50">
+                    <button type="button" onClick={handleExitPresentation} disabled={togglingPresentation} className="px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
                       {t.exit_presentation_mode}
                     </button>
                   </div>
@@ -632,7 +632,7 @@ export function SettingsPage() {
                   <button type="button" onClick={handleCreateSnapshot} disabled={snapshotting || testMode} className="flex items-center gap-1 px-2.5 py-1 bg-accent text-white text-xs rounded hover:bg-accent-hover disabled:opacity-50">
                     <Camera size={12} /> {snapshotting ? t.loading : t.create_snapshot}
                   </button>
-                  <button type="button" onClick={handleRestoreSnapshot} disabled={restoringSnapshot || !hasSnapshotFile || testMode} className="flex items-center gap-1 px-2.5 py-1 border border-red-300 text-[var(--color-danger-text)] text-xs rounded hover:bg-red-50 disabled:opacity-50">
+                  <button type="button" onClick={handleRestoreSnapshot} disabled={restoringSnapshot || !hasSnapshotFile || testMode} className="flex items-center gap-1 px-2.5 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
                     <RotateCcw size={12} /> {restoringSnapshot ? t.loading : t.restore_snapshot}
                   </button>
                   {!hasSnapshotFile && <span className="text-[11px] text-muted">{t.no_snapshot_available}</span>}
@@ -721,7 +721,7 @@ export function SettingsPage() {
                       <option key={name} value={name}>{name.replace("backup-", "")}</option>
                     ))}
                   </Select>
-                  <button type="button" onClick={runRestore} disabled={restoring || !selectedBackup || !backupPath} className="flex items-center gap-1 px-2 py-1 border border-red-300 text-[var(--color-danger-text)] text-xs rounded hover:bg-red-50 disabled:opacity-50">
+                  <button type="button" onClick={runRestore} disabled={restoring || !selectedBackup || !backupPath} className="flex items-center gap-1 px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
                     <RotateCcw size={12} /> {restoring ? t.restoring : t.restore}
                   </button>
                 </div>
@@ -963,7 +963,7 @@ function ExpenseCategoryManager() {
                     ) : categoryUsage[cat.code] ? (
                       <span className="px-2 py-1 text-xs text-muted">{t.category_in_use}</span>
                     ) : (
-                      <button type="button" onClick={() => handleDelete(cat.code)} className="px-2 py-1 border border-red-200 text-[var(--color-danger-text)] text-xs rounded hover:bg-red-50">
+                      <button type="button" onClick={() => handleDelete(cat.code)} className="px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded hover:bg-[var(--color-danger-bg)]">
                         {t.delete}
                       </button>
                     )}
@@ -1178,7 +1178,7 @@ function CustomListsManager() {
       {/* Right: items for selected list */}
       <div className="flex-1">
         {selectedId === null ? (
-          <p className="text-xs text-muted py-2">{allLists.length > 0 ? "Select a list to edit its items" : ""}</p>
+          <p className="text-xs text-muted py-2">{allLists.length > 0 ? t.select_list_to_edit : ""}</p>
         ) : (
           <div>
             <div className="space-y-1.5 mb-3">
@@ -1205,7 +1205,7 @@ function CustomListsManager() {
                 value={newItemValue}
                 onChange={(e) => setNewItemValue(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addItem()}
-                placeholder="New item..."
+                placeholder={t.new_list_item}
                 className="flex-1 border border-[var(--color-border-divider)] rounded px-2 py-1.5 text-sm"
               />
               <select
@@ -1451,7 +1451,7 @@ function TimeEntriesManager() {
                                 type="button"
                                 onClick={() => handleDelete(entry.id)}
                                 disabled={deleteEntry.isPending}
-                                className="px-1.5 py-0.5 bg-red-500 text-white rounded text-[10px] hover:bg-red-600"
+                                className="px-1.5 py-0.5 bg-[var(--color-danger)] text-white rounded text-[10px] hover:opacity-80"
                               >
                                 {t.delete}
                               </button>

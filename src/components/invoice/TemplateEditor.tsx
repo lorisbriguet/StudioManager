@@ -101,13 +101,17 @@ type ColumnKey = "designation" | "rate" | "unit" | "qty" | "amount";
 
 const DEFAULT_COLUMN_ORDER: ColumnKey[] = ["designation", "rate", "unit", "qty", "amount"];
 
-const COLUMN_LABELS: Record<ColumnKey, string> = {
-  designation: "Designation",
-  rate: "Rate",
-  unit: "Unit",
-  qty: "Qty",
-  amount: "Amount",
-};
+type ColumnLabels = Record<ColumnKey, string>;
+
+function makeColumnLabels(t: { designation: string; rate: string; unit: string; qty: string; amount: string }): ColumnLabels {
+  return {
+    designation: t.designation,
+    rate: t.rate,
+    unit: t.unit,
+    qty: t.qty,
+    amount: t.amount,
+  };
+}
 
 function parseColumnOrder(json: string | undefined): ColumnKey[] {
   try {
@@ -157,6 +161,7 @@ interface TemplateEditorProps {
 
 export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
   const t = useT();
+  const columnLabels = makeColumnLabels(t);
   const createTemplate = useCreateInvoiceTemplate();
   const updateTemplate = useUpdateInvoiceTemplate();
   const setDefault = useSetDefaultTemplate();
@@ -296,7 +301,7 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
         {/* Name */}
         <div>
           <label className="block text-xs font-medium text-muted mb-1">{t.name}</label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="My Template" />
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.new_invoice_template} />
         </div>
 
         {/* Accent color */}
@@ -345,11 +350,11 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
           <label className="block text-xs font-medium text-muted mb-2">{t.margins}</label>
           <div className="grid grid-cols-2 gap-2">
             {([
-              { label: "Top", value: marginTop, set: setMarginTop },
-              { label: "Right", value: marginRight, set: setMarginRight },
-              { label: "Bottom", value: marginBottom, set: setMarginBottom },
-              { label: "Left", value: marginLeft, set: setMarginLeft },
-            ] as const).map(({ label, value, set }) => (
+              { label: t.margin_top ?? "Top", value: marginTop, set: setMarginTop },
+              { label: t.margin_right ?? "Right", value: marginRight, set: setMarginRight },
+              { label: t.margin_bottom ?? "Bottom", value: marginBottom, set: setMarginBottom },
+              { label: t.margin_left ?? "Left", value: marginLeft, set: setMarginLeft },
+            ] as { label: string; value: number; set: (v: number) => void }[]).map(({ label, value, set }) => (
               <div key={label}>
                 <label className="block text-xs text-muted mb-0.5">{label}</label>
                 <Input type="number" value={value} onChange={(e) => set(Number(e.target.value))} className="text-right" />
@@ -360,7 +365,7 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
 
         {/* Field visibility toggles */}
         <div>
-          <label className="block text-xs font-medium text-muted mb-2">Visibility</label>
+          <label className="block text-xs font-medium text-muted mb-2">{t.visibility}</label>
           <div className="space-y-2">
             {([
               { label: t.show_notes, value: showNotes, set: setShowNotes },
@@ -384,7 +389,7 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
           <div className="space-y-1">
             {columnOrder.map((col, idx) => (
               <div key={col} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--color-border-divider)] bg-[var(--color-bg)] text-sm">
-                <span className="flex-1">{COLUMN_LABELS[col]}</span>
+                <span className="flex-1">{columnLabels[col]}</span>
                 <button type="button" onClick={() => moveColumn(idx, -1)} disabled={idx === 0} className="text-muted hover:text-[var(--color-text)] disabled:opacity-30" aria-label="Move up">
                   <ChevronUp size={14} />
                 </button>

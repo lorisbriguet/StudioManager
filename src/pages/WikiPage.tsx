@@ -521,7 +521,7 @@ function ArticleEditor({
         <div className="flex-1" />
         <button
           onClick={handleDeleteArticle}
-          className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-red-500/10 hover:text-[var(--color-danger-text)] transition-colors"
+          className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger-text)] transition-colors"
           title={t.delete}
         >
           <Trash2 size={16} />

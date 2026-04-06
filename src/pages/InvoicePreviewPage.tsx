@@ -29,7 +29,7 @@ export function InvoicePreviewPage() {
   const invoiceTemplateId = invoice && "template_id" in invoice
     ? (invoice as { template_id?: number | null }).template_id ?? null
     : null;
-  const { data: invoiceTemplate } = useInvoiceTemplate(invoiceTemplateId ?? 0);
+  const { data: invoiceTemplate } = useInvoiceTemplate(invoiceTemplateId);
   const selectedContact = invoice?.contact_id
     ? contacts?.find((c) => c.id === invoice.contact_id)
     : null;
