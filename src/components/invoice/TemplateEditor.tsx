@@ -298,7 +298,7 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
   const isPending = createTemplate.isPending || updateTemplate.isPending;
 
   return (
-    <div className="flex gap-0 -m-8" style={{ height: "calc(100vh - 120px)" }}>
+    <div className="flex gap-0" style={{ height: "calc(100vh - 140px)" }}>
       {/* Left panel: settings */}
       <div className="w-[40%] shrink-0 border-r border-[var(--color-border-divider)] overflow-y-auto p-6 space-y-6 bg-[var(--color-surface)]">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">

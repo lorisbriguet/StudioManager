@@ -32,11 +32,16 @@ export async function getCustomListItems(listId: number): Promise<CustomListItem
 
 export async function createCustomList(name: string): Promise<number> {
   const db = await getDb();
-  const result = await db.execute(
+  await db.execute(
     "INSERT INTO custom_lists (name) VALUES ($1)",
     [name]
   );
-  return result.lastInsertId ?? 0;
+  // Retrieve the actual ID (lastInsertId unreliable with Tauri SQL pool)
+  const rows = await db.select<{ id: number }[]>(
+    "SELECT id FROM custom_lists WHERE name = $1 ORDER BY id DESC LIMIT 1",
+    [name]
+  );
+  return rows[0]?.id ?? 0;
 }
 
 export async function updateCustomList(id: number, name: string): Promise<void> {
