@@ -233,8 +233,9 @@ export function QuotePDF({
     : ["designation", "rate", "unit", "qty", "amount"];
 
   // Dynamic styles
-  const dynPage = { fontFamily, fontSize: 9, color: accentColor, flexDirection: "column" as const, height: "100%" };
+  const dynPage = { fontFamily, fontSize: 9, color: "#1a1a1a", flexDirection: "column" as const, height: "100%" };
   const dynContent = { paddingTop, paddingHorizontal, flex: 1 };
+  const dynTitle = { color: accentColor };
   const dynAccentBorder = { borderBottomColor: accentColor };
   const dynGrandTotal = { borderTopColor: accentColor };
 
@@ -257,7 +258,7 @@ export function QuotePDF({
       <Page size="A4" style={[s.page, dynPage]}>
         <View style={[s.content, dynContent]}>
           {/* Title */}
-          <Text style={s.title}>{t.quote_title.toUpperCase()}</Text>
+          <Text style={[s.title, dynTitle]}>{t.quote_title.toUpperCase()}</Text>
 
           {/* Header: business info left, client right */}
           <View style={s.header}>
