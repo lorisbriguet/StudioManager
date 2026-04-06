@@ -164,9 +164,9 @@ export function ProfilePage() {
 
       {/* Content */}
       {activeCategory === "templates" ? (
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-hidden flex flex-col min-h-0">
           {editingTemplate !== null ? (
-            <div className="flex-1 h-full overflow-hidden">
+            <div className="flex-1 min-h-0 overflow-hidden">
               <TemplateEditor
                 template={editingTemplate === "new" ? null : editingTemplate}
                 onSaved={() => setEditingTemplate(null)}
