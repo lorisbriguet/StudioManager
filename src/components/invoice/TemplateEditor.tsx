@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { PDFViewer } from "@react-pdf/renderer";
 import { ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
@@ -30,59 +30,32 @@ const sampleInvoice = {
   assignment: "Brand Identity",
   po_number: "PO-12345",
   project_id: null,
-  client_id: "0",
-  language: "en" as const,
-  discount_applied: 0,
-  discount_rate: 0,
-  discount_label: "",
+  client_id: 0,
   contact_id: null,
   billing_address_id: null,
-  paid_date: null,
+  language: "EN" as const,
+  discount_rate: 0,
+  discount_amount: 0,
+  exchange_rate: null,
+  chf_equivalent: null,
+  chf_manual_override: null,
   pdf_path: null,
-  from_quote_id: null,
-  exchange_rate: 1,
-  chf_equivalent: 3500,
+  payment_terms_days: 30,
   reminder_count: 0,
   last_reminder_date: null,
-  payment_terms_days: 30,
   template_id: null,
+  created_at: "",
+  updated_at: "",
 };
 
 const sampleLineItems = [
-  {
-    id: 1,
-    invoice_id: 0,
-    designation: "Logo Design",
-    quantity: 1,
-    rate: 1500,
-    unit: "flat rate",
-    amount: 1500,
-    sort_order: 0,
-  },
-  {
-    id: 2,
-    invoice_id: 0,
-    designation: "Brand Guidelines",
-    quantity: 8,
-    rate: 150,
-    unit: "hours",
-    amount: 1200,
-    sort_order: 1,
-  },
-  {
-    id: 3,
-    invoice_id: 0,
-    designation: "Business Card Design",
-    quantity: 1,
-    rate: 800,
-    unit: "flat rate",
-    amount: 800,
-    sort_order: 2,
-  },
+  { id: 1, invoice_id: 0, designation: "Logo Design", quantity: 1, rate: 1500, unit: "flat rate", amount: 1500, sort_order: 0 },
+  { id: 2, invoice_id: 0, designation: "Brand Guidelines", quantity: 8, rate: 150, unit: "hours", amount: 1200, sort_order: 1 },
+  { id: 3, invoice_id: 0, designation: "Business Card Design", quantity: 1, rate: 800, unit: "flat rate", amount: 800, sort_order: 2 },
 ];
 
 const sampleClient = {
-  id: "0",
+  id: 0,
   name: "Acme Corp",
   address: "123 Business St",
   postal_code: "8001",
@@ -91,9 +64,10 @@ const sampleClient = {
   email: "hello@acme.ch",
   language: "en" as const,
   phone: "",
-  has_discount: 0,
   discount_rate: 0,
-  billing_name: "",
+  notes: "",
+  created_at: "",
+  updated_at: "",
 };
 
 const sampleProfile = {
@@ -120,18 +94,12 @@ const sampleProfile = {
 };
 
 // ---------------------------------------------------------------------------
-// Column order drag/reorder helpers
+// Column order helpers
 // ---------------------------------------------------------------------------
 
 type ColumnKey = "designation" | "rate" | "unit" | "qty" | "amount";
 
-const DEFAULT_COLUMN_ORDER: ColumnKey[] = [
-  "designation",
-  "rate",
-  "unit",
-  "qty",
-  "amount",
-];
+const DEFAULT_COLUMN_ORDER: ColumnKey[] = ["designation", "rate", "unit", "qty", "amount"];
 
 const COLUMN_LABELS: Record<ColumnKey, string> = {
   designation: "Designation",
@@ -141,9 +109,14 @@ const COLUMN_LABELS: Record<ColumnKey, string> = {
   amount: "Amount",
 };
 
-// ---------------------------------------------------------------------------
-// Default template values
-// ---------------------------------------------------------------------------
+function parseColumnOrder(json: string | undefined): ColumnKey[] {
+  try {
+    const arr = JSON.parse(json ?? "[]");
+    return Array.isArray(arr) ? arr : [...DEFAULT_COLUMN_ORDER];
+  } catch {
+    return [...DEFAULT_COLUMN_ORDER];
+  }
+}
 
 function defaultDraft(): Omit<InvoiceTemplate, "id" | "created_at" | "updated_at"> {
   return {
@@ -170,8 +143,10 @@ function defaultDraft(): Omit<InvoiceTemplate, "id" | "created_at" | "updated_at
 // Props
 // ---------------------------------------------------------------------------
 
+type FontFamily = "Helvetica" | "Times-Roman" | "Courier";
+type LogoPosition = "left" | "center" | "right" | "hide";
+
 interface TemplateEditorProps {
-  /** Existing template to edit. If null, create a new one on save. */
   template?: InvoiceTemplate | null;
   onSaved?: (template: InvoiceTemplate) => void;
 }
@@ -228,7 +203,20 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
   const [showFooter, setShowFooter] = useState(!!initial.show_footer);
   const [columnOrder, setColumnOrder] = useState<ColumnKey[]>(initial.columns);
 
-  // Build current template state for passing to PDF
+  // Measure right panel for PDFViewer pixel dimensions
+  const rightPanelRef = useRef<HTMLDivElement>(null);
+  const [panelSize, setPanelSize] = useState({ w: 600, h: 800 });
+  useEffect(() => {
+    const el = rightPanelRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      if (width > 0 && height > 0) setPanelSize({ w: width, h: height });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const currentTemplateState: Omit<InvoiceTemplate, "id" | "created_at" | "updated_at"> = {
     name,
     is_default: template?.is_default ?? 0,
@@ -298,9 +286,9 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
   const isPending = createTemplate.isPending || updateTemplate.isPending;
 
   return (
-    <div className="flex gap-0" style={{ height: "calc(100vh - 140px)" }}>
+    <div className="flex h-full min-h-0">
       {/* Left panel: settings */}
-      <div className="w-[40%] shrink-0 border-r border-[var(--color-border-divider)] overflow-y-auto p-6 space-y-6 bg-[var(--color-surface)]">
+      <div className="w-[340px] shrink-0 border-r border-[var(--color-border-divider)] overflow-y-auto p-6 space-y-5 bg-[var(--color-surface)]">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
           {t.template_editor}
         </h2>
@@ -308,18 +296,12 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
         {/* Name */}
         <div>
           <label className="block text-xs font-medium text-muted mb-1">{t.name}</label>
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="My Template"
-          />
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="My Template" />
         </div>
 
         {/* Accent color */}
         <div>
-          <label className="block text-xs font-medium text-muted mb-1">
-            {t.invoice_template_accent_color}
-          </label>
+          <label className="block text-xs font-medium text-muted mb-1">{t.invoice_template_accent_color}</label>
           <div className="flex items-center gap-2">
             <input
               type="color"
@@ -327,12 +309,7 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
               onChange={(e) => setAccentColor(e.target.value)}
               className="h-8 w-10 cursor-pointer rounded border border-[var(--color-border-divider)] bg-[var(--color-input-bg)] p-0.5"
             />
-            <Input
-              value={accentColor}
-              onChange={(e) => setAccentColor(e.target.value)}
-              className="w-28 font-mono text-xs"
-              placeholder="#1a1a1a"
-            />
+            <Input value={accentColor} onChange={(e) => setAccentColor(e.target.value)} className="w-28 font-mono text-xs" />
           </div>
         </div>
 
@@ -342,7 +319,7 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
           <select
             value={fontFamily}
             onChange={(e) => setFontFamily(e.target.value as FontFamily)}
-            className="w-full border border-[var(--color-border-divider)] rounded-lg px-3 py-2 text-sm bg-[var(--color-input-bg)] text-[var(--color-text)]"
+            className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-2 text-sm bg-[var(--color-input-bg)] text-[var(--color-text)]"
           >
             <option value="Helvetica">Helvetica</option>
             <option value="Times-Roman">Times Roman</option>
@@ -356,14 +333,7 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
           <div className="flex gap-3">
             {(["left", "center", "right", "hide"] as LogoPosition[]).map((pos) => (
               <label key={pos} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  name="logo_position"
-                  value={pos}
-                  checked={logoPosition === pos}
-                  onChange={() => setLogoPosition(pos)}
-                  className="accent-[var(--accent)]"
-                />
+                <input type="radio" name="logo_position" value={pos} checked={logoPosition === pos} onChange={() => setLogoPosition(pos)} className="accent-accent" />
                 <span className="capitalize">{pos}</span>
               </label>
             ))}
@@ -374,22 +344,15 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
         <div>
           <label className="block text-xs font-medium text-muted mb-2">{t.margins}</label>
           <div className="grid grid-cols-2 gap-2">
-            {(
-              [
-                { label: "Top", value: marginTop, set: setMarginTop },
-                { label: "Right", value: marginRight, set: setMarginRight },
-                { label: "Bottom", value: marginBottom, set: setMarginBottom },
-                { label: "Left", value: marginLeft, set: setMarginLeft },
-              ] as const
-            ).map(({ label, value, set }) => (
+            {([
+              { label: "Top", value: marginTop, set: setMarginTop },
+              { label: "Right", value: marginRight, set: setMarginRight },
+              { label: "Bottom", value: marginBottom, set: setMarginBottom },
+              { label: "Left", value: marginLeft, set: setMarginLeft },
+            ] as const).map(({ label, value, set }) => (
               <div key={label}>
                 <label className="block text-xs text-muted mb-0.5">{label}</label>
-                <Input
-                  type="number"
-                  value={value}
-                  onChange={(e) => set(Number(e.target.value))}
-                  className="text-right"
-                />
+                <Input type="number" value={value} onChange={(e) => set(Number(e.target.value))} className="text-right" />
               </div>
             ))}
           </div>
@@ -399,26 +362,16 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
         <div>
           <label className="block text-xs font-medium text-muted mb-2">Visibility</label>
           <div className="space-y-2">
-            {(
-              [
-                { label: t.show_notes, value: showNotes, set: setShowNotes },
-                { label: t.show_project_name, value: showProjectName, set: setShowProjectName },
-                { label: t.show_po_number, value: showPoNumber, set: setShowPoNumber },
-                { label: t.show_bank_details, value: showBankDetails, set: setShowBankDetails },
-                { label: t.show_qr_bill, value: showQrBill, set: setShowQrBill },
-                { label: t.show_footer, value: showFooter, set: setShowFooter },
-              ] as const
-            ).map(({ label, value, set }) => (
-              <label
-                key={label}
-                className="flex items-center gap-2 text-sm cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  checked={value}
-                  onChange={(e) => (set as (v: boolean) => void)(e.target.checked)}
-                  className="accent-[var(--accent)] rounded"
-                />
+            {([
+              { label: t.show_notes, value: showNotes, set: setShowNotes },
+              { label: t.show_project_name, value: showProjectName, set: setShowProjectName },
+              { label: t.show_po_number, value: showPoNumber, set: setShowPoNumber },
+              { label: t.show_bank_details, value: showBankDetails, set: setShowBankDetails },
+              { label: t.show_qr_bill, value: showQrBill, set: setShowQrBill },
+              { label: t.show_footer, value: showFooter, set: setShowFooter },
+            ] as const).map(({ label, value, set }) => (
+              <label key={label} className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={value} onChange={(e) => (set as (v: boolean) => void)(e.target.checked)} className="accent-accent rounded" />
                 {label}
               </label>
             ))}
@@ -427,30 +380,15 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
 
         {/* Column order */}
         <div>
-          <label className="block text-xs font-medium text-muted mb-2">{t.columns}</label>
+          <label className="block text-xs font-medium text-muted mb-2">{t.column_order}</label>
           <div className="space-y-1">
             {columnOrder.map((col, idx) => (
-              <div
-                key={col}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--color-border-divider)] bg-[var(--color-bg)] text-sm"
-              >
+              <div key={col} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--color-border-divider)] bg-[var(--color-bg)] text-sm">
                 <span className="flex-1">{COLUMN_LABELS[col]}</span>
-                <button
-                  type="button"
-                  onClick={() => moveColumn(idx, -1)}
-                  disabled={idx === 0}
-                  className="text-muted hover:text-[var(--color-text)] disabled:opacity-30"
-                  aria-label="Move up"
-                >
+                <button type="button" onClick={() => moveColumn(idx, -1)} disabled={idx === 0} className="text-muted hover:text-[var(--color-text)] disabled:opacity-30" aria-label="Move up">
                   <ChevronUp size={14} />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => moveColumn(idx, 1)}
-                  disabled={idx === columnOrder.length - 1}
-                  className="text-muted hover:text-[var(--color-text)] disabled:opacity-30"
-                  aria-label="Move down"
-                >
+                <button type="button" onClick={() => moveColumn(idx, 1)} disabled={idx === columnOrder.length - 1} className="text-muted hover:text-[var(--color-text)] disabled:opacity-30" aria-label="Move down">
                   <ChevronDown size={14} />
                 </button>
               </div>
@@ -459,16 +397,12 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
         </div>
 
         {/* Actions */}
-        <div className="flex gap-2 pt-2">
+        <div className="flex gap-2 pt-2 pb-4">
           <Button onClick={handleSave} disabled={isPending}>
             {isPending ? t.saving : t.save}
           </Button>
           {template?.id && !template.is_default && (
-            <Button
-              variant="secondary"
-              onClick={handleSetDefault}
-              disabled={setDefault.isPending}
-            >
+            <Button variant="secondary" onClick={handleSetDefault} disabled={setDefault.isPending}>
               {t.set_as_default}
             </Button>
           )}
@@ -476,44 +410,26 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
       </div>
 
       {/* Right panel: live PDF preview */}
-      <div className="flex-1 bg-[var(--color-bg)] min-h-0">
-        <PDFViewer
-          width="100%"
-          height="100%"
-          showToolbar={false}
-          style={{ border: "none" }}
-        >
-          <InvoicePDF
-            invoice={sampleInvoice as never}
-            lineItems={sampleLineItems}
-            client={sampleClient as never}
-            profile={sampleProfile as never}
-            projectName={showProjectName ? "Brand Identity Project" : undefined}
-            reminderCount={0}
-            template={currentTemplateState as never}
-          />
-        </PDFViewer>
+      <div ref={rightPanelRef} className="flex-1 min-h-0 min-w-0 bg-[var(--color-bg)]">
+        {panelSize.w > 100 && panelSize.h > 100 && (
+          <PDFViewer
+            width={panelSize.w}
+            height={panelSize.h}
+            showToolbar={false}
+            style={{ border: "none" }}
+          >
+            <InvoicePDF
+              invoice={sampleInvoice as never}
+              lineItems={sampleLineItems}
+              client={sampleClient as never}
+              profile={sampleProfile as never}
+              projectName={showProjectName ? "Brand Identity Project" : undefined}
+              reminderCount={0}
+              template={currentTemplateState as never}
+            />
+          </PDFViewer>
+        )}
       </div>
     </div>
   );
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-type FontFamily = "Helvetica" | "Times-Roman" | "Courier";
-type LogoPosition = "left" | "center" | "right" | "hide";
-
-function parseColumnOrder(raw: string | null | undefined): ColumnKey[] {
-  if (!raw) return [...DEFAULT_COLUMN_ORDER];
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed as ColumnKey[];
-    }
-  } catch {
-    // fall through
-  }
-  return [...DEFAULT_COLUMN_ORDER];
 }

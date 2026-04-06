@@ -136,7 +136,7 @@ export function ProfilePage() {
   if (isLoading) return <PageSpinner />;
 
   return (
-    <div className="flex gap-0 h-full -m-8">
+    <div className="flex gap-0 -m-8" style={{ height: "calc(100vh - 80px)" }}>
       {/* Category sidebar */}
       <div className="w-56 shrink-0 border-r border-[var(--color-border-divider)] py-6">
         <h1 className="text-xl font-semibold px-6 mb-6">{t.profile}</h1>
