@@ -121,13 +121,18 @@ function StartupChecks() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "T") {
+      // Cmd+Shift+T — Quick Timer modal.
+      // e.key is "T" (uppercase) when Shift is held, but guard both cases.
+      // Must preventDefault before useTabSync's "reopen closed tab" fires.
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "T" || e.key === "t")) {
         e.preventDefault();
+        e.stopImmediatePropagation();
         useAppStore.getState().toggleQuickTimer();
       }
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    // useCapture: true — fires before bubble-phase listeners (e.g. useTabSync)
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
   }, []);
 
   return null;

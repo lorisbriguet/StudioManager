@@ -623,7 +623,7 @@ async function ensureSchema(db: Database) {
       logo_position TEXT NOT NULL DEFAULT 'left',
       margins_top REAL NOT NULL DEFAULT 35,
       margins_right REAL NOT NULL DEFAULT 50,
-      margins_bottom REAL NOT NULL DEFAULT 30,
+      margins_bottom REAL NOT NULL DEFAULT 35,
       margins_left REAL NOT NULL DEFAULT 50,
       show_notes INTEGER NOT NULL DEFAULT 1,
       show_project_name INTEGER NOT NULL DEFAULT 1,
@@ -636,9 +636,24 @@ async function ensureSchema(db: Database) {
       updated_at TEXT DEFAULT (datetime('now'))
     )
   `);
-  // Seed default template (one-time)
+  // Seed default template (one-time) — values must match InvoicePDF hardcoded defaults
   await db.execute(
-    `INSERT INTO invoice_templates (name, is_default) SELECT 'Default', 1 WHERE NOT EXISTS (SELECT 1 FROM invoice_templates)`
+    `INSERT INTO invoice_templates (
+       name, is_default,
+       accent_color, font_family, logo_position,
+       margins_top, margins_right, margins_bottom, margins_left,
+       show_notes, show_project_name, show_po_number,
+       show_bank_details, show_qr_bill, show_footer,
+       columns
+     )
+     SELECT
+       'Default', 1,
+       '#1a1a1a', 'Helvetica', 'left',
+       35, 50, 35, 50,
+       1, 1, 1,
+       1, 1, 1,
+       '["designation","rate","unit","qty","amount"]'
+     WHERE NOT EXISTS (SELECT 1 FROM invoice_templates)`
   );
   // Add template_id to invoices and quotes
   await addColumnIfMissing("invoices", "template_id", "INTEGER REFERENCES invoice_templates(id) ON DELETE SET NULL");
