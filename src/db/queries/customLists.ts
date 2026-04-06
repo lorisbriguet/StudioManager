@@ -56,26 +56,22 @@ export async function setCustomListItems(
   listId: number,
   items: { value: string; color?: string }[]
 ): Promise<void> {
-  const db = await getDb();
-  await db.execute("BEGIN");
-  try {
-    await db.execute("DELETE FROM custom_list_items WHERE list_id = $1", [listId]);
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      await db.execute(
-        "INSERT INTO custom_list_items (list_id, value, color, sort_order) VALUES ($1, $2, $3, $4)",
-        [listId, item.value, item.color ?? null, i]
-      );
-    }
-    await db.execute(
-      "UPDATE custom_lists SET updated_at = datetime('now') WHERE id = $1",
-      [listId]
+  // Use TransactionBatch for atomic operation (Tauri pool doesn't support BEGIN/COMMIT)
+  const { TransactionBatch } = await import("../index");
+  const batch = new TransactionBatch();
+  batch.add("DELETE FROM custom_list_items WHERE list_id = $1", [listId]);
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    batch.add(
+      "INSERT INTO custom_list_items (list_id, value, color, sort_order) VALUES ($1, $2, $3, $4)",
+      [listId, item.value, item.color ?? null, i]
     );
-    await db.execute("COMMIT");
-  } catch (err) {
-    await db.execute("ROLLBACK");
-    throw err;
   }
+  batch.add(
+    "UPDATE custom_lists SET updated_at = datetime('now') WHERE id = $1",
+    [listId]
+  );
+  await batch.commit();
 }
 
 export async function isListInUse(_listId: number): Promise<boolean> {

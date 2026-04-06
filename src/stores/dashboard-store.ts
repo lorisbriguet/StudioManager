@@ -204,8 +204,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
 
   setLayout: (layout) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
-    clearPresetTracking();
-    set({ layout, activePresetId: null, activePresetName: "Custom" });
+    set({ layout });
   },
 
   addWidget: (type) => {

@@ -298,7 +298,7 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
   const isPending = createTemplate.isPending || updateTemplate.isPending;
 
   return (
-    <div className="flex h-full gap-0 -m-8">
+    <div className="flex gap-0 -m-8" style={{ height: "calc(100vh - 120px)" }}>
       {/* Left panel: settings */}
       <div className="w-[40%] shrink-0 border-r border-[var(--color-border-divider)] overflow-y-auto p-6 space-y-6 bg-[var(--color-surface)]">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
@@ -476,7 +476,7 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
       </div>
 
       {/* Right panel: live PDF preview */}
-      <div className="flex-1 bg-[var(--color-bg)]">
+      <div className="flex-1 bg-[var(--color-bg)] min-h-0">
         <PDFViewer
           width="100%"
           height="100%"
