@@ -29,6 +29,20 @@ function persist(tabs: Tab[], activeTabId: string) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ tabs, activeTabId }));
 }
 
+/**
+ * The tab that becomes active when `closingId` is closed while active:
+ * the same-index neighbor, or the last remaining tab. Single source of the
+ * neighbor rule — used by closeTab AND by the pre-close dirty-guard checks
+ * (useTabSync Cmd+W, TabBar close handler) so prediction and actual close
+ * behavior cannot diverge.
+ */
+export function predictNextActiveTab(tabs: Tab[], closingId: string): Tab | null {
+  const idx = tabs.findIndex((t) => t.id === closingId);
+  if (idx === -1) return null;
+  const remaining = tabs.filter((t) => t.id !== closingId);
+  return remaining[Math.min(idx, remaining.length - 1)] ?? null;
+}
+
 interface TabState {
   tabs: Tab[];
   activeTabId: string;
@@ -74,8 +88,7 @@ export const useTabStore = create<TabState>((set, get) => ({
     const newClosed = [tab, ...closedTabs].slice(0, 10);
     let newActiveId = activeTabId;
     if (activeTabId === id) {
-      const idx = tabs.findIndex((t) => t.id === id);
-      newActiveId = newTabs[Math.min(idx, newTabs.length - 1)]?.id ?? newTabs[0].id;
+      newActiveId = predictNextActiveTab(tabs, id)?.id ?? newTabs[0].id;
     }
     persist(newTabs, newActiveId);
     set({ tabs: newTabs, activeTabId: newActiveId, closedTabs: newClosed });

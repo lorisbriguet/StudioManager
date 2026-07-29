@@ -1,5 +1,7 @@
 import { getDb, validateFields, TransactionBatch } from "../index";
 import { getNextReference } from "./referenceGenerator";
+import { isDraftReference } from "../../types/invoice";
+import { todayLocalISO } from "../../utils/localDate";
 import type { Invoice, InvoiceLineItem } from "../../types/invoice";
 
 export interface InvoiceAgingRow {
@@ -10,20 +12,25 @@ export interface InvoiceAgingRow {
 
 export async function getInvoiceAging(): Promise<InvoiceAgingRow[]> {
   const db = await getDb();
+  // Bind the LOCAL calendar date instead of julianday('now')/date('now'),
+  // which are UTC and (for julianday) include the time of day, producing
+  // fractional diffs that fall between brackets.
+  // $1 is ONE bound value referenced 4x — sqlx binds $N by index, so do not
+  // "normalize" to sequential placeholders.
   return db.select<InvoiceAgingRow[]>(`
     SELECT
       CASE
-        WHEN julianday('now') - julianday(due_date) BETWEEN 0 AND 30 THEN '0-30'
-        WHEN julianday('now') - julianday(due_date) BETWEEN 31 AND 60 THEN '31-60'
-        WHEN julianday('now') - julianday(due_date) BETWEEN 61 AND 90 THEN '61-90'
+        WHEN julianday($1) - julianday(due_date) BETWEEN 0 AND 30 THEN '0-30'
+        WHEN julianday($1) - julianday(due_date) BETWEEN 31 AND 60 THEN '31-60'
+        WHEN julianday($1) - julianday(due_date) BETWEEN 61 AND 90 THEN '61-90'
         ELSE '90+'
       END as bracket,
       COUNT(*) as count,
-      SUM(total) as total
+      COALESCE(SUM(CASE WHEN currency != 'CHF' AND chf_equivalent > 0 THEN chf_equivalent ELSE total END), 0) as total
     FROM invoices
-    WHERE status IN ('sent', 'overdue') AND due_date < date('now')
+    WHERE status IN ('sent', 'overdue') AND due_date < $1
     GROUP BY bracket
-  `);
+  `, [todayLocalISO()]);
 }
 
 export async function getInvoices(): Promise<Invoice[]> {
@@ -71,12 +78,14 @@ export async function createInvoiceWithLineItems(
   lineItems: Omit<InvoiceLineItem, "id" | "invoice_id">[]
 ): Promise<number> {
   const batch = new TransactionBatch();
+  // reminder_count / last_reminder_date are intentionally omitted: the DB
+  // defaults (0 / NULL) match what every caller passes for a new invoice.
   batch.add(
     `INSERT INTO invoices (reference, client_id, project_id, status, language, activity, assignment,
      invoice_date, due_date, payment_terms_days, subtotal, discount_applied, discount_rate,
      discount_label, total, paid_date, contact_id, billing_address_id, po_number, pdf_path, from_quote_id, notes,
-     currency, exchange_rate, chf_equivalent)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)`,
+     currency, exchange_rate, chf_equivalent, template_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)`,
     [
       data.reference, data.client_id, data.project_id, data.status, data.language,
       data.activity, data.assignment, data.invoice_date, data.due_date,
@@ -84,7 +93,7 @@ export async function createInvoiceWithLineItems(
       data.discount_label, data.total, data.paid_date, data.contact_id, data.billing_address_id ?? null,
       data.po_number, data.pdf_path,
       data.from_quote_id, data.notes, data.currency ?? "CHF", data.exchange_rate ?? 1.0,
-      data.chf_equivalent ?? data.total,
+      data.chf_equivalent ?? data.total, data.template_id ?? null,
     ]
   );
   for (const item of lineItems) {
@@ -141,7 +150,7 @@ export async function updateInvoiceWithLineItems(
 
 export async function markOverdueInvoices(): Promise<Invoice[]> {
   const db = await getDb();
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayLocalISO();
   // Find sent invoices past their due date
   const overdue = await db.select<Invoice[]>(
     `SELECT * FROM invoices
@@ -165,32 +174,27 @@ export async function markOverdueInvoices(): Promise<Invoice[]> {
 
 export async function deleteInvoice(id: number): Promise<void> {
   const db = await getDb();
-  // Get the invoice to know its year prefix before deleting
-  const rows = await db.select<Invoice[]>("SELECT * FROM invoices WHERE id = $1", [id]);
-  const invoice = rows[0];
-  await db.execute("DELETE FROM invoices WHERE id = $1", [id]);
-  // Reindex remaining invoices for the same year
-  if (invoice && !invoice.reference.startsWith("DRAFT")) {
-    const year = invoice.reference.split("-")[0];
-    await reindexInvoiceReferences(year);
-  }
-}
-
-async function reindexInvoiceReferences(year: string): Promise<void> {
-  const db = await getDb();
-  const invoices = await db.select<{ id: number; reference: string }[]>(
-    "SELECT id, reference FROM invoices WHERE reference LIKE $1 ORDER BY CAST(SUBSTR(reference, $2) AS INTEGER)",
-    [`${year}-%`, year.length + 2]
+  // Only drafts (DRAFT- reference) are deletable. An invoice that ever
+  // received a real reference must be cancelled instead — issued references
+  // are never reused and remaining invoices are never renumbered
+  // (gaps in the sequence are accepted).
+  const rows = await db.select<{ reference: string }[]>(
+    "SELECT reference FROM invoices WHERE id = $1",
+    [id]
   );
-  for (let i = 0; i < invoices.length; i++) {
-    const newRef = `${year}-${String(i + 1).padStart(3, "0")}`;
-    if (invoices[i].reference !== newRef) {
-      await db.execute(
-        "UPDATE invoices SET reference = $1, updated_at = datetime('now') WHERE id = $2",
-        [newRef, invoices[i].id]
-      );
-    }
+  const invoice = rows[0];
+  if (invoice && !isDraftReference(invoice.reference)) {
+    throw new Error("Only draft invoices can be deleted");
   }
+  // Clear the conversion back-reference (quotes.converted_to_invoice_id) so
+  // FK enforcement doesn't reject deleting a draft created from a quote.
+  // Sequential db.execute (not a batch) is intentional, matching deleteProject:
+  // the SELECT guard above precedes it and the UPDATE is idempotent/harmless standalone.
+  await db.execute(
+    "UPDATE quotes SET converted_to_invoice_id = NULL WHERE converted_to_invoice_id = $1",
+    [id]
+  );
+  await db.execute("DELETE FROM invoices WHERE id = $1", [id]);
 }
 
 export async function getInvoiceLineItems(

@@ -43,6 +43,7 @@ export function BulkActionBar({ count, actions, onClear }: Props) {
         onClick={onClear}
         className="p-1 text-muted hover:text-[var(--color-text-secondary)]"
         title={t.cancel}
+        aria-label={t.cancel}
       >
         <X size={14} />
       </button>

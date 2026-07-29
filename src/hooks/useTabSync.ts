@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useTabStore } from "../stores/tab-store";
+import { useTabStore, predictNextActiveTab } from "../stores/tab-store";
+import { confirmIfDirty } from "../lib/dirty-guard";
 
 // Map route paths to tab labels
 function labelFromPath(path: string): string {
@@ -47,7 +48,7 @@ export function useTabSync() {
     }
     const label = labelFromPath(location.pathname);
     updateActiveTab(location.pathname, label);
-  }, [location.pathname]);
+  }, [location.pathname, updateActiveTab]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -57,36 +58,55 @@ export function useTabSync() {
       // Cmd+T: new tab (no Shift). e.key is lowercase "t" when Shift is not held.
       if (isMeta && (e.key === "t" || e.key === "T") && !e.shiftKey) {
         e.preventDefault();
-        openTab("/", "Dashboard");
-        navigate("/");
+        void confirmIfDirty("/").then((ok) => {
+          if (!ok) return;
+          openTab("/", "Dashboard");
+          navigate("/");
+        });
         return;
       }
 
-      // Cmd+W: close tab
+      // Cmd+W: close tab (always the ACTIVE tab, so this leaves the current
+      // page — prompt if it holds a dirty form)
       if (isMeta && e.key === "w") {
         e.preventDefault();
         const store = useTabStore.getState();
         if (store.tabs.length <= 1) return;
-        const newActiveId = closeTab(store.activeTabId);
-        if (newActiveId) {
-          const newActive = useTabStore.getState().tabs.find((t) => t.id === newActiveId);
-          if (newActive) {
-            isTabNavRef.current = true;
-            navigate(newActive.path);
+        const active = store.tabs.find((t) => t.id === store.activeTabId);
+        // closeTab refuses pinned tabs — skip early so we don't prompt for nothing
+        if (!active || active.pinned) return;
+        // Predict the neighbor we would land on (shared rule with closeTab) so
+        // confirmIfDirty can skip the prompt when its path equals the current one
+        const next = predictNextActiveTab(store.tabs, store.activeTabId);
+        void confirmIfDirty(next?.path).then((ok) => {
+          if (!ok) return;
+          const newActiveId = closeTab(store.activeTabId);
+          if (newActiveId) {
+            const newActive = useTabStore.getState().tabs.find((t) => t.id === newActiveId);
+            if (newActive) {
+              isTabNavRef.current = true;
+              navigate(newActive.path);
+            }
           }
-        }
+        });
         return;
       }
 
-      // Cmd+Shift+T: reopen closed tab. e.key is uppercase "T" when Shift is held.
-      // Note: App.tsx captures this shortcut first for the Quick Timer modal.
-      if (isMeta && (e.key === "T" || e.key === "t") && e.shiftKey) {
+      // Cmd+Shift+Y: reopen closed tab. e.key is uppercase "Y" when Shift is held.
+      // (Cmd+Shift+T belongs to the Quick Timer modal — see App.tsx.)
+      if (isMeta && (e.key === "Y" || e.key === "y") && e.shiftKey) {
         e.preventDefault();
-        const tab = reopenClosedTab();
-        if (tab) {
-          isTabNavRef.current = true;
-          navigate(tab.path);
-        }
+        // Peek before mutating the store: on cancel the tab must stay closed
+        const peek = useTabStore.getState().closedTabs[0];
+        if (!peek) return;
+        void confirmIfDirty(peek.path).then((ok) => {
+          if (!ok) return;
+          const tab = reopenClosedTab();
+          if (tab) {
+            isTabNavRef.current = true;
+            navigate(tab.path);
+          }
+        });
         return;
       }
 
@@ -98,10 +118,14 @@ export function useTabSync() {
         const len = store.tabs.length;
         const nextIdx = e.shiftKey ? (idx - 1 + len) % len : (idx + 1) % len;
         const nextTab = store.tabs[nextIdx];
-        if (nextTab) {
-          store.activateTab(nextTab.id);
-          isTabNavRef.current = true;
-          navigate(nextTab.path);
+        // Single tab: cycling is a no-op — don't prompt, don't navigate
+        if (nextTab && nextTab.id !== store.activeTabId) {
+          void confirmIfDirty(nextTab.path).then((ok) => {
+            if (!ok) return;
+            store.activateTab(nextTab.id);
+            isTabNavRef.current = true;
+            navigate(nextTab.path);
+          });
         }
         return;
       }
@@ -113,9 +137,14 @@ export function useTabSync() {
         if (idx < store.tabs.length) {
           e.preventDefault();
           const tab = store.tabs[idx];
-          store.activateTab(tab.id);
-          isTabNavRef.current = true;
-          navigate(tab.path);
+          // Jumping to the tab we're already on is a no-op — don't prompt
+          if (tab.id === store.activeTabId) return;
+          void confirmIfDirty(tab.path).then((ok) => {
+            if (!ok) return;
+            store.activateTab(tab.id);
+            isTabNavRef.current = true;
+            navigate(tab.path);
+          });
         }
       }
     };

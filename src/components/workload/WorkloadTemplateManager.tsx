@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Plus, Trash2, Copy, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "../ui";
 import {
   useWorkloadTemplates,
   useCreateWorkloadTemplate,
@@ -8,12 +9,15 @@ import {
   useDeleteWorkloadTemplate,
 } from "../../db/hooks/useWorkload";
 import { WorkloadColumnEditor } from "./WorkloadColumnEditor";
-import { TAG_COLORS, DEFAULT_WORKLOAD_COLUMNS } from "../../types/workload";
+import { DEFAULT_WORKLOAD_COLUMNS } from "../../types/workload";
 import type { WorkloadColumn } from "../../types/workload";
+import { getStoredTagColor } from "../../lib/tagColors";
+import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
 
 export function WorkloadTemplateManager() {
   const t = useT();
+  const darkMode = useAppStore((s) => s.darkMode);
   const { data: templates } = useWorkloadTemplates();
   const createTemplate = useCreateWorkloadTemplate();
   const updateTemplate = useUpdateWorkloadTemplate();
@@ -93,13 +97,9 @@ export function WorkloadTemplateManager() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted">{t.workload_templates_desc}</p>
-        <button
-          onClick={handleCreate}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-accent text-white rounded-md hover:opacity-90"
-        >
-          <Plus size={14} />
+        <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={handleCreate}>
           {t.new_template}
-        </button>
+        </Button>
       </div>
 
       {/* Template list */}
@@ -125,7 +125,7 @@ export function WorkloadTemplateManager() {
                     if (e.key === "Enter") handleRenameCommit(tpl.id);
                     if (e.key === "Escape") setRenamingId(null);
                   }}
-                  className="flex-1 text-sm border border-[var(--color-border-divider)] rounded px-2 py-0.5 bg-transparent"
+                  className="flex-1 text-sm border border-[var(--color-border-divider)] rounded-lg px-2 py-0.5 bg-transparent"
                 />
               ) : (
                 <button
@@ -147,6 +147,7 @@ export function WorkloadTemplateManager() {
                 }}
                 className="p-1 text-muted hover:text-accent"
                 title={t.rename}
+                aria-label={t.rename}
               >
                 <Pencil size={12} />
               </button>
@@ -154,6 +155,7 @@ export function WorkloadTemplateManager() {
                 onClick={() => handleDuplicate(tpl)}
                 className="p-1 text-muted hover:text-accent"
                 title={t.duplicate}
+                aria-label={t.duplicate}
               >
                 <Copy size={12} />
               </button>
@@ -161,6 +163,7 @@ export function WorkloadTemplateManager() {
                 onClick={() => handleDelete(tpl.id)}
                 className="p-1 text-muted hover:text-[var(--color-danger-text)]"
                 title={t.delete}
+                aria-label={t.delete}
               >
                 <Trash2 size={12} />
               </button>
@@ -180,11 +183,12 @@ export function WorkloadTemplateManager() {
                       col.options && (
                         <div className="flex gap-0.5 flex-1 overflow-hidden">
                           {col.options.slice(0, 4).map((opt) => {
-                            const c = TAG_COLORS[opt.color] ?? TAG_COLORS.gray;
+                            const c = getStoredTagColor(opt.color, darkMode);
                             return (
                               <span
                                 key={opt.value}
-                                className={`px-1.5 py-0 rounded text-[10px] ${c.bg} ${c.text}`}
+                                style={{ background: c.bg, color: c.text }}
+                                className="px-1.5 py-0 rounded-full text-[10px]"
                               >
                                 {opt.value}
                               </span>
@@ -205,20 +209,23 @@ export function WorkloadTemplateManager() {
                     <button
                       onClick={() => setEditingColumn({ column: col, index: ci })}
                       className="ml-auto opacity-0 group-hover/col:opacity-100 p-0.5 text-muted hover:text-accent"
+                      aria-label={t.edit}
                     >
                       <Pencil size={12} />
                     </button>
                   </div>
                 ))}
-                <button
+                <Button
+                  variant="link"
+                  size="sm"
+                  icon={<Plus size={12} />}
                   onClick={() =>
                     setEditingColumn({ column: null, index: tpl.columns.length })
                   }
-                  className="flex items-center gap-1 py-1 text-xs text-muted hover:text-accent"
+                  className="py-1 text-muted hover:text-accent"
                 >
-                  <Plus size={12} />
                   {t.add_column}
-                </button>
+                </Button>
               </div>
             )}
           </div>

@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Plus, Paperclip, Eye, X, ChevronRight, Trash2, Upload, Wallet } from "lucide-react";
-import { PageHeader, SearchBar, Button, Card, EmptyState, Input, Select } from "../components/ui";
+import { PageHeader, SearchBar, Button, Card, EmptyState, FormField, Input, Select, TableSkeleton } from "../components/ui";
+import * as v from "../lib/validate";
+import { undoableFromStore } from "../lib/undo";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { formatDisplayDate } from "../utils/formatDate";
@@ -20,6 +22,7 @@ import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
 import { BulkActionBar } from "../components/BulkActionBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useT } from "../i18n/useT";
+import { notifyError } from "../lib/notifyError";
 import type { Income } from "../types/income";
 import { extractPdfText, extractImageText, parseExpenseFromText } from "../lib/pdfExtract";
 import { logError } from "../lib/log";
@@ -190,7 +193,16 @@ export function IncomePage() {
     }
   };
 
-  if (isLoading) return <div className="text-muted text-sm">{t.loading}</div>;
+  if (isLoading) return (
+    <div className="relative">
+      <PageHeader title={t.income}>
+        <Button icon={<Plus size={16} />} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
+          {t.new_income}
+        </Button>
+      </PageHeader>
+      <TableSkeleton columns={6} />
+    </div>
+  );
 
   return (
     <div className="relative">
@@ -335,34 +347,39 @@ export function IncomePage() {
                         <td className="px-4 py-2.5">
                           {inc.receipt_path ? (
                             <div className="flex items-center gap-2">
-                              <button
+                              <Button
+                                variant="link"
+                                size="sm"
+                                icon={<Eye size={14} />}
                                 onClick={() => setPreview({ path: inc.receipt_path!, reference: inc.reference })}
-                                className="text-xs text-accent hover:underline flex items-center gap-1"
                               >
-                                <Eye size={14} /> {t.view}
-                              </button>
+                                {t.view}
+                              </Button>
                               <span className="text-xs text-success flex items-center gap-1">
                                 <Paperclip size={12} />
                               </span>
                             </div>
                           ) : (
-                            <button
+                            <Button
+                              variant="link"
+                              size="sm"
+                              icon={<Paperclip size={12} />}
                               onClick={() => attachReceipt(inc.id, inc.reference, inc.source)}
-                              className="text-xs text-accent hover:underline flex items-center gap-1"
                             >
-                              <Paperclip size={12} /> {t.attach}
-                            </button>
+                              {t.attach}
+                            </Button>
                           )}
                         </td>
                         <td className="px-4 py-2.5">
                           <button
                             onClick={() => {
                               deleteIncome.mutate(inc.id, {
-                                onSuccess: () => toast.success(t.toast_deleted),
+                                onSuccess: () => undoableFromStore(t.toast_income_deleted),
                               });
                             }}
                             className="opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-danger-text)] transition-opacity"
                             title={t.delete}
+                            aria-label={t.delete}
                           >
                             <Trash2 size={14} />
                           </button>
@@ -375,7 +392,15 @@ export function IncomePage() {
           </tbody>
         </table>
         {filtered.length === 0 && !isLoading && (
-          <EmptyState message={t.no_incomes_yet} icon={<Wallet size={32} />} />
+          <EmptyState
+            message={(incomes?.length ?? 0) === 0 ? t.no_incomes_yet : t.no_matching_incomes}
+            icon={<Wallet size={32} />}
+            action={(incomes?.length ?? 0) === 0 ? (
+              <Button icon={<Plus size={16} />} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
+                {t.new_income}
+              </Button>
+            ) : undefined}
+          />
         )}
       </div>
 
@@ -392,7 +417,7 @@ export function IncomePage() {
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteIncome.mutate(ctxMenu.item.id) },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteIncome.mutate(ctxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_income_deleted) }) },
           ]}
         />
       )}
@@ -416,6 +441,7 @@ function ReceiptPreview({
   reference: string;
   onClose: () => void;
 }) {
+  const t = useT();
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
   const isImage = ["png", "jpg", "jpeg", "webp"].includes(ext);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
@@ -431,11 +457,14 @@ function ReceiptPreview({
         url = URL.createObjectURL(blob);
         setBlobUrl(url);
       })
-      .catch(() => setBlobUrl(null));
+      .catch((err) => {
+        setBlobUrl(null);
+        notifyError(t.receipt_load_failed, err);
+      });
     return () => {
       if (url) URL.revokeObjectURL(url);
     };
-  }, [path, ext, isImage]);
+  }, [path, ext, isImage, t.receipt_load_failed]);
 
   return (
     <div
@@ -448,13 +477,13 @@ function ReceiptPreview({
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-input-border)]">
           <h2 className="text-sm font-semibold">{reference}</h2>
-          <button onClick={onClose} className="text-muted hover:text-[var(--color-text)]">
+          <button onClick={onClose} aria-label={t.close} className="text-muted hover:text-[var(--color-text)]">
             <X size={16} />
           </button>
         </div>
         <div className="flex-1 overflow-auto bg-[var(--color-input-bg)] flex items-center justify-center">
           {!blobUrl ? (
-            <span className="text-sm text-muted">Loading...</span>
+            <span className="text-sm text-muted">{t.loading}</span>
           ) : isImage ? (
             <img
               src={blobUrl}
@@ -473,6 +502,16 @@ function ReceiptPreview({
     </div>
   );
 }
+
+// Phase 2 E3 — inline validation (E1 pattern). category is a Select that
+// always holds a valid value; description/notes are free-form. Unvalidated.
+type IncomeFormField = "source" | "amount" | "date";
+
+const incomeSchema: v.FormSchema<IncomeFormField> = {
+  source: [v.required],
+  amount: [v.required, v.numberPositive],
+  date: [v.required, v.dateValid],
+};
 
 function NewIncomeForm({
   droppedReceiptPath,
@@ -502,6 +541,25 @@ function NewIncomeForm({
     amount: prefill?.amount ?? 0,
     notes: "",
   });
+  const [errors, setErrors] = useState<Partial<Record<IncomeFormField, string>>>({});
+
+  const setFieldError = (field: IncomeFormField, msg: string | null) =>
+    setErrors((e) => {
+      const next = { ...e };
+      if (msg) next[field] = msg;
+      else delete next[field];
+      return next;
+    });
+
+  // Raw string value per validated field; amount is held as a number in form
+  // state and renders as "" while zero, so validate what the user sees.
+  const fieldValue = (field: IncomeFormField): string =>
+    field === "amount" ? (form.amount ? String(form.amount) : "") : form[field];
+
+  const validateOnBlur = (field: IncomeFormField) =>
+    setFieldError(field, v.validateField(fieldValue(field), incomeSchema[field]));
+
+  const clearError = (field: IncomeFormField) => setFieldError(field, null);
 
   useEffect(() => {
     if (prefill) {
@@ -511,6 +569,15 @@ function NewIncomeForm({
         date: prefill.date ?? prev.date,
         amount: prefill.amount ?? prev.amount,
       }));
+      // Receipt-parse prefill fills fields programmatically — clear any stale
+      // inline error on exactly the fields it fills.
+      setErrors((e) => {
+        const next = { ...e };
+        if (prefill.source != null) delete next.source;
+        if (prefill.date != null) delete next.date;
+        if (prefill.amount != null) delete next.amount;
+        return next;
+      });
     }
   }, [prefill]);
 
@@ -523,60 +590,78 @@ function NewIncomeForm({
         </div>
       )}
       <div className="grid grid-cols-2 gap-3">
-        <Input
-          placeholder={`${t.source} *`}
-          value={form.source}
-          onChange={(e) => setForm({ ...form, source: e.target.value })}
-        />
-        <Select
-          value={form.category}
-          onChange={(e) => setForm({ ...form, category: e.target.value })}
-          className="py-2"
-        >
-          {INCOME_CATEGORIES.map((c) => (
-            <option key={c} value={c}>{c.replace(/_/g, " ")}</option>
-          ))}
-        </Select>
-        <Input
-          placeholder={t.description}
-          value={form.description}
-          onChange={(e) => setForm({ ...form, description: e.target.value })}
-        />
-        <Input
-          type="date"
-          value={form.date}
-          onChange={(e) => setForm({ ...form, date: e.target.value })}
-          fullWidth={false}
-        />
-        <Input
-          type="number"
-          step="0.01"
-          placeholder={`${t.amount} *`}
-          value={form.amount || ""}
-          onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
-          fullWidth={false}
-        />
+        <FormField label={t.source} required error={errors.source}>
+          <Input
+            value={form.source}
+            onChange={(e) => {
+              setForm({ ...form, source: e.target.value });
+              clearError("source");
+            }}
+            onBlur={() => validateOnBlur("source")}
+          />
+        </FormField>
+        <FormField label={t.category}>
+          <Select
+            value={form.category}
+            onChange={(e) => setForm({ ...form, category: e.target.value })}
+            className="py-2"
+          >
+            {INCOME_CATEGORIES.map((c) => (
+              <option key={c} value={c}>{c.replace(/_/g, " ")}</option>
+            ))}
+          </Select>
+        </FormField>
+        <FormField label={t.description}>
+          <Input
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+          />
+        </FormField>
+        <FormField label={t.date} required error={errors.date}>
+          <Input
+            type="date"
+            value={form.date}
+            onChange={(e) => {
+              setForm({ ...form, date: e.target.value });
+              clearError("date");
+            }}
+            onBlur={() => validateOnBlur("date")}
+          />
+        </FormField>
+        <FormField label={t.amount} required error={errors.amount}>
+          <Input
+            type="number"
+            step="0.01"
+            value={form.amount || ""}
+            onChange={(e) => {
+              setForm({ ...form, amount: Number(e.target.value) });
+              clearError("amount");
+            }}
+            onBlur={() => validateOnBlur("amount")}
+          />
+        </FormField>
       </div>
       <div className="flex gap-2">
-        <button
+        <Button
           onClick={() => {
-            if (!form.source.trim()) return toast.error(t.source + " " + t.field_required);
-            if (!form.amount) return toast.error(t.amount + " " + t.field_required);
+            const errs = v.validateForm(
+              { source: form.source, amount: fieldValue("amount"), date: form.date },
+              incomeSchema
+            );
+            setErrors(errs);
+            if (Object.keys(errs).length > 0) return;
+            // DB failures surface via the mutation's onError toast (backstop).
             onSave({
               ...form,
               receipt_path: null,
             });
           }}
-          className="px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover"
         >
           {t.save}
-        </button>
-        <button
-          onClick={onCancel}
-          className="px-3 py-1.5 border border-[var(--color-input-border)] text-sm rounded-md hover:bg-[var(--color-hover-row)]"
-        >
+        </Button>
+        <Button variant="secondary" onClick={onCancel}>
           {t.cancel}
-        </button>
+        </Button>
       </div>
     </Card>
   );

@@ -9,11 +9,16 @@ import {
   deleteCalendarEvent,
 } from "../../lib/appleCalendar";
 import { useUndoStore } from "../../stores/undo-store";
-import { logError } from "../../lib/log";
+import { notifyError, getLabels } from "../../lib/notifyError";
+import { todayLocalISO } from "../../utils/localDate";
 
 // Guards against concurrent calendar syncs for the same item
 const pendingTaskSyncs = new Set<number>();
 const pendingSubtaskSyncs = new Set<number>();
+
+// notifyError logs AND toasts (toast deduped); no separate logError needed
+const notifyCalendarSyncFailure = (e: unknown) =>
+  notifyError(getLabels().calendar_sync_failed, e);
 
 let _qc: QueryClient | null = null;
 
@@ -51,7 +56,7 @@ function syncTaskCalendar(id: number) {
         }
       }
     } catch (e) {
-      logError("Calendar sync failed:", e);
+      notifyCalendarSyncFailure(e);
     } finally {
       pendingTaskSyncs.delete(id);
       _qc?.invalidateQueries({ queryKey: ["tasks"] });
@@ -93,7 +98,7 @@ function syncSubtaskCalendar(id: number) {
         }
       }
     } catch (e) {
-      logError("Calendar sync failed:", e);
+      notifyCalendarSyncFailure(e);
     } finally {
       pendingSubtaskSyncs.delete(id);
       _qc?.invalidateQueries({ queryKey: ["subtasks"] });
@@ -128,7 +133,7 @@ export function useCreateTask() {
       const id = await q.createTask(data);
       syncTaskCalendar(id);
       useUndoStore.getState().push({
-        label: `Create task "${data.title}"`,
+        label: `${getLabels().undo_create_task} "${data.title}"`,
         execute: async () => {
           await q.deleteTask(id);
           qc.invalidateQueries({ queryKey: ["tasks"] });
@@ -165,7 +170,7 @@ export function useUpdateTask() {
           prevData[key] = (prev as unknown as Record<string, unknown>)[key];
         }
         useUndoStore.getState().push({
-          label: `Update task "${prev.title}"`,
+          label: `${getLabels().undo_update_task} "${prev.title}"`,
           execute: async () => {
             await q.updateTask(id, prevData as Partial<Omit<Task, "id" | "created_at" | "updated_at">>);
             syncTaskCalendar(id);
@@ -175,7 +180,7 @@ export function useUpdateTask() {
       }
       // When marking as done, update due_date to today if it differs
       if (data.status === "done") {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = todayLocalISO();
         if (prev?.due_date && prev.due_date !== today) {
           data = { ...data, due_date: today };
         }
@@ -196,19 +201,39 @@ export function useDeleteTask() {
   return useMutation({
     mutationFn: async (id: number) => {
       const prev = await q.getTaskById(id);
+      // Snapshot subtasks before delete — the schema cascade removes them
+      // with the task, and undo must bring them back too.
+      const subtasks = prev ? await q.getSubtasksByTask(id) : [];
       const calId = useAppStore.getState().calendarSync ? prev?.calendar_event_id : null;
       await q.deleteTask(id);
       if (calId) {
-        deleteCalendarEvent(calId).catch((e) => logError("Calendar sync failed:", e));
+        deleteCalendarEvent(calId).catch(notifyCalendarSyncFailure);
       }
       if (prev) {
         useUndoStore.getState().push({
-          label: `Delete task "${prev.title}"`,
+          label: `${getLabels().undo_delete_task} "${prev.title}"`,
           execute: async () => {
-            const { id: _id, created_at, updated_at, calendar_event_id, ...data } = prev;
+            const {
+              id: _id, created_at, updated_at, calendar_event_id,
+              planned_minutes, tracked_minutes, workload_cells, workload_sort_order,
+              ...data
+            } = prev;
             const newId = await q.createTask(data);
+            // createTask doesn't insert time/workload fields — restore them
+            await q.updateTask(newId, {
+              planned_minutes,
+              tracked_minutes,
+              workload_cells,
+              workload_sort_order,
+            });
+            for (const sub of subtasks) {
+              const { id: _sid, created_at: _c, updated_at: _u, calendar_event_id: _cal, ...subData } = sub;
+              await q.createSubtask({ ...subData, task_id: newId });
+            }
             syncTaskCalendar(newId);
             qc.invalidateQueries({ queryKey: ["tasks"] });
+            qc.invalidateQueries({ queryKey: ["subtasks"] });
+            qc.invalidateQueries({ queryKey: ["workload-rows"] });
           },
         });
       }
@@ -236,7 +261,7 @@ export function useCreateSubtask() {
       const id = await q.createSubtask(data);
       syncSubtaskCalendar(id);
       useUndoStore.getState().push({
-        label: `Create subtask "${data.title}"`,
+        label: `${getLabels().undo_create_subtask} "${data.title}"`,
         execute: async () => {
           await q.deleteSubtask(id);
           qc.invalidateQueries({ queryKey: ["subtasks"] });
@@ -270,7 +295,7 @@ export function useUpdateSubtask() {
           prevData[key] = (prev as unknown as Record<string, unknown>)[key];
         }
         useUndoStore.getState().push({
-          label: `Update subtask "${prev.title}"`,
+          label: `${getLabels().undo_update_subtask} "${prev.title}"`,
           execute: async () => {
             await q.updateSubtask(id, prevData as Partial<Omit<Subtask, "id" | "created_at" | "updated_at">>);
             syncSubtaskCalendar(id);
@@ -279,7 +304,7 @@ export function useUpdateSubtask() {
         });
       }
       if (data.status === "done") {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = todayLocalISO();
         if (prev?.due_date && prev.due_date !== today) {
           data = { ...data, due_date: today };
         }
@@ -300,11 +325,11 @@ export function useDeleteSubtask() {
       const calId = useAppStore.getState().calendarSync ? prev?.calendar_event_id : null;
       await q.deleteSubtask(id);
       if (calId) {
-        deleteCalendarEvent(calId).catch((e) => logError("Calendar sync failed:", e));
+        deleteCalendarEvent(calId).catch(notifyCalendarSyncFailure);
       }
       if (prev) {
         useUndoStore.getState().push({
-          label: `Delete subtask "${prev.title}"`,
+          label: `${getLabels().undo_delete_subtask} "${prev.title}"`,
           execute: async () => {
             const { id: _id, created_at, updated_at, calendar_event_id, ...data } = prev;
             const newId = await q.createSubtask(data);

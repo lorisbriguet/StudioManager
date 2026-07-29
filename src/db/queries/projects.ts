@@ -1,4 +1,5 @@
 import { getDb, validateFields } from "../index";
+import { todayLocalISO } from "../../utils/localDate";
 import type { Project } from "../../types/project";
 
 export async function getProjects(): Promise<Project[]> {
@@ -81,8 +82,8 @@ export async function createProjectFromQuote(data: {
   // 1. Create project
   const result = await db.execute(
     `INSERT INTO projects (client_id, name, description, status, start_date, deadline, notes)
-     VALUES ($1, $2, '', 'active', date('now'), $3, $4)`,
-    [data.clientId, data.name, data.deadline, data.notes]
+     VALUES ($1, $2, '', 'active', $3, $4, $5)`,
+    [data.clientId, data.name, todayLocalISO(), data.deadline, data.notes]
   );
   const projectId = result.lastInsertId ?? 0;
 

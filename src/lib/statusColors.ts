@@ -53,6 +53,15 @@ export function projectStatusVariant(s: ProjectStatus): BadgeVariant {
   return PROJECT_VARIANT[s];
 }
 
+/**
+ * Client status is derived at render time ("active" when the client has an
+ * active project, "inactive" otherwise) — it is not stored on the Client type,
+ * so this accepts a plain string.
+ */
+export function clientStatusVariant(s: string): BadgeVariant {
+  return s === "active" ? "success" : "neutral";
+}
+
 /** Returns the raw CSS classes for a Badge variant — useful for <select> elements styled as badges. */
 export function statusClasses(variant: BadgeVariant, status?: string): string {
   if (status === "cancelled") return variantClasses.neutral;

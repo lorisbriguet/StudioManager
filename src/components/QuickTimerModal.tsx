@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Timer } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "./ui";
 import { useAppStore } from "../stores/app-store";
 import { useProjects } from "../db/hooks/useProjects";
 import { useTasksByProject } from "../db/hooks/useTasks";
@@ -18,7 +19,7 @@ export function QuickTimerModal() {
 
   const { data: projects } = useProjects();
   const { data: tasks } = useTasksByProject(selectedProjectId ?? 0);
-  const { startTimer, activeTimer, stopAndSave } = useTimerActions();
+  const { startTimer, stopAndSave } = useTimerActions();
 
   // Reset state when modal opens
   useEffect(() => {
@@ -57,7 +58,13 @@ export function QuickTimerModal() {
 
   const handleStart = async () => {
     if (!selectedProjectId || !selectedTaskId || !selectedProject) return;
-    if (activeTimer) await stopAndSave();
+    // Read from the store directly to avoid acting on a stale snapshot.
+    if (useAppStore.getState().activeTimer) {
+      await stopAndSave();
+      // If saving failed the previous timer is still running — keep it rather
+      // than overwriting the unsaved time (stopAndSave surfaced the error).
+      if (useAppStore.getState().activeTimer) return;
+    }
     startTimer(selectedTaskId, selectedProjectId, selectedProject.name);
     toast.success(t.start_timer);
     close();
@@ -156,15 +163,17 @@ export function QuickTimerModal() {
             )}
 
             {/* Start button */}
-            <button
+            <Button
               type="button"
+              variant="primary"
+              size="md"
+              icon={<Timer size={14} />}
               disabled={!selectedProjectId || !selectedTaskId}
               onClick={handleStart}
-              className="mt-1 w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+              className="mt-1 w-full justify-center disabled:cursor-not-allowed"
             >
-              <Timer size={14} />
               {t.start_timer_for}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

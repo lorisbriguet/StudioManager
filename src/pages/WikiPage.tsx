@@ -452,6 +452,7 @@ function ArticleEditor({
         }
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount-only flush; reads live values via refs on purpose (see comment above)
   }, []);
 
   const handleSlashSelect = useCallback(
@@ -514,6 +515,7 @@ function ArticleEditor({
         <button
           onClick={onBack}
           className="text-muted hover:text-[var(--color-text-secondary)] transition-colors"
+          aria-label={t.back}
         >
           <ArrowLeft size={18} />
         </button>
@@ -523,6 +525,7 @@ function ArticleEditor({
           onClick={handleDeleteArticle}
           className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger-text)] transition-colors"
           title={t.delete}
+          aria-label={t.delete}
         >
           <Trash2 size={16} />
         </button>
@@ -555,6 +558,7 @@ function ArticleEditor({
                   <button
                     onClick={() => handleRemoveTag(tag)}
                     className="opacity-60 hover:opacity-100"
+                    aria-label={`${t.remove_tag} ${tag}`}
                   >
                     <X size={10} />
                   </button>
@@ -709,6 +713,7 @@ function FolderSidebar({
         <button
           onClick={handleCreateFolder}
           className="text-muted hover:text-[var(--color-text-secondary)] transition-colors"
+          aria-label={t.new_folder}
         >
           <Plus size={14} />
         </button>

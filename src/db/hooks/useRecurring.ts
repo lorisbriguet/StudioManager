@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { useUndoStore } from "../../stores/undo-store";
 import * as q from "../queries/recurring";
 import type { RecurringInvoiceTemplate } from "../../types/recurring";
+import { getLabels } from "../../lib/notifyError";
 
 export function useRecurringTemplates() {
   return useQuery({
@@ -20,7 +21,7 @@ export function useCreateRecurringTemplate() {
     onSuccess: (id) => {
       qc.invalidateQueries({ queryKey: ["recurring_templates"] });
       push({
-        label: "Create recurring template",
+        label: getLabels().undo_create_recurring,
         execute: () => q.deleteRecurringTemplate(id).then(() => {
           qc.invalidateQueries({ queryKey: ["recurring_templates"] });
         }),
@@ -48,7 +49,7 @@ export function useUpdateRecurringTemplate() {
           prevData[key] = (prev as unknown as Record<string, unknown>)[key];
         }
         useUndoStore.getState().push({
-          label: "Update recurring template",
+          label: getLabels().undo_update_recurring,
           execute: async () => {
             await q.updateRecurringTemplate(id, prevData as Partial<Omit<RecurringInvoiceTemplate, "id" | "created_at" | "updated_at">>);
             qc.invalidateQueries({ queryKey: ["recurring_templates"] });
@@ -80,7 +81,7 @@ export function useDeleteRecurringTemplate() {
       qc.invalidateQueries({ queryKey: ["recurring_templates"] });
       if (prev) {
         push({
-          label: "Delete recurring template",
+          label: getLabels().undo_delete_recurring,
           execute: () => q.createRecurringTemplate(prev).then(() => {
             qc.invalidateQueries({ queryKey: ["recurring_templates"] });
           }),

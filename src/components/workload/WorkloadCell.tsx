@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect, useCallback, memo } from "react";
-import { TAG_COLORS, type WorkloadColumn, type SelectOption } from "../../types/workload";
+import type { WorkloadColumn, SelectOption } from "../../types/workload";
 import { SelectTagPicker } from "./SelectTagPicker";
 import { evaluateFormula } from "../../lib/formulaEval";
+import { getStoredTagColor } from "../../lib/tagColors";
+import { useAppStore } from "../../stores/app-store";
 
 interface Props {
   column: WorkloadColumn;
@@ -206,6 +208,7 @@ function SelectCell({
 }) {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLDivElement>(null);
+  const darkMode = useAppStore((s) => s.darkMode);
 
   return (
     <div ref={anchorRef} className="relative min-h-[28px] flex items-center flex-wrap gap-1">
@@ -216,11 +219,12 @@ function SelectCell({
         {value.length === 0 && <span className="text-muted text-sm">&nbsp;</span>}
         {value.map((v) => {
           const opt = options.find((o) => o.value === v);
-          const c = TAG_COLORS[opt?.color ?? "gray"] ?? TAG_COLORS.gray;
+          const c = getStoredTagColor(opt?.color, darkMode);
           return (
             <span
               key={v}
-              className={`inline-block px-2 py-0.5 rounded text-xs ${c.bg} ${c.text}`}
+              style={{ background: c.bg, color: c.text }}
+              className="inline-block px-2 py-0.5 rounded-full text-xs"
             >
               {v}
             </span>

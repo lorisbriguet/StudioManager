@@ -151,6 +151,15 @@ body {
   box-shadow: 0 0 0 1px var(--color-surface, #fff), 0 0 0 3px color-mix(in srgb, var(--color-accent) 50%, transparent);
 }
 
+/* Global keyboard-focus visibility for raw buttons and button-like elements.
+   Same accent ring as .focus-accent; :not(.focus-accent) keeps the two rules
+   from double-applying on elements that already opt in via the class. */
+button:focus-visible:not(.focus-accent),
+[role="button"]:focus-visible:not(.focus-accent) {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--color-surface, #fff), 0 0 0 3px color-mix(in srgb, var(--color-accent) 50%, transparent);
+}
+
 /* ─── FullCalendar overrides ─── */
 .fc-studio .fc {
   --fc-border-color: var(--color-border-divider);
@@ -416,8 +425,10 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   :root { --duration-fast: 0ms; --duration-normal: 0ms; --duration-slow: 0ms; }
+  .skeleton { animation: none; }
 }
 .reduce-motion { --duration-fast: 0ms; --duration-normal: 0ms; --duration-slow: 0ms; }
+.reduce-motion .skeleton { animation: none; }
 
 /* ─── Global transitions (Notion-like smooth feel) ─── */
 table tbody tr {

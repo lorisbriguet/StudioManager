@@ -132,7 +132,7 @@ class Parser {
   }
 
   private parseComparison(): number | boolean {
-    let left = this.parseExpr();
+    const left = this.parseExpr();
     const tok = this.peek();
     if (tok?.type === "op" && [">", "<", ">=", "<=", "==", "!="].includes(tok.value)) {
       this.advance();

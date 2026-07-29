@@ -1,4 +1,5 @@
 import { getDb, validateFields } from "../index";
+import { todayLocalISO } from "../../utils/localDate";
 import type { RecurringInvoiceTemplate } from "../../types/recurring";
 
 export async function getRecurringTemplates(): Promise<RecurringInvoiceTemplate[]> {
@@ -52,7 +53,7 @@ export async function deleteRecurringTemplate(id: number): Promise<void> {
 /** Get all active templates whose next_due is today or in the past. */
 export async function getDueTemplates(): Promise<RecurringInvoiceTemplate[]> {
   const db = await getDb();
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayLocalISO();
   return db.select<RecurringInvoiceTemplate[]>(
     "SELECT * FROM recurring_invoice_templates WHERE active = 1 AND next_due <= $1",
     [today]

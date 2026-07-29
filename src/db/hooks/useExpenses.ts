@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import * as q from "../queries/expenses";
 import type { Expense, ExpenseCategory } from "../../types/expense";
 import { useUndoStore } from "../../stores/undo-store";
+import { getLabels } from "../../lib/notifyError";
 
 export function useExpenses() {
   return useQuery({ queryKey: ["expenses"], queryFn: q.getExpenses });
@@ -28,15 +29,19 @@ export function useCreateExpense() {
     mutationFn: async (data: Omit<Expense, "id" | "created_at" | "updated_at">) => {
       const id = await q.createExpense(data);
       useUndoStore.getState().push({
-        label: `Create expense "${data.reference}"`,
+        label: `${getLabels().undo_create_expense} "${data.reference}"`,
         execute: async () => {
           await q.deleteExpense(id);
           qc.invalidateQueries({ queryKey: ["expenses"] });
+          qc.invalidateQueries({ queryKey: ["finance"] });
         },
       });
       return id;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["expenses"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["finance"] });
+    },
     onError: (e) => { toast.error(String(e)); },
   });
 }
@@ -59,15 +64,19 @@ export function useUpdateExpense() {
           prevData[key] = (prev as unknown as Record<string, unknown>)[key];
         }
         useUndoStore.getState().push({
-          label: `Update expense "${prev.reference}"`,
+          label: `${getLabels().undo_update_expense} "${prev.reference}"`,
           execute: async () => {
             await q.updateExpense(id, prevData as Partial<Omit<Expense, "id" | "created_at" | "updated_at">>);
             qc.invalidateQueries({ queryKey: ["expenses"] });
+            qc.invalidateQueries({ queryKey: ["finance"] });
           },
         });
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["expenses"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["finance"] });
+    },
     onError: (e) => { toast.error(String(e)); },
   });
 }
@@ -80,16 +89,20 @@ export function useDeleteExpense() {
       await q.deleteExpense(id);
       if (prev) {
         useUndoStore.getState().push({
-          label: `Delete expense "${prev.reference}"`,
+          label: `${getLabels().undo_delete_expense} "${prev.reference}"`,
           execute: async () => {
             const { id: _id, created_at, updated_at, ...data } = prev;
             await q.createExpense(data);
             qc.invalidateQueries({ queryKey: ["expenses"] });
+            qc.invalidateQueries({ queryKey: ["finance"] });
           },
         });
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["expenses"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["finance"] });
+    },
     onError: (e) => { toast.error(String(e)); },
   });
 }
@@ -111,7 +124,7 @@ export function useCreateExpenseCategory() {
     mutationFn: async (data: ExpenseCategory) => {
       await q.createExpenseCategory(data);
       useUndoStore.getState().push({
-        label: `Create category "${data.code}"`,
+        label: `${getLabels().undo_create_category} "${data.code}"`,
         execute: async () => {
           await q.deleteExpenseCategory(data.code);
           qc.invalidateQueries({ queryKey: ["expense-categories"] });
@@ -142,19 +155,24 @@ export function useUpdateExpenseCategory() {
           prevData[key] = (prev as unknown as Record<string, unknown>)[key];
         }
         useUndoStore.getState().push({
-          label: `Update category "${vars.code}"`,
+          label: `${getLabels().undo_update_category} "${vars.code}"`,
           execute: async () => {
             await q.updateExpenseCategory(vars.code, prevData as Partial<Omit<ExpenseCategory, "code">>);
             qc.invalidateQueries({ queryKey: ["expense-categories"] });
+            qc.invalidateQueries({ queryKey: ["finance"] });
           },
           redo: async () => {
             await q.updateExpenseCategory(vars.code, vars.data);
             qc.invalidateQueries({ queryKey: ["expense-categories"] });
+            qc.invalidateQueries({ queryKey: ["finance"] });
           },
         });
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["expense-categories"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["expense-categories"] });
+      qc.invalidateQueries({ queryKey: ["finance"] });
+    },
     onError: (e) => { toast.error(String(e)); },
   });
 }
@@ -167,19 +185,24 @@ export function useDeleteExpenseCategory() {
       await q.deleteExpenseCategory(code);
       if (prev) {
         useUndoStore.getState().push({
-          label: `Delete category "${code}"`,
+          label: `${getLabels().undo_delete_category} "${code}"`,
           execute: async () => {
             await q.createExpenseCategory(prev);
             qc.invalidateQueries({ queryKey: ["expense-categories"] });
+            qc.invalidateQueries({ queryKey: ["finance"] });
           },
           redo: async () => {
             await q.deleteExpenseCategory(code);
             qc.invalidateQueries({ queryKey: ["expense-categories"] });
+            qc.invalidateQueries({ queryKey: ["finance"] });
           },
         });
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["expense-categories"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["expense-categories"] });
+      qc.invalidateQueries({ queryKey: ["finance"] });
+    },
     onError: (e) => { toast.error(String(e)); },
   });
 }

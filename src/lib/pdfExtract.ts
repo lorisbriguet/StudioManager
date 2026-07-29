@@ -1,10 +1,24 @@
 import { Command } from "@tauri-apps/plugin-shell";
-import { readFile } from "@tauri-apps/plugin-fs";
+import { readFile, remove } from "@tauri-apps/plugin-fs";
+import { appDataDir } from "@tauri-apps/api/path";
 import { logError } from "./log";
+
+/** Escape a string for embedding in an AppleScript double-quoted literal. */
+function escapeAppleScript(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
 
 // Singleton OCR worker — lazy-loaded to avoid ~300KB bundle cost upfront.
 // Reused across calls to avoid re-downloading ~15MB language data each time.
 let ocrWorker: Awaited<ReturnType<typeof import("tesseract.js")["createWorker"]>> | null = null;
+
+/**
+ * True once the OCR worker singleton has been created. Lets callers show a
+ * "first run downloads language data" hint before the initial (slow) init.
+ */
+export function isOcrWorkerReady(): boolean {
+  return ocrWorker !== null;
+}
 
 async function getOCRWorker() {
   if (!ocrWorker) {
@@ -59,27 +73,29 @@ if (!doc || doc.isNil()) { ''; } else {
  * Returns the path to the converted JPEG file.
  */
 async function convertHeicToJpeg(filePath: string): Promise<Uint8Array> {
-  const safePath = filePath.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-  const outPath = filePath.replace(/\.heic$/i, "_converted.jpg");
-  const safeOut = outPath.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-  const cmd = Command.create("osascript", [
-    "-e",
-    `do shell script "sips -s format jpeg '${safePath}' --out '${safeOut}'"`,
-  ]);
-  const result = await cmd.execute();
-  if (result.code !== 0) {
-    throw new Error(`HEIC conversion failed: ${result.stderr}`);
-  }
-  const bytes = await readFile(outPath);
-  // Clean up temp file
+  // Write the converted JPEG into APPDATA: the fs scope covers APPDATA but
+  // not arbitrary sibling paths of the picked file (dialog/drag-drop only
+  // allows the picked file itself). sips runs via shell, outside fs scope,
+  // but the readFile below goes through the fs plugin.
+  const outPath = `${await appDataDir()}/temp_heic_converted_${crypto.randomUUID()}.jpg`;
+  // The paths reach the shell via AppleScript's `quoted form of`, which
+  // safely quotes spaces, single quotes and shell metacharacters;
+  // escapeAppleScript covers the outer AppleScript string-literal layer.
+  const script =
+    `do shell script "sips -s format jpeg " & quoted form of "${escapeAppleScript(filePath)}"` +
+    ` & " --out " & quoted form of "${escapeAppleScript(outPath)}"`;
+  const cmd = Command.create("osascript", ["-e", script]);
   try {
-    const rmCmd = Command.create("osascript", [
-      "-e",
-      `do shell script "rm -f '${safeOut}'"`,
-    ]);
-    await rmCmd.execute();
-  } catch { /* ignore cleanup errors */ }
-  return bytes;
+    const result = await cmd.execute();
+    if (result.code !== 0) {
+      throw new Error(`HEIC conversion failed: ${result.stderr}`);
+    }
+    return await readFile(outPath);
+  } finally {
+    // Always clean up the temp file; it is in APPDATA (in fs scope), so the
+    // fs plugin's remove() works — no extra shell-quoting context needed.
+    await remove(outPath).catch(() => {});
+  }
 }
 
 /**

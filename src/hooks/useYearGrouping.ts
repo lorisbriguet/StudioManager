@@ -26,7 +26,8 @@ export function useYearGrouping<T>(
   const toggleYear = (year: number) => {
     setExpandedYears((prev) => {
       const next = new Set(prev);
-      next.has(year) ? next.delete(year) : next.add(year);
+      if (next.has(year)) next.delete(year);
+      else next.add(year);
       return next;
     });
   };

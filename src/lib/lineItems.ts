@@ -20,6 +20,21 @@ export interface LineItem {
   amount: number;
 }
 
+/**
+ * Round a newly computed money value to exactly 2 decimals.
+ * Every arithmetic write into a stored money field (amount, subtotal,
+ * discount, total, chf_equivalent) must pass through this — raw float math
+ * stores values like 65.69999999999999. The Number.EPSILON nudge fixes
+ * halfway cases at typical invoice magnitudes (e.g. 1.005, stored as
+ * 1.00499…, rounds up to 1.01); it stops working around magnitude 8192.
+ * Negative halfway cases round toward +∞ (Math.round semantics) — no
+ * negative-money path exists in the app today. Idempotent, so re-rounding
+ * an already-rounded value is safe.
+ */
+export function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
 let nextLineItemId = 1;
 
 export function makeLineItem(partial?: Partial<Omit<LineItem, "_id">>): LineItem {
@@ -84,7 +99,7 @@ export function useLineItemForm(initial?: LineItem[]) {
         (updated[i] as unknown as Record<string, unknown>)[field] = value;
         if (field === "rate" || field === "quantity") {
           const rate = updated[i].rate ?? 0;
-          updated[i].amount = rate * updated[i].quantity;
+          updated[i].amount = round2(rate * updated[i].quantity);
         }
         return updated;
       });

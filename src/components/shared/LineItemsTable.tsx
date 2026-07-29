@@ -1,4 +1,4 @@
-import { Plus, Trash2, GripVertical } from "lucide-react";
+import { Plus, Trash2, GripVertical, ChevronUp, ChevronDown } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -10,6 +10,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { Button } from "../ui";
 import type { LineItem } from "../../lib/lineItems";
 import { useT } from "../../i18n/useT";
 
@@ -58,15 +59,32 @@ export function LineItemsTable({
 }: LineItemsTableProps) {
   const t = useT();
 
+  /**
+   * Move a row to a neighboring position via the same commit path as
+   * drag-and-drop: synthesize a minimal DragEndEvent carrying the two row ids
+   * and hand it to onDragEnd. handleDragEnd (useLineItemForm) only reads
+   * active.id / over.id, and parents wrap onDragEnd with their dirty-tracking
+   * (e.g. markDirty), so button reorders behave identically to drag reorders.
+   */
+  const moveRow = (from: number, to: number) => {
+    const active = items[from];
+    const over = items[to];
+    if (!active || !over) return;
+    onDragEnd({
+      active: { id: active._id },
+      over: { id: over._id },
+    } as unknown as DragEndEvent);
+  };
+
   return (
     <div className="p-0">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-medium">{t.line_items}</h2>
         <div className="flex items-center gap-3">
           {headerActions}
-          <button onClick={onAdd} className="flex items-center gap-1 text-xs text-accent hover:underline">
-            <Plus size={14} /> {t.add_line}
-          </button>
+          <Button variant="link" size="sm" icon={<Plus size={14} />} onClick={onAdd}>
+            {t.add_line}
+          </Button>
         </div>
       </div>
       {globalRateLabel && (
@@ -77,7 +95,7 @@ export function LineItemsTable({
           <table className="w-full text-sm">
             <thead>
               <tr className="text-xs text-muted">
-                <th className="w-8"></th>
+                <th className="w-12"></th>
                 <th className="text-left pb-2">{t.designation}</th>
                 {!hideRate && <th className="text-right pb-2 w-24">{t.rate}</th>}
                 {!hideRate && <th className="text-left pb-2 w-24">{t.unit}</th>}
@@ -89,8 +107,30 @@ export function LineItemsTable({
             <tbody>
               {items.map((item, i) => (
                 <SortableLineItemRow key={item._id} id={item._id}>
-                  <td className="py-1 w-8">
-                    <SortableLineItemHandle id={item._id} />
+                  <td className="py-1 w-12">
+                    <div className="flex items-center">
+                      <SortableLineItemHandle id={item._id} />
+                      <div className="flex flex-col">
+                        <button
+                          type="button"
+                          onClick={() => moveRow(i, i - 1)}
+                          disabled={i === 0}
+                          aria-label={t.move_up}
+                          className="text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none"
+                        >
+                          <ChevronUp size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveRow(i, i + 1)}
+                          disabled={i === items.length - 1}
+                          aria-label={t.move_down}
+                          className="text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none"
+                        >
+                          <ChevronDown size={14} />
+                        </button>
+                      </div>
+                    </div>
                   </td>
                   <td className="pr-2 py-1">
                     {renderDesignation ? (
@@ -148,7 +188,7 @@ export function LineItemsTable({
                   </td>
                   <td className="pl-1 py-1">
                     {items.length > 1 && (
-                      <button onClick={() => onRemove(i)} className="text-muted hover:text-danger">
+                      <button onClick={() => onRemove(i)} aria-label={t.delete} className="text-muted hover:text-danger">
                         <Trash2 size={14} />
                       </button>
                     )}
@@ -197,6 +237,7 @@ function SortableLineItemRow({ id, children }: { id: number; children: React.Rea
 }
 
 function SortableLineItemHandle({ id }: { id: number }) {
+  const t = useT();
   const { attributes, listeners } = useSortable({ id });
 
   return (
@@ -204,7 +245,7 @@ function SortableLineItemHandle({ id }: { id: number }) {
       {...attributes}
       {...listeners}
       className="cursor-grab text-muted hover:text-[var(--color-text-secondary)] flex items-center justify-center"
-      aria-label="Drag to reorder"
+      aria-label={t.drag_to_reorder}
     >
       <GripVertical size={14} />
     </div>

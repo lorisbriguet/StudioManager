@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { format, addMonths } from "date-fns";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Modal } from "./ui";
+import { Button, FormField, Modal } from "./ui";
+import * as v from "../lib/validate";
 import { useT } from "../i18n/useT";
 import { useCreateProjectFromQuote } from "../db/hooks/useProjects";
 import type { Quote, QuoteLineItem } from "../types/quote";
@@ -21,6 +22,14 @@ interface WizardTask {
   title: string;
   plannedMinutes: number | null;
 }
+
+// Phase 2 E3 — inline validation (E1 pattern) for the project-details step.
+type WizardFormField = "name" | "deadline";
+
+const wizardSchema: v.FormSchema<WizardFormField> = {
+  name: [v.required],
+  deadline: [v.required, v.dateValid],
+};
 
 export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientName }: Props) {
   const t = useT();
@@ -43,6 +52,20 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
   );
   const [deadline, setDeadline] = useState(format(addMonths(new Date(), 1), "yyyy-MM-dd"));
   const [notes, setNotes] = useState("");
+  const [errors, setErrors] = useState<Partial<Record<WizardFormField, string>>>({});
+
+  const setFieldError = (field: WizardFormField, msg: string | null) =>
+    setErrors((e) => {
+      const next = { ...e };
+      if (msg) next[field] = msg;
+      else delete next[field];
+      return next;
+    });
+
+  const validateOnBlur = (field: WizardFormField) =>
+    setFieldError(field, v.validateField(field === "name" ? projectName : deadline, wizardSchema[field]));
+
+  const clearError = (field: WizardFormField) => setFieldError(field, null);
 
   const includedCount = useMemo(() => tasks.filter((t) => t.included).length, [tasks]);
 
@@ -129,7 +152,7 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
                 type="text"
                 value={task.title}
                 onChange={(e) => updateTask(i, { title: e.target.value })}
-                className="text-sm border border-[var(--color-input-border)] rounded px-2 py-1"
+                className="text-sm border border-[var(--color-input-border)] rounded-lg px-2 py-1"
               />
               <input
                 type="number"
@@ -139,8 +162,8 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
                     plannedMinutes: e.target.value ? Number(e.target.value) : null,
                   })
                 }
-                placeholder="min"
-                className="text-sm border border-[var(--color-input-border)] rounded px-2 py-1 text-right"
+                placeholder={t.minutes_short}
+                className="text-sm border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-right"
               />
             </div>
           ))}
@@ -150,33 +173,32 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
       {/* Step 2: Project details */}
       {step === 1 && (
         <div className="space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">{t.project_name}</label>
+          <FormField label={t.project_name} required error={errors.name}>
             <input
               type="text"
               value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              className="w-full border border-[var(--color-input-border)] rounded-md px-3 py-2 text-sm"
+              onChange={(e) => { setProjectName(e.target.value); clearError("name"); }}
+              onBlur={() => validateOnBlur("name")}
+              className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-2 text-sm"
             />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">{t.project_deadline}</label>
+          </FormField>
+          <FormField label={t.project_deadline} required error={errors.deadline}>
             <input
               type="date"
               value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
-              className="w-full border border-[var(--color-input-border)] rounded-md px-3 py-2 text-sm"
+              onChange={(e) => { setDeadline(e.target.value); clearError("deadline"); }}
+              onBlur={() => validateOnBlur("deadline")}
+              className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-2 text-sm"
             />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">{t.notes}</label>
+          </FormField>
+          <FormField label={t.notes}>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              className="w-full border border-[var(--color-input-border)] rounded-md px-3 py-2 text-sm"
+              className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-2 text-sm"
             />
-          </div>
+          </FormField>
         </div>
       )}
 
@@ -205,7 +227,14 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
         </Button>
         {step < 2 ? (
           <Button
-            onClick={() => setStep(step + 1)}
+            onClick={() => {
+              if (step === 1) {
+                const errs = v.validateForm({ name: projectName, deadline }, wizardSchema);
+                setErrors(errs);
+                if (Object.keys(errs).length > 0) return;
+              }
+              setStep(step + 1);
+            }}
             disabled={step === 0 && includedCount === 0}
           >
             {t.next}

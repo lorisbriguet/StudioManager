@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight, Plus, GripVertical, Trash2, ExternalLink, Play, Square, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
-import { undoable } from "../lib/undo";
+import { undoable, undoableFromStore } from "../lib/undo";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
   DndContext,
@@ -33,7 +33,7 @@ import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useTimerActions } from "../hooks/useTimerActions";
 import { useT } from "../i18n/useT";
-import { PageHeader, SearchBar, PageSpinner, EmptyState } from "../components/ui";
+import { PageHeader, SearchBar, TableSkeleton, EmptyState } from "../components/ui";
 import { taskStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Task, Subtask, TaskStatus } from "../types/task";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
@@ -80,14 +80,14 @@ export function TasksPage() {
   const projectsMap = useMemo(() => new Map(projects?.map((p) => [p.id, p]) ?? []), [projects]);
   const clientsMap = useMemo(() => new Map(clients?.map((c) => [c.id, c.name]) ?? []), [clients]);
 
-  const projectName = (projectId: number) =>
-    projectsMap.get(projectId)?.name ?? "";
+  const projectName = useCallback((projectId: number) =>
+    projectsMap.get(projectId)?.name ?? "", [projectsMap]);
 
-  const clientForProject = (projectId: number) => {
+  const clientForProject = useCallback((projectId: number) => {
     const project = projectsMap.get(projectId);
     if (!project) return "";
     return clientsMap.get(project.client_id) ?? "";
-  };
+  }, [projectsMap, clientsMap]);
 
   const handleTimerToggle = useCallback(async (taskId: number, projectId: number) => {
     await toggleTimer(taskId, projectId, projectName(projectId));
@@ -149,7 +149,7 @@ export function TasksPage() {
       });
     }
     return result;
-  }, [tasks, projects, clients, filter, search, projectOrder, filterConditions, filterLogic]);
+  }, [tasks, projectName, clientForProject, filter, search, projectOrder, filterConditions, filterLogic]);
 
   const flatTasks = useMemo(() => grouped.flatMap((g) => g.tasks), [grouped]);
   const bulk = useBulkSelect(flatTasks);
@@ -209,7 +209,12 @@ export function TasksPage() {
     { value: "done", label: t.done },
   ];
 
-  if (isLoading) return <PageSpinner />;
+  if (isLoading) return (
+    <div>
+      <PageHeader title={t.tasks} />
+      <TableSkeleton columns={5} />
+    </div>
+  );
 
   return (
     <div>
@@ -261,7 +266,8 @@ export function TasksPage() {
               <button
                 onClick={() => {
                   const next = new Set(collapsedProjects);
-                  next.has(g.projectId) ? next.delete(g.projectId) : next.add(g.projectId);
+                  if (next.has(g.projectId)) next.delete(g.projectId);
+                  else next.add(g.projectId);
                   setCollapsedProjects(next);
                   localStorage.setItem("tasksCollapsedProjects", JSON.stringify([...next]));
                 }}
@@ -307,10 +313,12 @@ export function TasksPage() {
                       <button
                         onClick={() => {
                           const next = new Set(expandedTasks);
-                          next.has(tk.id) ? next.delete(tk.id) : next.add(tk.id);
+                          if (next.has(tk.id)) next.delete(tk.id);
+                          else next.add(tk.id);
                           setExpandedTasks(next);
                         }}
                         className="text-muted hover:text-[var(--color-text-secondary)] p-0.5"
+                        aria-label={isExpanded ? t.collapse : t.expand}
                       >
                         <ChevronRight
                           size={14}
@@ -354,7 +362,7 @@ export function TasksPage() {
                             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                             if (e.key === "Escape") setEditingTask(null);
                           }}
-                          className="flex-1 text-sm border border-[var(--color-input-border)] rounded px-1 py-0.5"
+                          className="flex-1 text-sm border border-[var(--color-input-border)] rounded-lg px-1 py-0.5"
                         />
                       ) : (
                         <span
@@ -401,15 +409,17 @@ export function TasksPage() {
                             : "opacity-0 group-hover/task:opacity-100 text-muted hover:text-accent"
                         }`}
                         title={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
+                        aria-label={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
                       >
                         {activeTimer?.taskId === tk.id ? <Square size={14} /> : <Play size={14} />}
                       </button>
                       <button
                         onClick={() => deleteTask.mutate(tk.id, {
-                          onSuccess: () => toast.success(t.toast_task_deleted),
+                          onSuccess: () => undoableFromStore(t.toast_task_deleted),
                         })}
                         className="opacity-0 group-hover/task:opacity-100 text-muted hover:text-[var(--color-danger-text)] transition-opacity p-0.5"
                         title={t.delete}
+                        aria-label={t.delete}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -455,7 +465,7 @@ export function TasksPage() {
                                   if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                                   if (e.key === "Escape") setEditingSubtask(null);
                                 }}
-                                className="flex-1 text-xs border border-[var(--color-input-border)] rounded px-1 py-0.5"
+                                className="flex-1 text-xs border border-[var(--color-input-border)] rounded-lg px-1 py-0.5"
                               />
                             ) : (
                               <span
@@ -478,10 +488,11 @@ export function TasksPage() {
                             />
                             <button
                               onClick={() => deleteSubtask.mutate(s.id, {
-                                onSuccess: () => toast.success(t.toast_subtask_deleted),
+                                onSuccess: () => undoableFromStore(t.toast_subtask_deleted),
                               })}
                               className="opacity-0 group-hover/sub:opacity-100 text-muted hover:text-[var(--color-danger-text)] transition-opacity p-0.5"
                               title={t.delete}
+                              aria-label={t.delete}
                             >
                               <Trash2 size={14} />
                             </button>
@@ -514,12 +525,12 @@ export function TasksPage() {
                                     onSuccess: () =>
                                       setNewSubtaskText({ ...newSubtaskText, [tk.id]: "" }),
                                     onError: (err) =>
-                                      toast.error(`Failed to create subtask: ${String(err)}`),
+                                      toast.error(t.subtask_create_failed.replace("{error}", String(err))),
                                   }
                                 );
                               }
                             }}
-                            className="flex-1 border border-[var(--color-input-border)] rounded px-2 py-1 text-xs"
+                            className="flex-1 border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-xs"
                           />
                           <button
                             onClick={() => {
@@ -541,11 +552,12 @@ export function TasksPage() {
                                   onSuccess: () =>
                                     setNewSubtaskText({ ...newSubtaskText, [tk.id]: "" }),
                                   onError: (err) =>
-                                    toast.error(`Failed to create subtask: ${String(err)}`),
+                                    toast.error(t.subtask_create_failed.replace("{error}", String(err))),
                                 }
                               );
                             }}
                             className="p-1 text-muted hover:text-accent"
+                            aria-label={t.new_subtask}
                           >
                             <Plus size={14} />
                           </button>
@@ -592,7 +604,7 @@ export function TasksPage() {
                     );
                   }
                 }}
-                className="flex-1 border border-[var(--color-input-border)] rounded-md px-3 py-1.5 text-sm"
+                className="flex-1 border border-[var(--color-input-border)] rounded-lg px-3 py-1.5 text-sm"
               />
               <button
                 onClick={() => {
@@ -623,6 +635,7 @@ export function TasksPage() {
                   );
                 }}
                 className="p-1.5 text-muted hover:text-accent"
+                aria-label={t.new_task}
               >
                 <Plus size={16} />
               </button>
@@ -631,7 +644,7 @@ export function TasksPage() {
           </SortableProjectGroup>
         ))}
         {grouped.length === 0 && !isLoading && (
-          <EmptyState message={search ? t.no_matching_tasks : (t.no_tasks ?? "No tasks found")} icon={<CheckCircle size={32} />} />
+          <EmptyState message={(tasks?.length ?? 0) === 0 ? t.no_tasks_yet : t.no_matching_tasks} icon={<CheckCircle size={32} />} />
         )}
       </div>
       </SortableContext>
@@ -645,7 +658,7 @@ export function TasksPage() {
             { label: ctxMenu.item.status === "done" ? t.todo : t.done, onClick: () => updateTask.mutate({ id: ctxMenu.item.id, data: { status: ctxMenu.item.status === "done" ? "todo" : "done" } }) },
             { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/projects/${ctxMenu.item.project_id}`, projectName(ctxMenu.item.project_id)) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteTask.mutate(ctxMenu.item.id) },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteTask.mutate(ctxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_task_deleted) }) },
           ]}
         />
       )}
@@ -657,7 +670,7 @@ export function TasksPage() {
           items={[
             { label: subCtxMenu.item.status === "done" ? t.todo : t.done, onClick: () => updateSubtask.mutate({ id: subCtxMenu.item.id, data: { status: subCtxMenu.item.status === "done" ? "todo" : "done" } }) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteSubtask.mutate(subCtxMenu.item.id) },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteSubtask.mutate(subCtxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_subtask_deleted) }) },
           ]}
         />
       )}

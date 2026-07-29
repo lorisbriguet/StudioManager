@@ -63,20 +63,165 @@ export async function updateClient(
   );
 }
 
+// MAINTENANCE — adding a table to the client graph requires co-updating:
+//   (a) the cascade list in deleteClient below
+//   (b) snapshotClientGraph
+//   (c) restoreClientGraph
+//   (d) the CASCADE_SQL pin in src/__tests__/clientDelete.test.ts
+//   (e) CLIENT_GRAPH_QUERY_KEYS in src/db/hooks/useClients.ts
+// The test pin only catches (a) — forgetting (b)/(c) silently reintroduces
+// lossy undo.
+/**
+ * Delete a client and its ENTIRE graph (projects, tasks, subtasks, invoices,
+ * quotes, line items, recurring templates, time entries, project tables,
+ * resource links, contacts, addresses) in one atomic transaction.
+ *
+ * Ordering strategy: explicit children-first deletes rather than
+ * `PRAGMA defer_foreign_keys = ON` (the backup-restore approach). Deferral
+ * would not shrink this list — projects/invoices/quotes have NO ON DELETE
+ * action from clients, so every DELETE below is required either way — and
+ * explicit ordering keeps the cascade correct even on connections where
+ * foreign_keys is OFF, while making the statement sequence testable.
+ * The only circular FK pair (invoices.from_quote_id <->
+ * quotes.converted_to_invoice_id, no ON DELETE actions) is broken by
+ * clearing the quote-side pointer first.
+ */
 export async function deleteClient(id: string): Promise<void> {
   const batch = new TransactionBatch();
-  // Manually cascade to tables that lack ON DELETE CASCADE in schema
+  // 1. Break the circular FK so invoices can be deleted mid-batch
+  batch.add("UPDATE quotes SET converted_to_invoice_id = NULL WHERE client_id = $1", [id]);
+  // 2. Invoice/quote subtree (children before parents)
+  batch.add("DELETE FROM recurring_invoice_templates WHERE client_id = $1", [id]);
   batch.add("DELETE FROM invoice_line_items WHERE invoice_id IN (SELECT id FROM invoices WHERE client_id = $1)", [id]);
-  batch.add("DELETE FROM quote_line_items WHERE quote_id IN (SELECT id FROM quotes WHERE client_id = $1)", [id]);
   batch.add("DELETE FROM invoices WHERE client_id = $1", [id]);
+  batch.add("DELETE FROM quote_line_items WHERE quote_id IN (SELECT id FROM quotes WHERE client_id = $1)", [id]);
   batch.add("DELETE FROM quotes WHERE client_id = $1", [id]);
+  // 3. Project subtree (children before parents)
+  batch.add("DELETE FROM time_entries WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1)", [id]);
   batch.add("DELETE FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1))", [id]);
-  batch.add("DELETE FROM tasks WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1)", [id]);
+  // workload_rows is legacy (drained into tasks by ensureSchema on every
+  // startup) — deleted defensively, intentionally NOT snapshotted for undo
   batch.add("DELETE FROM workload_rows WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1)", [id]);
+  batch.add("DELETE FROM tasks WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1)", [id]);
+  batch.add("DELETE FROM project_table_rows WHERE table_id IN (SELECT id FROM project_tables WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1))", [id]);
+  batch.add("DELETE FROM project_tables WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1)", [id]);
+  batch.add("DELETE FROM resource_projects WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1)", [id]);
   batch.add("DELETE FROM projects WHERE client_id = $1", [id]);
+  // 4. Client-owned rows, then the client itself
   batch.add("DELETE FROM client_contacts WHERE client_id = $1", [id]);
   batch.add("DELETE FROM client_addresses WHERE client_id = $1", [id]);
   batch.add("DELETE FROM clients WHERE id = $1", [id]);
+  await batch.commit();
+}
+
+// ── Client graph snapshot (honest undo for deleteClient) ─────
+
+/** Generic SELECT * row — restored verbatim, original IDs included. */
+type Row = Record<string, unknown>;
+
+export interface ClientGraphSnapshot {
+  client: Client;
+  contacts: Row[];
+  addresses: Row[];
+  projects: Row[];
+  tasks: Row[];
+  subtasks: Row[];
+  invoices: Row[];
+  invoiceLineItems: Row[];
+  quotes: Row[];
+  quoteLineItems: Row[];
+  recurringTemplates: Row[];
+  timeEntries: Row[];
+  projectTables: Row[];
+  projectTableRows: Row[];
+  resourceProjects: Row[];
+}
+
+/**
+ * Capture every row deleteClient's cascade will remove, so undo can restore
+ * the full graph with original IDs. Must mirror the delete statement list
+ * (workload_rows excepted — legacy, always drained by ensureSchema).
+ */
+export async function snapshotClientGraph(
+  id: string
+): Promise<ClientGraphSnapshot | null> {
+  const db = await getDb();
+  const clients = await db.select<Client[]>(
+    "SELECT * FROM clients WHERE id = $1",
+    [id]
+  );
+  const client = clients[0];
+  if (!client) return null;
+  const grab = (sql: string) => db.select<Row[]>(sql, [id]);
+  return {
+    client,
+    contacts: await grab("SELECT * FROM client_contacts WHERE client_id = $1"),
+    addresses: await grab("SELECT * FROM client_addresses WHERE client_id = $1"),
+    projects: await grab("SELECT * FROM projects WHERE client_id = $1"),
+    tasks: await grab("SELECT * FROM tasks WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1)"),
+    subtasks: await grab("SELECT * FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1))"),
+    invoices: await grab("SELECT * FROM invoices WHERE client_id = $1"),
+    invoiceLineItems: await grab("SELECT * FROM invoice_line_items WHERE invoice_id IN (SELECT id FROM invoices WHERE client_id = $1)"),
+    quotes: await grab("SELECT * FROM quotes WHERE client_id = $1"),
+    quoteLineItems: await grab("SELECT * FROM quote_line_items WHERE quote_id IN (SELECT id FROM quotes WHERE client_id = $1)"),
+    recurringTemplates: await grab("SELECT * FROM recurring_invoice_templates WHERE client_id = $1"),
+    timeEntries: await grab("SELECT * FROM time_entries WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1)"),
+    projectTables: await grab("SELECT * FROM project_tables WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1)"),
+    projectTableRows: await grab("SELECT * FROM project_table_rows WHERE table_id IN (SELECT id FROM project_tables WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1))"),
+    resourceProjects: await grab("SELECT * FROM resource_projects WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1)"),
+  };
+}
+
+/** Queue an INSERT built from a snapshot row's own columns (keeps original IDs).
+ *  `table` must be a call-site literal — it is interpolated into SQL unescaped. */
+function addRowInsert(batch: TransactionBatch, table: string, row: Row): void {
+  const fields = Object.keys(row);
+  if (fields.length === 0) {
+    throw new Error(`Cannot restore an empty snapshot row into ${table}`);
+  }
+  validateFields(fields);
+  const placeholders = fields.map((_, i) => `$${i + 1}`).join(", ");
+  batch.add(
+    `INSERT INTO ${table} (${fields.join(", ")}) VALUES (${placeholders})`,
+    fields.map((f) => row[f])
+  );
+}
+
+/**
+ * Restore everything deleteClient removed, with original IDs, atomically.
+ * Parents-first mirror of the delete order. The circular invoices <-> quotes
+ * pair is handled by inserting quotes with converted_to_invoice_id = NULL,
+ * then patching the pointer once the invoices exist.
+ */
+export async function restoreClientGraph(
+  snap: ClientGraphSnapshot
+): Promise<void> {
+  const batch = new TransactionBatch();
+  addRowInsert(batch, "clients", snap.client as unknown as Row);
+  for (const row of snap.contacts) addRowInsert(batch, "client_contacts", row);
+  for (const row of snap.addresses) addRowInsert(batch, "client_addresses", row);
+  for (const row of snap.projects) addRowInsert(batch, "projects", row);
+  for (const row of snap.tasks) addRowInsert(batch, "tasks", row);
+  for (const row of snap.subtasks) addRowInsert(batch, "subtasks", row);
+  for (const row of snap.quotes) {
+    addRowInsert(batch, "quotes", { ...row, converted_to_invoice_id: null });
+  }
+  for (const row of snap.invoices) addRowInsert(batch, "invoices", row);
+  for (const row of snap.quotes) {
+    if (row.converted_to_invoice_id != null) {
+      batch.add(
+        "UPDATE quotes SET converted_to_invoice_id = $1 WHERE id = $2",
+        [row.converted_to_invoice_id, row.id]
+      );
+    }
+  }
+  for (const row of snap.invoiceLineItems) addRowInsert(batch, "invoice_line_items", row);
+  for (const row of snap.quoteLineItems) addRowInsert(batch, "quote_line_items", row);
+  for (const row of snap.recurringTemplates) addRowInsert(batch, "recurring_invoice_templates", row);
+  for (const row of snap.timeEntries) addRowInsert(batch, "time_entries", row);
+  for (const row of snap.projectTables) addRowInsert(batch, "project_tables", row);
+  for (const row of snap.projectTableRows) addRowInsert(batch, "project_table_rows", row);
+  for (const row of snap.resourceProjects) addRowInsert(batch, "resource_projects", row);
   await batch.commit();
 }
 

@@ -52,11 +52,14 @@ export function FinancesPage() {
   const chart = useChartTheme();
   const exportLang = useAppStore((s) => s.exportLanguage);
   const darkMode = useAppStore((s) => s.darkMode);
+  const [exporting, setExporting] = useState(false);
 
   const exportForTrustee = async () => {
+    if (exporting) return;
+    setExporting(true);
     try {
       const basePath = await save({
-        title: `Export comptable ${year}`,
+        title: t.trustee_export_title.replace("{year}", String(year)),
         defaultPath: `Comptabilite_${year}`,
       });
       if (!basePath) return;
@@ -112,20 +115,27 @@ export function FinancesPage() {
         await writeFile(`${basePath}/depenses/depenses_${year}.pdf`, new Uint8Array(await expListBlob.arrayBuffer()));
       }
 
+      let receiptsSkipped = 0;
       for (const exp of yearExpenses) {
         if (exp.receipt_path) {
           try {
             const ext = exp.receipt_path.split(".").pop() ?? "pdf";
             await copyFile(exp.receipt_path, `${basePath}/depenses/justificatifs/${exp.reference}_${exp.supplier}.${ext}`);
           } catch {
-            // receipt file may not exist
+            // Receipt file missing, or its stored path is outside the fs scope
+            receiptsSkipped++;
           }
         }
       }
+      if (receiptsSkipped > 0) {
+        toast.warning(t.export_receipts_skipped.replace("{count}", String(receiptsSkipped)));
+      }
 
-      toast.success(`Exported to ${basePath}`);
+      toast.success(t.exported_to.replace("{path}", basePath));
     } catch {
       toast.error(t.export_failed);
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -153,7 +163,7 @@ export function FinancesPage() {
             <option key={y} value={y}>{y}</option>
           ))}
         </select>
-        <Button icon={<Download size={14} />} onClick={exportForTrustee}>{t.export_trustee}</Button>
+        <Button icon={<Download size={14} />} loading={exporting} onClick={exportForTrustee}>{t.export_trustee}</Button>
       </PageHeader>
 
       {/* Monthly revenue vs expenses chart */}

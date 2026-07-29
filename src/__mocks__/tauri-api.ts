@@ -1,5 +1,16 @@
 // Catch-all stub for all @tauri-apps/* modules
-export async function invoke(): Promise<unknown> {
+import { executedStatements } from "./tauri-sql";
+
+export async function invoke(cmd?: string, args?: Record<string, unknown>): Promise<unknown> {
+  // Log TransactionBatch statements so tests can assert on batched SQL too
+  if (cmd === "execute_batch" && Array.isArray(args?.statements)) {
+    for (const stmt of args.statements as { sql: string; params: unknown[] }[]) {
+      executedStatements.push({ sql: stmt.sql, params: stmt.params });
+    }
+    // The real command resolves to { lastInsertId }; return the same shape so
+    // callers that read the result (createInvoiceWithLineItems) run under test.
+    return { lastInsertId: 1 };
+  }
   return null;
 }
 export async function appDataDir(): Promise<string> {

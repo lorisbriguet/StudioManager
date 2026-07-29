@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ask } from "@tauri-apps/plugin-dialog";
-import { useT } from "../i18n/useT";
+import { confirmIfDirty, isConfirming, registerDirtyGuard } from "../lib/dirty-guard";
 
 /**
  * Warns the user when navigating away from a form with unsaved changes.
@@ -11,16 +10,32 @@ import { useT } from "../i18n/useT";
  * - In-app link clicks (anchor tags with href starting with /)
  * - Browser back/forward (popstate)
  * - Window close / hard refresh (beforeunload)
+ * - Programmatic navigations (tab shortcuts, tab bar, command palette,
+ *   sidebar keyboard nav) via the central dirty-guard registry — those
+ *   sites await confirmIfDirty() before navigating.
+ *
+ * The confirmation dialog itself lives in confirmIfDirty (lib/dirty-guard),
+ * which also handles the dirty check, re-entrancy, and marking the form
+ * clean on confirm. This hook only intercepts the events and delegates.
  *
  * Set isDirty to false before programmatic navigation (e.g. after save)
  * so the warning does not trigger.
  */
 export function useUnsavedChangesWarning(isDirty: boolean) {
-  const t = useT();
   const dirtyRef = useRef(isDirty);
   dirtyRef.current = isDirty;
-  const handlingRef = useRef(false);
   const navigate = useNavigate();
+
+  // Register with the central registry so programmatic navigation sites
+  // can prompt before discarding this form.
+  useEffect(() => {
+    return registerDirtyGuard(
+      () => dirtyRef.current,
+      () => {
+        dirtyRef.current = false;
+      }
+    );
+  }, []);
 
   // Intercept in-app link clicks
   useEffect(() => {
@@ -33,63 +48,45 @@ export function useUnsavedChangesWarning(isDirty: boolean) {
       if (!href || !href.startsWith("/")) return;
       // Don't intercept if modifier keys (open in new tab, etc.)
       if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+      // Already marked clean (e.g. just confirmed via another interceptor)
+      if (!dirtyRef.current) return;
 
       e.preventDefault();
       e.stopPropagation();
 
-      if (handlingRef.current) return;
-      handlingRef.current = true;
-
-      ask(t.unsaved_changes_message, {
-        title: t.unsaved_changes,
-        kind: "warning",
-        okLabel: t.leave,
-        cancelLabel: t.stay,
-      }).then((confirmed) => {
-        if (confirmed) {
-          dirtyRef.current = false;
-          navigate(href);
-        }
-      }).finally(() => {
-        handlingRef.current = false;
+      void confirmIfDirty(href).then((ok) => {
+        if (ok) navigate(href);
       });
     };
 
     document.addEventListener("click", handler, true);
     return () => document.removeEventListener("click", handler, true);
-  }, [isDirty, navigate, t]);
+  }, [isDirty, navigate]);
 
   // Intercept browser back/forward
   useEffect(() => {
     if (!isDirty) return;
 
     const handler = () => {
-      if (!dirtyRef.current || handlingRef.current) return;
-      handlingRef.current = true;
+      // Skip when already clean, or while a confirmation dialog is open —
+      // never revert the history or stack a second dialog mid-confirm.
+      if (!dirtyRef.current || isConfirming()) return;
 
       // Push the current URL back to cancel the popstate
       window.history.pushState(null, "", window.location.pathname);
 
-      ask(t.unsaved_changes_message, {
-        title: t.unsaved_changes,
-        kind: "warning",
-        okLabel: t.leave,
-        cancelLabel: t.stay,
-      }).then((confirmed) => {
-        if (confirmed) {
-          dirtyRef.current = false;
-          window.history.back();
-        }
-      }).finally(() => {
-        handlingRef.current = false;
+      void confirmIfDirty().then((confirmed) => {
+        if (confirmed) window.history.back();
       });
     };
 
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
-  }, [isDirty, t]);
+  }, [isDirty]);
 
-  // Fallback: beforeunload for window close / hard refresh
+  // Fallback: beforeunload for window close / hard refresh.
+  // Stays hand-rolled: the API is synchronous, so confirmIfDirty cannot be
+  // awaited here — the browser shows its own native prompt instead.
   useEffect(() => {
     if (!isDirty) return;
     const handler = (e: BeforeUnloadEvent) => {

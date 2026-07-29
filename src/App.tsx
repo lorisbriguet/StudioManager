@@ -35,9 +35,8 @@ import { useErrorNotifications } from "./hooks/useErrorNotifications";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useUndoStore } from "./stores/undo-store";
 import { useAppStore } from "./stores/app-store";
-import { logError } from "./lib/log";
+import { getLabels, notifyError } from "./lib/notifyError";
 import { requestNotificationPermission } from "./lib/nativeNotification";
-import { useT } from "./i18n/useT";
 
 import { queryClient } from "./lib/queryClient";
 // Re-export so existing imports from "./App" still work
@@ -48,7 +47,6 @@ function StartupChecks() {
   useRecurringCheck();
   useAutoBackup();
   useErrorNotifications();
-  const t = useT();
 
   useEffect(() => {
     requestNotificationPermission();
@@ -71,48 +69,58 @@ function StartupChecks() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key !== "z") return;
-      const tag = (e.target as HTMLElement)?.tagName;
+      // e.key is "Z" (uppercase) when Shift is held — guard both cases.
+      if (!(e.metaKey || e.ctrlKey) || (e.key !== "z" && e.key !== "Z")) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      // Rich-text editors (e.g. Wiki): let the editor handle its own undo/redo
+      if (target?.isContentEditable || target?.closest?.('[contenteditable="true"]')) return;
 
       const store = useUndoStore.getState();
+      // Read labels per keypress (not from the mount-time closure) so a
+      // mid-session language switch takes effect.
+      const t = getLabels();
 
       if (e.shiftKey) {
         // Redo: Cmd+Shift+Z
-        const action = store.popRedo();
-        if (action) {
-          e.preventDefault();
-          Promise.resolve(action.execute()).then(() => {
-            // Push reverse (undo) back onto the undo stack without clearing redo
-            if (action.redo) {
-              store.stack.unshift({ label: action.label, execute: action.redo, redo: action.execute });
-              useUndoStore.setState({ stack: store.stack.slice(0, 20) });
-            }
-            toast.success(`Redo: ${action.label}`);
-          }).catch((err) => {
-            logError("Redo failed:", err);
-            toast.error(t.redo_failed);
-          });
-        }
+        const action = store.redoStack[0];
+        if (!action) return;
+        e.preventDefault();
+        // Remove before executing so a concurrent trigger can't double-run it;
+        // put back on failure so it isn't lost and can be retried.
+        store.remove(action);
+        Promise.resolve(action.execute()).then(() => {
+          // Hand the inverse (undo) back to the undo stack without clearing redo
+          if (action.redo) {
+            store.insertUndo({ label: action.label, execute: action.redo, redo: action.execute }, 0);
+          }
+          toast.success(`${t.redo_prefix} ${action.label}`);
+        }).catch((err) => {
+          store.pushRedo(action);
+          notifyError(t.redo_failed, err);
+        });
       } else {
         // Undo: Cmd+Z
-        const action = store.pop();
-        if (action) {
-          e.preventDefault();
-          Promise.resolve(action.execute()).then(() => {
-            if (action.redo) {
-              store.pushRedo({ label: action.label, execute: action.redo, redo: action.execute });
-            }
-            if (action.redirectTo) {
-              window.history.pushState({}, "", action.redirectTo);
-              window.dispatchEvent(new PopStateEvent("popstate"));
-            }
-            toast.success(`Undo: ${action.label}`);
-          }).catch((err) => {
-            logError("Undo failed:", err);
-            toast.error(t.undo_failed);
-          });
-        }
+        const action = store.stack[0];
+        if (!action) return;
+        e.preventDefault();
+        // Remove before executing so a concurrent trigger (toast Undo button)
+        // can't double-run it; put back on failure so it can be retried.
+        store.remove(action);
+        Promise.resolve(action.execute()).then(() => {
+          if (action.redo) {
+            store.pushRedo({ label: action.label, execute: action.redo, redo: action.execute });
+          }
+          if (action.redirectTo) {
+            window.history.pushState({}, "", action.redirectTo);
+            window.dispatchEvent(new PopStateEvent("popstate"));
+          }
+          toast.success(`${t.undo_prefix} ${action.label}`);
+        }).catch((err) => {
+          store.insertUndo(action, 0);
+          notifyError(t.undo_failed, err);
+        });
       }
     };
     window.addEventListener("keydown", handler);
@@ -121,9 +129,9 @@ function StartupChecks() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // Cmd+Shift+T — Quick Timer modal.
+      // Cmd+Shift+T — Quick Timer modal (reopen-closed-tab lives on
+      // Cmd+Shift+Y in useTabSync, so this shortcut is exclusively ours).
       // e.key is "T" (uppercase) when Shift is held, but guard both cases.
-      // Must preventDefault before useTabSync's "reopen closed tab" fires.
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "T" || e.key === "t")) {
         e.preventDefault();
         e.stopImmediatePropagation();

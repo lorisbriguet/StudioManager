@@ -24,6 +24,20 @@ function isQRIBAN(iban: string): boolean {
   return iid >= 30000 && iid <= 31999;
 }
 
+/**
+ * Whether the invoice PDF should include a Swiss QR-bill payment part.
+ * QR-bill payments are CHF-only, so the payment part renders only for CHF
+ * invoices with an IBAN configured and the template's show_qr_bill toggle on.
+ * A missing currency defaults to CHF, matching the PDF's display behavior.
+ */
+export function shouldRenderQrBill(
+  invoice: Pick<Invoice, "currency">,
+  profile: Pick<BusinessProfile, "iban">,
+  showQrBill: boolean
+): boolean {
+  return (invoice.currency || "CHF") === "CHF" && !!profile.iban && showQrBill;
+}
+
 /** Build the swissqrbill Data object for an invoice */
 export function buildQRBillData(
   invoice: Invoice,

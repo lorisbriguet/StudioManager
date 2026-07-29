@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useAppStore } from "../../stores/app-store";
 import { useTabStore } from "../../stores/tab-store";
+import { confirmIfDirty } from "../../lib/dirty-guard";
 import { useUnreadNotificationCount } from "../../db/hooks/useNotifications";
 import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
@@ -114,21 +115,28 @@ export function Sidebar() {
           if (e.key === "ArrowDown") next = (focusIdx + 1) % len;
           else next = (focusIdx - 1 + len) % len;
         }
-        setFocusIdx(next);
-        // Auto-navigate immediately (like settings sub-sidebar)
+        // Auto-navigate immediately (like settings sub-sidebar) — but ask
+        // first if the current page holds a dirty form
         const item = visibleLinks[next];
         if (item) {
-          keyNavRef.current = true;
-          navigate(item.to);
+          void confirmIfDirty(item.to).then((ok) => {
+            if (!ok) return;
+            setFocusIdx(next);
+            keyNavRef.current = true;
+            navigate(item.to);
+          });
         }
       } else if (e.key === "ArrowRight" && focusIdx >= 0) {
         // If focused on settings/profile, enter the sub-sidebar
         const item = visibleLinks[focusIdx];
         if (item && (item.to === "/settings" || item.to === "/profile")) {
           e.preventDefault();
-          keyNavRef.current = true;
-          navigate(item.to);
-          setFocusIdx(-1); // Hand off to sub-sidebar
+          void confirmIfDirty(item.to).then((ok) => {
+            if (!ok) return;
+            keyNavRef.current = true;
+            navigate(item.to);
+            setFocusIdx(-1); // Hand off to sub-sidebar
+          });
         }
       } else if (e.key === "Escape" && focusIdx >= 0) {
         setFocusIdx(-1);
@@ -290,8 +298,9 @@ function TimerIndicator({ collapsed }: { collapsed: boolean }) {
             </div>
             <button
               onClick={() => stopAndSave()}
-              className="shrink-0 p-1 rounded hover:bg-[var(--color-hover-row)] text-[var(--color-danger-text)] hover:text-[var(--color-danger-text)]"
+              className="shrink-0 p-1 rounded-md hover:bg-[var(--color-hover-row)] text-[var(--color-danger-text)] hover:text-[var(--color-danger-text)]"
               title={t.stop_timer}
+              aria-label={t.stop_timer}
             >
               <Square size={12} />
             </button>

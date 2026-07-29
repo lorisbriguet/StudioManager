@@ -1,4 +1,5 @@
-export type TagColorName = "blue" | "purple" | "green" | "red" | "yellow" | "cyan" | "orange" | "teal" | "gray";
+export type { TagColorName } from "../lib/tagColors";
+import type { TagColorName } from "../lib/tagColors";
 
 export interface ExpenseCategory {
   code: string;

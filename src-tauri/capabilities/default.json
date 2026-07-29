@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "enables the default permissions",
+  "description": "Default permissions. fs scope is deliberately limited to APPDATA + Documents + Downloads + Desktop + ~/Library/CloudStorage (cloud drives such as Synology Drive, where the user's working data and backup folders live); dialog/drag-drop picks extend it per-session. The osascript shell entries intentionally accept arbitrary scripts: they power Apple Mail sharing, Apple Calendar sync and PDF/HEIC text extraction (see src/lib/pdfExtract.ts, appleCalendar.ts).",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -19,10 +19,21 @@
     "fs:allow-exists",
     "fs:allow-read-file",
     "fs:allow-write-file",
-    "fs:scope-appdata-recursive",
+    "fs:allow-remove",
     {
       "identifier": "fs:scope",
-      "allow": ["$HOME/**/*"]
+      "allow": [
+        "$APPDATA",
+        "$APPDATA/**",
+        "$DOCUMENT",
+        "$DOCUMENT/**",
+        "$DOWNLOAD",
+        "$DOWNLOAD/**",
+        "$DESKTOP",
+        "$DESKTOP/**",
+        "$HOME/Library/CloudStorage",
+        "$HOME/Library/CloudStorage/**"
+      ]
     },
     "notification:default",
     "notification:allow-notify",

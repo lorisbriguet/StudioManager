@@ -67,11 +67,11 @@ function SortableBlock({ block, renderBlock, onToggleCollapse, onRemove, onToggl
           {...attributes}
           {...listeners}
           className="cursor-grab text-[var(--color-muted)] hover:text-[var(--color-text-secondary)] opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-          aria-label="Drag to reorder"
+          aria-label={t.drag_to_reorder}
         >
           <GripVertical size={14} />
         </div>
-        <button onClick={() => onToggleCollapse(block.type)} className="text-[var(--color-muted)] hover:text-[var(--color-text-secondary)]">
+        <button onClick={() => onToggleCollapse(block.type)} aria-label={isCollapsed ? t.expand : t.collapse} className="text-[var(--color-muted)] hover:text-[var(--color-text-secondary)]">
           {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
         </button>
         <h3 className="text-xs font-semibold tracking-tight">
@@ -82,6 +82,7 @@ function SortableBlock({ block, renderBlock, onToggleCollapse, onRemove, onToggl
             onClick={() => onToggleWidth(block.type)}
             className="text-[var(--color-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
             title={t.width}
+            aria-label={t.width}
           >
             {isHalf ? <Maximize2 size={12} /> : <Columns2 size={12} />}
           </button>
@@ -89,6 +90,7 @@ function SortableBlock({ block, renderBlock, onToggleCollapse, onRemove, onToggl
             onClick={() => onRemove(block.type)}
             className="text-[var(--color-muted)] hover:text-[var(--color-danger-text)] transition-colors"
             title={t.delete}
+            aria-label={t.delete}
           >
             <X size={12} />
           </button>

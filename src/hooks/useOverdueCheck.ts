@@ -17,6 +17,7 @@ export function useOverdueCheck() {
     markOverdueInvoices().then(async (overdue) => {
       if (overdue.length > 0) {
         qc.invalidateQueries({ queryKey: ["invoices"] });
+        qc.invalidateQueries({ queryKey: ["finance"] });
 
         const msg = `${overdue.length} invoice${overdue.length > 1 ? "s" : ""} marked as overdue: ${overdue.map((i) => i.reference).join(", ")}`;
 

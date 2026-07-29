@@ -5,6 +5,7 @@ import * as tq from "../queries/tasks";
 import * as wq from "../queries/workload";
 import type { Project } from "../../types/project";
 import { useUndoStore } from "../../stores/undo-store";
+import { getLabels } from "../../lib/notifyError";
 
 export function useProjects() {
   return useQuery({ queryKey: ["projects"], queryFn: q.getProjects });
@@ -32,7 +33,7 @@ export function useCreateProject() {
     mutationFn: async (data: Omit<Project, "id" | "created_at" | "updated_at">) => {
       const id = await q.createProject(data);
       useUndoStore.getState().push({
-        label: `Create project "${data.name}"`,
+        label: `${getLabels().undo_create_project} "${data.name}"`,
         execute: async () => {
           await q.deleteProject(id);
           qc.invalidateQueries({ queryKey: ["projects"] });
@@ -67,7 +68,7 @@ export function useUpdateProject() {
           prevData[key] = (prev as unknown as Record<string, unknown>)[key];
         }
         useUndoStore.getState().push({
-          label: `Update project "${prev.name}"`,
+          label: `${getLabels().undo_update_project} "${prev.name}"`,
           execute: async () => {
             await q.updateProject(id, prevData as Partial<Omit<Project, "id" | "created_at" | "updated_at">>);
             qc.invalidateQueries({ queryKey: ["projects"] });
@@ -93,7 +94,7 @@ export function useDeleteProject() {
       await q.deleteProject(id);
       if (prev) {
         useUndoStore.getState().push({
-          label: `Delete project "${prev.name}"`,
+          label: `${getLabels().undo_delete_project} "${prev.name}"`,
           execute: async () => {
             const { id: _id, created_at, updated_at, ...data } = prev;
             const newProjectId = await q.createProject(data);
@@ -152,7 +153,7 @@ export function useCreateProjectFromQuote() {
     mutationFn: async (data: Parameters<typeof q.createProjectFromQuote>[0]) => {
       const projectId = await q.createProjectFromQuote(data);
       useUndoStore.getState().push({
-        label: `Generate project "${data.name}"`,
+        label: `${getLabels().undo_generate_project} "${data.name}"`,
         execute: async () => {
           await q.deleteProject(projectId);
           qc.invalidateQueries({ queryKey: ["projects"] });
