@@ -57,7 +57,7 @@ import { effectivePriority, type TaskPriority } from "../types/task";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu";
 import { useInvoices, useInvoicesByProject, useUpdateInvoice } from "../db/hooks/useInvoices";
 import { useQuotes, useQuotesByProject, useUpdateQuote } from "../db/hooks/useQuotes";
-import { Badge, PageSpinner } from "./ui";
+import { Badge, Button, PageSpinner } from "./ui";
 import { invoiceStatusVariant, quoteStatusVariant } from "../lib/statusColors";
 import { useTabStore } from "../stores/tab-store";
 import { useTimerActions } from "../hooks/useTimerActions";
@@ -358,26 +358,30 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
             />
           </div>
           {project.folder_path ? (
-            <button
+            <Button
+              variant="link"
+              size="sm"
+              icon={<FolderOpen size={12} />}
               onClick={() => invoke("open_in_finder", { path: project.folder_path! }).catch(() => toast.error(t.failed_open_folder))}
-              className="text-muted hover:text-[var(--color-text-secondary)] text-xs flex items-center gap-1 cursor-pointer"
+              className="text-muted hover:text-[var(--color-text-secondary)] cursor-pointer"
             >
-              <FolderOpen size={12} />
               {t.folder}
-            </button>
+            </Button>
           ) : (
-            <button
+            <Button
+              variant="link"
+              size="sm"
+              icon={<FolderOpen size={12} />}
               onClick={async () => {
                 const dir = await openDirectory({ directory: true, title: t.set_folder });
                 if (typeof dir === "string") {
                   updateProject.mutate({ id: projectId, data: { folder_path: dir } });
                 }
               }}
-              className="text-muted hover:text-[var(--color-text-secondary)] text-xs flex items-center gap-1"
+              className="text-muted hover:text-[var(--color-text-secondary)]"
             >
-              <FolderOpen size={12} />
               {t.set_folder}
-            </button>
+            </Button>
           )}
         </div>
 
@@ -436,23 +440,26 @@ function ProjectResources({ projectId }: { projectId: number }) {
       )}
       {(linked ?? []).map((r) => (
         <div key={r.id} className="flex items-center gap-2 py-1 group text-sm">
-          <button
+          <Button
+            variant="link"
+            size="md"
+            icon={<ExternalLink size={12} />}
             onClick={() => {
               let u = r.url;
               if (u && !u.startsWith("http://") && !u.startsWith("https://")) u = "https://" + u;
               import("@tauri-apps/plugin-shell").then((m) => m.open(u));
             }}
-            className="flex items-center gap-1 text-accent hover:underline truncate max-w-[300px]"
+            className="truncate max-w-[300px]"
           >
-            <ExternalLink size={12} />
             {r.name}
-          </button>
+          </Button>
           <span className="text-xs text-muted truncate max-w-[200px]">
             {r.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
           </span>
           <button
             onClick={() => unlinkResource.mutate({ resourceId: r.id, projectId })}
             className="text-danger opacity-0 group-hover:opacity-100"
+            aria-label={t.remove}
           >
             <X size={12} />
           </button>
@@ -487,12 +494,9 @@ function ProjectResources({ projectId }: { projectId: number }) {
           </button>
         </div>
       ) : (
-        <button
-          onClick={() => setShowPicker(true)}
-          className="flex items-center gap-1 text-xs text-accent hover:underline mt-1"
-        >
-          <Plus size={12} /> {t.add}
-        </button>
+        <Button variant="link" size="sm" icon={<Plus size={12} />} onClick={() => setShowPicker(true)} className="mt-1">
+          {t.add}
+        </Button>
       )}
     </div>
   );
@@ -585,12 +589,9 @@ function ProjectWikiBlock({ projectId }: { projectId: number }) {
           </button>
         </div>
       ) : (
-        <button
-          onClick={() => setShowPicker(true)}
-          className="flex items-center gap-1 text-xs text-accent hover:underline mt-1"
-        >
-          <Plus size={12} /> {t.link_article}
-        </button>
+        <Button variant="link" size="sm" icon={<Plus size={12} />} onClick={() => setShowPicker(true)} className="mt-1">
+          {t.link_article}
+        </Button>
       )}
     </div>
   );
@@ -682,7 +683,7 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
           onKeyDown={(e) => { if (e.key === "Enter") addTask(); }}
           className="flex-1 border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-3 py-1.5 text-sm"
         />
-        <button onClick={addTask} className="p-1.5 text-muted hover:text-accent">
+        <button onClick={addTask} aria-label={t.new_task} className="p-1.5 text-muted hover:text-accent">
           <Plus size={16} />
         </button>
       </div>
@@ -700,10 +701,12 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
                 <button
                   onClick={() => {
                     const next = new Set(expandedTasks);
-                    next.has(tk.id) ? next.delete(tk.id) : next.add(tk.id);
+                    if (next.has(tk.id)) next.delete(tk.id);
+                    else next.add(tk.id);
                     setExpandedTasks(next);
                   }}
                   className="text-muted hover:text-[var(--color-text-secondary)] p-0.5"
+                  aria-label={isExpanded ? t.collapse : t.expand}
                 >
                   <ChevronRight size={14} className={`transition-transform ${isExpanded ? "rotate-90" : ""}`} />
                 </button>
@@ -762,6 +765,7 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
                       : "opacity-0 pointer-events-none group-hover/task:opacity-100 group-hover/task:pointer-events-auto text-muted hover:text-accent"
                   }`}
                   title={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
+                  aria-label={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
                 >
                   {activeTimer?.taskId === tk.id ? <Square size={14} /> : <Play size={14} />}
                 </button>
@@ -769,6 +773,7 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
                   onClick={() => deleteTask.mutate(tk.id, { onSuccess: () => toast.success(t.toast_task_deleted) })}
                   className="shrink-0 opacity-0 pointer-events-none group-hover/task:opacity-100 group-hover/task:pointer-events-auto text-muted hover:text-[var(--color-danger-text)] transition-opacity p-0.5"
                   title={t.delete}
+                  aria-label={t.delete}
                 >
                   <Trash2 size={14} />
                 </button>
@@ -833,6 +838,7 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
                         onClick={() => deleteSubtask.mutate(s.id, { onSuccess: () => toast.success(t.toast_subtask_deleted) })}
                         className="shrink-0 opacity-0 pointer-events-none group-hover/sub:opacity-100 group-hover/sub:pointer-events-auto text-muted hover:text-[var(--color-danger-text)] transition-opacity p-0.5"
                         title={t.delete}
+                        aria-label={t.delete}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -851,7 +857,7 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
                           if (!text) return;
                           createSubtask.mutate(
                             { task_id: tk.id, title: text, status: "todo", due_date: null, end_date: null, start_time: null, end_time: null, reminder: null, sort_order: subtasks.length },
-                            { onSuccess: () => setNewSubtaskText({ ...newSubtaskText, [tk.id]: "" }), onError: (err) => toast.error(`Failed to create subtask: ${String(err)}`) }
+                            { onSuccess: () => setNewSubtaskText({ ...newSubtaskText, [tk.id]: "" }), onError: (err) => toast.error(t.subtask_create_failed.replace("{error}", String(err))) }
                           );
                         }
                       }}
@@ -863,10 +869,11 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
                         if (!text) return;
                         createSubtask.mutate(
                           { task_id: tk.id, title: text, status: "todo", due_date: null, end_date: null, start_time: null, end_time: null, reminder: null, sort_order: subtasks.length },
-                          { onSuccess: () => setNewSubtaskText({ ...newSubtaskText, [tk.id]: "" }), onError: (err) => toast.error(`Failed to create subtask: ${String(err)}`) }
+                          { onSuccess: () => setNewSubtaskText({ ...newSubtaskText, [tk.id]: "" }), onError: (err) => toast.error(t.subtask_create_failed.replace("{error}", String(err))) }
                         );
                       }}
                       className="p-1 text-muted hover:text-accent"
+                      aria-label={t.new_subtask}
                     >
                       <Plus size={14} />
                     </button>
@@ -885,6 +892,7 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
 }
 
 function SortableSubtaskRow({ id, children }: { id: number; children: React.ReactNode }) {
+  const t = useT();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
   const style = {
@@ -899,7 +907,7 @@ function SortableSubtaskRow({ id, children }: { id: number; children: React.Reac
         {...attributes}
         {...listeners}
         className="cursor-grab text-muted hover:text-[var(--color-text-secondary)] opacity-0 group-hover/sub:opacity-100 shrink-0"
-        aria-label="Drag to reorder"
+        aria-label={t.drag_to_reorder}
       >
         <GripVertical size={14} />
       </div>
@@ -922,6 +930,7 @@ function ProjectNamedTables({ projectId }: { projectId: number }) {
           onClick={() => createTable.mutate({ name: t.untitled })}
           className="text-muted hover:text-accent"
           title={t.add_table}
+          aria-label={t.add_table}
         >
           <Plus size={14} />
         </button>
@@ -939,17 +948,24 @@ function ProjectNamedTables({ projectId }: { projectId: number }) {
 }
 
 function PriorityBadge({ priority, onClick }: { priority: TaskPriority; onClick?: () => void }) {
+  const t = useT();
   const colors: Record<TaskPriority, string> = {
     high: "bg-danger",
     medium: "bg-warning",
     low: "bg-success",
+  };
+  const labels: Record<TaskPriority, string> = {
+    high: t.priority_high,
+    medium: t.priority_medium,
+    low: t.priority_low,
   };
   return (
     <button
       type="button"
       onClick={onClick}
       className="cursor-pointer hover:opacity-70"
-      title={`Priority: ${priority}`}
+      title={`${t.priority}: ${labels[priority]}`}
+      aria-label={`${t.priority}: ${labels[priority]}`}
     >
       <span className={`dot ${colors[priority]}`} />
     </button>

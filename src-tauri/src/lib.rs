@@ -34,12 +34,19 @@ fn execute_batch(
     let conn =
         rusqlite::Connection::open(&db_path).map_err(|e| format!("Failed to open DB: {e}"))?;
 
+    // Enforce foreign keys (rusqlite default is OFF) and wait instead of
+    // failing immediately if another connection holds the write lock.
+    conn.pragma_update(None, "foreign_keys", true)
+        .map_err(|e| format!("Failed to enable foreign_keys: {e}"))?;
+    conn.busy_timeout(std::time::Duration::from_millis(5000))
+        .map_err(|e| format!("Failed to set busy_timeout: {e}"))?;
+
     conn.execute_batch("BEGIN")
         .map_err(|e| format!("BEGIN failed: {e}"))?;
 
     let mut last_insert_id: i64 = 0;
 
-    for stmt in &statements {
+    for (i, stmt) in statements.iter().enumerate() {
         // Check if this statement references the parent insert ID
         let uses_parent_id = stmt.sql.contains("$LAST_INSERT_ID");
         // Allow referencing the last insert ID in subsequent statements
@@ -64,13 +71,16 @@ fn execute_batch(
             }
             Err(e) => {
                 let _ = conn.execute_batch("ROLLBACK");
-                return Err(format!("error returned from database: {e}"));
+                return Err(format!("statement {i} failed: {e}"));
             }
         }
     }
 
-    conn.execute_batch("COMMIT")
-        .map_err(|e| format!("COMMIT failed: {e}"))?;
+    if let Err(e) = conn.execute_batch("COMMIT") {
+        // Self-documenting all-or-nothing: never leave a transaction open
+        let _ = conn.execute_batch("ROLLBACK");
+        return Err(format!("COMMIT failed: {e}"));
+    }
 
     Ok(serde_json::json!({ "lastInsertId": last_insert_id }))
 }
@@ -300,14 +310,34 @@ async fn share_pdf_via_mail(path: String, to: String, subject: String) -> Result
     Ok(())
 }
 
-/// Open a file or folder in Finder (macOS `open` command).
+/// Open a directory in Finder, or reveal a file in its enclosing folder
+/// (macOS `open` command). The path is canonicalized first: it must exist
+/// and resolve to an absolute path, and a canonical path can never start
+/// with `-`, so it cannot be misparsed as an `open` flag.
 #[tauri::command]
 async fn open_in_finder(path: String) -> Result<(), String> {
-    std::process::Command::new("open")
-        .arg(&path)
-        .output()
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    let canonical =
+        std::fs::canonicalize(&path).map_err(|e| format!("path not found: {path} ({e})"))?;
+    if !canonical.is_absolute() {
+        return Err(format!("path is not absolute: {path}"));
+    }
+    let mut cmd = std::process::Command::new("open");
+    if canonical.is_file() {
+        // Reveal files in their enclosing Finder window instead of
+        // launching the default application for the file type.
+        cmd.arg("-R");
+    }
+    let output = cmd.arg(&canonical).output().map_err(|e| e.to_string())?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        if stderr.is_empty() {
+            Err(format!("open failed for {path}: status {}", output.status))
+        } else {
+            Err(format!("open failed for {path}: {stderr}"))
+        }
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

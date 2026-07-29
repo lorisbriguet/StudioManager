@@ -1,7 +1,8 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { X, Plus, Pin, ChevronLeft, ChevronRight } from "lucide-react";
-import { useTabStore, type Tab } from "../../stores/tab-store";
+import { useTabStore, predictNextActiveTab, type Tab } from "../../stores/tab-store";
+import { confirmIfDirty } from "../../lib/dirty-guard";
 import { useT } from "../../i18n/useT";
 
 function TabItem({ tab, isActive, onActivate, onClose, onMiddleClick }: {
@@ -11,28 +12,40 @@ function TabItem({ tab, isActive, onActivate, onClose, onMiddleClick }: {
   onClose: () => void;
   onMiddleClick: () => void;
 }) {
+  const t = useT();
+  // Non-interactive flex container holding TWO sibling real <button>s
+  // (activate + close) — nesting a button in a button (or in a
+  // role="button") is invalid/flagged by axe's nested-interactive rule.
+  // Middle-click close stays here so it works from both buttons (bubbles).
   return (
-    <button
-      type="button"
-      onClick={onActivate}
+    <div
       onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); onMiddleClick(); } }}
-      className={`flex items-center gap-1.5 px-3.5 py-2 text-sm shrink-0 border-b-2 transition-colors group ${
+      className={`flex items-center gap-1.5 px-3.5 py-2 text-sm shrink-0 border-b-2 transition-colors group select-none ${
         isActive
           ? "border-accent text-[var(--color-text)] font-medium"
           : "border-transparent text-muted hover:text-[var(--color-text-secondary)]"
       }`}
     >
-      {tab.pinned && <Pin size={10} className="text-muted shrink-0" />}
-      <span className="max-w-[120px] truncate">{tab.label}</span>
+      <button
+        type="button"
+        onClick={onActivate}
+        aria-current={isActive ? "page" : undefined}
+        className="flex items-center gap-1.5 cursor-pointer"
+      >
+        {tab.pinned && <Pin size={10} className="text-muted shrink-0" />}
+        <span className="max-w-[120px] truncate">{tab.label}</span>
+      </button>
       {!tab.pinned && (
-        <span
+        <button
+          type="button"
+          aria-label={t.close_tab}
           onClick={(e) => { e.stopPropagation(); onClose(); }}
-          className="opacity-0 group-hover:opacity-100 hover:text-[var(--color-danger-text)] shrink-0 ml-0.5"
+          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-[var(--color-danger-text)] shrink-0 ml-0.5"
         >
           <X size={12} />
-        </span>
+        </button>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -72,12 +85,25 @@ export function TabBar() {
   // Don't show tab bar when only 1 tab
   if (tabs.length <= 1) return null;
 
-  const handleActivate = (tab: Tab) => {
+  const handleActivate = async (tab: Tab) => {
+    // Clicking the active tab is a same-page no-op — confirmIfDirty skips
+    // the prompt when the target path equals the current one
+    if (!(await confirmIfDirty(tab.path))) return;
     activateTab(tab.id);
     navigate(tab.path);
   };
 
-  const handleClose = (tab: Tab) => {
+  const handleClose = async (tab: Tab) => {
+    const store = useTabStore.getState();
+    // closeTab refuses pinned / last tabs — skip early so we don't prompt for nothing
+    if (store.tabs.length <= 1 || tab.pinned) return;
+    if (tab.id === store.activeTabId) {
+      // Closing the ACTIVE tab navigates to a neighbor — predict it (shared
+      // rule with closeTab) and prompt if the current page holds a dirty form.
+      // Closing a background tab never changes the route: no prompt.
+      const next = predictNextActiveTab(store.tabs, tab.id);
+      if (!(await confirmIfDirty(next?.path))) return;
+    }
     const newActiveId = closeTab(tab.id);
     if (newActiveId) {
       const newActive = useTabStore.getState().tabs.find((t) => t.id === newActiveId);
@@ -85,7 +111,8 @@ export function TabBar() {
     }
   };
 
-  const handleNewTab = () => {
+  const handleNewTab = async () => {
+    if (!(await confirmIfDirty("/"))) return;
     const id = openTab("/", "Dashboard");
     if (id) navigate("/");
   };
@@ -98,8 +125,9 @@ export function TabBar() {
           type="button"
           disabled={!canGoBack}
           onClick={() => navigate(-1)}
-          className="p-1 rounded text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
+          className="p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
           title={t.back}
+          aria-label={t.back}
         >
           <ChevronLeft size={14} />
         </button>
@@ -107,8 +135,9 @@ export function TabBar() {
           type="button"
           disabled={!canGoForward}
           onClick={() => navigate(1)}
-          className="p-1 rounded text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
+          className="p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
           title={t.forward}
+          aria-label={t.forward}
         >
           <ChevronRight size={14} />
         </button>
@@ -131,7 +160,9 @@ export function TabBar() {
       <button
         type="button"
         onClick={handleNewTab}
-        className="shrink-0 p-1.5 mx-1 text-muted hover:text-[var(--color-text-secondary)] rounded transition-colors"
+        aria-label={t.new_tab}
+        title={t.new_tab}
+        className="shrink-0 p-1.5 mx-1 text-muted hover:text-[var(--color-text-secondary)] rounded-md transition-colors"
       >
         <Plus size={14} />
       </button>

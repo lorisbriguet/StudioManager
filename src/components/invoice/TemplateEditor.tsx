@@ -312,7 +312,7 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
               type="color"
               value={accentColor}
               onChange={(e) => setAccentColor(e.target.value)}
-              className="h-8 w-10 cursor-pointer rounded border border-[var(--color-border-divider)] bg-[var(--color-input-bg)] p-0.5"
+              className="h-8 w-10 cursor-pointer rounded-lg border border-[var(--color-border-divider)] bg-[var(--color-input-bg)] p-0.5"
             />
             <Input value={accentColor} onChange={(e) => setAccentColor(e.target.value)} className="w-28 font-mono text-xs" />
           </div>
@@ -390,10 +390,10 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
             {columnOrder.map((col, idx) => (
               <div key={col} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--color-border-divider)] bg-[var(--color-bg)] text-sm">
                 <span className="flex-1">{columnLabels[col]}</span>
-                <button type="button" onClick={() => moveColumn(idx, -1)} disabled={idx === 0} className="text-muted hover:text-[var(--color-text)] disabled:opacity-30" aria-label="Move up">
+                <button type="button" onClick={() => moveColumn(idx, -1)} disabled={idx === 0} className="text-muted hover:text-[var(--color-text)] disabled:opacity-30" aria-label={t.move_up}>
                   <ChevronUp size={14} />
                 </button>
-                <button type="button" onClick={() => moveColumn(idx, 1)} disabled={idx === columnOrder.length - 1} className="text-muted hover:text-[var(--color-text)] disabled:opacity-30" aria-label="Move down">
+                <button type="button" onClick={() => moveColumn(idx, 1)} disabled={idx === columnOrder.length - 1} className="text-muted hover:text-[var(--color-text)] disabled:opacity-30" aria-label={t.move_down}>
                   <ChevronDown size={14} />
                 </button>
               </div>

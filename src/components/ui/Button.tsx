@@ -7,6 +7,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
   icon?: ReactNode;
+  /** Busy state: replaces the icon with a spinner and disables the button. */
+  loading?: boolean;
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
@@ -21,23 +23,44 @@ const variantClasses: Record<ButtonVariant, string> = {
 const sizeClasses: Record<ButtonSize, string> = {
   sm: "px-2.5 py-1 text-xs rounded-md",
   md: "px-4 py-[7px] text-sm",
-  lg: "px-5 py-2.5 text-sm",
+  lg: "px-5 py-2.5 text-base",
+};
+
+// Link buttons are text-styled (p-0 in the variant) — size only controls text.
+// Regular size padding would win over p-0 in the generated CSS, so skip it.
+const linkSizeClasses: Record<ButtonSize, string> = {
+  sm: "text-xs",
+  md: "text-sm",
+  lg: "text-base",
 };
 
 export function Button({
   variant = "primary",
   size = "md",
   icon,
+  loading = false,
   children,
   className = "",
+  disabled,
   ...props
 }: ButtonProps) {
   return (
     <button
-      className={`inline-flex items-center gap-1.5 rounded-lg font-medium transition-colors focus-accent ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-lg font-medium transition-colors focus-accent ${variantClasses[variant]} ${(variant === "link" ? linkSizeClasses : sizeClasses)[size]} ${className}`}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
       {...props}
     >
-      {icon}
+      {loading ? (
+        // border-current so the spinner inherits the variant's text color
+        // (an accent-colored spinner would vanish on the primary accent bg)
+        <span
+          aria-hidden="true"
+          className="inline-block h-3.5 w-3.5 shrink-0 border-2 border-current border-t-transparent rounded-full animate-spin"
+        />
+      ) : (
+        icon
+      )}
       {children}
     </button>
   );

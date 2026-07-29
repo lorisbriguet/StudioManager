@@ -518,7 +518,8 @@ const articles: ArticleSeed[] = [
   <tr><td><strong>Cmd+Shift+Z</strong></td><td>Redo</td></tr>
   <tr><td><strong>Cmd+T</strong></td><td>Open new tab</td></tr>
   <tr><td><strong>Cmd+W</strong></td><td>Close current tab</td></tr>
-  <tr><td><strong>Cmd+Shift+T</strong></td><td>Reopen last closed tab</td></tr>
+  <tr><td><strong>Cmd+Shift+Y</strong></td><td>Reopen last closed tab</td></tr>
+  <tr><td><strong>Cmd+Shift+T</strong></td><td>Open Quick Timer</td></tr>
   <tr><td><strong>Ctrl+Tab</strong></td><td>Next tab</td></tr>
   <tr><td><strong>Ctrl+Shift+Tab</strong></td><td>Previous tab</td></tr>
 </table>

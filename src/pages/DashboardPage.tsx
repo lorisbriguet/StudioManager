@@ -155,6 +155,7 @@ function PresetDropdown() {
                 onClick={(e) => handleDelete(e, preset.id)}
                 className="opacity-0 group-hover/item:opacity-100 transition-opacity text-muted hover:text-[var(--color-danger-text)] px-2 py-1.5"
                 title={t.delete_preset}
+                aria-label={t.delete_preset}
               >
                 <Trash2 size={12} />
               </button>
@@ -197,6 +198,7 @@ function PresetDropdown() {
                 onClick={handleSave}
                 disabled={!saveName.trim()}
                 className="text-accent hover:text-accent/80 transition-colors disabled:opacity-40"
+                aria-label={t.save}
               >
                 <Save size={14} />
               </button>
@@ -271,7 +273,7 @@ export function DashboardPage() {
           <div className="mb-4 bg-[var(--color-surface)] rounded-xl p-4 max-h-[60vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-medium">{t.add}</h2>
-              <button type="button" onClick={() => setShowWidgetPanel(false)} className="text-muted hover:text-[var(--color-text)]">
+              <button type="button" onClick={() => setShowWidgetPanel(false)} aria-label={t.close} className="text-muted hover:text-[var(--color-text)]">
                 <X size={14} />
               </button>
             </div>
@@ -330,6 +332,7 @@ export function DashboardPage() {
                 type="button"
                 onClick={() => removeWidget(widget.id)}
                 className="absolute top-1 right-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-muted hover:text-[var(--color-danger-text)] p-0.5"
+                aria-label={t.remove}
               >
                 <X size={12} />
               </button>

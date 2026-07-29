@@ -17,6 +17,7 @@ import {
   Plus,
 } from "lucide-react";
 import { useAppStore } from "../stores/app-store";
+import { confirmIfDirty } from "../lib/dirty-guard";
 import { useT } from "../i18n/useT";
 import { useClients } from "../db/hooks/useClients";
 import { useProjects } from "../db/hooks/useProjects";
@@ -46,10 +47,25 @@ export function CommandPalette() {
     return () => document.removeEventListener("keydown", handler);
   }, [toggle]);
 
-  const go = (path: string) => {
-    navigate(path);
+  // Escape closes the palette (same close path as the backdrop click).
+  // Listener only exists while open, so Escape is never swallowed otherwise.
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open, close]);
+
+  const go = async (path: string) => {
+    // Close first so the unsaved-changes dialog isn't shown under the palette
     close();
     setSearch("");
+    if (await confirmIfDirty(path)) navigate(path);
   };
 
   if (!open) return null;

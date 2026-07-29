@@ -1,5 +1,14 @@
 export type InvoiceStatus = "draft" | "sent" | "paid" | "overdue" | "cancelled";
 
+/**
+ * True when the reference is a DRAFT- placeholder (real references like
+ * "2026-001" are assigned when the invoice is sent). Only such invoices
+ * are deletable — anything with a real reference must be cancelled instead.
+ */
+export function isDraftReference(reference: string): boolean {
+  return reference.startsWith("DRAFT-");
+}
+
 export interface Invoice {
   id: number;
   reference: string;

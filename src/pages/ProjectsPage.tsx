@@ -1,8 +1,9 @@
 import { useState, useMemo, useRef, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, X, Eye, Trash2, ExternalLink, Maximize2, FolderOpen } from "lucide-react";
+import { Plus, X, Eye, Trash2, ExternalLink, Maximize2, FolderOpen, Play, Pause, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
-import { useProjects, useCreateProject, useDeleteProject } from "../db/hooks/useProjects";
+import { ask } from "@tauri-apps/plugin-dialog";
+import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from "../db/hooks/useProjects";
 import { useClients } from "../db/hooks/useClients";
 import { useAllTasks } from "../db/hooks/useTasks";
 import { getAllSubtasks } from "../db/queries/tasks";
@@ -11,13 +12,19 @@ import type { Subtask } from "../types/task";
 import { useAppStore } from "../stores/app-store";
 import { useTabStore } from "../stores/tab-store";
 import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
+import { BulkActionBar } from "../components/BulkActionBar";
+import { SavedFilterBar } from "../components/SavedFilterBar";
+import { useBulkSelect } from "../hooks/useBulkSelect";
 import { formatDisplayDate } from "../utils/formatDate";
 import { ProjectDetailContent } from "../components/ProjectDetailContent";
 import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Button, Badge, Card, PageHeader, SearchBar, PageSpinner, Input, EmptyState } from "../components/ui";
+import { Button, Badge, Card, PageHeader, SearchBar, TableSkeleton, Input, EmptyState } from "../components/ui";
+import { undoable, undoableFromStore } from "../lib/undo";
+import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
+import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
 import type { BadgeVariant } from "../components/ui/Badge";
 
@@ -35,12 +42,15 @@ const statusKeys: Record<ProjectStatus, UIKey> = {
   cancelled: "cancelled",
 };
 
+const priorityRank: Record<TaskPriority, number> = { low: 0, medium: 1, high: 2 };
+
 export function ProjectsPage() {
   const { data: projects, isLoading } = useProjects();
   const { data: clients } = useClients();
   const { data: allTasks } = useAllTasks();
   const { data: allSubtasks } = useQuery({ queryKey: ["subtasks"], queryFn: getAllSubtasks });
   const createProject = useCreateProject();
+  const updateProject = useUpdateProject();
   const deleteProject = useDeleteProject();
   const navigate = useNavigate();
   const openTab = useTabStore((s) => s.openTab);
@@ -49,6 +59,9 @@ export function ProjectsPage() {
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState<ProjectStatus | "all">("active");
   const [search, setSearch] = useState("");
+  const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
+  const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
+  const [filterLogic, setFilterLogic] = useState<ConditionLogic>("and");
   const [peekId, setPeekId] = useState<number | null>(null);
   const [closingPeek, setClosingPeek] = useState(false);
   const [peekWidth, setPeekWidth] = useState(() => {
@@ -97,10 +110,28 @@ export function ProjectsPage() {
     document.addEventListener("pointerup", onPointerUp);
   }, []);
 
-  const clientName = (clientId: string) =>
-    clients?.find((c) => c.id === clientId)?.name ?? clientId;
+  const clientName = useCallback((clientId: string) =>
+    clients?.find((c) => c.id === clientId)?.name ?? clientId, [clients]);
 
-  const priorityRank: Record<TaskPriority, number> = { low: 0, medium: 1, high: 2 };
+  const applyFilter = useCallback((filters: SavedFilterData) => {
+    if (typeof filters.search === "string") setSearch(filters.search);
+    if (filters.filter === "all" || filters.filter === "active" || filters.filter === "completed" || filters.filter === "on_hold" || filters.filter === "cancelled") {
+      setFilter(filters.filter as ProjectStatus | "all");
+    }
+    setFilterConditions(filters.conditions ?? []);
+    setFilterLogic(filters.conditionLogic ?? "and");
+  }, []);
+
+  const projectFields = useMemo<FilterableField[]>(() => [
+    { key: "name", label: t.project_name, type: "string" },
+    { key: "client_id", label: t.client, type: "select", options: (clients ?? []).map((c) => ({ value: c.id, label: c.name })) },
+    { key: "status", label: t.status, type: "select", options: [
+      { value: "active", label: t.active },
+      { value: "completed", label: t.completed },
+      { value: "on_hold", label: t.on_hold },
+      { value: "cancelled", label: t.cancelled },
+    ]},
+  ], [t, clients]);
 
   // Group subtasks by task_id
   const subtasksByTask = useMemo(() => {
@@ -157,12 +188,39 @@ export function ProjectsPage() {
           clientName(p.client_id).toLowerCase().includes(q)
       );
     }
+    rows = applyFilterConditions(rows, filterConditions, filterLogic);
     return [...rows].sort((a, b) => {
       const pa = priorityRank[taskStats[a.id]?.maxPriority ?? "low"];
       const pb = priorityRank[taskStats[b.id]?.maxPriority ?? "low"];
       return pb - pa;
     });
-  }, [projects, clients, filter, search, taskStats]);
+  }, [projects, clientName, filter, search, taskStats, filterConditions, filterLogic]);
+
+  const bulk = useBulkSelect(filtered);
+
+  const bulkSetStatus = useCallback((status: ProjectStatus) => {
+    const ids = [...bulk.selected] as number[];
+    const prevStates = ids.map((id) => {
+      const p = (projects ?? []).find((proj) => proj.id === id);
+      return { id, status: p?.status };
+    });
+    ids.forEach((id) => updateProject.mutate({ id, data: { status } }));
+    undoable(t.bulk_updated, async () => {
+      await Promise.all(
+        prevStates.map((prev) =>
+          updateProject.mutateAsync({ id: prev.id, data: { status: prev.status as ProjectStatus } })
+        )
+      );
+    });
+    bulk.clearSelection();
+  }, [bulk, updateProject, projects, t]);
+
+  const bulkDelete = useCallback(async () => {
+    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
+    const ids = [...bulk.selected] as number[];
+    ids.forEach((id) => deleteProject.mutate(id));
+    bulk.clearSelection();
+  }, [bulk, deleteProject, t]);
 
   const handleProjectClick = (projectId: number) => {
     if (projectOpenMode === "peek") {
@@ -185,7 +243,16 @@ export function ProjectsPage() {
     cancelled: t.cancelled,
   };
 
-  if (isLoading) return <PageSpinner />;
+  if (isLoading) return (
+    <div className="flex flex-1 min-h-0 -m-8">
+      <div className="min-w-0 overflow-y-auto flex-1 p-8">
+        <PageHeader title={t.projects}>
+          <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>{t.new_project}</Button>
+        </PageHeader>
+        <TableSkeleton columns={4} />
+      </div>
+    </div>
+  );
 
   return (
     <div ref={containerRef} className="flex flex-1 min-h-0 -m-8">
@@ -199,7 +266,7 @@ export function ProjectsPage() {
             {(["all", "active", "completed", "on_hold", "cancelled"] as const).map((s) => (
               <button
                 key={s}
-                onClick={() => setFilter(s)}
+                onClick={() => { setFilter(s); setActiveFilterId(null); setFilterConditions([]); }}
                 className={`px-3 py-1 text-xs rounded-full border ${
                   filter === s
                     ? "bg-accent text-white border-accent"
@@ -210,8 +277,22 @@ export function ProjectsPage() {
               </button>
             ))}
           </div>
-          <SearchBar value={search} onChange={setSearch} placeholder={t.search_projects} className="w-48" />
+          <SearchBar
+            value={search}
+            onChange={(v) => { setSearch(v); setActiveFilterId(null); setFilterConditions([]); }}
+            placeholder={t.search_projects}
+            className="w-48"
+          />
         </div>
+
+        <SavedFilterBar
+          page="projects"
+          currentFilters={{ search, filter, conditions: filterConditions, conditionLogic: filterLogic }}
+          onApply={applyFilter}
+          activeFilterId={activeFilterId}
+          onActiveChange={setActiveFilterId}
+          fields={projectFields}
+        />
 
         {showForm && (
           <NewProjectForm
@@ -238,14 +319,27 @@ export function ProjectsPage() {
                 key={p.id}
                 onClick={() => handleProjectClick(p.id)}
                 onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: { id: p.id, name: p.name } }); }}
-                className={`block rounded-xl p-4 transition-all cursor-pointer ${
+                className={`group block rounded-xl p-4 transition-all cursor-pointer ${
                   peekId === p.id
                     ? "bg-[var(--color-hover-row)] outline outline-1 outline-accent"
-                    : "bg-[var(--color-surface)] hover:bg-[var(--color-hover-row)]"
+                    : bulk.selected.has(p.id)
+                      ? "bg-[var(--color-hover-row)] outline outline-1 outline-accent"
+                      : "bg-[var(--color-surface)] hover:bg-[var(--color-hover-row)]"
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium leading-tight">{p.name}</h3>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={bulk.selected.has(p.id)}
+                      onChange={(e) => bulk.toggleItem(p.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
+                      onClick={(e) => e.stopPropagation()}
+                      className={`accent-[var(--accent)] shrink-0 transition-opacity ${
+                        bulk.selected.has(p.id) || bulk.count > 0 ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                      }`}
+                    />
+                    <h3 className="text-sm font-medium leading-tight truncate">{p.name}</h3>
+                  </div>
                   <Badge variant={statusBadgeVariant[p.status]} className="shrink-0 ml-2">
                     {t[statusKeys[p.status]]}
                   </Badge>
@@ -284,7 +378,13 @@ export function ProjectsPage() {
           })}
           {filtered.length === 0 && (
             <div className="col-span-full">
-              <EmptyState icon={<FolderOpen size={32} />} message={search ? t.no_matching_projects : t.no_projects} />
+              <EmptyState
+                icon={<FolderOpen size={32} />}
+                message={(projects?.length ?? 0) === 0 ? t.no_projects : t.no_matching_projects}
+                action={(projects?.length ?? 0) === 0 ? (
+                  <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>{t.new_project}</Button>
+                ) : undefined}
+              />
             </div>
           )}
         </div>
@@ -299,7 +399,7 @@ export function ProjectsPage() {
             { label: t.view_details, icon: <Eye size={14} />, onClick: () => navigate(`/projects/${ctxMenu.item.id}`) },
             { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/projects/${ctxMenu.item.id}`, ctxMenu.item.name) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteProject.mutate(ctxMenu.item.id) },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteProject.mutate(ctxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_project_deleted) }) },
           ]}
         />
       )}
@@ -326,6 +426,7 @@ export function ProjectsPage() {
             <button
               onClick={handleClosePeek}
               className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
+              aria-label={t.close}
             >
               <X size={14} />
             </button>
@@ -344,6 +445,17 @@ export function ProjectsPage() {
         </div>
         </>
       )}
+
+      <BulkActionBar
+        count={bulk.count}
+        onClear={bulk.clearSelection}
+        actions={[
+          { label: t.mark_active, icon: <Play size={14} />, onClick: () => bulkSetStatus("active") },
+          { label: t.mark_completed, icon: <CheckCircle size={14} />, onClick: () => bulkSetStatus("completed") },
+          { label: t.mark_on_hold, icon: <Pause size={14} />, onClick: () => bulkSetStatus("on_hold") },
+          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+        ]}
+      />
     </div>
   );
 }

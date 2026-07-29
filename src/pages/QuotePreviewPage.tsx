@@ -31,6 +31,7 @@ export function QuotePreviewPage() {
   const { data: quoteTemplate } = useInvoiceTemplate(quoteTemplateId);
   const [showDraftWarning, setShowDraftWarning] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const updateQuote = useUpdateQuote();
   const t = useT();
 
@@ -57,6 +58,8 @@ export function QuotePreviewPage() {
   );
 
   const doDownload = async () => {
+    if (exporting) return;
+    setExporting(true);
     try {
       const blob = await pdf(pdfDocument).toBlob();
       const url = URL.createObjectURL(blob);
@@ -68,6 +71,8 @@ export function QuotePreviewPage() {
       toast.success(t.pdf_downloaded);
     } catch {
       toast.error(t.failed_to_generate_pdf);
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -92,6 +97,7 @@ export function QuotePreviewPage() {
         <button
           onClick={() => navigate(-1)}
           className="text-muted hover:text-[var(--color-text)]"
+          aria-label={t.back}
         >
           <ArrowLeft size={18} />
         </button>
@@ -103,7 +109,7 @@ export function QuotePreviewPage() {
             {t.generate_project}
           </Button>
         )}
-        <Button icon={<Download size={14} />} onClick={downloadPdf}>
+        <Button icon={<Download size={14} />} loading={exporting} onClick={downloadPdf}>
           {t.download_pdf}
         </Button>
       </div>
@@ -137,7 +143,7 @@ export function QuotePreviewPage() {
               <Button variant="secondary" onClick={() => { setShowDraftWarning(false); doDownload(); }}>
                 {t.export_as_draft}
               </Button>
-              <Button onClick={handleMarkSentAndExport}>
+              <Button loading={updateQuote.isPending} onClick={handleMarkSentAndExport}>
                 {t.mark_sent_and_export}
               </Button>
             </div>

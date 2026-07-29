@@ -13,7 +13,10 @@ import { BulkActionBar } from "../components/BulkActionBar";
 import { SavedFilterBar } from "../components/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
-import { Button, Badge, Card, Input, PageHeader, SearchBar, PageSpinner, EmptyState } from "../components/ui";
+import { Button, Badge, Card, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState } from "../components/ui";
+import * as v from "../lib/validate";
+import { undoableFromStore } from "../lib/undo";
+import { clientStatusVariant } from "../lib/statusColors";
 import type { Client } from "../types/client";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
@@ -38,7 +41,10 @@ export function ClientsPage() {
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
   const [filterLogic, setFilterLogic] = useState<ConditionLogic>("and");
-  const sort: SortState<SortKey> = { key: clientsSortKey as SortKey, dir: clientsSortDir };
+  const sort: SortState<SortKey> = useMemo(
+    () => ({ key: clientsSortKey as SortKey, dir: clientsSortDir }),
+    [clientsSortKey, clientsSortDir]
+  );
   const setSort = useCallback((s: SortState<SortKey>) => {
     setClientsSortKey(s.key);
     setClientsSortDir(s.dir);
@@ -91,13 +97,22 @@ export function ClientsPage() {
   const bulk = useBulkSelect(filtered);
 
   const bulkDelete = useCallback(async () => {
-    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
+    if (!(await ask(t.confirm_bulk_delete_clients, { kind: "warning" }))) return;
     const ids = [...bulk.selected] as string[];
     ids.forEach((id) => deleteClient.mutate(id));
     bulk.clearSelection();
   }, [bulk, deleteClient, t]);
 
-  if (isLoading) return <PageSpinner />;
+  if (isLoading) return (
+    <div>
+      <PageHeader title={t.clients}>
+        <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>
+          {t.new_client}
+        </Button>
+      </PageHeader>
+      <TableSkeleton columns={5} />
+    </div>
+  );
 
   return (
     <div>
@@ -175,7 +190,7 @@ export function ClientsPage() {
                   {c.has_discount ? `${(c.discount_rate * 100).toFixed(0)}%` : "-"}
                 </td>
                 <td className="px-4 py-2.5">
-                  <Badge variant={c.status === "active" ? "success" : "neutral"}>
+                  <Badge variant={clientStatusVariant(c.status)}>
                     {c.status === "active" ? t.active : t.inactive}
                   </Badge>
                 </td>
@@ -184,7 +199,15 @@ export function ClientsPage() {
           </tbody>
         </table>
         {filtered.length === 0 && !isLoading && (
-          <EmptyState message={t.no_clients ?? "No clients found"} icon={<Users size={32} />} />
+          <EmptyState
+            message={(clients?.length ?? 0) === 0 ? t.no_clients : t.no_matching_clients}
+            icon={<Users size={32} />}
+            action={(clients?.length ?? 0) === 0 ? (
+              <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>
+                {t.new_client}
+              </Button>
+            ) : undefined}
+          />
         )}
       </div>
       {ctxMenu && (
@@ -196,7 +219,12 @@ export function ClientsPage() {
             { label: t.view_details, icon: <Eye size={14} />, onClick: () => navigate(`/clients/${ctxMenu.item.id}`) },
             { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/clients/${ctxMenu.item.id}`, ctxMenu.item.name) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteClient.mutate(ctxMenu.item.id) },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: async () => {
+              if (!(await ask(t.confirm_delete_client, { kind: "warning" }))) return;
+              deleteClient.mutate(ctxMenu.item.id, {
+                onSuccess: () => undoableFromStore(t.toast_client_deleted),
+              });
+            } },
           ]}
         />
       )}
@@ -210,6 +238,14 @@ export function ClientsPage() {
     </div>
   );
 }
+
+// Only fields with rules appear in the schema; the rest are unvalidated.
+type ClientFormField = "name" | "email";
+
+const clientSchema: v.FormSchema<ClientFormField> = {
+  name: [v.required],
+  email: [v.email],
+};
 
 function NewClientForm({
   onSave,
@@ -232,43 +268,87 @@ function NewClientForm({
     discount_rate: 0.1,
     notes: "",
   });
+  const [errors, setErrors] = useState<Partial<Record<ClientFormField, string>>>({});
+
+  const setFieldError = (field: ClientFormField, msg: string | null) =>
+    setErrors((e) => {
+      const next = { ...e };
+      if (msg) next[field] = msg;
+      else delete next[field];
+      return next;
+    });
+
+  const validateOnBlur = (field: ClientFormField) =>
+    setFieldError(field, v.validateField(form[field], clientSchema[field]));
+
+  const clearError = (field: ClientFormField) => setFieldError(field, null);
+
+  const submit = () => {
+    const errs = v.validateForm(form, clientSchema);
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+    // DB failures surface via the mutation's onError toast (backstop).
+    onSave({ ...form, billing_name: form.billing_name || form.name });
+  };
 
   return (
     <Card className="mb-6 space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <Input
-          placeholder={`${t.display_name} *`}
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-        />
-        <Input
-          placeholder={t.billing_name}
-          value={form.billing_name}
-          onChange={(e) => setForm({ ...form, billing_name: e.target.value })}
-        />
-        <Input
-          placeholder={t.address_line_1}
-          value={form.address_line1}
-          onChange={(e) => setForm({ ...form, address_line1: e.target.value })}
-        />
-        <Input
-          placeholder={t.address_line_2}
-          value={form.address_line2}
-          onChange={(e) => setForm({ ...form, address_line2: e.target.value })}
-        />
-        <Input
-          placeholder={t.postal_city}
-          value={form.postal_city}
-          onChange={(e) => setForm({ ...form, postal_city: e.target.value })}
-        />
-        <select
-          value={form.language}
-          onChange={(e) => setForm({ ...form, language: e.target.value as "FR" | "EN" })}
-          className="border border-[var(--color-input-border)] rounded-md px-3 py-2 text-sm"
-        >
-          <option value="FR">French</option>
-          <option value="EN">English</option>
-        </select>
+        <FormField label={t.display_name} required error={errors.name}>
+          <Input
+            value={form.name}
+            onChange={(e) => { setForm({ ...form, name: e.target.value }); clearError("name"); }}
+            onBlur={() => validateOnBlur("name")}
+          />
+        </FormField>
+        <FormField label={t.billing_name}>
+          <Input
+            value={form.billing_name}
+            onChange={(e) => setForm({ ...form, billing_name: e.target.value })}
+          />
+        </FormField>
+        <FormField label={t.email} error={errors.email}>
+          <Input
+            type="email"
+            value={form.email}
+            onChange={(e) => { setForm({ ...form, email: e.target.value }); clearError("email"); }}
+            onBlur={() => validateOnBlur("email")}
+          />
+        </FormField>
+        <FormField label={t.phone}>
+          <Input
+            type="tel"
+            value={form.phone}
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          />
+        </FormField>
+        <FormField label={t.address_line_1}>
+          <Input
+            value={form.address_line1}
+            onChange={(e) => setForm({ ...form, address_line1: e.target.value })}
+          />
+        </FormField>
+        <FormField label={t.address_line_2}>
+          <Input
+            value={form.address_line2}
+            onChange={(e) => setForm({ ...form, address_line2: e.target.value })}
+          />
+        </FormField>
+        <FormField label={t.postal_city}>
+          <Input
+            value={form.postal_city}
+            onChange={(e) => setForm({ ...form, postal_city: e.target.value })}
+          />
+        </FormField>
+        <FormField label={t.language}>
+          <Select
+            value={form.language}
+            onChange={(e) => setForm({ ...form, language: e.target.value as "FR" | "EN" })}
+          >
+            <option value="FR">{t.french}</option>
+            <option value="EN">{t.english}</option>
+          </Select>
+        </FormField>
       </div>
       <div className="flex items-center gap-4">
         <label className="flex items-center gap-2 text-sm">
@@ -281,14 +361,7 @@ function NewClientForm({
         </label>
       </div>
       <div className="flex gap-2">
-        <Button
-          onClick={() => {
-            if (!form.name.trim()) return toast.error(t.toast_name_required);
-            onSave({ ...form, billing_name: form.billing_name || form.name });
-          }}
-        >
-          {t.save}
-        </Button>
+        <Button onClick={submit}>{t.save}</Button>
         <Button variant="secondary" onClick={onCancel}>
           {t.cancel}
         </Button>

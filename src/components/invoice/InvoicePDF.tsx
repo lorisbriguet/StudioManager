@@ -12,7 +12,7 @@ import type { BusinessProfile } from "../../types/business-profile";
 import type { InvoiceTemplate } from "../../types/invoice-template";
 import { formatDisplayDate } from "../../utils/formatDate";
 import { QRBillCanvas } from "./QRBillSvgRenderer";
-import { buildQRBillData } from "./qr-bill";
+import { buildQRBillData, shouldRenderQrBill } from "./qr-bill";
 
 interface InvoicePDFProps {
   invoice: Invoice;
@@ -276,7 +276,7 @@ export function InvoicePDF({
   const dynAccentBorder = { borderBottomColor: accentColor };
   const dynGrandTotal = { borderTopColor: accentColor };
 
-  const qrBillData = (profile.iban && showQrBill) ? buildQRBillData(invoice, client, profile) : null;
+  const qrBillData = shouldRenderQrBill(invoice, profile, showQrBill) ? buildQRBillData(invoice, client, profile) : null;
   const qrBillLang = invoice.language === "EN" ? "EN" as const : "FR" as const;
   // Detect global rate: all items share the same non-null rate and same unit
   const allSameRate = lineItems.length > 0 && lineItems.every((item) => item.rate != null && item.rate === lineItems[0].rate);

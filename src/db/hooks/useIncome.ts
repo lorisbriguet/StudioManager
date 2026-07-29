@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import * as q from "../queries/income";
 import type { Income } from "../../types/income";
 import { useUndoStore } from "../../stores/undo-store";
+import { getLabels } from "../../lib/notifyError";
 
 export function useIncomes() {
   return useQuery({ queryKey: ["incomes"], queryFn: q.getIncomes });
@@ -14,19 +15,24 @@ export function useCreateIncome() {
     mutationFn: async (data: Omit<Income, "id" | "created_at" | "updated_at">) => {
       const id = await q.createIncome(data);
       useUndoStore.getState().push({
-        label: `Create income "${data.reference}"`,
+        label: `${getLabels().undo_create_income} "${data.reference}"`,
         execute: async () => {
           await q.deleteIncome(id);
           qc.invalidateQueries({ queryKey: ["incomes"] });
+          qc.invalidateQueries({ queryKey: ["finance"] });
         },
         redo: async () => {
           await q.createIncome(data);
           qc.invalidateQueries({ queryKey: ["incomes"] });
+          qc.invalidateQueries({ queryKey: ["finance"] });
         },
       });
       return id;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["incomes"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["incomes"] });
+      qc.invalidateQueries({ queryKey: ["finance"] });
+    },
     onError: (e) => { toast.error(String(e)); },
   });
 }
@@ -49,19 +55,24 @@ export function useUpdateIncome() {
           prevData[key] = (prev as unknown as Record<string, unknown>)[key];
         }
         useUndoStore.getState().push({
-          label: `Update income "${prev.reference}"`,
+          label: `${getLabels().undo_update_income} "${prev.reference}"`,
           execute: async () => {
             await q.updateIncome(id, prevData as Partial<Omit<Income, "id" | "created_at" | "updated_at">>);
             qc.invalidateQueries({ queryKey: ["incomes"] });
+            qc.invalidateQueries({ queryKey: ["finance"] });
           },
           redo: async () => {
             await q.updateIncome(id, data);
             qc.invalidateQueries({ queryKey: ["incomes"] });
+            qc.invalidateQueries({ queryKey: ["finance"] });
           },
         });
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["incomes"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["incomes"] });
+      qc.invalidateQueries({ queryKey: ["finance"] });
+    },
     onError: (e) => { toast.error(String(e)); },
   });
 }
@@ -75,10 +86,11 @@ export function useDeleteIncome() {
       if (prev) {
         const { id: _id, created_at, updated_at, ...data } = prev;
         useUndoStore.getState().push({
-          label: `Delete income "${prev.reference}"`,
+          label: `${getLabels().undo_delete_income} "${prev.reference}"`,
           execute: async () => {
             await q.createIncome(data);
             qc.invalidateQueries({ queryKey: ["incomes"] });
+            qc.invalidateQueries({ queryKey: ["finance"] });
           },
           redo: async () => {
             const incomes = await q.getIncomes();
@@ -86,12 +98,16 @@ export function useDeleteIncome() {
             if (restored) {
               await q.deleteIncome(restored.id);
               qc.invalidateQueries({ queryKey: ["incomes"] });
+              qc.invalidateQueries({ queryKey: ["finance"] });
             }
           },
         });
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["incomes"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["incomes"] });
+      qc.invalidateQueries({ queryKey: ["finance"] });
+    },
     onError: (e) => { toast.error(String(e)); },
   });
 }

@@ -17,7 +17,20 @@
 - [x] Template selector on invoice/quote forms
 - [x] Full UX audit — CSS tokens, i18n, accessibility, focus states, consistency
 
-## V1.10.0 — Planned
+## V1.10.0 — Done (full audit hardening + UI/UX pass)
+
+- [x] Backup/restore rebuilt: all 32 tables covered, atomic restore with automatic safety backup, corrupted/empty-backup guards
+- [x] Invoice integrity: QR-bill CHF-only, draft-only deletion (no renumbering/reference reuse), edits preserve historical rates/discounts/due dates, money rounding, loud offline exchange-rate handling
+- [x] Silent failures made visible (backup, calendar sync, recurring generation, DB init)
+- [x] Client delete: confirmation + full-cascade undo; timer survives restarts; undo/redo hardened (WebKit redo fix); Cmd+Shift+Y reopen tab
+- [x] Unsaved-changes guard on every navigation path; Escape closes command palette
+- [x] Security: fs scope narrowed, open-in-Finder path validation, FK enforcement in batches
+- [x] Local-date correctness (overdue/recurring/aging), calendar month-end fix, recurring multi-period catch-up with anchor days
+- [x] Design-system compliance: dark-mode workload tags, shared Button adoption, radius/i18n/aria sweeps (810 EN/FR keys, 113+ aria-labels)
+- [x] UX: skeletons on list pages, busy states, empty-state CTAs, ProjectsPage bulk+filters, line-item keyboard reorder, full inline form validation
+- [x] ESLint (zero findings), 219 tests, RELEASING.md guidelines
+
+## V1.11.0 — Planned
 
 ### Meetings block in projects
 - Separate `meetings` table: title, date, start_time, end_time, location, attendees (JSON: contact IDs + free text names), project_id, tracked_minutes

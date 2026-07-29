@@ -2,6 +2,7 @@ import { Command } from "@tauri-apps/plugin-shell";
 import { getDb } from "../db/index";
 import { useAppStore } from "../stores/app-store";
 import { logError, logInfo, logWarn } from "../lib/log";
+import { notifyError, getLabels } from "../lib/notifyError";
 
 function getCalendarName(): string {
   return useAppStore.getState().calendarName || "StudioManager";
@@ -47,6 +48,7 @@ function escapeAS(str: string): string {
     .replace(/\n/g, "\\n")
     .replace(/\t/g, "\\t")
     // Strip characters that could break AppleScript string boundaries
+    // eslint-disable-next-line no-control-regex -- intentional: strip control chars for AppleScript safety
     .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, ""); // control chars except \t \n \r
 }
 
@@ -102,6 +104,8 @@ export async function createCalendarEvent(event: CalendarEvent): Promise<string>
           set hours of startDate to 0
           set minutes of startDate to 0
           set seconds of startDate to 0
+          -- Pin day to 1 before year/month: prevents month-overflow (e.g. Jan 31 + set month 2 = March) and the Feb 29 non-leap-year edge
+          set day of startDate to 1
           set year of startDate to ${d.year}
           set month of startDate to ${d.month}
           set day of startDate to ${d.day}
@@ -118,6 +122,8 @@ export async function createCalendarEvent(event: CalendarEvent): Promise<string>
       tell application "Calendar"
         tell calendar "${calName}"
           set eventDate to current date
+          -- Pin day to 1 before year/month: prevents month-overflow (e.g. Jan 31 + set month 2 = March) and the Feb 29 non-leap-year edge
+          set day of eventDate to 1
           set year of eventDate to ${d.year}
           set month of eventDate to ${d.month}
           set day of eventDate to ${d.day}
@@ -212,6 +218,13 @@ export async function syncAllExisting(): Promise<number> {
   logInfo("[CalendarSync] Starting sync...");
   const db = await getDb();
   let count = 0;
+  // Collect failures and surface at most ONE summary toast per sync run
+  let failed = 0;
+  let firstError: unknown = null;
+  const recordFailure = (e: unknown) => {
+    failed++;
+    if (firstError === null) firstError = e;
+  };
 
   // Ensure calendar_deadline_id column exists
   try {
@@ -243,10 +256,12 @@ export async function syncAllExisting(): Promise<number> {
         await db.execute("UPDATE tasks SET calendar_event_id = $1 WHERE id = $2", [uid, t.id]);
         count++;
       } catch (e) {
+        recordFailure(e);
         logError(`Failed to sync task ${t.id}:`, e);
       }
     }
   } catch (e) {
+    recordFailure(e);
     logError("Failed to query tasks for sync:", e);
   }
 
@@ -270,10 +285,12 @@ export async function syncAllExisting(): Promise<number> {
         await db.execute("UPDATE subtasks SET calendar_event_id = $1 WHERE id = $2", [uid, s.id]);
         count++;
       } catch (e) {
+        recordFailure(e);
         logError(`Failed to sync subtask ${s.id}:`, e);
       }
     }
   } catch (e) {
+    recordFailure(e);
     logError("Failed to query subtasks for sync:", e);
   }
 
@@ -285,17 +302,23 @@ export async function syncAllExisting(): Promise<number> {
     for (const p of projects) {
       try {
         const uid = await createCalendarEvent({
-          title: `Deadline: ${p.name}`,
+          title: `${getLabels().deadline}: ${p.name}`,
           date: p.deadline,
         });
         await db.execute("UPDATE projects SET calendar_deadline_id = $1 WHERE id = $2", [uid, p.id]);
         count++;
       } catch (e) {
+        recordFailure(e);
         logError(`Failed to sync deadline for project ${p.id}:`, e);
       }
     }
   } catch (e) {
+    recordFailure(e);
     logError("Failed to query projects for sync:", e);
+  }
+
+  if (failed > 0) {
+    notifyError(getLabels().calendar_sync_failed, firstError);
   }
 
   return count;

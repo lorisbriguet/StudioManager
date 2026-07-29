@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as q from "../queries/workload";
 import type { WorkloadColumn } from "../../types/workload";
 import { useUndoStore } from "../../stores/undo-store";
+import { getLabels } from "../../lib/notifyError";
 
 // ── Templates ──────────────────────────────────────────────
 
@@ -69,7 +70,7 @@ export function useCreateWorkloadRow() {
     }) => {
       const id = await q.createWorkloadRow(data);
       useUndoStore.getState().push({
-        label: "Create workload row",
+        label: getLabels().undo_create_workload_row,
         execute: async () => {
           await q.deleteWorkloadRow(id);
           qc.invalidateQueries({ queryKey: ["workload-rows", data.project_id] });
@@ -106,7 +107,7 @@ export function useUpdateWorkloadRow(projectId: number) {
         if (data.tracked_minutes !== undefined) prevUpdate.tracked_minutes = prev.tracked_minutes;
         if (data.planned_minutes !== undefined) prevUpdate.planned_minutes = prev.planned_minutes;
         useUndoStore.getState().push({
-          label: "Edit workload cell",
+          label: getLabels().undo_edit_workload_cell,
           execute: async () => {
             await q.updateWorkloadRow(data.id, prevUpdate as {
               title?: string;
@@ -145,7 +146,7 @@ export function useDeleteWorkloadRow(projectId: number) {
       await q.deleteWorkloadRow(id);
       if (prev) {
         useUndoStore.getState().push({
-          label: "Delete workload row",
+          label: getLabels().undo_delete_workload_row,
           execute: async () => {
             await q.createWorkloadRow({
               project_id: prev.project_id,
@@ -185,7 +186,7 @@ export function useSetProjectWorkloadConfig(projectId: number) {
       const prev = await q.getProjectWorkloadConfig(projectId);
       await q.setProjectWorkloadConfig(projectId, data.templateId, data.columns);
       useUndoStore.getState().push({
-        label: "Change workload columns",
+        label: getLabels().undo_change_workload_columns,
         execute: async () => {
           await q.setProjectWorkloadConfig(
             projectId,

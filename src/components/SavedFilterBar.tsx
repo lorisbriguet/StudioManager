@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Bookmark, Plus, X, Pencil, Trash2, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { createPortal } from "react-dom";
+import { Button } from "./ui";
 import {
   useSavedFilters,
   useCreateSavedFilter,
@@ -110,7 +111,7 @@ function ConditionRow({
           className="text-xs px-1.5 py-1 border border-[var(--color-border-divider)] rounded-lg bg-transparent w-24"
         />
       )}
-      <button onClick={onRemove} className="text-muted hover:text-[var(--color-danger-text)]">
+      <button onClick={onRemove} aria-label={t.remove} className="text-muted hover:text-[var(--color-danger-text)]">
         <X size={12} />
       </button>
     </div>
@@ -271,7 +272,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
             <select
               value={conditionLogic}
               onChange={(e) => setConditionLogic(e.target.value as ConditionLogic)}
-              className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--color-input-border)] bg-[var(--color-input-bg)] text-muted min-w-fit w-14"
+              className="text-[10px] px-1.5 py-0.5 rounded-lg border border-[var(--color-input-border)] bg-[var(--color-input-bg)] text-muted min-w-fit w-14"
             >
               <option value="and">AND</option>
               <option value="or">OR</option>
@@ -290,13 +291,15 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
         </div>
       ))}
       <div className="flex items-center gap-2 ml-[58px]">
-        <button
+        <Button
+          variant="link"
+          size="sm"
+          icon={<Plus size={12} />}
           onClick={addCondition}
-          className="flex items-center gap-1 text-xs text-muted hover:text-accent transition-colors"
+          className="text-muted hover:text-accent"
         >
-          <Plus size={10} />
           {t.add_condition}
-        </button>
+        </Button>
         {editingFilterId != null && (
           <>
             <button
@@ -308,6 +311,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
             <button
               onClick={() => { setEditingFilterId(null); setShowConditions(false); }}
               className="text-muted hover:text-[var(--color-text-secondary)]"
+              aria-label={t.cancel}
             >
               <X size={12} />
             </button>
@@ -342,23 +346,26 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
                       showConditions ? "text-accent bg-accent-light" : "text-muted hover:text-accent"
                     }`}
                     title={t.add_condition}
+                    aria-label={t.add_condition}
                   >
                     <Filter size={12} />
                   </button>
                 )}
                 <button onClick={handleSave} className="text-xs text-accent hover:text-accent-hover px-1">{t.save}</button>
-                <button onClick={() => { setNaming(false); setNameInput(""); setConditions([]); setShowConditions(false); }} className="text-muted hover:text-[var(--color-text-secondary)]"><X size={12} /></button>
+                <button onClick={() => { setNaming(false); setNameInput(""); setConditions([]); setShowConditions(false); }} aria-label={t.cancel} className="text-muted hover:text-[var(--color-text-secondary)]"><X size={12} /></button>
               </div>
               {conditionsUI}
             </div>
           ) : (
-            <button
+            <Button
+              variant="link"
+              size="sm"
+              icon={<Bookmark size={12} />}
               onClick={handleStartNaming}
-              className="flex items-center gap-1 text-xs text-muted hover:text-accent transition-colors"
+              className="text-muted hover:text-accent"
             >
-              <Bookmark size={12} />
               {t.save_filter}
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -461,12 +468,13 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
                     showConditions ? "text-accent bg-accent-light" : "text-muted hover:text-accent"
                   }`}
                   title={t.add_condition}
+                  aria-label={t.add_condition}
                 >
                   <Filter size={12} />
                 </button>
               )}
               <button onClick={handleSave} className="text-xs text-accent hover:text-accent-hover px-1">{t.save}</button>
-              <button onClick={() => { setNaming(false); setNameInput(""); setConditions([]); setShowConditions(false); }} className="text-muted hover:text-[var(--color-text-secondary)]"><X size={12} /></button>
+              <button onClick={() => { setNaming(false); setNameInput(""); setConditions([]); setShowConditions(false); }} aria-label={t.cancel} className="text-muted hover:text-[var(--color-text-secondary)]"><X size={12} /></button>
             </div>
           </div>
         ) : (
@@ -474,6 +482,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
             onClick={handleStartNaming}
             className="flex items-center gap-1 text-xs text-muted hover:text-accent transition-colors px-1"
             title={t.save_filter}
+            aria-label={t.save_filter}
           >
             <Plus size={12} />
           </button>

@@ -1,5 +1,5 @@
 import { Bell, Check, CheckCheck, Trash2, AlertTriangle, Info, AlertCircle, Copy } from "lucide-react";
-import { PageHeader, Button } from "../components/ui";
+import { PageHeader, Button, EmptyState } from "../components/ui";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
@@ -74,10 +74,7 @@ export function NotificationsPage() {
       {isLoading ? (
         <p className="text-muted text-sm">{t.loading}</p>
       ) : notifications.length === 0 ? (
-        <div className="text-center py-16 text-muted">
-          <Bell size={32} className="mx-auto mb-3 opacity-30" />
-          <p className="text-sm">{t.no_notifications}</p>
-        </div>
+        <EmptyState message={t.no_notifications} icon={<Bell size={32} />} />
       ) : (
         <div className="space-y-1">
           {notifications.map((n) => {
@@ -121,6 +118,7 @@ export function NotificationsPage() {
                       navigator.clipboard.writeText(text).then(() => toast.success(t.copied));
                     }}
                     title={t.copy}
+                    aria-label={t.copy}
                   >
                     <Copy size={14} />
                   </button>
@@ -132,6 +130,7 @@ export function NotificationsPage() {
                         markRead.mutate(n.id);
                       }}
                       title={t.mark_read}
+                      aria-label={t.mark_read}
                     >
                       <Check size={14} />
                     </button>
@@ -143,6 +142,7 @@ export function NotificationsPage() {
                       deleteNotif.mutate(n.id);
                     }}
                     title={t.delete}
+                    aria-label={t.delete}
                   >
                     <Trash2 size={14} />
                   </button>

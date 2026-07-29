@@ -3,6 +3,29 @@ import { toast } from "sonner";
 import * as q from "../queries/clients";
 import type { Client, ClientContact, ClientAddress } from "../../types/client";
 import { useUndoStore } from "../../stores/undo-store";
+import { getLabels } from "../../lib/notifyError";
+
+// Every query family the deleteClient cascade touches — invalidated after
+// delete, undo (restore) and redo so no stale rows linger anywhere.
+const CLIENT_GRAPH_QUERY_KEYS = [
+  "clients",
+  "client-contacts",
+  "client-addresses",
+  "client-activity",
+  "projects",
+  "tasks",
+  "subtasks",
+  "workload-rows",
+  "workload-config",
+  "invoices",
+  "quotes",
+  "finance",
+  "time-entries",
+  "project-tables",
+  "project-table-rows",
+  "resources",
+  "recurring_templates",
+] as const;
 
 export function useClients() {
   return useQuery({ queryKey: ["clients"], queryFn: q.getClients });
@@ -30,7 +53,7 @@ export function useCreateClient() {
     mutationFn: async (data: Omit<Client, "created_at" | "updated_at">) => {
       await q.createClient(data);
       useUndoStore.getState().push({
-        label: `Create client "${data.name}"`,
+        label: `${getLabels().undo_create_client} "${data.name}"`,
         execute: async () => {
           await q.deleteClient(data.id);
           qc.invalidateQueries({ queryKey: ["clients"] });
@@ -64,7 +87,7 @@ export function useUpdateClient() {
           prevData[key] = (prev as unknown as Record<string, unknown>)[key];
         }
         useUndoStore.getState().push({
-          label: `Update client "${prev.name}"`,
+          label: `${getLabels().undo_update_client} "${prev.name}"`,
           execute: async () => {
             await q.updateClient(id, prevData as Partial<Omit<Client, "id" | "created_at" | "updated_at">>);
             qc.invalidateQueries({ queryKey: ["clients"] });
@@ -83,26 +106,36 @@ export function useUpdateClient() {
 
 export function useDeleteClient() {
   const qc = useQueryClient();
+  const invalidateGraph = () => {
+    for (const key of CLIENT_GRAPH_QUERY_KEYS) {
+      qc.invalidateQueries({ queryKey: [key] });
+    }
+  };
   return useMutation({
     mutationFn: async (id: string) => {
-      const prev = await q.getClient(id);
+      // Snapshot the FULL graph before the cascade destroys it, so undo
+      // restores every project/task/invoice/quote/etc. with original IDs.
+      // Accepted non-transactional read window: the snapshot is 15 separate
+      // SELECTs plus a gap before the delete batch, so background writers
+      // (e.g. syncTaskCalendar) landing in that window are deleted but not
+      // snapshotted — fine for a single-user desktop app.
+      const snap = await q.snapshotClientGraph(id);
       await q.deleteClient(id);
-      if (prev) {
+      if (snap) {
         useUndoStore.getState().push({
-          label: `Delete client "${prev.name}"`,
+          label: `${getLabels().undo_delete_client} "${snap.client.name}"`,
           execute: async () => {
-            const { created_at, updated_at, ...data } = prev;
-            await q.createClient(data);
-            qc.invalidateQueries({ queryKey: ["clients"] });
+            await q.restoreClientGraph(snap);
+            invalidateGraph();
           },
           redo: async () => {
-            await q.deleteClient(prev.id);
-            qc.invalidateQueries({ queryKey: ["clients"] });
+            await q.deleteClient(id);
+            invalidateGraph();
           },
         });
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["clients"] }),
+    onSuccess: invalidateGraph,
     onError: (e) => { toast.error(String(e)); },
   });
 }
@@ -119,7 +152,7 @@ export function useCreateClientContact() {
       );
       if (created) {
         useUndoStore.getState().push({
-          label: `Create contact "${data.first_name} ${data.last_name}"`,
+          label: `${getLabels().undo_create_contact} "${data.first_name} ${data.last_name}"`,
           execute: async () => {
             await q.deleteClientContact(created.id);
             qc.invalidateQueries({ queryKey: ["client-contacts", data.client_id] });
@@ -153,7 +186,7 @@ export function useUpdateClientContact() {
           prevData[key] = (prev as unknown as Record<string, unknown>)[key];
         }
         useUndoStore.getState().push({
-          label: `Update contact "${prev.first_name} ${prev.last_name}"`,
+          label: `${getLabels().undo_update_contact} "${prev.first_name} ${prev.last_name}"`,
           execute: async () => {
             await q.updateClientContact(vars.id, prevData as Partial<Omit<ClientContact, "id" | "client_id">>);
             qc.invalidateQueries({ queryKey: ["client-contacts", vars.clientId] });
@@ -180,7 +213,7 @@ export function useDeleteClientContact() {
       if (prev) {
         const { id: _id, ...data } = prev;
         useUndoStore.getState().push({
-          label: `Delete contact "${prev.first_name} ${prev.last_name}"`,
+          label: `${getLabels().undo_delete_contact} "${prev.first_name} ${prev.last_name}"`,
           execute: async () => {
             await q.createClientContact(data as Omit<ClientContact, "id">);
             qc.invalidateQueries({ queryKey: ["client-contacts", vars.clientId] });
@@ -221,7 +254,7 @@ export function useCreateClientAddress() {
     mutationFn: async (data: Omit<ClientAddress, "id">) => {
       const newId = await q.createClientAddress(data);
       useUndoStore.getState().push({
-        label: `Create address "${data.label}"`,
+        label: `${getLabels().undo_create_address} "${data.label}"`,
         execute: async () => {
           await q.deleteClientAddress(newId);
           qc.invalidateQueries({ queryKey: ["client-addresses", data.client_id] });
@@ -254,7 +287,7 @@ export function useUpdateClientAddress() {
           prevData[key] = (prev as unknown as Record<string, unknown>)[key];
         }
         useUndoStore.getState().push({
-          label: `Update address "${prev.label}"`,
+          label: `${getLabels().undo_update_address} "${prev.label}"`,
           execute: async () => {
             await q.updateClientAddress(vars.id, prevData as Partial<Omit<ClientAddress, "id" | "client_id">>);
             qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] });
@@ -281,7 +314,7 @@ export function useDeleteClientAddress() {
       if (prev) {
         const { id: _id, ...data } = prev;
         useUndoStore.getState().push({
-          label: `Delete address "${prev.label}"`,
+          label: `${getLabels().undo_delete_address} "${prev.label}"`,
           execute: async () => {
             await q.createClientAddress(data as Omit<ClientAddress, "id">);
             qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] });

@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Save, Plus, Trash2, Eye, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { Input, PageSpinner, Card } from "../components/ui";
+import { Button, Input, PageSpinner, Card } from "../components/ui";
 import { useTabStore } from "../stores/tab-store";
 import {
   useClient,
@@ -21,7 +20,10 @@ import {
 import { useProjectsByClient } from "../db/hooks/useProjects";
 import { useInvoicesByClient } from "../db/hooks/useInvoices";
 import { useT } from "../i18n/useT";
+import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { ClientTimeline } from "../components/ClientTimeline";
+import { ContextMenu } from "../components/ContextMenu";
+import { undoableFromStore } from "../lib/undo";
 import type { Client, ClientContact, ClientAddress } from "../types/client";
 
 export function ClientDetailPage() {
@@ -41,6 +43,10 @@ export function ClientDetailPage() {
   const [dirty, setDirty] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // Warn before leaving with unsaved edits (anchor clicks, back/forward,
+  // window close, and programmatic navigations via the dirty-guard registry)
+  useUnsavedChangesWarning(dirty);
+
   useEffect(() => {
     if (client) setForm(client);
   }, [client]);
@@ -48,7 +54,7 @@ export function ClientDetailPage() {
   // Update tab label with client name
   useEffect(() => {
     if (client?.name) updateActiveTab(`/clients/${id}`, client.name);
-  }, [client?.name, id]);
+  }, [client?.name, id, updateActiveTab]);
 
   const saveField = (field: keyof Client, value: unknown) => {
     if (!id) return;
@@ -84,47 +90,43 @@ export function ClientDetailPage() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(-1)} className="text-muted hover:text-[var(--color-text)]">
+        <button onClick={() => navigate(-1)} aria-label={t.back} className="text-muted hover:text-[var(--color-text)]">
           <ArrowLeft size={18} />
         </button>
         <h1 className="text-xl font-semibold">{client.name}</h1>
         <div className="ml-auto flex items-center gap-2">
           {dirty && (
-            <button
-              onClick={save}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover"
-            >
-              <Save size={14} /> {t.save}
-            </button>
+            <Button size="md" icon={<Save size={14} />} onClick={save}>
+              {t.save}
+            </Button>
           )}
           {confirmDelete ? (
             <div className="flex items-center gap-2 text-sm">
               <span className="text-[var(--color-danger-text)]">{t.confirm_delete_client}</span>
-              <button
+              <Button
+                variant="danger"
+                size="sm"
                 onClick={() => {
                   deleteClient.mutate(id!, {
                     onSuccess: () => {
-                      toast.success(t.toast_client_deleted);
+                      undoableFromStore(t.toast_client_deleted);
                       navigate("/clients");
                     },
                   });
                 }}
-                className="px-2 py-1 bg-[var(--color-danger)] text-white rounded-md text-xs hover:opacity-80"
               >
                 {t.delete}
-              </button>
-              <button
-                onClick={() => setConfirmDelete(false)}
-                className="px-2 py-1 border border-[var(--color-border-divider)] rounded-md text-xs hover:bg-[var(--color-hover-row)]"
-              >
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setConfirmDelete(false)}>
                 {t.cancel}
-              </button>
+              </Button>
             </div>
           ) : (
             <button
               onClick={() => setConfirmDelete(true)}
               className="p-1.5 text-muted hover:text-[var(--color-danger-text)]"
               title={t.delete}
+              aria-label={t.delete}
             >
               <Trash2 size={16} />
             </button>
@@ -283,14 +285,6 @@ function ContactsSection({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; contactId: number } | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // Close context menu on click outside
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handler = () => setContextMenu(null);
-    document.addEventListener("click", handler);
-    return () => document.removeEventListener("click", handler);
-  }, [contextMenu]);
-
   const addDraft = () =>
     setDrafts((prev) => [
       ...prev,
@@ -366,12 +360,9 @@ function ContactsSection({
     <Card>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-medium">{t.contacts}</h2>
-        <button
-          onClick={addDraft}
-          className="flex items-center gap-1 text-xs text-accent hover:text-accent-hover"
-        >
-          <Plus size={14} /> {t.add}
-        </button>
+        <Button variant="link" size="sm" icon={<Plus size={14} />} onClick={addDraft} className="hover:text-accent-hover">
+          {t.add}
+        </Button>
       </div>
 
       {contacts.length === 0 && drafts.length === 0 && (
@@ -475,6 +466,7 @@ function ContactsSection({
               <button
                 onClick={() => startEditing(c)}
                 className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
+                aria-label={t.edit}
               >
                 <Pencil size={14} />
               </button>
@@ -484,32 +476,31 @@ function ContactsSection({
 
         {/* Context menu */}
         {contextMenu && (
-          <div
-            className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[160px]"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-          >
-            <button
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
-              onClick={() => {
-                const contact = contacts.find((c) => c.id === contextMenu.contactId);
-                if (contact) startEditing(contact);
-                setContextMenu(null);
-              }}
-            >
-              <Pencil size={14} /> {t.edit}
-            </button>
-            <div className="my-1 border-t border-[var(--color-border-divider)]" />
-            <button
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)]"
-              onClick={() => {
-                const contact = contacts.find((c) => c.id === contextMenu.contactId);
-                if (contact) removeContact(contact);
-                setContextMenu(null);
-              }}
-            >
-              <Trash2 size={14} /> {t.delete}
-            </button>
-          </div>
+          <ContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            onClose={() => setContextMenu(null)}
+            items={[
+              {
+                label: t.edit,
+                icon: <Pencil size={14} />,
+                onClick: () => {
+                  const contact = contacts.find((c) => c.id === contextMenu.contactId);
+                  if (contact) startEditing(contact);
+                },
+              },
+              { label: "", divider: true, onClick: () => {} },
+              {
+                label: t.delete,
+                icon: <Trash2 size={14} />,
+                danger: true,
+                onClick: () => {
+                  const contact = contacts.find((c) => c.id === contextMenu.contactId);
+                  if (contact) removeContact(contact);
+                },
+              },
+            ]}
+          />
         )}
 
         {drafts.map((d, idx) => (
@@ -618,13 +609,6 @@ function AddressCard({
   });
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
 
-  useEffect(() => {
-    if (!ctxMenu) return;
-    const close = () => setCtxMenu(null);
-    window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
-  }, [ctxMenu]);
-
   const save = () => {
     if (form.label !== a.label) onUpdate("label", form.label);
     if (form.billing_name !== a.billing_name) onUpdate("billing_name", form.billing_name);
@@ -670,23 +654,21 @@ function AddressCard({
         <button
           onClick={() => setEditing(true)}
           className="opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
+          aria-label={t.edit}
         >
           <Pencil size={14} />
         </button>
       </div>
-      {ctxMenu && createPortal(
-        <div
-          className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[140px]"
-          style={{ left: ctxMenu.x, top: ctxMenu.y }}
-        >
-          <button onClick={() => { setEditing(true); setCtxMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]">
-            <Pencil size={14} /> {t.edit}
-          </button>
-          <button onClick={() => { onDelete(); setCtxMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)]">
-            <Trash2 size={14} /> {t.delete}
-          </button>
-        </div>,
-        document.body
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          onClose={() => setCtxMenu(null)}
+          items={[
+            { label: t.edit, icon: <Pencil size={14} />, onClick: () => setEditing(true) },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: onDelete },
+          ]}
+        />
       )}
     </div>
   );
@@ -754,12 +736,9 @@ function AddressesSection({
     <Card>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-medium">{t.billing_addresses}</h2>
-        <button
-          onClick={addDraft}
-          className="flex items-center gap-1 text-xs text-accent hover:text-accent-hover"
-        >
-          <Plus size={14} /> {t.add}
-        </button>
+        <Button variant="link" size="sm" icon={<Plus size={14} />} onClick={addDraft} className="hover:text-accent-hover">
+          {t.add}
+        </Button>
       </div>
 
       <div className="space-y-3">

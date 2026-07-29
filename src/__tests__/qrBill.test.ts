@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildQRBillData } from "../components/invoice/qr-bill";
+import { buildQRBillData, shouldRenderQrBill } from "../components/invoice/qr-bill";
 import type { Invoice } from "../types/invoice";
 import type { Client } from "../types/client";
 import type { BusinessProfile } from "../types/business-profile";
@@ -84,5 +84,29 @@ describe("buildQRBillData", () => {
     const data = buildQRBillData(baseInvoice, baseClient, baseProfile);
     expect(data.amount).toBe(1500);
     expect(data.currency).toBe("CHF");
+  });
+});
+
+describe("shouldRenderQrBill", () => {
+  it("returns true for a CHF invoice with IBAN and toggle on", () => {
+    expect(shouldRenderQrBill({ currency: "CHF" }, baseProfile, true)).toBe(true);
+  });
+
+  it("returns false for EUR, USD and GBP even with IBAN and toggle on", () => {
+    expect(shouldRenderQrBill({ currency: "EUR" }, baseProfile, true)).toBe(false);
+    expect(shouldRenderQrBill({ currency: "USD" }, baseProfile, true)).toBe(false);
+    expect(shouldRenderQrBill({ currency: "GBP" }, baseProfile, true)).toBe(false);
+  });
+
+  it("returns false when IBAN is missing", () => {
+    expect(shouldRenderQrBill({ currency: "CHF" }, { ...baseProfile, iban: "" }, true)).toBe(false);
+  });
+
+  it("returns false when the template toggle is off", () => {
+    expect(shouldRenderQrBill({ currency: "CHF" }, baseProfile, false)).toBe(false);
+  });
+
+  it("treats a missing currency as CHF (display default)", () => {
+    expect(shouldRenderQrBill({ currency: "" }, baseProfile, true)).toBe(true);
   });
 });

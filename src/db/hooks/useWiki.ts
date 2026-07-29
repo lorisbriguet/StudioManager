@@ -15,6 +15,7 @@ import {
   getWikiArticlesByProject,
 } from "../queries/wiki";
 import { useUndoStore } from "../../stores/undo-store";
+import { getLabels } from "../../lib/notifyError";
 
 // ── Folders ──────────────────────────────────────────────────
 
@@ -119,7 +120,7 @@ export function useDeleteWikiArticle() {
       await deleteWikiArticle(id);
       if (prev) {
         useUndoStore.getState().push({
-          label: `Article deleted`,
+          label: `${getLabels().undo_delete_article} "${prev.title}"`,
           execute: async () => {
             const newId = await createWikiArticle({
               folder_id: prev.folder_id,

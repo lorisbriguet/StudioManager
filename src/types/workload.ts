@@ -9,7 +9,10 @@ export type WorkloadColumnType =
 
 export interface SelectOption {
   value: string;
-  color: string; // gray | brown | orange | yellow | green | blue | purple | pink | red
+  // Canonical names: blue | purple | green | red | yellow | cyan | orange | teal | gray
+  // (see lib/tagColors). Stored data may still contain legacy "brown"/"pink" —
+  // render via getStoredTagColor, which maps them to orange/red. Never migrate stored names.
+  color: string;
 }
 
 export interface WorkloadColumn {
@@ -65,23 +68,6 @@ export interface ProjectWorkloadConfig {
   columns: WorkloadColumn[];
 }
 
-export const TAG_COLORS: Record<
-  string,
-  { bg: string; text: string }
-> = {
-  gray:   { bg: "bg-gray-200",   text: "text-gray-700" },
-  brown:  { bg: "bg-amber-100",  text: "text-amber-800" },
-  orange: { bg: "bg-orange-100", text: "text-orange-700" },
-  yellow: { bg: "bg-yellow-100", text: "text-yellow-700" },
-  green:  { bg: "bg-green-100",  text: "text-green-700" },
-  blue:   { bg: "bg-blue-100",   text: "text-blue-700" },
-  purple: { bg: "bg-purple-100", text: "text-purple-700" },
-  pink:   { bg: "bg-pink-100",   text: "text-pink-700" },
-  red:    { bg: "bg-red-100",    text: "text-red-700" },
-};
-
-export const TAG_COLOR_NAMES = Object.keys(TAG_COLORS);
-
 export const DEFAULT_WORKLOAD_COLUMNS: WorkloadColumn[] = [
   { key: "asset", name: "Asset", type: "link", width: 160 },
   {
@@ -93,7 +79,7 @@ export const DEFAULT_WORKLOAD_COLUMNS: WorkloadColumn[] = [
       { value: "Digital", color: "yellow" },
       { value: "Motion", color: "purple" },
       { value: "Print", color: "orange" },
-      { value: "Admin", color: "pink" },
+      { value: "Admin", color: "red" },
     ],
   },
   { key: "og_scope", name: "OG Scope", type: "checkbox", width: 80 },

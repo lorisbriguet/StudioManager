@@ -92,7 +92,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
     try { return localStorage.getItem(`workload_sticky_${projectId}`) === "1"; } catch { return false; }
   });
 
-  const columns: WorkloadColumn[] = config?.columns ?? [];
+  const columns: WorkloadColumn[] = useMemo(() => config?.columns ?? [], [config?.columns]);
   const templateId = config?.template_id ?? null;
 
   const columnsRef = useRef(columns);
@@ -334,7 +334,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
       // Custom column sorting
       const av = a.cells[sortKey];
       const bv = b.cells[sortKey];
-      let cmp = 0;
+      let cmp: number;
       if (typeof av === "number" && typeof bv === "number") {
         cmp = av - bv;
       } else {
@@ -446,6 +446,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
           onClick={() => onEditColumn?.(null, columns.length)}
           className="p-1 text-muted hover:text-accent"
           title={t.add_column}
+          aria-label={t.add_column}
         >
           <Plus size={16} />
         </button>
@@ -613,13 +614,15 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
         </div>
 
         {/* Add row button */}
-        <button
+        <Button
+          variant="link"
+          size="md"
+          icon={<Plus size={14} />}
           onClick={handleAddRow}
-          className="w-full px-4 py-2 text-sm text-muted hover:text-accent hover:bg-[var(--color-hover-row)] flex items-center gap-1 border-t border-[var(--color-border-divider)]"
+          className="w-full px-4 py-2 text-muted hover:text-accent hover:no-underline! hover:bg-[var(--color-hover-row)] border-t border-[var(--color-border-divider)]"
         >
-          <Plus size={14} />
           {t.new_row}
-        </button>
+        </Button>
       </SortableContext>
       </DndContext>
 
@@ -689,7 +692,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
           <div className="bg-[var(--color-surface)] rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-divider)]">
               <h3 className="text-sm font-medium">{t.save_as_template}</h3>
-              <button onClick={() => setShowSaveModal(false)} className="text-muted hover:text-[var(--color-text-secondary)]">
+              <button onClick={() => setShowSaveModal(false)} aria-label={t.close} className="text-muted hover:text-[var(--color-text-secondary)]">
                 <X size={16} />
               </button>
             </div>
@@ -865,7 +868,7 @@ function SortableRow({
           {...attributes}
           {...listeners}
           className="flex items-center justify-center w-full h-full min-h-[32px] cursor-grab text-muted opacity-0 group-hover/row:opacity-50"
-          aria-label="Drag to reorder"
+          aria-label={t.drag_to_reorder}
         >
           <GripVertical size={14} />
         </div>
@@ -876,12 +879,13 @@ function SortableRow({
         <div className="flex items-center gap-1">
           <button
             onClick={() => toggleTimer(row.id, projectId)}
-            className={`shrink-0 p-0.5 rounded ${
+            className={`shrink-0 p-0.5 rounded-md ${
               isTimerActive
                 ? "text-[var(--color-danger-text)] hover:text-[var(--color-danger-text)]"
                 : "text-muted opacity-0 group-hover/row:opacity-100 hover:text-accent"
             }`}
             title={isTimerActive ? t.stop_timer : t.start_timer}
+            aria-label={isTimerActive ? t.stop_timer : t.start_timer}
           >
             {isTimerActive ? <Square size={12} /> : <Play size={12} />}
           </button>
@@ -938,6 +942,7 @@ function SortableRow({
             onClick={() => handleDuplicateRow(row)}
             className="p-0.5 text-muted hover:text-accent"
             title={t.duplicate_row}
+            aria-label={t.duplicate_row}
           >
             <Copy size={14} />
           </button>
@@ -945,6 +950,7 @@ function SortableRow({
             onClick={() => deleteRow.mutate(row.id)}
             className="p-0.5 text-muted hover:text-[var(--color-danger-text)]"
             title={t.delete}
+            aria-label={t.delete}
           >
             <Trash2 size={14} />
           </button>

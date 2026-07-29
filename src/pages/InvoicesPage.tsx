@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Eye, ChevronRight, Pencil, Trash2, CheckCircle, Send, Repeat, X, AlertTriangle, ExternalLink, FileText, Settings2, Download, Mail } from "lucide-react";
 import { toast } from "sonner";
@@ -8,7 +8,7 @@ import { appDataDir } from "@tauri-apps/api/path";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { addMonths, format } from "date-fns";
 import { pdf } from "@react-pdf/renderer";
-import { undoable } from "../lib/undo";
+import { undoable, undoableFromStore } from "../lib/undo";
 import { useInvoices, useUpdateInvoice, useDeleteInvoice } from "../db/hooks/useInvoices";
 import { getInvoice, getInvoiceLineItems } from "../db/queries/invoices";
 import { getClient, getClientContacts, getClientAddresses } from "../db/queries/clients";
@@ -20,6 +20,7 @@ import { useClients } from "../db/hooks/useClients";
 import { useRecurringTemplates, useCreateRecurringTemplate, useDeleteRecurringTemplate, useUpdateRecurringTemplate } from "../db/hooks/useRecurring";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
 import { formatDisplayDate } from "../utils/formatDate";
+import { todayLocalISO } from "../utils/localDate";
 import { useT } from "../i18n/useT";
 import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
 import { BulkActionBar } from "../components/BulkActionBar";
@@ -27,8 +28,9 @@ import { SavedFilterBar } from "../components/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useYearGrouping } from "../hooks/useYearGrouping";
-import { PageHeader, SearchBar, PageSpinner, Button, EmptyState, Card } from "../components/ui";
+import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Card } from "../components/ui";
 import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
+import { isDraftReference } from "../types/invoice";
 import type { Invoice, InvoiceStatus } from "../types/invoice";
 import type { RecurringFrequency } from "../types/recurring";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
@@ -109,7 +111,7 @@ export function InvoicesPage() {
       const inv = enriched.find((i) => i.id === id);
       return { id, status: inv?.status, paid_date: inv?.paid_date };
     });
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayLocalISO();
     ids.forEach((id) => updateInvoice.mutate({ id, data: { status: "paid" as InvoiceStatus, paid_date: today } }));
     undoable(t.bulk_updated, async () => {
       await Promise.all(
@@ -138,22 +140,53 @@ export function InvoicesPage() {
     bulk.clearSelection();
   }, [bulk, updateInvoice, enriched, t]);
 
+  // Only drafts (DRAFT- reference) are deletable — invoices that ever had
+  // a real reference must be cancelled instead
+  const selectionHasNonDraft = useMemo(
+    () =>
+      ([...bulk.selected] as number[]).some((id) => {
+        const inv = enriched.find((i) => i.id === id);
+        return inv !== undefined && !isDraftReference(inv.reference);
+      }),
+    [bulk.selected, enriched]
+  );
+
   const bulkDelete = useCallback(async () => {
+    if (selectionHasNonDraft) {
+      toast.error(t.invoice_delete_only_drafts);
+      return;
+    }
     if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
     ([...bulk.selected] as number[]).forEach((id) => deleteInvoice.mutate(id));
     bulk.clearSelection();
-  }, [bulk, deleteInvoice, t]);
+  }, [bulk, deleteInvoice, selectionHasNonDraft, t]);
 
   const { expandedYears, groupedByYear, toggleYear } = useYearGrouping(
     filtered,
     useCallback((inv: (typeof filtered)[0]) => inv.invoice_date, [])
   );
 
+  // PDF generation runs for seconds; the actions live in the context menu,
+  // which can't show a spinner — so guard per-invoice against double-fire
+  // (ref: no re-render needed) and surface progress via a loading toast.
+  const busyPdfIds = useRef<Set<number>>(new Set());
+
   const handleDownloadPdf = async (inv: Invoice & { client_name: string }) => {
+    if (busyPdfIds.current.has(inv.id)) return;
+    busyPdfIds.current.add(inv.id);
+    try {
+      await doDownloadPdf(inv);
+    } finally {
+      busyPdfIds.current.delete(inv.id);
+    }
+  };
+
+  const doDownloadPdf = async (inv: Invoice & { client_name: string }) => {
     if (inv.reference.startsWith("DRAFT")) {
       const proceed = await ask(t.export_draft_warning, { kind: "warning", okLabel: t.download_pdf, cancelLabel: t.cancel });
       if (!proceed) return;
     }
+    const toastId = toast.loading(t.generating_pdf);
     try {
       const [fullInvoice, lineItems, client, profile] = await Promise.all([
         getInvoice(inv.id),
@@ -162,7 +195,7 @@ export function InvoicesPage() {
         getBusinessProfile(),
       ]);
       if (!fullInvoice || !client || !profile) {
-        toast.error(t.invoice_not_found);
+        toast.error(t.invoice_not_found, { id: toastId });
         return;
       }
       const [contacts, addresses, project] = await Promise.all([
@@ -204,17 +237,28 @@ export function InvoicesPage() {
       a.download = `${fullInvoice.reference}_${client.name}.pdf`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast.success(t.download_pdf);
+      toast.success(t.download_pdf, { id: toastId });
     } catch (err) {
-      toast.error(String(err));
+      toast.error(String(err), { id: toastId });
     }
   };
 
   const handleEmailPdf = async (inv: Invoice & { client_name: string }) => {
+    if (busyPdfIds.current.has(inv.id)) return;
+    busyPdfIds.current.add(inv.id);
+    try {
+      await doEmailPdf(inv);
+    } finally {
+      busyPdfIds.current.delete(inv.id);
+    }
+  };
+
+  const doEmailPdf = async (inv: Invoice & { client_name: string }) => {
     if (inv.reference.startsWith("DRAFT")) {
       const proceed = await ask(t.export_draft_warning, { kind: "warning", okLabel: t.email_pdf, cancelLabel: t.cancel });
       if (!proceed) return;
     }
+    const toastId = toast.loading(t.generating_pdf);
     try {
       const [fullInvoice, lineItems, client, profile] = await Promise.all([
         getInvoice(inv.id),
@@ -223,7 +267,7 @@ export function InvoicesPage() {
         getBusinessProfile(),
       ]);
       if (!fullInvoice || !client || !profile) {
-        toast.error(t.invoice_not_found);
+        toast.error(t.invoice_not_found, { id: toastId });
         return;
       }
       const [contacts, addresses, project] = await Promise.all([
@@ -269,8 +313,9 @@ export function InvoicesPage() {
         to: client.email ?? "",
         subject: fullInvoice.reference,
       });
+      toast.dismiss(toastId);
     } catch (err) {
-      toast.error(String(err));
+      toast.error(String(err), { id: toastId });
     }
   };
 
@@ -296,7 +341,7 @@ export function InvoicesPage() {
 
   const handleGenerateReminder = (inv: Invoice & { client_name: string }) => {
     const newCount = (inv.reminder_count ?? 0) + 1;
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayLocalISO();
     updateInvoice.mutate(
       { id: inv.id, data: { reminder_count: newCount, last_reminder_date: today } },
       {
@@ -315,35 +360,44 @@ export function InvoicesPage() {
     return inv.reference.startsWith("DRAFT") ? t.draft : inv.reference;
   };
 
-  if (isLoading) return <PageSpinner label={t.loading} />;
+  const header = (
+    <PageHeader title={t.invoices}>
+      <Button
+        variant="secondary"
+        icon={<Repeat size={14} />}
+        onClick={() => setShowRecurring(!showRecurring)}
+        className={showRecurring ? "border-accent text-accent bg-accent-light" : ""}
+      >
+        {t.recurring}
+        {(templates?.length ?? 0) > 0 && (
+          <span className="ml-1 text-xs bg-[var(--color-input-bg)] text-[var(--color-muted)] rounded-full px-1.5 py-0.5">
+            {templates?.length}
+          </span>
+        )}
+      </Button>
+      <Button icon={<Plus size={16} />} onClick={() => navigate("/invoices/new")}>
+        {t.new_invoice}
+      </Button>
+    </PageHeader>
+  );
+
+  if (isLoading) return (
+    <div>
+      {header}
+      <TableSkeleton columns={6} />
+    </div>
+  );
 
   return (
     <div>
-      <PageHeader title={t.invoices}>
-        <Button
-          variant="secondary"
-          icon={<Repeat size={14} />}
-          onClick={() => setShowRecurring(!showRecurring)}
-          className={showRecurring ? "border-accent text-accent bg-accent-light" : ""}
-        >
-          {t.recurring}
-          {(templates?.length ?? 0) > 0 && (
-            <span className="ml-1 text-xs bg-[var(--color-input-bg)] text-[var(--color-muted)] rounded-full px-1.5 py-0.5">
-              {templates?.length}
-            </span>
-          )}
-        </Button>
-        <Button icon={<Plus size={16} />} onClick={() => navigate("/invoices/new")}>
-          {t.new_invoice}
-        </Button>
-      </PageHeader>
+      {header}
 
       {/* Recurring templates panel */}
       {showRecurring && (
         <Card className="mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-medium">{t.recurring_invoices}</h2>
-            <button type="button" onClick={() => setShowRecurring(false)} className="text-muted hover:text-[var(--color-text)]">
+            <button type="button" onClick={() => setShowRecurring(false)} aria-label={t.close} className="text-muted hover:text-[var(--color-text)]">
               <X size={14} />
             </button>
           </div>
@@ -372,7 +426,7 @@ export function InvoicesPage() {
                         onChange={(e) =>
                           updateTemplate.mutate({ id: tmpl.id, data: { frequency: e.target.value as RecurringFrequency } })
                         }
-                        className="text-xs border border-[var(--color-input-border)] rounded px-1.5 py-0.5"
+                        className="text-xs border border-[var(--color-input-border)] rounded-lg px-1.5 py-0.5"
                       >
                         {FREQUENCIES.map((f) => (
                           <option key={f} value={f}>{t[f] ?? f}</option>
@@ -400,6 +454,7 @@ export function InvoicesPage() {
                           onSuccess: () => toast.success(t.template_deleted),
                         })}
                         className="text-muted hover:text-[var(--color-danger-text)]"
+                        aria-label={t.delete_template}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -490,6 +545,7 @@ export function InvoicesPage() {
                               setCtxMenu({ x: e.clientX, y: e.clientY, item: inv });
                             }}
                             className="opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
+                            aria-label={t.more_actions}
                           >
                             <Settings2 size={14} />
                           </button>
@@ -507,7 +563,7 @@ export function InvoicesPage() {
                               const prevStatus = inv.status;
                               const prevPaidDate = inv.paid_date;
                               const data: Record<string, unknown> = { status };
-                              if (status === "paid") data.paid_date = new Date().toISOString().split("T")[0];
+                              if (status === "paid") data.paid_date = todayLocalISO();
                               updateInvoice.mutate(
                                 { id: inv.id, data },
                                 {
@@ -552,8 +608,13 @@ export function InvoicesPage() {
         </table>
         {filtered.length === 0 && (
           <EmptyState
-            message={search ? t.no_matching_invoices : t.no_invoices_yet}
+            message={(invoices?.length ?? 0) === 0 ? t.no_invoices_yet : t.no_matching_invoices}
             icon={<FileText size={32} />}
+            action={(invoices?.length ?? 0) === 0 ? (
+              <Button icon={<Plus size={16} />} onClick={() => navigate("/invoices/new")}>
+                {t.new_invoice}
+              </Button>
+            ) : undefined}
           />
         )}
       </div>
@@ -570,11 +631,13 @@ export function InvoicesPage() {
             { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/invoices/${ctxMenu.item.id}/edit`, ctxMenu.item.reference.startsWith("DRAFT") ? t.draft : ctxMenu.item.reference) },
             { label: "", divider: true, onClick: () => {} },
             ...(ctxMenu.item.status === "draft" ? [{ label: t.mark_sent, icon: <Send size={14} />, onClick: () => updateInvoice.mutate({ id: ctxMenu.item.id, data: { status: "sent" } }) }] : []),
-            ...(ctxMenu.item.status !== "paid" && ctxMenu.item.status !== "cancelled" ? [{ label: t.mark_paid, icon: <CheckCircle size={14} />, onClick: () => updateInvoice.mutate({ id: ctxMenu.item.id, data: { status: "paid", paid_date: new Date().toISOString().split("T")[0] } }) }] : []),
+            ...(ctxMenu.item.status !== "paid" && ctxMenu.item.status !== "cancelled" ? [{ label: t.mark_paid, icon: <CheckCircle size={14} />, onClick: () => updateInvoice.mutate({ id: ctxMenu.item.id, data: { status: "paid", paid_date: todayLocalISO() } }) }] : []),
             ...(ctxMenu.item.status !== "draft" && ctxMenu.item.status !== "cancelled" ? [{ label: t.create_recurring, icon: <Repeat size={14} />, onClick: () => handleCreateRecurring(ctxMenu.item) }] : []),
             ...(ctxMenu.item.status === "overdue" ? [{ label: t.generate_reminder, icon: <AlertTriangle size={14} />, onClick: () => handleGenerateReminder(ctxMenu.item) }] : []),
-            { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteInvoice.mutate(ctxMenu.item.id) },
+            ...(isDraftReference(ctxMenu.item.reference) ? [
+              { label: "", divider: true, onClick: () => {} },
+              { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteInvoice.mutate(ctxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_invoice_deleted) }) },
+            ] : []),
           ]}
         />
       )}
@@ -584,7 +647,7 @@ export function InvoicesPage() {
         actions={[
           { label: t.mark_paid, icon: <CheckCircle size={14} />, onClick: bulkMarkPaid },
           { label: t.mark_sent, icon: <Send size={14} />, onClick: bulkMarkSent },
-          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+          ...(selectionHasNonDraft ? [] : [{ label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true }]),
         ]}
       />
     </div>

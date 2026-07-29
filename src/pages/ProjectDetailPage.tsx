@@ -23,12 +23,12 @@ export function ProjectDetailPage() {
     if (project?.name) {
       updateActiveTab(`/projects/${projectId}`, project.name);
     }
-  }, [project?.name, projectId]);
+  }, [project?.name, projectId, updateActiveTab]);
 
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(-1)} className="text-[var(--color-muted)] hover:text-[var(--color-text-secondary)]">
+        <button onClick={() => navigate(-1)} aria-label={t.back} className="text-[var(--color-muted)] hover:text-[var(--color-text-secondary)]">
           <ArrowLeft size={18} />
         </button>
         <div className="ml-auto flex items-center gap-2">
@@ -63,6 +63,7 @@ export function ProjectDetailPage() {
               size="sm"
               icon={<Trash2 size={16} />}
               onClick={() => setConfirmDelete(true)}
+              aria-label={t.delete}
               className="p-1.5 text-muted hover:text-[var(--color-danger-text)]"
               title={t.delete}
             />

@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.9.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.10.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="Platform">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
@@ -287,8 +287,9 @@ StudioManager is designed for Swiss freelancers:
 ## Roadmap
 
 - [ ] Windows support
-- [ ] Unsaved changes warning on invoice/quote pages
-- [ ] Tab navigation arrows (back/forward)
+- [ ] Meetings block in projects
+- [ ] System tray quick-add
+- [ ] Project profitability view
 
 ---
 

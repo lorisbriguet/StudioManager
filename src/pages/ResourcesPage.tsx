@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Plus, Search, ExternalLink, Trash2, X } from "lucide-react";
-import { PageHeader, Button, EmptyState } from "../components/ui";
+import { PageHeader, Button, EmptyState, FormField } from "../components/ui";
+import * as v from "../lib/validate";
 import { Skeleton } from "../components/ui/Skeleton";
 import { SavedFilterBar } from "../components/SavedFilterBar";
 import { getTagColor, getNamedTagColor } from "../lib/tagColors";
@@ -185,7 +186,7 @@ export function ResourcesPage() {
             placeholder={t.search_resources}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setActiveFilterId(null); }}
-            className="w-full pl-8 pr-3 py-1.5 border border-[var(--color-input-border)] rounded-md text-sm"
+            className="w-full pl-8 pr-3 py-1.5 border border-[var(--color-input-border)] rounded-lg text-sm"
           />
         </div>
         {(allTags ?? []).length > 0 && (
@@ -223,7 +224,14 @@ export function ResourcesPage() {
       />
 
       {filtered.length === 0 ? (
-        <EmptyState message={rows.length === 0 ? t.no_resources_yet : t.no_matching_resources} />
+        <EmptyState
+          message={rows.length === 0 ? t.no_resources_yet : t.no_matching_resources}
+          action={rows.length === 0 ? (
+            <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>
+              {t.new_resource}
+            </Button>
+          ) : undefined}
+        />
       ) : (
         <div>
           <table className="w-full text-sm">
@@ -297,6 +305,21 @@ export function ResourcesPage() {
   );
 }
 
+// Phase 2 E3 — inline validation (E1 pattern) for the new-resource form.
+type ResourceFormField = "name" | "url";
+
+// Mirrors handleOpenUrl's normalization: bare domains are opened as https://.
+const lenientUrl: v.Rule = (value) => {
+  const s = value.trim();
+  if (!s) return null;
+  return v.url(s.startsWith("http://") || s.startsWith("https://") ? s : `https://${s}`);
+};
+
+const resourceSchema: v.FormSchema<ResourceFormField> = {
+  name: [v.required],
+  url: [v.required, lenientUrl],
+};
+
 function NewResourceForm({
   allTags,
   existingUrls,
@@ -315,8 +338,22 @@ function NewResourceForm({
   const [price, setPrice] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
+  const [errors, setErrors] = useState<Partial<Record<ResourceFormField, string>>>({});
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [pendingSubmit, setPendingSubmit] = useState<{ name: string; url: string; price: string; tags: string[] } | null>(null);
+
+  const setFieldError = (field: ResourceFormField, msg: string | null) =>
+    setErrors((e) => {
+      const next = { ...e };
+      if (msg) next[field] = msg;
+      else delete next[field];
+      return next;
+    });
+
+  const validateOnBlur = (field: ResourceFormField) =>
+    setFieldError(field, v.validateField(field === "name" ? name : url, resourceSchema[field]));
+
+  const clearError = (field: ResourceFormField) => setFieldError(field, null);
 
   const normalizeUrl = (u: string) => u.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/$/, "");
 
@@ -344,46 +381,54 @@ function NewResourceForm({
   return (
     <div className="rounded-xl p-4 mb-4 bg-[var(--color-surface)]">
       <div className="grid grid-cols-4 gap-3">
-        <input
-          type="text"
-          placeholder={t.name}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="border border-[var(--color-input-border)] rounded-md px-3 py-1.5 text-sm"
-          autoFocus
-        />
-        <input
-          type="text"
-          placeholder="URL"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          className="border border-[var(--color-input-border)] rounded-md px-3 py-1.5 text-sm"
-        />
-        <select
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
-          className="border border-[var(--color-input-border)] rounded-md px-3 py-1.5 text-sm"
-        >
-          <option value="">{t.price_label}</option>
-          <option value="free">{t.price_free}</option>
-          <option value="paid">{t.price_paid}</option>
-        </select>
+        <FormField label={t.name} required error={errors.name}>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => { setName(e.target.value); clearError("name"); }}
+            onBlur={() => validateOnBlur("name")}
+            className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-1.5 text-sm"
+            autoFocus
+          />
+        </FormField>
+        <FormField label={t.url_label} required error={errors.url}>
+          <input
+            type="text"
+            value={url}
+            onChange={(e) => { setUrl(e.target.value); clearError("url"); }}
+            onBlur={() => validateOnBlur("url")}
+            className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-1.5 text-sm"
+          />
+        </FormField>
+        <FormField label={t.price_label}>
+          <select
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-1.5 text-sm"
+          >
+            <option value="">{t.price_label}</option>
+            <option value="free">{t.price_free}</option>
+            <option value="paid">{t.price_paid}</option>
+          </select>
+        </FormField>
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <input
-              type="text"
-              placeholder={t.add_tag}
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === ",") {
-                  e.preventDefault();
-                  addTag(tagInput);
-                }
-              }}
-              list="tag-suggestions"
-              className="w-full border border-[var(--color-input-border)] rounded-md px-3 py-1.5 text-sm"
-            />
+            <FormField label={t.tags}>
+              <input
+                type="text"
+                placeholder={t.add_tag}
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === ",") {
+                    e.preventDefault();
+                    addTag(tagInput);
+                  }
+                }}
+                list="tag-suggestions"
+                className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-1.5 text-sm"
+              />
+            </FormField>
             <datalist id="tag-suggestions">
               {allTags.filter((t) => !tags.includes(t)).map((t) => (
                 <option key={t} value={t} />
@@ -403,7 +448,7 @@ function NewResourceForm({
                 className="px-2 py-0.5 text-xs rounded-full font-medium flex items-center gap-1"
               >
                 {tag}
-                <button onClick={() => setTags(tags.filter((t) => t !== tag))}>
+                <button onClick={() => setTags(tags.filter((t) => t !== tag))} aria-label={`${t.remove_tag} ${tag}`}>
                   <X size={10} />
                 </button>
               </span>
@@ -417,7 +462,7 @@ function NewResourceForm({
           <span className="text-[var(--color-warning-text)] flex-1">{t.resource_duplicate_warning.replace("{name}", duplicateWarning)}</span>
           <button
             onClick={() => { if (pendingSubmit) { onSubmit(pendingSubmit); } setDuplicateWarning(null); setPendingSubmit(null); }}
-            className="text-xs px-2 py-1 rounded bg-[var(--color-warning-text)] text-white hover:opacity-80 shrink-0"
+            className="text-xs px-2 py-1 rounded-md bg-[var(--color-warning-text)] text-white hover:opacity-80 shrink-0"
           >
             {t.save_anyway}
           </button>
@@ -432,13 +477,14 @@ function NewResourceForm({
       <div className="flex gap-2 mt-3">
         <button
           onClick={() => {
-            if (!name.trim()) return;
+            const errs = v.validateForm({ name, url }, resourceSchema);
+            setErrors(errs);
+            if (Object.keys(errs).length > 0) return;
             const data = { name: name.trim(), url: url.trim(), price, tags };
             if (!checkDuplicate(data)) {
               onSubmit(data);
             }
           }}
-          disabled={!name.trim()}
           className="px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover disabled:opacity-50"
         >
           {t.save}
@@ -544,7 +590,7 @@ function ResourceTableRow({
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="border border-[var(--color-input-border)] rounded px-2 py-1 text-sm w-full"
+            className="border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-sm w-full"
             autoFocus
           />
         </td>
@@ -555,7 +601,7 @@ function ResourceTableRow({
               return (
                 <span key={tag} style={{ background: c.bg, color: c.text }} className="px-2 py-0.5 text-xs rounded-full font-medium flex items-center gap-1">
                   {tag}
-                  <button onClick={() => setTags(tags.filter((t) => t !== tag))}><X size={10} /></button>
+                  <button onClick={() => setTags(tags.filter((t) => t !== tag))} aria-label={`${t.remove_tag} ${tag}`}><X size={10} /></button>
                 </span>
               );
             })}
@@ -583,7 +629,7 @@ function ResourceTableRow({
           </div>
         </td>
         <td className="px-3 py-2">
-          <select value={price} onChange={(e) => setPrice(e.target.value)} className="border border-[var(--color-input-border)] rounded px-2 py-1 text-sm">
+          <select value={price} onChange={(e) => setPrice(e.target.value)} className="border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-sm">
             <option value="">—</option>
             <option value="free">{t.price_free}</option>
             <option value="paid">{t.price_paid}</option>
@@ -593,7 +639,7 @@ function ResourceTableRow({
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            className="border border-[var(--color-input-border)] rounded px-2 py-1 text-sm w-full"
+            className="border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-sm w-full"
           />
         </td>
         <td className="px-3 py-2">
@@ -652,19 +698,22 @@ function ResourceTableRow({
       </td>
       <td className="px-3 py-2">
         {resource.url && (
-          <button
+          <Button
+            variant="link"
+            size="sm"
+            icon={<ExternalLink size={12} />}
             onClick={(e) => { e.stopPropagation(); onOpenUrl(); }}
-            className="flex items-center gap-1 text-accent hover:underline text-xs max-w-[300px] truncate"
+            className="max-w-[300px] truncate"
           >
-            <ExternalLink size={12} />
             {resource.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
-          </button>
+          </Button>
         )}
       </td>
       <td className="px-3 py-2">
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
           className="text-danger opacity-0 group-hover:opacity-100 transition-opacity"
+          aria-label={t.delete}
         >
           <Trash2 size={14} />
         </button>

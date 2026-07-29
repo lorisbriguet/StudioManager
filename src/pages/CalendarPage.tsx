@@ -8,6 +8,7 @@ import interactionPlugin from "@fullcalendar/interaction";
 import type { EventInput, EventContentArg, EventDropArg } from "@fullcalendar/core";
 import type { DateClickArg, EventResizeDoneArg } from "@fullcalendar/interaction";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "../components/ui";
 import { useT } from "../i18n/useT";
 import { useTasksWithDueDate, useUpdateTask, useUpdateSubtask, useCreateTask, useCreateSubtask, useTasksByProject } from "../db/hooks/useTasks";
 import { useProjects, useUpdateProject } from "../db/hooks/useProjects";
@@ -80,7 +81,7 @@ function getTaskEventColor(
   const col = findCalendarColorColumn(columns);
   if (!col) return null;
 
-  let cells: Record<string, unknown> = {};
+  let cells: Record<string, unknown>;
   try {
     cells = JSON.parse(workloadCellsJson || "{}") as Record<string, unknown>;
   } catch {
@@ -130,7 +131,7 @@ export function CalendarPage() {
   const [calView, setCalView] = useState<"dayGridMonth" | "timeGridWeek">("timeGridWeek");
 
   const calApi = () => calRef.current?.getApi();
-  const syncTitle = () => { const api = calApi(); if (api) setCalTitle(api.view.title); };
+  const syncTitle = useCallback(() => { const api = calRef.current?.getApi(); if (api) setCalTitle(api.view.title); }, []);
   const calPrev = () => { calApi()?.prev(); syncTitle(); };
   const calNext = () => { calApi()?.next(); syncTitle(); };
   const calToday = () => { calApi()?.today(); syncTitle(); };
@@ -139,7 +140,7 @@ export function CalendarPage() {
   useEffect(() => {
     const timer = setTimeout(() => { calRef.current?.getApi()?.updateSize(); syncTitle(); }, 100);
     return () => clearTimeout(timer);
-  }, [peekId]);
+  }, [peekId, syncTitle]);
 
   const events = useMemo<EventInput[]>(() => {
     const items: EventInput[] = [];
@@ -425,10 +426,10 @@ export function CalendarPage() {
       <div className="min-w-0 flex-1 p-8">
         {/* Custom toolbar */}
         <div className="flex items-center gap-3 mb-4">
-          <button onClick={calPrev} className="p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors">
+          <button onClick={calPrev} aria-label={t.previous} className="p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors">
             <ChevronLeft size={18} />
           </button>
-          <button onClick={calNext} className="p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors">
+          <button onClick={calNext} aria-label={t.next} className="p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors">
             <ChevronRight size={18} />
           </button>
           <button onClick={calToday} className="px-3 py-1 text-xs border border-[var(--color-input-border)] rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:border-[#444] transition-colors">
@@ -515,6 +516,7 @@ export function CalendarPage() {
             <button
               onClick={handleClosePeek}
               className="text-muted hover:text-[var(--color-text-secondary)]"
+              aria-label={t.close}
             >
               <X size={16} />
             </button>
@@ -640,7 +642,7 @@ function QuickCreatePopup({
           setSubtaskTitle("");
           setTitle("");
         }}
-        className="w-full border border-[var(--color-input-border)] rounded-md px-2 py-1.5 text-xs mb-2"
+        className="w-full bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-lg px-2 py-1.5 text-xs focus-accent mb-2"
       >
         <option value="">{t.select_project}</option>
         {projects.map((p) => (
@@ -651,11 +653,12 @@ function QuickCreatePopup({
       {/* Task name with autocomplete */}
       <div className="relative mb-2">
         {selectedTask ? (
-          <div className="flex items-center gap-1 border border-accent/30 bg-accent-light rounded-md px-2 py-1.5">
+          <div className="flex items-center gap-1 border border-accent/30 bg-accent-light rounded-lg px-2 py-1.5">
             <span className="text-xs flex-1 truncate">{selectedTask.title}</span>
             <button
               onClick={handleClearTask}
               className="text-muted hover:text-[var(--color-text)] shrink-0"
+              aria-label={t.remove}
             >
               <X size={12} />
             </button>
@@ -677,11 +680,11 @@ function QuickCreatePopup({
               }
             }}
             placeholder={t.new_task}
-            className="w-full border border-[var(--color-input-border)] rounded-md px-2 py-1.5 text-xs"
+            className="w-full bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-lg px-2 py-1.5 text-xs focus-accent"
           />
         )}
         {!selectedTask && showSuggestions && suggestions.length > 0 && (
-          <div className="absolute z-10 top-full left-0 right-0 mt-0.5 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.4)] max-h-32 overflow-y-auto">
+          <div className="absolute z-10 top-full left-0 right-0 mt-0.5 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 max-h-32 overflow-y-auto">
             {suggestions.map((task) => (
               <button
                 key={task.id}
@@ -706,24 +709,17 @@ function QuickCreatePopup({
             if (e.key === "Enter") handleSubmit();
           }}
           placeholder={t.new_subtask}
-          className="w-full border border-[var(--color-input-border)] rounded-md px-2 py-1.5 text-xs mb-2"
+          className="w-full bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-lg px-2 py-1.5 text-xs focus-accent mb-2"
         />
       )}
 
       <div className="flex justify-end gap-1.5">
-        <button
-          onClick={onClose}
-          className="px-2.5 py-1 text-xs border border-[var(--color-input-border)] rounded hover:bg-[var(--color-hover-row)]"
-        >
+        <Button variant="ghost" size="sm" onClick={onClose}>
           {t.cancel}
-        </button>
-        <button
-          onClick={handleSubmit}
-          disabled={!canSubmit}
-          className="px-2.5 py-1 text-xs bg-accent text-white rounded hover:bg-accent-hover disabled:opacity-40"
-        >
+        </Button>
+        <Button size="sm" onClick={handleSubmit} disabled={!canSubmit}>
           {t.add}
-        </button>
+        </Button>
       </div>
     </div>,
     document.body

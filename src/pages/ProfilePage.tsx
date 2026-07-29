@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { Plus, X, Palette, Trash2, Building2, Landmark, FileText } from "lucide-react";
 import { toast } from "sonner";
@@ -10,7 +10,8 @@ import { parseActivities } from "../types/business-profile";
 import type { BusinessProfile } from "../types/business-profile";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Button, Input, PageSpinner } from "../components/ui";
+import { Button, FormField, Input, PageSpinner } from "../components/ui";
+import { Toggle } from "../components/ui/Toggle";
 import { TemplateEditor } from "../components/invoice/TemplateEditor";
 import {
   useInvoiceTemplates,
@@ -46,7 +47,17 @@ const bankFields: { key: keyof FormData; labelKey: UIKey }[] = [
 export function ProfilePage() {
   const { data: profile, isLoading } = useBusinessProfile();
   const updateProfile = useUpdateBusinessProfile();
-  const { register, handleSubmit, reset } = useForm<FormData>();
+  // Phase 2 E3: this stays a react-hook-form form — FormField is wired
+  // presentationally around register (label/id association, error passthrough).
+  // No required marks: the save path enforces no field, so none would be honest.
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    setValue,
+    formState: { errors: rhfErrors },
+  } = useForm<FormData>();
   const t = useT();
 
   const [activities, setActivities] = useState<string[]>([]);
@@ -99,12 +110,12 @@ export function ProfilePage() {
     saveActivities(activities.filter((_, i) => i !== idx));
   };
 
-  const categories: Array<{ key: ProfileCategory; label: string; icon?: React.ReactNode }> = [
+  const categories = useMemo<Array<{ key: ProfileCategory; label: string; icon?: React.ReactNode }>>(() => [
     { key: "business", label: t.business_profile, icon: <Building2 size={14} /> },
     { key: "bank", label: t.bank_details, icon: <Landmark size={14} /> },
     { key: "invoicing", label: t.invoice_defaults, icon: <FileText size={14} /> },
     { key: "templates", label: t.templates, icon: <Palette size={14} /> },
-  ];
+  ], [t]);
 
   // Keyboard navigation for profile sidebar
   const handleProfileKeyDown = useCallback(
@@ -213,7 +224,7 @@ export function ProfilePage() {
                           });
                         }}
                         className="text-muted hover:text-[var(--color-danger-text)] disabled:opacity-30"
-                        aria-label="Delete template"
+                        aria-label={t.delete_template}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -236,12 +247,14 @@ export function ProfilePage() {
               </h2>
               <div className="grid grid-cols-2 gap-4 max-w-lg">
                 {profileFields.map(({ key, labelKey, type }) => (
-                  <div key={key} className={key === "address" ? "col-span-2" : ""}>
-                    <label className="block text-xs font-medium text-muted mb-1">
-                      {t[labelKey]}
-                    </label>
+                  <FormField
+                    key={key}
+                    label={t[labelKey]}
+                    error={rhfErrors[key]?.message}
+                    className={key === "address" ? "col-span-2" : ""}
+                  >
                     <Input {...register(key)} type={type ?? "text"} />
-                  </div>
+                  </FormField>
                 ))}
               </div>
               <Button type="submit" className="mt-6" disabled={updateProfile.isPending}>
@@ -257,12 +270,14 @@ export function ProfilePage() {
               </h2>
               <div className="grid grid-cols-2 gap-4 max-w-lg">
                 {bankFields.map(({ key, labelKey }) => (
-                  <div key={key} className={key === "bank_address" || key === "iban" || key === "qr_iban" ? "col-span-2" : ""}>
-                    <label className="block text-xs font-medium text-muted mb-1">
-                      {t[labelKey]}
-                    </label>
+                  <FormField
+                    key={key}
+                    label={t[labelKey]}
+                    error={rhfErrors[key]?.message}
+                    className={key === "bank_address" || key === "iban" || key === "qr_iban" ? "col-span-2" : ""}
+                  >
                     <Input {...register(key)} type="text" />
-                  </div>
+                  </FormField>
                 ))}
               </div>
               <Button type="submit" className="mt-6" disabled={updateProfile.isPending}>
@@ -293,6 +308,7 @@ export function ProfilePage() {
                           type="button"
                           onClick={() => removeActivity(i)}
                           className="text-muted hover:text-[var(--color-danger-text)]"
+                          aria-label={t.remove}
                         >
                           <X size={14} />
                         </button>
@@ -316,6 +332,7 @@ export function ProfilePage() {
                       type="button"
                       onClick={addActivity}
                       className="p-2 text-muted hover:text-accent"
+                      aria-label={t.add_activity}
                     >
                       <Plus size={16} />
                     </button>
@@ -323,21 +340,21 @@ export function ProfilePage() {
                 </div>
 
                 {/* Payment terms */}
-                <div>
-                  <label className="block text-xs font-medium text-muted mb-1">
-                    {t.payment_terms_days}
-                  </label>
+                <FormField
+                  label={t.payment_terms_days}
+                  error={rhfErrors.default_payment_terms_days?.message}
+                >
                   <Input
                     {...register("default_payment_terms_days", { valueAsNumber: true })}
                     type="number"
                   />
-                </div>
+                </FormField>
 
                 <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    {...register("vat_exempt")}
-                    className="rounded"
+                  <Toggle
+                    checked={!!watch("vat_exempt")}
+                    onChange={(v) => setValue("vat_exempt", v ? 1 : 0)}
+                    ariaLabel={t.vat_exempt}
                   />
                   <label className="text-sm">{t.vat_exempt}</label>
                 </div>

@@ -5,16 +5,15 @@ import { toast } from "sonner";
 import { FolderOpen, HardDrive, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield, X, Clock, Pencil, Trash2, Check, Plus } from "lucide-react";
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { purgeAllCalendarEvents, syncAllExisting, listWritableCalendars } from "../lib/appleCalendar";
-import { createBackup, listBackups, restoreFromBackup, validateBackupPath, isBackupRunning, setBackupRunning } from "../lib/backup";
+import { createBackup, listBackups, restoreFromBackup, RestoreError, validateBackupPath, isBackupRunning, setBackupRunning, isScopeDenied } from "../lib/backup";
 import { switchDb, resetDb, seedPresentationDb } from "../db";
 import { useExpenseCategories, useCreateExpenseCategory, useUpdateExpenseCategory, useDeleteExpenseCategory, isDefaultCategory } from "../db/hooks/useExpenses";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useUpdateCustomList, useDeleteCustomList, useSetCustomListItems } from "../db/hooks/useCustomLists";
-import { TAG_COLOR_NAMES as WORKLOAD_COLOR_NAMES } from "../types/workload";
 import { useTimeEntriesWithDetails, useUpdateTimeEntry, useDeleteTimeEntry } from "../db/hooks/useTimeEntries";
 import { useProjects } from "../db/hooks/useProjects";
 import { isCategoryInUse } from "../db/queries/expenses";
-import type { ExpenseCategory, TagColorName } from "../types/expense";
-import { getNamedTagColor } from "../lib/tagColors";
+import type { ExpenseCategory } from "../types/expense";
+import { getNamedTagColor, getStoredTagColor, normalizeTagColorName, TAG_COLOR_NAMES, type TagColorName } from "../lib/tagColors";
 import { useAppStore, ACCENT_PRESETS, type DateFormatOption, type AccentPreset, type ProjectOpenMode } from "../stores/app-store";
 import { THEMES } from "../lib/themes";
 import { useT } from "../i18n/useT";
@@ -205,7 +204,10 @@ export function SettingsPage() {
   };
 
   const browseBackupDir = async (secondary?: boolean) => {
-    const dir = await open({ directory: true, title: t.backup_directory });
+    // recursive: true extends the session fs scope to the whole subtree —
+    // backups write nested folders (backup-<ts>/data/...), so a plain pick
+    // outside the static scope roots would otherwise fail on the first mkdir.
+    const dir = await open({ directory: true, recursive: true, title: t.backup_directory });
     if (typeof dir === "string") {
       const writable = await validateBackupPath(dir);
       if (!writable) {
@@ -235,7 +237,11 @@ export function SettingsPage() {
       }
       toast.success(t.backup_created.replace("{name}", path.split("/").pop() ?? ""));
     } catch (e) {
-      toast.error(t.backup_failed.replace("{error}", String(e)));
+      toast.error(
+        isScopeDenied(e)
+          ? t.backup_path_not_allowed
+          : t.backup_failed.replace("{error}", String(e))
+      );
     } finally {
       setBacking(false);
       setBackupRunning(false);
@@ -249,7 +255,8 @@ export function SettingsPage() {
       const backups = await listBackups(backupPath);
       setAvailableBackups(backups);
       setSelectedBackup(backups[0] ?? "");
-    } catch {
+    } catch (e) {
+      if (isScopeDenied(e)) toast.error(t.backup_path_not_allowed);
       setAvailableBackups([]);
     } finally {
       setLoadingBackups(false);
@@ -265,14 +272,26 @@ export function SettingsPage() {
     if (!confirmed) return;
     setRestoring(true);
     try {
-      const warnings = await restoreFromBackup(`${backupPath}/${selectedBackup}`);
+      const { warnings, valuesDefaulted, safetyBackup } = await restoreFromBackup(`${backupPath}/${selectedBackup}`);
       if (warnings.length > 0) {
         toast.warning(`${t.restore_warnings} ${warnings.join(", ")}`, { duration: 8000 });
       }
-      toast.success(t.toast_restore_success);
+      let successMsg = valuesDefaulted > 0
+        ? `${t.toast_restore_success} ${t.restore_values_defaulted.replace("{count}", String(valuesDefaulted))}`
+        : t.toast_restore_success;
+      successMsg += ` ${t.restore_safety_created.replace("{name}", safetyBackup)}`;
+      toast.success(successMsg);
       setTimeout(() => window.location.reload(), 1500);
     } catch (e) {
-      toast.error(`${t.toast_restore_failed}: ${String(e)}`);
+      // Restore runs in a single transaction — on failure it rolled back
+      if (e instanceof RestoreError) {
+        const base = e.code === "backup_empty" ? t.restore_backup_empty : t.restore_safety_backup_failed;
+        toast.error(e.detail ? `${base} (${e.detail})` : base, { duration: 10000 });
+      } else if (isScopeDenied(e)) {
+        toast.error(`${t.backup_path_not_allowed} ${t.restore_no_changes}`, { duration: 10000 });
+      } else {
+        toast.error(`${t.toast_restore_failed}: ${String(e)}. ${t.restore_no_changes}`, { duration: 10000 });
+      }
     } finally {
       setRestoring(false);
     }
@@ -280,7 +299,7 @@ export function SettingsPage() {
 
   const categorySections: { label: string; items: { key: SettingsCategory; label: string; icon: React.ReactNode }[] }[] = [
     {
-      label: "Preferences",
+      label: t.settings_group_preferences,
       items: [
         { key: "general", label: t.general, icon: <Settings2 size={14} /> },
         { key: "appearance", label: t.appearance, icon: <Palette size={14} /> },
@@ -290,7 +309,7 @@ export function SettingsPage() {
       ],
     },
     {
-      label: "Data",
+      label: t.settings_group_data,
       items: [
         { key: "categories", label: t.expense_categories, icon: <Tags size={14} /> },
         { key: "lists", label: t.custom_lists, icon: <LayoutList size={14} /> },
@@ -300,7 +319,7 @@ export function SettingsPage() {
       ],
     },
     {
-      label: "App",
+      label: t.settings_group_app,
       items: [
         { key: "updates", label: t.updates, icon: <Download size={14} /> },
       ],
@@ -383,8 +402,8 @@ export function SettingsPage() {
                   onChange={(e) => setLanguage(e.target.value as AppLanguage)}
                   fullWidth={false}
                 >
-                  <option value="EN">English</option>
-                  <option value="FR">Francais</option>
+                  <option value="EN">{t.english}</option>
+                  <option value="FR">{t.french}</option>
                 </Select>
               </SettingRow>
               <SettingRow label={t.export_language}>
@@ -393,8 +412,8 @@ export function SettingsPage() {
                   onChange={(e) => setExportLanguage(e.target.value as AppLanguage)}
                   fullWidth={false}
                 >
-                  <option value="EN">English</option>
-                  <option value="FR">Francais</option>
+                  <option value="EN">{t.english}</option>
+                  <option value="FR">{t.french}</option>
                 </Select>
               </SettingRow>
               <SettingRow label={t.date_format}>
@@ -475,7 +494,7 @@ export function SettingsPage() {
                 />
               </div>
               <SettingRow label={t.reduce_motion} desc={t.reduce_motion_desc}>
-                <Toggle checked={reduceMotion} onChange={setReduceMotion} />
+                <Toggle checked={reduceMotion} onChange={setReduceMotion} ariaLabel={t.reduce_motion} />
               </SettingRow>
             </div>
           )}
@@ -494,16 +513,16 @@ export function SettingsPage() {
                 </Select>
               </SettingRow>
               <SettingRow label={t.show_tasks_page} desc={t.show_tasks_page_desc}>
-                <Toggle checked={showTasksPage} onChange={setShowTasksPage} />
+                <Toggle checked={showTasksPage} onChange={setShowTasksPage} ariaLabel={t.show_tasks_page} />
               </SettingRow>
               <SettingRow label={t.show_income} desc={t.show_income_desc}>
-                <Toggle checked={showIncome} onChange={setShowIncome} />
+                <Toggle checked={showIncome} onChange={setShowIncome} ariaLabel={t.show_income} />
               </SettingRow>
               <SettingRow label={t.show_time_overview} desc={t.show_time_overview_desc}>
-                <Toggle checked={showTimeOverview} onChange={setShowTimeOverview} />
+                <Toggle checked={showTimeOverview} onChange={setShowTimeOverview} ariaLabel={t.show_time_overview} />
               </SettingRow>
               <SettingRow label={t.native_notifications} desc={t.native_notifications_desc}>
-                <Toggle checked={nativeNotifications} onChange={setNativeNotifications} />
+                <Toggle checked={nativeNotifications} onChange={setNativeNotifications} ariaLabel={t.native_notifications} />
               </SettingRow>
             </div>
           )}
@@ -542,6 +561,7 @@ export function SettingsPage() {
                 <Toggle
                   checked={calendarSync}
                   disabled={syncing}
+                  ariaLabel={t.sync_to_apple}
                   onChange={(_v: boolean) => {
                     if (!calendarName && !calendarSync) {
                       toast.error(t.toast_select_calendar);
@@ -596,12 +616,12 @@ export function SettingsPage() {
                 {testMode ? (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-amber-600 font-medium flex items-center gap-1"><FlaskConical size={12} /> {t.test_mode_active}</span>
-                    <button type="button" onClick={handleExitTestMode} disabled={togglingTestMode} className="px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
+                    <button type="button" onClick={handleExitTestMode} disabled={togglingTestMode} className="px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
                       {t.exit_test_mode}
                     </button>
                   </div>
                 ) : (
-                  <button type="button" onClick={handleEnterTestMode} disabled={togglingTestMode} className="flex items-center gap-1 px-2.5 py-1 bg-amber-500 text-white text-xs rounded hover:bg-amber-600 disabled:opacity-50">
+                  <button type="button" onClick={handleEnterTestMode} disabled={togglingTestMode} className="flex items-center gap-1 px-2.5 py-1 bg-amber-500 text-white text-xs rounded-md hover:bg-amber-600 disabled:opacity-50">
                     <FlaskConical size={12} />
                     {togglingTestMode ? t.loading : t.enter_test_mode}
                   </button>
@@ -613,13 +633,13 @@ export function SettingsPage() {
               <SettingRow label={t.presentation_mode}>
                 {presentationMode ? (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-indigo-600 font-medium">Presentation active</span>
-                    <button type="button" onClick={handleExitPresentation} disabled={togglingPresentation} className="px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
+                    <span className="text-xs text-indigo-600 font-medium">{t.presentation_active}</span>
+                    <button type="button" onClick={handleExitPresentation} disabled={togglingPresentation} className="px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
                       {t.exit_presentation_mode}
                     </button>
                   </div>
                 ) : (
-                  <button type="button" onClick={handleEnterPresentation} disabled={togglingPresentation || testMode} className="flex items-center gap-1 px-2.5 py-1 bg-indigo-500 text-white text-xs rounded hover:bg-indigo-600 disabled:opacity-50">
+                  <button type="button" onClick={handleEnterPresentation} disabled={togglingPresentation || testMode} className="flex items-center gap-1 px-2.5 py-1 bg-indigo-500 text-white text-xs rounded-md hover:bg-indigo-600 disabled:opacity-50">
                     {togglingPresentation ? t.loading : t.enter_presentation_mode}
                   </button>
                 )}
@@ -629,10 +649,10 @@ export function SettingsPage() {
               <SectionHeader title={t.snapshot} desc={t.snapshot_desc} />
               <SettingRow label={t.snapshot}>
                 <div className="flex items-center gap-2">
-                  <button type="button" onClick={handleCreateSnapshot} disabled={snapshotting || testMode} className="flex items-center gap-1 px-2.5 py-1 bg-accent text-white text-xs rounded hover:bg-accent-hover disabled:opacity-50">
-                    <Camera size={12} /> {snapshotting ? t.loading : t.create_snapshot}
-                  </button>
-                  <button type="button" onClick={handleRestoreSnapshot} disabled={restoringSnapshot || !hasSnapshotFile || testMode} className="flex items-center gap-1 px-2.5 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
+                  <Button type="button" size="sm" icon={<Camera size={12} />} onClick={handleCreateSnapshot} disabled={snapshotting || testMode}>
+                    {snapshotting ? t.loading : t.create_snapshot}
+                  </Button>
+                  <button type="button" onClick={handleRestoreSnapshot} disabled={restoringSnapshot || !hasSnapshotFile || testMode} className="flex items-center gap-1 px-2.5 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
                     <RotateCcw size={12} /> {restoringSnapshot ? t.loading : t.restore_snapshot}
                   </button>
                   {!hasSnapshotFile && <span className="text-[11px] text-muted">{t.no_snapshot_available}</span>}
@@ -647,19 +667,19 @@ export function SettingsPage() {
               <SettingRow label={t.backup_directory}>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-muted truncate max-w-[180px]" title={backupPath}>{backupPath || t.not_set}</span>
-                  <button type="button" onClick={() => browseBackupDir()} className="flex items-center gap-1 px-2 py-1 border border-[var(--color-input-border)] rounded text-xs hover:bg-[var(--color-hover-row)]">
-                    <FolderOpen size={12} /> {t.browse}
-                  </button>
+                  <Button type="button" variant="ghost" size="sm" icon={<FolderOpen size={12} />} onClick={() => browseBackupDir()}>
+                    {t.browse}
+                  </Button>
                 </div>
               </SettingRow>
               <SettingRow label={t.backup_directory_2}>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-muted truncate max-w-[180px]" title={backupPath2}>{backupPath2 || t.not_set}</span>
-                  <button type="button" onClick={() => browseBackupDir(true)} className="flex items-center gap-1 px-2 py-1 border border-[var(--color-input-border)] rounded text-xs hover:bg-[var(--color-hover-row)]">
-                    <FolderOpen size={12} /> {t.browse}
-                  </button>
+                  <Button type="button" variant="ghost" size="sm" icon={<FolderOpen size={12} />} onClick={() => browseBackupDir(true)}>
+                    {t.browse}
+                  </Button>
                   {backupPath2 && (
-                    <button type="button" onClick={() => setBackupPath2("")} className="text-muted hover:text-[var(--color-text)]"><X size={12} /></button>
+                    <button type="button" onClick={() => setBackupPath2("")} aria-label={t.remove} className="text-muted hover:text-[var(--color-text)]"><X size={12} /></button>
                   )}
                 </div>
               </SettingRow>
@@ -695,9 +715,9 @@ export function SettingsPage() {
                 </div>
               </SettingRow>
               <div className="pt-3 flex items-center gap-2">
-                <button type="button" onClick={runBackup} disabled={backing || !backupPath} className="flex items-center gap-1 px-2.5 py-1 bg-accent text-white text-xs rounded hover:bg-accent-hover disabled:opacity-50">
-                  <HardDrive size={12} /> {backing ? t.backing_up : t.backup_now}
-                </button>
+                <Button type="button" size="sm" icon={<HardDrive size={12} />} onClick={runBackup} disabled={backing || !backupPath}>
+                  {backing ? t.backing_up : t.backup_now}
+                </Button>
               </div>
 
               <div className="border-t border-[var(--color-border-divider)] my-3" />
@@ -721,7 +741,7 @@ export function SettingsPage() {
                       <option key={name} value={name}>{name.replace("backup-", "")}</option>
                     ))}
                   </Select>
-                  <button type="button" onClick={runRestore} disabled={restoring || !selectedBackup || !backupPath} className="flex items-center gap-1 px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
+                  <button type="button" onClick={runRestore} disabled={restoring || !selectedBackup || !backupPath} className="flex items-center gap-1 px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
                     <RotateCcw size={12} /> {restoring ? t.restoring : t.restore}
                   </button>
                 </div>
@@ -788,16 +808,15 @@ function AccentColorPicker({
   );
 }
 
-const TAG_COLOR_NAMES: TagColorName[] = ["blue", "purple", "green", "red", "yellow", "cyan", "orange", "teal", "gray"];
-
 function ColorSwatchPicker({ value, onChange }: { value: TagColorName | null; onChange: (c: TagColorName | null) => void }) {
+  const t = useT();
   return (
     <select
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value ? e.target.value as TagColorName : null)}
       className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1 text-xs"
     >
-      <option value="">Auto</option>
+      <option value="">{t.auto}</option>
       {TAG_COLOR_NAMES.map((name) => (
         <option key={name} value={name}>{name.charAt(0).toUpperCase() + name.slice(1)}</option>
       ))}
@@ -832,7 +851,7 @@ function ExpenseCategoryManager() {
     ).then((results) => {
       setCategoryUsage(Object.fromEntries(results));
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberate: depend on the catCodes fingerprint instead of `cats`, whose array identity changes every render (categories ?? []) and would re-run the async usage check constantly
   }, [catCodes]);
 
   const handleSaveNew = async () => {
@@ -924,10 +943,10 @@ function ExpenseCategoryManager() {
                     <ColorSwatchPicker value={form.color} onChange={(c) => setForm({ ...form, color: c })} />
                   </td>
                   <td className="py-2 flex gap-1">
-                    <button type="button" onClick={handleSaveEdit} className="px-2 py-1 bg-accent text-white text-xs rounded hover:bg-accent-hover">
+                    <button type="button" onClick={handleSaveEdit} className="px-2 py-1 bg-accent text-white text-xs rounded-md hover:bg-accent-hover">
                       {t.save}
                     </button>
-                    <button type="button" onClick={() => setEditingCode(null)} className="px-2 py-1 border border-[var(--color-input-border)] text-xs rounded hover:bg-[var(--color-hover-row)]">
+                    <button type="button" onClick={() => setEditingCode(null)} className="px-2 py-1 border border-[var(--color-input-border)] text-xs rounded-md hover:bg-[var(--color-hover-row)]">
                       {t.cancel}
                     </button>
                   </td>
@@ -942,7 +961,7 @@ function ExpenseCategoryManager() {
                   </td>
                   <td className="py-2 pr-2">
                     {cat.color ? (() => {
-                      const c = getNamedTagColor(cat.color as TagColorName, darkMode);
+                      const c = getNamedTagColor(cat.color, darkMode);
                       return (
                         <span
                           className="inline-block w-5 h-5 rounded-full"
@@ -955,7 +974,7 @@ function ExpenseCategoryManager() {
                     )}
                   </td>
                   <td className="py-2 flex gap-1">
-                    <button type="button" onClick={() => startEdit(cat)} className="px-2 py-1 border border-[var(--color-input-border)] text-xs rounded hover:bg-[var(--color-hover-row)]">
+                    <button type="button" onClick={() => startEdit(cat)} className="px-2 py-1 border border-[var(--color-input-border)] text-xs rounded-md hover:bg-[var(--color-hover-row)]">
                       {t.edit}
                     </button>
                     {isDefaultCategory(cat.code) ? (
@@ -963,7 +982,7 @@ function ExpenseCategoryManager() {
                     ) : categoryUsage[cat.code] ? (
                       <span className="px-2 py-1 text-xs text-muted">{t.category_in_use}</span>
                     ) : (
-                      <button type="button" onClick={() => handleDelete(cat.code)} className="px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded hover:bg-[var(--color-danger-bg)]">
+                      <button type="button" onClick={() => handleDelete(cat.code)} className="px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)]">
                         {t.delete}
                       </button>
                     )}
@@ -1003,10 +1022,10 @@ function ExpenseCategoryManager() {
                 <ColorSwatchPicker value={form.color} onChange={(c) => setForm({ ...form, color: c })} />
               </td>
               <td className="py-2 flex gap-1">
-                <button type="button" onClick={handleSaveNew} className="px-2 py-1 bg-accent text-white text-xs rounded hover:bg-accent-hover">
+                <button type="button" onClick={handleSaveNew} className="px-2 py-1 bg-accent text-white text-xs rounded-md hover:bg-accent-hover">
                   {t.save}
                 </button>
-                <button type="button" onClick={() => setAdding(false)} className="px-2 py-1 border border-[var(--color-input-border)] text-xs rounded hover:bg-[var(--color-hover-row)]">
+                <button type="button" onClick={() => setAdding(false)} className="px-2 py-1 border border-[var(--color-input-border)] text-xs rounded-md hover:bg-[var(--color-hover-row)]">
                   {t.cancel}
                 </button>
               </td>
@@ -1032,6 +1051,7 @@ function ExpenseCategoryManager() {
 
 function CustomListsManager() {
   const t = useT();
+  const darkMode = useAppStore((s) => s.darkMode);
   const { data: lists } = useCustomLists();
   const createList = useCreateCustomList();
   const updateList = useUpdateCustomList();
@@ -1144,6 +1164,7 @@ function CustomListsManager() {
                 type="button"
                 onClick={() => handleDeleteList(list.id)}
                 className="opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-danger-text)] shrink-0"
+                aria-label={t.delete}
               >
                 <Trash2 size={11} />
               </button>
@@ -1157,21 +1178,24 @@ function CustomListsManager() {
               onChange={(e) => setNewListName(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleCreateList(); if (e.key === "Escape") setAddingList(false); }}
               placeholder={t.list_name}
-              className="flex-1 border border-[var(--color-input-border)] rounded px-2 py-1 text-xs"
+              className="flex-1 border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-xs"
               autoFocus
             />
-            <button type="button" onClick={handleCreateList} className="px-2 py-1 bg-accent text-white text-xs rounded hover:bg-accent-hover">
+            <button type="button" onClick={handleCreateList} aria-label={t.create} className="px-2 py-1 bg-accent text-white text-xs rounded-md hover:bg-accent-hover">
               <Check size={12} />
             </button>
           </div>
         ) : (
-          <button
+          <Button
             type="button"
+            variant="link"
+            size="sm"
+            icon={<Plus size={12} />}
             onClick={() => setAddingList(true)}
-            className="mt-2 w-full text-left text-xs text-accent hover:underline flex items-center gap-1 px-2 py-1"
+            className="mt-2 w-full px-2 py-1"
           >
-            <Plus size={12} /> {t.new_list}
-          </button>
+            {t.new_list}
+          </Button>
         )}
       </div>
 
@@ -1182,23 +1206,33 @@ function CustomListsManager() {
         ) : (
           <div>
             <div className="space-y-1.5 mb-3">
-              {localItems.map((item, i) => (
+              {localItems.map((item, i) => {
+                const c = getStoredTagColor(item.color, darkMode);
+                return (
                 <div key={i} className="flex items-center gap-2">
-                  <span className="flex-1 text-xs truncate border border-[var(--color-border-divider)] rounded px-2 py-1">{item.value}</span>
+                  <div className="flex-1 min-w-0">
+                    <span
+                      style={{ background: c.bg, color: c.text }}
+                      className="inline-block max-w-full truncate align-middle px-2 py-0.5 rounded-full text-xs"
+                    >
+                      {item.value}
+                    </span>
+                  </div>
                   <select
-                    value={item.color}
+                    value={normalizeTagColorName(item.color)}
                     onChange={(e) => updateItemColor(i, e.target.value)}
-                    className="text-xs border border-[var(--color-border-divider)] rounded px-1 py-1"
+                    className="text-xs border border-[var(--color-border-divider)] rounded-lg px-1 py-1"
                   >
-                    {WORKLOAD_COLOR_NAMES.map((c) => (
+                    {TAG_COLOR_NAMES.map((c) => (
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
-                  <button type="button" onClick={() => removeItem(i)} className="text-muted hover:text-[var(--color-danger-text)]">
+                  <button type="button" onClick={() => removeItem(i)} aria-label={t.delete} className="text-muted hover:text-[var(--color-danger-text)]">
                     <Trash2 size={12} />
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
             <div className="flex gap-2 mb-3">
               <input
@@ -1206,18 +1240,18 @@ function CustomListsManager() {
                 onChange={(e) => setNewItemValue(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addItem()}
                 placeholder={t.new_list_item}
-                className="flex-1 border border-[var(--color-border-divider)] rounded px-2 py-1.5 text-sm"
+                className="flex-1 border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm"
               />
               <select
                 value={newItemColor}
                 onChange={(e) => setNewItemColor(e.target.value)}
-                className="text-sm border border-[var(--color-border-divider)] rounded px-2 py-1.5"
+                className="text-sm border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5"
               >
-                {WORKLOAD_COLOR_NAMES.map((c) => (
+                {TAG_COLOR_NAMES.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
-              <button type="button" onClick={addItem} className="p-1.5 text-muted hover:text-accent">
+              <button type="button" onClick={addItem} aria-label={t.new_list_item} className="p-1.5 text-muted hover:text-accent">
                 <Plus size={16} />
               </button>
             </div>
@@ -1225,7 +1259,7 @@ function CustomListsManager() {
               <button
                 type="button"
                 onClick={saveItems}
-                className="px-3 py-1.5 bg-accent text-white text-xs rounded hover:bg-accent-hover"
+                className="px-3 py-1.5 bg-accent text-white text-xs rounded-md hover:bg-accent-hover"
               >
                 {t.save}
               </button>
@@ -1332,13 +1366,16 @@ function TimeEntriesManager() {
           </select>
         </div>
         {(startDate || endDate || projectFilter) && (
-          <button
+          <Button
             type="button"
+            variant="link"
+            size="sm"
+            icon={<X size={12} />}
             onClick={() => { setStartDate(""); setEndDate(""); setProjectFilter(undefined); }}
-            className="text-xs text-muted hover:text-[var(--color-text)] flex items-center gap-1 self-end pb-1"
+            className="self-end pb-1 text-muted hover:text-[var(--color-text)]"
           >
-            <X size={12} /> {t.cancel}
-          </button>
+            {t.cancel}
+          </Button>
         )}
       </div>
 
@@ -1370,7 +1407,7 @@ function TimeEntriesManager() {
                           type="date"
                           value={editForm.date}
                           onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
-                          className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded px-1.5 py-1 text-xs w-full"
+                          className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-full"
                         />
                       </td>
                       <td className="px-3 py-1.5 text-muted">{entry.project_name}</td>
@@ -1383,7 +1420,7 @@ function TimeEntriesManager() {
                             max={23}
                             value={editForm.hours}
                             onChange={(e) => setEditForm({ ...editForm, hours: Math.max(0, Number(e.target.value)) })}
-                            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded px-1.5 py-1 text-xs w-12"
+                            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-12"
                           />
                           <span className="text-muted">h</span>
                           <input
@@ -1392,7 +1429,7 @@ function TimeEntriesManager() {
                             max={59}
                             value={editForm.minutes}
                             onChange={(e) => setEditForm({ ...editForm, minutes: Math.max(0, Math.min(59, Number(e.target.value))) })}
-                            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded px-1.5 py-1 text-xs w-12"
+                            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-12"
                           />
                           <span className="text-muted">m</span>
                         </div>
@@ -1402,7 +1439,7 @@ function TimeEntriesManager() {
                           type="text"
                           value={editForm.description}
                           onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                          className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded px-1.5 py-1 text-xs w-full"
+                          className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-full"
                           placeholder={t.description}
                         />
                       </td>
@@ -1412,16 +1449,18 @@ function TimeEntriesManager() {
                             type="button"
                             onClick={saveEdit}
                             disabled={updateEntry.isPending}
-                            className="p-1 text-accent hover:bg-accent-light rounded"
+                            className="p-1 text-accent hover:bg-accent-light rounded-md"
                             title={t.save}
+                            aria-label={t.save}
                           >
                             <Check size={13} />
                           </button>
                           <button
                             type="button"
                             onClick={() => setEditingId(null)}
-                            className="p-1 text-muted hover:bg-[var(--color-hover-row)] rounded"
+                            className="p-1 text-muted hover:bg-[var(--color-hover-row)] rounded-md"
                             title={t.cancel}
+                            aria-label={t.cancel}
                           >
                             <X size={13} />
                           </button>
@@ -1440,8 +1479,9 @@ function TimeEntriesManager() {
                           <button
                             type="button"
                             onClick={() => startEdit(entry)}
-                            className="p-1 text-muted hover:text-[var(--color-text)] hover:bg-[var(--color-hover-row)] rounded"
+                            className="p-1 text-muted hover:text-[var(--color-text)] hover:bg-[var(--color-hover-row)] rounded-md"
                             title={t.edit_entry}
+                            aria-label={t.edit_entry}
                           >
                             <Pencil size={12} />
                           </button>
@@ -1451,14 +1491,15 @@ function TimeEntriesManager() {
                                 type="button"
                                 onClick={() => handleDelete(entry.id)}
                                 disabled={deleteEntry.isPending}
-                                className="px-1.5 py-0.5 bg-[var(--color-danger)] text-white rounded text-[10px] hover:opacity-80"
+                                className="px-1.5 py-0.5 bg-[var(--color-danger)] text-white rounded-md text-[10px] hover:opacity-80"
                               >
                                 {t.delete}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setConfirmDeleteId(null)}
-                                className="p-1 text-muted hover:bg-[var(--color-hover-row)] rounded"
+                                className="p-1 text-muted hover:bg-[var(--color-hover-row)] rounded-md"
+                                aria-label={t.cancel}
                               >
                                 <X size={12} />
                               </button>
@@ -1467,8 +1508,9 @@ function TimeEntriesManager() {
                             <button
                               type="button"
                               onClick={() => setConfirmDeleteId(entry.id)}
-                              className="p-1 text-muted hover:text-[var(--color-danger-text)] hover:bg-[var(--color-hover-row)] rounded"
+                              className="p-1 text-muted hover:text-[var(--color-danger-text)] hover:bg-[var(--color-hover-row)] rounded-md"
                               title={t.delete}
+                              aria-label={t.delete}
                             >
                               <Trash2 size={12} />
                             </button>

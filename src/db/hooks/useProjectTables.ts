@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import * as q from "../queries/projectTables";
 import { useUndoStore } from "../../stores/undo-store";
 import type { TableColumnDef } from "../../types/project-table";
+import { getLabels } from "../../lib/notifyError";
 
 export function useProjectTables(projectId: number) {
   return useQuery({
@@ -41,7 +42,7 @@ export function useDeleteProjectTable(projectId: number) {
       await q.deleteProjectTable(id);
       if (table) {
         useUndoStore.getState().push({
-          label: `Delete table "${table.name}"`,
+          label: `${getLabels().undo_delete_table} "${table.name}"`,
           execute: async () => {
             const newId = await q.createProjectTable(projectId, table.name, table.column_config);
             for (const row of rows) {

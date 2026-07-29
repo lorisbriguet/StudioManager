@@ -111,6 +111,41 @@ function getInitialAccent(): AccentPreset {
   return ACCENT_PRESETS[0];
 }
 
+export interface ActiveTimer {
+  taskId: number;
+  projectId: number;
+  startedAt: number; // timestamp
+  projectName?: string;
+}
+
+// The running timer is persisted so a quit or crash never loses a session.
+// Elapsed time is always derived from startedAt, so restoring the stored
+// value on launch is enough for the UI to keep counting.
+function loadActiveTimer(): ActiveTimer | null {
+  try {
+    const raw = localStorage.getItem("activeTimer");
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      typeof parsed === "object" && parsed !== null &&
+      typeof (parsed as ActiveTimer).taskId === "number" &&
+      typeof (parsed as ActiveTimer).projectId === "number" &&
+      typeof (parsed as ActiveTimer).startedAt === "number"
+    ) {
+      const p = parsed as ActiveTimer;
+      return {
+        taskId: p.taskId,
+        projectId: p.projectId,
+        startedAt: p.startedAt,
+        projectName: typeof p.projectName === "string" ? p.projectName : undefined,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export interface AppState {
   commandPaletteOpen: boolean;
   quickTimerOpen: boolean;
@@ -139,18 +174,14 @@ export interface AppState {
   exportLanguage: AppLanguage;
   clientsSortKey: string;
   clientsSortDir: "asc" | "desc";
-  activeTimer: {
-    taskId: number;
-    projectId: number;
-    startedAt: number; // timestamp
-    projectName?: string;
-  } | null;
+  activeTimer: ActiveTimer | null;
   currentContext: {
     clientId?: string;
     projectId?: number;
   };
   startTimer: (taskId: number, projectId: number, projectName?: string) => void;
-  stopTimer: () => { taskId: number; projectId: number; durationMinutes: number } | null;
+  /** Clear the timer state WITHOUT saving. Callers must persist the entry first (useTimerActions.stopAndSave). */
+  clearTimer: () => void;
   setClientsSortKey: (key: string) => void;
   setClientsSortDir: (dir: "asc" | "desc") => void;
   setLanguage: (lang: AppLanguage) => void;
@@ -217,7 +248,7 @@ function getInitialAccentForTheme(): AccentPreset {
 }
 const effectiveInitialAccent = getInitialAccentForTheme();
 
-export const useAppStore = create<AppState>((set, get) => ({
+export const useAppStore = create<AppState>((set) => ({
   commandPaletteOpen: false,
   quickTimerOpen: false,
   sidebarCollapsed: false,
@@ -245,26 +276,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   exportLanguage: (localStorage.getItem("exportLanguage") as AppLanguage) ?? "FR",
   clientsSortKey: localStorage.getItem("clientsSortKey") ?? "name",
   clientsSortDir: (localStorage.getItem("clientsSortDir") as "asc" | "desc") ?? "asc",
-  activeTimer: null,
+  activeTimer: loadActiveTimer(),
   currentContext: {},
-  startTimer: (taskId, projectId, projectName) =>
-    set((s) => {
-      // Stop any existing timer (discard result — caller should handle via stopTimer first)
-      if (s.activeTimer) return { activeTimer: { taskId, projectId, startedAt: Date.now(), projectName } };
-      return { activeTimer: { taskId, projectId, startedAt: Date.now(), projectName } };
-    }),
-  stopTimer: () => {
-    const { activeTimer } = get();
-    if (!activeTimer) return null;
-    const elapsed = Date.now() - activeTimer.startedAt;
-    const durationMinutes = Math.max(1, Math.round(elapsed / 60000));
-    const result = {
-      taskId: activeTimer.taskId,
-      projectId: activeTimer.projectId,
-      durationMinutes,
-    };
+  // Overwrites any existing timer — callers that care about the running
+  // session must stop-and-save it first (useTimerActions does).
+  startTimer: (taskId, projectId, projectName) => {
+    const timer: ActiveTimer = { taskId, projectId, startedAt: Date.now(), projectName };
+    localStorage.setItem("activeTimer", JSON.stringify(timer));
+    set({ activeTimer: timer });
+  },
+  clearTimer: () => {
+    localStorage.removeItem("activeTimer");
     set({ activeTimer: null });
-    return result;
   },
   setClientsSortKey: (key) => {
     localStorage.setItem("clientsSortKey", key);

@@ -1,13 +1,15 @@
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Plus, Paperclip, Eye, X, ChevronRight, Upload, Trash2, CheckCircle, Receipt, Settings2, XCircle, Pencil } from "lucide-react";
-import { Button, Input, Select, PageHeader, SearchBar, PageSpinner, EmptyState, Card, Modal } from "../components/ui";
+import { Button, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState, Card, Modal } from "../components/ui";
+import * as v from "../lib/validate";
+import { undoableFromStore } from "../lib/undo";
 import { SavedFilterBar } from "../components/SavedFilterBar";
 import { getTagColor, getNamedTagColor } from "../lib/tagColors";
-import type { TagColorName } from "../types/expense";
 import { useAppStore } from "../stores/app-store";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { formatDisplayDate } from "../utils/formatDate";
+import { todayLocalISO } from "../utils/localDate";
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { copyFile, mkdir, exists } from "@tauri-apps/plugin-fs";
 import { appDataDir } from "@tauri-apps/api/path";
@@ -29,7 +31,8 @@ import type { Expense } from "../types/expense";
 import { getNextExpenseReference } from "../db/queries/expenses";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
 import { useT } from "../i18n/useT";
-import { extractPdfText, extractImageText, parseExpenseFromText, type ExtractedExpenseData } from "../lib/pdfExtract";
+import { notifyError } from "../lib/notifyError";
+import { extractPdfText, extractImageText, parseExpenseFromText, isOcrWorkerReady, type ExtractedExpenseData } from "../lib/pdfExtract";
 import { logError } from "../lib/log";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
@@ -54,6 +57,9 @@ export function ExpensesPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [prefill, setPrefill] = useState<(ExtractedExpenseData & { receiptPath?: string }) | null>(null);
   const [parsing, setParsing] = useState(false);
+  // First OCR use downloads ~15MB of tesseract language data — show a
+  // dedicated indicator label so the longer wait is explained.
+  const [ocrFirstRun, setOcrFirstRun] = useState(false);
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
   const [filterLogic, setFilterLogic] = useState<ConditionLogic>("and");
@@ -79,7 +85,7 @@ export function ExpensesPage() {
 
   const categoryColor = (code: string) => {
     const cat = categories?.find((c) => c.code === code);
-    if (cat?.color) return getNamedTagColor(cat.color as TagColorName, darkMode);
+    if (cat?.color) return getNamedTagColor(cat.color, darkMode);
     return getTagColor(code, darkMode);
   };
 
@@ -129,6 +135,7 @@ export function ExpensesPage() {
           extracted = parseExpenseFromText(text);
         }
       } else if (["png", "jpg", "jpeg", "heic"].includes(ext)) {
+        if (!isOcrWorkerReady()) setOcrFirstRun(true);
         const text = await extractImageText(filePath);
         if (text) {
           extracted = parseExpenseFromText(text);
@@ -153,8 +160,9 @@ export function ExpensesPage() {
       setShowForm(true);
     } finally {
       setParsing(false);
+      setOcrFirstRun(false);
     }
-  }, [pastSuppliers]);
+  }, [pastSuppliers, t.unsupported_file]);
 
   // Listen for Tauri drag-and-drop events
   useEffect(() => {
@@ -215,7 +223,14 @@ export function ExpensesPage() {
     }
   };
 
-  if (isLoading) return <PageSpinner />;
+  if (isLoading) return (
+    <div className="relative">
+      <PageHeader title={t.expenses}>
+        <Button icon={<Plus size={16} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
+      </PageHeader>
+      <TableSkeleton columns={7} />
+    </div>
+  );
 
   return (
     <div className="relative">
@@ -232,7 +247,7 @@ export function ExpensesPage() {
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-[var(--color-surface)]/60 backdrop-blur-sm rounded-lg">
           <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-input-border)] shadow-sm">
             <div className="h-4 w-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-muted">{t.analyzing_receipt}</span>
+            <span className="text-sm text-muted">{ocrFirstRun ? t.ocr_first_run_download : t.analyzing_receipt}</span>
           </div>
         </div>
       )}
@@ -359,6 +374,7 @@ export function ExpensesPage() {
                               setCtxMenu({ x: e.clientX, y: e.clientY, item: exp });
                             }}
                             className="opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
+                            aria-label={t.more_actions}
                           >
                             <Settings2 size={14} />
                           </button>
@@ -380,24 +396,28 @@ export function ExpensesPage() {
                         <td className="px-4 py-2.5">
                           {exp.receipt_path ? (
                             <div className="flex items-center gap-2">
-                              <button
+                              <Button
+                                variant="link"
+                                size="sm"
+                                icon={<Eye size={14} />}
                                 onClick={() => setPreview({ path: exp.receipt_path!, reference: exp.reference })}
-                                className="text-xs text-accent hover:underline flex items-center gap-1"
-                                title="Preview receipt"
+                                title={t.preview_receipt}
                               >
-                                <Eye size={14} /> {t.view}
-                              </button>
+                                {t.view}
+                              </Button>
                               <span className="text-xs text-success flex items-center gap-1">
                                 <Paperclip size={12} />
                               </span>
                             </div>
                           ) : (
-                            <button
+                            <Button
+                              variant="link"
+                              size="sm"
+                              icon={<Paperclip size={12} />}
                               onClick={() => attachReceipt(exp.id, exp.reference, exp.supplier)}
-                              className="text-xs text-accent hover:underline flex items-center gap-1"
                             >
-                              <Paperclip size={12} /> {t.attach}
-                            </button>
+                              {t.attach}
+                            </Button>
                           )}
                         </td>
                         <td className="px-4 py-2.5 text-right font-medium">
@@ -411,7 +431,13 @@ export function ExpensesPage() {
           </tbody>
         </table>
         {filtered.length === 0 && !isLoading && (
-          <EmptyState message={search ? (t.no_matching_expenses ?? "No matching expenses") : (t.no_expenses_yet ?? "No expenses yet")} icon={<Receipt size={32} />} />
+          <EmptyState
+            message={(expenses?.length ?? 0) === 0 ? (t.no_expenses_yet ?? "No expenses yet") : (t.no_matching_expenses ?? "No matching expenses")}
+            icon={<Receipt size={32} />}
+            action={(expenses?.length ?? 0) === 0 ? (
+              <Button icon={<Plus size={16} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
+            ) : undefined}
+          />
         )}
       </div>
 
@@ -429,10 +455,10 @@ export function ExpensesPage() {
           onClose={() => setCtxMenu(null)}
           items={[
             ...(!ctxMenu.item.paid_date
-              ? [{ label: t.mark_as_paid_today, icon: <CheckCircle size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: new Date().toISOString().split("T")[0] } }, { onSuccess: () => toast.success(t.marked_as_paid) }) }]
+              ? [{ label: t.mark_as_paid_today, icon: <CheckCircle size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: todayLocalISO() } }, { onSuccess: () => toast.success(t.marked_as_paid) }) }]
               : [{ label: t.mark_as_unpaid, icon: <XCircle size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: null } }, { onSuccess: () => toast.success(t.marked_as_unpaid) }) }]),
             { label: t.edit_paid_date, icon: <Pencil size={14} />, onClick: () => { setEditDateValue(ctxMenu.item.paid_date ?? format(new Date(), "yyyy-MM-dd")); setEditDateExpense(ctxMenu.item); } },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteExpense.mutate(ctxMenu.item.id) },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteExpense.mutate(ctxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_expense_deleted) }) },
           ]}
         />
       )}
@@ -497,11 +523,14 @@ function ReceiptPreview({
         url = URL.createObjectURL(blob);
         setBlobUrl(url);
       })
-      .catch(() => setBlobUrl(null));
+      .catch((err) => {
+        setBlobUrl(null);
+        notifyError(t.receipt_load_failed, err);
+      });
     return () => {
       if (url) URL.revokeObjectURL(url);
     };
-  }, [path, ext, isImage]);
+  }, [path, ext, isImage, t.receipt_load_failed]);
 
   return (
     <div
@@ -514,7 +543,7 @@ function ReceiptPreview({
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-input-border)]">
           <h2 className="text-sm font-semibold">{reference}</h2>
-          <button onClick={onClose} className="text-muted hover:text-[var(--color-text)]">
+          <button onClick={onClose} aria-label={t.close} className="text-muted hover:text-[var(--color-text)]">
             <X size={16} />
           </button>
         </div>
@@ -539,6 +568,16 @@ function ReceiptPreview({
     </div>
   );
 }
+
+// Phase 2 E3 — inline validation (E1 pattern). category_code is a Select that
+// always holds a valid value (defaulted, never empty), so it is not validated.
+type ExpenseFormField = "supplier" | "amount" | "invoice_date";
+
+const expenseSchema: v.FormSchema<ExpenseFormField> = {
+  supplier: [v.required],
+  amount: [v.required, v.numberPositive],
+  invoice_date: [v.required, v.dateValid],
+};
 
 function NewExpenseForm({
   categories,
@@ -584,6 +623,26 @@ function NewExpenseForm({
       notes: "",
     };
   });
+  const [errors, setErrors] = useState<Partial<Record<ExpenseFormField, string>>>({});
+
+  const setFieldError = (field: ExpenseFormField, msg: string | null) =>
+    setErrors((e) => {
+      const next = { ...e };
+      if (msg) next[field] = msg;
+      else delete next[field];
+      return next;
+    });
+
+  // Raw string value per validated field; amount is held as a number in form
+  // state and renders as "" while zero, so validate what the user sees.
+  const fieldValue = (field: ExpenseFormField): string =>
+    field === "amount" ? (form.amount ? String(form.amount) : "") : form[field];
+
+  const validateOnBlur = (field: ExpenseFormField) =>
+    setFieldError(field, v.validateField(fieldValue(field), expenseSchema[field]));
+
+  const clearError = (field: ExpenseFormField) => setFieldError(field, null);
+
   // Sync prefill into form when it changes (e.g. new file dropped while form is open)
   useEffect(() => {
     if (!prefill) return;
@@ -605,9 +664,16 @@ function NewExpenseForm({
       amount: prefill.amount ?? amount,
       notes: "",
     });
+    // OCR prefill overwrites the whole form programmatically — any stale
+    // inline errors no longer describe what is on screen, so clear them all.
+    setErrors({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync only when a new prefill arrives; adding categories/pastSuppliers would clobber user edits when those queries refetch
   }, [prefill]);
 
   const [showSuggestions, setShowSuggestions] = useState(false);
+  // Set on suggestion mousedown (which fires before the input's blur) so the
+  // blur handler does not validate the stale pre-selection supplier value.
+  const pickingSuggestionRef = useRef(false);
   const [duplicateWarning, setDuplicateWarning] = useState<{ supplier: string; amount: number; date: string } | null>(null);
   const duplicateCheck = useDuplicateCheck();
 
@@ -643,6 +709,9 @@ function NewExpenseForm({
     });
     setShowSuggestions(false);
     setDuplicateWarning(null);
+    // Programmatic fill — stale errors on the filled fields no longer apply.
+    clearError("supplier");
+    clearError("amount");
   };
 
   return (
@@ -655,25 +724,34 @@ function NewExpenseForm({
       )}
       <div className="grid grid-cols-2 gap-3">
         <div className="relative">
-          <Input
-            placeholder={`${t.supplier} *`}
-            value={form.supplier}
-            onChange={(e) => {
-              setForm({ ...form, supplier: e.target.value });
-              setShowSuggestions(true);
-            }}
-            onFocus={() => setShowSuggestions(true)}
-            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-            className="py-2"
-            autoComplete="off"
-          />
+          <FormField label={t.supplier} required error={errors.supplier}>
+            <Input
+              value={form.supplier}
+              onChange={(e) => {
+                setForm({ ...form, supplier: e.target.value });
+                setShowSuggestions(true);
+                clearError("supplier");
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              onBlur={() => {
+                setTimeout(() => setShowSuggestions(false), 200);
+                if (!pickingSuggestionRef.current) validateOnBlur("supplier");
+                pickingSuggestionRef.current = false;
+              }}
+              className="py-2"
+              autoComplete="off"
+            />
+          </FormField>
           {showSuggestions && suggestions.length > 0 && (
             <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-[var(--color-surface)] border border-[var(--color-input-border)] rounded-xl shadow-lg max-h-48 overflow-y-auto">
               {suggestions.map((s) => (
                 <button
                   key={s.supplier}
                   type="button"
-                  onMouseDown={() => selectSupplier(s)}
+                  onMouseDown={() => {
+                    pickingSuggestionRef.current = true;
+                    selectSupplier(s);
+                  }}
                   className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-hover-row)] flex items-center justify-between"
                 >
                   <span>{s.supplier}</span>
@@ -685,34 +763,47 @@ function NewExpenseForm({
             </div>
           )}
         </div>
-        <Select
-          value={form.category_code}
-          onChange={(e) => setForm({ ...form, category_code: e.target.value })}
-          className="py-2"
-        >
-          {categories.map((c) => (
-            <option key={c.code} value={c.code}>
-              {c.code} - {c.name_fr}
-            </option>
-          ))}
-        </Select>
-        <Input
-          type="date"
-          fullWidth={false}
-          value={form.invoice_date}
-          onChange={(e) => setForm({ ...form, invoice_date: e.target.value })}
-          className="py-2"
-        />
-        <Input
-          type="number"
-          step="0.01"
-          fullWidth={false}
-          placeholder={`${t.amount} *`}
-          value={form.amount || ""}
-          onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
-          onBlur={checkForDuplicates}
-          className="py-2"
-        />
+        <FormField label={t.category}>
+          <Select
+            value={form.category_code}
+            onChange={(e) => setForm({ ...form, category_code: e.target.value })}
+            className="py-2"
+          >
+            {categories.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.code} - {c.name_fr}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+        <FormField label={t.date} required error={errors.invoice_date}>
+          <Input
+            type="date"
+            value={form.invoice_date}
+            onChange={(e) => {
+              setForm({ ...form, invoice_date: e.target.value });
+              clearError("invoice_date");
+            }}
+            onBlur={() => validateOnBlur("invoice_date")}
+            className="py-2"
+          />
+        </FormField>
+        <FormField label={t.amount} required error={errors.amount}>
+          <Input
+            type="number"
+            step="0.01"
+            value={form.amount || ""}
+            onChange={(e) => {
+              setForm({ ...form, amount: Number(e.target.value) });
+              clearError("amount");
+            }}
+            onBlur={() => {
+              checkForDuplicates();
+              validateOnBlur("amount");
+            }}
+            className="py-2"
+          />
+        </FormField>
       </div>
       {duplicateWarning && (
         <div className="flex items-center gap-2 p-3 bg-[var(--color-warning-bg)] border border-[var(--color-border-header)] rounded-md text-sm">
@@ -725,8 +816,13 @@ function NewExpenseForm({
       <div className="flex gap-2">
         <Button
           onClick={() => {
-            if (!form.supplier.trim()) return toast.error(t.supplier_required);
-            if (!form.amount) return toast.error(t.amount_required);
+            const errs = v.validateForm(
+              { supplier: form.supplier, amount: fieldValue("amount"), invoice_date: form.invoice_date },
+              expenseSchema
+            );
+            setErrors(errs);
+            if (Object.keys(errs).length > 0) return;
+            // DB failures surface via the mutation's onError toast (backstop).
             onSave({
               ...form,
               due_date: prefill?.due_date ?? null,

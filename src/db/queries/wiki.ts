@@ -1,4 +1,4 @@
-import { getDb, validateFields } from "../index";
+import { getDb, validateFields, TransactionBatch } from "../index";
 import type { WikiFolder, WikiArticle, WikiArticleWithTags } from "../../types/wiki";
 
 // ── Folders ──────────────────────────────────────────────────
@@ -198,21 +198,17 @@ export async function getWikiArticleTags(articleId: number): Promise<string[]> {
 }
 
 export async function setWikiArticleTags(articleId: number, tags: string[]): Promise<void> {
-  const db = await getDb();
-  await db.execute("BEGIN", []);
-  try {
-    await db.execute("DELETE FROM wiki_article_tags WHERE article_id = $1", [articleId]);
-    for (const tag of tags) {
-      await db.execute(
-        "INSERT INTO wiki_article_tags (article_id, tag) VALUES ($1, $2)",
-        [articleId, tag]
-      );
-    }
-    await db.execute("COMMIT", []);
-  } catch (e) {
-    await db.execute("ROLLBACK", []);
-    throw e;
+  // Use TransactionBatch for atomic delete+insert (raw BEGIN/COMMIT is unsafe
+  // on the pooled plugin connection — each IPC call may hit a different connection)
+  const batch = new TransactionBatch();
+  batch.add("DELETE FROM wiki_article_tags WHERE article_id = $1", [articleId]);
+  for (const tag of tags) {
+    batch.add(
+      "INSERT INTO wiki_article_tags (article_id, tag) VALUES ($1, $2)",
+      [articleId, tag]
+    );
   }
+  await batch.commit();
 }
 
 export async function getAllWikiTags(): Promise<string[]> {

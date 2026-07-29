@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
-import { TAG_COLORS, type SelectOption } from "../../types/workload";
+import type { SelectOption } from "../../types/workload";
+import { getStoredTagColor, TAG_COLOR_NAMES } from "../../lib/tagColors";
+import { useAppStore } from "../../stores/app-store";
+import { useT } from "../../i18n/useT";
 
 interface Props {
   options: SelectOption[];
@@ -22,10 +25,12 @@ export function SelectTagPicker({
   onClose,
   anchorRef,
 }: Props) {
+  const t = useT();
   const [search, setSearch] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const darkMode = useAppStore((s) => s.darkMode);
 
   useEffect(() => {
     if (anchorRef?.current) {
@@ -67,8 +72,7 @@ export function SelectTagPicker({
   const createOption = () => {
     const trimmed = search.trim();
     if (!trimmed || options.some((o) => o.value === trimmed)) return;
-    const colors = Object.keys(TAG_COLORS);
-    const color = colors[options.length % colors.length];
+    const color = TAG_COLOR_NAMES[options.length % TAG_COLOR_NAMES.length];
     const newOpt: SelectOption = { value: trimmed, color };
     onOptionsChange?.([...options, newOpt]);
     onChange([...value, trimmed]);
@@ -92,13 +96,13 @@ export function SelectTagPicker({
             }
             if (e.key === "Escape") onClose();
           }}
-          placeholder="Search or create..."
-          className="w-full text-sm px-2 py-1 border border-[var(--color-border-divider)] rounded"
+          placeholder={t.search_or_create}
+          className="w-full text-sm px-2 py-1 border border-[var(--color-border-divider)] rounded-lg"
         />
       </div>
       <div className="max-h-48 overflow-y-auto">
         {filtered.map((opt) => {
-          const c = TAG_COLORS[opt.color] ?? TAG_COLORS.gray;
+          const c = getStoredTagColor(opt.color, darkMode);
           const selected = value.includes(opt.value);
           return (
             <button
@@ -109,7 +113,8 @@ export function SelectTagPicker({
               }`}
             >
               <span
-                className={`inline-block px-2 py-0.5 rounded text-xs ${c.bg} ${c.text}`}
+                style={{ background: c.bg, color: c.text }}
+                className="inline-block px-2 py-0.5 rounded-full text-xs"
               >
                 {opt.value}
               </span>
@@ -124,7 +129,7 @@ export function SelectTagPicker({
             onClick={createOption}
             className="w-full text-left px-3 py-2 text-sm text-accent hover:bg-[var(--color-hover-row)]"
           >
-            Create &quot;{search.trim()}&quot;
+            {t.create} &quot;{search.trim()}&quot;
           </button>
         )}
       </div>

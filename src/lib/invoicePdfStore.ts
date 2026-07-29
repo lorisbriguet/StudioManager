@@ -14,8 +14,9 @@ function sanitizeFilename(name: string): string {
     .replace(/[/\\]/g, "_")
     .replace(/\.\./g, "_")
     .replace(/^\.+/, "")
+    // eslint-disable-next-line no-control-regex -- intentional: strip null bytes for path-traversal safety
     .replace(/\x00/g, "")                        // null bytes
-    .replace(/[\u200b\u200c\u200d\ufeff]/g, "")  // zero-width chars
+    .replace(/\u200b|\u200c|\u200d|\ufeff/g, "") // zero-width chars
     .normalize("NFC")
     .substring(0, 255);
 }

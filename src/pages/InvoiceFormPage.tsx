@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { ListTodo, Trash2, ArrowLeft } from "lucide-react";
-import { Button, Input, Select } from "../components/ui";
+import { Button, Input, Select, FormField } from "../components/ui";
+import * as v from "../lib/validate";
 import { toast } from "sonner";
 import { addDays, format } from "date-fns";
 import { useT } from "../i18n/useT";
@@ -16,11 +17,26 @@ import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { parseActivities } from "../types/business-profile";
 import { getQuote, getQuoteLineItems, updateQuote } from "../db/queries/quotes";
 import { logError } from "../lib/log";
-import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel } from "../lib/lineItems";
+import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel, round2 } from "../lib/lineItems";
 import { LineItemsTable } from "../components/shared/LineItemsTable";
 import { currencies, getExchangeRate, toCHF, type Currency } from "../lib/exchangeRate";
 import { useTabStore } from "../stores/tab-store";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
+import { confirmIfDirty } from "../lib/dirty-guard";
+
+// Phase 2 E2 — inline validation (additive; only fields with rules appear in
+// the schema, the rest are unvalidated). "line_items" has no schema rules —
+// it is a region-level check performed in save() (at least one line with a
+// description and an amount) whose message renders under LineItemsTable.
+// chf_equivalent is validated only while its input exists (currency !== CHF):
+// save() simply omits the value for CHF, and numberPositive passes empty.
+type InvoiceField = "client_id" | "invoice_date" | "chf_equivalent" | "line_items";
+
+const invoiceSchema: v.FormSchema<InvoiceField> = {
+  client_id: [v.required],
+  invoice_date: [v.required, v.dateValid],
+  chf_equivalent: [v.numberPositive],
+};
 
 export function InvoiceFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -50,6 +66,17 @@ export function InvoiceFormPage() {
   }, []);
   useUnsavedChangesWarning(formDirty);
 
+  // Phase 2 E2 — field errors (blur -> validate, change -> clear, submit -> block)
+  const [errors, setErrors] = useState<Partial<Record<InvoiceField, string>>>({});
+  const setFieldError = (field: InvoiceField, msg: string | null) =>
+    setErrors((e) => {
+      const next = { ...e };
+      if (msg) next[field] = msg;
+      else delete next[field];
+      return next;
+    });
+  const clearError = (field: InvoiceField) => setFieldError(field, null);
+
   const { data: invoiceTemplates } = useInvoiceTemplates();
   const { data: defaultTemplate } = useDefaultTemplate();
   const [templateId, setTemplateId] = useState<number | null>(null);
@@ -67,6 +94,16 @@ export function InvoiceFormPage() {
   const [exchangeRate, setExchangeRate] = useState(1);
   const [chfManualOverride, setChfManualOverride] = useState(false);
   const [chfEquivalent, setChfEquivalent] = useState(0);
+  const [discountRate, setDiscountRate] = useState(0);
+  // Snapshot of the loaded invoice's stored money facts. While `currency`
+  // matches this snapshot, the [currency] effect re-asserts the stored
+  // exchange_rate/chf_equivalent instead of fetching today's rate — editing
+  // an old invoice must never rewrite its historical financials.
+  const loadedInvoiceRef = useRef<{
+    currency: Currency;
+    exchange_rate: number;
+    chf_equivalent: number;
+  } | null>(null);
 
   const {
     items, setItems, sensors, lineItemIds, handleDragEnd,
@@ -87,7 +124,7 @@ export function InvoiceFormPage() {
   const addItem = useCallback(() => {
     const rate = useGlobalRateRef.current ? globalRateRef.current : null;
     const unit = useGlobalRateRef.current ? globalUnitRef.current : null;
-    setItems((prev) => [...prev, makeLineItem({ rate, unit, amount: rate ? rate * 1 : 0 })]);
+    setItems((prev) => [...prev, makeLineItem({ rate, unit, amount: rate ? round2(rate * 1) : 0 })]);
   }, [setItems]);
 
   const applyGlobalRate = useCallback((rate: number, unit?: string) => {
@@ -96,13 +133,21 @@ export function InvoiceFormPage() {
       ...item,
       rate,
       unit: u,
-      amount: rate * item.quantity,
+      amount: round2(rate * item.quantity),
     })));
   }, [setItems]);
 
   useEffect(() => {
     if (existingInvoice) {
       formLoadedRef.current = false;
+      // Single source for the stored money facts: the ref (used by the
+      // currency/auto-calc effects) and the hydration setters below must agree.
+      const snapshot = {
+        currency: (existingInvoice.currency ?? "CHF") as Currency,
+        exchange_rate: existingInvoice.exchange_rate ?? 1,
+        chf_equivalent: existingInvoice.chf_equivalent ?? existingInvoice.total,
+      };
+      loadedInvoiceRef.current = snapshot;
       setClientId(existingInvoice.client_id);
       setContactId(existingInvoice.contact_id);
       setBillingAddressId(existingInvoice.billing_address_id);
@@ -112,9 +157,10 @@ export function InvoiceFormPage() {
       setAssignment(existingInvoice.assignment);
       setPoNumber(existingInvoice.po_number ?? "");
       setNotes(existingInvoice.notes);
-      setCurrency((existingInvoice.currency ?? "CHF") as Currency);
-      setExchangeRate(existingInvoice.exchange_rate ?? 1);
-      setChfEquivalent(existingInvoice.chf_equivalent ?? existingInvoice.total);
+      setCurrency(snapshot.currency);
+      setExchangeRate(snapshot.exchange_rate);
+      setChfEquivalent(snapshot.chf_equivalent);
+      setDiscountRate(existingInvoice.discount_rate ?? 0);
       if (existingInvoice.currency && existingInvoice.currency !== "CHF") {
         setChfManualOverride(true); // preserve user's manually set CHF equivalent
       }
@@ -138,6 +184,7 @@ export function InvoiceFormPage() {
         setTimeout(() => { formLoadedRef.current = true; }, 0);
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate-once per loaded invoice; adding t.* would re-hydrate (and clobber edits) on locale switch. setItems is a stable setState.
   }, [existingInvoice, invoiceId]);
 
   // Update tab label with invoice reference
@@ -146,13 +193,14 @@ export function InvoiceFormPage() {
       const label = existingInvoice.reference.startsWith("DRAFT") ? t.draft : existingInvoice.reference;
       updateActiveTab(`/invoices/${invoiceId}/edit`, label);
     }
-  }, [existingInvoice?.reference, isEdit, invoiceId]);
+  }, [existingInvoice?.reference, isEdit, invoiceId, t.draft, updateActiveTab]);
 
   // Default activity from profile for new invoices
   useEffect(() => {
     if (!isEdit && !activity && !fromQuoteId && profileActivities.length > 0) {
       setActivity(profileActivities[0]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- default-fill only when the profile loads; adding `activity` would re-fill the default after the user clears the field
   }, [profileActivities, isEdit, fromQuoteId]);
 
   // Pre-select default template for new invoices
@@ -189,6 +237,8 @@ export function InvoiceFormPage() {
       setActivity(quote.activity);
       setAssignment(quote.assignment);
       setNotes(quote.notes);
+      // Carry over the discount agreed on the quote, not the client's current setting
+      setDiscountRate(quote.discount_rate ?? 0);
       const lineItems = await getQuoteLineItems(fromQuoteId);
       if (lineItems.length > 0) {
         setItems(
@@ -206,16 +256,34 @@ export function InvoiceFormPage() {
       logError("Failed to load quote:", e);
       toast.error(t.failed_load_line_items);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-fill once per source quote; adding t.* would re-run the pre-fill (and clobber edits) on locale switch. setItems is a stable setState.
   }, [fromQuoteId, isEdit]);
 
   const selectedClient = clients?.find((c) => c.id === clientId);
-  const discountRate = selectedClient?.has_discount ? selectedClient.discount_rate : 0;
-  const subtotal = items.reduce((sum, i) => sum + i.amount, 0);
-  const discountAmount = subtotal * discountRate;
-  const total = subtotal - discountAmount;
+  // Newly computed money values are rounded at every boundary — these are
+  // what save() persists, and invoices are legal documents.
+  const subtotal = round2(items.reduce((sum, i) => sum + i.amount, 0));
+  const discountAmount = round2(subtotal * discountRate);
+  const total = round2(subtotal - discountAmount);
 
   // Auto-fetch exchange rate when currency changes
   useEffect(() => {
+    const loaded = loadedInvoiceRef.current;
+    if (loaded && currency === loaded.currency) {
+      // Editing an invoice in its stored currency: exchange_rate and
+      // chf_equivalent are historical facts captured at invoice time —
+      // re-assert them instead of fetching today's rate. (Re-asserting, not
+      // just returning, also repairs the mount ordering where this effect
+      // ran with the pre-hydration currency and clobbered the stored rate.)
+      setExchangeRate(loaded.exchange_rate);
+      if (loaded.currency !== "CHF") {
+        setChfEquivalent(loaded.chf_equivalent);
+        setChfManualOverride(true);
+      } else {
+        setChfManualOverride(false);
+      }
+      return;
+    }
     if (currency === "CHF") {
       setExchangeRate(1);
       setChfManualOverride(false);
@@ -224,14 +292,39 @@ export function InvoiceFormPage() {
     let cancelled = false;
     getExchangeRate(currency).then((rate) => {
       if (cancelled) return;
+      if (rate === null) {
+        // No trustworthy live rate (offline / API down). Never book the
+        // face value as CHF: zero the equivalent so a wrong figure is
+        // impossible to miss, and force manual mode so the auto-calc
+        // effect cannot recompute it from a stale exchangeRate. Also zero
+        // exchangeRate itself so the persisted exchange_rate metadata is
+        // as loud as the UI (it could otherwise hold 1 or a stale
+        // different-currency rate); safe because override is on, so the
+        // auto-calc effect never divides by it.
+        toast.error(t.exchange_rate_unavailable);
+        setExchangeRate(0);
+        setChfEquivalent(0);
+        setChfManualOverride(true);
+        return;
+      }
       setExchangeRate(rate);
       setChfManualOverride(false);
     });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately runs on currency change only (see comments above); adding t.* would refetch today's rate on locale switch
   }, [currency]);
 
   // Auto-calc CHF equivalent when total or exchange rate changes (unless manually overridden)
   useEffect(() => {
+    const loaded = loadedInvoiceRef.current;
+    if (loaded && currency === loaded.currency && currency !== "CHF") {
+      // Loaded invoice in its stored foreign currency: chf_equivalent is a
+      // historical fact re-asserted by the currency effect that re-asserts
+      // stored values — never recompute it here (this effect can re-run in
+      // the same flush as that repair with a stale chfManualOverride closure
+      // and clobber it).
+      return;
+    }
     if (!chfManualOverride) {
       setChfEquivalent(currency === "CHF" ? total : toCHF(total, exchangeRate));
     }
@@ -246,16 +339,42 @@ export function InvoiceFormPage() {
     if (clientAddresses && clientAddresses.length === 1 && !billingAddressId) {
       setBillingAddressId(clientAddresses[0].id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot auto-select when the address list loads; adding billingAddressId would re-select right after the user deselects
   }, [clientAddresses]);
   const { data: projectTasks } = useTasksByProject(projectId ?? 0);
 
   const availableTasks = projectTasks ?? [];
 
   const save = async () => {
-    if (!clientId) return toast.error(t.toast_select_client);
-    if (items.every((i) => !i.designation.trim())) return toast.error(t.add_line_item);
+    // Phase 2 E2 — field-level validation replaces the old toast branches
+    // (toasts remain the backstop for DB failures via onError below).
+    const errs = v.validateForm<InvoiceField>(
+      {
+        client_id: clientId,
+        invoice_date: invoiceDate,
+        // The CHF-equivalent input only exists for foreign currencies; for
+        // CHF the value is omitted so numberPositive passes it as empty.
+        ...(currency !== "CHF" ? { chf_equivalent: chfEquivalent } : {}),
+      },
+      invoiceSchema
+    );
+    // Region-level line-items rule: at least one line that actually bills
+    // something — a description plus a non-zero amount (amount covers both
+    // rate*quantity and the direct flat-amount entry the table supports).
+    if (!items.some((i) => i.designation.trim() && i.amount > 0)) {
+      errs.line_items = t.line_items_required;
+    }
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
 
-    const dueDate = format(addDays(new Date(invoiceDate), 30), "yyyy-MM-dd");
+    // Payment terms: the invoice's own stored terms on edit, profile default on create.
+    const paymentTermsDays =
+      existingInvoice?.payment_terms_days || profile?.default_payment_terms_days || 30;
+    // On edit, keep the stored due date unless the invoice date was changed.
+    const dueDate =
+      isEdit && existingInvoice?.due_date && invoiceDate === existingInvoice.invoice_date
+        ? existingInvoice.due_date
+        : format(addDays(new Date(invoiceDate), paymentTermsDays), "yyyy-MM-dd");
     const lineItems = toPersistedLineItems(items);
 
     try {
@@ -297,7 +416,7 @@ export function InvoiceFormPage() {
           }
         );
       } else {
-        const reference = `DRAFT-${Date.now()}`;
+        const reference = `DRAFT-${crypto.randomUUID()}`;
         createInvoice.mutate(
           {
             data: {
@@ -312,7 +431,7 @@ export function InvoiceFormPage() {
               assignment,
               invoice_date: invoiceDate,
               due_date: dueDate,
-              payment_terms_days: 30,
+              payment_terms_days: paymentTermsDays,
               subtotal,
               discount_applied: discountRate > 0 ? 1 : 0,
               discount_rate: discountRate,
@@ -354,7 +473,7 @@ export function InvoiceFormPage() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/invoices")} icon={<ArrowLeft size={18} />} />
+        <Button variant="ghost" size="sm" onClick={async () => { if (await confirmIfDirty("/invoices")) navigate("/invoices"); }} icon={<ArrowLeft size={18} />} aria-label={t.back} />
         <h1 className="text-xl font-semibold">
           {isEdit ? t.edit_invoice : t.new_invoice}
         </h1>
@@ -382,8 +501,7 @@ export function InvoiceFormPage() {
         )}
 
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">{t.client}</label>
+          <FormField label={t.client} required error={errors.client_id}>
             <Select
               value={clientId}
               onChange={(e) => {
@@ -391,16 +509,20 @@ export function InvoiceFormPage() {
                 setContactId(null);
                 setBillingAddressId(null);
                 setProjectId(null);
+                // User picked a (new) client: derive discount from that client
+                const newClient = clients?.find((c) => c.id === e.target.value);
+                setDiscountRate(newClient?.has_discount ? newClient.discount_rate : 0);
+                clearError("client_id");
               }}
+              onBlur={() => setFieldError("client_id", v.validateField(clientId, invoiceSchema.client_id))}
             >
               <option value="">{t.select_client}</option>
               {clients?.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </Select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">{t.intended_for}</label>
+          </FormField>
+          <FormField label={t.intended_for}>
             <Select
               value={contactId ?? ""}
               onChange={(e) => setContactId(e.target.value ? Number(e.target.value) : null)}
@@ -412,10 +534,9 @@ export function InvoiceFormPage() {
                 </option>
               ))}
             </Select>
-          </div>
+          </FormField>
           {clientId && (
-            <div>
-              <label className="block text-xs font-medium text-muted mb-1">{t.billing_address}</label>
+            <FormField label={t.billing_address}>
               <Select
                 value={billingAddressId ?? ""}
                 onChange={(e) => setBillingAddressId(e.target.value ? Number(e.target.value) : null)}
@@ -427,10 +548,9 @@ export function InvoiceFormPage() {
                   </option>
                 ))}
               </Select>
-            </div>
+            </FormField>
           )}
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">{t.project_optional}</label>
+          <FormField label={t.project_optional}>
             <Select
               value={projectId ?? ""}
               onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
@@ -440,17 +560,16 @@ export function InvoiceFormPage() {
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </Select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">{t.date}</label>
+          </FormField>
+          <FormField label={t.date} required error={errors.invoice_date}>
             <Input
               type="date"
               value={invoiceDate}
-              onChange={(e) => setInvoiceDate(e.target.value)}
+              onChange={(e) => { setInvoiceDate(e.target.value); clearError("invoice_date"); }}
+              onBlur={() => setFieldError("invoice_date", v.validateField(invoiceDate, invoiceSchema.invoice_date))}
             />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">{t.activity}</label>
+          </FormField>
+          <FormField label={t.activity}>
             <Select
               value={activity}
               onChange={(e) => setActivity(e.target.value)}
@@ -462,25 +581,22 @@ export function InvoiceFormPage() {
                 <option value={activity}>{activity}</option>
               )}
             </Select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">{t.assignment}</label>
+          </FormField>
+          <FormField label={t.assignment}>
             <Input
               value={assignment}
               onChange={(e) => setAssignment(e.target.value)}
               placeholder={t.description_work}
             />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">{t.po_number}</label>
+          </FormField>
+          <FormField label={t.po_number}>
             <Input
               value={poNumber}
               onChange={(e) => setPoNumber(e.target.value)}
               placeholder="e.g. PO-12345"
             />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">{t.currency}</label>
+          </FormField>
+          <FormField label={t.currency}>
             <Select
               value={currency}
               onChange={(e) => setCurrency(e.target.value as Currency)}
@@ -489,20 +605,21 @@ export function InvoiceFormPage() {
                 <option key={c} value={c}>{c}</option>
               ))}
             </Select>
-          </div>
+          </FormField>
           {currency !== "CHF" && (
-              <div>
-                <label className="block text-xs font-medium text-muted mb-1">{t.chf_equivalent}</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={chfEquivalent}
-                  onChange={(e) => {
-                    setChfEquivalent(Number(e.target.value));
-                    setChfManualOverride(true);
-                  }}
-                />
-              </div>
+            <FormField label={t.chf_equivalent} error={errors.chf_equivalent}>
+              <Input
+                type="number"
+                step="0.01"
+                value={chfEquivalent}
+                onChange={(e) => {
+                  setChfEquivalent(Number(e.target.value));
+                  setChfManualOverride(true);
+                  clearError("chf_equivalent");
+                }}
+                onBlur={() => setFieldError("chf_equivalent", v.validateField(String(chfEquivalent), invoiceSchema.chf_equivalent))}
+              />
+            </FormField>
           )}
         </div>
 
@@ -558,9 +675,9 @@ export function InvoiceFormPage() {
           lineItemIds={lineItemIds}
           sensors={sensors}
           onDragEnd={(...a) => { handleDragEnd(...a); markDirty(); }}
-          onAdd={() => { addItem(); markDirty(); }}
-          onRemove={(...a) => { removeItem(...a); markDirty(); }}
-          onUpdate={(...a) => { updateItem(...a); markDirty(); }}
+          onAdd={() => { addItem(); markDirty(); clearError("line_items"); }}
+          onRemove={(...a) => { removeItem(...a); markDirty(); clearError("line_items"); }}
+          onUpdate={(...a) => { updateItem(...a); markDirty(); clearError("line_items"); }}
           subtotal={subtotal}
           discountRate={discountRate}
           discountAmount={discountAmount}
@@ -590,6 +707,7 @@ export function InvoiceFormPage() {
                     const nonEmpty = items.filter((i) => i.designation.trim());
                     setItems(nonEmpty.length > 0 ? [...nonEmpty, ...newItems] : newItems);
                     markDirty();
+                    clearError("line_items");
                   }}
                   className="text-accent hover:underline"
                 >
@@ -601,21 +719,27 @@ export function InvoiceFormPage() {
           renderDesignation={(item, i) => (
             <DesignationInput
               value={item.designation}
-              onChange={(v: string) => updateItem(i, "designation", v)}
+              onChange={(v: string) => { updateItem(i, "designation", v); clearError("line_items"); }}
               tasks={availableTasks}
             />
           )}
         />
 
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1">{t.notes}</label>
+        {/* Phase 2 E2 — summary error for the line-items region (not per-cell) */}
+        {errors.line_items && (
+          <p role="alert" className="text-xs text-danger-text">
+            {errors.line_items}
+          </p>
+        )}
+
+        <FormField label={t.notes}>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
             className="w-full border border-[var(--color-border-divider)] rounded-lg px-3 py-2 text-sm bg-[var(--color-surface)]"
           />
-        </div>
+        </FormField>
 
         <div className="flex gap-2">
           <Button
@@ -628,7 +752,9 @@ export function InvoiceFormPage() {
           <Button
             variant="secondary"
             size="lg"
-            onClick={() => navigate("/invoices")}
+            onClick={async () => {
+              if (await confirmIfDirty("/invoices")) navigate("/invoices");
+            }}
           >
             {t.cancel}
           </Button>

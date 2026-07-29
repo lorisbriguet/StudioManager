@@ -191,6 +191,26 @@ Sizes: `sm`, `md`, `lg`
 - **Icon-only**: use `<button className="text-muted hover:text-[var(--color-text-secondary)] transition-colors"><Icon size={14} /></button>` — never use the shared `Button` component for icon-only actions (it adds borders/padding that are too heavy)
 - Never put a lucide icon inside a `<button>` alongside text without using the shared Button component
 
+### Sanctioned Raw-Button Exceptions
+
+These patterns keep raw `<button>` elements — do not convert them to the shared Button:
+
+- **Dropdown / context menu items** — see the Dropdown / Context Menu Pattern below
+- **Icon-only actions** — per the icon-only rule above
+- **Banner action chips** — inverse-colored chips on mode banners (`MainLayout` test/presentation banners)
+- **Settings status chips** — the amber test-mode chip and the danger-outline restore/snapshot chips in `SettingsPage`. If a **third** danger-outline chip appears, promote the pattern to a proper Button variant (e.g. `danger-outline`) instead of adding a fourth exception.
+- **Dashed dropzones** — full-width dashed add-affordances (`ProjectBlockLayout` add-block)
+
+### Link Button Conventions
+
+- **Icon sizes**: `12` with `size="sm"`; `14` with `size="md"` and in table-row contexts
+- **Sanctioned className modifiers** on `variant="link"` (only these two):
+  - `text-muted hover:text-accent` — quiet links (add-condition, save-filter, folder actions)
+  - `text-danger-text` — danger links (clear date)
+
+  Both rely on Tailwind emitting these color utilities *after* `text-accent` in the compiled CSS (driven by `@theme` declaration order in `index.css`). Verify compiled order before introducing any other color override.
+- **Full-width footer add-row** (named pattern: `WorkloadTable` and `NamedTable` table footers): `variant="link"` + `className="w-full px-* py-*"` — explicit `px/py` reliably restores padding over the variant's `p-0`. To suppress the variant's hover underline (as in `WorkloadTable`), use `hover:no-underline!` — the important modifier is required because plain `hover:no-underline` sorts *before* `hover:underline` in the compiled CSS and loses.
+
 ### Badge
 ```tsx
 import { Badge } from "../components/ui";

@@ -48,9 +48,11 @@ export async function getTimeEntriesByDateRange(
   );
 }
 
-/** Create a time entry and update task's tracked_minutes. */
+/** Create a time entry and update task's tracked_minutes.
+ *  task_id may be null (e.g. the task was deleted while a timer ran) —
+ *  the entry is then kept on the project alone. */
 export async function createTimeEntry(data: {
-  task_id: number;
+  task_id: number | null;
   project_id: number;
   duration_minutes: number;
   date: string;
@@ -62,10 +64,12 @@ export async function createTimeEntry(data: {
     [data.task_id, data.project_id, data.duration_minutes, data.date, data.description ?? ""]
   );
   // Update task's tracked_minutes (add)
-  await db.execute(
-    "UPDATE tasks SET tracked_minutes = tracked_minutes + $1, updated_at = datetime('now') WHERE id = $2",
-    [data.duration_minutes, data.task_id]
-  );
+  if (data.task_id !== null) {
+    await db.execute(
+      "UPDATE tasks SET tracked_minutes = tracked_minutes + $1, updated_at = datetime('now') WHERE id = $2",
+      [data.duration_minutes, data.task_id]
+    );
+  }
   return result.lastInsertId ?? 0;
 }
 
@@ -110,11 +114,11 @@ export async function getTimeEntriesWithDetails(startDate?: string, endDate?: st
              LEFT JOIN tasks t ON te.task_id = t.id
              LEFT JOIN projects p ON te.project_id = p.id
              WHERE 1=1`;
-  const params: any[] = [];
+  const params: (string | number)[] = [];
   let idx = 1;
   if (startDate) { sql += ` AND te.date >= $${idx++}`; params.push(startDate); }
   if (endDate) { sql += ` AND te.date <= $${idx++}`; params.push(endDate); }
-  if (projectId) { sql += ` AND te.project_id = $${idx++}`; params.push(projectId); }
+  if (projectId) { sql += ` AND te.project_id = $${idx}`; params.push(projectId); }
   sql += ` ORDER BY te.date DESC, te.created_at DESC`;
   return db.select<TimeEntryWithDetails[]>(sql, params);
 }
@@ -130,7 +134,7 @@ export async function updateTimeEntry(id: number, data: { date?: string; duratio
     }
   }
   const fields: string[] = [];
-  const values: any[] = [];
+  const values: (string | number)[] = [];
   let idx = 1;
   if (data.date !== undefined) { fields.push(`date = $${idx++}`); values.push(data.date); }
   if (data.duration_minutes !== undefined) { fields.push(`duration_minutes = $${idx++}`); values.push(data.duration_minutes); }

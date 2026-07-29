@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Plus, Trash2, GripVertical, ChevronDown, ChevronRight, Pencil, X, Link, Unlink } from "lucide-react";
 import { ask } from "@tauri-apps/plugin-dialog";
+import { Button } from "./ui";
 import {
   useProjectTableRows,
   useCreateProjectTableRow,
@@ -51,6 +52,8 @@ export function NamedTable({ table, projectId }: Props) {
   const cellInputRef = useRef<HTMLInputElement>(null);
   const colPickerRef = useRef<HTMLDivElement>(null);
   const colEditorRef = useRef<HTMLDivElement>(null);
+
+  const cols = table.column_config;
 
   const { data: customLists } = useCustomLists();
   const [importListId, setImportListId] = useState<number | null>(null);
@@ -111,18 +114,6 @@ export function NamedTable({ table, projectId }: Props) {
     return () => document.removeEventListener("mousedown", handler);
   }, [showColPicker]);
 
-  // Close column editor on outside click
-  useEffect(() => {
-    if (!editingCol) return;
-    const handler = (e: MouseEvent) => {
-      if (colEditorRef.current && !colEditorRef.current.contains(e.target as Node)) {
-        commitColEdit();
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [editingCol, colName, colOptions]);
-
   // When import list items arrive, apply them
   useEffect(() => {
     if (!importListItems || importListId === null) return;
@@ -164,7 +155,7 @@ export function NamedTable({ table, projectId }: Props) {
     }
   };
 
-  const commitColEdit = () => {
+  const commitColEdit = useCallback(() => {
     if (!editingCol) return;
     const updated = cols.map((c) => {
       if (c.id !== editingCol) return c;
@@ -182,7 +173,20 @@ export function NamedTable({ table, projectId }: Props) {
     updateTable.mutate({ id: table.id, data: { column_config: updated } });
     setEditingCol(null);
     setColEditorPos(null);
-  };
+  }, [editingCol, cols, colName, colOptions, colLinkedListId, updateTable, table.id]);
+
+  // Close column editor on outside click (depends on commitColEdit so the
+  // listener always commits with the latest editor state)
+  useEffect(() => {
+    if (!editingCol) return;
+    const handler = (e: MouseEvent) => {
+      if (colEditorRef.current && !colEditorRef.current.contains(e.target as Node)) {
+        commitColEdit();
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [editingCol, commitColEdit]);
 
   const deleteColumn = (colId: string) => {
     const updated = cols.filter((c) => c.id !== colId);
@@ -200,13 +204,11 @@ export function NamedTable({ table, projectId }: Props) {
     setShowColPicker(false);
   };
 
-  const cols = table.column_config;
-
   return (
     <div className="rounded-xl bg-[var(--color-surface)] overflow-visible">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2 bg-[var(--color-surface)]">
-        <button onClick={() => setCollapsed(!collapsed)} className="text-muted hover:text-[var(--color-text-secondary)]">
+        <button onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? t.expand : t.collapse} className="text-muted hover:text-[var(--color-text-secondary)]">
           {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
         </button>
         {editingName ? (
@@ -235,6 +237,7 @@ export function NamedTable({ table, projectId }: Props) {
           onClick={() => setEditingName(true)}
           className="text-muted hover:text-accent opacity-0 group-hover:opacity-100"
           title={t.rename}
+          aria-label={t.rename}
         >
           <Pencil size={12} />
         </button>
@@ -242,6 +245,7 @@ export function NamedTable({ table, projectId }: Props) {
           onClick={async () => { if (await ask(t.confirm_delete_table, { kind: "warning" })) deleteTable.mutate(table.id); }}
           className="text-muted hover:text-[var(--color-danger-text)]"
           title={t.delete}
+          aria-label={t.delete}
         >
           <Trash2 size={12} />
         </button>
@@ -277,7 +281,7 @@ export function NamedTable({ table, projectId }: Props) {
                           value={colName}
                           onChange={(e) => setColName(e.target.value)}
                           onKeyDown={(e) => { if (e.key === "Enter") commitColEdit(); }}
-                          className="w-full border border-[var(--color-input-border)] rounded px-2 py-1 text-xs mb-2"
+                          className="w-full border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-xs mb-2"
                           autoFocus
                         />
                         {(col.type === "select" || col.type === "tags") && (
@@ -290,19 +294,28 @@ export function NamedTable({ table, projectId }: Props) {
                                     <Link size={9} />
                                     {(customLists ?? []).find((l) => l.id === colLinkedListId)?.name ?? ""}
                                   </span>
-                                  <button type="button" onClick={handleUnlinkList} className="text-[10px] text-muted hover:text-[var(--color-danger-text)] flex items-center gap-0.5">
-                                    <Unlink size={9} /> {t.unlink_list}
-                                  </button>
+                                  <Button
+                                    type="button"
+                                    variant="link"
+                                    size="sm"
+                                    icon={<Unlink size={12} />}
+                                    onClick={handleUnlinkList}
+                                    className="text-muted hover:text-[var(--color-danger-text)]"
+                                  >
+                                    {t.unlink_list}
+                                  </Button>
                                 </div>
                               ) : (
                                 <div className="relative">
-                                  <button
+                                  <Button
                                     type="button"
+                                    variant="link"
+                                    size="sm"
+                                    icon={<Link size={12} />}
                                     onClick={() => setShowImportListDropdown((v) => !v)}
-                                    className="text-[10px] text-accent hover:underline flex items-center gap-0.5"
                                   >
-                                    <Link size={9} /> {t.import_from_list}
-                                  </button>
+                                    {t.import_from_list}
+                                  </Button>
                                   {showImportListDropdown && (
                                     <div className="absolute right-0 top-full mt-1 z-[10000] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-lg shadow-lg py-1 min-w-[140px]">
                                       {(customLists ?? []).length === 0 ? (
@@ -335,13 +348,14 @@ export function NamedTable({ table, projectId }: Props) {
                                     setColOptions(next);
                                   }}
                                   readOnly={!!colLinkedListId}
-                                  className={`flex-1 border border-[var(--color-input-border)] rounded px-2 py-0.5 text-xs ${colLinkedListId ? "opacity-60 cursor-not-allowed" : ""}`}
+                                  className={`flex-1 border border-[var(--color-input-border)] rounded-lg px-2 py-0.5 text-xs ${colLinkedListId ? "opacity-60 cursor-not-allowed" : ""}`}
                                 />
                                 {!colLinkedListId && (
                                   <button
                                     type="button"
                                     onClick={() => setColOptions(colOptions.filter((_, j) => j !== i))}
                                     className="text-muted hover:text-[var(--color-danger-text)]"
+                                    aria-label={t.delete}
                                   >
                                     <Trash2 size={10} />
                                   </button>
@@ -350,13 +364,15 @@ export function NamedTable({ table, projectId }: Props) {
                             ))}
                             {!colLinkedListId && (
                               <>
-                                <button
+                                <Button
                                   type="button"
+                                  variant="link"
+                                  size="sm"
+                                  icon={<Plus size={12} />}
                                   onClick={() => setColOptions([...colOptions, ""])}
-                                  className="text-[10px] text-accent hover:underline flex items-center gap-0.5"
                                 >
-                                  <Plus size={10} /> {t.add_row}
-                                </button>
+                                  {t.add_row}
+                                </Button>
                                 <div className="border-t border-[var(--color-border-divider)] mt-2 pt-2">
                                   {showSaveAsListInput ? (
                                     <div className="flex gap-1">
@@ -365,19 +381,22 @@ export function NamedTable({ table, projectId }: Props) {
                                         onChange={(e) => setSaveAsListName(e.target.value)}
                                         onKeyDown={(e) => { if (e.key === "Enter") handleSaveAsList(); if (e.key === "Escape") setShowSaveAsListInput(false); }}
                                         placeholder={t.list_name}
-                                        className="flex-1 border border-[var(--color-input-border)] rounded px-2 py-0.5 text-[10px]"
+                                        className="flex-1 border border-[var(--color-input-border)] rounded-lg px-2 py-0.5 text-[10px]"
                                         autoFocus
                                       />
                                       <button type="button" onClick={handleSaveAsList} className="text-[10px] text-accent hover:underline">{t.save}</button>
                                     </div>
                                   ) : (
-                                    <button
+                                    <Button
                                       type="button"
+                                      variant="link"
+                                      size="sm"
+                                      icon={<Link size={12} />}
                                       onClick={() => setShowSaveAsListInput(true)}
-                                      className="text-[10px] text-muted hover:text-accent flex items-center gap-0.5"
+                                      className="text-muted hover:text-accent"
                                     >
-                                      <Link size={9} /> {t.save_as_list}
-                                    </button>
+                                      {t.save_as_list}
+                                    </Button>
                                   )}
                                 </div>
                               </>
@@ -412,8 +431,9 @@ export function NamedTable({ table, projectId }: Props) {
                       setColPickerPos({ top: rect.bottom + 4, left: rect.right - 140 });
                       setShowColPicker((v) => !v);
                     }}
-                    className="text-muted hover:text-accent transition-colors p-0.5 rounded hover:bg-[var(--color-hover-row)]"
+                    className="text-muted hover:text-accent transition-colors p-0.5 rounded-md hover:bg-[var(--color-hover-row)]"
                     title={t.add_column}
+                    aria-label={t.add_column}
                   >
                     <Plus size={14} />
                   </button>
@@ -455,6 +475,7 @@ export function NamedTable({ table, projectId }: Props) {
                     <button
                       onClick={() => deleteRow.mutate(row.id)}
                       className="opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-danger-text)] transition-opacity"
+                      aria-label={t.delete}
                     >
                       <Trash2 size={12} />
                     </button>
@@ -463,12 +484,15 @@ export function NamedTable({ table, projectId }: Props) {
               ))}
             </tbody>
           </table>
-          <button
+          <Button
+            variant="link"
+            size="sm"
+            icon={<Plus size={12} />}
             onClick={() => createRow.mutate(undefined)}
-            className="flex items-center gap-1 text-xs text-accent hover:underline px-3 py-2 w-full text-left"
+            className="w-full px-3 py-2"
           >
-            <Plus size={12} /> {t.add_row}
-          </button>
+            {t.add_row}
+          </Button>
         </>
       )}
     </div>
@@ -520,7 +544,7 @@ export function NamedTable({ table, projectId }: Props) {
                   className="px-1.5 py-0.5 text-[10px] rounded-full flex items-center gap-0.5"
                 >
                   {tag}
-                  <button type="button" onClick={() => removeTag(tag)} className="hover:text-danger">
+                  <button type="button" onClick={() => removeTag(tag)} aria-label={`${t.remove_tag} ${tag}`} className="hover:text-danger">
                     <X size={10} />
                   </button>
                 </span>

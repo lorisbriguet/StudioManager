@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Eye } from "lucide-react";
-import { Button, Input, Select } from "../components/ui";
+import { Button, Input, Select, FormField } from "../components/ui";
+import * as v from "../lib/validate";
 import { toast } from "sonner";
 import { addDays, format } from "date-fns";
 import { useQuote, useCreateQuote, useUpdateQuote } from "../db/hooks/useQuotes";
@@ -13,9 +14,21 @@ import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { logError } from "../lib/log";
 import { parseActivities } from "../types/business-profile";
 import { useT } from "../i18n/useT";
-import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel } from "../lib/lineItems";
+import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel, round2 } from "../lib/lineItems";
 import { LineItemsTable } from "../components/shared/LineItemsTable";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
+import { confirmIfDirty } from "../lib/dirty-guard";
+
+// Phase 2 E2 — inline validation (additive; only fields with rules appear in
+// the schema, the rest are unvalidated). "line_items" has no schema rules —
+// it is a region-level check performed in save() (at least one line with a
+// description and an amount) whose message renders under LineItemsTable.
+type QuoteField = "client_id" | "quote_date" | "line_items";
+
+const quoteSchema: v.FormSchema<QuoteField> = {
+  client_id: [v.required],
+  quote_date: [v.required, v.dateValid],
+};
 
 export function QuoteFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -40,6 +53,17 @@ export function QuoteFormPage() {
   }, []);
   useUnsavedChangesWarning(formDirty);
 
+  // Phase 2 E2 — field errors (blur -> validate, change -> clear, submit -> block)
+  const [errors, setErrors] = useState<Partial<Record<QuoteField, string>>>({});
+  const setFieldError = (field: QuoteField, msg: string | null) =>
+    setErrors((e) => {
+      const next = { ...e };
+      if (msg) next[field] = msg;
+      else delete next[field];
+      return next;
+    });
+  const clearError = (field: QuoteField) => setFieldError(field, null);
+
   const { data: invoiceTemplates } = useInvoiceTemplates();
   const { data: defaultTemplate } = useDefaultTemplate();
   const [templateId, setTemplateId] = useState<number | null>(null);
@@ -51,6 +75,7 @@ export function QuoteFormPage() {
   const [activity, setActivity] = useState("");
   const [assignment, setAssignment] = useState("");
   const [notes, setNotes] = useState("");
+  const [discountRate, setDiscountRate] = useState(0);
 
   const {
     items, setItems, sensors, lineItemIds, handleDragEnd,
@@ -71,7 +96,7 @@ export function QuoteFormPage() {
   const addItem = useCallback(() => {
     const rate = useGlobalRateRef.current ? globalRateRef.current : null;
     const unit = useGlobalRateRef.current ? globalUnitRef.current : null;
-    setItems((prev) => [...prev, makeLineItem({ rate, unit, amount: rate ? rate * 1 : 0 })]);
+    setItems((prev) => [...prev, makeLineItem({ rate, unit, amount: rate ? round2(rate * 1) : 0 })]);
   }, [setItems]);
 
   const applyGlobalRate = useCallback((rate: number, unit?: string) => {
@@ -80,7 +105,7 @@ export function QuoteFormPage() {
       ...item,
       rate,
       unit: u,
-      amount: rate * item.quantity,
+      amount: round2(rate * item.quantity),
     })));
   }, [setItems]);
 
@@ -94,6 +119,7 @@ export function QuoteFormPage() {
       setActivity(existingQuote.activity);
       setAssignment(existingQuote.assignment);
       setNotes(existingQuote.notes);
+      setDiscountRate(existingQuote.discount_rate ?? 0);
       getQuoteLineItems(quoteId).then((lineItems) => {
         if (lineItems.length > 0) {
           setItems(
@@ -113,6 +139,7 @@ export function QuoteFormPage() {
         setTimeout(() => { formLoadedRef.current = true; }, 0);
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate-once per loaded quote; adding t.* would re-hydrate (and clobber edits) on locale switch. setItems is a stable setState.
   }, [existingQuote, quoteId]);
 
   // Default activity from profile for new quotes
@@ -120,6 +147,7 @@ export function QuoteFormPage() {
     if (!isEdit && !activity && profileActivities.length > 0) {
       setActivity(profileActivities[0]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- default-fill only when the profile loads; adding `activity` would re-fill the default after the user clears the field
   }, [profileActivities, isEdit]);
 
   // Pre-select default template for new quotes
@@ -144,10 +172,11 @@ export function QuoteFormPage() {
   }, [isEdit]);
 
   const selectedClient = clients?.find((c) => c.id === clientId);
-  const discountRate = selectedClient?.has_discount ? selectedClient.discount_rate : 0;
-  const subtotal = items.reduce((sum, i) => sum + i.amount, 0);
-  const discountAmount = subtotal * discountRate;
-  const total = subtotal - discountAmount;
+  // Newly computed money values are rounded at every boundary — these are
+  // what save() persists.
+  const subtotal = round2(items.reduce((sum, i) => sum + i.amount, 0));
+  const discountAmount = round2(subtotal * discountRate);
+  const total = round2(subtotal - discountAmount);
 
   const { data: clientAddresses } = useClientAddresses(clientId);
   const clientProjects = projects?.filter((p) => p.client_id === clientId);
@@ -157,13 +186,30 @@ export function QuoteFormPage() {
     if (clientAddresses && clientAddresses.length === 1 && !billingAddressId) {
       setBillingAddressId(clientAddresses[0].id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot auto-select when the address list loads; adding billingAddressId would re-select right after the user deselects
   }, [clientAddresses]);
 
   const save = async () => {
-    if (!clientId) return toast.error(t.toast_select_client);
-    if (items.every((i) => !i.designation.trim())) return toast.error(t.add_line_item);
+    // Phase 2 E2 — field-level validation replaces the old toast branches
+    // (toasts remain the backstop for DB failures via onError below).
+    const errs = v.validateForm<QuoteField>(
+      { client_id: clientId, quote_date: quoteDate },
+      quoteSchema
+    );
+    // Region-level line-items rule: at least one line that actually bills
+    // something — a description plus a non-zero amount (amount covers both
+    // rate*quantity and the direct flat-amount entry the table supports).
+    if (!items.some((i) => i.designation.trim() && i.amount > 0)) {
+      errs.line_items = t.line_items_required;
+    }
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
 
-    const validUntil = format(addDays(new Date(quoteDate), 30), "yyyy-MM-dd");
+    // On edit, keep the stored validity date unless the quote date was changed.
+    const validUntil =
+      isEdit && existingQuote?.valid_until && quoteDate === existingQuote.quote_date
+        ? existingQuote.valid_until
+        : format(addDays(new Date(quoteDate), 30), "yyyy-MM-dd");
     const lineItems = toPersistedLineItems(items);
 
     try {
@@ -199,7 +245,7 @@ export function QuoteFormPage() {
           }
         );
       } else {
-        const reference = `DRAFT-${Date.now()}`;
+        const reference = `DRAFT-${crypto.randomUUID()}`;
         createQuote.mutate(
           {
             data: {
@@ -242,7 +288,7 @@ export function QuoteFormPage() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/quotes")} icon={<ArrowLeft size={18} />} />
+        <Button variant="ghost" size="sm" onClick={async () => { if (await confirmIfDirty("/quotes")) navigate("/quotes"); }} icon={<ArrowLeft size={18} />} aria-label={t.back} />
         <h1 className="text-xl font-semibold">
           {isEdit ? t.edit_quote : t.new_quote}
         </h1>
@@ -271,15 +317,19 @@ export function QuoteFormPage() {
         )}
 
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">{t.client}</label>
+          <FormField label={t.client} required error={errors.client_id}>
             <Select
               value={clientId}
               onChange={(e) => {
                 setClientId(e.target.value);
                 setBillingAddressId(null);
                 setProjectId(null);
+                // User picked a (new) client: derive discount from that client
+                const newClient = clients?.find((c) => c.id === e.target.value);
+                setDiscountRate(newClient?.has_discount ? newClient.discount_rate : 0);
+                clearError("client_id");
               }}
+              onBlur={() => setFieldError("client_id", v.validateField(clientId, quoteSchema.client_id))}
               className="py-2"
             >
               <option value="">{t.select_client}</option>
@@ -287,10 +337,9 @@ export function QuoteFormPage() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </Select>
-          </div>
+          </FormField>
           {clientId && (
-            <div>
-              <label className="block text-xs font-medium text-muted mb-1">{t.billing_address}</label>
+            <FormField label={t.billing_address}>
               <Select
                 value={billingAddressId ?? ""}
                 onChange={(e) => setBillingAddressId(e.target.value ? Number(e.target.value) : null)}
@@ -303,10 +352,9 @@ export function QuoteFormPage() {
                   </option>
                 ))}
               </Select>
-            </div>
+            </FormField>
           )}
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">{t.project_optional}</label>
+          <FormField label={t.project_optional}>
             <Select
               value={projectId ?? ""}
               onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
@@ -317,18 +365,17 @@ export function QuoteFormPage() {
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </Select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">{t.date}</label>
+          </FormField>
+          <FormField label={t.date} required error={errors.quote_date}>
             <Input
               type="date"
               value={quoteDate}
-              onChange={(e) => setQuoteDate(e.target.value)}
+              onChange={(e) => { setQuoteDate(e.target.value); clearError("quote_date"); }}
+              onBlur={() => setFieldError("quote_date", v.validateField(quoteDate, quoteSchema.quote_date))}
               className="py-2"
             />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">{t.activity}</label>
+          </FormField>
+          <FormField label={t.activity}>
             <Select
               value={activity}
               onChange={(e) => setActivity(e.target.value)}
@@ -341,16 +388,15 @@ export function QuoteFormPage() {
                 <option value={activity}>{activity}</option>
               )}
             </Select>
-          </div>
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-muted mb-1">{t.assignment}</label>
+          </FormField>
+          <FormField label={t.assignment} className="col-span-2">
             <Input
               value={assignment}
               onChange={(e) => setAssignment(e.target.value)}
               className="py-2"
               placeholder={t.description_work}
             />
-          </div>
+          </FormField>
         </div>
 
         {/* Global rate toggle */}
@@ -405,9 +451,9 @@ export function QuoteFormPage() {
           lineItemIds={lineItemIds}
           sensors={sensors}
           onDragEnd={(...a) => { handleDragEnd(...a); markDirty(); }}
-          onAdd={() => { addItem(); markDirty(); }}
-          onRemove={(...a) => { removeItem(...a); markDirty(); }}
-          onUpdate={(...a) => { updateItem(...a); markDirty(); }}
+          onAdd={() => { addItem(); markDirty(); clearError("line_items"); }}
+          onRemove={(...a) => { removeItem(...a); markDirty(); clearError("line_items"); }}
+          onUpdate={(...a) => { updateItem(...a); markDirty(); clearError("line_items"); }}
           subtotal={subtotal}
           discountRate={discountRate}
           discountAmount={discountAmount}
@@ -416,15 +462,21 @@ export function QuoteFormPage() {
           globalRateLabel={useGlobalRate && globalRate > 0 ? t.all_items_at_rate.replace("{rate}", String(globalRate)).replace("{currency}", "CHF").replace("{unit}", unitShortLabel(globalUnit)) : undefined}
         />
 
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1">{t.notes}</label>
+        {/* Phase 2 E2 — summary error for the line-items region (not per-cell) */}
+        {errors.line_items && (
+          <p role="alert" className="text-xs text-danger-text">
+            {errors.line_items}
+          </p>
+        )}
+
+        <FormField label={t.notes}>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
             className="w-full border border-[var(--color-border-divider)] rounded-lg px-3 py-2 text-sm bg-[var(--color-surface)]"
           />
-        </div>
+        </FormField>
 
         <div className="flex gap-2">
           <Button
@@ -439,7 +491,12 @@ export function QuoteFormPage() {
               variant="secondary"
               size="lg"
               icon={<Eye size={14} />}
-              onClick={() => navigate(`/quotes/${quoteId}/preview`)}
+              // Preview renders the SAVED quote, so unsaved edits would be
+              // silently dropped — prompt as a stopgap. Proper phase-2 fix:
+              // save-then-preview.
+              onClick={async () => {
+                if (await confirmIfDirty(`/quotes/${quoteId}/preview`)) navigate(`/quotes/${quoteId}/preview`);
+              }}
             >
               {t.preview}
             </Button>
@@ -447,7 +504,9 @@ export function QuoteFormPage() {
           <Button
             variant="secondary"
             size="lg"
-            onClick={() => navigate("/quotes")}
+            onClick={async () => {
+              if (await confirmIfDirty("/quotes")) navigate("/quotes");
+            }}
           >
             {t.cancel}
           </Button>

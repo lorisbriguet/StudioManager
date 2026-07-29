@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import * as q from "../queries/resources";
 import { useUndoStore } from "../../stores/undo-store";
+import { getLabels } from "../../lib/notifyError";
 
 export function useResources() {
   return useQuery({ queryKey: ["resources"], queryFn: q.getResources });
@@ -35,7 +36,7 @@ export function useCreateResource() {
     mutationFn: async (data: { name: string; url: string; price: string; tags: string[] }) => {
       const id = await q.createResource(data);
       useUndoStore.getState().push({
-        label: `Create resource "${data.name}"`,
+        label: `${getLabels().undo_create_resource} "${data.name}"`,
         execute: async () => {
           await q.deleteResource(id);
           invalidate();
@@ -80,7 +81,7 @@ export function useUpdateResource() {
           prevData[key] = (prev as unknown as Record<string, unknown>)[key];
         }
         useUndoStore.getState().push({
-          label: `Update resource "${prev.name}"`,
+          label: `${getLabels().undo_update_resource} "${prev.name}"`,
           execute: async () => {
             await q.updateResource(id, prevData as Partial<{ name: string; url: string; price: string }>);
             if (tags !== undefined) {
@@ -116,7 +117,7 @@ export function useDeleteResource() {
       await q.deleteResource(id);
       if (prev) {
         useUndoStore.getState().push({
-          label: `Delete resource "${prev.name}"`,
+          label: `${getLabels().undo_delete_resource} "${prev.name}"`,
           execute: async () => {
             await q.createResource({
               name: prev.name,

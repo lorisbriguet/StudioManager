@@ -1,6 +1,8 @@
 import Database from "@tauri-apps/plugin-sql";
 import { invoke } from "@tauri-apps/api/core";
 import { logError } from "../lib/log";
+import { getLabels } from "../lib/notifyError";
+import { todayLocalISO } from "../utils/localDate";
 import { seedUserGuide } from "./seeds/user-guide";
 
 const SAFE_FIELD = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -48,6 +50,43 @@ let currentDbName = localStorage.getItem("presentationMode") === "true"
     ? "studiomanager_test.db"
     : "studiomanager.db";
 
+let dbFatalShown = false;
+
+/**
+ * Render a full-screen fatal error overlay directly into the DOM.
+ * getDb() is first called from async code (React Query hooks, startup
+ * hooks), so a schema-migration failure never reaches the React
+ * ErrorBoundary — this guard makes it visibly fatal regardless.
+ */
+function showFatalDbError(err: unknown): void {
+  if (dbFatalShown) return;
+  dbFatalShown = true;
+  try {
+    const t = getLabels();
+    const overlay = document.createElement("div");
+    overlay.setAttribute(
+      "style",
+      "position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:32px;text-align:center;background:#fff;color:#111;font-family:system-ui,-apple-system,sans-serif;"
+    );
+    const title = document.createElement("h1");
+    title.textContent = t.page_error_title;
+    title.setAttribute("style", "font-size:16px;font-weight:600;margin:0;");
+    const message = document.createElement("p");
+    message.textContent = t.db_init_failed;
+    message.setAttribute("style", "font-size:13px;max-width:480px;margin:0;");
+    const detail = document.createElement("p");
+    detail.textContent = err instanceof Error ? err.message : String(err);
+    detail.setAttribute("style", "font-size:12px;color:#666;max-width:480px;margin:0;word-break:break-word;");
+    overlay.append(title, message, detail);
+    overlay.setAttribute("role", "alert");
+    overlay.tabIndex = -1;
+    document.body.appendChild(overlay);
+    overlay.focus();
+  } catch {
+    // Never mask the original error because the overlay itself failed
+  }
+}
+
 export async function getDb(): Promise<Database> {
   if (!dbPromise) {
     dbPromise = (async () => {
@@ -55,7 +94,11 @@ export async function getDb(): Promise<Database> {
       try {
         await ensureSchema(database);
       } catch (e) {
+        // Do NOT continue on a half-migrated schema: surface fatally and
+        // rethrow so every getDb() caller rejects.
         logError("[DB] ensureSchema failed:", e);
+        showFatalDbError(e);
+        throw e instanceof Error ? e : new Error(String(e));
       }
       return database;
     })();
@@ -402,11 +445,12 @@ async function ensureSchema(db: Database) {
     "SELECT COUNT(*) as cnt FROM workload_templates"
   );
   if (templateCount[0]?.cnt === 0) {
+    // Keep in sync with DEFAULT_WORKLOAD_COLUMNS (src/types/workload.ts); differs only in asset type "text" vs "link".
     const defaultCols = JSON.stringify([
       { key: "asset", name: "Asset", type: "text", width: 160 },
       { key: "type", name: "Type", type: "multi_select", width: 140, options: [
         { value: "Digital", color: "yellow" }, { value: "Motion", color: "purple" },
-        { value: "Print", color: "orange" }, { value: "Admin", color: "pink" },
+        { value: "Print", color: "orange" }, { value: "Admin", color: "red" },
       ]},
       { key: "og_scope", name: "OG Scope", type: "checkbox", width: 80 },
       { key: "hours", name: "N of Hours", type: "number", width: 90 },
@@ -597,7 +641,7 @@ async function ensureSchema(db: Database) {
        AND t.id NOT IN (SELECT DISTINCT task_id FROM time_entries WHERE task_id IS NOT NULL)`
   );
   for (const tt of tasksNeedingMigration) {
-    const entryDate = tt.updated_at ? tt.updated_at.slice(0, 10) : new Date().toISOString().slice(0, 10);
+    const entryDate = tt.updated_at ? tt.updated_at.slice(0, 10) : todayLocalISO();
     await db.execute(
       "INSERT INTO time_entries (task_id, project_id, duration_minutes, date, description) VALUES ($1, $2, $3, $4, $5)",
       [tt.id, tt.project_id, tt.tracked_minutes, entryDate, "Migrated from tracked_minutes"]
