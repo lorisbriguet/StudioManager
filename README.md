@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.10.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.11.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="Platform">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
@@ -45,6 +45,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Side peek panel for quick project overview without leaving the page
 - Weighted progress calculation (tasks + subtasks)
 - Task filters: todo, done, all — applied globally
+- Tasks of cancelled and completed projects are hidden from dashboards, task lists, and the calendar (project pages keep their own)
 - Workload tracker with custom columns (text, number, checkbox, select, formula)
 - Named tables per project with configurable columns (text, number, checkbox, select, tags, date)
 - Time tracking — start/stop timer per task, quick timer picker (Cmd+Shift+T)
@@ -66,7 +67,8 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Status tracking: draft, sent, paid, overdue, cancelled
 - Automatic overdue detection on app startup with notifications
 - Late payment reminders with numbered reminder PDFs
-- Recurring invoice templates (monthly, quarterly, biannual, annual)
+- Recurring invoice templates (monthly, quarterly, biannual, annual) — create from any invoice via "Make recurring...", manage templates with pause/resume
+- Bulk PDF export — select multiple invoices and export all PDFs to a chosen folder
 - Editable PO number field, VOID overlay for cancelled invoices
 - Draft reference deferral — reference generated only on send
 - Configurable footer text, bank details, and payment terms in PDF
@@ -79,6 +81,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - PDF preview and export with client/supplier name in filename
 - Convert accepted quotes to invoices with one click
 - Quote-to-project wizard — generate projects with tasks from accepted quotes
+- Bulk PDF export to a chosen folder, mirroring invoices
 - Status tracking: draft, sent, accepted, rejected, expired
 
 ### Expense Tracking
@@ -102,7 +105,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Click to open URLs externally
 
 ### Finance & P&L
-- Real-time profit & loss overview
+- Real-time profit & loss overview — only sent/paid/overdue invoices count as revenue (drafts excluded)
 - Revenue, operating expenses, social charges breakdown
 - Charts and yearly comparison
 - Follows Swiss independent worker tax format

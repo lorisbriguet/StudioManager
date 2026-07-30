@@ -20,7 +20,12 @@ import { FileText, Receipt, ClipboardList, FolderPlus } from "lucide-react";
 import { useCountUp } from "../../hooks/useCountUp";
 import { useDashboardKPIs, useMonthlyData, useRevenueByActivity, useRevenueByClient } from "../../db/hooks/useFinance";
 import { useProjects } from "../../db/hooks/useProjects";
-import { useAllTasks } from "../../db/hooks/useTasks";
+// V1.11 C1: task-list widgets (today, overdue, deadlines, this-week, stale,
+// free-days, recently-completed) use useVisibleTasks so tasks of cancelled/
+// completed projects are hidden. Widgets that scope tasks through an
+// active-projects filter (progress, no-deadline, stale-projects) and pure
+// historical aggregates (weekly-streak, busiest-day) keep useAllTasks.
+import { useAllTasks, useVisibleTasks } from "../../db/hooks/useTasks";
 import { useInvoices } from "../../db/hooks/useInvoices";
 import { useQuotes } from "../../db/hooks/useQuotes";
 import { useExpenses } from "../../db/hooks/useExpenses";
@@ -201,7 +206,7 @@ function RecentInvoices() {
 // ── Today tasks ──
 
 function TodayTasks() {
-  const { data: tasks } = useAllTasks();
+  const { data: tasks } = useVisibleTasks();
   const { data: subtasks } = useQuery({ queryKey: ["subtasks", "with-due-date"], queryFn: getSubtasksWithDueDate });
   const { data: projects } = useProjects();
   const t = useT();
@@ -249,7 +254,7 @@ function TodayTasks() {
 // ── Overdue tasks ──
 
 function OverdueTasks() {
-  const { data: tasks } = useAllTasks();
+  const { data: tasks } = useVisibleTasks();
   const { data: subtasks } = useQuery({ queryKey: ["subtasks", "with-due-date"], queryFn: getSubtasksWithDueDate });
   const { data: projects } = useProjects();
   const t = useT();
@@ -348,7 +353,7 @@ function ProjectProgress() {
 // ── Upcoming deadlines ──
 
 function UpcomingDeadlines() {
-  const { data: tasks } = useAllTasks();
+  const { data: tasks } = useVisibleTasks();
   const { data: projects } = useProjects();
   const t = useT();
   const today = todayLocalISO();
@@ -463,7 +468,7 @@ function RevenueByClient() {
 // ── This week events ──
 
 function ThisWeekEvents() {
-  const { data: tasks } = useAllTasks();
+  const { data: tasks } = useVisibleTasks();
   const { data: projects } = useProjects();
   const t = useT();
 
@@ -798,7 +803,7 @@ function NewClientsYear() {
 // ── Phase 18: Stale tasks ──
 
 function StaleTasks() {
-  const { data: tasks } = useAllTasks();
+  const { data: tasks } = useVisibleTasks();
   const { data: projects } = useProjects();
   const t = useT();
 
@@ -871,7 +876,7 @@ function ProjectsWithoutDeadline() {
 // ── Phase 18: Free days this week ──
 
 function FreeDaysWeek() {
-  const { data: tasks } = useAllTasks();
+  const { data: tasks } = useVisibleTasks();
   const t = useT();
 
   const freeDays = useMemo(() => {
@@ -948,7 +953,7 @@ function UpcomingReminders() {
 // ── Phase 18: Recently completed ──
 
 function RecentlyCompleted() {
-  const { data: tasks } = useAllTasks();
+  const { data: tasks } = useVisibleTasks();
   const { data: projects } = useProjects();
   const t = useT();
 

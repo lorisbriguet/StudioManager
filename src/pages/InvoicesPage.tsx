@@ -6,7 +6,6 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir } from "@tauri-apps/api/path";
 import { writeFile } from "@tauri-apps/plugin-fs";
-import { addMonths, format } from "date-fns";
 import { pdf } from "@react-pdf/renderer";
 import { undoable, undoableFromStore } from "../lib/undo";
 import { useInvoices, useUpdateInvoice, useDeleteInvoice } from "../db/hooks/useInvoices";
@@ -16,11 +15,14 @@ import { getBusinessProfile } from "../db/queries/business-profile";
 import { getProject } from "../db/queries/projects";
 import { InvoicePDF } from "../components/invoice/InvoicePDF";
 import { postProcessInvoicePdf } from "../lib/pdfPostProcess";
+import { pdfFileName } from "../lib/pdfFilename";
+import { runBulkPdfExport } from "../lib/bulkPdfExport";
 import { useClients } from "../db/hooks/useClients";
 import { useRecurringTemplates, useCreateRecurringTemplate, useDeleteRecurringTemplate, useUpdateRecurringTemplate } from "../db/hooks/useRecurring";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
 import { formatDisplayDate } from "../utils/formatDate";
-import { todayLocalISO } from "../utils/localDate";
+import { todayLocalISO, parseLocalDate } from "../utils/localDate";
+import { advanceDate } from "../utils/recurringDates";
 import { useT } from "../i18n/useT";
 import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
 import { BulkActionBar } from "../components/BulkActionBar";
@@ -28,10 +30,11 @@ import { SavedFilterBar } from "../components/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useYearGrouping } from "../hooks/useYearGrouping";
-import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Card } from "../components/ui";
+import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Card, Modal, FormField, Input, Select } from "../components/ui";
 import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
 import { isDraftReference } from "../types/invoice";
 import type { Invoice, InvoiceStatus } from "../types/invoice";
+import type { Client } from "../types/client";
 import type { RecurringFrequency } from "../types/recurring";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
@@ -39,6 +42,58 @@ import { applyFilterConditions, type ConditionLogic } from "../types/saved-filte
 const FREQUENCIES: RecurringFrequency[] = ["monthly", "quarterly", "biannual", "annual"];
 
 type SortKey = "reference" | "client_name" | "invoice_date" | "status" | "total";
+
+/**
+ * Fetch everything the InvoicePDF document needs and render it to
+ * post-processed PDF bytes. Shared by download, email and bulk export.
+ * Returns null when the invoice, client or business profile is missing
+ * (caller surfaces t.invoice_not_found).
+ */
+async function generateInvoicePdfBytes(
+  invoiceId: number,
+  clientId: string
+): Promise<{ bytes: Uint8Array<ArrayBuffer>; reference: string; client: Client } | null> {
+  const [fullInvoice, lineItems, client, profile] = await Promise.all([
+    getInvoice(invoiceId),
+    getInvoiceLineItems(invoiceId),
+    getClient(clientId),
+    getBusinessProfile(),
+  ]);
+  if (!fullInvoice || !client || !profile) return null;
+  const [contacts, addresses, project] = await Promise.all([
+    getClientContacts(clientId),
+    getClientAddresses(clientId),
+    fullInvoice.project_id ? getProject(fullInvoice.project_id) : Promise.resolve(null),
+  ]);
+  const selectedContact = fullInvoice.contact_id
+    ? contacts?.find((c) => c.id === fullInvoice.contact_id)
+    : null;
+  const contactName = selectedContact
+    ? `${selectedContact.first_name} ${selectedContact.last_name}`.trim()
+    : undefined;
+  const billingAddress = fullInvoice.billing_address_id
+    ? addresses?.find((a) => a.id === fullInvoice.billing_address_id) ?? null
+    : null;
+
+  const doc = (
+    <InvoicePDF
+      invoice={fullInvoice}
+      lineItems={lineItems}
+      client={client}
+      profile={profile}
+      contactName={contactName}
+      billingAddress={billingAddress}
+      projectName={project?.name}
+      reminderCount={fullInvoice.reminder_count}
+    />
+  );
+  const blob = await pdf(doc).toBlob();
+  const rawBytes = new Uint8Array(await blob.arrayBuffer());
+  const processed = await postProcessInvoicePdf(rawBytes, {
+    isCancelled: fullInvoice.status === "cancelled",
+  });
+  return { bytes: new Uint8Array(processed), reference: fullInvoice.reference, client };
+}
 
 export function InvoicesPage() {
   const t = useT();
@@ -188,53 +243,16 @@ export function InvoicesPage() {
     }
     const toastId = toast.loading(t.generating_pdf);
     try {
-      const [fullInvoice, lineItems, client, profile] = await Promise.all([
-        getInvoice(inv.id),
-        getInvoiceLineItems(inv.id),
-        getClient(inv.client_id),
-        getBusinessProfile(),
-      ]);
-      if (!fullInvoice || !client || !profile) {
+      const result = await generateInvoicePdfBytes(inv.id, inv.client_id);
+      if (!result) {
         toast.error(t.invoice_not_found, { id: toastId });
         return;
       }
-      const [contacts, addresses, project] = await Promise.all([
-        getClientContacts(inv.client_id),
-        getClientAddresses(inv.client_id),
-        fullInvoice.project_id ? getProject(fullInvoice.project_id) : Promise.resolve(null),
-      ]);
-      const selectedContact = fullInvoice.contact_id
-        ? contacts?.find((c) => c.id === fullInvoice.contact_id)
-        : null;
-      const contactName = selectedContact
-        ? `${selectedContact.first_name} ${selectedContact.last_name}`.trim()
-        : undefined;
-      const billingAddress = fullInvoice.billing_address_id
-        ? addresses?.find((a) => a.id === fullInvoice.billing_address_id) ?? null
-        : null;
-
-      const doc = (
-        <InvoicePDF
-          invoice={fullInvoice}
-          lineItems={lineItems}
-          client={client}
-          profile={profile}
-          contactName={contactName}
-          billingAddress={billingAddress}
-          projectName={project?.name}
-          reminderCount={fullInvoice.reminder_count}
-        />
-      );
-      const blob = await pdf(doc).toBlob();
-      const rawBytes = new Uint8Array(await blob.arrayBuffer());
-      const processed = await postProcessInvoicePdf(rawBytes, {
-        isCancelled: fullInvoice.status === "cancelled",
-      });
-      const processedBlob = new Blob([new Uint8Array(processed)], { type: "application/pdf" });
+      const processedBlob = new Blob([result.bytes], { type: "application/pdf" });
       const url = URL.createObjectURL(processedBlob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${fullInvoice.reference}_${client.name}.pdf`;
+      a.download = pdfFileName(result.reference, result.client.name);
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       toast.success(t.download_pdf, { id: toastId });
@@ -260,58 +278,19 @@ export function InvoicesPage() {
     }
     const toastId = toast.loading(t.generating_pdf);
     try {
-      const [fullInvoice, lineItems, client, profile] = await Promise.all([
-        getInvoice(inv.id),
-        getInvoiceLineItems(inv.id),
-        getClient(inv.client_id),
-        getBusinessProfile(),
-      ]);
-      if (!fullInvoice || !client || !profile) {
+      const result = await generateInvoicePdfBytes(inv.id, inv.client_id);
+      if (!result) {
         toast.error(t.invoice_not_found, { id: toastId });
         return;
       }
-      const [contacts, addresses, project] = await Promise.all([
-        getClientContacts(inv.client_id),
-        getClientAddresses(inv.client_id),
-        fullInvoice.project_id ? getProject(fullInvoice.project_id) : Promise.resolve(null),
-      ]);
-      const selectedContact = fullInvoice.contact_id
-        ? contacts?.find((c) => c.id === fullInvoice.contact_id)
-        : null;
-      const contactName = selectedContact
-        ? `${selectedContact.first_name} ${selectedContact.last_name}`.trim()
-        : undefined;
-      const billingAddress = fullInvoice.billing_address_id
-        ? addresses?.find((a) => a.id === fullInvoice.billing_address_id) ?? null
-        : null;
-
-      const doc = (
-        <InvoicePDF
-          invoice={fullInvoice}
-          lineItems={lineItems}
-          client={client}
-          profile={profile}
-          contactName={contactName}
-          billingAddress={billingAddress}
-          projectName={project?.name}
-          reminderCount={fullInvoice.reminder_count}
-        />
-      );
-      const blob = await pdf(doc).toBlob();
-      const rawBytes = new Uint8Array(await blob.arrayBuffer());
-      const processed = await postProcessInvoicePdf(rawBytes, {
-        isCancelled: fullInvoice.status === "cancelled",
-      });
-
       const dataDir = await appDataDir();
-      const tempFileName = `${fullInvoice.reference}_${client.name}.pdf`.replace(/[/\\]/g, "_");
-      const tempPath = `${dataDir}/temp_${tempFileName}`;
-      await writeFile(tempPath, new Uint8Array(processed));
+      const tempPath = `${dataDir}/temp_${pdfFileName(result.reference, result.client.name)}`;
+      await writeFile(tempPath, result.bytes);
 
       await invoke("share_pdf_via_mail", {
         path: tempPath,
-        to: client.email ?? "",
-        subject: fullInvoice.reference,
+        to: result.client.email ?? "",
+        subject: result.reference,
       });
       toast.dismiss(toastId);
     } catch (err) {
@@ -319,22 +298,78 @@ export function InvoicesPage() {
     }
   };
 
-  const handleCreateRecurring = (inv: Invoice & { client_name: string }) => {
-    const nextDue = format(addMonths(new Date(), 1), "yyyy-MM-dd");
+  const bulkExportPdfs = async () => {
+    const docs = ([...bulk.selected] as number[])
+      .map((id) => enriched.find((i) => i.id === id))
+      .filter((i): i is (typeof enriched)[number] => i !== undefined);
+    await runBulkPdfExport({
+      docs,
+      busyIds: busyPdfIds.current,
+      t,
+      generate: (d) => generateInvoicePdfBytes(d.id, d.client_id),
+      notFoundMessage: t.invoice_not_found,
+      logLabel: "invoice",
+      onDone: bulk.clearSelection,
+    });
+  };
+
+  // "Make recurring..." modal — the single canonical creation flow for
+  // recurring templates (opened from the invoice context menu).
+  const [recurringInv, setRecurringInv] = useState<(Invoice & { client_name: string }) | null>(null);
+  const [recFrequency, setRecFrequency] = useState<RecurringFrequency>("monthly");
+  const [recNextDue, setRecNextDue] = useState("");
+  const [recNextDueTouched, setRecNextDueTouched] = useState(false);
+
+  // Default next_due: one period after the invoice date, advanced until it is
+  // strictly in the future — converting an old invoice must not pre-fill a
+  // past date, or the catch-up loop in useRecurringCheck would generate one
+  // surprise draft per elapsed period on the next launch.
+  const defaultNextDue = (inv: Invoice, f: RecurringFrequency) => {
+    const anchorDay = parseLocalDate(inv.invoice_date).getDate();
+    const today = todayLocalISO();
+    let due = advanceDate(inv.invoice_date, f, anchorDay);
+    while (due <= today) due = advanceDate(due, f, anchorDay);
+    return due;
+  };
+
+  const openMakeRecurring = (inv: Invoice & { client_name: string }) => {
+    setRecFrequency("monthly");
+    setRecNextDue(defaultNextDue(inv, "monthly"));
+    setRecNextDueTouched(false);
+    setRecurringInv(inv);
+  };
+
+  const handleRecFrequencyChange = (f: RecurringFrequency) => {
+    setRecFrequency(f);
+    // Keep the default in sync with the period as long as the user has not
+    // edited the date manually.
+    if (!recNextDueTouched && recurringInv) {
+      setRecNextDue(defaultNextDue(recurringInv, f));
+    }
+  };
+
+  const confirmMakeRecurring = async () => {
+    if (!recurringInv || !recNextDue) return;
+    // A manually chosen past date triggers the catch-up loop (one draft per
+    // elapsed period) — legitimate for intentional backfill, so warn, don't block.
+    if (recNextDue < todayLocalISO()) {
+      const proceed = await ask(t.recurring_past_date_warning, { kind: "warning", okLabel: t.create, cancelLabel: t.cancel });
+      if (!proceed) return;
+    }
     createTemplate.mutate(
       {
-        base_invoice_id: inv.id,
-        client_id: inv.client_id,
-        frequency: "monthly",
-        next_due: nextDue,
+        base_invoice_id: recurringInv.id,
+        client_id: recurringInv.client_id,
+        frequency: recFrequency,
+        next_due: recNextDue,
         active: 1,
       },
       {
         onSuccess: () => {
           toast.success(t.template_created);
+          setRecurringInv(null);
           setShowRecurring(true);
         },
-        onError: (e) => toast.error(String(e)),
       }
     );
   };
@@ -352,12 +387,6 @@ export function InvoicesPage() {
         onError: (e) => toast.error(String(e)),
       }
     );
-  };
-
-  const invoiceRef = (id: number) => {
-    const inv = invoices?.find((i) => i.id === id);
-    if (!inv) return `#${id}`;
-    return inv.reference.startsWith("DRAFT") ? t.draft : inv.reference;
   };
 
   const header = (
@@ -402,13 +431,17 @@ export function InvoicesPage() {
             </button>
           </div>
           {(!templates || templates.length === 0) ? (
-            <p className="text-sm text-muted">{t.no_recurring_templates}</p>
+            <div>
+              <p className="text-sm text-muted">{t.no_recurring_templates}</p>
+              <p className="text-sm text-muted mt-1">{t.recurring_empty_hint}</p>
+            </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[var(--color-border-header)] text-left text-xs text-muted uppercase">
                   <th className="py-2 pr-2">{t.base_invoice}</th>
                   <th className="py-2 pr-2">{t.client}</th>
+                  <th className="py-2 pr-2 text-right">{t.amount}</th>
                   <th className="py-2 pr-2">{t.frequency}</th>
                   <th className="py-2 pr-2">{t.next_due}</th>
                   <th className="py-2 pr-2">{t.status}</th>
@@ -416,10 +449,17 @@ export function InvoicesPage() {
                 </tr>
               </thead>
               <tbody>
-                {templates.map((tmpl) => (
+                {templates.map((tmpl) => {
+                  const baseInv = invoices?.find((i) => i.id === tmpl.base_invoice_id);
+                  return (
                   <tr key={tmpl.id} className="border-b border-[var(--color-border-divider)]">
-                    <td className="py-2 pr-2">{invoiceRef(tmpl.base_invoice_id)}</td>
+                    <td className="py-2 pr-2">
+                      {baseInv ? (isDraftReference(baseInv.reference) ? t.draft : baseInv.reference) : `#${tmpl.base_invoice_id}`}
+                    </td>
                     <td className="py-2 pr-2">{clientsMap.get(tmpl.client_id) ?? tmpl.client_id}</td>
+                    <td className="py-2 pr-2 text-right">
+                      {baseInv ? `CHF ${(baseInv.chf_equivalent ?? baseInv.total).toFixed(2)}` : "—"}
+                    </td>
                     <td className="py-2 pr-2">
                       <select
                         value={tmpl.frequency}
@@ -450,9 +490,12 @@ export function InvoicesPage() {
                     <td className="py-2 text-right">
                       <button
                         type="button"
-                        onClick={() => deleteTemplate.mutate(tmpl.id, {
-                          onSuccess: () => toast.success(t.template_deleted),
-                        })}
+                        onClick={async () => {
+                          if (!(await ask(t.confirm_delete_template, { kind: "warning" }))) return;
+                          deleteTemplate.mutate(tmpl.id, {
+                            onSuccess: () => toast.success(t.template_deleted),
+                          });
+                        }}
                         className="text-muted hover:text-[var(--color-danger-text)]"
                         aria-label={t.delete_template}
                       >
@@ -460,7 +503,8 @@ export function InvoicesPage() {
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -632,7 +676,7 @@ export function InvoicesPage() {
             { label: "", divider: true, onClick: () => {} },
             ...(ctxMenu.item.status === "draft" ? [{ label: t.mark_sent, icon: <Send size={14} />, onClick: () => updateInvoice.mutate({ id: ctxMenu.item.id, data: { status: "sent" } }) }] : []),
             ...(ctxMenu.item.status !== "paid" && ctxMenu.item.status !== "cancelled" ? [{ label: t.mark_paid, icon: <CheckCircle size={14} />, onClick: () => updateInvoice.mutate({ id: ctxMenu.item.id, data: { status: "paid", paid_date: todayLocalISO() } }) }] : []),
-            ...(ctxMenu.item.status !== "draft" && ctxMenu.item.status !== "cancelled" ? [{ label: t.create_recurring, icon: <Repeat size={14} />, onClick: () => handleCreateRecurring(ctxMenu.item) }] : []),
+            ...(ctxMenu.item.status !== "draft" && ctxMenu.item.status !== "cancelled" ? [{ label: t.make_recurring, icon: <Repeat size={14} />, onClick: () => openMakeRecurring(ctxMenu.item) }] : []),
             ...(ctxMenu.item.status === "overdue" ? [{ label: t.generate_reminder, icon: <AlertTriangle size={14} />, onClick: () => handleGenerateReminder(ctxMenu.item) }] : []),
             ...(isDraftReference(ctxMenu.item.reference) ? [
               { label: "", divider: true, onClick: () => {} },
@@ -647,9 +691,43 @@ export function InvoicesPage() {
         actions={[
           { label: t.mark_paid, icon: <CheckCircle size={14} />, onClick: bulkMarkPaid },
           { label: t.mark_sent, icon: <Send size={14} />, onClick: bulkMarkSent },
+          { label: t.export_pdfs, icon: <Download size={14} />, onClick: bulkExportPdfs },
           ...(selectionHasNonDraft ? [] : [{ label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true }]),
         ]}
       />
+      <Modal
+        open={recurringInv !== null}
+        onClose={() => setRecurringInv(null)}
+        title={t.create_recurring}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setRecurringInv(null)}>{t.cancel}</Button>
+            <Button onClick={confirmMakeRecurring} disabled={!recNextDue || createTemplate.isPending}>
+              {t.create}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <FormField label={t.frequency}>
+            <Select
+              value={recFrequency}
+              onChange={(e) => handleRecFrequencyChange(e.target.value as RecurringFrequency)}
+            >
+              {FREQUENCIES.map((f) => (
+                <option key={f} value={f}>{t[f] ?? f}</option>
+              ))}
+            </Select>
+          </FormField>
+          <FormField label={t.next_due}>
+            <Input
+              type="date"
+              value={recNextDue}
+              onChange={(e) => { setRecNextDue(e.target.value); setRecNextDueTouched(true); }}
+            />
+          </FormField>
+        </div>
+      </Modal>
     </div>
   );
 }

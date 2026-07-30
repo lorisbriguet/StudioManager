@@ -248,3 +248,51 @@ Not bugs in this pass — logged deliberately:
 - **Consumer-less i18n keys** — `supplier_required`, `amount_required`, `add_line_item` exist in both languages but have no consumer yet (verified by grep). Remove or wire up in a later pass.
 - **Language picker shows translated names, not endonyms** (e.g. "French" in the EN UI rather than "Français") — product call, revisit if wanted.
 - **DataTable component, invoice/quote dedup, queryKeys factory, ensureSchema consolidation** — backlog unchanged from phase 1.
+
+---
+
+# V1.11 batch 1
+
+New features + fixes: bulk PDF export, recurring-invoice discoverability, widened time-entries editor, task visibility by project status. Automated coverage: `pdfFilename.test.ts` (filename sanitization + bulk collision dedupe), `taskVisibility.test.ts` (filtered vs unfiltered task queries); full suite 232 tests green, tsc + eslint clean, EN/FR parity 820/820.
+
+## 28. Bulk PDF export (invoices + quotes)
+
+- [ ] 28.1 Select several invoices → **Export PDFs** in the bulk bar → pick a folder: all PDFs land there as `<Reference>_<Client>.pdf`, progress toast counts N/M, success toast says "N PDF(s) exported".
+- [ ] 28.2 Same flow on the **Quotes** page.
+- [ ] 28.3 **Cancel the folder picker**: clean no-op — no toast, selection stays.
+- [ ] 28.4 Include at least one **draft** in the selection: ONE warning for the whole selection ("The selection includes draft document(s)…"), before the folder picker. Cancelling it aborts; confirming exports everything.
+- [ ] 28.5 Two **draft quotes for the same client** in one export: both files exist (`DRAFT_Client.pdf`, `DRAFT_Client_2.pdf`) — no silent overwrite.
+- [ ] 28.6 Start a single PDF download from the context menu, and while it's generating trigger a bulk export including that row: an info toast says generation is already in progress — no dialogs open, nothing silently swallowed.
+- [ ] 28.7 Bulk-export exactly **one** document: toast reads "1 PDF(s) exported" (EN) / "1 PDF exporte(s)" (FR).
+
+## 29. Recurring invoices — discoverability + management
+
+- [ ] 29.1 Right-click a **non-draft** invoice → **Make recurring…**: modal opens with frequency (monthly default) and next-due prefilled **in the future** (one period after the invoice date, advanced past today for old invoices).
+- [ ] 29.2 Change frequency before touching the date: the default date re-derives. Edit the date manually, then change frequency: your date **stays**.
+- [ ] 29.3 Make an invoice from **several months ago** recurring, accept the default date, confirm: NO surprise drafts on next launch (default was clamped to the future).
+- [ ] 29.4 Manually set a **past** next-due date and confirm: a warning explains one draft per elapsed period will be generated; cancelling aborts, confirming creates the template (intentional backfill).
+- [ ] 29.5 Templates panel: each row shows base invoice reference, client, **amount** (— if the base invoice is gone), frequency (editable), next due, active toggle (pause/resume works).
+- [ ] 29.6 **Delete a template**: confirm dialog appears first; cancelling keeps it.
+- [ ] 29.7 With the Recurring panel closed and templates existing: the header button shows the **count chip**. With zero templates: the empty panel hints at "right-click an invoice → Make recurring…".
+- [ ] 29.8 Switch to **FR**: all of the above strings are French and accent-free.
+
+## 30. Time-entries editor width (Settings)
+
+- [ ] 30.1 Settings → time entries: the table is comfortably wide (`max-w-4xl`), date/duration/description columns don't jump while editing; long descriptions truncate around 320px in display mode.
+- [ ] 30.2 Shrink the window to its **minimum width**: the table scrolls horizontally inside its rounded border — Save/Cancel buttons in the edit row never clip out of reach.
+- [ ] 30.3 Expense categories manager: content fits its section (no cramped parent wrapper).
+
+## 31. Task visibility by project status
+
+- [ ] 31.1 Cancel a project that has tasks with due dates: its tasks disappear **immediately** (no reload) from dashboard widgets (today/overdue/upcoming/stale/recently-completed), TasksPage (its whole group vanishes), and the calendar (tasks AND subtasks).
+- [ ] 31.2 Mark a project **completed**: same hiding. Put a project **on hold**: tasks stay visible everywhere.
+- [ ] 31.3 Open the cancelled project's **detail page**: its own tasks are still listed there (project-scoped views are intentionally unfiltered).
+- [ ] 31.4 Undo the status change (toast/undo stack): the tasks come back everywhere without a reload.
+- [ ] 31.5 Historical widgets (weekly streak, busiest day) and time reports still count work from completed projects — completing a project does not rewrite history.
+
+## 32. P&L draft-invoice fix
+
+Draft invoices (including recurring-template output) no longer count as revenue anywhere. Automated: `financeRevenue.test.ts` asserts the sent/paid/overdue filter on all five revenue queries.
+
+- [ ] 32.1 Create a draft invoice with a large amount: dashboard KPIs (total invoiced, open balance, net result), the P&L page, the monthly chart, and revenue by activity/client all stay **unchanged**. Mark it sent: it now appears in all of them.
+- [ ] 32.2 Trustee export with a draft invoice in the year: the draft is **absent** from the invoices list PDF and no `DRAFT-*.pdf` lands in `factures/justificatifs/`. A **cancelled** invoice still appears in the list (complete numbered sequence) but adds nothing to revenue.
