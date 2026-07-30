@@ -392,7 +392,7 @@ export function SettingsPage() {
 
       {/* Settings content */}
       <div className="flex-1 overflow-y-auto px-8 py-6">
-        <div className="max-w-xl">
+        <div className={activeCategory === "time_entries" ? "max-w-4xl" : activeCategory === "categories" ? "max-w-3xl" : "max-w-xl"}>
           {activeCategory === "general" && (
             <div className="space-y-1">
               <SectionHeader title={t.general} />
@@ -1385,16 +1385,16 @@ function TimeEntriesManager() {
       ) : rows.length === 0 ? (
         <p className="text-xs text-muted py-4">{t.no_entries_found}</p>
       ) : (
-        <div className="rounded-xl border border-[var(--color-border-divider)] overflow-hidden">
+        <div className="rounded-xl border border-[var(--color-border-divider)] overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-[var(--color-border-divider)] bg-[var(--color-surface)]">
-                <th className="text-left px-3 py-2 font-medium text-muted">{t.date}</th>
+                <th className="text-left px-3 py-2 font-medium text-muted w-[130px]">{t.date}</th>
                 <th className="text-left px-3 py-2 font-medium text-muted">{t.project}</th>
                 <th className="text-left px-3 py-2 font-medium text-muted">{t.tasks}</th>
-                <th className="text-left px-3 py-2 font-medium text-muted">{t.duration}</th>
-                <th className="text-left px-3 py-2 font-medium text-muted">{t.description}</th>
-                <th className="px-3 py-2" />
+                <th className="text-left px-3 py-2 font-medium text-muted w-[150px]">{t.duration}</th>
+                <th className="text-left px-3 py-2 font-medium text-muted w-full">{t.description}</th>
+                <th className="px-3 py-2 w-16" />
               </tr>
             </thead>
             <tbody>
@@ -1407,7 +1407,7 @@ function TimeEntriesManager() {
                           type="date"
                           value={editForm.date}
                           onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
-                          className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-full"
+                          className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-full min-w-[110px]"
                         />
                       </td>
                       <td className="px-3 py-1.5 text-muted">{entry.project_name}</td>
@@ -1420,7 +1420,7 @@ function TimeEntriesManager() {
                             max={23}
                             value={editForm.hours}
                             onChange={(e) => setEditForm({ ...editForm, hours: Math.max(0, Number(e.target.value)) })}
-                            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-12"
+                            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-14"
                           />
                           <span className="text-muted">h</span>
                           <input
@@ -1429,7 +1429,7 @@ function TimeEntriesManager() {
                             max={59}
                             value={editForm.minutes}
                             onChange={(e) => setEditForm({ ...editForm, minutes: Math.max(0, Math.min(59, Number(e.target.value))) })}
-                            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-12"
+                            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-14"
                           />
                           <span className="text-muted">m</span>
                         </div>
@@ -1439,7 +1439,7 @@ function TimeEntriesManager() {
                           type="text"
                           value={editForm.description}
                           onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                          className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-full"
+                          className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-full min-w-[200px]"
                           placeholder={t.description}
                         />
                       </td>
@@ -1473,7 +1473,7 @@ function TimeEntriesManager() {
                       <td className="px-3 py-2">{entry.project_name}</td>
                       <td className="px-3 py-2 text-muted">{entry.task_title ?? "—"}</td>
                       <td className="px-3 py-2 tabular-nums">{formatDuration(entry.duration_minutes)}</td>
-                      <td className="px-3 py-2 text-muted max-w-[160px] truncate" title={entry.description}>{entry.description || "—"}</td>
+                      <td className="px-3 py-2 text-muted max-w-[320px] truncate" title={entry.description}>{entry.description || "—"}</td>
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-1">
                           <button

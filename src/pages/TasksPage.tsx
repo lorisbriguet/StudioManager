@@ -20,7 +20,7 @@ import {
   sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useAllTasks, useUpdateTask, useCreateTask, useDeleteTask, useCreateSubtask, useUpdateSubtask, useDeleteSubtask } from "../db/hooks/useTasks";
+import { useVisibleTasks, useUpdateTask, useCreateTask, useDeleteTask, useCreateSubtask, useUpdateSubtask, useDeleteSubtask } from "../db/hooks/useTasks";
 import { getAllSubtasks } from "../db/queries/tasks";
 import { useQuery } from "@tanstack/react-query";
 import { useProjects } from "../db/hooks/useProjects";
@@ -42,7 +42,12 @@ import { applyFilterConditions, type ConditionLogic } from "../types/saved-filte
 export function TasksPage() {
   const t = useT();
   const openTab = useTabStore((s) => s.openTab);
-  const { data: tasks, isLoading } = useAllTasks();
+  // V1.11 C1: tasks of cancelled/completed projects are hidden, so their
+  // project groups disappear entirely (groups are derived from the tasks).
+  // EmptyState below reads this filtered source: if every task in the DB
+  // belongs to a cancelled/completed project, the page shows "no tasks yet" —
+  // sensible, since nothing actionable exists and no groups render.
+  const { data: tasks, isLoading } = useVisibleTasks();
   const { data: projects } = useProjects();
   const { data: clients } = useClients();
   const { data: subtasks } = useQuery({ queryKey: ["subtasks"], queryFn: getAllSubtasks });

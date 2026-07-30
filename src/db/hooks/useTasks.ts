@@ -118,6 +118,14 @@ export function useAllTasks() {
   return useQuery({ queryKey: ["tasks"], queryFn: q.getAllTasks });
 }
 
+/** Tasks excluding those of cancelled/completed projects (V1.11 C1) — for
+ *  cross-project surfaces (dashboard task lists, TasksPage). Project-scoped
+ *  views keep useTasksByProject / useAllTasks. Invalidations on the ["tasks"]
+ *  prefix cover this key too. */
+export function useVisibleTasks() {
+  return useQuery({ queryKey: ["tasks", "visible"], queryFn: q.getVisibleTasks });
+}
+
 export function useTasksWithDueDate() {
   return useQuery({
     queryKey: ["tasks", "with-due-date"],

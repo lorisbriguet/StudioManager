@@ -79,8 +79,11 @@ export function FinancesPage() {
         await writeFile(`${basePath}/${profile.owner_name.toUpperCase()} - ${year} - Comptabilite.pdf`, plBytes);
       }
 
-      // Export invoices list PDF + individual invoice PDFs
-      const yearInvoices = invoices?.filter((inv) => inv.invoice_date.startsWith(String(year))) ?? [];
+      // Export invoices list PDF + individual invoice PDFs. Drafts are not
+      // bookkeeping records — exclude them; cancelled invoices keep their
+      // real reference and stay listed so the numbered sequence is complete.
+      const yearInvoices =
+        invoices?.filter((inv) => inv.invoice_date.startsWith(String(year)) && inv.status !== "draft") ?? [];
       const clientNames: Record<string, string> = {};
       for (const c of clients ?? []) clientNames[c.id] = c.name;
 

@@ -8,6 +8,8 @@ import { appDataDir } from "@tauri-apps/api/path";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { undoable, undoableFromStore } from "../lib/undo";
 import { ask } from "@tauri-apps/plugin-dialog";
+import { pdfFileName } from "../lib/pdfFilename";
+import { runBulkPdfExport } from "../lib/bulkPdfExport";
 import { useClients } from "../db/hooks/useClients";
 import { useQuotes, useUpdateQuote, useDeleteQuote } from "../db/hooks/useQuotes";
 import { getQuote, getQuoteLineItems } from "../db/queries/quotes";
@@ -27,10 +29,52 @@ import { useTabStore } from "../stores/tab-store";
 import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState } from "../components/ui";
 import { quoteStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Quote, QuoteStatus, QuoteLineItem } from "../types/quote";
+import type { Client } from "../types/client";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
 type SortKey = "reference" | "client_name" | "quote_date" | "status" | "total";
+
+/**
+ * Fetch everything the QuotePDF document needs and render it to PDF bytes.
+ * Shared by download, email and bulk export. Returns null when the quote,
+ * client or business profile is missing (caller surfaces t.quote_not_found).
+ * `reference` is the filename-safe form (drafts collapse to "DRAFT").
+ */
+async function generateQuotePdfBytes(
+  quoteId: number,
+  clientId: string
+): Promise<{ bytes: Uint8Array<ArrayBuffer>; reference: string; client: Client } | null> {
+  const [fullQuote, lineItems, client, profile] = await Promise.all([
+    getQuote(quoteId),
+    getQuoteLineItems(quoteId),
+    getClient(clientId),
+    getBusinessProfile(),
+  ]);
+  if (!fullQuote || !client || !profile) return null;
+  const [addresses, project] = await Promise.all([
+    getClientAddresses(clientId),
+    fullQuote.project_id ? getProject(fullQuote.project_id) : Promise.resolve(null),
+  ]);
+  const billingAddress = fullQuote.billing_address_id
+    ? addresses?.find((a) => a.id === fullQuote.billing_address_id) ?? null
+    : null;
+
+  const doc = (
+    <QuotePDF
+      quote={fullQuote}
+      lineItems={lineItems}
+      client={client}
+      profile={profile}
+      billingAddress={billingAddress}
+      projectName={project?.name}
+    />
+  );
+  const blob = await pdf(doc).toBlob();
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const reference = fullQuote.reference.startsWith("DRAFT") ? "DRAFT" : fullQuote.reference;
+  return { bytes, reference, client };
+}
 
 export function QuotesPage() {
   const { data: quotes, isLoading } = useQuotes();
@@ -93,39 +137,16 @@ export function QuotesPage() {
     }
     const toastId = toast.loading(t.generating_pdf);
     try {
-      const [fullQuote, lineItems, client, profile] = await Promise.all([
-        getQuote(q.id),
-        getQuoteLineItems(q.id),
-        getClient(q.client_id),
-        getBusinessProfile(),
-      ]);
-      if (!fullQuote || !client || !profile) {
+      const result = await generateQuotePdfBytes(q.id, q.client_id);
+      if (!result) {
         toast.error(t.quote_not_found, { id: toastId });
         return;
       }
-      const [addresses, project] = await Promise.all([
-        getClientAddresses(q.client_id),
-        fullQuote.project_id ? getProject(fullQuote.project_id) : Promise.resolve(null),
-      ]);
-      const billingAddress = fullQuote.billing_address_id
-        ? addresses?.find((a) => a.id === fullQuote.billing_address_id) ?? null
-        : null;
-
-      const doc = (
-        <QuotePDF
-          quote={fullQuote}
-          lineItems={lineItems}
-          client={client}
-          profile={profile}
-          billingAddress={billingAddress}
-          projectName={project?.name}
-        />
-      );
-      const blob = await pdf(doc).toBlob();
+      const blob = new Blob([result.bytes], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${fullQuote.reference.startsWith("DRAFT") ? "DRAFT" : fullQuote.reference}_${client.name}.pdf`;
+      a.download = pdfFileName(result.reference, result.client.name);
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       toast.success(t.download_pdf, { id: toastId });
@@ -151,46 +172,19 @@ export function QuotesPage() {
     }
     const toastId = toast.loading(t.generating_pdf);
     try {
-      const [fullQuote, lineItems, client, profile] = await Promise.all([
-        getQuote(q.id),
-        getQuoteLineItems(q.id),
-        getClient(q.client_id),
-        getBusinessProfile(),
-      ]);
-      if (!fullQuote || !client || !profile) {
+      const result = await generateQuotePdfBytes(q.id, q.client_id);
+      if (!result) {
         toast.error(t.quote_not_found, { id: toastId });
         return;
       }
-      const [addresses, project] = await Promise.all([
-        getClientAddresses(q.client_id),
-        fullQuote.project_id ? getProject(fullQuote.project_id) : Promise.resolve(null),
-      ]);
-      const billingAddress = fullQuote.billing_address_id
-        ? addresses?.find((a) => a.id === fullQuote.billing_address_id) ?? null
-        : null;
-
-      const doc = (
-        <QuotePDF
-          quote={fullQuote}
-          lineItems={lineItems}
-          client={client}
-          profile={profile}
-          billingAddress={billingAddress}
-          projectName={project?.name}
-        />
-      );
-      const blob = await pdf(doc).toBlob();
-      const pdfBytes = new Uint8Array(await blob.arrayBuffer());
-
       const dataDir = await appDataDir();
-      const tempFileName = `${fullQuote.reference.startsWith("DRAFT") ? "DRAFT" : fullQuote.reference}_${client.name}.pdf`.replace(/[/\\]/g, "_");
-      const tempPath = `${dataDir}/temp_${tempFileName}`;
-      await writeFile(tempPath, pdfBytes);
+      const tempPath = `${dataDir}/temp_${pdfFileName(result.reference, result.client.name)}`;
+      await writeFile(tempPath, result.bytes);
 
       await invoke("share_pdf_via_mail", {
         path: tempPath,
-        to: client.email ?? "",
-        subject: fullQuote.reference.startsWith("DRAFT") ? "DRAFT" : fullQuote.reference,
+        to: result.client.email ?? "",
+        subject: result.reference,
       });
       toast.dismiss(toastId);
     } catch (err) {
@@ -255,6 +249,21 @@ export function QuotesPage() {
     ([...bulk.selected] as number[]).forEach((id) => deleteQuote.mutate(id));
     bulk.clearSelection();
   }, [bulk, deleteQuote, t]);
+
+  const bulkExportPdfs = async () => {
+    const docs = ([...bulk.selected] as number[])
+      .map((id) => enriched.find((q) => q.id === id))
+      .filter((q): q is (typeof enriched)[number] => q !== undefined);
+    await runBulkPdfExport({
+      docs,
+      busyIds: busyPdfIds.current,
+      t,
+      generate: (d) => generateQuotePdfBytes(d.id, d.client_id),
+      notFoundMessage: t.quote_not_found,
+      logLabel: "quote",
+      onDone: bulk.clearSelection,
+    });
+  };
 
   if (isLoading) return (
     <div>
@@ -393,6 +402,7 @@ export function QuotesPage() {
         onClear={bulk.clearSelection}
         actions={[
           { label: t.mark_sent, icon: <Send size={14} />, onClick: bulkMarkSent },
+          { label: t.export_pdfs, icon: <Download size={14} />, onClick: bulkExportPdfs },
           { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
         ]}
       />

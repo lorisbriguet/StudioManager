@@ -898,6 +898,18 @@ const ui = {
 
     // Phase 2 E3 — validation rollout
     url_label: "URL",
+
+    // V1.11 A — bulk PDF export + recurring management
+    export_pdfs: "Export PDFs",
+    bulk_export_progress: "Generating PDFs {n}/{total}...",
+    bulk_export_done: "{n} PDF(s) exported",
+    bulk_export_partial: "{n}/{total} PDF(s) exported",
+    bulk_export_draft_warning: "The selection includes draft document(s). Export them anyway?",
+    pdf_generation_busy: "PDF generation already in progress. Try again in a moment.",
+    make_recurring: "Make recurring...",
+    recurring_past_date_warning: "The next due date is in the past. A draft invoice will be generated for each elapsed period on the next launch. Continue?",
+    confirm_delete_template: "Delete this recurring template?",
+    recurring_empty_hint: 'Right-click an invoice and choose "Make recurring..." to create a template.',
   },
   FR: {
     // Sidebar / Nav
@@ -1796,6 +1808,18 @@ const ui = {
 
     // Phase 2 E3 — validation rollout
     url_label: "URL",
+
+    // V1.11 A — bulk PDF export + recurring management
+    export_pdfs: "Exporter les PDF",
+    bulk_export_progress: "Generation des PDF {n}/{total}...",
+    bulk_export_done: "{n} PDF exporte(s)",
+    bulk_export_partial: "{n}/{total} PDF exporte(s)",
+    bulk_export_draft_warning: "La selection contient des brouillons. Les exporter quand meme ?",
+    pdf_generation_busy: "Une generation de PDF est deja en cours. Reessayez dans un instant.",
+    make_recurring: "Rendre recurrente...",
+    recurring_past_date_warning: "La date de prochaine echeance est passee. Un brouillon sera genere pour chaque periode ecoulee au prochain lancement. Continuer ?",
+    confirm_delete_template: "Supprimer ce modele recurrent ?",
+    recurring_empty_hint: 'Faites un clic droit sur une facture et choisissez "Rendre recurrente..." pour creer un modele.',
   },
 } as const;
 

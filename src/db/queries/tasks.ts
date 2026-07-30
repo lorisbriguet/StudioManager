@@ -20,10 +20,30 @@ export async function getAllTasks(): Promise<Task[]> {
   return db.select<Task[]>("SELECT * FROM tasks ORDER BY due_date, sort_order");
 }
 
+// V1.11 C1: cross-project task surfaces (dashboard due/overdue widgets, TasksPage,
+// calendar display) hide tasks belonging to cancelled or completed projects.
+// On-hold projects stay visible. Project-scoped views (ProjectDetailContent,
+// ProjectsPage card stats) keep using the unfiltered queries.
+const VISIBLE_PROJECT_PREDICATE = "p.status NOT IN ('cancelled', 'completed')";
+
+/** All tasks except those of cancelled/completed projects — for cross-project lists. */
+export async function getVisibleTasks(): Promise<Task[]> {
+  const db = await getDb();
+  return db.select<Task[]>(
+    `SELECT t.* FROM tasks t
+     JOIN projects p ON p.id = t.project_id
+     WHERE ${VISIBLE_PROJECT_PREDICATE}
+     ORDER BY t.due_date, t.sort_order`
+  );
+}
+
 export async function getTasksWithDueDate(): Promise<Task[]> {
   const db = await getDb();
   return db.select<Task[]>(
-    "SELECT * FROM tasks WHERE due_date IS NOT NULL ORDER BY due_date"
+    `SELECT t.* FROM tasks t
+     JOIN projects p ON p.id = t.project_id
+     WHERE t.due_date IS NOT NULL AND ${VISIBLE_PROJECT_PREDICATE}
+     ORDER BY t.due_date`
   );
 }
 
@@ -91,12 +111,15 @@ export async function getAllSubtasks(): Promise<Subtask[]> {
   return db.select<Subtask[]>("SELECT * FROM subtasks ORDER BY task_id, sort_order");
 }
 
+// V1.11 C1: only consumed by cross-project surfaces (Today/Overdue widgets,
+// CalendarPage), so the visible-project filter applies here directly.
 export async function getSubtasksWithDueDate(): Promise<(Subtask & { project_id: number })[]> {
   const db = await getDb();
   return db.select<(Subtask & { project_id: number })[]>(
     `SELECT s.*, t.project_id FROM subtasks s
      JOIN tasks t ON s.task_id = t.id
-     WHERE s.due_date IS NOT NULL
+     JOIN projects p ON p.id = t.project_id
+     WHERE s.due_date IS NOT NULL AND ${VISIBLE_PROJECT_PREDICATE}
      ORDER BY s.due_date`
   );
 }

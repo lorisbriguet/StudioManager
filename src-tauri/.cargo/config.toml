@@ -1,0 +1,6 @@
+# Build artifacts live outside the Synology-synced tree: the target dir is a
+# regenerable 17 GB cache that was being uploaded to the NAS on every build.
+# Scoped to this project (not ~/.cargo) so other Rust projects keep their
+# default target/ layout.
+[build]
+target-dir = "/Users/loris.briguet/.cargo-targets/studiomanager"

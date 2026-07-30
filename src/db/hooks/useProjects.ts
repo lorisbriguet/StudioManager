@@ -72,11 +72,25 @@ export function useUpdateProject() {
           execute: async () => {
             await q.updateProject(id, prevData as Partial<Omit<Project, "id" | "created_at" | "updated_at">>);
             qc.invalidateQueries({ queryKey: ["projects"] });
+            if ("status" in data) {
+              qc.invalidateQueries({ queryKey: ["tasks"] });
+              qc.invalidateQueries({ queryKey: ["subtasks"] });
+            }
           },
         });
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
+    onSuccess: (_result, { data }) => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      // V1.11 C1: project status drives task/subtask visibility queries
+      // (cancelled/completed projects' tasks are hidden), so status changes
+      // must refresh task lists too — but only status changes; unconditional
+      // invalidation would refetch every task list on each notes autosave.
+      if ("status" in data) {
+        qc.invalidateQueries({ queryKey: ["tasks"] });
+        qc.invalidateQueries({ queryKey: ["subtasks"] });
+      }
+    },
     onError: (e) => { toast.error(String(e)); },
   });
 }
