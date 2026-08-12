@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAmount, parseExpenseFromText } from "../lib/expenseParse";
+import { parseAmount, parseExpenseFromText, matchKnownSupplier } from "../lib/expenseParse";
 
 describe("parseAmount", () => {
   it("parses Swiss apostrophe thousands", () => {
@@ -135,5 +135,46 @@ describe("parseExpenseFromText — dates", () => {
     const r = parseExpenseFromText(text);
     expect(r.invoice_date).toBe("2025-03-01");
     expect(r.due_date).toBeUndefined();
+  });
+});
+
+describe("matchKnownSupplier", () => {
+  it("matches a known supplier ignoring legal suffixes and diacritics", () => {
+    const text = "Migros Genève Plainpalais\nQuittung 2025";
+    expect(matchKnownSupplier(text, ["Migros SA"])).toBe("Migros SA");
+  });
+
+  it("matches multi-token names when all tokens appear", () => {
+    const text = "Facture — Atelier Weber, Zürich";
+    expect(matchKnownSupplier(text, ["Atelier Weber AG"])).toBe("Atelier Weber AG");
+  });
+
+  it("prefers longer, more specific names", () => {
+    const text = "Coop Pronto Lausanne Gare";
+    expect(matchKnownSupplier(text, ["Coop", "Coop Pronto"])).toBe("Coop Pronto");
+  });
+
+  it("returns null when no known supplier appears", () => {
+    expect(matchKnownSupplier("Boulangerie Dupont", ["Migros SA"])).toBeNull();
+  });
+
+  it("does not match on short/legal-only tokens", () => {
+    expect(matchKnownSupplier("Rapport SA 2025", ["SA"])).toBeNull();
+  });
+});
+
+describe("parseExpenseFromText — supplier", () => {
+  it("returns the canonical known-supplier name when fuzzy-matched", () => {
+    const r = parseExpenseFromText(FR_INVOICE, ["Boulangerie Dupont Sàrl", "Migros SA"]);
+    expect(r.supplier).toBe("Boulangerie Dupont Sàrl");
+  });
+
+  it("uses labeled supplier patterns when no known supplier matches", () => {
+    const r = parseExpenseFromText("Quittung\nLieferant: Muster AG\nTotal CHF 10.00");
+    expect(r.supplier).toBe("Muster AG");
+  });
+
+  it("falls back to the first prominent line", () => {
+    expect(parseExpenseFromText(DE_INVOICE).supplier).toBe("Bürobedarf München GmbH");
   });
 });

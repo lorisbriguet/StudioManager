@@ -141,6 +141,76 @@ function detectDates(lines: string[]): { invoice_date?: string; due_date?: strin
   return result;
 }
 
+const LEGAL_SUFFIXES = new Set([
+  "sa", "sarl", "gmbh", "ag", "sas", "ltd", "inc", "llc", "kg", "srl", "co",
+]);
+
+function normalizeText(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * Fuzzy-match document text against known supplier names.
+ * A supplier matches when all its significant tokens (legal suffixes
+ * stripped) appear as whole words in the text. Returns the canonical
+ * DB name so downstream category autofill fires.
+ */
+export function matchKnownSupplier(
+  text: string,
+  knownSuppliers: string[]
+): string | null {
+  const haystack = ` ${normalizeText(text)} `;
+  // Longer names first so "Coop Pronto" beats "Coop".
+  const sorted = [...knownSuppliers].sort((a, b) => b.length - a.length);
+  for (const name of sorted) {
+    const tokens = normalizeText(name)
+      .split(" ")
+      .filter((t) => t && !LEGAL_SUFFIXES.has(t));
+    if (tokens.length === 0 || !tokens.some((t) => t.length >= 3)) continue;
+    if (tokens.every((t) => haystack.includes(` ${t} `))) return name;
+  }
+  return null;
+}
+
+function detectSupplier(
+  text: string,
+  lines: string[],
+  knownSuppliers: string[]
+): string | undefined {
+  const known = matchKnownSupplier(text, knownSuppliers);
+  if (known) return known;
+
+  const supplierPatterns = [
+    /(?:four(?:nisseur|\.?\s*de\s*prestations)?|fournisseur|supplier|lieferant)\s*[:.]?\s*(.+)/i,
+    /(?:auteur\s*facture|biller|rechnungssteller)\s*[:.]?\s*(.+)/i,
+  ];
+  for (const pattern of supplierPatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      const name = match[1].trim();
+      if (name.length >= 3 && name.length <= 80) return name;
+    }
+  }
+
+  // Fallback: first prominent text line (skip OCR noise and headers).
+  const nonEmpty = lines.filter((l) => l.length > 2);
+  for (const line of nonEmpty.slice(0, 15)) {
+    if (/^\d/.test(line)) continue;
+    if (/^(facture|invoice|rechnung|quittung|receipt|page|date|total|ref|n°|cette|veuillez|destinataire)/i.test(line)) continue;
+    if (/chf|fr\.|montant|amount|tva/i.test(line)) continue;
+    const alphaRatio = (line.match(/[a-zA-ZÀ-ÿ]/g) || []).length / line.length;
+    if (alphaRatio < 0.5) continue;
+    if (line.length < 5) continue;
+    if (line.length <= 80) return line;
+  }
+  return undefined;
+}
+
 /**
  * Parse extracted document text (PDF text layer or OCR output) into
  * expense fields. `knownSuppliers` enables fuzzy supplier matching.
@@ -149,7 +219,6 @@ export function parseExpenseFromText(
   text: string,
   knownSuppliers: string[] = []
 ): ExtractedExpenseData {
-  void knownSuppliers; // used from Task 4 on
   const lines = text.split("\n").map((l) => l.trim());
   const result: ExtractedExpenseData = {};
 
@@ -157,6 +226,9 @@ export function parseExpenseFromText(
   if (amount !== undefined) result.amount = amount;
 
   Object.assign(result, detectDates(lines));
+
+  const supplier = detectSupplier(text, lines, knownSuppliers);
+  if (supplier) result.supplier = supplier;
 
   return result;
 }
