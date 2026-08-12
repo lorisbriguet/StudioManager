@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { ListTodo, Trash2, ArrowLeft } from "lucide-react";
 import { Button, Input, Select, FormField } from "../components/ui";
@@ -14,8 +14,9 @@ import { useProjectsByClient } from "../db/hooks/useProjects";
 import { useTasksByProject } from "../db/hooks/useTasks";
 import { getInvoiceLineItems } from "../db/queries/invoices";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
-import { parseActivities } from "../types/business-profile";
 import { getQuote, getQuoteLineItems, updateQuote } from "../db/queries/quotes";
+import { useActivities } from "../db/hooks/useActivities";
+import type { Activity } from "../types/activity";
 import { logError } from "../lib/log";
 import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel, round2 } from "../lib/lineItems";
 import { LineItemsTable } from "../components/shared/LineItemsTable";
@@ -51,7 +52,7 @@ export function InvoiceFormPage() {
   const { data: existingInvoice } = useInvoice(isEdit ? invoiceId : 0);
   const { data: clients } = useClients();
   const { data: profile } = useBusinessProfile();
-  const profileActivities = useMemo(() => parseActivities(profile?.default_activity), [profile?.default_activity]);
+  const { data: activityList } = useActivities();
   const createInvoice = useCreateInvoice();
   const updateInvoice = useUpdateInvoice();
   const deleteInvoice = useDeleteInvoice();
@@ -87,6 +88,7 @@ export function InvoiceFormPage() {
   const [projectId, setProjectId] = useState<number | null>(null);
   const [invoiceDate, setInvoiceDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [activity, setActivity] = useState("");
+  const [activityId, setActivityId] = useState<number | null>(null);
   const [assignment, setAssignment] = useState("");
   const [poNumber, setPoNumber] = useState("");
   const [notes, setNotes] = useState("");
@@ -154,6 +156,7 @@ export function InvoiceFormPage() {
       setProjectId(existingInvoice.project_id);
       setInvoiceDate(existingInvoice.invoice_date);
       setActivity(existingInvoice.activity);
+      setActivityId(existingInvoice.activity_id ?? null);
       setAssignment(existingInvoice.assignment);
       setPoNumber(existingInvoice.po_number ?? "");
       setNotes(existingInvoice.notes);
@@ -195,13 +198,13 @@ export function InvoiceFormPage() {
     }
   }, [existingInvoice?.reference, isEdit, invoiceId, t.draft, updateActiveTab]);
 
-  // Default activity from profile for new invoices
+  // Default activity for new invoices
   useEffect(() => {
-    if (!isEdit && !activity && !fromQuoteId && profileActivities.length > 0) {
-      setActivity(profileActivities[0]);
+    if (!isEdit && !activity && activityId === null && !fromQuoteId && activityList && activityList.length > 0) {
+      setActivityId(activityList[0].id);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- default-fill only when the profile loads; adding `activity` would re-fill the default after the user clears the field
-  }, [profileActivities, isEdit, fromQuoteId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- default-fill only when activities load; adding `activity`/`activityId` would re-fill after the user clears the field
+  }, [activityList, isEdit, fromQuoteId]);
 
   // Pre-select default template for new invoices
   useEffect(() => {
@@ -235,6 +238,7 @@ export function InvoiceFormPage() {
       setProjectId(quote.project_id);
       setBillingAddressId(quote.billing_address_id ?? null);
       setActivity(quote.activity);
+      setActivityId(quote.activity_id ?? null);
       setAssignment(quote.assignment);
       setNotes(quote.notes);
       // Carry over the discount agreed on the quote, not the client's current setting
@@ -260,6 +264,8 @@ export function InvoiceFormPage() {
   }, [fromQuoteId, isEdit]);
 
   const selectedClient = clients?.find((c) => c.id === clientId);
+  const invoiceLang: "FR" | "EN" = selectedClient?.language ?? "FR";
+  const activityName = (a: Activity) => (invoiceLang === "FR" ? a.name_fr : a.name_en);
   // Newly computed money values are rounded at every boundary — these are
   // what save() persists, and invoices are legal documents.
   const subtotal = round2(items.reduce((sum, i) => sum + i.amount, 0));
@@ -388,7 +394,13 @@ export function InvoiceFormPage() {
               contact_id: contactId,
               billing_address_id: billingAddressId,
               language: selectedClient?.language ?? "FR",
-              activity,
+              ...(() => {
+                const selected = activityId !== null ? activityList?.find((a) => a.id === activityId) : undefined;
+                return {
+                  activity: (selected ? activityName(selected) : activity).trim(),
+                  activity_id: selected ? selected.id : null,
+                };
+              })(),
               assignment,
               invoice_date: invoiceDate,
               due_date: dueDate,
@@ -427,8 +439,13 @@ export function InvoiceFormPage() {
               billing_address_id: billingAddressId,
               status: "draft",
               language: selectedClient?.language ?? "FR",
-              activity,
-              activity_id: null,
+              ...(() => {
+                const selected = activityId !== null ? activityList?.find((a) => a.id === activityId) : undefined;
+                return {
+                  activity: (selected ? activityName(selected) : activity).trim(),
+                  activity_id: selected ? selected.id : null,
+                };
+              })(),
               assignment,
               invoice_date: invoiceDate,
               due_date: dueDate,
@@ -572,15 +589,18 @@ export function InvoiceFormPage() {
           </FormField>
           <FormField label={t.activity}>
             <Select
-              value={activity}
-              onChange={(e) => setActivity(e.target.value)}
+              value={activityId !== null ? String(activityId) : activity ? "legacy" : ""}
+              onChange={(e) => {
+                setActivityId(e.target.value === "legacy" || e.target.value === "" ? null : Number(e.target.value));
+              }}
             >
-              {profileActivities.map((a) => (
-                <option key={a} value={a}>{a}</option>
+              {(activityList ?? []).map((a) => (
+                <option key={a.id} value={String(a.id)}>{activityName(a)}</option>
               ))}
-              {activity && !profileActivities.includes(activity) && (
-                <option value={activity}>{activity}</option>
+              {activityId === null && activity && (
+                <option value="legacy">{activity}</option>
               )}
+              {activityId === null && !activity && <option value="" />}
             </Select>
           </FormField>
           <FormField label={t.assignment}>
