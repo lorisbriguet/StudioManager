@@ -32,7 +32,8 @@ import { getNextExpenseReference } from "../db/queries/expenses";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
 import { useT } from "../i18n/useT";
 import { notifyError } from "../lib/notifyError";
-import { extractPdfText, extractImageText, parseExpenseFromText, isOcrWorkerReady, type ExtractedExpenseData } from "../lib/pdfExtract";
+import { extractPdfText, extractImageText, isOcrWorkerReady } from "../lib/pdfExtract";
+import { parseExpenseFromText, type ExtractedExpenseData } from "../lib/expenseParse";
 import { logError } from "../lib/log";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
@@ -128,24 +129,26 @@ export function ExpensesPage() {
     setParsing(true);
     try {
       let extracted: ExtractedExpenseData = {};
+      const supplierNames = (pastSuppliers ?? []).map((s) => s.supplier);
 
       if (ext === "pdf") {
         const text = await extractPdfText(filePath);
         if (text) {
-          extracted = parseExpenseFromText(text);
+          extracted = parseExpenseFromText(text, supplierNames);
         }
       } else if (["png", "jpg", "jpeg", "heic"].includes(ext)) {
         if (!isOcrWorkerReady()) setOcrFirstRun(true);
         const text = await extractImageText(filePath);
         if (text) {
-          extracted = parseExpenseFromText(text);
+          extracted = parseExpenseFromText(text, supplierNames);
         }
       }
 
       // Match supplier to known suppliers for category autofill
       if (extracted.supplier && pastSuppliers) {
+        const needle = extracted.supplier.trim().toLowerCase();
         const match = pastSuppliers.find(
-          (s) => s.supplier.toLowerCase() === extracted.supplier!.toLowerCase()
+          (s) => s.supplier.trim().toLowerCase() === needle
         );
         if (match) {
           extracted.supplier = match.supplier;
@@ -607,7 +610,7 @@ function NewExpenseForm({
     let amount = 0;
     if (prefill?.supplier && pastSuppliers.length > 0) {
       const match = pastSuppliers.find(
-        (s) => s.supplier.toLowerCase() === prefill.supplier!.toLowerCase()
+        (s) => s.supplier.trim().toLowerCase() === prefill.supplier!.trim().toLowerCase()
       );
       if (match) {
         categoryCode = match.category_code;
@@ -650,7 +653,7 @@ function NewExpenseForm({
     let amount = 0;
     if (prefill.supplier && pastSuppliers.length > 0) {
       const match = pastSuppliers.find(
-        (s) => s.supplier.toLowerCase() === prefill.supplier!.toLowerCase()
+        (s) => s.supplier.trim().toLowerCase() === prefill.supplier!.trim().toLowerCase()
       );
       if (match) {
         categoryCode = match.category_code;
