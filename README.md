@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.12.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.12.1-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="Platform">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
@@ -140,7 +140,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - **macOS Native Notifications** — OS-level banners for overdue invoices and backups
 - **Notifications** — persistent in-app notifications with unread badges
 - **Backup System** — automatic and manual backups with configurable paths
-- **Multiple Activities** — define a list of activities in your profile, select per invoice/quote
+- **Multiple Activities** — manage activities with French and English names in Settings; invoices/quotes print the client's language and charts group them as one
 - **Sidebar Keyboard Navigation** — arrow keys to navigate between pages
 - **Bilingual UI** — English and French interface
 - **Auto-Updater** — check for updates and install from within the app
