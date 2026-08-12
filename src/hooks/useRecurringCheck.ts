@@ -64,7 +64,7 @@ export function useRecurringCheck() {
                   status: "draft",
                   language: baseInvoice.language,
                   activity: baseInvoice.activity,
-                  activity_id: null,
+                  activity_id: baseInvoice.activity_id ?? null,
                   assignment: baseInvoice.assignment,
                   invoice_date: nextDue,
                   due_date: dueDate,
