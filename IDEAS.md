@@ -68,6 +68,23 @@
 - [ ] Editing paid date: Enter key doesn't trigger save — only clicking the save button works. Do an app-wide sweep: every inline edit / small form should submit on Enter
 - [ ] Invoice export from preview with "mark as sent and export": exported file still has a draft name, and the preview window soft-locks afterwards
 
+## UX/UI improvements (2026-08-12)
+
+- [ ] "Detected from receipt" indicators — tint OCR-prefilled fields (supplier/amount/dates) with a badge + one-click clear, so wrong extractions don't look hand-typed
+- [ ] Supplier merge tool in Settings — pick canonical name, relink expenses (dedupe "Adobe"/"Adobe Cloud"/"Adobe Systems…", "Fairtiq"/"FairtiQ", Figma variants); improves autofill + fuzzy matching
+- [ ] Untranslated-activity nudge — badge in Settings editor (and on first EN-client invoice) where name_fr === name_en
+- [ ] Stable chart colors per activity — derive color from activity id instead of row index so colors don't shift with ranking
+- [ ] Dashboard year switcher — widgets hardcode current year (January cliff); add year selector or "last 12 months" toggle
+- [ ] YoY deltas on dashboard KPIs — "+12% vs last year" badges
+- [ ] One-click "mark paid today" on invoice/expense rows
+- [ ] Undo toast for expense/income deletion (extend the client-delete undo pattern)
+
+## Security hardening (2026-08-12)
+
+- [ ] Retire arbitrary osascript execution — replace Mail sharing, Calendar sync, and PDF/HEIC extraction with dedicated Rust Tauri commands (fixed scripts, path args only), then drop `shell:allow-execute` from capabilities. Overlaps with the Apple Vision OCR item
+- [ ] Notarize the app — add APPLE_ID / API-key notarization to the release flow so users stop bypassing Gatekeeper
+- [ ] Automate dependency auditing — scheduled GitHub Action for `npm audit` + `cargo audit` (or Dependabot) so vulnerabilities surface as notifications
+
 ## Planned — features (pre-1.12 backlog)
 
 ### Meetings block in projects
