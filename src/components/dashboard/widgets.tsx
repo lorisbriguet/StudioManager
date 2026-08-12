@@ -48,6 +48,9 @@ import { effectivePriority } from "../../types/task";
 import { useChartTheme } from "../../hooks/useChartTheme";
 import { useT } from "../../i18n/useT";
 import type { WidgetType } from "../../stores/dashboard-store";
+import { useAppStore } from "../../stores/app-store";
+import { useActivities } from "../../db/hooks/useActivities";
+import { resolveActivityRevenue } from "../../lib/activityResolve";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -403,16 +406,22 @@ const COLORS = [
 
 function RevenueByActivity() {
   const year = new Date().getFullYear();
-  const { data: rows } = useRevenueByActivity(year);
+  const { data: rawRows } = useRevenueByActivity(year);
+  const { data: activities } = useActivities();
+  const lang = useAppStore((s) => s.language);
   const t = useT();
 
-  const total = rows?.reduce((s, r) => s + r.total, 0) ?? 0;
+  const rows = useMemo(
+    () => resolveActivityRevenue(rawRows ?? [], activities ?? [], lang),
+    [rawRows, activities, lang]
+  );
+  const total = rows.reduce((s, r) => s + r.total, 0);
 
   return (
     <div className="h-full flex flex-col p-4">
       <h2 className="text-sm font-medium mb-3">{t.revenue_by_activity}</h2>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2">
-        {rows?.map((r, i) => {
+        {rows.map((r, i) => {
           const pct = total > 0 ? Math.round((r.total / total) * 100) : 0;
           return (
             <div key={r.label}>
@@ -426,7 +435,7 @@ function RevenueByActivity() {
             </div>
           );
         })}
-        {(!rows || rows.length === 0) && <div className="text-xs text-muted">{t.no_invoices_yet}</div>}
+        {rows.length === 0 && <div className="text-xs text-muted">{t.no_invoices_yet}</div>}
       </div>
     </div>
   );
