@@ -8,6 +8,7 @@ export interface Quote {
   status: QuoteStatus;
   language: "FR" | "EN";
   activity: string;
+  activity_id: number | null;
   assignment: string;
   quote_date: string;
   valid_until: string | null;

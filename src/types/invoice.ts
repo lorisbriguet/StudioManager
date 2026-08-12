@@ -17,6 +17,7 @@ export interface Invoice {
   status: InvoiceStatus;
   language: "FR" | "EN";
   activity: string;
+  activity_id: number | null;
   assignment: string;
   invoice_date: string;
   due_date: string | null;

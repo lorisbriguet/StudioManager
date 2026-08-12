@@ -428,6 +428,7 @@ export function InvoiceFormPage() {
               status: "draft",
               language: selectedClient?.language ?? "FR",
               activity,
+              activity_id: null,
               assignment,
               invoice_date: invoiceDate,
               due_date: dueDate,

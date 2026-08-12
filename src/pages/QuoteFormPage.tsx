@@ -256,6 +256,7 @@ export function QuoteFormPage() {
               status: "draft",
               language: selectedClient?.language ?? "FR",
               activity,
+              activity_id: null,
               assignment,
               quote_date: quoteDate,
               valid_until: validUntil,
