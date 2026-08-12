@@ -81,6 +81,66 @@ function detectAmount(lines: string[]): number | undefined {
   return Math.round(candidates[0].value * 100) / 100;
 }
 
+const DUE_KEYWORDS =
+  /[ée]ch[ée]ance|payable\s*jusqu|zahlbar\s*bis|f[äa]llig|due\s*date|payment\s*due|\bdue\b/i;
+const INVOICE_DATE_KEYWORDS =
+  /date\s*de\s*facture|rechnungsdatum|belegdatum|invoice\s*date|facture\s*du|\bdatum\b|\bdate\b/i;
+
+function isValidDate(dateStr: string): boolean {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return false;
+  const year = d.getFullYear();
+  return year >= 2020 && year <= 2030;
+}
+
+function collectDates(lines: string[]): { iso: string; line: string }[] {
+  const out: { iso: string; line: string }[] = [];
+  for (const line of lines) {
+    for (const m of line.matchAll(/(\d{1,2})[./](\d{1,2})[./](\d{2,4})/g)) {
+      const [, d, mo, yRaw] = m;
+      if (yRaw.length === 3) continue;
+      const y = yRaw.length === 2 ? `20${yRaw}` : yRaw;
+      const iso = `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+      if (isValidDate(iso)) out.push({ iso, line });
+    }
+    for (const m of line.matchAll(/\d{4}-\d{2}-\d{2}/g)) {
+      if (isValidDate(m[0])) out.push({ iso: m[0], line });
+    }
+  }
+  return out;
+}
+
+function detectDates(lines: string[]): { invoice_date?: string; due_date?: string } {
+  const cands = collectDates(lines);
+  if (cands.length === 0) return {};
+
+  const result: { invoice_date?: string; due_date?: string } = {};
+  // Due first: "date d'échéance" matches both keyword sets and must be due.
+  const due = cands.find((c) => DUE_KEYWORDS.test(c.line));
+  const invoice = cands.find(
+    (c) => !DUE_KEYWORDS.test(c.line) && INVOICE_DATE_KEYWORDS.test(c.line)
+  );
+  if (invoice) result.invoice_date = invoice.iso;
+  if (due) result.due_date = due.iso;
+
+  if (!result.invoice_date || !result.due_date) {
+    // Fallback: unlabeled dates, excluding outliers >1 year from the median.
+    const sorted = cands.map((c) => c.iso).sort();
+    const times = sorted.map((s) => new Date(s).getTime());
+    const median = times[Math.floor(times.length / 2)];
+    const YEAR_MS = 366 * 24 * 3600 * 1000;
+    const filtered = sorted.filter((_, i) => Math.abs(times[i] - median) <= YEAR_MS);
+    if (!result.invoice_date && filtered.length > 0) {
+      result.invoice_date = filtered[0];
+    }
+    if (!result.due_date && filtered.length > 1) {
+      const last = filtered[filtered.length - 1];
+      if (result.invoice_date && last > result.invoice_date) result.due_date = last;
+    }
+  }
+  return result;
+}
+
 /**
  * Parse extracted document text (PDF text layer or OCR output) into
  * expense fields. `knownSuppliers` enables fuzzy supplier matching.
@@ -95,6 +155,8 @@ export function parseExpenseFromText(
 
   const amount = detectAmount(lines);
   if (amount !== undefined) result.amount = amount;
+
+  Object.assign(result, detectDates(lines));
 
   return result;
 }

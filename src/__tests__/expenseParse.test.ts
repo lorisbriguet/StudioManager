@@ -98,3 +98,42 @@ describe("parseExpenseFromText — amount", () => {
     expect(parseExpenseFromText("Total CHF 2'500'000.00").amount).toBeUndefined();
   });
 });
+
+describe("parseExpenseFromText — dates", () => {
+  it("uses labeled invoice and due dates (FR)", () => {
+    const r = parseExpenseFromText(FR_INVOICE);
+    expect(r.invoice_date).toBe("2025-03-15");
+    expect(r.due_date).toBe("2025-04-14");
+  });
+
+  it("uses labeled invoice and due dates (DE)", () => {
+    const r = parseExpenseFromText(DE_INVOICE);
+    expect(r.invoice_date).toBe("2025-02-03");
+    expect(r.due_date).toBe("2025-03-03");
+  });
+
+  it("falls back to the only date for unlabeled receipts", () => {
+    const r = parseExpenseFromText(EN_RECEIPT);
+    expect(r.invoice_date).toBe("2025-07-25");
+    expect(r.due_date).toBeUndefined();
+  });
+
+  it("expands two-digit years on till receipts", () => {
+    const r = parseExpenseFromText("Kiosk Bahnhof\n15.06.25 09:12\nTotal CHF 4.50");
+    expect(r.invoice_date).toBe("2025-06-15");
+  });
+
+  it("excludes far-out outlier dates in fallback mode", () => {
+    const text = "Garage Blanc\n01.03.2025\n31.03.2025\nOffre valable jusqu'au 01.01.2030";
+    const r = parseExpenseFromText(text);
+    expect(r.invoice_date).toBe("2025-03-01");
+    expect(r.due_date).toBe("2025-03-31");
+  });
+
+  it("does not pair a labeled invoice date with an outlier due date", () => {
+    const text = "Atelier X\nDate de facture: 01.03.2025\nValable jusqu'au 01.01.2030";
+    const r = parseExpenseFromText(text);
+    expect(r.invoice_date).toBe("2025-03-01");
+    expect(r.due_date).toBeUndefined();
+  });
+});
