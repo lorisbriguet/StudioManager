@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAmount } from "../lib/expenseParse";
+import { parseAmount, parseExpenseFromText } from "../lib/expenseParse";
 
 describe("parseAmount", () => {
   it("parses Swiss apostrophe thousands", () => {
@@ -35,5 +35,66 @@ describe("parseAmount", () => {
   it("returns null for non-numeric input", () => {
     expect(parseAmount("abc")).toBeNull();
     expect(parseAmount("")).toBeNull();
+  });
+});
+
+const FR_INVOICE = `Boulangerie Dupont Sàrl
+Rue du Marché 12
+1204 Genève
+Facture N° 2025-114
+Date de facture: 15.03.2025
+Échéance: 14.04.2025
+Croissants x 20    45.00
+Pain complet       12.50
+Sous-total         57.50
+TVA 2.6%            1.50
+Total TTC CHF      59.00`;
+
+const DE_INVOICE = `Bürobedarf München GmbH
+Rechnungsdatum: 03.02.2025
+Zahlbar bis: 03.03.2025
+Zwischensumme 1.100,00
+MwSt 19% 209,00
+Gesamtbetrag EUR 1.309,00`;
+
+const EN_RECEIPT = `STAPLES STORE #142
+25/07/2025 14:32
+Paper A4 24.99
+Subtotal 24.99
+Tax 1.87
+Total 26.86`;
+
+const CH_INVOICE = `Atelier Weber AG
+Rechnung 2025-33
+Datum: 10.01.2025
+Total CHF 12'450.00`;
+
+describe("parseExpenseFromText — amount", () => {
+  it("prefers the labeled total over subtotals and line items (FR)", () => {
+    expect(parseExpenseFromText(FR_INVOICE).amount).toBe(59.0);
+  });
+
+  it("prefers Gesamtbetrag over Zwischensumme and MwSt (DE)", () => {
+    expect(parseExpenseFromText(DE_INVOICE).amount).toBe(1309.0);
+  });
+
+  it("prefers Total over Subtotal and Tax (EN receipt)", () => {
+    expect(parseExpenseFromText(EN_RECEIPT).amount).toBe(26.86);
+  });
+
+  it("parses Swiss apostrophe amounts in context", () => {
+    expect(parseExpenseFromText(CH_INVOICE).amount).toBe(12450.0);
+  });
+
+  it("picks up currency-prefixed integers", () => {
+    expect(parseExpenseFromText("Parking\nTotal CHF 25").amount).toBe(25);
+  });
+
+  it("ignores dates and percentages as amounts", () => {
+    expect(parseExpenseFromText("Facture du 15.03.2025\nTVA 7.7%").amount).toBeUndefined();
+  });
+
+  it("rejects out-of-range amounts", () => {
+    expect(parseExpenseFromText("Total CHF 2'500'000.00").amount).toBeUndefined();
   });
 });
