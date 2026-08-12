@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.11.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.12.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="Platform">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
@@ -88,7 +88,8 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Categorized expenses following Swiss tax declaration structure
 - Customizable expense categories (add/edit/delete in Settings)
 - Drag-and-drop receipt upload (PDF, PNG, JPG, HEIC)
-- Receipt OCR — auto-fills supplier, amount, and date from dropped images
+- Receipt OCR (French/German/English) — auto-fills supplier, amount, and dates from dropped PDFs and images
+- Smart receipt parsing — recognizes Swiss/German/French/English number formats, month-name dates (e.g. `14-JAN-2024`, `16 avril 2024`), picks the real total over subtotals/VAT lines, and matches suppliers against your existing supplier list for category autofill
 - Supplier autocomplete with smart autofill (category + amount)
 - Inline editable paid date
 - Receipt preview inline
