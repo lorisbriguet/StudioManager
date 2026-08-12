@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Eye } from "lucide-react";
 import { Button, Input, Select, FormField } from "../components/ui";
@@ -10,10 +10,10 @@ import { useInvoiceTemplates, useDefaultTemplate } from "../db/hooks/useInvoiceT
 import { useClients, useClientAddresses } from "../db/hooks/useClients";
 import { useProjects } from "../db/hooks/useProjects";
 import { getQuoteLineItems } from "../db/queries/quotes";
-import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { logError } from "../lib/log";
-import { parseActivities } from "../types/business-profile";
 import { useT } from "../i18n/useT";
+import { useActivities } from "../db/hooks/useActivities";
+import type { Activity } from "../types/activity";
 import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel, round2 } from "../lib/lineItems";
 import { LineItemsTable } from "../components/shared/LineItemsTable";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
@@ -40,8 +40,7 @@ export function QuoteFormPage() {
   const { data: existingQuote } = useQuote(isEdit ? quoteId : 0);
   const { data: clients } = useClients();
   const { data: projects } = useProjects();
-  const { data: profile } = useBusinessProfile();
-  const profileActivities = useMemo(() => parseActivities(profile?.default_activity), [profile?.default_activity]);
+  const { data: activityList } = useActivities();
   const createQuote = useCreateQuote();
   const updateQuote = useUpdateQuote();
 
@@ -73,6 +72,7 @@ export function QuoteFormPage() {
   const [projectId, setProjectId] = useState<number | null>(null);
   const [quoteDate, setQuoteDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [activity, setActivity] = useState("");
+  const [activityId, setActivityId] = useState<number | null>(null);
   const [assignment, setAssignment] = useState("");
   const [notes, setNotes] = useState("");
   const [discountRate, setDiscountRate] = useState(0);
@@ -117,6 +117,7 @@ export function QuoteFormPage() {
       setProjectId(existingQuote.project_id);
       setQuoteDate(existingQuote.quote_date);
       setActivity(existingQuote.activity);
+      setActivityId(existingQuote.activity_id ?? null);
       setAssignment(existingQuote.assignment);
       setNotes(existingQuote.notes);
       setDiscountRate(existingQuote.discount_rate ?? 0);
@@ -142,13 +143,13 @@ export function QuoteFormPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate-once per loaded quote; adding t.* would re-hydrate (and clobber edits) on locale switch. setItems is a stable setState.
   }, [existingQuote, quoteId]);
 
-  // Default activity from profile for new quotes
+  // Default activity for new quotes
   useEffect(() => {
-    if (!isEdit && !activity && profileActivities.length > 0) {
-      setActivity(profileActivities[0]);
+    if (!isEdit && !activity && activityId === null && activityList && activityList.length > 0) {
+      setActivityId(activityList[0].id);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- default-fill only when the profile loads; adding `activity` would re-fill the default after the user clears the field
-  }, [profileActivities, isEdit]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- default-fill only when activities load; adding `activity`/`activityId` would re-fill after the user clears the field
+  }, [activityList, isEdit]);
 
   // Pre-select default template for new quotes
   useEffect(() => {
@@ -172,6 +173,8 @@ export function QuoteFormPage() {
   }, [isEdit]);
 
   const selectedClient = clients?.find((c) => c.id === clientId);
+  const quoteLang: "FR" | "EN" = selectedClient?.language ?? "FR";
+  const activityName = (a: Activity) => (quoteLang === "FR" ? a.name_fr : a.name_en);
   // Newly computed money values are rounded at every boundary — these are
   // what save() persists.
   const subtotal = round2(items.reduce((sum, i) => sum + i.amount, 0));
@@ -222,7 +225,13 @@ export function QuoteFormPage() {
               project_id: projectId,
               billing_address_id: billingAddressId,
               language: selectedClient?.language ?? "FR",
-              activity,
+              ...(() => {
+                const selected = activityId !== null ? activityList?.find((a) => a.id === activityId) : undefined;
+                return {
+                  activity: (selected ? activityName(selected) : activity).trim(),
+                  activity_id: selected ? selected.id : null,
+                };
+              })(),
               assignment,
               quote_date: quoteDate,
               valid_until: validUntil,
@@ -255,8 +264,13 @@ export function QuoteFormPage() {
               billing_address_id: billingAddressId,
               status: "draft",
               language: selectedClient?.language ?? "FR",
-              activity,
-              activity_id: null,
+              ...(() => {
+                const selected = activityId !== null ? activityList?.find((a) => a.id === activityId) : undefined;
+                return {
+                  activity: (selected ? activityName(selected) : activity).trim(),
+                  activity_id: selected ? selected.id : null,
+                };
+              })(),
               assignment,
               quote_date: quoteDate,
               valid_until: validUntil,
@@ -378,16 +392,19 @@ export function QuoteFormPage() {
           </FormField>
           <FormField label={t.activity}>
             <Select
-              value={activity}
-              onChange={(e) => setActivity(e.target.value)}
+              value={activityId !== null ? String(activityId) : activity ? "legacy" : ""}
+              onChange={(e) => {
+                setActivityId(e.target.value === "legacy" || e.target.value === "" ? null : Number(e.target.value));
+              }}
               className="py-2"
             >
-              {profileActivities.map((a) => (
-                <option key={a} value={a}>{a}</option>
+              {(activityList ?? []).map((a) => (
+                <option key={a.id} value={String(a.id)}>{activityName(a)}</option>
               ))}
-              {activity && !profileActivities.includes(activity) && (
-                <option value={activity}>{activity}</option>
+              {activityId === null && activity && (
+                <option value="legacy">{activity}</option>
               )}
+              {activityId === null && !activity && <option value="" />}
             </Select>
           </FormField>
           <FormField label={t.assignment} className="col-span-2">
