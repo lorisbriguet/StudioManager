@@ -36,11 +36,11 @@ export async function createQuoteWithLineItems(
 ): Promise<number> {
   const batch = new TransactionBatch();
   batch.add(
-    `INSERT INTO quotes (reference, client_id, project_id, status, language, activity, assignment, quote_date, valid_until, subtotal, discount_applied, discount_rate, total, converted_to_invoice_id, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+    `INSERT INTO quotes (reference, client_id, project_id, status, language, activity, activity_id, assignment, quote_date, valid_until, subtotal, discount_applied, discount_rate, total, converted_to_invoice_id, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
     [
       data.reference, data.client_id, data.project_id, data.status, data.language,
-      data.activity, data.assignment, data.quote_date, data.valid_until,
+      data.activity, data.activity_id ?? null, data.assignment, data.quote_date, data.valid_until,
       data.subtotal, data.discount_applied, data.discount_rate, data.total,
       data.converted_to_invoice_id, data.notes,
     ]

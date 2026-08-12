@@ -81,14 +81,14 @@ export async function createInvoiceWithLineItems(
   // reminder_count / last_reminder_date are intentionally omitted: the DB
   // defaults (0 / NULL) match what every caller passes for a new invoice.
   batch.add(
-    `INSERT INTO invoices (reference, client_id, project_id, status, language, activity, assignment,
+    `INSERT INTO invoices (reference, client_id, project_id, status, language, activity, activity_id, assignment,
      invoice_date, due_date, payment_terms_days, subtotal, discount_applied, discount_rate,
      discount_label, total, paid_date, contact_id, billing_address_id, po_number, pdf_path, from_quote_id, notes,
      currency, exchange_rate, chf_equivalent, template_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)`,
     [
       data.reference, data.client_id, data.project_id, data.status, data.language,
-      data.activity, data.assignment, data.invoice_date, data.due_date,
+      data.activity, data.activity_id ?? null, data.assignment, data.invoice_date, data.due_date,
       data.payment_terms_days, data.subtotal, data.discount_applied, data.discount_rate,
       data.discount_label, data.total, data.paid_date, data.contact_id, data.billing_address_id ?? null,
       data.po_number, data.pdf_path,

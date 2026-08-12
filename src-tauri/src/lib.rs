@@ -373,6 +373,12 @@ pub fn run() {
             sql: include_str!("../migrations/005_consolidate_schema.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 6,
+            description: "create_activities_table",
+            sql: include_str!("../migrations/006_activities.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

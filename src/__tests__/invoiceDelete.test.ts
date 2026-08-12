@@ -137,6 +137,7 @@ describe("invoice deletion", () => {
           status: "draft",
           language: "EN",
           activity: "",
+          activity_id: null,
           assignment: "",
           invoice_date: "2026-01-31",
           due_date: "2026-03-02",
@@ -167,10 +168,10 @@ describe("invoice deletion", () => {
       );
       expect(insert).toBeDefined();
       // template_id was silently dropped before: assert the column is in the
-      // statement and its value is bound as the 26th param
+      // statement and its value is bound as the 27th param
       expect(insert!.sql).toContain("template_id");
-      expect(insert!.params).toHaveLength(26);
-      expect(insert!.params[25]).toBe(5);
+      expect(insert!.params).toHaveLength(27);
+      expect(insert!.params[26]).toBe(5);
     });
   });
 
