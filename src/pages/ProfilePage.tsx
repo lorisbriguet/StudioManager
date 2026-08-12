@@ -6,8 +6,9 @@ import {
   useBusinessProfile,
   useUpdateBusinessProfile,
 } from "../db/hooks/useBusinessProfile";
-import { parseActivities } from "../types/business-profile";
 import type { BusinessProfile } from "../types/business-profile";
+import { useActivities, useCreateActivity, useUpdateActivity, useDeleteActivity } from "../db/hooks/useActivities";
+import type { Activity } from "../types/activity";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
 import { Button, FormField, Input, PageSpinner } from "../components/ui";
@@ -60,8 +61,20 @@ export function ProfilePage() {
   } = useForm<FormData>();
   const t = useT();
 
-  const [activities, setActivities] = useState<string[]>([]);
-  const [newActivity, setNewActivity] = useState("");
+  const { data: activityList } = useActivities();
+  const createActivityMut = useCreateActivity();
+  const updateActivityMut = useUpdateActivity();
+  const deleteActivityMut = useDeleteActivity();
+  const [newFr, setNewFr] = useState("");
+  const [newEn, setNewEn] = useState("");
+
+  const addNewActivity = () => {
+    if (!newFr.trim() && !newEn.trim()) return;
+    createActivityMut.mutate(
+      { name_fr: newFr, name_en: newEn },
+      { onSuccess: () => { setNewFr(""); setNewEn(""); } }
+    );
+  };
   const [activeCategory, setActiveCategory] = useState<ProfileCategory>("business");
 
   // Templates state
@@ -72,7 +85,6 @@ export function ProfilePage() {
   useEffect(() => {
     if (profile) {
       reset(profile);
-      setActivities(parseActivities(profile.default_activity));
     }
   }, [profile, reset]);
 
@@ -80,7 +92,6 @@ export function ProfilePage() {
     updateProfile.mutate(
       {
         ...data,
-        default_activity: JSON.stringify(activities),
         vat_exempt: data.vat_exempt ? 1 : 0,
       },
       {
@@ -88,26 +99,6 @@ export function ProfilePage() {
         onError: (err) => toast.error(`${t.failed_save_profile}: ${String(err)}`),
       }
     );
-  };
-
-  const saveActivities = (next: string[]) => {
-    setActivities(next);
-    updateProfile.mutate({ default_activity: JSON.stringify(next) });
-  };
-
-  const addActivity = () => {
-    const val = newActivity.trim();
-    if (!val) return;
-    if (activities.includes(val)) {
-      toast.error(t.activity_exists);
-      return;
-    }
-    saveActivities([...activities, val]);
-    setNewActivity("");
-  };
-
-  const removeActivity = (idx: number) => {
-    saveActivities(activities.filter((_, i) => i !== idx));
   };
 
   const categories = useMemo<Array<{ key: ProfileCategory; label: string; icon?: React.ReactNode }>>(() => [
@@ -297,40 +288,38 @@ export function ProfilePage() {
                   <label className="block text-xs font-medium text-muted mb-1">
                     {t.activities}
                   </label>
+                  <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center text-xs text-muted mb-1">
+                    <span>{t.activity_name_fr}</span>
+                    <span>{t.activity_name_en}</span>
+                    <span className="w-[14px]" />
+                  </div>
                   <div className="space-y-1.5 mb-2">
-                    {activities.map((a, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center gap-2 border border-[var(--color-border-divider)] rounded-lg px-3 py-1.5 text-sm"
-                      >
-                        <span className="flex-1">{a}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeActivity(i)}
-                          className="text-muted hover:text-[var(--color-danger-text)]"
-                          aria-label={t.remove}
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
+                    {(activityList ?? []).map((a) => (
+                      <ActivityRow
+                        key={a.id}
+                        activity={a}
+                        onSave={(name_fr, name_en) => updateActivityMut.mutate({ id: a.id, name_fr, name_en })}
+                        onDelete={() => deleteActivityMut.mutate(a.id)}
+                        removeLabel={t.remove}
+                      />
                     ))}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
                     <Input
-                      value={newActivity}
-                      onChange={(e) => setNewActivity(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          addActivity();
-                        }
-                      }}
-                      placeholder={t.add_activity}
-                      className="flex-1"
+                      value={newFr}
+                      onChange={(e) => setNewFr(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addNewActivity(); } }}
+                      placeholder={t.activity_name_fr}
+                    />
+                    <Input
+                      value={newEn}
+                      onChange={(e) => setNewEn(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addNewActivity(); } }}
+                      placeholder={t.activity_name_en}
                     />
                     <button
                       type="button"
-                      onClick={addActivity}
+                      onClick={addNewActivity}
                       className="p-2 text-muted hover:text-accent"
                       aria-label={t.add_activity}
                     >
@@ -367,6 +356,45 @@ export function ProfilePage() {
         </form>
       </div>
       )}
+    </div>
+  );
+}
+
+function ActivityRow({
+  activity,
+  onSave,
+  onDelete,
+  removeLabel,
+}: {
+  activity: Activity;
+  onSave: (name_fr: string, name_en: string) => void;
+  onDelete: () => void;
+  removeLabel: string;
+}) {
+  const [fr, setFr] = useState(activity.name_fr);
+  const [en, setEn] = useState(activity.name_en);
+  useEffect(() => {
+    setFr(activity.name_fr);
+    setEn(activity.name_en);
+  }, [activity.name_fr, activity.name_en]);
+
+  const commit = () => {
+    if (fr.trim() === activity.name_fr && en.trim() === activity.name_en) return;
+    onSave(fr, en);
+  };
+
+  return (
+    <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+      <Input value={fr} onChange={(e) => setFr(e.target.value)} onBlur={commit} />
+      <Input value={en} onChange={(e) => setEn(e.target.value)} onBlur={commit} />
+      <button
+        type="button"
+        onClick={onDelete}
+        className="text-muted hover:text-[var(--color-danger-text)]"
+        aria-label={removeLabel}
+      >
+        <X size={14} />
+      </button>
     </div>
   );
 }
