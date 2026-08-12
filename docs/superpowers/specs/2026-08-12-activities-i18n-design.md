@@ -76,7 +76,8 @@ New `src/db/queries/activities.ts`:
 sort_order: number }` in `src/types/activity.ts`.
 
 New `src/db/hooks/useActivities.ts` with TanStack Query hooks following the
-existing hook patterns (query key in `src/lib/queryKeys.ts`).
+existing hook patterns (inline query key `["activities"]`, as in
+`useFinance.ts`).
 
 ### 4. Settings UI
 
