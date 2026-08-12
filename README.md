@@ -290,10 +290,27 @@ StudioManager is designed for Swiss freelancers:
 
 ## Roadmap
 
+### Features
 - [ ] Windows support
 - [ ] Meetings block in projects
 - [ ] System tray quick-add
 - [ ] Project profitability view
+
+### UX polish
+- [ ] Dashboard year switcher + year-over-year deltas
+- [ ] Highlight fields auto-filled from scanned receipts
+- [ ] Supplier merge tool (dedupe name variants)
+- [ ] One-click "mark paid today" and undo for deleted finance entries
+- [ ] Stable per-activity chart colors
+- [ ] App-wide Enter-to-save on inline edits
+
+### Under the hood
+- [ ] Native macOS Vision OCR for receipt scanning (better accuracy, no downloads)
+- [ ] Notarized builds
+- [ ] Automated dependency security audits
+- [ ] Vite 8 / Rolldown build pipeline
+
+Full backlog and bug tracker: [IDEAS.md](IDEAS.md)
 
 ---
 
