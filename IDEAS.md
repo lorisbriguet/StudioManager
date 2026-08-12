@@ -30,7 +30,39 @@
 - [x] UX: skeletons on list pages, busy states, empty-state CTAs, ProjectsPage bulk+filters, line-item keyboard reorder, full inline form validation
 - [x] ESLint (zero findings), 219 tests, RELEASING.md guidelines
 
-## V1.11.0 — Planned
+## V1.12.0 — Done (expense receipt parsing)
+
+- [x] Scoring-based expense parser (`expenseParse.ts`): multi-format amounts (CH/DE/FR/EN), label-aware invoice/due dates with month-name formats, fuzzy known-supplier matching
+- [x] German OCR language pack (fra+deu+eng)
+- [x] Fix: Income page date prefill read a nonexistent parser field
+- [x] Real-receipt eval vs recorded data: invoice date 8% → 83%, amount 10% → 70%
+
+## V1.12.1 — Done (activities i18n)
+
+- [x] Activities as entities with user-editable FR/EN names (migration 006, two-column Settings editor)
+- [x] Invoices/quotes store activity_id + language-appropriate text snapshot (PDFs print client language)
+- [x] Revenue by Activity dedup via id/name resolution (fixes "Graphisme" / "Graphic Design" / trailing-space triple rows)
+- [x] Recurring invoices keep their activity link; seed guarded against concurrent first runs
+
+## Maintenance — dependency audit (2026-08-12)
+
+### Do now (safe batch)
+- [ ] `npm audit fix` — 14 vulnerabilities (11 high), all dev/transitive, fixes available
+- [ ] `npm update` — ~35 minor/patch bumps within current majors (incl. happy-dom CVE fixes, all Tauri plugins, React 19.2.8, TanStack Query 5.101, tiptap 3.30)
+- [ ] `cargo update` + rusqlite 0.31 → latest minor (bundled SQLite CVE fixes)
+- [ ] lucide-react 0.577 → 1.x (check renamed icons)
+- [ ] @testing-library/jest-dom 6 → 7 (dev-only)
+
+### Plan as own branch
+- [ ] Vite 7 → 8 (Rolldown bundler, ~10-30x faster prod builds) + @vitejs/plugin-react 6 — verify vitest compatibility first
+- [ ] Replace tesseract.js with Apple Vision OCR (`VNRecognizeTextRequest`) via a Tauri command — better receipt photo accuracy, no 15 MB language downloads, macOS-only app anyway
+
+### Deferred — revisit later
+- [ ] TypeScript 5.9 → 7.x (Go-native compiler, ~10x builds) — BLOCKED until TS 7.1 ships its stable API and typescript-eslint supports it
+- [ ] FullCalendar 6 → 7 — new temporal-polyfill peer dep, package restructure, custom CSS breaks; upgrade only when v7 features are wanted
+- [ ] TanStack Table 8 → 9 — real API migration (`useTable`, opt-in features, readonly data); benefit is bundle size, no current pain
+
+## Planned — features (pre-1.12 backlog)
 
 ### Meetings block in projects
 - Separate `meetings` table: title, date, start_time, end_time, location, attendees (JSON: contact IDs + free text names), project_id, tracked_minutes
