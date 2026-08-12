@@ -2,6 +2,8 @@ import { getDb } from "../index";
 import { parseActivities } from "../../types/business-profile";
 import type { Activity } from "../../types/activity";
 
+let seedPromise: Promise<Activity[]> | null = null;
+
 export async function getActivities(): Promise<Activity[]> {
   const db = await getDb();
   const rows = await db.select<Activity[]>(
@@ -9,29 +11,39 @@ export async function getActivities(): Promise<Activity[]> {
   );
   if (rows.length > 0) return rows;
 
-  // First run: seed from the legacy business_profile.default_activity list
-  // (JSON string array, or a plain string on very old profiles). The user
-  // fills in the other language in Settings afterwards.
-  const profile = await db.select<{ default_activity: string }[]>(
-    "SELECT default_activity FROM business_profile LIMIT 1"
-  );
-  const names = [
-    ...new Set(
-      parseActivities(profile[0]?.default_activity)
-        .map((n) => n.trim())
-        .filter(Boolean)
-    ),
-  ];
-  if (names.length === 0) return [];
-  for (let i = 0; i < names.length; i++) {
-    await db.execute(
-      "INSERT INTO activities (name_fr, name_en, sort_order) VALUES ($1, $2, $3)",
-      [names[i], names[i], i]
+  // First run: seed from the legacy business_profile.default_activity list.
+  // If seedPromise is already in flight, return it to avoid duplicates.
+  if (seedPromise !== null) return seedPromise;
+
+  seedPromise = (async () => {
+    // First run: seed from the legacy business_profile.default_activity list
+    // (JSON string array, or a plain string on very old profiles). The user
+    // fills in the other language in Settings afterwards.
+    const profile = await db.select<{ default_activity: string }[]>(
+      "SELECT default_activity FROM business_profile LIMIT 1"
     );
-  }
-  return db.select<Activity[]>(
-    "SELECT * FROM activities ORDER BY sort_order, id"
-  );
+    const names = [
+      ...new Set(
+        parseActivities(profile[0]?.default_activity)
+          .map((n) => n.trim())
+          .filter(Boolean)
+      ),
+    ];
+    if (names.length === 0) return [];
+    for (let i = 0; i < names.length; i++) {
+      await db.execute(
+        "INSERT INTO activities (name_fr, name_en, sort_order) VALUES ($1, $2, $3)",
+        [names[i], names[i], i]
+      );
+    }
+    return db.select<Activity[]>(
+      "SELECT * FROM activities ORDER BY sort_order, id"
+    );
+  })().finally(() => {
+    seedPromise = null;
+  });
+
+  return seedPromise;
 }
 
 export async function createActivity(
