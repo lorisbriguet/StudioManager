@@ -178,3 +178,35 @@ describe("parseExpenseFromText — supplier", () => {
     expect(parseExpenseFromText(DE_INVOICE).supplier).toBe("Bürobedarf München GmbH");
   });
 });
+
+describe("parseExpenseFromText — month-name dates", () => {
+  it("parses dd-MMM-yyyy with the label on a preceding line (Adobe style)", () => {
+    const text =
+      "Adobe\nDate de facturation\nIEN2024002208841\n14-JAN-2024\nValidité: 13-JAN-2024 au 12-FEV-2024";
+    expect(parseExpenseFromText(text).invoice_date).toBe("2024-01-14");
+  });
+
+  it("parses English 'Month d, yyyy' dates", () => {
+    const text =
+      "Anthropic, PBC\nDate paid February 5, 2026\n$216.20 paid on February 5, 2026";
+    expect(parseExpenseFromText(text).invoice_date).toBe("2026-02-05");
+  });
+
+  it("parses French full month names", () => {
+    const text = "Sunrise SA\nDate de la facture 16 avril 2024\nTotal CHF 43.47";
+    expect(parseExpenseFromText(text).invoice_date).toBe("2024-04-16");
+  });
+
+  it("parses German day-first month names", () => {
+    expect(parseExpenseFromText("Rechnung\nDatum: 5. März 2025").invoice_date).toBe(
+      "2025-03-05"
+    );
+  });
+});
+
+describe("parseExpenseFromText — total scoring without position bias", () => {
+  it("prefers the largest equally-labeled total regardless of position", () => {
+    const text = "Facture\nTotal 43.47\nTotal taxes d'appels 6.00";
+    expect(parseExpenseFromText(text).amount).toBe(43.47);
+  });
+});
