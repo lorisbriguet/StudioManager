@@ -25,7 +25,7 @@ import { useT } from "../i18n/useT";
 import { notifyError } from "../lib/notifyError";
 import type { Income } from "../types/income";
 import { extractPdfText, extractImageText } from "../lib/pdfExtract";
-import { parseExpenseFromText } from "../lib/expenseParse";
+import { parseExpenseFromText, type ExtractedExpenseData } from "../lib/expenseParse";
 import { logError } from "../lib/log";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import { SavedFilterBar } from "../components/SavedFilterBar";
@@ -114,7 +114,7 @@ export function IncomePage() {
 
     setParsing(true);
     try {
-      let extracted: { supplier?: string; amount?: number; date?: string } = {};
+      let extracted: ExtractedExpenseData = {};
 
       if (ext === "pdf") {
         const text = await extractPdfText(filePath);
@@ -126,7 +126,7 @@ export function IncomePage() {
 
       setPrefill({
         amount: extracted.amount,
-        date: extracted.date,
+        date: extracted.invoice_date,
         source: extracted.supplier,
       });
     } catch (e) {
