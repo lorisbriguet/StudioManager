@@ -1,4 +1,4 @@
-import { cloneElement, useId, type ReactElement } from "react";
+import { cloneElement, useId, type ReactElement, type ReactNode } from "react";
 
 /**
  * FormField — labeled form control with inline validation (Phase 2 E1).
@@ -47,9 +47,11 @@ interface FormFieldProps {
   error?: string;
   required?: boolean;
   className?: string;
+  /** Optional chip rendered right-aligned on the label row (e.g. DetectedBadge). */
+  badge?: ReactNode;
 }
 
-export function FormField({ label, children, error, required = false, className = "" }: FormFieldProps) {
+export function FormField({ label, children, error, required = false, className = "", badge }: FormFieldProps) {
   const generatedId = useId();
   const fieldId = children.props.id ?? generatedId;
   const errorId = `${fieldId}-error`;
@@ -60,12 +62,22 @@ export function FormField({ label, children, error, required = false, className 
     "aria-describedby": error ? errorId : undefined,
     className: `${children.props.className ?? ""} aria-[invalid=true]:border-danger-text`.trim(),
   });
+  const labelEl = (
+    <label htmlFor={fieldId} className={`block text-xs text-muted ${badge ? "" : "mb-1"}`}>
+      {label}
+      {required && <span aria-hidden="true" className="text-accent ml-0.5">*</span>}
+    </label>
+  );
   return (
     <div className={className}>
-      <label htmlFor={fieldId} className="block text-xs text-muted mb-1">
-        {label}
-        {required && <span aria-hidden="true" className="text-accent ml-0.5">*</span>}
-      </label>
+      {badge ? (
+        <div className="flex items-center justify-between mb-1">
+          {labelEl}
+          {badge}
+        </div>
+      ) : (
+        labelEl
+      )}
       {control}
       {error && (
         <p id={errorId} role="alert" className="mt-1 text-xs text-danger-text">
