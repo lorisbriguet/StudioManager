@@ -53,9 +53,9 @@
 - [x] lucide-react 0.577 → 1.31 (no renamed icons in use)
 - [x] @testing-library/jest-dom 6 → 7 (dev-only)
 
-### Plan as own branch
-- [ ] Vite 7 → 8 (Rolldown bundler, ~10-30x faster prod builds) + @vitejs/plugin-react 6 — verify vitest compatibility first
-- [ ] Replace tesseract.js with Apple Vision OCR (`VNRecognizeTextRequest`) via a Tauri command — better receipt photo accuracy, no 15 MB language downloads, macOS-only app anyway
+### Plan as own branch — Done (2026-08-14)
+- [x] Vite 7 → 8 (Rolldown) + @vitejs/plugin-react 6 — bundling ~6.4s → ~0.8s, vitest 4.1 compatible unchanged
+- [x] Replace tesseract.js with Apple Vision OCR (`VNRecognizeTextRequest`) via the `ocr_image_text` Rust command (fixed JXA script, argv-only, fr/de/en) — HEIC read natively so the sips conversion command was removed too; live-OCR unit test on a committed fixture. Re-run the receipt eval against recorded data to quantify accuracy vs tesseract
 
 ### Deferred — revisit later
 - [ ] TypeScript 5.9 → 7.x (Go-native compiler, ~10x builds) — BLOCKED until TS 7.1 ships its stable API and typescript-eslint supports it
