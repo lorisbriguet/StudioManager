@@ -31,9 +31,8 @@ export function useMergeSuppliers() {
       useUndoStore.getState().push({
         label: `${getLabels().undo_merge_suppliers} "${canonical}"`,
         execute: async () => {
-          for (const row of prev) {
-            await q.updateExpense(row.id, { supplier: row.supplier });
-          }
+          // Single transaction — a crash cannot leave a partial revert
+          await q.restoreSupplierNames(prev);
           qc.invalidateQueries({ queryKey: ["expenses"] });
         },
         redo: async () => {
