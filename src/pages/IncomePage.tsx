@@ -160,7 +160,7 @@ export function IncomePage() {
     }).then((fn) => {
       if (cancelled) { fn(); return; }
       unlisten = fn;
-    }).catch(() => {});
+    }).catch((e) => logError("Failed to register drag-drop listener:", e));
 
     return () => {
       cancelled = true;
@@ -628,7 +628,7 @@ export function NewIncomeForm({
       {droppedReceiptPath && (
         <div className="flex items-center gap-2 text-xs text-success">
           <Paperclip size={12} />
-          <span>Receipt will be attached: {droppedReceiptPath.split("/").pop()}</span>
+          <span>{t.receipt_will_be_attached} {droppedReceiptPath.split("/").pop()}</span>
         </div>
       )}
       <div className="grid grid-cols-2 gap-3">

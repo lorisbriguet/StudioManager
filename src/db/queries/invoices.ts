@@ -206,3 +206,26 @@ export async function getInvoiceLineItems(
     [invoiceId]
   );
 }
+
+/**
+ * Line items for many invoices in one query, grouped by invoice id —
+ * bulk flows (trustee export) must not fetch one invoice at a time.
+ */
+export async function getLineItemsForInvoices(
+  invoiceIds: number[]
+): Promise<Map<number, InvoiceLineItem[]>> {
+  const map = new Map<number, InvoiceLineItem[]>();
+  if (invoiceIds.length === 0) return map;
+  const db = await getDb();
+  const placeholders = invoiceIds.map((_, i) => `$${i + 1}`).join(", ");
+  const rows = await db.select<InvoiceLineItem[]>(
+    `SELECT * FROM invoice_line_items WHERE invoice_id IN (${placeholders}) ORDER BY invoice_id, sort_order`,
+    invoiceIds
+  );
+  for (const row of rows) {
+    const items = map.get(row.invoice_id) ?? [];
+    items.push(row);
+    map.set(row.invoice_id, items);
+  }
+  return map;
+}

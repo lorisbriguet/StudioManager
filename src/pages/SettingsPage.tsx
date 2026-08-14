@@ -85,8 +85,14 @@ export function SettingsPage() {
   const [hasSnapshotFile, setHasSnapshotFile] = useState(false);
   const t = useT();
 
-  useEffect(() => { getVersion().then(setAppVersion).catch(() => {}); }, []);
-  useEffect(() => { invoke<boolean>("has_snapshot").then(setHasSnapshotFile).catch(() => {}); }, []);
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch((e) => logError("Failed to read app version:", e));
+  }, []);
+  useEffect(() => {
+    invoke<boolean>("has_snapshot")
+      .then(setHasSnapshotFile)
+      .catch((e) => logError("Failed to check for snapshot:", e));
+  }, []);
 
   const handleEnterTestMode = async () => {
     setTogglingTestMode(true);
@@ -625,13 +631,13 @@ export function SettingsPage() {
               <SettingRow label={t.test_mode}>
                 {testMode ? (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-amber-600 font-medium flex items-center gap-1"><FlaskConical size={12} /> {t.test_mode_active}</span>
+                    <span className="text-xs text-[var(--color-warning-text)] font-medium flex items-center gap-1"><FlaskConical size={12} /> {t.test_mode_active}</span>
                     <button type="button" onClick={handleExitTestMode} disabled={togglingTestMode} className="px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
                       {t.exit_test_mode}
                     </button>
                   </div>
                 ) : (
-                  <button type="button" onClick={handleEnterTestMode} disabled={togglingTestMode} className="flex items-center gap-1 px-2.5 py-1 bg-amber-500 text-white text-xs rounded-md hover:bg-amber-600 disabled:opacity-50">
+                  <button type="button" onClick={handleEnterTestMode} disabled={togglingTestMode} className="flex items-center gap-1 px-2.5 py-1 bg-[var(--color-warning-text)] text-white text-xs rounded-md hover:opacity-90 disabled:opacity-50">
                     <FlaskConical size={12} />
                     {togglingTestMode ? t.loading : t.enter_test_mode}
                   </button>
@@ -643,13 +649,13 @@ export function SettingsPage() {
               <SettingRow label={t.presentation_mode}>
                 {presentationMode ? (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-indigo-600 font-medium">{t.presentation_active}</span>
+                    <span className="text-xs text-[var(--color-indigo-text)] font-medium">{t.presentation_active}</span>
                     <button type="button" onClick={handleExitPresentation} disabled={togglingPresentation} className="px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
                       {t.exit_presentation_mode}
                     </button>
                   </div>
                 ) : (
-                  <button type="button" onClick={handleEnterPresentation} disabled={togglingPresentation || testMode} className="flex items-center gap-1 px-2.5 py-1 bg-indigo-500 text-white text-xs rounded-md hover:bg-indigo-600 disabled:opacity-50">
+                  <button type="button" onClick={handleEnterPresentation} disabled={togglingPresentation || testMode} className="flex items-center gap-1 px-2.5 py-1 bg-[var(--color-indigo-text)] text-white text-xs rounded-md hover:opacity-90 disabled:opacity-50">
                     {togglingPresentation ? t.loading : t.enter_presentation_mode}
                   </button>
                 )}

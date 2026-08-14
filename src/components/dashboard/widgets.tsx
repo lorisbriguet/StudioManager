@@ -71,7 +71,7 @@ function StatusDot({ status }: { status: string }) {
     status === "paid" ? "bg-success" :
     status === "overdue" ? "bg-danger" :
     status === "sent" ? "bg-warning" :
-    status === "draft" ? "bg-indigo-500" :
+    status === "draft" ? "bg-[var(--color-indigo-text)]" :
     "bg-[var(--color-input-bg)]";
   return <span className={`dot-sm ml-2 ${color}`} />;
 }
