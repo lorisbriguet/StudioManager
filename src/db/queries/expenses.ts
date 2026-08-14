@@ -65,6 +65,38 @@ export async function getDistinctSuppliers(): Promise<
   );
 }
 
+export async function getSupplierCounts(): Promise<{ supplier: string; count: number }[]> {
+  const db = await getDb();
+  return db.select(
+    `SELECT supplier, COUNT(*) as count
+     FROM expenses
+     GROUP BY supplier
+     ORDER BY count DESC, supplier`
+  );
+}
+
+/**
+ * Relink every expense of the given supplier-name variants to `canonical`.
+ * Returns the affected rows' previous names so the caller can register undo.
+ */
+export async function mergeSuppliers(
+  canonical: string,
+  variants: string[]
+): Promise<{ id: number; supplier: string }[]> {
+  const db = await getDb();
+  const placeholders = variants.map((_, i) => `$${i + 1}`).join(", ");
+  const prev = await db.select<{ id: number; supplier: string }[]>(
+    `SELECT id, supplier FROM expenses WHERE supplier IN (${placeholders})`,
+    variants
+  );
+  const updPlaceholders = variants.map((_, i) => `$${i + 2}`).join(", ");
+  await db.execute(
+    `UPDATE expenses SET supplier = $1, updated_at = datetime('now') WHERE supplier IN (${updPlaceholders})`,
+    [canonical, ...variants]
+  );
+  return prev;
+}
+
 export async function getExpenseById(id: number): Promise<Expense | null> {
   const db = await getDb();
   const rows = await db.select<Expense[]>("SELECT * FROM expenses WHERE id = $1", [id]);
