@@ -86,6 +86,40 @@
 - [x] Automate dependency auditing (2026-08-14) — weekly GitHub Action runs `npm audit` + `cargo audit`; two unfixable sqlx-transitive advisories ignored with reasons in `src-tauri/.cargo/audit.toml`
 - [ ] Smoke-test the osascript migration in the running app before release: task with due date syncs to Calendar (timed + all-day), event deleted on task completion, purge-all works, PDF receipt drag-drop parses, HEIC photo converts + OCRs, invoice "share via Mail" opens a draft
 
+## Audit — full app (2026-08-14)
+
+Five-front audit (security, data integrity, frontend quality, performance, tests/Rust). Verdict: fundamentally healthy — zero critical findings; parameterized SQL, fixed-script argv-only osascript, path canonicalization, batch transactions and snapshot undo all confirmed solid. npm/cargo audits clean, 302+8 tests green, lint/tsc zero findings.
+
+### P0 — correctness
+- [ ] DB snapshots ignore SQLite WAL: enter_test_mode / enter_presentation_mode / snapshot_db fs::copy only the main file while connections are open; restore_snapshot copies over an open DB. Use VACUUM INTO for snapshots and the SQLite backup API for restore; clean up -wal/-shm on mode exit (src-tauri/src/lib.rs:137-263)
+- [ ] Supplier-merge undo is a non-atomic per-row loop — make it a TransactionBatch (src/db/hooks/useExpenses.ts:34)
+- [ ] Recurring catch-up cap (60/template) is log-only — surface a toast/notification and sanity-check next_due (src/hooks/useRecurringCheck.ts:111)
+
+### P1 — user-visible
+- [ ] Draft-warning overlays are raw divs, not the shared Modal (no Escape/focus trap): InvoicePreviewPage:237, QuotePreviewPage:135
+- [ ] Hardcoded "Receipt will be attached:" (only i18n miss; EN/FR parity otherwise perfect): ExpensesPage:767, IncomePage:631
+- [ ] Non-token colors break dark mode: amber/indigo in SettingsPage test/presentation controls, green-100/700 in InvoicesPage recurring badge, indigo-500 in widgets StatusDot
+- [ ] Trustee export: per-invoice line-item query + sequential PDF renders freeze the UI — batch fetch + Promise.all (FinancesPage:98)
+- [ ] Calendar sync N+1 project lookups — prefetch a project map (appleCalendar.ts:128)
+- [ ] Silent .catch(() => {}): SettingsPage:88-89, IncomePage:163
+
+### P2 — hardening/hygiene
+- [ ] run_osascript: no Rust-side timeout or stdout cap; consider spawn_blocking (apple.rs)
+- [ ] share_pdf_via_mail: convert to argv pattern for consistency (current escaping is sufficient for AppleScript string literals)
+- [ ] Verify tiptap Link rejects javascript: URLs in stored wiki content
+- [ ] categories.find() per expense row → memoized Map (ExpensesPage:82)
+- [ ] CREATE INDEX on hot columns (invoices client_id/date/status, expenses date/category, tasks project/due)
+- [ ] Invoice delete redo finds the restored row by reference — store the id instead (useInvoices.ts:182)
+- [ ] Warn when non-CHF invoice has chf_equivalent <= 0 (currency mixing in P&L)
+- [ ] Design-system sweep: ~14 rounded-md misuses; ad-hoc raw buttons in Settings/Calendar/Resources
+- [ ] Dedupe detected-badge helpers + handleDroppedFile into shared hooks; split SettingsPage (1673 l.) / ExpensesPage (907 l.) / widgets.tsx (1546 l.)
+
+### P3 — missing tests (ranked) + bundle
+- [ ] Tests: useRecurringCheck workflow, backup.ts create/restore I/O, dirty-guard, tab-store, bulkPdfExport; Rust execute_batch (placeholder conversion incl. $N inside string literals, rollback)
+- [ ] Bundle: single 4.1 MB chunk — lazy-load FullCalendar, tiptap, recharts, PDF stack (low urgency, desktop app)
+
+False alarms reviewed and rejected: $LAST_INSERT_ID injection (i64-only), localStorage mode switching (webview already has execute_batch by design), javascript:/file: URLs via shell.open (plugin's default validator blocks them), supplier-merge finance invalidation (finance never aggregates by supplier).
+
 ## Planned — features (pre-1.12 backlog)
 
 ### Meetings block in projects
