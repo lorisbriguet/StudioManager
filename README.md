@@ -305,8 +305,6 @@ StudioManager is designed for Swiss freelancers:
 
 ### Under the hood
 - [ ] Native macOS Vision OCR for receipt scanning (better accuracy, no downloads)
-- [ ] Notarized builds
-- [ ] Automated dependency security audits
 - [ ] Vite 8 / Rolldown build pipeline
 
 Full backlog and bug tracker: [IDEAS.md](IDEAS.md)
