@@ -35,6 +35,16 @@ export function useRecurringCheck() {
         for (const tmpl of templates) {
           // Fail soft per-template: one broken template must not block the others.
           try {
+            // A corrupt next_due would silently skip (or spin) the catch-up
+            // loop — surface it instead of guessing.
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(tmpl.next_due)) {
+              notifyError(
+                getLabels().recurring_invalid_next_due,
+                new Error(`template ${tmpl.id}: next_due "${tmpl.next_due}"`)
+              );
+              continue;
+            }
+
             const baseInvoice = await getInvoice(tmpl.base_invoice_id);
             if (!baseInvoice) continue;
 
@@ -112,6 +122,21 @@ export function useRecurringCheck() {
               logWarn(
                 `Recurring catch-up cap (${MAX_CATCHUP_PER_TEMPLATE}) hit for template ${tmpl.id}; remaining periods will generate on next launch`
               );
+              // Log-only would repeat this every launch without the user ever
+              // noticing — make the runaway template visible.
+              const capMsg = getLabels().recurring_catchup_cap_hit.replace(
+                "{count}",
+                String(MAX_CATCHUP_PER_TEMPLATE)
+              );
+              toast.warning(capMsg, { duration: 8000 });
+              await createNotification({
+                type: "warning",
+                title: getLabels().recurring_invoices,
+                message: capMsg,
+                read: 0,
+                link: "/invoices",
+              });
+              qc.invalidateQueries({ queryKey: ["notifications"] });
             }
           } catch (e) {
             notifyError(getLabels().recurring_generation_failed, e);
