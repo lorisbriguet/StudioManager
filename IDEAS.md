@@ -46,12 +46,12 @@
 
 ## Maintenance — dependency audit (2026-08-12)
 
-### Do now (safe batch)
-- [ ] `npm audit fix` — 14 vulnerabilities (11 high), all dev/transitive, fixes available
-- [ ] `npm update` — ~35 minor/patch bumps within current majors (incl. happy-dom CVE fixes, all Tauri plugins, React 19.2.8, TanStack Query 5.101, tiptap 3.30)
-- [ ] `cargo update` + rusqlite 0.31 → latest minor (bundled SQLite CVE fixes)
-- [ ] lucide-react 0.577 → 1.x (check renamed icons)
-- [ ] @testing-library/jest-dom 6 → 7 (dev-only)
+### Do now (safe batch) — Done (2026-08-14)
+- [x] `npm audit fix` — 14 vulnerabilities → 0
+- [x] `npm update` — ~36 minor/patch bumps within current majors (incl. happy-dom CVE fixes, all Tauri plugins, React 19.2.8, TanStack Query 5.101, tiptap 3.30)
+- [x] `cargo update` + rusqlite 0.31 → 0.32 (bundled SQLite 3.45 → 3.46.1). 0.33+ blocked: tauri-plugin-sql's sqlx pins libsqlite3-sys 0.30 and Cargo's `links` rule forbids two SQLite copies — revisit when the plugin moves past sqlx 0.8
+- [x] lucide-react 0.577 → 1.31 (no renamed icons in use)
+- [x] @testing-library/jest-dom 6 → 7 (dev-only)
 
 ### Plan as own branch
 - [ ] Vite 7 → 8 (Rolldown bundler, ~10-30x faster prod builds) + @vitejs/plugin-react 6 — verify vitest compatibility first
@@ -81,9 +81,9 @@
 
 ## Security hardening (2026-08-12)
 
-- [ ] Retire arbitrary osascript execution — replace Mail sharing, Calendar sync, and PDF/HEIC extraction with dedicated Rust Tauri commands (fixed scripts, path args only), then drop `shell:allow-execute` from capabilities. Overlaps with the Apple Vision OCR item
-- [ ] Notarize the app — add APPLE_ID / API-key notarization to the release flow so users stop bypassing Gatekeeper
-- [ ] Automate dependency auditing — scheduled GitHub Action for `npm audit` + `cargo audit` (or Dependabot) so vulnerabilities surface as notifications
+- [x] Retire arbitrary osascript execution (2026-08-14) — Calendar sync + PDF/HEIC extraction moved to Rust commands in `src-tauri/src/apple.rs` with fixed scripts; user data passed via argv only (`on run argv` / JXA `function run(argv)`), HEIC runs `sips` directly with no shell; `shell:allow-execute` dropped from capabilities (`shell:allow-open` kept for browser URLs). Mail sharing was already a Rust command
+- ~~Notarize the app~~ — dropped: requires the paid Apple Developer Program, which we're not getting. Unsigned builds keep using the right-click-open Gatekeeper bypass
+- [x] Automate dependency auditing (2026-08-14) — weekly GitHub Action runs `npm audit` + `cargo audit`; two unfixable sqlx-transitive advisories ignored with reasons in `src-tauri/.cargo/audit.toml`
 
 ## Planned — features (pre-1.12 backlog)
 
