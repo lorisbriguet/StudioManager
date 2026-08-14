@@ -410,7 +410,7 @@ pub fn run() {
             share_pdf_via_mail,
             open_in_finder,
             apple::extract_pdf_text,
-            apple::convert_heic_to_jpeg,
+            apple::ocr_image_text,
             apple::calendar_list_writable,
             apple::calendar_create_event,
             apple::calendar_delete_event,

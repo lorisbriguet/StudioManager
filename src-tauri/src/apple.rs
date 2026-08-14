@@ -30,6 +30,35 @@ function run(argv) {
 }
 "#;
 
+/// JXA: OCR an image via the native Vision framework (VNRecognizeTextRequest).
+/// Reads JPEG/PNG/HEIC natively; recognition languages match the receipt
+/// locales previously configured for tesseract (fr/de/en).
+/// argv[0] = absolute file path.
+pub(crate) const OCR_VISION_JXA: &str = r#"
+function run(argv) {
+  ObjC.import('Vision');
+  ObjC.import('Foundation');
+  var url = $.NSURL.fileURLWithPath($(argv[0]));
+  var handler = $.VNImageRequestHandler.alloc.initWithURLOptions(url, $({}));
+  var request = $.VNRecognizeTextRequest.alloc.init;
+  request.recognitionLevel = $.VNRequestTextRecognitionLevelAccurate;
+  request.usesLanguageCorrection = true;
+  request.recognitionLanguages = $(['fr-FR', 'de-DE', 'en-US']);
+  var error = Ref();
+  var ok = handler.performRequestsError($([request]), error);
+  if (!ok) {
+    throw new Error('Vision request failed');
+  }
+  var results = request.results;
+  var lines = [];
+  for (var i = 0; i < results.count; i++) {
+    var top = results.objectAtIndex(i).topCandidates(1);
+    if (top.count > 0) lines.push(top.objectAtIndex(0).string.js);
+  }
+  return lines.join(String.fromCharCode(10));
+}
+"#;
+
 /// List names of writable calendars, "||"-separated.
 pub(crate) const CAL_LIST_WRITABLE: &str = r#"
 tell application "Calendar"
@@ -211,35 +240,17 @@ pub(crate) fn extract_pdf_text(path: String) -> Result<String, String> {
     )
 }
 
-/// Convert a HEIC image to JPEG with the system `sips` binary (no shell).
-/// Writes into the app data dir (inside the frontend fs scope) and returns
-/// the output path; the caller reads and removes it.
+/// Run Vision OCR on an image file and return the recognized lines.
+fn run_vision_ocr(path: &str) -> Result<String, String> {
+    run_osascript(&["-l", "JavaScript"], OCR_VISION_JXA, &[path])
+}
+
+/// OCR an image (JPEG/PNG/HEIC) with the native Vision framework.
 #[tauri::command]
-pub(crate) fn convert_heic_to_jpeg(app: tauri::AppHandle, path: String) -> Result<String, String> {
+pub(crate) fn ocr_image_text(path: String) -> Result<String, String> {
     let canonical =
         std::fs::canonicalize(&path).map_err(|e| format!("path not found: {path} ({e})"))?;
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("failed to get app data dir: {e}"))?;
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let out_path = app_dir.join(format!("temp_heic_converted_{nanos}.jpg"));
-    let output = std::process::Command::new("sips")
-        .args(["-s", "format", "jpeg"])
-        .arg(&canonical)
-        .arg("--out")
-        .arg(&out_path)
-        .output()
-        .map_err(|e| format!("failed to run sips: {e}"))?;
-    if output.status.success() {
-        Ok(out_path.to_string_lossy().to_string())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Err(format!("HEIC conversion failed: {stderr}"))
-    }
+    run_vision_ocr(&canonical.to_string_lossy())
 }
 
 /// List writable Apple Calendar calendars.
@@ -363,6 +374,16 @@ mod tests {
     }
 
     #[test]
+    fn vision_ocr_reads_fixture_text() {
+        // Live Vision OCR on a committed fixture (macOS-only app, macOS-only test)
+        let fixture = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/ocr_sample.png");
+        let text = run_vision_ocr(fixture).unwrap();
+        assert!(text.contains("FACTURE 2026"), "got: {text}");
+        assert!(text.contains("123.45"), "got: {text}");
+        assert!(text.contains("ACME"), "got: {text}");
+    }
+
+    #[test]
     fn scripts_take_data_via_argv_only() {
         // Fixed scripts must not contain any interpolation and must read
         // their inputs from argv.
@@ -373,5 +394,7 @@ mod tests {
             assert!(script.contains("on run argv"), "script must use on run argv");
         }
         assert!(PDF_TEXT_JXA.contains("function run(argv)"));
+        assert!(!OCR_VISION_JXA.contains("${"));
+        assert!(OCR_VISION_JXA.contains("function run(argv)"));
     }
 }

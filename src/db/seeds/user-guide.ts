@@ -254,7 +254,7 @@ const articles: ArticleSeed[] = [
 </ul>
 
 <h2>Receipt OCR</h2>
-<p>When you drop an image file (JPG, PNG, HEIC) onto the expenses page, StudioManager uses <strong>OCR</strong> (optical character recognition via tesseract.js) to automatically extract the supplier name, amount, and date from the receipt. The extracted data pre-fills the expense form.</p>
+<p>When you drop an image file (JPG, PNG, HEIC) onto the expenses page, StudioManager uses <strong>OCR</strong> (optical character recognition via the native Apple Vision framework) to automatically extract the supplier name, amount, and date from the receipt. The extracted data pre-fills the expense form.</p>
 
 <h2>Duplicate Detection</h2>
 <p>When adding an expense, if a similar entry exists (same supplier + similar amount + close date), a <strong>yellow warning banner</strong> appears. You can still save it if it's intentional.</p>

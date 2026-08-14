@@ -879,7 +879,6 @@ const ui = {
     priority_low: "Low",
 
     // Phase 2 D2 — busy states
-    ocr_first_run_download: "Preparing text recognition (first run downloads language data)...",
 
     // Phase 2 D4 — projects bulk actions
     mark_active: "Mark as active",
@@ -1790,7 +1789,6 @@ const ui = {
     priority_low: "Basse",
 
     // Phase 2 D2 — busy states
-    ocr_first_run_download: "Preparation de la reconnaissance de texte (premier lancement : telechargement des donnees de langue)...",
 
     // Phase 2 D4 — projects bulk actions
     mark_active: "Marquer comme actif",

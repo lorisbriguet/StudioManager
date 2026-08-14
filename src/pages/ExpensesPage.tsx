@@ -32,7 +32,7 @@ import { getNextExpenseReference } from "../db/queries/expenses";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
 import { useT } from "../i18n/useT";
 import { notifyError } from "../lib/notifyError";
-import { extractPdfText, extractImageText, isOcrWorkerReady } from "../lib/pdfExtract";
+import { extractPdfText, extractImageText } from "../lib/pdfExtract";
 import { parseExpenseFromText, type ExtractedExpenseData } from "../lib/expenseParse";
 import { logError } from "../lib/log";
 import { useYearGrouping } from "../hooks/useYearGrouping";
@@ -58,9 +58,6 @@ export function ExpensesPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [prefill, setPrefill] = useState<(ExtractedExpenseData & { receiptPath?: string }) | null>(null);
   const [parsing, setParsing] = useState(false);
-  // First OCR use downloads ~15MB of tesseract language data — show a
-  // dedicated indicator label so the longer wait is explained.
-  const [ocrFirstRun, setOcrFirstRun] = useState(false);
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
   const [filterLogic, setFilterLogic] = useState<ConditionLogic>("and");
@@ -145,7 +142,6 @@ export function ExpensesPage() {
           extracted = parseExpenseFromText(text, supplierNames);
         }
       } else if (["png", "jpg", "jpeg", "heic"].includes(ext)) {
-        if (!isOcrWorkerReady()) setOcrFirstRun(true);
         const text = await extractImageText(filePath);
         if (text) {
           extracted = parseExpenseFromText(text, supplierNames);
@@ -171,7 +167,6 @@ export function ExpensesPage() {
       setShowForm(true);
     } finally {
       setParsing(false);
-      setOcrFirstRun(false);
     }
   }, [pastSuppliers, t.unsupported_file]);
 
@@ -258,7 +253,7 @@ export function ExpensesPage() {
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-[var(--color-surface)]/60 backdrop-blur-sm rounded-lg">
           <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-input-border)] shadow-sm">
             <div className="h-4 w-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-muted">{ocrFirstRun ? t.ocr_first_run_download : t.analyzing_receipt}</span>
+            <span className="text-sm text-muted">{t.analyzing_receipt}</span>
           </div>
         </div>
       )}
