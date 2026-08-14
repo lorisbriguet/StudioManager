@@ -5,6 +5,7 @@ import { Plus, X, ChevronDown, Lock, Save, Trash2 } from "lucide-react";
 import { useDashboardStore, WIDGET_CATALOG, type WidgetType, type DashboardWidget } from "../stores/dashboard-store";
 import type { LayoutItem } from "react-grid-layout";
 import { renderWidget } from "../components/dashboard/widgets";
+import { DashboardYearContext } from "../components/dashboard/DashboardYearContext";
 import { PageHeader, Button } from "../components/ui";
 import { useT } from "../i18n/useT";
 import { toast } from "sonner";
@@ -222,6 +223,7 @@ function PresetDropdown() {
 export function DashboardPage() {
   const { widgets, layout, setLayout, addWidget, removeWidget } = useDashboardStore();
   const [showWidgetPanel, setShowWidgetPanel] = useState(false);
+  const [year, setYear] = useState(new Date().getFullYear());
   const { width, containerRef, mounted } = useContainerWidth();
   const t = useT();
 
@@ -252,8 +254,19 @@ export function DashboardPage() {
   }, []);
 
   return (
+    <DashboardYearContext.Provider value={year}>
     <div ref={containerRef} className="overflow-x-hidden">
       <PageHeader title={t.dashboard}>
+        <select
+          value={year}
+          onChange={(e) => setYear(Number(e.target.value))}
+          aria-label={t.year}
+          className="border border-[var(--color-border-divider)] rounded-lg px-2 py-1 text-sm bg-[var(--color-surface)]"
+        >
+          {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
         <PresetDropdown />
         <Button
           variant="secondary"
@@ -342,5 +355,6 @@ export function DashboardPage() {
         </ResponsiveGridLayout>
       )}
     </div>
+    </DashboardYearContext.Provider>
   );
 }

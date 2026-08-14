@@ -52,6 +52,8 @@ import { useAppStore } from "../../stores/app-store";
 import { useActivities } from "../../db/hooks/useActivities";
 import { resolveActivityRevenue } from "../../lib/activityResolve";
 import { tagHash } from "../../lib/tagColors";
+import { yoyDelta } from "../../lib/yoyDelta";
+import { useDashboardYear } from "./DashboardYearContext";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -76,7 +78,8 @@ function StatusDot({ status }: { status: string }) {
 
 // ── KPI widgets ──
 
-function KPIWidget({ label, value, numericValue, accent }: { label: string; value: string; numericValue?: number; accent?: boolean }) {
+export function KPIWidget({ label, value, numericValue, accent, delta }: { label: string; value: string; numericValue?: number; accent?: boolean; delta?: number | null }) {
+  const t = useT();
   const animated = useCountUp(numericValue ?? 0);
   const displayValue = numericValue != null
     ? `CHF ${animated.toLocaleString("de-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -85,42 +88,71 @@ function KPIWidget({ label, value, numericValue, accent }: { label: string; valu
     <div className="h-full flex flex-col justify-center px-4">
       <div className="text-xs text-muted uppercase tracking-wide mb-1">{label}</div>
       <div className={`text-lg font-semibold ${accent ? "text-warning" : ""}`}>{displayValue}</div>
+      {delta != null && (
+        <div className={`text-[10px] font-medium ${delta >= 0 ? "text-[var(--color-success-text)]" : "text-[var(--color-danger-text)]"}`}>
+          {delta >= 0 ? "+" : ""}{delta}% {t.vs_last_year}
+        </div>
+      )}
     </div>
   );
 }
 
 function KPIInvoiced() {
-  const year = new Date().getFullYear();
+  const year = useDashboardYear();
   const { data: kpis } = useDashboardKPIs(year);
+  const { data: prev } = useDashboardKPIs(year - 1);
   const t = useT();
-  return <KPIWidget label={t.total_invoiced} value={formatCHF(kpis?.total_invoiced ?? 0)} numericValue={kpis?.total_invoiced ?? 0} />;
+  return (
+    <KPIWidget
+      label={t.total_invoiced}
+      value={formatCHF(kpis?.total_invoiced ?? 0)}
+      numericValue={kpis?.total_invoiced ?? 0}
+      delta={prev ? yoyDelta(kpis?.total_invoiced ?? 0, prev.total_invoiced) : null}
+    />
+  );
 }
 
 function KPIBalance() {
-  const year = new Date().getFullYear();
+  const year = useDashboardYear();
   const { data: kpis } = useDashboardKPIs(year);
   const t = useT();
   return <KPIWidget label={t.open_balance} value={formatCHF(kpis?.open_balance ?? 0)} numericValue={kpis?.open_balance ?? 0} accent={!!kpis?.open_balance} />;
 }
 
 function KPIExpenses() {
-  const year = new Date().getFullYear();
+  const year = useDashboardYear();
   const { data: kpis } = useDashboardKPIs(year);
+  const { data: prev } = useDashboardKPIs(year - 1);
   const t = useT();
-  return <KPIWidget label={t.total_expenses} value={formatCHF(kpis?.total_expenses ?? 0)} numericValue={kpis?.total_expenses ?? 0} />;
+  return (
+    <KPIWidget
+      label={t.total_expenses}
+      value={formatCHF(kpis?.total_expenses ?? 0)}
+      numericValue={kpis?.total_expenses ?? 0}
+      delta={prev ? yoyDelta(kpis?.total_expenses ?? 0, prev.total_expenses) : null}
+    />
+  );
 }
 
 function KPINet() {
-  const year = new Date().getFullYear();
+  const year = useDashboardYear();
   const { data: kpis } = useDashboardKPIs(year);
+  const { data: prev } = useDashboardKPIs(year - 1);
   const t = useT();
-  return <KPIWidget label={t.net_result} value={formatCHF(kpis?.net_result ?? 0)} numericValue={kpis?.net_result ?? 0} />;
+  return (
+    <KPIWidget
+      label={t.net_result}
+      value={formatCHF(kpis?.net_result ?? 0)}
+      numericValue={kpis?.net_result ?? 0}
+      delta={prev ? yoyDelta(kpis?.net_result ?? 0, prev.net_result) : null}
+    />
+  );
 }
 
 // ── Chart widget ──
 
 function ChartRevenue() {
-  const year = new Date().getFullYear();
+  const year = useDashboardYear();
   const { data: monthly } = useMonthlyData(year);
   const chart = useChartTheme();
   const t = useT();
@@ -406,7 +438,7 @@ const COLORS = [
 ];
 
 function RevenueByActivity() {
-  const year = new Date().getFullYear();
+  const year = useDashboardYear();
   const { data: rawRows } = useRevenueByActivity(year);
   const { data: activities } = useActivities();
   const lang = useAppStore((s) => s.language);
@@ -446,7 +478,7 @@ function RevenueByActivity() {
 // ── Revenue by client ──
 
 function RevenueByClient() {
-  const year = new Date().getFullYear();
+  const year = useDashboardYear();
   const { data: rows } = useRevenueByClient(year);
   const t = useT();
 
@@ -584,7 +616,7 @@ function ExpenseBreakdown() {
   }});
   const chart = useChartTheme();
   const t = useT();
-  const year = new Date().getFullYear();
+  const year = useDashboardYear();
 
   const data = useMemo(() => {
     if (!expenses || !categories) return [];
@@ -626,7 +658,7 @@ function ExpenseBreakdown() {
 // ── Phase 18: Monthly comparison ──
 
 function MonthlyComparison() {
-  const year = new Date().getFullYear();
+  const year = useDashboardYear();
   const month = new Date().getMonth();
   const { data: currentYearData } = useMonthlyData(year);
   const { data: lastYearData } = useMonthlyData(year - 1);
@@ -656,7 +688,7 @@ function MonthlyComparison() {
 // ── Phase 18: Profit margin ──
 
 function ProfitMargin() {
-  const year = new Date().getFullYear();
+  const year = useDashboardYear();
   const { data: kpis } = useDashboardKPIs(year);
   const t = useT();
 
@@ -678,7 +710,7 @@ function ProfitMargin() {
 // ── Phase 18: Top client ──
 
 function TopClient() {
-  const year = new Date().getFullYear();
+  const year = useDashboardYear();
   const { data: rows } = useRevenueByClient(year);
   const t = useT();
 
@@ -704,7 +736,7 @@ function TopClient() {
 function AverageInvoiceValue() {
   const { data: invoices } = useInvoices();
   const t = useT();
-  const year = new Date().getFullYear();
+  const year = useDashboardYear();
 
   const avg = useMemo(() => {
     if (!invoices) return 0;
@@ -797,7 +829,7 @@ function ClientActivity() {
 function NewClientsYear() {
   const { data: clients } = useClients();
   const t = useT();
-  const year = new Date().getFullYear();
+  const year = useDashboardYear();
 
   const count = useMemo(() => {
     if (!clients) return 0;
