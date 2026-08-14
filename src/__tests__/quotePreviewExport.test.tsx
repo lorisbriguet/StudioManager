@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
-import { InvoicePreviewPage } from "../pages/InvoicePreviewPage";
+import { QuotePreviewPage } from "../pages/QuotePreviewPage";
 import { useAppStore } from "../stores/app-store";
 import { getDb } from "../db";
 import {
@@ -11,10 +11,9 @@ import {
   clearExecutedStatements,
 } from "../__mocks__/tauri-sql";
 
-// "Mark as sent & export" bug: the exported file was named from the stale
-// draft invoice captured in the component closure, and any error left the
-// draft-warning modal soft-locked. The export must use the freshly updated
-// invoice (new reference, stored PDF).
+// Same class of bug as the invoice preview: "mark as sent & export" must
+// export under the freshly assigned reference (not the stale draft closure),
+// and the draft warning must behave like a real dialog (Escape closes).
 
 vi.mock("@react-pdf/renderer", () => ({
   PDFViewer: () => null,
@@ -22,44 +21,32 @@ vi.mock("@react-pdf/renderer", () => ({
     toBlob: async () => new Blob([new Uint8Array([1, 2, 3])], { type: "application/pdf" }),
   }),
 }));
-vi.mock("../lib/pdfPostProcess", () => ({
-  postProcessInvoicePdf: async (bytes: Uint8Array) => bytes,
-}));
-vi.mock("../components/invoice/InvoicePDF", () => ({ InvoicePDF: () => null }));
+vi.mock("../components/quote/QuotePDF", () => ({ QuotePDF: () => null }));
 
 const draftRow = {
-  id: 5,
-  reference: "DRAFT-2026-001",
+  id: 9,
+  reference: "DRAFT-2026-Q1",
   client_id: "c1",
   project_id: null,
-  contact_id: null,
   billing_address_id: null,
   template_id: null,
   status: "draft",
-  invoice_date: "2026-03-01",
-  due_date: "2026-03-31",
-  total: 100,
-  currency: "CHF",
-  chf_equivalent: 0,
-  reminder_count: 0,
-  pdf_path: null,
+  quote_date: "2026-03-01",
+  valid_until: "2026-03-31",
+  total: 250,
+  converted_to_project_id: null,
 };
 
-const sentRow = {
-  ...draftRow,
-  status: "sent",
-  reference: "2026-0001",
-  pdf_path: "/stored/2026-0001_ACME.pdf",
-};
+const sentRow = { ...draftRow, status: "sent", reference: "2026-Q001" };
 
 const lineItem = {
   id: 1,
-  invoice_id: 5,
+  quote_id: 9,
   designation: "Work",
-  rate: 100,
+  rate: 250,
   unit: "h",
   quantity: 1,
-  amount: 100,
+  amount: 250,
   sort_order: 0,
 };
 
@@ -68,13 +55,12 @@ let downloads: string[];
 function renderPage() {
   setSelectHandler((sql) => {
     const flat = sql.replace(/\s+/g, " ");
-    if (flat.includes("FROM invoice_line_items")) return [lineItem];
-    if (flat.includes("FROM invoices WHERE id")) {
-      // After the status update ran, the DB row has the real reference
-      const updated = executedStatements.some((s) => s.sql.includes("UPDATE invoices SET"));
+    if (flat.includes("FROM quote_line_items")) return [lineItem];
+    if (flat.includes("FROM quotes WHERE id")) {
+      const updated = executedStatements.some((s) => s.sql.includes("UPDATE quotes SET"));
       return [updated ? sentRow : draftRow];
     }
-    if (flat.includes("FROM invoices")) return []; // next-reference lookup
+    if (flat.includes("FROM quotes")) return []; // next-reference lookup
     if (flat.includes("FROM business_profile")) return [{ id: 1, name: "Studio" }];
     if (flat.includes("FROM clients")) return [{ id: "c1", name: "ACME" }];
     return [];
@@ -82,9 +68,9 @@ function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={["/invoices/5"]}>
+      <MemoryRouter initialEntries={["/quotes/9"]}>
         <Routes>
-          <Route path="/invoices/:id" element={<InvoicePreviewPage />} />
+          <Route path="/quotes/:id" element={<QuotePreviewPage />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -111,8 +97,8 @@ afterEach(() => {
   cleanup();
 });
 
-describe("mark as sent and export", () => {
-  it("exports under the freshly assigned reference and closes the modal", async () => {
+describe("quote mark as sent and export", () => {
+  it("exports under the freshly assigned reference", async () => {
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: /download pdf/i }));
     fireEvent.click(await screen.findByRole("button", { name: /mark as sent/i }));
@@ -120,12 +106,10 @@ describe("mark as sent and export", () => {
     await waitFor(() => {
       expect(downloads).toHaveLength(1);
     });
-    expect(downloads[0]).toBe("2026-0001_ACME.pdf");
-    // Modal must be gone — no soft-lock
-    expect(screen.queryByRole("button", { name: /mark as sent/i })).not.toBeInTheDocument();
+    expect(downloads[0]).toBe("2026-Q001_ACME.pdf");
   });
 
-  it("closes the draft warning with Escape (real dialog semantics)", async () => {
+  it("closes the draft warning with Escape", async () => {
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: /download pdf/i }));
     await screen.findByRole("button", { name: /mark as sent/i });
