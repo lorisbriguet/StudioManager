@@ -5,8 +5,6 @@
 //! `function run(argv)`), so nothing is ever interpolated into script source
 //! and script injection is impossible by construction.
 
-use tauri::Manager;
-
 // ── Fixed scripts ───────────────────────────────────────────────────────────
 
 /// JXA: extract text from a PDF via the native PDFKit bridge.
