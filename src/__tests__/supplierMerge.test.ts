@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
 import { suggestSupplierGroups } from "../lib/supplierMerge";
-import { getSupplierCounts, mergeSuppliers } from "../db/queries/expenses";
+import { getSupplierCounts, mergeSuppliers, restoreSupplierNames } from "../db/queries/expenses";
 import { getDb } from "../db";
 import {
   setSelectHandler,
@@ -98,5 +98,18 @@ describe("supplier merge queries", () => {
     expect(upd!.params[0]).toBe("Adobe");
     expect(upd!.params).toContain("Adobe Cloud");
     expect(upd!.params).toContain("Adobe Systems Inc");
+  });
+
+  it("restoreSupplierNames reverts every row in one transaction", async () => {
+    await restoreSupplierNames([
+      { id: 1, supplier: "Adobe Cloud" },
+      { id: 2, supplier: "Adobe Systems Inc" },
+    ]);
+    const updates = executedStatements.filter((s) =>
+      s.sql.includes("UPDATE expenses SET supplier")
+    );
+    expect(updates).toHaveLength(2);
+    expect(updates[0].params).toEqual([1, "Adobe Cloud"]);
+    expect(updates[1].params).toEqual([2, "Adobe Systems Inc"]);
   });
 });

@@ -1,4 +1,4 @@
-import { getDb, validateFields } from "../index";
+import { getDb, validateFields, TransactionBatch } from "../index";
 import { getNextReference } from "./referenceGenerator";
 import type { Expense, ExpenseCategory } from "../../types/expense";
 
@@ -95,6 +95,24 @@ export async function mergeSuppliers(
     [canonical, ...variants]
   );
   return prev;
+}
+
+/**
+ * Undo half of a supplier merge: restore each expense's previous supplier
+ * name in a single transaction, so a crash cannot leave a partial revert.
+ */
+export async function restoreSupplierNames(
+  rows: { id: number; supplier: string }[]
+): Promise<void> {
+  if (rows.length === 0) return;
+  const batch = new TransactionBatch();
+  for (const row of rows) {
+    batch.add(
+      `UPDATE expenses SET supplier = $2, updated_at = datetime('now') WHERE id = $1`,
+      [row.id, row.supplier]
+    );
+  }
+  await batch.commit();
 }
 
 export async function getExpenseById(id: number): Promise<Expense | null> {
