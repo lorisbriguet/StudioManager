@@ -27,7 +27,7 @@ import { useT } from "../i18n/useT";
 import { PageHeader, PageSpinner, Button, Card } from "../components/ui";
 import { useChartTheme } from "../hooks/useChartTheme";
 import { getTagColor } from "../lib/tagColors";
-import { getInvoiceLineItems } from "../db/queries/invoices";
+import { getLineItemsForInvoices } from "../db/queries/invoices";
 import { InvoicePDF } from "../components/invoice/InvoicePDF";
 import { PLPDF } from "../components/finance/PLPDF";
 import { InvoicesListPDF } from "../components/finance/InvoicesListPDF";
@@ -94,12 +94,16 @@ export function FinancesPage() {
         await writeFile(`${basePath}/factures/factures_${year}.pdf`, new Uint8Array(await invListBlob.arrayBuffer()));
       }
 
-      // Individual invoice PDFs
+      // Individual invoice PDFs. Line items are batch-fetched in one query
+      // (was one query per invoice); rendering stays sequential on purpose —
+      // @react-pdf renders are CPU-bound and concurrent renders have wedged
+      // before (see the mark-sent-and-export soft-lock).
+      const lineItemsByInvoice = await getLineItemsForInvoices(yearInvoices.map((i) => i.id));
       for (const inv of yearInvoices) {
         try {
           const client = clients?.find((c) => c.id === inv.client_id);
           if (client && profile) {
-            const lineItems = await getInvoiceLineItems(inv.id);
+            const lineItems = lineItemsByInvoice.get(inv.id) ?? [];
             const doc = createElement(InvoicePDF, { invoice: inv, lineItems, client, profile });
             const blob = await pdf(doc as never).toBlob();
             await writeFile(`${basePath}/factures/justificatifs/${inv.reference}_${client.name}.pdf`, new Uint8Array(await blob.arrayBuffer()));

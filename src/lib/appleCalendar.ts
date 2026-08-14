@@ -123,6 +123,14 @@ export async function syncAllExisting(): Promise<number> {
     logError("Failed to ensure calendar_deadline_id column:", e);
   }
 
+  // Batched lookups: one project-name map and one task->project map, instead
+  // of one query per task and two per subtask.
+  let projectNames = new Map<number, string>();
+  try {
+    const rows = await db.select<{ id: number; name: string }[]>("SELECT id, name FROM projects");
+    projectNames = new Map(rows.map((p) => [p.id, p.name]));
+  } catch (e) { logWarn("Calendar sync: fetch project names:", e); }
+
   // Tasks with due_date but no calendar_event_id
   try {
     const tasks = await db.select<{ id: number; title: string; due_date: string; start_time: string | null; end_time: string | null; project_id: number }[]>(
@@ -132,8 +140,7 @@ export async function syncAllExisting(): Promise<number> {
     for (const t of tasks) {
       try {
         logInfo(`[CalendarSync] Syncing task ${t.id}: ${t.title}`);
-        const pRows = await db.select<{ name: string }[]>("SELECT name FROM projects WHERE id = $1", [t.project_id]);
-        const projectName = pRows[0]?.name ?? "";
+        const projectName = projectNames.get(t.project_id) ?? "";
         const uid = await createCalendarEvent({
           title: `${projectName}: ${t.title}`,
           date: t.due_date,
@@ -157,12 +164,16 @@ export async function syncAllExisting(): Promise<number> {
     const subtasks = await db.select<{ id: number; title: string; due_date: string; start_time: string | null; end_time: string | null; task_id: number }[]>(
       "SELECT id, title, due_date, start_time, end_time, task_id FROM subtasks WHERE due_date IS NOT NULL AND status != 'done' AND (calendar_event_id IS NULL OR calendar_event_id = '')"
     );
+    const taskProjects = subtasks.length > 0
+      ? new Map(
+          (await db.select<{ id: number; project_id: number }[]>("SELECT id, project_id FROM tasks"))
+            .map((r) => [r.id, r.project_id])
+        )
+      : new Map<number, number>();
     for (const s of subtasks) {
       try {
-        const tRows = await db.select<{ project_id: number }[]>("SELECT project_id FROM tasks WHERE id = $1", [s.task_id]);
-        const projectId = tRows[0]?.project_id;
-        const pRows = projectId ? await db.select<{ name: string }[]>("SELECT name FROM projects WHERE id = $1", [projectId]) : [];
-        const projectName = pRows[0]?.name ?? "";
+        const projectId = taskProjects.get(s.task_id);
+        const projectName = projectId != null ? projectNames.get(projectId) ?? "" : "";
         const uid = await createCalendarEvent({
           title: `${projectName}: ${s.title}`,
           date: s.due_date,

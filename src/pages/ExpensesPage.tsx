@@ -764,7 +764,7 @@ export function NewExpenseForm({
       {prefill?.receiptPath && (
         <div className="flex items-center gap-2 text-xs text-success">
           <Paperclip size={12} />
-          <span>Receipt will be attached: {prefill.receiptPath.split("/").pop()}</span>
+          <span>{t.receipt_will_be_attached} {prefill.receiptPath.split("/").pop()}</span>
         </div>
       )}
       <div className="grid grid-cols-2 gap-3">

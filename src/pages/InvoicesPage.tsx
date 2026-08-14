@@ -503,7 +503,7 @@ export function InvoicesPage() {
                         onClick={() => updateTemplate.mutate({ id: tmpl.id, data: { active: tmpl.active ? 0 : 1 } })}
                         className={`text-xs px-2 py-0.5 rounded-full ${
                           tmpl.active
-                            ? "bg-green-100 text-green-700"
+                            ? "bg-[var(--color-success-bg)] text-[var(--color-success-text)]"
                             : "bg-[var(--color-input-bg)] text-[var(--color-muted)]"
                         }`}
                       >
