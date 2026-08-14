@@ -304,9 +304,7 @@ StudioManager is designed for Swiss freelancers:
 - [ ] Stable per-activity chart colors
 
 ### Under the hood
-- [ ] Smoke-test the Rust-native macOS integrations (post-osascript migration): task due date → Calendar event appears/deletes, PDF receipt parsing, HEIC receipt conversion, Mail sharing
-- [ ] Native macOS Vision OCR for receipt scanning (better accuracy, no downloads)
-- [ ] Vite 8 / Rolldown build pipeline
+- [ ] Smoke-test the Rust-native macOS integrations (post-osascript migration): task due date → Calendar event appears/deletes, PDF receipt parsing, HEIC receipt OCR (now Apple Vision), Mail sharing
 
 Full backlog and bug tracker: [IDEAS.md](IDEAS.md)
 
