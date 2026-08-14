@@ -62,11 +62,11 @@
 - [ ] FullCalendar 6 → 7 — new temporal-polyfill peer dep, package restructure, custom CSS breaks; upgrade only when v7 features are wanted
 - [ ] TanStack Table 8 → 9 — real API migration (`useTable`, opt-in features, readonly data); benefit is bundle size, no current pain
 
-## Bug fixes — reported (2026-08-12)
+## Bug fixes — reported (2026-08-12) — Done (2026-08-14)
 
-- [ ] Charges sociales (CS) not rendered in the Finances data visualization
-- [ ] Editing paid date: Enter key doesn't trigger save — only clicking the save button works. Do an app-wide sweep: every inline edit / small form should submit on Enter
-- [ ] Invoice export from preview with "mark as sent and export": exported file still has a draft name, and the preview window soft-locks afterwards
+- [x] Charges sociales (CS) not rendered in the Finances data visualization — social charges now returned as per-category rows (`social_charge_categories`) and included in the expense breakdown pie
+- [x] Editing paid date: Enter key doesn't trigger save. App-wide sweep done: paid-date modal, workload column editor (name + formula), client detail fields and address editor all submit on Enter
+- [x] Invoice export from preview with "mark as sent and export": export now re-fetches the updated invoice (fresh reference + stored PDF) instead of the stale closure copy; mutation errors close the modal with a toast. Stored PDFs also render with template/billing address/project/reminder props so they match the preview
 
 ## UX/UI improvements (2026-08-12)
 

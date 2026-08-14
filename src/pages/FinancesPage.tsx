@@ -150,9 +150,11 @@ export function FinancesPage() {
     expenses: m.expenses,
   })) ?? [];
 
-  const pieData = pl?.operating_expenses
-    .filter((c) => c.total > 0)
-    .map((c) => ({ name: c.category_code, value: c.total, label: c.name_fr })) ?? [];
+  const pieData = pl
+    ? [...pl.operating_expenses, ...pl.social_charge_categories]
+        .filter((c) => c.total > 0)
+        .map((c) => ({ name: c.category_code, value: c.total, label: c.name_fr }))
+    : [];
 
   return (
     <div>

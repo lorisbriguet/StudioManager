@@ -618,18 +618,28 @@ function AddressCard({
     setEditing(false);
   };
 
+  const cancel = () => {
+    setForm({ label: a.label, billing_name: a.billing_name, address_line1: a.address_line1, address_line2: a.address_line2, postal_city: a.postal_city });
+    setEditing(false);
+  };
+
+  const fieldKeys = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") save();
+    if (e.key === "Escape") cancel();
+  };
+
   if (editing) {
     return (
       <div className="rounded-xl bg-[var(--color-surface)] p-3 space-y-2">
         <div className="grid grid-cols-2 gap-2">
-          <MiniField label={t.label} value={form.label} onChange={(v) => setForm({ ...form, label: v })} />
-          <MiniField label={t.billing_name} value={form.billing_name} onChange={(v) => setForm({ ...form, billing_name: v })} />
-          <MiniField label={t.address_line_1} value={form.address_line1} onChange={(v) => setForm({ ...form, address_line1: v })} />
-          <MiniField label={t.address_line_2} value={form.address_line2} onChange={(v) => setForm({ ...form, address_line2: v })} />
-          <MiniField label={t.postal_city} value={form.postal_city} onChange={(v) => setForm({ ...form, postal_city: v })} />
+          <MiniField label={t.label} value={form.label} onChange={(v) => setForm({ ...form, label: v })} onKeyDown={fieldKeys} />
+          <MiniField label={t.billing_name} value={form.billing_name} onChange={(v) => setForm({ ...form, billing_name: v })} onKeyDown={fieldKeys} />
+          <MiniField label={t.address_line_1} value={form.address_line1} onChange={(v) => setForm({ ...form, address_line1: v })} onKeyDown={fieldKeys} />
+          <MiniField label={t.address_line_2} value={form.address_line2} onChange={(v) => setForm({ ...form, address_line2: v })} onKeyDown={fieldKeys} />
+          <MiniField label={t.postal_city} value={form.postal_city} onChange={(v) => setForm({ ...form, postal_city: v })} onKeyDown={fieldKeys} />
         </div>
         <div className="flex gap-2 justify-end">
-          <button onClick={() => { setForm({ label: a.label, billing_name: a.billing_name, address_line1: a.address_line1, address_line2: a.address_line2, postal_city: a.postal_city }); setEditing(false); }} className="text-xs text-muted hover:text-[var(--color-text-secondary)]">{t.cancel}</button>
+          <button onClick={cancel} className="text-xs text-muted hover:text-[var(--color-text-secondary)]">{t.cancel}</button>
           <button onClick={save} className="text-xs text-accent hover:text-accent-hover">{t.save}</button>
         </div>
       </div>
@@ -868,6 +878,11 @@ function Field({
     if (!focusedRef.current) setLocal(value);
   }, [value]);
 
+  const commit = () => {
+    focusedRef.current = false;
+    if (onBlur && local !== value) onBlur(local);
+  };
+
   return (
     <div>
       <label className="block text-xs font-medium text-muted mb-1">{label}</label>
@@ -875,10 +890,8 @@ function Field({
         value={local}
         onFocus={() => { focusedRef.current = true; }}
         onChange={(e) => setLocal(e.target.value)}
-        onBlur={() => {
-          focusedRef.current = false;
-          if (onBlur && local !== value) onBlur(local);
-        }}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
         className="py-2"
       />
     </div>

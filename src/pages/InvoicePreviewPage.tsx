@@ -5,6 +5,9 @@ import { Button, PageSpinner } from "../components/ui";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useInvoice, useInvoiceLineItems, useUpdateInvoice } from "../db/hooks/useInvoices";
+import { getInvoice } from "../db/queries/invoices";
+import { pdfFileName } from "../lib/pdfFilename";
+import type { Invoice } from "../types/invoice";
 import { useClient, useClientContacts, useClientAddresses } from "../db/hooks/useClients";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { useProject } from "../db/hooks/useProjects";
@@ -106,48 +109,57 @@ export function InvoicePreviewPage() {
   if (!invoice || !lineItems || !client || !profile)
     return <div className="text-muted text-sm">{t.invoice_not_found}</div>;
 
-  const billingAddress = invoice.billing_address_id
-    ? addresses?.find((a) => a.id === invoice.billing_address_id) ?? null
-    : null;
-
-  const pdfDocument = (
+  const buildPdfDoc = (inv: Invoice) => (
     <InvoicePDF
-      invoice={invoice}
+      invoice={inv}
       lineItems={lineItems}
       client={client}
       profile={profile}
       contactName={contactName}
-      billingAddress={billingAddress}
+      billingAddress={inv.billing_address_id
+        ? addresses?.find((a) => a.id === inv.billing_address_id) ?? null
+        : null}
       projectName={project?.name}
-      reminderCount={invoice.reminder_count}
+      reminderCount={inv.reminder_count}
       template={invoiceTemplate ?? undefined}
     />
   );
 
-  const doDownload = async () => {
+  const pdfDocument = buildPdfDoc(invoice);
+
+  const triggerDownload = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // `inv` defaults to the invoice from the query cache; callers that just
+  // mutated the invoice must pass a freshly fetched row, because the closure
+  // copy is stale until the refetch lands (the draft-name export bug).
+  const doDownload = async (inv: Invoice = invoice) => {
     if (exporting) return;
     setExporting(true);
     try {
-      if (storedPdfUrl) {
-        const a = document.createElement("a");
-        a.href = storedPdfUrl;
-        a.download = `${invoice.reference}_${client.name}.pdf`;
-        a.click();
-        toast.success(t.pdf_downloaded);
-        return;
+      const filename = pdfFileName(inv.reference, client.name);
+      if (inv.pdf_path) {
+        try {
+          const bytes = await readFile(inv.pdf_path);
+          triggerDownload(new Blob([bytes], { type: "application/pdf" }), filename);
+          toast.success(t.pdf_downloaded);
+          return;
+        } catch {
+          // stored file unreadable — fall through to client-side render
+        }
       }
-      const blob = await pdf(pdfDocument).toBlob();
+      const blob = await pdf(buildPdfDoc(inv)).toBlob();
       const rawBytes = new Uint8Array(await blob.arrayBuffer());
       const processed = await postProcessInvoicePdf(rawBytes, {
-        isCancelled: invoice.status === "cancelled",
+        isCancelled: inv.status === "cancelled",
       });
-      const processedBlob = new Blob([new Uint8Array(processed)], { type: "application/pdf" });
-      const url = URL.createObjectURL(processedBlob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${invoice.reference}_${client.name}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      triggerDownload(new Blob([new Uint8Array(processed)], { type: "application/pdf" }), filename);
       toast.success(t.pdf_downloaded);
     } catch {
       toast.error(t.failed_to_generate_pdf);
@@ -167,7 +179,17 @@ export function InvoicePreviewPage() {
   const handleMarkSentAndExport = () => {
     updateInvoice.mutate(
       { id: invoiceId, data: { status: "sent" } },
-      { onSuccess: () => { setShowDraftWarning(false); doDownload(); } }
+      {
+        onSuccess: async () => {
+          setShowDraftWarning(false);
+          const fresh = await getInvoice(invoiceId);
+          await doDownload(fresh ?? invoice);
+        },
+        onError: (e) => {
+          setShowDraftWarning(false);
+          toast.error(String(e));
+        },
+      }
     );
   };
 

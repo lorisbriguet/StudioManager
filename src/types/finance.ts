@@ -5,6 +5,7 @@ export interface PLData {
   operating_expenses: CategoryTotal[];
   total_operating: number;
   social_charges: number;
+  social_charge_categories: CategoryTotal[];
   operating_net: number;
   net_result: number;
 }

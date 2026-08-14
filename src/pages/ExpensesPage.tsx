@@ -119,6 +119,14 @@ export function ExpensesPage() {
     bulk.clearSelection();
   }, [bulk, deleteExpense, t]);
 
+  const saveEditDate = () => {
+    if (!editDateExpense) return;
+    updateExpense.mutate(
+      { id: editDateExpense.id, data: { paid_date: editDateValue || null } },
+      { onSuccess: () => { toast.success(editDateValue ? t.paid_date_updated : t.marked_as_unpaid); setEditDateExpense(null); } }
+    );
+  };
+
   const handleDroppedFile = useCallback(async (filePath: string) => {
     const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
     if (!["pdf", "png", "jpg", "jpeg", "heic"].includes(ext)) {
@@ -472,13 +480,7 @@ export function ExpensesPage() {
         footer={
           <div className="flex gap-2 justify-end">
             <Button variant="secondary" onClick={() => setEditDateExpense(null)}>{t.cancel}</Button>
-            <Button onClick={() => {
-              if (!editDateExpense) return;
-              updateExpense.mutate(
-                { id: editDateExpense.id, data: { paid_date: editDateValue || null } },
-                { onSuccess: () => { toast.success(editDateValue ? t.paid_date_updated : t.marked_as_unpaid); setEditDateExpense(null); } }
-              );
-            }}>{t.save}</Button>
+            <Button onClick={saveEditDate}>{t.save}</Button>
           </div>
         }
       >
@@ -487,6 +489,7 @@ export function ExpensesPage() {
           fullWidth
           value={editDateValue}
           onChange={(e) => setEditDateValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") saveEditDate(); }}
           autoFocus
         />
       </Modal>

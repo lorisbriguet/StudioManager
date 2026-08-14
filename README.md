@@ -302,7 +302,6 @@ StudioManager is designed for Swiss freelancers:
 - [ ] Supplier merge tool (dedupe name variants)
 - [ ] One-click "mark paid today" and undo for deleted finance entries
 - [ ] Stable per-activity chart colors
-- [ ] App-wide Enter-to-save on inline edits
 
 ### Under the hood
 - [ ] Native macOS Vision OCR for receipt scanning (better accuracy, no downloads)
