@@ -1,4 +1,4 @@
-import { Command } from "@tauri-apps/plugin-shell";
+import { invoke } from "@tauri-apps/api/core";
 import { getDb } from "../db/index";
 import { useAppStore } from "../stores/app-store";
 import { logError, logInfo, logWarn } from "../lib/log";
@@ -8,71 +8,22 @@ function getCalendarName(): string {
   return useAppStore.getState().calendarName || "StudioManager";
 }
 
-async function runAppleScript(script: string): Promise<string> {
-  const cmd = Command.create("osascript", ["-e", script]);
-  const result = await Promise.race([
-    cmd.execute(),
+// Calendar automation runs in Rust (`src-tauri/src/apple.rs`): fixed
+// AppleScript sources with all user data passed as argv, so no script
+// injection surface and no shell:allow-execute capability. Date/time
+// validation happens on the Rust side.
+async function invokeCalendar<T>(cmd: string, args: Record<string, unknown> = {}): Promise<T> {
+  return Promise.race([
+    invoke<T>(cmd, args),
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("osascript timed out after 10s")), 10000)
+      setTimeout(() => reject(new Error("Calendar operation timed out after 10s")), 10000)
     ),
   ]);
-  if (result.code !== 0) {
-    throw new Error(result.stderr || `osascript failed with code ${result.code}`);
-  }
-  return result.stdout.trim();
 }
 
 /** List writable calendars from Apple Calendar */
 export async function listWritableCalendars(): Promise<string[]> {
-  const raw = await runAppleScript(`
-    tell application "Calendar"
-      set output to ""
-      repeat with c in every calendar
-        if writable of c then
-          set output to output & name of c & "||"
-        end if
-      end repeat
-      return output
-    end tell
-  `);
-  if (!raw) return [];
-  return raw.split("||").filter((n) => n.length > 0);
-}
-
-function escapeAS(str: string): string {
-  return str
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\r\n/g, "\\n")
-    .replace(/\r/g, "\\n")
-    .replace(/\n/g, "\\n")
-    .replace(/\t/g, "\\t")
-    // Strip characters that could break AppleScript string boundaries
-    // eslint-disable-next-line no-control-regex -- intentional: strip control chars for AppleScript safety
-    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, ""); // control chars except \t \n \r
-}
-
-/** Validate date string is yyyy-MM-dd format and return parsed parts, or throw */
-function parseDateParts(date: string): { year: number; month: number; day: number } {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    throw new Error(`Invalid date format: ${date}`);
-  }
-  return {
-    year: parseInt(date.slice(0, 4)),
-    month: parseInt(date.slice(5, 7)),
-    day: parseInt(date.slice(8, 10)),
-  };
-}
-
-/** Validate time string is HH:mm format and return parsed parts, or throw */
-function parseTimeParts(time: string): { hours: number; minutes: number } {
-  if (!/^\d{2}:\d{2}$/.test(time)) {
-    throw new Error(`Invalid time format: ${time}`);
-  }
-  return {
-    hours: parseInt(time.split(":")[0]),
-    minutes: parseInt(time.split(":")[1]),
-  };
+  return invokeCalendar<string[]>("calendar_list_writable");
 }
 
 interface CalendarEvent {
@@ -85,59 +36,14 @@ interface CalendarEvent {
 
 /** Create an event in Apple Calendar and return its uid */
 export async function createCalendarEvent(event: CalendarEvent): Promise<string> {
-  const calName = escapeAS(getCalendarName());
-  const title = escapeAS(event.title);
-  const notes = escapeAS(event.notes ?? "");
-  const d = parseDateParts(event.date);
-
-  let script: string;
-  if (event.startTime) {
-    const st = parseTimeParts(event.startTime);
-    const et = parseTimeParts(event.endTime ?? event.startTime);
-    // Compute duration in seconds; minimum 1 hour if start == end
-    let durationSecs = (et.hours - st.hours) * 3600 + (et.minutes - st.minutes) * 60;
-    if (durationSecs <= 0) durationSecs = 3600;
-    script = `
-      tell application "Calendar"
-        tell calendar "${calName}"
-          set startDate to current date
-          set hours of startDate to 0
-          set minutes of startDate to 0
-          set seconds of startDate to 0
-          -- Pin day to 1 before year/month: prevents month-overflow (e.g. Jan 31 + set month 2 = March) and the Feb 29 non-leap-year edge
-          set day of startDate to 1
-          set year of startDate to ${d.year}
-          set month of startDate to ${d.month}
-          set day of startDate to ${d.day}
-          set hours of startDate to ${st.hours}
-          set minutes of startDate to ${st.minutes}
-          set endDate to startDate + ${durationSecs}
-          set newEvent to make new event with properties {summary:"${title}", start date:startDate, end date:endDate, description:"${notes}"}
-          return uid of newEvent
-        end tell
-      end tell
-    `;
-  } else {
-    script = `
-      tell application "Calendar"
-        tell calendar "${calName}"
-          set eventDate to current date
-          -- Pin day to 1 before year/month: prevents month-overflow (e.g. Jan 31 + set month 2 = March) and the Feb 29 non-leap-year edge
-          set day of eventDate to 1
-          set year of eventDate to ${d.year}
-          set month of eventDate to ${d.month}
-          set day of eventDate to ${d.day}
-          set hours of eventDate to 0
-          set minutes of eventDate to 0
-          set seconds of eventDate to 0
-          set newEvent to make new event with properties {summary:"${title}", start date:eventDate, end date:eventDate, allday event:true, description:"${notes}"}
-          return uid of newEvent
-        end tell
-      end tell
-    `;
-  }
-
-  return await runAppleScript(script);
+  return invokeCalendar<string>("calendar_create_event", {
+    calendar: getCalendarName(),
+    title: event.title,
+    notes: event.notes ?? "",
+    date: event.date,
+    startTime: event.startTime ?? null,
+    endTime: event.endTime ?? null,
+  });
 }
 
 /** Update an existing calendar event by uid — deletes old and creates new */
@@ -148,24 +54,15 @@ export async function updateCalendarEvent(uid: string, event: CalendarEvent): Pr
 
 /** Delete a calendar event by uid */
 export async function deleteCalendarEvent(uid: string): Promise<void> {
-  const calName = escapeAS(getCalendarName());
-  const safeUid = escapeAS(uid);
-  await runAppleScript(`
-    tell application "Calendar"
-      tell calendar "${calName}"
-        set theEvents to (every event whose uid is "${safeUid}")
-        repeat with e in theEvents
-          delete e
-        end repeat
-      end tell
-    end tell
-  `);
+  await invokeCalendar<void>("calendar_delete_event", {
+    calendar: getCalendarName(),
+    uid,
+  });
 }
 
 /** Delete all StudioManager-tracked events from the calendar and reset stored IDs */
 export async function purgeAllCalendarEvents(): Promise<void> {
   const db = await getDb();
-  const calName = escapeAS(getCalendarName());
 
   // Collect all tracked UIDs from DB
   const uids: string[] = [];
@@ -191,17 +88,7 @@ export async function purgeAllCalendarEvents(): Promise<void> {
   // Delete each tracked event by UID
   for (const uid of uids) {
     try {
-      const safeUid = escapeAS(uid);
-      await runAppleScript(`
-        tell application "Calendar"
-          tell calendar "${calName}"
-            set theEvents to (every event whose uid is "${safeUid}")
-            repeat with e in theEvents
-              delete e
-            end repeat
-          end tell
-        end tell
-      `);
+      await deleteCalendarEvent(uid);
     } catch (e) { logWarn("Calendar sync: delete event:", e); }
   }
 

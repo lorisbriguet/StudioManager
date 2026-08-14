@@ -1,3 +1,5 @@
+mod apple;
+
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
 use serde_json::Value as JsonValue;
@@ -407,6 +409,11 @@ pub fn run() {
             get_active_db,
             share_pdf_via_mail,
             open_in_finder,
+            apple::extract_pdf_text,
+            apple::convert_heic_to_jpeg,
+            apple::calendar_list_writable,
+            apple::calendar_create_event,
+            apple::calendar_delete_event,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

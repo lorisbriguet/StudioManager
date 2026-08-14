@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default permissions. fs scope is deliberately limited to APPDATA + Documents + Downloads + Desktop + ~/Library/CloudStorage (cloud drives such as Synology Drive, where the user's working data and backup folders live); dialog/drag-drop picks extend it per-session. The osascript shell entries intentionally accept arbitrary scripts: they power Apple Mail sharing, Apple Calendar sync and PDF/HEIC text extraction (see src/lib/pdfExtract.ts, appleCalendar.ts).",
+  "description": "Default permissions. fs scope is deliberately limited to APPDATA + Documents + Downloads + Desktop + ~/Library/CloudStorage (cloud drives such as Synology Drive, where the user's working data and backup folders live); dialog/drag-drop picks extend it per-session. The webview cannot execute shell commands: Apple Mail sharing, Calendar sync and PDF/HEIC extraction run as dedicated Rust commands with fixed scripts (src-tauri/src/apple.rs); shell:allow-open remains for opening URLs in the browser.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -44,21 +44,6 @@
     "updater:default",
     "process:default",
     "shell:default",
-    "shell:allow-open",
-    {
-      "identifier": "shell:allow-execute",
-      "allow": [
-        {
-          "name": "osascript",
-          "cmd": "osascript",
-          "args": ["-e", { "validator": "[\\s\\S]+" }]
-        },
-        {
-          "name": "osascript-jxa",
-          "cmd": "osascript",
-          "args": ["-l", "JavaScript", "-e", { "validator": "[\\s\\S]+" }]
-        }
-      ]
-    }
+    "shell:allow-open"
   ]
 }
