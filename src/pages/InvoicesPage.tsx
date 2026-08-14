@@ -374,6 +374,29 @@ export function InvoicesPage() {
     );
   };
 
+  // Row-level one-click "mark paid today" with undo, matching the status
+  // dropdown and bulk actions. No undo when coming from draft: reverting to
+  // draft is forbidden (the real reference is already assigned).
+  const markPaidToday = (inv: Invoice & { client_name: string }) => {
+    const prevStatus = inv.status;
+    const prevPaidDate = inv.paid_date;
+    updateInvoice.mutate(
+      { id: inv.id, data: { status: "paid", paid_date: todayLocalISO() } },
+      {
+        onSuccess: () => {
+          if (prevStatus !== "draft") {
+            undoable(t.status_updated, () =>
+              updateInvoice.mutateAsync({
+                id: inv.id,
+                data: { status: prevStatus, paid_date: prevPaidDate },
+              })
+            );
+          }
+        },
+      }
+    );
+  };
+
   const handleGenerateReminder = (inv: Invoice & { client_name: string }) => {
     const newCount = (inv.reminder_count ?? 0) + 1;
     const today = todayLocalISO();
@@ -675,7 +698,7 @@ export function InvoicesPage() {
             { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/invoices/${ctxMenu.item.id}/edit`, ctxMenu.item.reference.startsWith("DRAFT") ? t.draft : ctxMenu.item.reference) },
             { label: "", divider: true, onClick: () => {} },
             ...(ctxMenu.item.status === "draft" ? [{ label: t.mark_sent, icon: <Send size={14} />, onClick: () => updateInvoice.mutate({ id: ctxMenu.item.id, data: { status: "sent" } }) }] : []),
-            ...(ctxMenu.item.status !== "paid" && ctxMenu.item.status !== "cancelled" ? [{ label: t.mark_paid, icon: <CheckCircle size={14} />, onClick: () => updateInvoice.mutate({ id: ctxMenu.item.id, data: { status: "paid", paid_date: todayLocalISO() } }) }] : []),
+            ...(ctxMenu.item.status !== "paid" && ctxMenu.item.status !== "cancelled" ? [{ label: t.mark_paid, icon: <CheckCircle size={14} />, onClick: () => markPaidToday(ctxMenu.item) }] : []),
             ...(ctxMenu.item.status !== "draft" && ctxMenu.item.status !== "cancelled" ? [{ label: t.make_recurring, icon: <Repeat size={14} />, onClick: () => openMakeRecurring(ctxMenu.item) }] : []),
             ...(ctxMenu.item.status === "overdue" ? [{ label: t.generate_reminder, icon: <AlertTriangle size={14} />, onClick: () => handleGenerateReminder(ctxMenu.item) }] : []),
             ...(isDraftReference(ctxMenu.item.reference) ? [
