@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { open as openExternalUrl } from "@tauri-apps/plugin-shell";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { useWikiArticlesByProject, useWikiArticles, useUpdateWikiArticle } from "../db/hooks/useWiki";
@@ -447,7 +448,7 @@ function ProjectResources({ projectId }: { projectId: number }) {
             onClick={() => {
               let u = r.url;
               if (u && !u.startsWith("http://") && !u.startsWith("https://")) u = "https://" + u;
-              import("@tauri-apps/plugin-shell").then((m) => m.open(u));
+              openExternalUrl(u);
             }}
             className="truncate max-w-[300px]"
           >
