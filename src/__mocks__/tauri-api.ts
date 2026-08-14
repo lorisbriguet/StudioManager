@@ -25,6 +25,9 @@ export async function open(): Promise<null> {
 export async function save(): Promise<null> {
   return null;
 }
+export async function ask(): Promise<boolean> {
+  return false;
+}
 export async function readFile(): Promise<Uint8Array> {
   return new Uint8Array();
 }
@@ -39,7 +42,10 @@ export async function check(): Promise<null> {
 }
 export async function relaunch(): Promise<void> {}
 export function getCurrentWebview() {
-  return { listen: () => () => {} };
+  return {
+    listen: () => () => {},
+    onDragDropEvent: async () => () => {},
+  };
 }
 export class Command {
   static create() {

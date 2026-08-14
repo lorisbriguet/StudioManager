@@ -4,8 +4,10 @@ import { writeFile, mkdir, exists } from "@tauri-apps/plugin-fs";
 import { appDataDir } from "@tauri-apps/api/path";
 import { InvoicePDF } from "../components/invoice/InvoicePDF";
 import { getInvoice, getInvoiceLineItems, updateInvoice } from "../db/queries/invoices";
-import { getClient, getClientContact } from "../db/queries/clients";
+import { getClient, getClientContact, getClientAddresses } from "../db/queries/clients";
 import { getBusinessProfile } from "../db/queries/business-profile";
+import { getInvoiceTemplate } from "../db/queries/invoiceTemplates";
+import { getProject } from "../db/queries/projects";
 import { logError } from "./log";
 import { postProcessInvoicePdf } from "./pdfPostProcess";
 
@@ -49,12 +51,28 @@ export async function generateAndStoreInvoicePdf(
       }
     }
 
+    // Render with the same props as the live preview so the stored PDF
+    // (shown in the preview iframe and used for exports) is identical.
+    const template = invoice.template_id
+      ? await getInvoiceTemplate(invoice.template_id)
+      : null;
+    const billingAddress = invoice.billing_address_id
+      ? (await getClientAddresses(invoice.client_id)).find(
+          (a) => a.id === invoice.billing_address_id
+        ) ?? null
+      : null;
+    const project = invoice.project_id ? await getProject(invoice.project_id) : null;
+
     const doc = createElement(InvoicePDF, {
       invoice,
       lineItems,
       client,
       profile,
       contactName,
+      billingAddress,
+      projectName: project?.name,
+      reminderCount: invoice.reminder_count,
+      template: template ?? undefined,
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const blob = await pdf(doc as any).toBlob();

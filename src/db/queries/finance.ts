@@ -36,16 +36,19 @@ export async function getPLData(year: number): Promise<PLData> {
     [yearStr]
   );
 
-  const [socialRow] = await db.select<{ total: number }[]>(
-    `SELECT COALESCE(SUM(e.amount), 0) as total
+  // Per-category rows (same shape as operating) so the expense breakdown
+  // chart can render social charges; the scalar total feeds the P&L lines.
+  const socialRows = await db.select<CategoryTotal[]>(
+    `SELECT e.category_code, ec.name_fr, ec.name_en, COALESCE(SUM(e.amount), 0) as total
      FROM expenses e
      JOIN expense_categories ec ON e.category_code = ec.code
-     WHERE ec.pl_section = 'social_charges' AND strftime('%Y', e.invoice_date) = $1`,
+     WHERE ec.pl_section = 'social_charges' AND strftime('%Y', e.invoice_date) = $1
+     GROUP BY e.category_code`,
     [yearStr]
   );
 
   const totalOperating = operatingRows.reduce((sum, r) => sum + r.total, 0);
-  const socialCharges = socialRow?.total ?? 0;
+  const socialCharges = socialRows.reduce((sum, r) => sum + r.total, 0);
 
   return {
     revenue,
@@ -54,6 +57,7 @@ export async function getPLData(year: number): Promise<PLData> {
     operating_expenses: operatingRows,
     total_operating: totalOperating,
     social_charges: socialCharges,
+    social_charge_categories: socialRows,
     operating_net: revenue - totalOperating,
     net_result: revenue - totalOperating - socialCharges,
   };

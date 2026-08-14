@@ -152,6 +152,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
               className="w-full border border-[var(--color-border-divider)] rounded-md px-3 py-2 text-sm"
               autoFocus
             />
@@ -238,6 +239,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
               <input
                 value={formula}
                 onChange={(e) => handleFormulaChange(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
                 placeholder="e.g. og_scope ? hours : 0"
                 className={`w-full border rounded-md px-3 py-2 text-sm font-mono ${formulaError ? "border-[var(--color-danger-text)]" : "border-[var(--color-border-divider)]"}`}
               />
