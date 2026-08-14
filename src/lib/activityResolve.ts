@@ -14,12 +14,14 @@ const norm = (s: string) => s.trim().toLowerCase();
  * Resolution per row: valid activity_id -> name match (FR or EN,
  * case-insensitive, trimmed) -> raw text as its own row. Empty text is the
  * "N/A" bucket. Labels follow the requested UI language.
+ * `key` is stable across language and ranking changes — hash it for chart
+ * colors so an activity keeps its color when totals shift.
  */
 export function resolveActivityRevenue(
   rows: ActivityRevenueRow[],
   activities: Activity[],
   lang: "FR" | "EN"
-): { label: string; total: number }[] {
+): { key: string; label: string; total: number }[] {
   const byId = new Map(activities.map((a) => [a.id, a]));
   const byName = new Map<string, Activity>();
   for (const a of activities) {
@@ -27,7 +29,7 @@ export function resolveActivityRevenue(
     byName.set(norm(a.name_en), a);
   }
 
-  const groups = new Map<string, { label: string; total: number }>();
+  const groups = new Map<string, { key: string; label: string; total: number }>();
   for (const row of rows) {
     // A dangling activity_id (deleted activity) falls back to text matching.
     const act =
@@ -41,7 +43,7 @@ export function resolveActivityRevenue(
       : row.activity.trim() || "N/A";
     const g = groups.get(key);
     if (g) g.total += row.total;
-    else groups.set(key, { label, total: row.total });
+    else groups.set(key, { key, label, total: row.total });
   }
   return [...groups.values()].sort((a, b) => b.total - a.total);
 }
