@@ -17,7 +17,10 @@ tauri-build = { version = "2", features = [] }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 log = "0.4"
-rusqlite = { version = "0.31", features = ["bundled"] }
+# 0.32 is the newest rusqlite whose libsqlite3-sys (0.30) still unifies with
+# tauri-plugin-sql's sqlx-sqlite; 0.33+ needs libsqlite3-sys >0.30 and the
+# `links = "sqlite3"` constraint forbids two copies in one binary.
+rusqlite = { version = "0.32", features = ["bundled"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
