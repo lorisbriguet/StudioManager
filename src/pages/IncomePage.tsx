@@ -19,6 +19,7 @@ import {
 import { getNextIncomeReference } from "../db/queries/income";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
 import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
+import { DetectedBadge } from "../components/DetectedBadge";
 import { BulkActionBar } from "../components/BulkActionBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useT } from "../i18n/useT";
@@ -514,7 +515,20 @@ const incomeSchema: v.FormSchema<IncomeFormField> = {
   date: [v.required, v.dateValid],
 };
 
-function NewIncomeForm({
+/** Fields the receipt parser can prefill — tracked for "from receipt" badges. */
+type DetectableIncomeField = "source" | "date" | "amount";
+
+function detectedIncomeFields(
+  prefill: { amount?: number; date?: string; source?: string } | null | undefined
+): Set<DetectableIncomeField> {
+  const s = new Set<DetectableIncomeField>();
+  if (prefill?.source) s.add("source");
+  if (prefill?.date) s.add("date");
+  if (prefill?.amount) s.add("amount");
+  return s;
+}
+
+export function NewIncomeForm({
   droppedReceiptPath,
   prefill,
   onSave,
@@ -543,6 +557,32 @@ function NewIncomeForm({
     notes: "",
   });
   const [errors, setErrors] = useState<Partial<Record<IncomeFormField, string>>>({});
+  // Which fields still hold an untouched OCR-detected value
+  const [detected, setDetected] = useState<Set<DetectableIncomeField>>(() =>
+    detectedIncomeFields(prefill)
+  );
+
+  const undetect = (field: DetectableIncomeField) =>
+    setDetected((prev) => {
+      if (!prev.has(field)) return prev;
+      const next = new Set(prev);
+      next.delete(field);
+      return next;
+    });
+
+  /** Badge + clear for a detected field; `reset` restores the manual default. */
+  const detectedBadge = (field: DetectableIncomeField, reset: () => void) =>
+    detected.has(field) ? (
+      <DetectedBadge
+        onClear={() => {
+          reset();
+          undetect(field);
+        }}
+      />
+    ) : undefined;
+
+  const detectedClass = (field: DetectableIncomeField) =>
+    detected.has(field) ? "!border-[var(--color-accent)]" : "";
 
   const setFieldError = (field: IncomeFormField, msg: string | null) =>
     setErrors((e) => {
@@ -579,6 +619,7 @@ function NewIncomeForm({
         if (prefill.amount != null) delete next.amount;
         return next;
       });
+      setDetected(detectedIncomeFields(prefill));
     }
   }, [prefill]);
 
@@ -591,14 +632,21 @@ function NewIncomeForm({
         </div>
       )}
       <div className="grid grid-cols-2 gap-3">
-        <FormField label={t.source} required error={errors.source}>
+        <FormField
+          label={t.source}
+          required
+          error={errors.source}
+          badge={detectedBadge("source", () => setForm((f) => ({ ...f, source: "" })))}
+        >
           <Input
             value={form.source}
             onChange={(e) => {
               setForm({ ...form, source: e.target.value });
               clearError("source");
+              undetect("source");
             }}
             onBlur={() => validateOnBlur("source")}
+            className={detectedClass("source")}
           />
         </FormField>
         <FormField label={t.category}>
@@ -618,18 +666,32 @@ function NewIncomeForm({
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
         </FormField>
-        <FormField label={t.date} required error={errors.date}>
+        <FormField
+          label={t.date}
+          required
+          error={errors.date}
+          badge={detectedBadge("date", () =>
+            setForm((f) => ({ ...f, date: format(new Date(), "yyyy-MM-dd") }))
+          )}
+        >
           <Input
             type="date"
             value={form.date}
             onChange={(e) => {
               setForm({ ...form, date: e.target.value });
               clearError("date");
+              undetect("date");
             }}
             onBlur={() => validateOnBlur("date")}
+            className={detectedClass("date")}
           />
         </FormField>
-        <FormField label={t.amount} required error={errors.amount}>
+        <FormField
+          label={t.amount}
+          required
+          error={errors.amount}
+          badge={detectedBadge("amount", () => setForm((f) => ({ ...f, amount: 0 })))}
+        >
           <Input
             type="number"
             step="0.01"
@@ -637,8 +699,10 @@ function NewIncomeForm({
             onChange={(e) => {
               setForm({ ...form, amount: Number(e.target.value) });
               clearError("amount");
+              undetect("amount");
             }}
             onBlur={() => validateOnBlur("amount")}
+            className={detectedClass("amount")}
           />
         </FormField>
       </div>

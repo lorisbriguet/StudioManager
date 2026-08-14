@@ -25,6 +25,7 @@ import {
   useDuplicateCheck,
 } from "../db/hooks/useExpenses";
 import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
+import { DetectedBadge } from "../components/DetectedBadge";
 import { BulkActionBar } from "../components/BulkActionBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import type { Expense } from "../types/expense";
@@ -580,7 +581,20 @@ const expenseSchema: v.FormSchema<ExpenseFormField> = {
   invoice_date: [v.required, v.dateValid],
 };
 
-function NewExpenseForm({
+/** Fields the receipt parser can prefill — tracked for "from receipt" badges. */
+type DetectableExpenseField = "supplier" | "invoice_date" | "amount";
+
+function detectedFields(
+  prefill: ExtractedExpenseData | null | undefined
+): Set<DetectableExpenseField> {
+  const s = new Set<DetectableExpenseField>();
+  if (prefill?.supplier) s.add("supplier");
+  if (prefill?.invoice_date) s.add("invoice_date");
+  if (prefill?.amount) s.add("amount");
+  return s;
+}
+
+export function NewExpenseForm({
   categories,
   pastSuppliers,
   prefill,
@@ -625,6 +639,32 @@ function NewExpenseForm({
     };
   });
   const [errors, setErrors] = useState<Partial<Record<ExpenseFormField, string>>>({});
+  // Which fields still hold an untouched OCR-detected value
+  const [detected, setDetected] = useState<Set<DetectableExpenseField>>(() =>
+    detectedFields(prefill)
+  );
+
+  const undetect = (field: DetectableExpenseField) =>
+    setDetected((prev) => {
+      if (!prev.has(field)) return prev;
+      const next = new Set(prev);
+      next.delete(field);
+      return next;
+    });
+
+  /** Badge + clear for a detected field; `reset` restores the manual default. */
+  const detectedBadge = (field: DetectableExpenseField, reset: () => void) =>
+    detected.has(field) ? (
+      <DetectedBadge
+        onClear={() => {
+          reset();
+          undetect(field);
+        }}
+      />
+    ) : undefined;
+
+  const detectedClass = (field: DetectableExpenseField) =>
+    detected.has(field) ? "!border-[var(--color-accent)]" : "";
 
   const setFieldError = (field: ExpenseFormField, msg: string | null) =>
     setErrors((e) => {
@@ -668,6 +708,7 @@ function NewExpenseForm({
     // OCR prefill overwrites the whole form programmatically — any stale
     // inline errors no longer describe what is on screen, so clear them all.
     setErrors({});
+    setDetected(detectedFields(prefill));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync only when a new prefill arrives; adding categories/pastSuppliers would clobber user edits when those queries refetch
   }, [prefill]);
 
@@ -713,6 +754,9 @@ function NewExpenseForm({
     // Programmatic fill — stale errors on the filled fields no longer apply.
     clearError("supplier");
     clearError("amount");
+    // Picking a suggestion is a deliberate user choice, not a detection.
+    undetect("supplier");
+    undetect("amount");
   };
 
   return (
@@ -725,13 +769,19 @@ function NewExpenseForm({
       )}
       <div className="grid grid-cols-2 gap-3">
         <div className="relative">
-          <FormField label={t.supplier} required error={errors.supplier}>
+          <FormField
+            label={t.supplier}
+            required
+            error={errors.supplier}
+            badge={detectedBadge("supplier", () => setForm((f) => ({ ...f, supplier: "" })))}
+          >
             <Input
               value={form.supplier}
               onChange={(e) => {
                 setForm({ ...form, supplier: e.target.value });
                 setShowSuggestions(true);
                 clearError("supplier");
+                undetect("supplier");
               }}
               onFocus={() => setShowSuggestions(true)}
               onBlur={() => {
@@ -739,7 +789,7 @@ function NewExpenseForm({
                 if (!pickingSuggestionRef.current) validateOnBlur("supplier");
                 pickingSuggestionRef.current = false;
               }}
-              className="py-2"
+              className={`py-2 ${detectedClass("supplier")}`}
               autoComplete="off"
             />
           </FormField>
@@ -777,19 +827,32 @@ function NewExpenseForm({
             ))}
           </Select>
         </FormField>
-        <FormField label={t.date} required error={errors.invoice_date}>
+        <FormField
+          label={t.date}
+          required
+          error={errors.invoice_date}
+          badge={detectedBadge("invoice_date", () =>
+            setForm((f) => ({ ...f, invoice_date: format(new Date(), "yyyy-MM-dd") }))
+          )}
+        >
           <Input
             type="date"
             value={form.invoice_date}
             onChange={(e) => {
               setForm({ ...form, invoice_date: e.target.value });
               clearError("invoice_date");
+              undetect("invoice_date");
             }}
             onBlur={() => validateOnBlur("invoice_date")}
-            className="py-2"
+            className={`py-2 ${detectedClass("invoice_date")}`}
           />
         </FormField>
-        <FormField label={t.amount} required error={errors.amount}>
+        <FormField
+          label={t.amount}
+          required
+          error={errors.amount}
+          badge={detectedBadge("amount", () => setForm((f) => ({ ...f, amount: 0 })))}
+        >
           <Input
             type="number"
             step="0.01"
@@ -797,12 +860,13 @@ function NewExpenseForm({
             onChange={(e) => {
               setForm({ ...form, amount: Number(e.target.value) });
               clearError("amount");
+              undetect("amount");
             }}
             onBlur={() => {
               checkForDuplicates();
               validateOnBlur("amount");
             }}
-            className="py-2"
+            className={`py-2 ${detectedClass("amount")}`}
           />
         </FormField>
       </div>
