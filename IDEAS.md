@@ -84,7 +84,7 @@
 - [x] Retire arbitrary osascript execution (2026-08-14) — Calendar sync + PDF/HEIC extraction moved to Rust commands in `src-tauri/src/apple.rs` with fixed scripts; user data passed via argv only (`on run argv` / JXA `function run(argv)`), HEIC runs `sips` directly with no shell; `shell:allow-execute` dropped from capabilities (`shell:allow-open` kept for browser URLs). Mail sharing was already a Rust command
 - ~~Notarize the app~~ — dropped: requires the paid Apple Developer Program, which we're not getting. Unsigned builds keep using the right-click-open Gatekeeper bypass
 - [x] Automate dependency auditing (2026-08-14) — weekly GitHub Action runs `npm audit` + `cargo audit`; two unfixable sqlx-transitive advisories ignored with reasons in `src-tauri/.cargo/audit.toml`
-- [ ] Smoke-test the osascript migration in the running app before release: task with due date syncs to Calendar (timed + all-day), event deleted on task completion, purge-all works, PDF receipt drag-drop parses, HEIC photo converts + OCRs, invoice "share via Mail" opens a draft
+- [x] Smoke-test the osascript migration (2026-08-14): Calendar sync (timed + all-day + deletion), PDF receipt parsing, HEIC Vision OCR, Mail sharing, export dialogs, dashboard year switcher, supplier merge — all verified in the running app
 
 ## Audit — full app (2026-08-14)
 
