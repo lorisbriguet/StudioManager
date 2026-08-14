@@ -296,13 +296,6 @@ StudioManager is designed for Swiss freelancers:
 - [ ] System tray quick-add
 - [ ] Project profitability view
 
-### UX polish
-- [ ] Dashboard year switcher + year-over-year deltas
-- [ ] Highlight fields auto-filled from scanned receipts
-- [ ] Supplier merge tool (dedupe name variants)
-- [ ] One-click "mark paid today" and undo for deleted finance entries
-- [ ] Stable per-activity chart colors
-
 ### Under the hood
 - [ ] Smoke-test the Rust-native macOS integrations (post-osascript migration): task due date → Calendar event appears/deletes, PDF receipt parsing, HEIC receipt OCR (now Apple Vision), Mail sharing
 
