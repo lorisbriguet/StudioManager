@@ -68,16 +68,16 @@
 - [x] Editing paid date: Enter key doesn't trigger save. App-wide sweep done: paid-date modal, workload column editor (name + formula), client detail fields and address editor all submit on Enter
 - [x] Invoice export from preview with "mark as sent and export": export now re-fetches the updated invoice (fresh reference + stored PDF) instead of the stale closure copy; mutation errors close the modal with a toast. Stored PDFs also render with template/billing address/project/reminder props so they match the preview
 
-## UX/UI improvements (2026-08-12)
+## UX/UI improvements (2026-08-12) — Done (2026-08-14) except the nudge
 
-- [ ] "Detected from receipt" indicators — tint OCR-prefilled fields (supplier/amount/dates) with a badge + one-click clear, so wrong extractions don't look hand-typed
-- [ ] Supplier merge tool in Settings — pick canonical name, relink expenses (dedupe "Adobe"/"Adobe Cloud"/"Adobe Systems…", "Fairtiq"/"FairtiQ", Figma variants); improves autofill + fuzzy matching
+- [x] "Detected from receipt" indicators — accent border + "From receipt" chip with one-click clear on OCR-prefilled fields (expense + income forms); marker clears on edit or suggestion pick
+- [x] Supplier merge tool in Settings — suggested variant groups (token-subset heuristic) + manual multi-select, canonical pick, single-UPDATE relink with per-row undo
 - [ ] Untranslated-activity nudge — badge in Settings editor (and on first EN-client invoice) where name_fr === name_en
-- [ ] Stable chart colors per activity — derive color from activity id instead of row index so colors don't shift with ranking
-- [ ] Dashboard year switcher — widgets hardcode current year (January cliff); add year selector or "last 12 months" toggle
-- [ ] YoY deltas on dashboard KPIs — "+12% vs last year" badges
-- [ ] One-click "mark paid today" on invoice/expense rows
-- [ ] Undo toast for expense/income deletion (extend the client-delete undo pattern)
+- [x] Stable chart colors per activity — hash of stable key (activity id / name / category code) instead of sorted index; also fixed client/category/project-time charts
+- [x] Dashboard year switcher — header dropdown feeding a DashboardYearContext consumed by all 13 year-scoped widgets
+- [x] YoY deltas on dashboard KPIs — "+X% vs last year" on Invoiced/Expenses/Net, hidden when the prior year is empty
+- [x] One-click "mark paid today" on invoice/expense rows — already existed via context menus; the invoice row action now has undo (drafts excluded: no revert to draft once numbered)
+- [x] Undo toast for expense/income deletion — already covered by the existing undoableFromStore pattern (verified)
 
 ## Security hardening (2026-08-12)
 
