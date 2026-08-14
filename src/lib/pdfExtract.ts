@@ -1,12 +1,6 @@
-import { Command } from "@tauri-apps/plugin-shell";
+import { invoke } from "@tauri-apps/api/core";
 import { readFile, remove } from "@tauri-apps/plugin-fs";
-import { appDataDir } from "@tauri-apps/api/path";
 import { logError } from "./log";
-
-/** Escape a string for embedding in an AppleScript double-quoted literal. */
-function escapeAppleScript(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-}
 
 // Singleton OCR worker — lazy-loaded to avoid ~300KB bundle cost upfront.
 // Reused across calls to avoid re-downloading ~15MB language data each time.
@@ -29,71 +23,36 @@ async function getOCRWorker() {
 }
 
 /**
- * Extract text from a PDF using macOS built-in JXA (JavaScript for Automation)
- * which has native access to PDFKit via the ObjC bridge — no Python dependencies.
+ * Extract text from a PDF via the `extract_pdf_text` Rust command, which
+ * runs a fixed JXA/PDFKit script with the path passed as argv only.
  */
 export async function extractPdfText(filePath: string): Promise<string> {
-  const safePath = filePath.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-  const script = `
-ObjC.import('PDFKit');
-ObjC.import('Foundation');
-var url = $.NSURL.fileURLWithPath($('${safePath}'));
-var doc = $.PDFDocument.alloc.initWithURL(url);
-if (!doc || doc.isNil()) { ''; } else {
-  var text = '';
-  for (var i = 0; i < doc.pageCount; i++) {
-    var page = doc.pageAtIndex(i);
-    if (page) {
-      var s = page.string;
-      if (s) text += s.js + String.fromCharCode(10);
+  const extraction = invoke<string>("extract_pdf_text", { path: filePath }).then(
+    (text) => text.trim(),
+    (e) => {
+      logError("PDF extraction failed:", e);
+      return "";
     }
-  }
-  text;
-}
-`.trim();
-
-  const cmd = Command.create("osascript-jxa", ["-l", "JavaScript", "-e", script]);
-  const result = await Promise.race([
-    cmd.execute(),
+  );
+  return Promise.race([
+    extraction,
     new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("PDF extraction timed out")), 15000)
     ),
   ]);
-
-  if (result.code !== 0) {
-    logError("PDF extraction failed:", result.stderr);
-    return "";
-  }
-
-  return result.stdout.trim();
 }
 
 /**
- * Convert HEIC to JPEG using macOS built-in sips command.
- * Returns the path to the converted JPEG file.
+ * Convert HEIC to JPEG via the `convert_heic_to_jpeg` Rust command, which
+ * invokes the system `sips` binary directly (no shell involved). The JPEG
+ * lands in APPDATA — inside the frontend fs scope — so it can be read and
+ * cleaned up through the fs plugin.
  */
 async function convertHeicToJpeg(filePath: string): Promise<Uint8Array> {
-  // Write the converted JPEG into APPDATA: the fs scope covers APPDATA but
-  // not arbitrary sibling paths of the picked file (dialog/drag-drop only
-  // allows the picked file itself). sips runs via shell, outside fs scope,
-  // but the readFile below goes through the fs plugin.
-  const outPath = `${await appDataDir()}/temp_heic_converted_${crypto.randomUUID()}.jpg`;
-  // The paths reach the shell via AppleScript's `quoted form of`, which
-  // safely quotes spaces, single quotes and shell metacharacters;
-  // escapeAppleScript covers the outer AppleScript string-literal layer.
-  const script =
-    `do shell script "sips -s format jpeg " & quoted form of "${escapeAppleScript(filePath)}"` +
-    ` & " --out " & quoted form of "${escapeAppleScript(outPath)}"`;
-  const cmd = Command.create("osascript", ["-e", script]);
+  const outPath = await invoke<string>("convert_heic_to_jpeg", { path: filePath });
   try {
-    const result = await cmd.execute();
-    if (result.code !== 0) {
-      throw new Error(`HEIC conversion failed: ${result.stderr}`);
-    }
     return await readFile(outPath);
   } finally {
-    // Always clean up the temp file; it is in APPDATA (in fs scope), so the
-    // fs plugin's remove() works — no extra shell-quoting context needed.
     await remove(outPath).catch(() => {});
   }
 }
