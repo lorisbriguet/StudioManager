@@ -16,6 +16,40 @@ export function useDistinctSuppliers() {
   });
 }
 
+export function useSupplierCounts() {
+  return useQuery({
+    queryKey: ["expenses", "supplier-counts"],
+    queryFn: q.getSupplierCounts,
+  });
+}
+
+export function useMergeSuppliers() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ canonical, variants }: { canonical: string; variants: string[] }) => {
+      const prev = await q.mergeSuppliers(canonical, variants);
+      useUndoStore.getState().push({
+        label: `${getLabels().undo_merge_suppliers} "${canonical}"`,
+        execute: async () => {
+          for (const row of prev) {
+            await q.updateExpense(row.id, { supplier: row.supplier });
+          }
+          qc.invalidateQueries({ queryKey: ["expenses"] });
+        },
+        redo: async () => {
+          await q.mergeSuppliers(canonical, variants);
+          qc.invalidateQueries({ queryKey: ["expenses"] });
+        },
+      });
+      return prev.length;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+    },
+    onError: (e) => { toast.error(String(e)); },
+  });
+}
+
 export function useExpenseCategories() {
   return useQuery({
     queryKey: ["expense-categories"],

@@ -207,11 +207,11 @@ function detectDates(lines: string[]): { invoice_date?: string; due_date?: strin
   return result;
 }
 
-const LEGAL_SUFFIXES = new Set([
+export const LEGAL_SUFFIXES = new Set([
   "sa", "sarl", "gmbh", "ag", "sas", "ltd", "inc", "llc", "kg", "srl", "co",
 ]);
 
-function normalizeText(s: string): string {
+export function normalizeText(s: string): string {
   return s
     .toLowerCase()
     .normalize("NFD")
