@@ -27,7 +27,10 @@ const TAG_COLORS_LIGHT: TagColor[] = [
   { bg: "#f3f4f6", text: "#6b7280" },
 ];
 
-function tagHash(name: string): number {
+/** Deterministic 0-8 hash of a name — same string always maps to the same
+ * palette slot. Also used to keep chart series colors stable across
+ * ranking changes (hash the row's stable key, not its sorted index). */
+export function tagHash(name: string): number {
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
     hash = ((hash << 5) - hash) + name.charCodeAt(i);

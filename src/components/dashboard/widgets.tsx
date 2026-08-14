@@ -51,6 +51,7 @@ import type { WidgetType } from "../../stores/dashboard-store";
 import { useAppStore } from "../../stores/app-store";
 import { useActivities } from "../../db/hooks/useActivities";
 import { resolveActivityRevenue } from "../../lib/activityResolve";
+import { tagHash } from "../../lib/tagColors";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -421,16 +422,17 @@ function RevenueByActivity() {
     <div className="h-full flex flex-col p-4">
       <h2 className="text-sm font-medium mb-3">{t.revenue_by_activity}</h2>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2">
-        {rows.map((r, i) => {
+        {rows.map((r) => {
           const pct = total > 0 ? Math.round((r.total / total) * 100) : 0;
           return (
-            <div key={r.label}>
+            <div key={r.key}>
               <div className="flex items-center justify-between text-sm mb-0.5">
                 <span className="truncate">{r.label}</span>
                 <span className="text-xs text-muted shrink-0 ml-2">{formatCHF(r.total)} ({pct}%)</span>
               </div>
               <div className="w-full bg-[var(--color-input-bg)] rounded-full h-1.5">
-                <div className="rounded-full h-1.5 transition-all" style={{ width: `${pct}%`, backgroundColor: COLORS[i % COLORS.length] }} />
+                {/* Hash the stable key, not the sorted index: an activity keeps its color when rankings shift */}
+                <div className="rounded-full h-1.5 transition-all" style={{ width: `${pct}%`, backgroundColor: COLORS[tagHash(r.key) % COLORS.length] }} />
               </div>
             </div>
           );
@@ -454,7 +456,7 @@ function RevenueByClient() {
     <div className="h-full flex flex-col p-4">
       <h2 className="text-sm font-medium mb-3">{t.revenue_by_client}</h2>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2">
-        {rows?.map((r, i) => {
+        {rows?.map((r) => {
           const pct = total > 0 ? Math.round((r.total / total) * 100) : 0;
           return (
             <div key={r.label}>
@@ -463,7 +465,8 @@ function RevenueByClient() {
                 <span className="text-xs text-muted shrink-0 ml-2">{formatCHF(r.total)} ({pct}%)</span>
               </div>
               <div className="w-full bg-[var(--color-input-bg)] rounded-full h-1.5">
-                <div className="rounded-full h-1.5 transition-all" style={{ width: `${pct}%`, backgroundColor: COLORS[i % COLORS.length] }} />
+                {/* Hash the client name so colors survive ranking changes */}
+                <div className="rounded-full h-1.5 transition-all" style={{ width: `${pct}%`, backgroundColor: COLORS[tagHash(r.label) % COLORS.length] }} />
               </div>
             </div>
           );
@@ -593,7 +596,7 @@ function ExpenseBreakdown() {
     return Object.entries(byCategory)
       .map(([code, total]) => {
         const cat = categories.find((c) => c.code === code);
-        return { name: cat?.name_en ?? code, value: total };
+        return { code, name: cat?.name_en ?? code, value: total };
       })
       .sort((a, b) => b.value - a.value);
   }, [expenses, categories, year]);
@@ -606,7 +609,8 @@ function ExpenseBreakdown() {
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="80%" innerRadius="40%" paddingAngle={2}>
-                {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                {/* Hash the category code so slices keep their color across ranking changes */}
+                {data.map((d) => <Cell key={d.code} fill={COLORS[tagHash(d.code) % COLORS.length]} />)}
               </Pie>
               <Tooltip formatter={(value) => [`CHF ${Number(value).toFixed(2)}`, ""]} contentStyle={chart.tooltipStyle} itemStyle={chart.pieItemStyle} labelStyle={{ color: "var(--color-text)" }} />
             </PieChart>
@@ -1382,8 +1386,9 @@ function ProjectTimeDistribution() {
               }}
               labelLine
             >
-              {chartData.map((_, i) => (
-                <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+              {/* Hash the project name so slices keep their color across ranking changes */}
+              {chartData.map((d) => (
+                <Cell key={d.name} fill={PIE_COLORS[tagHash(d.name) % PIE_COLORS.length]} />
               ))}
             </Pie>
             <Tooltip formatter={(value) => fmtHours(Number(value ?? 0))} contentStyle={chart.tooltipStyle} itemStyle={chart.pieItemStyle} labelStyle={{ color: "var(--color-text)" }} />

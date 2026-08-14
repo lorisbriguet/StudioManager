@@ -16,7 +16,7 @@ describe("resolveActivityRevenue", () => {
       { activity_id: null, activity: "Graphic Design ", total: 1 },
     ];
     expect(resolveActivityRevenue(rows, ACTS, "EN")).toEqual([
-      { label: "Graphic Design", total: 141 },
+      { key: "id:1", label: "Graphic Design", total: 141 },
     ]);
   });
 
@@ -29,22 +29,43 @@ describe("resolveActivityRevenue", () => {
   it("keeps unmatched legacy text as its own row", () => {
     const rows = [{ activity_id: null, activity: "Old Consulting", total: 5 }];
     expect(resolveActivityRevenue(rows, ACTS, "EN")).toEqual([
-      { label: "Old Consulting", total: 5 },
+      { key: "text:old consulting", label: "Old Consulting", total: 5 },
     ]);
   });
 
   it("buckets empty activity as N/A", () => {
     const rows = [{ activity_id: null, activity: "", total: 7 }];
     expect(resolveActivityRevenue(rows, ACTS, "EN")).toEqual([
-      { label: "N/A", total: 7 },
+      { key: "text:", label: "N/A", total: 7 },
     ]);
   });
 
   it("falls back to text matching for dangling activity ids", () => {
     const rows = [{ activity_id: 99, activity: "Graphic Design", total: 3 }];
     expect(resolveActivityRevenue(rows, ACTS, "EN")).toEqual([
-      { label: "Graphic Design", total: 3 },
+      { key: "id:1", label: "Graphic Design", total: 3 },
     ]);
+  });
+
+  it("returns a stable key per row for chart color assignment", () => {
+    const rows = [
+      { activity_id: 1, activity: "Graphisme", total: 100 },
+      { activity_id: null, activity: "Old Consulting", total: 5 },
+    ];
+    const resolved = resolveActivityRevenue(rows, ACTS, "EN");
+    expect(resolved[0].key).toBe("id:1");
+    expect(resolved[1].key).toBe("text:old consulting");
+  });
+
+  it("keeps the same key across language and ranking changes", () => {
+    const rows = [
+      { activity_id: 1, activity: "", total: 1 },
+      { activity_id: 2, activity: "", total: 99 },
+    ];
+    const fr = resolveActivityRevenue(rows, ACTS, "FR");
+    const en = resolveActivityRevenue([...rows].reverse(), ACTS, "EN");
+    expect(fr.find((r) => r.label === "Graphisme")!.key).toBe("id:1");
+    expect(en.find((r) => r.label === "Graphic Design")!.key).toBe("id:1");
   });
 
   it("sorts by total descending", () => {
