@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Download, FolderPlus } from "lucide-react";
-import { Button, PageSpinner } from "../components/ui";
+import { Button, PageSpinner, Modal } from "../components/ui";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { useQuote, useUpdateQuote } from "../db/hooks/useQuotes";
+import { getQuote } from "../db/queries/quotes";
+import { pdfFileName } from "../lib/pdfFilename";
+import type { Quote } from "../types/quote";
 import { useQuoteLineItems } from "../db/hooks/useQuoteLineItems";
 import { useClient, useClientAddresses } from "../db/hooks/useClients";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
@@ -45,9 +48,9 @@ export function QuotePreviewPage() {
     ? addresses?.find((a) => a.id === quote.billing_address_id) ?? null
     : null;
 
-  const pdfDocument = (
+  const buildPdfDoc = (qt: Quote) => (
     <QuotePDF
-      quote={quote}
+      quote={qt}
       lineItems={lineItems}
       client={client}
       profile={profile}
@@ -57,15 +60,23 @@ export function QuotePreviewPage() {
     />
   );
 
-  const doDownload = async () => {
+  const pdfDocument = buildPdfDoc(quote);
+
+  // `qt` defaults to the quote from the query cache; callers that just
+  // mutated the quote must pass a freshly fetched row — the closure copy is
+  // stale until the refetch lands (same draft-name bug as invoice export).
+  const doDownload = async (qt: Quote = quote) => {
     if (exporting) return;
     setExporting(true);
     try {
-      const blob = await pdf(pdfDocument).toBlob();
+      const blob = await pdf(buildPdfDoc(qt)).toBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${quote.reference.startsWith("DRAFT") ? "DRAFT" : quote.reference}_${client.name}.pdf`;
+      a.download = pdfFileName(
+        qt.reference.startsWith("DRAFT") ? "DRAFT" : qt.reference,
+        client.name
+      );
       a.click();
       URL.revokeObjectURL(url);
       toast.success(t.pdf_downloaded);
@@ -87,7 +98,17 @@ export function QuotePreviewPage() {
   const handleMarkSentAndExport = () => {
     updateQuote.mutate(
       { id: quoteId, data: { status: "sent" } },
-      { onSuccess: () => { setShowDraftWarning(false); doDownload(); } }
+      {
+        onSuccess: async () => {
+          setShowDraftWarning(false);
+          const fresh = await getQuote(quoteId);
+          await doDownload(fresh ?? quote);
+        },
+        onError: (e) => {
+          setShowDraftWarning(false);
+          toast.error(String(e));
+        },
+      }
     );
   };
 
@@ -132,24 +153,25 @@ export function QuotePreviewPage() {
           clientName={client.name}
         />
       )}
-      {showDraftWarning && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-[var(--color-surface)] rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.5)] p-6 max-w-sm mx-4">
-            <p className="text-sm mb-4">{t.export_draft_warning}</p>
-            <div className="flex gap-2 justify-end">
-              <Button variant="ghost" onClick={() => setShowDraftWarning(false)}>
-                {t.cancel}
-              </Button>
-              <Button variant="secondary" onClick={() => { setShowDraftWarning(false); doDownload(); }}>
-                {t.export_as_draft}
-              </Button>
-              <Button loading={updateQuote.isPending} onClick={handleMarkSentAndExport}>
-                {t.mark_sent_and_export}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={showDraftWarning}
+        onClose={() => setShowDraftWarning(false)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setShowDraftWarning(false)}>
+              {t.cancel}
+            </Button>
+            <Button variant="secondary" onClick={() => { setShowDraftWarning(false); doDownload(); }}>
+              {t.export_as_draft}
+            </Button>
+            <Button loading={updateQuote.isPending} onClick={handleMarkSentAndExport}>
+              {t.mark_sent_and_export}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm">{t.export_draft_warning}</p>
+      </Modal>
     </div>
   );
 }

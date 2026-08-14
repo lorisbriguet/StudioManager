@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Download } from "lucide-react";
-import { Button, PageSpinner } from "../components/ui";
+import { Button, PageSpinner, Modal } from "../components/ui";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useInvoice, useInvoiceLineItems, useUpdateInvoice } from "../db/hooks/useInvoices";
@@ -234,24 +234,25 @@ export function InvoicePreviewPage() {
           </PDFViewer>
         )}
       </div>
-      {showDraftWarning && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-[var(--color-surface)] rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.5)] p-6 max-w-sm mx-4">
-            <p className="text-sm mb-4">{t.export_draft_warning}</p>
-            <div className="flex gap-2 justify-end">
-              <Button variant="ghost" onClick={() => setShowDraftWarning(false)}>
-                {t.cancel}
-              </Button>
-              <Button variant="secondary" onClick={() => { setShowDraftWarning(false); doDownload(); }}>
-                {t.export_as_draft}
-              </Button>
-              <Button loading={updateInvoice.isPending} onClick={handleMarkSentAndExport}>
-                {t.mark_sent_and_export}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={showDraftWarning}
+        onClose={() => setShowDraftWarning(false)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setShowDraftWarning(false)}>
+              {t.cancel}
+            </Button>
+            <Button variant="secondary" onClick={() => { setShowDraftWarning(false); doDownload(); }}>
+              {t.export_as_draft}
+            </Button>
+            <Button loading={updateInvoice.isPending} onClick={handleMarkSentAndExport}>
+              {t.mark_sent_and_export}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm">{t.export_draft_warning}</p>
+      </Modal>
     </div>
   );
 }
