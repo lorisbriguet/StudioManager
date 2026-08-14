@@ -1,0 +1,14 @@
+# cargo-audit configuration — keep the scheduled CI meaningful by ignoring
+# only advisories we provably cannot act on. Revisit when tauri-plugin-sql
+# moves past sqlx 0.8.
+
+[advisories]
+ignore = [
+    # rkyv 0.7 OOB read in archive validation. Pulled in via
+    # tauri-plugin-sql -> sqlx -> rust_decimal; fix requires rkyv 0.8 which
+    # sqlx 0.8 does not accept. The app never deserializes rkyv archives.
+    "RUSTSEC-2026-0235",
+    # rsa Marvin timing sidechannel. Pulled in via sqlx-mysql, which this
+    # app does not use (sqlite only). Upstream has no fixed release.
+    "RUSTSEC-2023-0071",
+]
