@@ -95,13 +95,13 @@ Five-front audit (security, data integrity, frontend quality, performance, tests
 - [x] Supplier-merge undo is now a single TransactionBatch (restoreSupplierNames)
 - [x] Recurring catch-up cap raises a toast + notification; malformed next_due skipped with a visible error; useRecurringCheck hook now tested (drafts per period, cap, corrupt-date guard)
 
-### P1 — user-visible
-- [ ] Draft-warning overlays are raw divs, not the shared Modal (no Escape/focus trap): InvoicePreviewPage:237, QuotePreviewPage:135
-- [ ] Hardcoded "Receipt will be attached:" (only i18n miss; EN/FR parity otherwise perfect): ExpensesPage:767, IncomePage:631
-- [ ] Non-token colors break dark mode: amber/indigo in SettingsPage test/presentation controls, green-100/700 in InvoicesPage recurring badge, indigo-500 in widgets StatusDot
-- [ ] Trustee export: per-invoice line-item query + sequential PDF renders freeze the UI — batch fetch + Promise.all (FinancesPage:98)
-- [ ] Calendar sync N+1 project lookups — prefetch a project map (appleCalendar.ts:128)
-- [ ] Silent .catch(() => {}): SettingsPage:88-89, IncomePage:163
+### P1 — user-visible — Done (2026-08-14)
+- [x] Draft-warning overlays now use the shared Modal (Escape/focus trap/restore); QuotePreviewPage's "mark sent & export" also got the fresh-reference fix invoices received earlier
+- [x] "Receipt will be attached:" now i18n'd (receipt_will_be_attached)
+- [x] Non-token colors replaced with warning/indigo/success tokens (SettingsPage mode controls, InvoicesPage recurring badge, widgets StatusDot)
+- [x] Trustee export batch-fetches all line items in one query (rendering stays sequential — @react-pdf concurrent renders have wedged before)
+- [x] Calendar sync batch-fetches project + task maps (no per-row lookups; tested)
+- [x] Silent .catch(() => {}) now log (version, snapshot check, drag-drop listener)
 
 ### P2 — hardening/hygiene
 - [ ] run_osascript: no Rust-side timeout or stdout cap; consider spawn_blocking (apple.rs)
