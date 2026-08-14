@@ -1,4 +1,5 @@
 mod apple;
+mod dbfiles;
 
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -143,12 +144,12 @@ fn enter_test_mode(app: tauri::AppHandle) -> Result<String, String> {
     let snapshot_db = app_dir.join("studiomanager_snapshot.db");
     let test_db = app_dir.join("studiomanager_test.db");
 
-    // Snapshot production DB (safety net)
-    std::fs::copy(&prod_db, &snapshot_db)
+    // Snapshot production DB (safety net) — WAL-safe consistent image
+    dbfiles::snapshot_db_file(&prod_db, &snapshot_db)
         .map_err(|e| format!("Failed to snapshot production DB: {e}"))?;
 
     // Copy production DB to test DB
-    std::fs::copy(&prod_db, &test_db)
+    dbfiles::snapshot_db_file(&prod_db, &test_db)
         .map_err(|e| format!("Failed to create test DB: {e}"))?;
 
     // Switch active DB to test
@@ -171,10 +172,8 @@ fn exit_test_mode(app: tauri::AppHandle) -> Result<(), String> {
     let active_db = app.state::<ActiveDb>();
     *active_db.0.lock().map_err(|e| format!("Lock error: {e}"))? = "studiomanager.db".to_string();
 
-    // Remove test DB
-    if test_db.exists() {
-        let _ = std::fs::remove_file(&test_db);
-    }
+    // Remove test DB together with its WAL/SHM companions
+    dbfiles::remove_db_files(&test_db);
 
     Ok(())
 }
@@ -190,12 +189,12 @@ fn enter_presentation_mode(app: tauri::AppHandle) -> Result<String, String> {
     let snapshot_db = app_dir.join("studiomanager_snapshot.db");
     let pres_db = app_dir.join("studiomanager_presentation.db");
 
-    // Snapshot production DB (safety net)
-    std::fs::copy(&prod_db, &snapshot_db)
+    // Snapshot production DB (safety net) — WAL-safe consistent image
+    dbfiles::snapshot_db_file(&prod_db, &snapshot_db)
         .map_err(|e| format!("Failed to snapshot production DB: {e}"))?;
 
     // Copy production DB to presentation DB (so schema/migrations are intact)
-    std::fs::copy(&prod_db, &pres_db)
+    dbfiles::snapshot_db_file(&prod_db, &pres_db)
         .map_err(|e| format!("Failed to create presentation DB: {e}"))?;
 
     // Switch active DB to presentation
@@ -218,10 +217,8 @@ fn exit_presentation_mode(app: tauri::AppHandle) -> Result<(), String> {
     let active_db = app.state::<ActiveDb>();
     *active_db.0.lock().map_err(|e| format!("Lock error: {e}"))? = "studiomanager.db".to_string();
 
-    // Remove presentation DB
-    if pres_db.exists() {
-        let _ = std::fs::remove_file(&pres_db);
-    }
+    // Remove presentation DB together with its WAL/SHM companions
+    dbfiles::remove_db_files(&pres_db);
 
     Ok(())
 }
@@ -236,7 +233,7 @@ fn snapshot_db(app: tauri::AppHandle) -> Result<String, String> {
     let prod_db = app_dir.join("studiomanager.db");
     let snapshot_db = app_dir.join("studiomanager_snapshot.db");
 
-    std::fs::copy(&prod_db, &snapshot_db)
+    dbfiles::snapshot_db_file(&prod_db, &snapshot_db)
         .map_err(|e| format!("Failed to snapshot DB: {e}"))?;
 
     Ok(snapshot_db.to_string_lossy().to_string())
@@ -256,7 +253,9 @@ fn restore_snapshot(app: tauri::AppHandle) -> Result<(), String> {
         return Err("No snapshot found".to_string());
     }
 
-    std::fs::copy(&snapshot_db, &prod_db)
+    // Online backup API: restores INTO the live DB with proper locking, so
+    // open plugin connections keep working and see the restored content.
+    dbfiles::restore_db_file(&snapshot_db, &prod_db)
         .map_err(|e| format!("Failed to restore snapshot: {e}"))?;
 
     Ok(())
