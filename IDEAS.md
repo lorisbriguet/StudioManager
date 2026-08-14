@@ -90,10 +90,10 @@
 
 Five-front audit (security, data integrity, frontend quality, performance, tests/Rust). Verdict: fundamentally healthy — zero critical findings; parameterized SQL, fixed-script argv-only osascript, path canonicalization, batch transactions and snapshot undo all confirmed solid. npm/cargo audits clean, 302+8 tests green, lint/tsc zero findings.
 
-### P0 — correctness
-- [ ] DB snapshots ignore SQLite WAL: enter_test_mode / enter_presentation_mode / snapshot_db fs::copy only the main file while connections are open; restore_snapshot copies over an open DB. Use VACUUM INTO for snapshots and the SQLite backup API for restore; clean up -wal/-shm on mode exit (src-tauri/src/lib.rs:137-263)
-- [ ] Supplier-merge undo is a non-atomic per-row loop — make it a TransactionBatch (src/db/hooks/useExpenses.ts:34)
-- [ ] Recurring catch-up cap (60/template) is log-only — surface a toast/notification and sanity-check next_due (src/hooks/useRecurringCheck.ts:111)
+### P0 — correctness — Done (2026-08-14)
+- [x] DB snapshots ignore SQLite WAL — snapshots now use VACUUM INTO, restore uses the SQLite online backup API (safe on a live DB), mode exits clean up -wal/-shm; proven by tmp-DB roundtrip tests incl. uncheckpointed-WAL capture (src-tauri/src/dbfiles.rs)
+- [x] Supplier-merge undo is now a single TransactionBatch (restoreSupplierNames)
+- [x] Recurring catch-up cap raises a toast + notification; malformed next_due skipped with a visible error; useRecurringCheck hook now tested (drafts per period, cap, corrupt-date guard)
 
 ### P1 — user-visible
 - [ ] Draft-warning overlays are raw divs, not the shared Modal (no Escape/focus trap): InvoicePreviewPage:237, QuotePreviewPage:135
