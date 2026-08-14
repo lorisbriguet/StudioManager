@@ -10,11 +10,10 @@ import {
   clearExecutedStatements,
 } from "../__mocks__/tauri-sql";
 
-// OCR/PDF extraction pulls in tesseract.js and pdfjs; irrelevant here.
+// Receipt OCR/PDF extraction is irrelevant here.
 vi.mock("../lib/pdfExtract", () => ({
   extractPdfText: vi.fn(),
   extractImageText: vi.fn(),
-  isOcrWorkerReady: vi.fn(() => false),
 }));
 
 // Enter-to-save bug: the "Edit paid date" modal only saved via the Save

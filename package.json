@@ -70,7 +70,6 @@
     "recharts": "^3.7.0",
     "sonner": "^2.0.7",
     "swissqrbill": "^4.3.0",
-    "tesseract.js": "^7.0.0",
     "zustand": "^5.0.11"
   }
 }
