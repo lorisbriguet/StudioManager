@@ -626,6 +626,7 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
   const [newSubtaskText, setNewSubtaskText] = useState<Record<number, string>>({});
   const [editingTask, setEditingTask] = useState<number | null>(null);
   const [editingSubtask, setEditingSubtask] = useState<number | null>(null);
+  const [hoveredSubtask, setHoveredSubtask] = useState<number | null>(null);
 
   const totalCount = tasks.length;
 
@@ -781,7 +782,10 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
               </div>
               {isExpanded && (
                 <div className="ml-9 border-l border-[var(--color-border-divider)] pl-3 pb-1">
-                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(event: DragEndEvent) => {
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={() => setHoveredSubtask(null)} onDragEnd={(event: DragEndEvent) => {
+                    // Rows move under a stationary cursor — clear the hover
+                    // state so no handle sticks around (#335)
+                    setHoveredSubtask(null);
                     const { active, over } = event;
                     if (!over || active.id === over.id) return;
                     const ids = subtasks.map((s) => s.id);
@@ -795,7 +799,7 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
                   }}>
                   <SortableContext items={filteredSubtasks.map((s) => s.id)} strategy={verticalListSortingStrategy}>
                   {filteredSubtasks.map((s) => (
-                    <SortableSubtaskRow key={s.id} id={s.id}>
+                    <SortableSubtaskRow key={s.id} id={s.id} hovered={hoveredSubtask === s.id} onHoverChange={setHoveredSubtask}>
                       <input
                         type="checkbox"
                         checked={s.status === "done"}
@@ -892,7 +896,20 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
   );
 }
 
-function SortableSubtaskRow({ id, children }: { id: number; children: React.ReactNode }) {
+export function SortableSubtaskRow({
+  id,
+  hovered,
+  onHoverChange,
+  children,
+}: {
+  id: number;
+  /** Handle visibility is explicit state, not CSS :hover — WebKit can leave
+   *  :hover stale when dnd re-renders move rows under a stationary cursor,
+   *  making the handle stick after the pointer left (#335). */
+  hovered: boolean;
+  onHoverChange: (id: number | null) => void;
+  children: React.ReactNode;
+}) {
   const t = useT();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
@@ -903,11 +920,17 @@ function SortableSubtaskRow({ id, children }: { id: number; children: React.Reac
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="flex items-center gap-2 py-1 group/sub">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-2 py-1 group/sub"
+      onMouseEnter={() => onHoverChange(id)}
+      onMouseLeave={() => onHoverChange(null)}
+    >
       <div
         {...attributes}
         {...listeners}
-        className="cursor-grab text-muted hover:text-[var(--color-text-secondary)] opacity-0 group-hover/sub:opacity-100 shrink-0"
+        className={`cursor-grab text-muted hover:text-[var(--color-text-secondary)] transition-opacity shrink-0 ${hovered ? "opacity-100" : "opacity-0"}`}
         aria-label={t.drag_to_reorder}
       >
         <GripVertical size={14} />
