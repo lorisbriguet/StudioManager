@@ -119,9 +119,10 @@ Five-front audit (security, data integrity, frontend quality, performance, tests
 - [x] Bundle: Calendar (274 kB) and Wiki (410 kB) lazy-loaded — main chunk 4.1 → 3.4 MB (gzip 1.31 → 1.11 MB). recharts stays (dashboard is the default route); PDF stack stays (woven through export paths — revisit only if it hurts)
 
 ### Receipt eval — Vision vs recorded data (2026-08-14, scripts/eval-receipts.mjs)
-- Image receipts via Vision OCR (n=8): supplier 100%, amount 88%, date 88% — clearly better than the tesseract-era baseline (~70% amounts)
-- PDF receipts via PDFKit text (n=40): supplier 88%, amount 70%, date 63% — parser headroom, not OCR
-- ⚠ 75 of 123 receipt files are missing at their stored paths (old machine paths?) — worth a data cleanup pass / re-link tool someday
+- Image receipts via Vision OCR (n=11): supplier 91%, amount 91%, date 64% — clearly better than the tesseract-era baseline (~70% amounts)
+- PDF receipts via PDFKit text (n=112): supplier 59%, amount 67%, date 78% — parser headroom on older receipt layouts, not OCR
+- [x] RESOLVED: 75 receipts + 22 invoice PDFs "missing" were stale absolute paths from the pre-rename bundle identifier (ch.lorisbriguet.studiomanager); the files were all present under ch.studiomanager.app. Live DB rewritten (123/123 verified resolving) and an idempotent ensureSchema migration now heals any DB restored from a pre-rename backup
+- [ ] Parser accuracy on older PDF receipt layouts (supplier 59%) — mine `scripts/eval-receipts.mjs --verbose` mismatches for new label patterns
 
 False alarms reviewed and rejected: $LAST_INSERT_ID injection (i64-only), localStorage mode switching (webview already has execute_batch by design), javascript:/file: URLs via shell.open (plugin's default validator blocks them), supplier-merge finance invalidation (finance never aggregates by supplier).
 

@@ -743,6 +743,20 @@ async function ensureSchema(db: Database) {
     await db.execute("DELETE FROM workload_rows");
   }
 
+  // ── Legacy bundle-identifier path migration ────────────────
+  // Files written before the identifier change (ch.lorisbriguet.studiomanager
+  // → ch.studiomanager.app) were migrated on disk, but the stored ABSOLUTE
+  // paths were not — leaving receipts/PDFs unresolvable. Idempotent rewrite;
+  // also heals databases restored from pre-rename backups.
+  await db.execute(
+    `UPDATE expenses SET receipt_path = REPLACE(receipt_path, '/ch.lorisbriguet.studiomanager/', '/ch.studiomanager.app/')
+     WHERE receipt_path LIKE '%/ch.lorisbriguet.studiomanager/%'`
+  ).catch((e) => logError("[DB] receipt path migration failed:", e));
+  await db.execute(
+    `UPDATE invoices SET pdf_path = REPLACE(pdf_path, '/ch.lorisbriguet.studiomanager/', '/ch.studiomanager.app/')
+     WHERE pdf_path LIKE '%/ch.lorisbriguet.studiomanager/%'`
+  ).catch((e) => logError("[DB] invoice pdf path migration failed:", e));
+
   // ── Hot-path indexes (idempotent) ──────────────────────────
   // Frequent WHERE/JOIN columns; negligible cost at this DB size, cheap
   // insurance as the data grows.
