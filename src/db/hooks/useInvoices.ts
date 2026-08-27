@@ -168,10 +168,13 @@ export function useDeleteInvoice() {
       if (prev) {
         const { id: _id, created_at, updated_at, ...data } = prev;
         const items = prevItems.map(({ id: _iid, invoice_id, ...rest }) => rest);
+        // The restore assigns a fresh rowid; redo targets exactly that id —
+        // a reference lookup could hit a different row with the same reference.
+        let restoredId: number | null = null;
         useUndoStore.getState().push({
           label: `${getLabels().undo_delete_invoice} "${prev.reference}"`,
           execute: async () => {
-            await q.createInvoiceWithLineItems(
+            restoredId = await q.createInvoiceWithLineItems(
               data as Omit<Invoice, "id" | "created_at" | "updated_at">,
               items
             );
@@ -179,11 +182,8 @@ export function useDeleteInvoice() {
             qc.invalidateQueries({ queryKey: ["finance"] });
           },
           redo: async () => {
-            // Re-fetch by reference since ID may differ after restore
-            const invoices = await q.getInvoices();
-            const restored = invoices.find((i) => i.reference === prev.reference);
-            if (restored) {
-              await q.deleteInvoice(restored.id);
+            if (restoredId !== null) {
+              await q.deleteInvoice(restoredId);
               qc.invalidateQueries({ queryKey: ["invoices"] });
               qc.invalidateQueries({ queryKey: ["finance"] });
             }

@@ -33,6 +33,7 @@ import { PLPDF } from "../components/finance/PLPDF";
 import { InvoicesListPDF } from "../components/finance/InvoicesListPDF";
 import { ExpensesListPDF } from "../components/finance/ExpensesListPDF";
 import { getMonthlyData } from "../db/queries/finance";
+import { missingChfEquivalent } from "../lib/chfEquivalent";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 /** Derive pie-chart fill color from category name using the tag color palette */
@@ -160,6 +161,16 @@ export function FinancesPage() {
         .map((c) => ({ name: c.category_code, value: c.total, label: c.name_fr }))
     : [];
 
+  // Counted foreign-currency invoices without a CHF equivalent fall back to
+  // their raw total in every aggregate — surface the data problem loudly.
+  const missingChfCount = (invoices ?? []).filter(
+    (inv) =>
+      inv.invoice_date.startsWith(String(year)) &&
+      inv.status !== "draft" &&
+      inv.status !== "cancelled" &&
+      missingChfEquivalent(inv.currency ?? "CHF", inv.chf_equivalent ?? 0)
+  ).length;
+
   return (
     <div>
       <PageHeader title={t.finances}>
@@ -174,6 +185,12 @@ export function FinancesPage() {
         </select>
         <Button icon={<Download size={14} />} loading={exporting} onClick={exportForTrustee}>{t.export_trustee}</Button>
       </PageHeader>
+
+      {missingChfCount > 0 && (
+        <div className="flex items-center gap-2 p-3 mb-4 bg-[var(--color-warning-bg)] border border-[var(--color-border-header)] rounded-md text-sm text-[var(--color-warning-text)]">
+          {t.chf_equivalent_missing_banner.replace("{count}", String(missingChfCount))}
+        </div>
+      )}
 
       {/* Monthly revenue vs expenses chart */}
       <Card className="mb-6">
