@@ -14,7 +14,6 @@ import { open, ask } from "@tauri-apps/plugin-dialog";
 import { copyFile, mkdir, exists } from "@tauri-apps/plugin-fs";
 import { appDataDir } from "@tauri-apps/api/path";
 import { readFile } from "@tauri-apps/plugin-fs";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   useExpenses,
   useExpenseCategories,
@@ -25,16 +24,16 @@ import {
   useDuplicateCheck,
 } from "../db/hooks/useExpenses";
 import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
-import { DetectedBadge } from "../components/DetectedBadge";
 import { BulkActionBar } from "../components/BulkActionBar";
+import { useReceiptDrop } from "../hooks/useReceiptDrop";
+import { useDetectedFields } from "../hooks/useDetectedFields";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import type { Expense } from "../types/expense";
 import { getNextExpenseReference } from "../db/queries/expenses";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
 import { useT } from "../i18n/useT";
 import { notifyError } from "../lib/notifyError";
-import { extractPdfText, extractImageText } from "../lib/pdfExtract";
-import { parseExpenseFromText, type ExtractedExpenseData } from "../lib/expenseParse";
+import { type ExtractedExpenseData } from "../lib/expenseParse";
 import { logError } from "../lib/log";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
@@ -56,9 +55,7 @@ export function ExpensesPage() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortState<SortKey>>({ key: "invoice_date", dir: "desc" });
   const [preview, setPreview] = useState<{ path: string; reference: string } | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
   const [prefill, setPrefill] = useState<(ExtractedExpenseData & { receiptPath?: string }) | null>(null);
-  const [parsing, setParsing] = useState(false);
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
   const [filterLogic, setFilterLogic] = useState<ConditionLogic>("and");
@@ -130,83 +127,21 @@ export function ExpensesPage() {
     );
   };
 
-  const handleDroppedFile = useCallback(async (filePath: string) => {
-    const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
-    if (!["pdf", "png", "jpg", "jpeg", "heic"].includes(ext)) {
-      toast.error(t.unsupported_file);
-      return;
-    }
-
-    setParsing(true);
-    try {
-      let extracted: ExtractedExpenseData = {};
-      const supplierNames = (pastSuppliers ?? []).map((s) => s.supplier);
-
-      if (ext === "pdf") {
-        const text = await extractPdfText(filePath);
-        if (text) {
-          extracted = parseExpenseFromText(text, supplierNames);
-        }
-      } else if (["png", "jpg", "jpeg", "heic"].includes(ext)) {
-        const text = await extractImageText(filePath);
-        if (text) {
-          extracted = parseExpenseFromText(text, supplierNames);
-        }
-      }
-
+  const { isDragging, parsing } = useReceiptDrop({
+    getKnownSuppliers: () => (pastSuppliers ?? []).map((s) => s.supplier),
+    onResult: (extracted, filePath) => {
       // Match supplier to known suppliers for category autofill
       if (extracted.supplier && pastSuppliers) {
         const needle = extracted.supplier.trim().toLowerCase();
         const match = pastSuppliers.find(
           (s) => s.supplier.trim().toLowerCase() === needle
         );
-        if (match) {
-          extracted.supplier = match.supplier;
-        }
+        if (match) extracted.supplier = match.supplier;
       }
-
       setPrefill({ ...extracted, receiptPath: filePath });
       setShowForm(true);
-    } catch (e) {
-      logError("PDF parsing failed:", e);
-      setPrefill({ receiptPath: filePath });
-      setShowForm(true);
-    } finally {
-      setParsing(false);
-    }
-  }, [pastSuppliers, t.unsupported_file]);
-
-  // Listen for Tauri drag-and-drop events
-  useEffect(() => {
-    const webview = getCurrentWebview();
-    let unlisten: (() => void) | undefined;
-    let cancelled = false;
-
-    webview.onDragDropEvent((event) => {
-      if (cancelled) return;
-      if (event.payload.type === "enter" || event.payload.type === "over") {
-        setIsDragging(true);
-      } else if (event.payload.type === "drop") {
-        setIsDragging(false);
-        const paths = event.payload.paths;
-        if (paths.length > 0) {
-          handleDroppedFile(paths[0]);
-        }
-      } else if (event.payload.type === "leave") {
-        setIsDragging(false);
-      }
-    }).then((fn) => {
-      if (cancelled) { fn(); return; }
-      unlisten = fn;
-    }).catch(() => {
-      // Silently handle if drag-drop listener setup fails (e.g. unsupported platform)
-    });
-
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, [handleDroppedFile]);
+    },
+  });
 
   const attachReceipt = async (expenseId: number, reference: string, supplier: string) => {
     try {
@@ -644,32 +579,8 @@ export function NewExpenseForm({
     };
   });
   const [errors, setErrors] = useState<Partial<Record<ExpenseFormField, string>>>({});
-  // Which fields still hold an untouched OCR-detected value
-  const [detected, setDetected] = useState<Set<DetectableExpenseField>>(() =>
-    detectedFields(prefill)
-  );
-
-  const undetect = (field: DetectableExpenseField) =>
-    setDetected((prev) => {
-      if (!prev.has(field)) return prev;
-      const next = new Set(prev);
-      next.delete(field);
-      return next;
-    });
-
-  /** Badge + clear for a detected field; `reset` restores the manual default. */
-  const detectedBadge = (field: DetectableExpenseField, reset: () => void) =>
-    detected.has(field) ? (
-      <DetectedBadge
-        onClear={() => {
-          reset();
-          undetect(field);
-        }}
-      />
-    ) : undefined;
-
-  const detectedClass = (field: DetectableExpenseField) =>
-    detected.has(field) ? "!border-[var(--color-accent)]" : "";
+  const { undetect, resetDetected, detectedBadge, detectedClass } =
+    useDetectedFields<DetectableExpenseField>(() => detectedFields(prefill));
 
   const setFieldError = (field: ExpenseFormField, msg: string | null) =>
     setErrors((e) => {
@@ -713,7 +624,7 @@ export function NewExpenseForm({
     // OCR prefill overwrites the whole form programmatically — any stale
     // inline errors no longer describe what is on screen, so clear them all.
     setErrors({});
-    setDetected(detectedFields(prefill));
+    resetDetected(detectedFields(prefill));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync only when a new prefill arrives; adding categories/pastSuppliers would clobber user edits when those queries refetch
   }, [prefill]);
 

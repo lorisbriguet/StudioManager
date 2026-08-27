@@ -780,7 +780,7 @@ function AddressesSection({
         {drafts.map((d, idx) => (
           <div
             key={`draft-addr-${idx}`}
-            className="border border-dashed border-[var(--color-input-border)] rounded-md p-3 space-y-2"
+            className="border border-dashed border-[var(--color-input-border)] rounded-xl p-3 space-y-2"
           >
             <div className="grid grid-cols-2 gap-2">
               <MiniField
