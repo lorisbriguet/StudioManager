@@ -9,7 +9,6 @@ import { formatDisplayDate } from "../utils/formatDate";
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { copyFile, mkdir, exists, readFile } from "@tauri-apps/plugin-fs";
 import { appDataDir } from "@tauri-apps/api/path";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   useIncomes,
   useCreateIncome,
@@ -19,14 +18,13 @@ import {
 import { getNextIncomeReference } from "../db/queries/income";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
 import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
-import { DetectedBadge } from "../components/DetectedBadge";
 import { BulkActionBar } from "../components/BulkActionBar";
+import { useReceiptDrop } from "../hooks/useReceiptDrop";
+import { useDetectedFields } from "../hooks/useDetectedFields";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useT } from "../i18n/useT";
 import { notifyError } from "../lib/notifyError";
 import type { Income } from "../types/income";
-import { extractPdfText, extractImageText } from "../lib/pdfExtract";
-import { parseExpenseFromText, type ExtractedExpenseData } from "../lib/expenseParse";
 import { logError } from "../lib/log";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import { SavedFilterBar } from "../components/SavedFilterBar";
@@ -53,10 +51,8 @@ export function IncomePage() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortState<SortKey>>({ key: "date", dir: "desc" });
   const [preview, setPreview] = useState<{ path: string; reference: string } | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
   const [droppedReceiptPath, setDroppedReceiptPath] = useState<string | null>(null);
   const [prefill, setPrefill] = useState<{ amount?: number; date?: string; source?: string } | null>(null);
-  const [parsing, setParsing] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState<Income> | null>(null);
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
@@ -106,67 +102,19 @@ export function IncomePage() {
     useCallback((inc: (typeof filtered)[0]) => inc.date, [])
   );
 
-  const handleDroppedFile = useCallback(async (filePath: string) => {
-    const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
-    if (!["pdf", "png", "jpg", "jpeg", "heic"].includes(ext)) {
-      toast.error(t.unsupported_file);
-      return;
-    }
-
-    setParsing(true);
-    try {
-      let extracted: ExtractedExpenseData = {};
-
-      if (ext === "pdf") {
-        const text = await extractPdfText(filePath);
-        if (text) extracted = parseExpenseFromText(text);
-      } else if (["png", "jpg", "jpeg", "heic"].includes(ext)) {
-        const text = await extractImageText(filePath);
-        if (text) extracted = parseExpenseFromText(text);
-      }
-
-      setPrefill({
-        amount: extracted.amount,
-        date: extracted.invoice_date,
-        source: extracted.supplier,
-      });
-    } catch (e) {
-      logError("Income file parsing failed:", e);
-      setPrefill(null);
-    } finally {
-      setParsing(false);
-    }
-
-    setDroppedReceiptPath(filePath);
-    setShowForm(true);
-  }, [t]);
-
-  useEffect(() => {
-    const webview = getCurrentWebview();
-    let unlisten: (() => void) | undefined;
-    let cancelled = false;
-
-    webview.onDragDropEvent((event) => {
-      if (cancelled) return;
-      if (event.payload.type === "enter" || event.payload.type === "over") {
-        setIsDragging(true);
-      } else if (event.payload.type === "drop") {
-        setIsDragging(false);
-        const paths = event.payload.paths;
-        if (paths.length > 0) handleDroppedFile(paths[0]);
-      } else if (event.payload.type === "leave") {
-        setIsDragging(false);
-      }
-    }).then((fn) => {
-      if (cancelled) { fn(); return; }
-      unlisten = fn;
-    }).catch((e) => logError("Failed to register drag-drop listener:", e));
-
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, [handleDroppedFile]);
+  const { isDragging, parsing } = useReceiptDrop({
+    onResult: (extracted, filePath) => {
+      const hasData =
+        extracted.amount != null || extracted.invoice_date != null || extracted.supplier != null;
+      setPrefill(
+        hasData
+          ? { amount: extracted.amount, date: extracted.invoice_date, source: extracted.supplier }
+          : null
+      );
+      setDroppedReceiptPath(filePath);
+      setShowForm(true);
+    },
+  });
 
   const attachReceipt = async (incomeId: number, reference: string, source: string) => {
     try {
@@ -557,32 +505,8 @@ export function NewIncomeForm({
     notes: "",
   });
   const [errors, setErrors] = useState<Partial<Record<IncomeFormField, string>>>({});
-  // Which fields still hold an untouched OCR-detected value
-  const [detected, setDetected] = useState<Set<DetectableIncomeField>>(() =>
-    detectedIncomeFields(prefill)
-  );
-
-  const undetect = (field: DetectableIncomeField) =>
-    setDetected((prev) => {
-      if (!prev.has(field)) return prev;
-      const next = new Set(prev);
-      next.delete(field);
-      return next;
-    });
-
-  /** Badge + clear for a detected field; `reset` restores the manual default. */
-  const detectedBadge = (field: DetectableIncomeField, reset: () => void) =>
-    detected.has(field) ? (
-      <DetectedBadge
-        onClear={() => {
-          reset();
-          undetect(field);
-        }}
-      />
-    ) : undefined;
-
-  const detectedClass = (field: DetectableIncomeField) =>
-    detected.has(field) ? "!border-[var(--color-accent)]" : "";
+  const { undetect, resetDetected, detectedBadge, detectedClass } =
+    useDetectedFields<DetectableIncomeField>(() => detectedIncomeFields(prefill));
 
   const setFieldError = (field: IncomeFormField, msg: string | null) =>
     setErrors((e) => {
@@ -619,9 +543,9 @@ export function NewIncomeForm({
         if (prefill.amount != null) delete next.amount;
         return next;
       });
-      setDetected(detectedIncomeFields(prefill));
+      resetDetected(detectedIncomeFields(prefill));
     }
-  }, [prefill]);
+  }, [prefill, resetDetected]);
 
   return (
     <Card className="mb-6 space-y-3">
