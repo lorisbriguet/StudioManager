@@ -88,11 +88,23 @@ fn execute_batch(
     Ok(serde_json::json!({ "lastInsertId": last_insert_id }))
 }
 
-/// Convert Tauri SQL plugin style $1, $2 placeholders to rusqlite ?1, ?2
+/// Convert Tauri SQL plugin style $1, $2 placeholders to rusqlite ?1, ?2.
+/// Text inside single-quoted SQL string literals is left untouched — a
+/// literal like '$1 fee' must not become a placeholder.
 fn convert_placeholders(sql: &str) -> String {
     let mut result = String::with_capacity(sql.len());
     let mut chars = sql.chars().peekable();
+    let mut in_string = false;
     while let Some(c) = chars.next() {
+        if c == '\'' {
+            in_string = !in_string;
+            result.push(c);
+            continue;
+        }
+        if in_string {
+            result.push(c);
+            continue;
+        }
         if c == '$' {
             // Check if followed by digits
             let mut digits = String::new();
@@ -394,4 +406,51 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn converts_dollar_placeholders_to_question_marks() {
+        assert_eq!(
+            convert_placeholders("SELECT * FROM t WHERE a = $1 AND b = $12"),
+            "SELECT * FROM t WHERE a = ?1 AND b = ?12"
+        );
+    }
+
+    #[test]
+    fn leaves_a_bare_dollar_untouched() {
+        assert_eq!(convert_placeholders("a $ b"), "a $ b");
+    }
+
+    #[test]
+    fn does_not_convert_inside_string_literals() {
+        assert_eq!(
+            convert_placeholders("UPDATE t SET label = '$1 fee' WHERE id = $1"),
+            "UPDATE t SET label = '$1 fee' WHERE id = ?1"
+        );
+        // '' is an escaped quote INSIDE the literal — $2 in the literal must
+        // survive, the one outside must convert
+        assert_eq!(
+            convert_placeholders("SELECT 'it''s $2', $2"),
+            "SELECT 'it''s $2', ?2"
+        );
+    }
+
+    #[test]
+    fn json_values_bind_with_their_sql_types() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        let q = |v: &JsonValue| -> rusqlite::types::Value {
+            let boxed = json_to_sql(v);
+            conn.query_row("SELECT ?1", [&*boxed], |r| r.get(0)).unwrap()
+        };
+        use rusqlite::types::Value;
+        assert_eq!(q(&serde_json::json!("x")), Value::Text("x".into()));
+        assert_eq!(q(&serde_json::json!(7)), Value::Integer(7));
+        assert_eq!(q(&serde_json::json!(1.5)), Value::Real(1.5));
+        assert_eq!(q(&serde_json::json!(true)), Value::Integer(1));
+        assert_eq!(q(&serde_json::json!(null)), Value::Null);
+    }
 }
