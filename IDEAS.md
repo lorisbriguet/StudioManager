@@ -122,9 +122,38 @@ Five-front audit (security, data integrity, frontend quality, performance, tests
 - Image receipts via Vision OCR (n=11): supplier 91%, amount 91%, date 64% — clearly better than the tesseract-era baseline (~70% amounts)
 - PDF receipts via PDFKit text (n=112): supplier 59%, amount 67%, date 78% — parser headroom on older receipt layouts, not OCR
 - [x] RESOLVED: 75 receipts + 22 invoice PDFs "missing" were stale absolute paths from the pre-rename bundle identifier (ch.lorisbriguet.studiomanager); the files were all present under ch.studiomanager.app. Live DB rewritten (123/123 verified resolving) and an idempotent ensureSchema migration now heals any DB restored from a pre-rename backup
-- [ ] Parser accuracy on older PDF receipt layouts (supplier 59%) — mine `scripts/eval-receipts.mjs --verbose` mismatches for new label patterns
+- [x] Parser accuracy on older PDF receipt layouts (2026-08-14) — US MM/DD/YYYY dates (incl. trailing time), "DD Mon, YYYY", header/metadata-line skips for the supplier fallback. Remaining eval gap is ground-truth artifacts (recorded payment dates vs printed invoice dates, CHF card charges vs foreign totals, supplier nicknames) — not parser bugs
 
 False alarms reviewed and rejected: $LAST_INSERT_ID injection (i64-only), localStorage mode switching (webview already has execute_batch by design), javascript:/file: URLs via shell.open (plugin's default validator blocks them), supplier-merge finance invalidation (finance never aggregates by supplier).
+
+## UI design audit — round 2 (2026-08-14)
+
+Code-level review by three design lenses (visual language, layout consistency, interaction). Verdict: the token system is excellent (zero hardcoded grays, 301 token usages, full dark-mode parity, reduced-motion respected); the design debt sits in discoverability, paradigm consistency and micro-typography. A visual (screenshot) pass is still pending — needs Screen Recording permission or user-provided captures.
+
+### Discoverability (highest impact)
+- [ ] Row-action menu trigger (Settings2) is invisible until hover on Invoices/Expenses/Quotes — make it persistently visible at rest (muted)
+- [ ] IncomePage has no row context menu at all (delete only) — bring it to parity with Expenses
+- [ ] Contact/address card edit affordances are hover-only — always-visible edit control
+
+### Form paradigms & flows
+- [ ] Button order: inline Card forms put Save leftmost while modals put primary rightmost (macOS convention) — standardize primary-rightmost everywhere; consistent action placement on full-page forms
+- [ ] "Save & preview" on the invoice form to collapse the save → list → hover → menu → export flow
+
+### Typography & tokens
+- [ ] Fold ad-hoc font sizes (text-[13px]/[11px]/[9px]) into the documented scale
+- [ ] Slightly darken --color-muted (borderline WCAG AA ~4.4:1 at the 10-11px sizes it dominates)
+- [ ] Document spacing rhythm + type scale in DESIGN-SYSTEM.md (py-[7px]-style one-offs exist)
+
+### Information architecture & guidance
+- [ ] SettingsPage: card-based sectioning per topic (currently one undifferentiated 1,679-line column)
+- [ ] FinancesPage: empty state for fresh profiles + clearer chart sectioning
+- [ ] First-run guidance for Dashboard/Calendar/Wiki (list pages already have good EmptyState CTAs)
+
+### Keyboard & undo
+- [ ] Cmd+N for new invoice/expense/income; arrow-key row navigation + keyboard path to the row menu
+- [ ] Undo for recurring-template delete and contact/address operations (currently permanent)
+
+Reviewer claims rejected: "radius hierarchy inverted" (frequency ≠ inversion), "PageHeader missing on half the pages" (spot-checked false; only Dashboard/Settings are custom, defensibly), "under-elevated" (flat border-defined depth with overlay-only shadows is a deliberate, good model).
 
 ## Planned — features (pre-1.12 backlog)
 
