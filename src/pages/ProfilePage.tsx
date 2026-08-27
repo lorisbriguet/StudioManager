@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useForm } from "react-hook-form";
-import { Plus, X, Palette, Trash2, Building2, Landmark, FileText } from "lucide-react";
+import { Plus, X, Palette, Trash2, Building2, Landmark, FileText, AlertTriangle } from "lucide-react";
+import { isUntranslatedActivity } from "../lib/activityNudge";
 import { toast } from "sonner";
 import {
   useBusinessProfile,
@@ -360,7 +361,7 @@ export function ProfilePage() {
   );
 }
 
-function ActivityRow({
+export function ActivityRow({
   activity,
   onSave,
   onDelete,
@@ -371,6 +372,7 @@ function ActivityRow({
   onDelete: () => void;
   removeLabel: string;
 }) {
+  const t = useT();
   const [fr, setFr] = useState(activity.name_fr);
   const [en, setEn] = useState(activity.name_en);
   useEffect(() => {
@@ -383,18 +385,32 @@ function ActivityRow({
     onSave(fr, en);
   };
 
+  // Live on the local edit state: translating clears the nudge immediately
+  const untranslated = isUntranslatedActivity({ name_fr: fr, name_en: en });
+
   return (
     <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
       <Input value={fr} onChange={(e) => setFr(e.target.value)} onBlur={commit} />
       <Input value={en} onChange={(e) => setEn(e.target.value)} onBlur={commit} />
-      <button
-        type="button"
-        onClick={onDelete}
-        className="text-muted hover:text-[var(--color-danger-text)]"
-        aria-label={removeLabel}
-      >
-        <X size={14} />
-      </button>
+      <div className="flex items-center gap-1">
+        {untranslated && (
+          <span
+            title={t.activity_untranslated}
+            aria-label={t.activity_untranslated}
+            className="text-[var(--color-warning-text)]"
+          >
+            <AlertTriangle size={13} />
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={onDelete}
+          className="text-muted hover:text-[var(--color-danger-text)]"
+          aria-label={removeLabel}
+        >
+          <X size={14} />
+        </button>
+      </div>
     </div>
   );
 }

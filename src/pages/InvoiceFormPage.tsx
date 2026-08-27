@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ListTodo, Trash2, ArrowLeft } from "lucide-react";
+import { ListTodo, Trash2, ArrowLeft, AlertTriangle } from "lucide-react";
+import { isUntranslatedActivity } from "../lib/activityNudge";
 import { Button, Input, Select, FormField } from "../components/ui";
 import * as v from "../lib/validate";
 import { toast } from "sonner";
@@ -603,6 +604,16 @@ export function InvoiceFormPage() {
               {activityId === null && !activity && <option value="" />}
             </Select>
           </FormField>
+          {/* The EN invoice would print the French name — nudge at the moment of harm */}
+          {selectedClient?.language === "EN" &&
+            (() => {
+              const selected = activityList?.find((a) => a.id === activityId);
+              return selected && isUntranslatedActivity(selected) ? (
+                <p className="col-span-2 -mt-2 text-xs text-[var(--color-warning-text)] flex items-center gap-1">
+                  <AlertTriangle size={12} /> {t.activity_untranslated}
+                </p>
+              ) : null;
+            })()}
           <FormField label={t.assignment}>
             <Input
               value={assignment}
