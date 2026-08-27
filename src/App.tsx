@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "react-error-boundary";
@@ -11,7 +11,11 @@ import { ClientDetailPage } from "./pages/ClientDetailPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { TasksPage } from "./pages/TasksPage";
-import { CalendarPage } from "./pages/CalendarPage";
+// Lazy: CalendarPage carries FullCalendar and WikiPage carries tiptap —
+// neither belongs in the main chunk for users who don't open them.
+const CalendarPage = lazy(() =>
+  import("./pages/CalendarPage").then((m) => ({ default: m.CalendarPage }))
+);
 import { InvoicesPage } from "./pages/InvoicesPage";
 import { InvoiceFormPage } from "./pages/InvoiceFormPage";
 import { QuotesPage } from "./pages/QuotesPage";
@@ -22,12 +26,15 @@ import { FinancesPage } from "./pages/FinancesPage";
 import { InvoicePreviewPage } from "./pages/InvoicePreviewPage";
 import { QuotePreviewPage } from "./pages/QuotePreviewPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
-import { WikiPage } from "./pages/WikiPage";
+const WikiPage = lazy(() =>
+  import("./pages/WikiPage").then((m) => ({ default: m.WikiPage }))
+);
 import { SettingsPage } from "./pages/SettingsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { CommandPalette } from "./components/CommandPalette";
 import { QuickTimerModal } from "./components/QuickTimerModal";
+import { PageSpinner } from "./components/ui";
 import { useOverdueCheck } from "./hooks/useOverdueCheck";
 import { useRecurringCheck } from "./hooks/useRecurringCheck";
 import { useAutoBackup } from "./hooks/useAutoBackup";
@@ -160,7 +167,7 @@ export default function App() {
               <Route path="projects" element={<ProjectsPage />} />
               <Route path="projects/:id" element={<ProjectDetailPage />} />
               <Route path="tasks" element={<TasksPage />} />
-              <Route path="calendar" element={<CalendarPage />} />
+              <Route path="calendar" element={<Suspense fallback={<PageSpinner />}><CalendarPage /></Suspense>} />
               <Route path="invoices" element={<InvoicesPage />} />
               <Route path="invoices/new" element={<InvoiceFormPage />} />
               <Route path="invoices/:id/edit" element={<InvoiceFormPage />} />
@@ -172,7 +179,7 @@ export default function App() {
               <Route path="expenses" element={<ExpensesPage />} />
               <Route path="income" element={<IncomePage />} />
               <Route path="finances" element={<FinancesPage />} />
-              <Route path="wiki" element={<WikiPage />} />
+              <Route path="wiki" element={<Suspense fallback={<PageSpinner />}><WikiPage /></Suspense>} />
               <Route path="resources" element={<ResourcesPage />} />
               <Route path="notifications" element={<NotificationsPage />} />
               <Route path="settings" element={<SettingsPage />} />
