@@ -117,8 +117,8 @@ function monthFromName(token: string): number | null {
   return MONTH_NAMES[t] ?? null;
 }
 
-// "14-JAN-2024", "16 avril 2024", "5. März 2025", "1er janvier 2025"
-const DAY_MONTHNAME_YEAR = /(\d{1,2})(?:er)?[.\s-]+([A-Za-zÀ-ÿ]{3,10})[.\s-]+(\d{4})/g;
+// "14-JAN-2024", "16 avril 2024", "5. März 2025", "1er janvier 2025", "17 Apr, 2026"
+const DAY_MONTHNAME_YEAR = /(\d{1,2})(?:er)?[.\s-]+([A-Za-zÀ-ÿ]{3,10})[,.\s-]+(\d{4})/g;
 // "February 5, 2026", "Feb 5, 2026"
 const MONTHNAME_DAY_YEAR = /([A-Za-zÀ-ÿ]{3,10})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})/g;
 
@@ -132,9 +132,14 @@ function collectDates(lines: string[]): DateCandidate[] {
   const out: DateCandidate[] = [];
   lines.forEach((line, lineIndex) => {
     for (const m of line.matchAll(/(\d{1,2})[./](\d{1,2})[./](\d{2,4})/g)) {
-      const [, d, mo, yRaw] = m;
+      const [, first, second, yRaw] = m;
       if (yRaw.length === 3) continue;
       const y = yRaw.length === 2 ? `20${yRaw}` : yRaw;
+      // Day-first (Swiss/EU) by default; when the middle group cannot be a
+      // month (>12) the date is unambiguously US MM/DD/YYYY — swap.
+      const usFormat = Number(second) > 12 && Number(first) <= 12;
+      const d = usFormat ? second : first;
+      const mo = usFormat ? first : second;
       const iso = `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
       if (isValidDate(iso)) out.push({ iso, line, lineIndex });
     }
@@ -267,7 +272,9 @@ function detectSupplier(
   const nonEmpty = lines.filter((l) => l.length > 2);
   for (const line of nonEmpty.slice(0, 15)) {
     if (/^\d/.test(line)) continue;
-    if (/^(facture|invoice|rechnung|quittung|receipt|page|date|total|ref|n°|cette|veuillez|destinataire)/i.test(line)) continue;
+    if (/^(facture|invoice|rechnung|quittung|receipt|page|date|total|ref|n°|cette|veuillez|destinataire|confirmation|order|sold to|bill to|ship to|delivery|liefer)/i.test(line)) continue;
+    // Terminal metadata like "ECR-Id: 2", "Attendant-Id: 27"
+    if (/^\w+-id\s*[:=]/i.test(line)) continue;
     if (/chf|fr\.|montant|amount|tva/i.test(line)) continue;
     const alphaRatio = (line.match(/[a-zA-ZÀ-ÿ]/g) || []).length / line.length;
     if (alphaRatio < 0.5) continue;

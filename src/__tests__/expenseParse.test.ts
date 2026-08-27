@@ -210,3 +210,50 @@ describe("parseExpenseFromText — total scoring without position bias", () => {
     expect(parseExpenseFromText(text).amount).toBe(43.47);
   });
 });
+
+// ── Eval-driven additions (2026-08-14): real receipts that failed ──────────
+
+describe("US date formats (eval: Digitec, Derivative)", () => {
+  it("swaps unambiguous US MM/DD/YYYY dates", () => {
+    const r = parseExpenseFromText("ACME Corp\nOrder / Invoice date 12/27/2024\nTotal CHF 100.00");
+    expect(r.invoice_date).toBe("2024-12-27");
+  });
+
+  it("parses a US date followed by a time", () => {
+    const r = parseExpenseFromText("ACME Corp\nDate: 08/13/2026 - 07:38\nTotal $600.00");
+    expect(r.invoice_date).toBe("2026-08-13");
+  });
+
+  it("keeps ambiguous slash dates European (Swiss default)", () => {
+    const r = parseExpenseFromText("ACME Corp\nDate: 03/04/2026\nTotal CHF 50.00");
+    expect(r.invoice_date).toBe("2026-04-03");
+  });
+});
+
+describe("month-name date with comma (eval: DORON's SUPPLY)", () => {
+  it("parses 'DD Mon, YYYY'", () => {
+    const r = parseExpenseFromText("ACME Corp\nDate: 17 Apr, 2026\nTotal CHF 55.00");
+    expect(r.invoice_date).toBe("2026-04-17");
+  });
+});
+
+describe("supplier fallback skips document headers (eval: Super Magnete, FNAC, Derivative)", () => {
+  it("never picks confirmation/sold-to/attendant lines as the supplier", () => {
+    const text = [
+      "Confirmation de la commande",
+      "Sold to: ch. du Royer 32",
+      "Attendant-Id: 27",
+      "Order confirmation 134465764",
+      "Super Magnete Shop",
+      "Total CHF 42.00",
+    ].join("\n");
+    expect(parseExpenseFromText(text).supplier).toBe("Super Magnete Shop");
+  });
+});
+
+describe("supplier fallback skips metadata id lines (eval: FNAC)", () => {
+  it("skips any '<word>-Id:' line", () => {
+    const text = ["ECR-Id: 2", "Terminal-Id: 9", "Fnac Suisse SA", "Total CHF 19.90"].join("\n");
+    expect(parseExpenseFromText(text).supplier).toBe("Fnac Suisse SA");
+  });
+});

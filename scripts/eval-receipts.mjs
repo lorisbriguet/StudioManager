@@ -55,7 +55,7 @@ function run(argv) {
 `;
 
 function sql(query) {
-  const out = execFileSync("sqlite3", ["-json", "-readonly", DB, query]).toString().trim();
+  const out = execFileSync("sqlite3", ["-json", DB, query]).toString().trim();
   return out ? JSON.parse(out) : [];
 }
 
