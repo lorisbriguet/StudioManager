@@ -742,4 +742,25 @@ async function ensureSchema(db: Database) {
     // Clear migrated rows so this doesn't run again
     await db.execute("DELETE FROM workload_rows");
   }
+
+  // ── Hot-path indexes (idempotent) ──────────────────────────
+  // Frequent WHERE/JOIN columns; negligible cost at this DB size, cheap
+  // insurance as the data grows.
+  const indexes = [
+    "CREATE INDEX IF NOT EXISTS idx_invoices_client ON invoices(client_id)",
+    "CREATE INDEX IF NOT EXISTS idx_invoices_date ON invoices(invoice_date)",
+    "CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status)",
+    "CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(invoice_date)",
+    "CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category_code)",
+    "CREATE INDEX IF NOT EXISTS idx_expenses_supplier ON expenses(supplier)",
+    "CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id)",
+    "CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_date)",
+    "CREATE INDEX IF NOT EXISTS idx_subtasks_task ON subtasks(task_id)",
+    "CREATE INDEX IF NOT EXISTS idx_time_entries_task ON time_entries(task_id)",
+    "CREATE INDEX IF NOT EXISTS idx_invoice_line_items_invoice ON invoice_line_items(invoice_id)",
+    "CREATE INDEX IF NOT EXISTS idx_quote_line_items_quote ON quote_line_items(quote_id)",
+  ];
+  for (const stmt of indexes) {
+    await db.execute(stmt).catch((e) => logError("[DB] index creation failed:", e));
+  }
 }

@@ -79,11 +79,16 @@ export function ExpensesPage() {
     { key: "amount", label: t.amount, type: "number" },
   ], [t, categories]);
 
-  const categoryName = (code: string) =>
-    categories?.find((c) => c.code === code)?.name_fr ?? code;
+  // Map lookup instead of a linear find per rendered row
+  const categoryMap = useMemo(
+    () => new Map((categories ?? []).map((c) => [c.code, c])),
+    [categories]
+  );
+
+  const categoryName = (code: string) => categoryMap.get(code)?.name_fr ?? code;
 
   const categoryColor = (code: string) => {
-    const cat = categories?.find((c) => c.code === code);
+    const cat = categoryMap.get(code);
     if (cat?.color) return getNamedTagColor(cat.color, darkMode);
     return getTagColor(code, darkMode);
   };
