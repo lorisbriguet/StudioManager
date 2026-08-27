@@ -3,6 +3,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
+import { isAllowedWikiLink } from "../lib/wikiLinks";
 import {
   Plus,
   ArrowLeft,
@@ -351,7 +352,12 @@ function ArticleEditor({
         Placeholder.configure({
           placeholder: t.start_writing,
         }),
-        Link.configure({ openOnClick: false }),
+        Link.configure({
+          openOnClick: false,
+          // Defense-in-depth on top of tiptap's own validation: only web
+          // URLs and internal /wiki links may be stored in article content.
+          isAllowedUri: (url) => isAllowedWikiLink(url),
+        }),
       ],
       content: article?.content ?? "",
       onUpdate: ({ editor: ed }) => {
