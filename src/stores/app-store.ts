@@ -15,6 +15,7 @@ function applyDarkClass(dark: boolean) {
 
 export type DateFormatOption = "dd.MM.yyyy" | "dd/MM/yyyy" | "MM/dd/yyyy" | "yyyy-MM-dd";
 export type ProjectOpenMode = "peek" | "page";
+export type CalendarViewOption = "dayGridMonth" | "timeGridWeek";
 
 export interface AccentPreset {
   name: string;
@@ -174,6 +175,8 @@ export interface AppState {
   exportLanguage: AppLanguage;
   clientsSortKey: string;
   clientsSortDir: "asc" | "desc";
+  /** Last selected calendar view — remembered across launches. */
+  calendarView: CalendarViewOption;
   activeTimer: ActiveTimer | null;
   currentContext: {
     clientId?: string;
@@ -186,6 +189,7 @@ export interface AppState {
   setClientsSortDir: (dir: "asc" | "desc") => void;
   setLanguage: (lang: AppLanguage) => void;
   setExportLanguage: (lang: AppLanguage) => void;
+  setCalendarView: (view: CalendarViewOption) => void;
   openCommandPalette: () => void;
   closeCommandPalette: () => void;
   toggleCommandPalette: () => void;
@@ -276,6 +280,7 @@ export const useAppStore = create<AppState>((set) => ({
   exportLanguage: (localStorage.getItem("exportLanguage") as AppLanguage) ?? "FR",
   clientsSortKey: localStorage.getItem("clientsSortKey") ?? "name",
   clientsSortDir: (localStorage.getItem("clientsSortDir") as "asc" | "desc") ?? "asc",
+  calendarView: (localStorage.getItem("calendarView") as CalendarViewOption) ?? "timeGridWeek",
   activeTimer: loadActiveTimer(),
   currentContext: {},
   // Overwrites any existing timer — callers that care about the running
@@ -304,6 +309,10 @@ export const useAppStore = create<AppState>((set) => ({
   setExportLanguage: (lang) => {
     localStorage.setItem("exportLanguage", lang);
     set({ exportLanguage: lang });
+  },
+  setCalendarView: (view) => {
+    localStorage.setItem("calendarView", view);
+    set({ calendarView: view });
   },
   openCommandPalette: () => set({ commandPaletteOpen: true }),
   closeCommandPalette: () => set({ commandPaletteOpen: false }),

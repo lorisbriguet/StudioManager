@@ -128,14 +128,18 @@ export function CalendarPage() {
   const lastClickRef = useRef<{ time: number; date: string }>({ time: 0, date: "" });
   const calRef = useRef<FullCalendar>(null);
   const [calTitle, setCalTitle] = useState("");
-  const [calView, setCalView] = useState<"dayGridMonth" | "timeGridWeek">("timeGridWeek");
+  // Remembered across launches (#311): initial value comes from the store,
+  // every switch persists through it.
+  const storedView = useAppStore((s) => s.calendarView);
+  const persistCalendarView = useAppStore((s) => s.setCalendarView);
+  const [calView, setCalView] = useState<"dayGridMonth" | "timeGridWeek">(storedView);
 
   const calApi = () => calRef.current?.getApi();
   const syncTitle = useCallback(() => { const api = calRef.current?.getApi(); if (api) setCalTitle(api.view.title); }, []);
   const calPrev = () => { calApi()?.prev(); syncTitle(); };
   const calNext = () => { calApi()?.next(); syncTitle(); };
   const calToday = () => { calApi()?.today(); syncTitle(); };
-  const calSetView = (v: "dayGridMonth" | "timeGridWeek") => { calApi()?.changeView(v); setCalView(v); syncTitle(); };
+  const calSetView = (v: "dayGridMonth" | "timeGridWeek") => { calApi()?.changeView(v); setCalView(v); persistCalendarView(v); syncTitle(); };
 
   useEffect(() => {
     const timer = setTimeout(() => { calRef.current?.getApi()?.updateSize(); syncTitle(); }, 100);
@@ -455,7 +459,7 @@ export function CalendarPage() {
           <FullCalendar
             ref={calRef}
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-            initialView="timeGridWeek"
+            initialView={storedView}
             headerToolbar={false}
             dayHeaderFormat={{ weekday: "short", day: "numeric" }}
             events={events}
