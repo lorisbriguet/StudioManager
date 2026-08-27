@@ -103,20 +103,25 @@ Five-front audit (security, data integrity, frontend quality, performance, tests
 - [x] Calendar sync batch-fetches project + task maps (no per-row lookups; tested)
 - [x] Silent .catch(() => {}) now log (version, snapshot check, drag-drop listener)
 
-### P2 — hardening/hygiene
-- [ ] run_osascript: no Rust-side timeout or stdout cap; consider spawn_blocking (apple.rs)
-- [ ] share_pdf_via_mail: convert to argv pattern for consistency (current escaping is sufficient for AppleScript string literals)
-- [ ] Verify tiptap Link rejects javascript: URLs in stored wiki content
-- [ ] categories.find() per expense row → memoized Map (ExpensesPage:82)
-- [ ] CREATE INDEX on hot columns (invoices client_id/date/status, expenses date/category, tasks project/due)
-- [ ] Invoice delete redo finds the restored row by reference — store the id instead (useInvoices.ts:182)
-- [ ] Warn when non-CHF invoice has chf_equivalent <= 0 (currency mixing in P&L)
-- [ ] Design-system sweep: ~14 rounded-md misuses; ad-hoc raw buttons in Settings/Calendar/Resources
-- [ ] Dedupe detected-badge helpers + handleDroppedFile into shared hooks; split SettingsPage (1673 l.) / ExpensesPage (907 l.) / widgets.tsx (1546 l.)
+### P2 — hardening/hygiene — Done (2026-08-14)
+- [x] run_osascript: per-integration timeouts (kill after 15-30s), 16 MB output cap with pipe draining, commands moved to the blocking pool
+- [x] share_pdf_via_mail converted to the fixed-script argv pattern (last interpolated AppleScript removed)
+- [x] tiptap Link: explicit allowlist (https?:// and /wiki?) — javascript:/data:/file: can never be stored
+- [x] Expense category lookups memoized as a Map
+- [x] CREATE INDEX on hot columns (idempotent, ensureSchema)
+- [x] Invoice delete redo tracks the restored row id
+- [x] Finances page banner when counted foreign-currency invoices lack a CHF equivalent (form already blocks new ones)
+- [x] Design-system: address dropzone → card radius; Settings sandbox controls kept as token-compliant custom buttons (small-button rounded-md is spec-compliant)
+- [x] Shared useReceiptDrop + useDetectedFields hooks (−200 duplicated lines). File splits of SettingsPage/widgets deliberately skipped — churn outweighs benefit today
 
-### P3 — missing tests (ranked) + bundle
-- [ ] Tests: useRecurringCheck workflow, backup.ts create/restore I/O, dirty-guard, tab-store, bulkPdfExport; Rust execute_batch (placeholder conversion incl. $N inside string literals, rollback)
-- [ ] Bundle: single 4.1 MB chunk — lazy-load FullCalendar, tiptap, recharts, PDF stack (low urgency, desktop app)
+### P3 — missing tests + bundle — Done (2026-08-14)
+- [x] Tests added: useRecurringCheck, backup I/O (in-memory fs: CSVs, rotation, safety backup, wipe order, empty-backup abort), dirty-guard, tab store, bulkPdfExport, Rust convert_placeholders (now skips $N inside string literals) + json_to_sql
+- [x] Bundle: Calendar (274 kB) and Wiki (410 kB) lazy-loaded — main chunk 4.1 → 3.4 MB (gzip 1.31 → 1.11 MB). recharts stays (dashboard is the default route); PDF stack stays (woven through export paths — revisit only if it hurts)
+
+### Receipt eval — Vision vs recorded data (2026-08-14, scripts/eval-receipts.mjs)
+- Image receipts via Vision OCR (n=8): supplier 100%, amount 88%, date 88% — clearly better than the tesseract-era baseline (~70% amounts)
+- PDF receipts via PDFKit text (n=40): supplier 88%, amount 70%, date 63% — parser headroom, not OCR
+- ⚠ 75 of 123 receipt files are missing at their stored paths (old machine paths?) — worth a data cleanup pass / re-link tool someday
 
 False alarms reviewed and rejected: $LAST_INSERT_ID injection (i64-only), localStorage mode switching (webview already has execute_batch by design), javascript:/file: URLs via shell.open (plugin's default validator blocks them), supplier-merge finance invalidation (finance never aggregates by supplier).
 
