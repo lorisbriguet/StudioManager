@@ -132,6 +132,24 @@ on run argv
 end run
 "#;
 
+/// Open Apple Mail with a new message and the PDF attached.
+/// argv: subject, to, absolute file path.
+pub(crate) const MAIL_SHARE: &str = r#"
+on run argv
+  set theSubject to item 1 of argv
+  set theTo to item 2 of argv
+  set thePath to item 3 of argv
+  tell application "Mail"
+    set newMessage to make new outgoing message with properties {subject:theSubject, visible:true}
+    tell newMessage
+      make new to recipient at end of to recipients with properties {address:theTo}
+      set mailAttachment to make new attachment with properties {file name:(POSIX file thePath)} at after the last paragraph of content
+    end tell
+    activate
+  end tell
+end run
+"#;
+
 /// Delete every event with the given uid.
 /// argv: calendar, uid.
 pub(crate) const CAL_DELETE_EVENT: &str = r#"
@@ -202,69 +220,179 @@ pub(crate) fn duration_secs(start: (u32, u32), end: (u32, u32)) -> i64 {
 
 // ── osascript runner ────────────────────────────────────────────────────────
 
+/// Generous ceiling for legitimate output (PDF text of a large document is
+/// well under 1 MB); anything beyond this indicates a runaway script.
+const OUTPUT_CAP_BYTES: usize = 16 * 1024 * 1024;
+
+/// Read up to `cap` bytes, then keep DRAINING (discarding) so a chatty child
+/// never blocks on a full pipe. Returns (data, exceeded_cap).
+fn read_capped(mut reader: impl std::io::Read, cap: usize) -> (Vec<u8>, bool) {
+    let mut buf = vec![0u8; 64 * 1024];
+    let mut out: Vec<u8> = Vec::new();
+    let mut exceeded = false;
+    loop {
+        match reader.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                if out.len() < cap {
+                    let take = (cap - out.len()).min(n);
+                    out.extend_from_slice(&buf[..take]);
+                    if n > take {
+                        exceeded = true;
+                    }
+                } else {
+                    exceeded = true;
+                }
+            }
+            Err(_) => break,
+        }
+    }
+    (out, exceeded)
+}
+
 /// Run a FIXED osascript script, passing user data as argv only.
 /// `language_flags` is either empty (AppleScript) or ["-l", "JavaScript"].
-fn run_osascript(language_flags: &[&str], script: &str, argv: &[&str]) -> Result<String, String> {
-    let output = std::process::Command::new("osascript")
+/// The child is killed after `timeout`; output beyond `cap` is an error
+/// (truncated data would be silently wrong for OCR/PDF text).
+fn run_osascript_impl(
+    language_flags: &[&str],
+    script: &str,
+    argv: &[&str],
+    timeout: std::time::Duration,
+    cap: usize,
+) -> Result<String, String> {
+    use std::process::Stdio;
+
+    let mut child = std::process::Command::new("osascript")
         .args(language_flags)
         .arg("-e")
         .arg(script)
         .args(argv)
-        .output()
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|e| format!("failed to run osascript: {e}"))?;
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+
+    let stdout = child.stdout.take().expect("piped stdout");
+    let stderr = child.stderr.take().expect("piped stderr");
+    let out_reader = std::thread::spawn(move || read_capped(stdout, cap));
+    let err_reader = std::thread::spawn(move || read_capped(stderr, 64 * 1024));
+
+    let deadline = std::time::Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {
+                if std::time::Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    let _ = out_reader.join();
+                    let _ = err_reader.join();
+                    return Err(format!(
+                        "osascript timed out after {}s",
+                        timeout.as_secs()
+                    ));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(25));
+            }
+            Err(e) => {
+                let _ = child.kill();
+                return Err(format!("failed to wait for osascript: {e}"));
+            }
+        }
+    };
+
+    let (out, out_exceeded) = out_reader
+        .join()
+        .map_err(|_| "osascript output reader panicked".to_string())?;
+    let (err_bytes, _) = err_reader
+        .join()
+        .map_err(|_| "osascript stderr reader panicked".to_string())?;
+
+    if out_exceeded {
+        return Err("osascript output exceeded the size limit".to_string());
+    }
+    if status.success() {
+        Ok(String::from_utf8_lossy(&out).trim().to_string())
     } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stderr = String::from_utf8_lossy(&err_bytes).trim().to_string();
         if stderr.is_empty() {
-            Err(format!("osascript failed with status {}", output.status))
+            Err(format!("osascript failed with status {status}"))
         } else {
             Err(stderr)
         }
     }
 }
 
+fn run_osascript(
+    language_flags: &[&str],
+    script: &str,
+    argv: &[&str],
+    timeout: std::time::Duration,
+) -> Result<String, String> {
+    run_osascript_impl(language_flags, script, argv, timeout, OUTPUT_CAP_BYTES)
+}
+
 // ── Tauri commands ──────────────────────────────────────────────────────────
 
 /// Extract text from a PDF using the native PDFKit bridge (JXA).
 #[tauri::command]
-pub(crate) fn extract_pdf_text(path: String) -> Result<String, String> {
-    let canonical =
-        std::fs::canonicalize(&path).map_err(|e| format!("path not found: {path} ({e})"))?;
-    run_osascript(
-        &["-l", "JavaScript"],
-        PDF_TEXT_JXA,
-        &[&canonical.to_string_lossy()],
-    )
+pub(crate) async fn extract_pdf_text(path: String) -> Result<String, String> {
+    spawn_osascript(move || {
+        let canonical =
+            std::fs::canonicalize(&path).map_err(|e| format!("path not found: {path} ({e})"))?;
+        run_osascript(
+            &["-l", "JavaScript"],
+            PDF_TEXT_JXA,
+            &[&canonical.to_string_lossy()],
+            PDF_TIMEOUT,
+        )
+    })
+    .await
 }
+
+// Per-integration timeouts: Rust-side backstop so a hung osascript never
+// keeps a process (or a spawn_blocking thread) alive forever. The frontend
+// races shorter timeouts for UX; these just guarantee cleanup.
+const PDF_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+const OCR_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+const CAL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+const MAIL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 
 /// Run Vision OCR on an image file and return the recognized lines.
 fn run_vision_ocr(path: &str) -> Result<String, String> {
-    run_osascript(&["-l", "JavaScript"], OCR_VISION_JXA, &[path])
+    run_osascript(&["-l", "JavaScript"], OCR_VISION_JXA, &[path], OCR_TIMEOUT)
 }
 
 /// OCR an image (JPEG/PNG/HEIC) with the native Vision framework.
 #[tauri::command]
-pub(crate) fn ocr_image_text(path: String) -> Result<String, String> {
-    let canonical =
-        std::fs::canonicalize(&path).map_err(|e| format!("path not found: {path} ({e})"))?;
-    run_vision_ocr(&canonical.to_string_lossy())
+pub(crate) async fn ocr_image_text(path: String) -> Result<String, String> {
+    spawn_osascript(move || {
+        let canonical =
+            std::fs::canonicalize(&path).map_err(|e| format!("path not found: {path} ({e})"))?;
+        run_vision_ocr(&canonical.to_string_lossy())
+    })
+    .await
 }
 
 /// List writable Apple Calendar calendars.
 #[tauri::command]
-pub(crate) fn calendar_list_writable() -> Result<Vec<String>, String> {
-    let raw = run_osascript(&[], CAL_LIST_WRITABLE, &[])?;
-    Ok(raw
-        .split("||")
-        .filter(|n| !n.is_empty())
-        .map(str::to_string)
-        .collect())
+pub(crate) async fn calendar_list_writable() -> Result<Vec<String>, String> {
+    spawn_osascript(move || {
+        let raw = run_osascript(&[], CAL_LIST_WRITABLE, &[], CAL_TIMEOUT)?;
+        Ok(raw
+            .split("||")
+            .filter(|n| !n.is_empty())
+            .map(str::to_string)
+            .collect())
+    })
+    .await
 }
 
 /// Create an Apple Calendar event (timed or all-day) and return its uid.
 #[tauri::command]
-pub(crate) fn calendar_create_event(
+pub(crate) async fn calendar_create_event(
     calendar: String,
     title: String,
     notes: String,
@@ -272,19 +400,37 @@ pub(crate) fn calendar_create_event(
     start_time: Option<String>,
     end_time: Option<String>,
 ) -> Result<String, String> {
-    let (y, m, d) = parse_date(&date)?;
-    let start = start_time.as_deref().filter(|s| !s.is_empty());
-    match start {
-        Some(st) => {
-            let start = parse_time(st)?;
-            let end = match end_time.as_deref().filter(|s| !s.is_empty()) {
-                Some(et) => parse_time(et)?,
-                None => start,
-            };
-            let dur = duration_secs(start, end);
-            run_osascript(
+    spawn_osascript(move || {
+        let (y, m, d) = parse_date(&date)?;
+        let start = start_time.as_deref().filter(|s| !s.is_empty());
+        match start {
+            Some(st) => {
+                let start = parse_time(st)?;
+                let end = match end_time.as_deref().filter(|s| !s.is_empty()) {
+                    Some(et) => parse_time(et)?,
+                    None => start,
+                };
+                let dur = duration_secs(start, end);
+                run_osascript(
+                    &[],
+                    CAL_CREATE_TIMED,
+                    &[
+                        &calendar,
+                        &title,
+                        &notes,
+                        &y.to_string(),
+                        &m.to_string(),
+                        &d.to_string(),
+                        &start.0.to_string(),
+                        &start.1.to_string(),
+                        &dur.to_string(),
+                    ],
+                    CAL_TIMEOUT,
+                )
+            }
+            None => run_osascript(
                 &[],
-                CAL_CREATE_TIMED,
+                CAL_CREATE_ALLDAY,
                 &[
                     &calendar,
                     &title,
@@ -292,32 +438,53 @@ pub(crate) fn calendar_create_event(
                     &y.to_string(),
                     &m.to_string(),
                     &d.to_string(),
-                    &start.0.to_string(),
-                    &start.1.to_string(),
-                    &dur.to_string(),
                 ],
-            )
+                CAL_TIMEOUT,
+            ),
         }
-        None => run_osascript(
-            &[],
-            CAL_CREATE_ALLDAY,
-            &[
-                &calendar,
-                &title,
-                &notes,
-                &y.to_string(),
-                &m.to_string(),
-                &d.to_string(),
-            ],
-        ),
-    }
+    })
+    .await
 }
 
 /// Delete every Apple Calendar event with the given uid.
 #[tauri::command]
-pub(crate) fn calendar_delete_event(calendar: String, uid: String) -> Result<(), String> {
-    run_osascript(&[], CAL_DELETE_EVENT, &[&calendar, &uid])?;
-    Ok(())
+pub(crate) async fn calendar_delete_event(calendar: String, uid: String) -> Result<(), String> {
+    spawn_osascript(move || {
+        run_osascript(&[], CAL_DELETE_EVENT, &[&calendar, &uid], CAL_TIMEOUT)?;
+        Ok(())
+    })
+    .await
+}
+
+/// Open Apple Mail with a new message containing the PDF as attachment.
+#[tauri::command]
+pub(crate) async fn share_pdf_via_mail(
+    path: String,
+    to: String,
+    subject: String,
+) -> Result<(), String> {
+    spawn_osascript(move || {
+        let canonical = std::fs::canonicalize(&path)
+            .map_err(|e| format!("Attachment not found: {path} ({e})"))?;
+        run_osascript(
+            &[],
+            MAIL_SHARE,
+            &[&subject, &to, &canonical.to_string_lossy()],
+            MAIL_TIMEOUT,
+        )?;
+        Ok(())
+    })
+    .await
+}
+
+/// Run blocking osascript work on Tauri's blocking pool so a slow or hung
+/// process never ties up an async runtime worker.
+async fn spawn_osascript<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(work)
+        .await
+        .map_err(|e| format!("osascript task failed: {e}"))?
 }
 
 #[cfg(test)]
@@ -382,13 +549,60 @@ mod tests {
     }
 
     #[test]
+    fn run_osascript_kills_a_hung_script_after_the_timeout() {
+        let start = std::time::Instant::now();
+        let result = run_osascript_impl(
+            &[],
+            "delay 30",
+            &[],
+            std::time::Duration::from_secs(1),
+            1024,
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("timed out"));
+        assert!(start.elapsed() < std::time::Duration::from_secs(5));
+    }
+
+    #[test]
+    fn run_osascript_rejects_output_beyond_the_cap() {
+        // ~200 KB of output against a 1 KB cap
+        let result = run_osascript_impl(
+            &["-l", "JavaScript"],
+            "function run() { return 'x'.repeat(200 * 1024); }",
+            &[],
+            std::time::Duration::from_secs(15),
+            1024,
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("output"));
+    }
+
+    #[test]
+    fn run_osascript_still_returns_normal_output() {
+        let result = run_osascript_impl(
+            &["-l", "JavaScript"],
+            "function run(argv) { return 'ok:' + argv[0]; }",
+            &["hello"],
+            std::time::Duration::from_secs(15),
+            1024 * 1024,
+        );
+        assert_eq!(result.unwrap(), "ok:hello");
+    }
+
+    #[test]
     fn scripts_take_data_via_argv_only() {
         // Fixed scripts must not contain any interpolation and must read
         // their inputs from argv.
-        for script in [CAL_LIST_WRITABLE, CAL_CREATE_TIMED, CAL_CREATE_ALLDAY, CAL_DELETE_EVENT] {
+        for script in [
+            CAL_LIST_WRITABLE,
+            CAL_CREATE_TIMED,
+            CAL_CREATE_ALLDAY,
+            CAL_DELETE_EVENT,
+            MAIL_SHARE,
+        ] {
             assert!(!script.contains("${"), "unexpected interpolation in script");
         }
-        for script in [CAL_CREATE_TIMED, CAL_CREATE_ALLDAY, CAL_DELETE_EVENT] {
+        for script in [CAL_CREATE_TIMED, CAL_CREATE_ALLDAY, CAL_DELETE_EVENT, MAIL_SHARE] {
             assert!(script.contains("on run argv"), "script must use on run argv");
         }
         assert!(PDF_TEXT_JXA.contains("function run(argv)"));

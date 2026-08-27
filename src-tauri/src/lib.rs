@@ -279,38 +279,6 @@ fn get_active_db(app: tauri::AppHandle) -> Result<String, String> {
     Ok(name)
 }
 
-/// Escape a string for safe interpolation into AppleScript double-quoted strings.
-fn escape_applescript(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
-/// Open Apple Mail with a new message containing the PDF as attachment.
-#[tauri::command]
-async fn share_pdf_via_mail(path: String, to: String, subject: String) -> Result<(), String> {
-    if !std::path::Path::new(&path).exists() {
-        return Err(format!("Attachment not found: {path}"));
-    }
-    let safe_subject = escape_applescript(&subject);
-    let safe_to = escape_applescript(&to);
-    let safe_path = escape_applescript(&path);
-    let script = format!(
-        r#"tell application "Mail"
-            set newMessage to make new outgoing message with properties {{subject:"{safe_subject}", visible:true}}
-            tell newMessage
-                make new to recipient at end of to recipients with properties {{address:"{safe_to}"}}
-                set mailAttachment to make new attachment with properties {{file name:POSIX file "{safe_path}"}} at after the last paragraph of content
-            end tell
-            activate
-        end tell"#
-    );
-    std::process::Command::new("osascript")
-        .arg("-e")
-        .arg(&script)
-        .output()
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
 /// Open a directory in Finder, or reveal a file in its enclosing folder
 /// (macOS `open` command). The path is canonicalized first: it must exist
 /// and resolve to an absolute path, and a canonical path can never start
@@ -406,7 +374,7 @@ pub fn run() {
             restore_snapshot,
             has_snapshot,
             get_active_db,
-            share_pdf_via_mail,
+            apple::share_pdf_via_mail,
             open_in_finder,
             apple::extract_pdf_text,
             apple::ocr_image_text,
