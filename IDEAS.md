@@ -44,6 +44,13 @@
 - [x] Revenue by Activity dedup via id/name resolution (fixes "Graphisme" / "Graphic Design" / trailing-space triple rows)
 - [x] Recurring invoices keep their activity link; seed guarded against concurrent first runs
 
+## V1.14.0 — Done (brand identity)
+
+- [x] Sidebar brand: STUDIO→MANAGER wordmark (expanded) + compact arrow mark (collapsed), inline SVG on currentColor
+- [x] New app icon — arrow mark on dark tile with flare rim; Icon Composer doc in `Icon/`, compiled via `scripts/compile-icon.sh` (Assets.car + spec-exact icns), flat set via `tauri icon`
+- [x] Untranslated-activity nudge in editor and on EN invoices
+- [x] Receipt parser: US dates, month-comma dates, header/id line skips
+
 ## Maintenance — dependency audit (2026-08-12)
 
 ### Do now (safe batch) — Done (2026-08-14)
@@ -68,11 +75,11 @@
 - [x] Editing paid date: Enter key doesn't trigger save. App-wide sweep done: paid-date modal, workload column editor (name + formula), client detail fields and address editor all submit on Enter
 - [x] Invoice export from preview with "mark as sent and export": export now re-fetches the updated invoice (fresh reference + stored PDF) instead of the stale closure copy; mutation errors close the modal with a toast. Stored PDFs also render with template/billing address/project/reminder props so they match the preview
 
-## UX/UI improvements (2026-08-12) — Done (2026-08-14) except the nudge
+## UX/UI improvements (2026-08-12) — Done (nudge shipped in v1.14.0)
 
 - [x] "Detected from receipt" indicators — accent border + "From receipt" chip with one-click clear on OCR-prefilled fields (expense + income forms); marker clears on edit or suggestion pick
 - [x] Supplier merge tool in Settings — suggested variant groups (token-subset heuristic) + manual multi-select, canonical pick, single-UPDATE relink with per-row undo
-- [ ] Untranslated-activity nudge — badge in Settings editor (and on first EN-client invoice) where name_fr === name_en
+- [x] Untranslated-activity nudge — badge in Settings editor (and on first EN-client invoice) where name_fr === name_en
 - [x] Stable chart colors per activity — hash of stable key (activity id / name / category code) instead of sorted index; also fixed client/category/project-time charts
 - [x] Dashboard year switcher — header dropdown feeding a DashboardYearContext consumed by all 13 year-scoped widgets
 - [x] YoY deltas on dashboard KPIs — "+X% vs last year" on Invoiced/Expenses/Net, hidden when the prior year is empty
