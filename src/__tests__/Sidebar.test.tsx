@@ -28,9 +28,10 @@ describe("Sidebar", () => {
     useAppStore.setState({ sidebarCollapsed: false, showTasksPage: true });
   });
 
-  it("renders the app name", () => {
+  it("renders the wordmark logo", () => {
     renderSidebar();
-    expect(screen.getByText("StudioManager")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "StudioManager" })).toBeInTheDocument();
+    expect(screen.getByTestId("brand-wordmark")).toBeInTheDocument();
   });
 
   it("renders all main navigation links", () => {
@@ -49,11 +50,12 @@ describe("Sidebar", () => {
     expect(badges.length).toBeGreaterThan(0);
   });
 
-  it("hides labels when collapsed", () => {
+  it("shows the compact brand mark instead of the wordmark when collapsed", () => {
     useAppStore.setState({ sidebarCollapsed: true });
     renderSidebar();
     expect(screen.queryByText("Dashboard")).not.toBeInTheDocument();
-    expect(screen.queryByText("StudioManager")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("brand-wordmark")).not.toBeInTheDocument();
+    expect(screen.getByTestId("brand-mark")).toBeInTheDocument();
   });
 
   it("hides Tasks link when showTasksPage is false", () => {
