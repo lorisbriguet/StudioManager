@@ -196,7 +196,7 @@ export function Sidebar() {
         collapsed ? "w-16" : "w-56"
       }`}
     >
-      <div className={`flex items-center h-14 border-b border-sidebar-border ${collapsed ? "justify-center px-2" : "px-4"}`}>
+      <div className={`flex items-center h-14 border-b border-sidebar-border ${collapsed ? "justify-center px-2" : "px-[22px]"}`}>
         {collapsed ? <BrandMark className="h-3.5" /> : <BrandLogo className="h-6" />}
       </div>
       <nav ref={navRef} className="flex-1 py-2 overflow-y-auto">
