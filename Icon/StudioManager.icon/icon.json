@@ -1,55 +1,55 @@
 {
-  "fill" : {
-    "automatic-gradient" : "display-p3:0.13333,0.13333,0.12941,1.00000"
+  "fill": {
+    "automatic-gradient": "display-p3:0.13333,0.13333,0.12941,1.00000"
   },
-  "groups" : [
+  "groups": [
     {
-      "layers" : [
+      "layers": [
         {
-          "glass" : false,
-          "hidden" : false,
-          "image-name" : "SM-Rim.svg",
-          "name" : "SM-Rim",
-          "position" : {
-            "scale" : 1,
-            "translation-in-points" : [
+          "glass": false,
+          "hidden": false,
+          "image-name": "SM-Rim.svg",
+          "name": "SM-Rim",
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
               0,
               0
             ]
           }
         },
         {
-          "fill-specializations" : [
+          "fill-specializations": [
             {
-              "value" : {
-                "solid" : "extended-gray:1.00000,1.00000"
+              "value": {
+                "solid": "extended-gray:1.00000,1.00000"
               }
             }
           ],
-          "glass" : false,
-          "hidden" : false,
-          "image-name" : "SM-Arrow.svg",
-          "name" : "SM-Arrow",
-          "position" : {
-            "scale" : 0.6,
-            "translation-in-points" : [
+          "glass": false,
+          "hidden": false,
+          "image-name": "SM-Arrow.svg",
+          "name": "SM-Arrow",
+          "position": {
+            "scale": 0.7,
+            "translation-in-points": [
               0,
               0
             ]
           }
         }
       ],
-      "shadow" : {
-        "kind" : "neutral",
-        "opacity" : 0.5
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
       },
-      "translucency" : {
-        "enabled" : true,
-        "value" : 0.5
+      "translucency": {
+        "enabled": true,
+        "value": 0.5
       }
     }
   ],
-  "supported-platforms" : {
-    "squares" : "shared"
+  "supported-platforms": {
+    "squares": "shared"
   }
 }
