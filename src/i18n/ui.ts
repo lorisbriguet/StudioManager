@@ -111,6 +111,11 @@ const ui = {
     no_invoices_yet: "No invoices yet",
     nothing_due_today: "Nothing due today",
     no_overdue_items: "No overdue items",
+    first_run_dashboard: "Start by adding your first client — projects, invoices and stats build from there.",
+    add_first_client: "Add a client",
+    first_run_finances: "Charts appear once you have invoices or expenses.",
+    first_run_calendar: "Tasks and subtasks with due dates appear here automatically.",
+    first_run_wiki: "Keep notes, processes and reference docs here.",
 
     // Projects
     new_project: "New Project",
@@ -462,6 +467,7 @@ const ui = {
     edit_invoice: "Edit Invoice",
     create_invoice: "Create Invoice",
     update_invoice: "Update Invoice",
+    save_and_preview: "Save & Preview",
     edit_quote: "Edit Quote",
     create_quote: "Create Quote",
     update_quote: "Update Quote",
@@ -1038,6 +1044,11 @@ const ui = {
     no_invoices_yet: "Aucune facture",
     nothing_due_today: "Rien de prevu aujourd'hui",
     no_overdue_items: "Aucun element en retard",
+    first_run_dashboard: "Commencez par ajouter votre premier client — projets, factures et statistiques en decoulent.",
+    add_first_client: "Ajouter un client",
+    first_run_finances: "Les graphiques apparaissent des que vous avez des factures ou des depenses.",
+    first_run_calendar: "Les taches et sous-taches avec echeance apparaissent ici automatiquement.",
+    first_run_wiki: "Conservez ici notes, processus et documents de reference.",
 
     // Projects
     new_project: "Nouveau projet",
@@ -1389,6 +1400,7 @@ const ui = {
     edit_invoice: "Modifier la facture",
     create_invoice: "Creer la facture",
     update_invoice: "Mettre a jour la facture",
+    save_and_preview: "Enregistrer et previsualiser",
     edit_quote: "Modifier l'offre",
     create_quote: "Creer l'offre",
     update_quote: "Mettre a jour l'offre",
