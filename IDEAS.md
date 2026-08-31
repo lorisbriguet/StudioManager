@@ -84,14 +84,14 @@ Full-coverage pass: deterministic tooling (npm/cargo audit, knip, jscpd, clippy,
 0 npm vulnerabilities · 0 RustSec vulnerabilities (17 unmaintained-crate warnings are Linux-only gtk deps) · clippy 0 warnings · licenses all permissive · 0 leaked listeners/intervals · design-system compliance 0 violations · transactions atomic (TransactionBatch everywhere it matters) · client cascade delete exemplary
 
 ### Dead weight (mechanical cleanup batch)
-- [ ] Unused npm deps: `@tanstack/react-table`, `@tanstack/react-virtual`, `@tauri-apps/plugin-window-state` (JS binding; Rust side stays)
-- [ ] Unused files: `scripts/attach-invoices.mjs`, `scripts/attach-receipts.mjs`, `scripts/eval-receipts.mjs` (keep? referenced in IDEAS receipts eval), `src/hooks/useAnimateIn.ts`, `src/lib/queryKeys.ts`
-- [ ] 4 dead DUPLICATE time queries in `db/queries/tasks.ts:188-289` (getTimeThisWeek etc.) — live versions are in timeEntries.ts; the dead ones even have divergent semantics (filter by task.updated_at) — delete before someone imports the wrong one
-- [ ] ~18 further unused exports + 9 unused types (knip 2026-08-31 output), incl. `isListInUse` stub that always returns false
-- [ ] 46 unused i18n keys (verify dynamic `t[expr]` access for: dark, light, annual, biannual before deleting)
+- [x] Unused npm deps: `@tanstack/react-table`, `@tanstack/react-virtual`, `@tauri-apps/plugin-window-state` (JS binding; Rust side stays)
+- [x] Unused files: `scripts/attach-invoices.mjs`, `scripts/attach-receipts.mjs`, `scripts/eval-receipts.mjs` (keep? referenced in IDEAS receipts eval), `src/hooks/useAnimateIn.ts`, `src/lib/queryKeys.ts`
+- [x] 4 dead DUPLICATE time queries in `db/queries/tasks.ts:188-289` (getTimeThisWeek etc.) — live versions are in timeEntries.ts; the dead ones even have divergent semantics (filter by task.updated_at) — delete before someone imports the wrong one
+- [x] ~18 further unused exports + 9 unused types (knip 2026-08-31 output), incl. `isListInUse` stub that always returns false
+- [x] 46 unused i18n keys (verify dynamic `t[expr]` access for: dark, light, annual, biannual before deleting)
 
 ### Correctness / UX (P2)
-- [ ] Silent-failure class: no global mutation onError and these lack local ones — Calendar event drag/resize, ClientDetail saveField + createContact, Wiki debounced article save, ProjectDetail delete, NamedTable save-as-list
+- [x] Silent-failure class: no global mutation onError and these lack local ones — Calendar event drag/resize, ClientDetail saveField + createContact, Wiki debounced article save, ProjectDetail delete, NamedTable save-as-list
 - [ ] Wiki debounced save: stale-articleId hazard only ref-mitigated; add id check at fire time + onError
 - [ ] Keyboard nav parity: Tasks/Projects/Clients lack the arrow-key row navigation Invoices/Expenses/Quotes/Income got in v1.15.0
 - [ ] Double-submit windows: create buttons without isPending disable (Clients form, TasksPage Enter, Wiki new article, Settings test/presentation-mode buttons)

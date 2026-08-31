@@ -256,24 +256,27 @@ export function CalendarPage() {
     return items;
   }, [tasks, subtasks, projects, invoices, quotes, t, wlConfigs, darkMode]);
 
-  const handleEventChange = useCallback((event: EventDropArg["event"]) => {
+  const handleEventChange = useCallback((event: EventDropArg["event"], revert?: () => void) => {
     const { type, itemId } = event.extendedProps;
     const data = extractEventData(event);
+    // On failure the calendar has already moved the event visually — snap it
+    // back; the query client's error backstop reports the failure.
+    const opts = { onError: () => revert?.() };
     if (type === "task") {
-      updateTask.mutate({ id: itemId, data });
+      updateTask.mutate({ id: itemId, data }, opts);
     } else if (type === "subtask") {
-      updateSubtask.mutate({ id: itemId, data });
+      updateSubtask.mutate({ id: itemId, data }, opts);
     } else if (type === "deadline") {
-      updateProject.mutate({ id: itemId, data: { deadline: data.due_date } });
+      updateProject.mutate({ id: itemId, data: { deadline: data.due_date } }, opts);
     }
   }, [updateTask, updateSubtask, updateProject]);
 
   const handleEventDrop = useCallback((info: EventDropArg) => {
-    handleEventChange(info.event);
+    handleEventChange(info.event, info.revert);
   }, [handleEventChange]);
 
   const handleEventResize = useCallback((info: EventResizeDoneArg) => {
-    handleEventChange(info.event);
+    handleEventChange(info.event, info.revert);
   }, [handleEventChange]);
 
   const handleEventClick = useCallback((info: { event: { extendedProps: Record<string, unknown> } }) => {
