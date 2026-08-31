@@ -465,7 +465,7 @@ function ContactsSection({
               )}
               <button
                 onClick={() => startEditing(c)}
-                className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
+                className="absolute top-2.5 right-2.5 opacity-60 hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
                 aria-label={t.edit}
               >
                 <Pencil size={14} />
@@ -663,7 +663,7 @@ function AddressCard({
         </div>
         <button
           onClick={() => setEditing(true)}
-          className="opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
+          className="opacity-60 hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
           aria-label={t.edit}
         >
           <Pencil size={14} />
