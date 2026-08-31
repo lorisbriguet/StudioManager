@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
-import { Plus, Paperclip, Eye, X, ChevronRight, Trash2, Upload, Wallet } from "lucide-react";
+import { Plus, Paperclip, Eye, X, ChevronRight, Trash2, Upload, Wallet, Pencil, Settings2 } from "lucide-react";
 import { PageHeader, SearchBar, Button, Card, EmptyState, FormField, Input, Select, TableSkeleton } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
@@ -48,6 +48,7 @@ export function IncomePage() {
   const updateIncome = useUpdateIncome();
   const deleteIncome = useDeleteIncome();
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<Income | null>(null);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortState<SortKey>>({ key: "date", dir: "desc" });
   const [preview, setPreview] = useState<{ path: string; reference: string } | null>(null);
@@ -182,11 +183,27 @@ export function IncomePage() {
         fields={incomeFields}
       />
 
-      {showForm && (
+      {(showForm || editing) && (
         <NewIncomeForm
-          droppedReceiptPath={droppedReceiptPath}
-          prefill={prefill}
+          key={editing?.id ?? "new"}
+          droppedReceiptPath={editing ? null : droppedReceiptPath}
+          prefill={editing ? null : prefill}
+          initial={editing}
           onSave={async (data) => {
+            if (editing) {
+              // Never touch receipt_path on edit — the receipt cell manages it.
+              const { receipt_path: _omit, ...fields } = data;
+              updateIncome.mutate(
+                { id: editing.id, data: fields },
+                {
+                  onSuccess: () => {
+                    toast.success(t.toast_income_updated);
+                    setEditing(null);
+                  },
+                }
+              );
+              return;
+            }
             const reference = await getNextIncomeReference(new Date().getFullYear());
 
             let receiptPath = data.receipt_path;
@@ -219,7 +236,7 @@ export function IncomePage() {
               }
             );
           }}
-          onCancel={() => { setShowForm(false); setDroppedReceiptPath(null); setPrefill(null); }}
+          onCancel={() => { setShowForm(false); setEditing(null); setDroppedReceiptPath(null); setPrefill(null); }}
         />
       )}
 
@@ -322,16 +339,14 @@ export function IncomePage() {
                         </td>
                         <td className="px-4 py-2.5">
                           <button
-                            onClick={() => {
-                              deleteIncome.mutate(inc.id, {
-                                onSuccess: () => undoableFromStore(t.toast_income_deleted),
-                              });
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCtxMenu({ x: e.clientX, y: e.clientY, item: inc });
                             }}
-                            className="opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-danger-text)] transition-opacity"
-                            title={t.delete}
-                            aria-label={t.delete}
+                            className="opacity-60 hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
+                            aria-label={t.more_actions}
                           >
-                            <Trash2 size={14} />
+                            <Settings2 size={14} />
                           </button>
                         </td>
                       </tr>
@@ -367,6 +382,11 @@ export function IncomePage() {
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
+            { label: t.edit, icon: <Pencil size={14} />, onClick: () => { setShowForm(false); setEditing(ctxMenu.item); } },
+            ctxMenu.item.receipt_path
+              ? { label: t.view, icon: <Eye size={14} />, onClick: () => setPreview({ path: ctxMenu.item.receipt_path!, reference: ctxMenu.item.reference }) }
+              : { label: t.attach, icon: <Paperclip size={14} />, onClick: () => attachReceipt(ctxMenu.item.id, ctxMenu.item.reference, ctxMenu.item.source) },
+            { label: "", divider: true, onClick: () => {} },
             { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteIncome.mutate(ctxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_income_deleted) }) },
           ]}
         />
@@ -479,11 +499,14 @@ function detectedIncomeFields(
 export function NewIncomeForm({
   droppedReceiptPath,
   prefill,
+  initial,
   onSave,
   onCancel,
 }: {
   droppedReceiptPath: string | null;
   prefill: { amount?: number; date?: string; source?: string } | null;
+  /** When set, the form edits this income instead of creating a new one. */
+  initial?: Income | null;
   onSave: (data: {
     date: string;
     description: string;
@@ -497,12 +520,12 @@ export function NewIncomeForm({
 }) {
   const t = useT();
   const [form, setForm] = useState({
-    source: prefill?.source ?? "",
-    description: "",
-    category: INCOME_CATEGORIES[0] as string,
-    date: prefill?.date ?? format(new Date(), "yyyy-MM-dd"),
-    amount: prefill?.amount ?? 0,
-    notes: "",
+    source: initial?.source ?? prefill?.source ?? "",
+    description: initial?.description ?? "",
+    category: (initial?.category ?? INCOME_CATEGORIES[0]) as string,
+    date: initial?.date ?? prefill?.date ?? format(new Date(), "yyyy-MM-dd"),
+    amount: initial?.amount ?? prefill?.amount ?? 0,
+    notes: initial?.notes ?? "",
   });
   const [errors, setErrors] = useState<Partial<Record<IncomeFormField, string>>>({});
   const { undetect, resetDetected, detectedBadge, detectedClass } =

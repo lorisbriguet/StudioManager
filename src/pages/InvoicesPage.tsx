@@ -611,7 +611,7 @@ export function InvoicesPage() {
                               e.stopPropagation();
                               setCtxMenu({ x: e.clientX, y: e.clientY, item: inv });
                             }}
-                            className="opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
+                            className="opacity-60 hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
                             aria-label={t.more_actions}
                           >
                             <Settings2 size={14} />
