@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Sidebar } from "../components/layout/Sidebar";
@@ -26,6 +26,15 @@ function renderSidebar() {
 describe("Sidebar", () => {
   beforeEach(() => {
     useAppStore.setState({ sidebarCollapsed: false, showTasksPage: true });
+  });
+
+  it("collapses and expands via the footer toggle", () => {
+    renderSidebar();
+    fireEvent.click(screen.getByRole("button", { name: /collapse sidebar/i }));
+    expect(useAppStore.getState().sidebarCollapsed).toBe(true);
+    expect(screen.getByTestId("brand-mark")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /expand sidebar/i }));
+    expect(useAppStore.getState().sidebarCollapsed).toBe(false);
   });
 
   it("renders the wordmark logo", () => {

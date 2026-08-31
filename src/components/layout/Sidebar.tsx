@@ -17,6 +17,8 @@ import {
   Bell,
   Settings,
   UserCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { BrandLogo, BrandMark } from "../BrandLogo";
 import { useAppStore } from "../../stores/app-store";
@@ -53,6 +55,7 @@ const navItems: SidebarItem[] = [
 
 export function Sidebar() {
   const collapsed = useAppStore((s) => s.sidebarCollapsed);
+  const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const showTasksPage = useAppStore((s) => s.showTasksPage);
   const showIncome = useAppStore((s) => s.showIncome);
   const { data: unreadCount = 0 } = useUnreadNotificationCount();
@@ -253,6 +256,16 @@ export function Sidebar() {
         })}
       </nav>
       <TimerIndicator collapsed={collapsed} />
+      <div className="border-t border-sidebar-border p-2">
+        <button
+          onClick={toggleSidebar}
+          aria-label={collapsed ? t.expand_sidebar : t.collapse_sidebar}
+          title={`${collapsed ? t.expand_sidebar : t.collapse_sidebar} (⌘B)`}
+          className="flex items-center justify-center w-full py-1.5 rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors"
+        >
+          {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+        </button>
+      </div>
     </aside>
   );
 }
