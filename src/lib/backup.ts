@@ -216,6 +216,30 @@ export async function createBackup(
   return backupPath;
 }
 
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Delays before each retry of a failed backup-dir delete. */
+const REMOVE_RETRY_DELAYS_MS = [3000, 15000];
+
+/** Recursive delete with retries. Rotation runs right after the backup's
+ *  file burst — on synced folders (Synology Drive, iCloud, Dropbox) the
+ *  sync daemon is mid-flight at that exact moment and `remove` can fail
+ *  transiently with "Directory not empty (os error 66)" even though the
+ *  same delete succeeds once the daemon settles. Root-caused 2026-08-31:
+ *  the identical remove_dir_all succeeded from an idle process on the
+ *  same directory that the app had just failed on. */
+async function removeBackupDir(path: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await remove(path, { recursive: true });
+      return;
+    } catch (e) {
+      if (attempt >= REMOVE_RETRY_DELAYS_MS.length) throw e;
+      await sleep(REMOVE_RETRY_DELAYS_MS[attempt]);
+    }
+  }
+}
+
 async function rotateBackups(
   backupDir: string,
   maxBackups: number
@@ -236,7 +260,7 @@ async function rotateBackups(
       const safe = safeName(oldest);
       if (!safe) continue;
       try {
-        await remove(`${backupDir}/${safe}`, { recursive: true });
+        await removeBackupDir(`${backupDir}/${safe}`);
       } catch (e) {
         logWarn(`rotateBackups: failed to delete ${safe}:`, String(e));
       }

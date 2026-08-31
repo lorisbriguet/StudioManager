@@ -134,6 +134,71 @@ describe("createBackup", () => {
     expect(memfs.removed).toContain("/backups/backup-2020-01-01-00-00-00");
     expect(memfs.removed).not.toContain("/backups/backup-2021-01-01-00-00-00");
   });
+
+  it("retries a rotation delete that fails transiently (synced-folder ENOTEMPTY)", async () => {
+    vi.useFakeTimers();
+    try {
+      memfs.dirs.add("/backups/backup-2020-01-01-00-00-00/data");
+      memfs.dirs.add("/backups/backup-2021-01-01-00-00-00/data");
+      const fs = await import("@tauri-apps/plugin-fs");
+      const realRemove = vi.mocked(fs.remove).getMockImplementation()!;
+      let failures = 0;
+      vi.mocked(fs.remove).mockImplementation(async (p, opts) => {
+        if (String(p).endsWith("backup-2020-01-01-00-00-00") && failures < 2) {
+          failures++;
+          throw new Error(
+            "failed to remove path: /backups/backup-2020-01-01-00-00-00 with error: Directory not empty (os error 66)"
+          );
+        }
+        return realRemove(p, opts);
+      });
+
+      const pending = createBackup("/backups", 2);
+      await vi.advanceTimersByTimeAsync(60000);
+      await pending;
+
+      expect(failures).toBe(2); // two transient failures were retried through
+      expect(memfs.removed).toContain("/backups/backup-2020-01-01-00-00-00");
+      vi.mocked(fs.remove).mockImplementation(realRemove);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("gives up with a warning when a rotation delete keeps failing", async () => {
+    vi.useFakeTimers();
+    try {
+      memfs.dirs.add("/backups/backup-2020-01-01-00-00-00/data");
+      memfs.dirs.add("/backups/backup-2021-01-01-00-00-00/data");
+      const fs = await import("@tauri-apps/plugin-fs");
+      const realRemove = vi.mocked(fs.remove).getMockImplementation()!;
+      let attempts = 0;
+      vi.mocked(fs.remove).mockImplementation(async (p, opts) => {
+        if (String(p).endsWith("backup-2020-01-01-00-00-00")) {
+          attempts++;
+          throw new Error("Directory not empty (os error 66)");
+        }
+        return realRemove(p, opts);
+      });
+
+      const pending = createBackup("/backups", 2);
+      await vi.advanceTimersByTimeAsync(60000);
+      // createBackup must still resolve — rotation failure is non-fatal
+      const path = await pending;
+      expect(path.startsWith("/backups/backup-")).toBe(true);
+
+      expect(attempts).toBeGreaterThanOrEqual(3); // exhausted retries
+      expect(memfs.removed).not.toContain("/backups/backup-2020-01-01-00-00-00");
+      const { logWarn } = await import("../lib/log");
+      expect(vi.mocked(logWarn)).toHaveBeenCalledWith(
+        expect.stringContaining("backup-2020-01-01-00-00-00"),
+        expect.anything()
+      );
+      vi.mocked(fs.remove).mockImplementation(realRemove);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("restoreFromBackup", () => {
