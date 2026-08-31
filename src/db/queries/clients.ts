@@ -248,9 +248,9 @@ export async function getClientContacts(
 
 export async function createClientContact(
   data: Omit<ClientContact, "id">
-): Promise<void> {
+): Promise<number> {
   const db = await getDb();
-  await db.execute(
+  const result = await db.execute(
     `INSERT INTO client_contacts (client_id, first_name, last_name, email, phone, role)
      VALUES ($1, $2, $3, $4, $5, $6)`,
     [
@@ -262,6 +262,7 @@ export async function createClientContact(
       data.role,
     ]
   );
+  return result.lastInsertId ?? 0;
 }
 
 export async function updateClientContact(

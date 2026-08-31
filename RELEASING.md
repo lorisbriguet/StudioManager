@@ -20,7 +20,7 @@ npm run lint            # exit 0, zero findings
 ```
 
 - Working tree contains only the changes meant for this release; no debug code, `console.log` leftovers, or commented-out hacks.
-- No secrets/PII in the diff (keys, IBANs, personal paths — `scripts/migrate-data.mjs` has historically contained personal data; keep it out of releases or scrubbed).
+- No secrets/PII in the diff (keys, IBANs, personal paths). `scripts/migrate-data.mjs` was deleted in the 2026-08 audit for exactly this reason — anything similar must read personal values from env, never hardcode them. Note the repo is PUBLIC.
 
 ## 2. Design-system compliance audit (required)
 
