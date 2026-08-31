@@ -403,8 +403,8 @@ export function SettingsPage() {
       <div className="flex-1 overflow-y-auto px-8 py-6">
         <div className={activeCategory === "time_entries" ? "max-w-4xl" : activeCategory === "categories" ? "max-w-3xl" : "max-w-xl"}>
           {activeCategory === "general" && (
-            <div className="space-y-1">
-              <SectionHeader title={t.general} />
+            <div className="space-y-4">
+              <SettingsCard title={t.general}>
               <SettingRow label={t.app_language}>
                 <Select
                   value={language}
@@ -437,8 +437,9 @@ export function SettingsPage() {
                   <option value="yyyy-MM-dd">2026-03-05</option>
                 </Select>
               </SettingRow>
+              </SettingsCard>
 
-              <SectionHeader title={t.wiki} />
+              <SettingsCard title={t.wiki}>
               <SettingRow label={t.reset_user_guide} desc={t.reset_user_guide_desc}>
                 <Button
                   variant="ghost"
@@ -458,12 +459,12 @@ export function SettingsPage() {
                   {t.reset_user_guide_btn ?? "Reset"}
                 </Button>
               </SettingRow>
+              </SettingsCard>
             </div>
           )}
 
           {activeCategory === "appearance" && (
-            <div className="space-y-1">
-              <SectionHeader title={t.appearance} />
+            <SettingsCard title={t.appearance}>
               <div className="pb-3">
                 <div className="text-sm mb-2">{t.theme}</div>
                 <div className="grid grid-cols-5 gap-2">
@@ -505,12 +506,11 @@ export function SettingsPage() {
               <SettingRow label={t.reduce_motion} desc={t.reduce_motion_desc}>
                 <Toggle checked={reduceMotion} onChange={setReduceMotion} ariaLabel={t.reduce_motion} />
               </SettingRow>
-            </div>
+            </SettingsCard>
           )}
 
           {activeCategory === "behavior" && (
-            <div className="space-y-1">
-              <SectionHeader title={t.behavior} />
+            <SettingsCard title={t.behavior}>
               <SettingRow label={t.project_open_mode}>
                 <Select
                   value={projectOpenMode}
@@ -533,12 +533,11 @@ export function SettingsPage() {
               <SettingRow label={t.native_notifications} desc={t.native_notifications_desc}>
                 <Toggle checked={nativeNotifications} onChange={setNativeNotifications} ariaLabel={t.native_notifications} />
               </SettingRow>
-            </div>
+            </SettingsCard>
           )}
 
           {activeCategory === "calendar" && (
-            <div className="space-y-1">
-              <SectionHeader title={t.calendar_sync} desc={t.calendar_permission_help} />
+            <SettingsCard title={t.calendar_sync} desc={t.calendar_permission_help}>
               <SettingRow label={t.target_calendar}>
                 <div className="flex items-center gap-2">
                   <Select
@@ -583,51 +582,48 @@ export function SettingsPage() {
               <SettingRow label={t.calendar_color_hint_label} desc={t.calendar_color_hint_desc}>
                 <span />
               </SettingRow>
-            </div>
+            </SettingsCard>
           )}
 
           {activeCategory === "workload" && (
-            <div>
-              <SectionHeader title={t.workload_templates} />
+            <SettingsCard title={t.workload_templates}>
               <WorkloadTemplateManager />
-            </div>
+            </SettingsCard>
           )}
 
           {activeCategory === "categories" && (
-            <div>
-              <SectionHeader title={t.expense_categories} desc={t.expense_categories_desc} />
+            <SettingsCard title={t.expense_categories} desc={t.expense_categories_desc}>
               <ExpenseCategoryManager />
-            </div>
+            </SettingsCard>
           )}
 
           {activeCategory === "suppliers" && (
-            <div>
-              <SectionHeader title={t.suppliers} />
+            <SettingsCard title={t.suppliers}>
               <SuppliersManager />
-            </div>
+            </SettingsCard>
           )}
 
           {activeCategory === "lists" && (
-            <div>
-              <SectionHeader title={t.custom_lists} />
+            <SettingsCard title={t.custom_lists}>
               <CustomListsManager />
-            </div>
+            </SettingsCard>
           )}
 
           {activeCategory === "time_entries" && (
-            <TimeEntriesManager />
+            <section className="rounded-xl bg-[var(--color-surface)] border border-[var(--color-border-divider)] px-4 pt-3 pb-1">
+              <TimeEntriesManager />
+            </section>
           )}
 
           {activeCategory === "updates" && (
-            <div>
-              <SectionHeader title={t.updates} />
+            <SettingsCard title={t.updates}>
               <UpdateChecker />
-            </div>
+            </SettingsCard>
           )}
 
           {activeCategory === "sandbox" && (
-            <div className="space-y-1">
-              <SectionHeader title={t.test_mode} desc={t.test_mode_desc} />
+            <div className="space-y-4">
+              <SettingsCard title={t.test_mode} desc={t.test_mode_desc}>
               <SettingRow label={t.test_mode}>
                 {testMode ? (
                   <div className="flex items-center gap-2">
@@ -643,9 +639,9 @@ export function SettingsPage() {
                   </button>
                 )}
               </SettingRow>
+              </SettingsCard>
 
-              <div className="border-t border-[var(--color-border-divider)] my-3" />
-              <SectionHeader title={t.presentation_mode} desc={t.presentation_mode_desc} />
+              <SettingsCard title={t.presentation_mode} desc={t.presentation_mode_desc}>
               <SettingRow label={t.presentation_mode}>
                 {presentationMode ? (
                   <div className="flex items-center gap-2">
@@ -660,9 +656,9 @@ export function SettingsPage() {
                   </button>
                 )}
               </SettingRow>
+              </SettingsCard>
 
-              <div className="border-t border-[var(--color-border-divider)] my-3" />
-              <SectionHeader title={t.snapshot} desc={t.snapshot_desc} />
+              <SettingsCard title={t.snapshot} desc={t.snapshot_desc}>
               <SettingRow label={t.snapshot}>
                 <div className="flex items-center gap-2">
                   <Button type="button" size="sm" icon={<Camera size={12} />} onClick={handleCreateSnapshot} disabled={snapshotting || testMode}>
@@ -674,12 +670,13 @@ export function SettingsPage() {
                   {!hasSnapshotFile && <span className="text-[11px] text-muted">{t.no_snapshot_available}</span>}
                 </div>
               </SettingRow>
+              </SettingsCard>
             </div>
           )}
 
           {activeCategory === "backup" && (
-            <div className="space-y-1">
-              <SectionHeader title={t.backup} desc={t.backup_desc} />
+            <div className="space-y-4">
+              <SettingsCard title={t.backup} desc={t.backup_desc}>
               <SettingRow label={t.backup_directory}>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-muted truncate max-w-[180px]" title={backupPath}>{backupPath || t.not_set}</span>
@@ -730,14 +727,15 @@ export function SettingsPage() {
                   )}
                 </div>
               </SettingRow>
-              <div className="pt-3 flex items-center gap-2">
+              <div className="py-3 flex items-center gap-2">
                 <Button type="button" size="sm" icon={<HardDrive size={12} />} onClick={runBackup} disabled={backing || !backupPath}>
                   {backing ? t.backing_up : t.backup_now}
                 </Button>
               </div>
+              </SettingsCard>
 
-              <div className="border-t border-[var(--color-border-divider)] my-3" />
-              <SettingRow label={t.restore_from_backup}>
+              <SettingsCard title={t.restore_from_backup}>
+              <SettingRow label={t.select_backup}>
                 <div className="flex items-center gap-1.5">
                   <Select
                     value={selectedBackup}
@@ -762,6 +760,7 @@ export function SettingsPage() {
                   </button>
                 </div>
               </SettingRow>
+              </SettingsCard>
             </div>
           )}
         </div>
@@ -780,6 +779,16 @@ function SettingRow({ label, desc, children }: { label: string; desc?: string; c
       </div>
       <div className="shrink-0">{children}</div>
     </div>
+  );
+}
+
+/** Topic card: a SectionHeader and its rows inside a bounded surface */
+function SettingsCard({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-xl bg-[var(--color-surface)] border border-[var(--color-border-divider)] px-4 pt-3 pb-1">
+      <SectionHeader title={title} desc={desc} />
+      {children}
+    </section>
   );
 }
 
