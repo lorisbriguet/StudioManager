@@ -1,5 +1,14 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
 import { syncAllExisting } from "../lib/appleCalendar";
+
+// plugin-log needs the real Tauri bridge — unmocked it surfaces unhandled
+// rejections ("Cannot read properties of undefined (reading 'invoke')").
+vi.mock("../lib/log", () => ({
+  logError: vi.fn(),
+  logWarn: vi.fn(),
+  logInfo: vi.fn(),
+  logDebug: vi.fn(),
+}));
 import { useAppStore } from "../stores/app-store";
 import { getDb } from "../db";
 import { setSelectHandler } from "../__mocks__/tauri-sql";

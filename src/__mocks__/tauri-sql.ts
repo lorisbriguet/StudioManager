@@ -27,11 +27,14 @@ export default class Database {
   async select(sql?: string, params?: unknown[]): Promise<unknown[]> {
     return selectHandler ? selectHandler(sql ?? "", params ?? []) : [];
   }
-  // Fidelity note: the real plugin's execute() resolves to
-  // { rowsAffected, lastInsertId }; this stub returns void, so code that
-  // reads execute()'s result is not exercised by tests.
-  async execute(sql?: string, params?: unknown[]): Promise<void> {
+  // Matches the real plugin's execute() result shape so code reading
+  // lastInsertId (undo id-capture) is exercised by tests.
+  async execute(
+    sql?: string,
+    params?: unknown[]
+  ): Promise<{ rowsAffected: number; lastInsertId: number }> {
     executedStatements.push({ sql: sql ?? "", params: params ?? [] });
+    return { rowsAffected: 1, lastInsertId: 1 };
   }
   async close(): Promise<boolean> {
     return true;

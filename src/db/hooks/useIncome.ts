@@ -85,18 +85,19 @@ export function useDeleteIncome() {
       await q.deleteIncome(id);
       if (prev) {
         const { id: _id, created_at, updated_at, ...data } = prev;
+        // The restore assigns a fresh rowid; redo targets exactly that id —
+        // a reference lookup could hit a different row with the same reference.
+        let restoredId: number | null = null;
         useUndoStore.getState().push({
           label: `${getLabels().undo_delete_income} "${prev.reference}"`,
           execute: async () => {
-            await q.createIncome(data);
+            restoredId = await q.createIncome(data);
             qc.invalidateQueries({ queryKey: ["incomes"] });
             qc.invalidateQueries({ queryKey: ["finance"] });
           },
           redo: async () => {
-            const incomes = await q.getIncomes();
-            const restored = incomes.find((i) => i.reference === prev.reference);
-            if (restored) {
-              await q.deleteIncome(restored.id);
+            if (restoredId !== null) {
+              await q.deleteIncome(restoredId);
               qc.invalidateQueries({ queryKey: ["incomes"] });
               qc.invalidateQueries({ queryKey: ["finance"] });
             }

@@ -56,6 +56,26 @@
 - [x] Backup rotation retries on synced folders (Synology ENOTEMPTY race)
 - [x] Full audit round 2: discoverability, button order, type scale, muted contrast, Settings cards, first-run guidance, Save & Preview, Cmd+N / arrow-key nav / Cmd+B sidebar toggle, undo affordance on contact/address/template deletes
 
+## Audit — round 3 (2026-08-31)
+
+Three-lens audit (correctness/data, security/platform, UI/a11y/perf/tests) after v1.15.0. Clean bill: SQL parameterization, osascript runner, wiki allowlist, updater chain, capabilities scope, date/money handling, design-system compliance (0 violations), modal/menu focus management.
+
+### Fixed (2026-08-31)
+- [x] PII (IBAN, IDE, phone, address) hardcoded in `scripts/migrate-data.mjs` on a PUBLIC repo — dead one-time script deleted; RELEASING.md rule updated. NOTE: still in git history; purge with `git filter-repo` if desired (destructive, needs force-push).
+- [x] Undo redo fragility — income/contact/address delete redos matched by reference/name instead of the restored id (wrong row deleted if duplicates); now capture `lastInsertId` like invoices (tests: undoRedoCapture.test.tsx; tauri-sql mock now returns the real execute() result shape)
+- [x] Recurring-template create/delete undo pushes had no `redo` — Cmd+Shift+Z was a silent no-op
+- [x] `execute_batch` unbounded — MAX_BATCH_STATEMENTS=10k guard
+- [x] Test-run noise — unmocked `lib/log` in useRecurringCheck.test.tsx
+
+### Open backlog
+- [ ] Test coverage: `lib/undo.ts`, `lib/statusColors.ts`, `db/queries/*` have no direct tests (only indirect via hooks/pages) — prioritize undo + money/date queries
+- [ ] `useListNavigation`: add `getRowProps(idx)` returning `aria-selected` so keyboard focus is announced (visual ring only today)
+- [ ] `pragma_table_info('${table}')` interpolation in `db/index.ts` + `lib/backup.ts` — currently allowlisted/hardcoded (not exploitable), escape or validate as defense-in-depth
+- [ ] Perf: memoize row components + `getTagColor`/`statusClasses` in Invoices/Expenses/NamedTable; consider lazy-loading Settings/Finances routes
+- [ ] Unify receipt-filename sanitization with backup's stronger `safeName()` (shared `lib/pathSafety.ts`)
+- [ ] CSP `connect-src https://github.com` breadth — verify the in-app update check's fetch path before narrowing (naive pinning can break updates)
+- [ ] Invoice PDF recomputes discount from `subtotal * discount_rate` at render — consider storing `discount_amount`
+
 ## Maintenance — dependency audit (2026-08-12)
 
 ### Do now (safe batch) — Done (2026-08-14)

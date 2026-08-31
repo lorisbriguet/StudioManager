@@ -212,20 +212,18 @@ export function useDeleteClientContact() {
       await q.deleteClientContact(vars.id);
       if (prev) {
         const { id: _id, ...data } = prev;
+        // Redo targets exactly the id the restore produced — a field-match
+        // lookup could hit a duplicate contact with the same name/email.
+        let restoredId: number | null = null;
         useUndoStore.getState().push({
           label: `${getLabels().undo_delete_contact} "${prev.first_name} ${prev.last_name}"`,
           execute: async () => {
-            await q.createClientContact(data as Omit<ClientContact, "id">);
+            restoredId = await q.createClientContact(data as Omit<ClientContact, "id">);
             qc.invalidateQueries({ queryKey: ["client-contacts", vars.clientId] });
           },
           redo: async () => {
-            // Find the restored contact by matching fields
-            const contacts = await q.getClientContacts(vars.clientId);
-            const restored = contacts.find(
-              (c) => c.first_name === prev.first_name && c.last_name === prev.last_name && c.email === prev.email
-            );
-            if (restored) {
-              await q.deleteClientContact(restored.id);
+            if (restoredId !== null) {
+              await q.deleteClientContact(restoredId);
               qc.invalidateQueries({ queryKey: ["client-contacts", vars.clientId] });
             }
           },
@@ -313,19 +311,18 @@ export function useDeleteClientAddress() {
       await q.deleteClientAddress(vars.id);
       if (prev) {
         const { id: _id, ...data } = prev;
+        // Redo targets exactly the id the restore produced — a field-match
+        // lookup could hit a duplicate address with the same label.
+        let restoredId: number | null = null;
         useUndoStore.getState().push({
           label: `${getLabels().undo_delete_address} "${prev.label}"`,
           execute: async () => {
-            await q.createClientAddress(data as Omit<ClientAddress, "id">);
+            restoredId = await q.createClientAddress(data as Omit<ClientAddress, "id">);
             qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] });
           },
           redo: async () => {
-            const addrs = await q.getClientAddresses(vars.clientId);
-            const restored = addrs.find(
-              (a) => a.label === prev.label && a.billing_name === prev.billing_name
-            );
-            if (restored) {
-              await q.deleteClientAddress(restored.id);
+            if (restoredId !== null) {
+              await q.deleteClientAddress(restoredId);
               qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] });
             }
           },

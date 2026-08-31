@@ -18,13 +18,20 @@ export function useCreateRecurringTemplate() {
   return useMutation({
     mutationFn: (data: Omit<RecurringInvoiceTemplate, "id" | "created_at" | "updated_at">) =>
       q.createRecurringTemplate(data),
-    onSuccess: (id) => {
+    onSuccess: (id, data) => {
       qc.invalidateQueries({ queryKey: ["recurring_templates"] });
+      // Redo recreates with a fresh id; keep the current id so a later undo
+      // of the redo deletes the right row.
+      let currentId = id;
       push({
         label: getLabels().undo_create_recurring,
-        execute: () => q.deleteRecurringTemplate(id).then(() => {
+        execute: () => q.deleteRecurringTemplate(currentId).then(() => {
           qc.invalidateQueries({ queryKey: ["recurring_templates"] });
         }),
+        redo: async () => {
+          currentId = await q.createRecurringTemplate(data);
+          qc.invalidateQueries({ queryKey: ["recurring_templates"] });
+        },
       });
     },
     onError: (e) => { toast.error(String(e)); },
@@ -80,11 +87,23 @@ export function useDeleteRecurringTemplate() {
     onSuccess: (prev) => {
       qc.invalidateQueries({ queryKey: ["recurring_templates"] });
       if (prev) {
+        const { id: _id, created_at, updated_at, ...data } = prev;
+        // Redo targets exactly the id the restore produced.
+        let restoredId: number | null = null;
         push({
           label: getLabels().undo_delete_recurring,
-          execute: () => q.createRecurringTemplate(prev).then(() => {
+          execute: async () => {
+            restoredId = await q.createRecurringTemplate(
+              data as Omit<RecurringInvoiceTemplate, "id" | "created_at" | "updated_at">
+            );
             qc.invalidateQueries({ queryKey: ["recurring_templates"] });
-          }),
+          },
+          redo: async () => {
+            if (restoredId !== null) {
+              await q.deleteRecurringTemplate(restoredId);
+              qc.invalidateQueries({ queryKey: ["recurring_templates"] });
+            }
+          },
         });
       }
     },

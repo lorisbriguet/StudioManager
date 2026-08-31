@@ -6,6 +6,14 @@ import { runBulkPdfExport } from "../lib/bulkPdfExport";
 
 // plugin-dialog and plugin-fs both alias to the same catch-all mock module,
 // so a single vi.mock must provide every export used by the code under test.
+// plugin-log needs the real Tauri bridge — unmocked it surfaces unhandled
+// rejections ("Cannot read properties of undefined (reading 'invoke')").
+vi.mock("../lib/log", () => ({
+  logError: vi.fn(),
+  logWarn: vi.fn(),
+  logInfo: vi.fn(),
+  logDebug: vi.fn(),
+}));
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   ask: vi.fn(),
   open: vi.fn(),

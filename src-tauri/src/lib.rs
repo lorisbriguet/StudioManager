@@ -21,11 +21,22 @@ struct SqlStatement {
 /// Execute multiple SQL statements in a single SQLite transaction.
 /// This avoids the connection-pool issue with the Tauri SQL plugin
 /// where each IPC call may get a different connection.
+/// Upper bound on statements per batch — the largest legitimate batch is a
+/// full backup restore (a few thousand rows); anything beyond this is a bug
+/// or abuse, not a real workload.
+const MAX_BATCH_STATEMENTS: usize = 10_000;
+
 #[tauri::command]
 fn execute_batch(
     app: tauri::AppHandle,
     statements: Vec<SqlStatement>,
 ) -> Result<serde_json::Value, String> {
+    if statements.len() > MAX_BATCH_STATEMENTS {
+        return Err(format!(
+            "batch too large: {} statements (max {MAX_BATCH_STATEMENTS})",
+            statements.len()
+        ));
+    }
     let app_dir = app
         .path()
         .app_data_dir()

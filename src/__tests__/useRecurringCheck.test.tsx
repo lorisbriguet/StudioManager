@@ -19,6 +19,14 @@ vi.mock("../db/queries/invoices", () => ({
 }));
 vi.mock("../db/queries/notifications", () => ({ createNotification: vi.fn() }));
 vi.mock("../lib/nativeNotification", () => ({ sendNativeNotification: vi.fn() }));
+// plugin-log needs the real Tauri bridge — unmocked it surfaces unhandled
+// rejections ("Cannot read properties of undefined (reading 'invoke')").
+vi.mock("../lib/log", () => ({
+  logError: vi.fn(),
+  logWarn: vi.fn(),
+  logInfo: vi.fn(),
+  logDebug: vi.fn(),
+}));
 vi.mock("sonner", () => ({
   toast: {
     info: vi.fn(),
