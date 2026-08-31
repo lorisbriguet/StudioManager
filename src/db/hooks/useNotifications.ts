@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import * as q from "../queries/notifications";
-import type { AppNotification } from "../../types/notification";
 
 export function useNotifications() {
   return useQuery({
@@ -14,16 +13,6 @@ export function useUnreadNotificationCount() {
   return useQuery({
     queryKey: ["notifications", "unread-count"],
     queryFn: q.getUnreadCount,
-  });
-}
-
-export function useCreateNotification() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: Omit<AppNotification, "id" | "created_at">) =>
-      q.createNotification(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 

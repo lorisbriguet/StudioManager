@@ -13,14 +13,6 @@ export function useWorkloadTemplates() {
   });
 }
 
-export function useWorkloadTemplate(id: number | null) {
-  return useQuery({
-    queryKey: ["workload-templates", id],
-    queryFn: () => (id ? q.getWorkloadTemplate(id) : null),
-    enabled: id !== null,
-  });
-}
-
 export function useCreateWorkloadTemplate() {
   const qc = useQueryClient();
   return useMutation({
@@ -212,10 +204,3 @@ export function useAllProjectWorkloadConfigs() {
 }
 
 // ── Time Overview (read-only aggregate) ────────────────────
-
-export function useTimeOverviewData() {
-  return useQuery({
-    queryKey: ["time-overview"],
-    queryFn: q.getTimeOverviewData,
-  });
-}

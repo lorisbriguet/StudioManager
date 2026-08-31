@@ -1,6 +1,6 @@
 import { getDb } from "../index";
 
-export interface TimeEntry {
+interface TimeEntry {
   id: number;
   task_id: number | null;
   project_id: number;
@@ -14,40 +14,7 @@ export interface TimeEntry {
 }
 
 /** All time entries, optionally filtered by project. */
-export async function getTimeEntries(projectId?: number): Promise<TimeEntry[]> {
-  const db = await getDb();
-  if (projectId !== undefined) {
-    return db.select<TimeEntry[]>(
-      "SELECT * FROM time_entries WHERE project_id = $1 ORDER BY date DESC, created_at DESC",
-      [projectId]
-    );
-  }
-  return db.select<TimeEntry[]>(
-    "SELECT * FROM time_entries ORDER BY date DESC, created_at DESC"
-  );
-}
-
 /** Time entries for a specific task. */
-export async function getTimeEntriesByTask(taskId: number): Promise<TimeEntry[]> {
-  const db = await getDb();
-  return db.select<TimeEntry[]>(
-    "SELECT * FROM time_entries WHERE task_id = $1 ORDER BY date DESC, created_at DESC",
-    [taskId]
-  );
-}
-
-/** Time entries within a date range (inclusive). */
-export async function getTimeEntriesByDateRange(
-  start: string,
-  end: string
-): Promise<TimeEntry[]> {
-  const db = await getDb();
-  return db.select<TimeEntry[]>(
-    "SELECT * FROM time_entries WHERE date >= $1 AND date <= $2 ORDER BY date DESC, created_at DESC",
-    [start, end]
-  );
-}
-
 /** Create a time entry and update task's tracked_minutes.
  *  task_id may be null (e.g. the task was deleted while a timer ran) —
  *  the entry is then kept on the project alone. */

@@ -12,13 +12,6 @@ export function useAllTags() {
   return useQuery({ queryKey: ["resource-tags"], queryFn: q.getAllTags });
 }
 
-export function useResourceTags(resourceId: number) {
-  return useQuery({
-    queryKey: ["resource-tags", resourceId],
-    queryFn: () => q.getResourceTags(resourceId),
-  });
-}
-
 export function useResourcesByProject(projectId: number) {
   return useQuery({
     queryKey: ["resources", "project", projectId],

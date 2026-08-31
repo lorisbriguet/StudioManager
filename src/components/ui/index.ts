@@ -8,5 +8,5 @@ export { SearchBar } from "./SearchBar";
 export { Select } from "./Select";
 export { EmptyState } from "./EmptyState";
 export { FormField } from "./FormField";
-export { Spinner, PageSpinner } from "./Spinner";
+export { PageSpinner } from "./Spinner";
 export { TableSkeleton } from "./TableSkeleton";

@@ -45,13 +45,3 @@ export async function logInfo(message: string, ...args: unknown[]) {
     console.log(formatted);
   }
 }
-
-export async function logDebug(message: string, ...args: unknown[]) {
-  const log = await getTauriLog();
-  const formatted = args.length ? `${message} ${args.map(String).join(" ")}` : message;
-  if (log) {
-    log.debug(formatted);
-  } else {
-    console.debug(formatted);
-  }
-}

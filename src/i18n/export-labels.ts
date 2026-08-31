@@ -1,6 +1,6 @@
 import type { AppLanguage } from "./ui";
 
-export const exportLabels = {
+const exportLabels = {
   EN: {
     // P&L
     pl_title: "Profit & Loss Statement",

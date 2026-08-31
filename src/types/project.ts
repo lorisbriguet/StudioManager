@@ -20,13 +20,6 @@ export const STANDARD_LAYOUT: LayoutConfig = [
   { type: "quotes", width: "half" },
 ];
 
-export const PROJECT_TEMPLATES: Record<string, { label: string; layout: LayoutConfig }> = {
-  standard: { label: "Standard", layout: STANDARD_LAYOUT },
-  creative: { label: "Creative Brief", layout: [{ type: "tasks" }, { type: "notes" }, { type: "resources" }, { type: "quotes" }] },
-  production: { label: "Production", layout: [{ type: "tasks" }, { type: "workload" }, { type: "named_tables" }] },
-  simple: { label: "Simple", layout: [{ type: "tasks" }, { type: "notes" }] },
-};
-
 export interface Project {
   id: number;
   client_id: string;

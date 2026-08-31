@@ -1,4 +1,4 @@
-export type NotificationType = "overdue" | "info" | "warning" | "error";
+type NotificationType = "overdue" | "info" | "warning" | "error";
 
 export interface AppNotification {
   id: number;

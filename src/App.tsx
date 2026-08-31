@@ -47,8 +47,6 @@ import { getLabels, notifyError } from "./lib/notifyError";
 import { requestNotificationPermission } from "./lib/nativeNotification";
 
 import { queryClient } from "./lib/queryClient";
-// Re-export so existing imports from "./App" still work
-export { queryClient };
 
 function StartupChecks() {
   useOverdueCheck();
