@@ -76,6 +76,41 @@ Three-lens audit (correctness/data, security/platform, UI/a11y/perf/tests) after
 - [ ] CSP `connect-src https://github.com` breadth — verify the in-app update check's fetch path before narrowing (naive pinning can break updates)
 - [ ] Invoice PDF recomputes discount from `subtotal * discount_rate` at render — consider storing `discount_amount`
 
+## Audit — round 4, exhaustive (2026-08-31)
+
+Full-coverage pass: deterministic tooling (npm/cargo audit, knip, jscpd, clippy, license-checker, i18n key cross-check) + four agents reading every line of src/pages, src/components+hooks+stores+lib, src/db+src-tauri (~37k lines). Every P1 claim was re-verified by hand; six were rejected as false (discount math, pdfExtract timeout, React Query prefix invalidation ×2, toCHF zero-division, receipt path traversal).
+
+### Clean bill
+0 npm vulnerabilities · 0 RustSec vulnerabilities (17 unmaintained-crate warnings are Linux-only gtk deps) · clippy 0 warnings · licenses all permissive · 0 leaked listeners/intervals · design-system compliance 0 violations · transactions atomic (TransactionBatch everywhere it matters) · client cascade delete exemplary
+
+### Dead weight (mechanical cleanup batch)
+- [ ] Unused npm deps: `@tanstack/react-table`, `@tanstack/react-virtual`, `@tauri-apps/plugin-window-state` (JS binding; Rust side stays)
+- [ ] Unused files: `scripts/attach-invoices.mjs`, `scripts/attach-receipts.mjs`, `scripts/eval-receipts.mjs` (keep? referenced in IDEAS receipts eval), `src/hooks/useAnimateIn.ts`, `src/lib/queryKeys.ts`
+- [ ] 4 dead DUPLICATE time queries in `db/queries/tasks.ts:188-289` (getTimeThisWeek etc.) — live versions are in timeEntries.ts; the dead ones even have divergent semantics (filter by task.updated_at) — delete before someone imports the wrong one
+- [ ] ~18 further unused exports + 9 unused types (knip 2026-08-31 output), incl. `isListInUse` stub that always returns false
+- [ ] 46 unused i18n keys (verify dynamic `t[expr]` access for: dark, light, annual, biannual before deleting)
+
+### Correctness / UX (P2)
+- [ ] Silent-failure class: no global mutation onError and these lack local ones — Calendar event drag/resize, ClientDetail saveField + createContact, Wiki debounced article save, ProjectDetail delete, NamedTable save-as-list
+- [ ] Wiki debounced save: stale-articleId hazard only ref-mitigated; add id check at fire time + onError
+- [ ] Keyboard nav parity: Tasks/Projects/Clients lack the arrow-key row navigation Invoices/Expenses/Quotes/Income got in v1.15.0
+- [ ] Double-submit windows: create buttons without isPending disable (Clients form, TasksPage Enter, Wiki new article, Settings test/presentation-mode buttons)
+- [ ] Trustee export: per-invoice PDF failures skipped silently — report failed count; verify `exporting` flag resets on mid-chain throw
+- [ ] ResourcesPage tag-loading effect: no abort on unmount (setState-after-unmount)
+- [ ] IncomePage edit form renders category values raw (`c.replace(/_/g," ")`) — bypasses i18n while the row badge translates
+- [ ] `createResource` inserts tags in a loop — batch it
+- [ ] Missing indexes: time_entries(project_id), time_entries(date), quotes(client_id)
+- [ ] SavedFilterBar portal menu lacks role/ARIA parity with ContextMenu
+
+### Polish (P3)
+- [ ] Duplication debt (4.1%): InvoicePDF↔QuotePDF 273 dup lines, InvoiceForm↔QuoteForm 265, Expenses↔Income 191 — extract shared document/form cores when next touching them
+- [ ] Component bloat: NamedTable 602L, ProjectDetailContent 1000L+, SettingsPage 1700L
+- [ ] Memoize per-row color/status computations (category IIFE in ExpensesPage, getTagColor, statusClasses); React.memo row components
+- [ ] dirty-guard `confirming` flag → promise-based lock
+- [ ] notifyError dedupe contract broken by interpolated message in useAutoBackup (latch already prevents spam)
+- [ ] appleCalendar subtask sync builds task→project map by fetching all tasks — JOIN instead
+- [ ] Dependency drift: ~28 patch/minor updates pending; majors (FullCalendar 7, react-table 9 → moot if dep deleted, TS 7) stay deferred
+
 ## Maintenance — dependency audit (2026-08-12)
 
 ### Do now (safe batch) — Done (2026-08-14)
