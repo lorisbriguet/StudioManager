@@ -5,6 +5,7 @@ import { ErrorBoundary } from "react-error-boundary";
 import { Toaster, toast } from "sonner";
 import { ErrorFallback } from "./components/ErrorFallback";
 import { MainLayout } from "./components/layout/MainLayout";
+import { GlobalShortcuts } from "./components/GlobalShortcuts";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ClientsPage } from "./pages/ClientsPage";
 import { ClientDetailPage } from "./pages/ClientDetailPage";
@@ -158,6 +159,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <StartupChecks />
       <BrowserRouter>
+        <GlobalShortcuts />
         <ErrorBoundary FallbackComponent={ErrorFallback}>
           <Routes>
             <Route element={<MainLayout />}>

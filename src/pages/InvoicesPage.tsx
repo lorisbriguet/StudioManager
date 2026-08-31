@@ -30,6 +30,7 @@ import { SavedFilterBar } from "../components/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useYearGrouping } from "../hooks/useYearGrouping";
+import { useListNavigation } from "../hooks/useListNavigation";
 import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Card, Modal, FormField, Input, Select } from "../components/ui";
 import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
 import { isDraftReference } from "../types/invoice";
@@ -220,6 +221,21 @@ export function InvoicesPage() {
     filtered,
     useCallback((inv: (typeof filtered)[0]) => inv.invoice_date, [])
   );
+
+  // Keyboard row navigation over the visible (expanded) rows.
+  const visibleRows = useMemo(
+    () => groupedByYear.flatMap(([year, rows]) => (expandedYears.has(year) ? rows : [])),
+    [groupedByYear, expandedYears]
+  );
+  const rowIdxById = useMemo(
+    () => new Map(visibleRows.map((r, i) => [r.id, i])),
+    [visibleRows]
+  );
+  const { focusIdx } = useListNavigation({
+    items: visibleRows,
+    onOpen: useCallback((inv: (typeof visibleRows)[0]) => navigate(`/invoices/${inv.id}/edit`), [navigate]),
+    onMenu: useCallback((inv: (typeof visibleRows)[0], pos: { x: number; y: number }) => setCtxMenu({ ...pos, item: inv }), []),
+  });
 
   // PDF generation runs for seconds; the actions live in the context menu,
   // which can't show a spinner — so guard per-invoice against double-fire
@@ -594,7 +610,8 @@ export function InvoicesPage() {
                     yearInvoices.map((inv) => (
                       <tr
                         key={inv.id}
-                        className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md group"
+                        data-list-row
+                        className={`border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md group${rowIdxById.get(inv.id) === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
                         onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: inv }); }}
                       >
                         <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>

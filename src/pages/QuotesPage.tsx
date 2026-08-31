@@ -18,6 +18,7 @@ import { getBusinessProfile } from "../db/queries/business-profile";
 import { getProject } from "../db/queries/projects";
 import { QuotePDF } from "../components/quote/QuotePDF";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
+import { useListNavigation } from "../hooks/useListNavigation";
 import { formatDisplayDate } from "../utils/formatDate";
 import { useT } from "../i18n/useT";
 import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
@@ -225,6 +226,13 @@ export function QuotesPage() {
     return sortRows(rows, sort.key, sort.dir);
   }, [enriched, search, sort, filterConditions, filterLogic]);
 
+  // Keyboard row navigation (flat list — every filtered row is visible).
+  const { focusIdx } = useListNavigation({
+    items: filtered,
+    onOpen: useCallback((q: Quote) => navigate(`/quotes/${q.id}/edit`), [navigate]),
+    onMenu: useCallback((q: (typeof filtered)[0], pos: { x: number; y: number }) => setCtxMenu({ ...pos, item: q }), []),
+  });
+
   const bulk = useBulkSelect(filtered);
 
   const bulkMarkSent = useCallback(() => {
@@ -310,10 +318,11 @@ export function QuotesPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((q) => (
+            {filtered.map((q, qi) => (
               <tr
                 key={q.id}
-                className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md group"
+                data-list-row
+                className={`border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md group${qi === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
                 onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: q }); }}
               >
                 <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
