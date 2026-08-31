@@ -27,6 +27,7 @@ import { notifyError } from "../lib/notifyError";
 import type { Income } from "../types/income";
 import { logError } from "../lib/log";
 import { useYearGrouping } from "../hooks/useYearGrouping";
+import { useListNavigation } from "../hooks/useListNavigation";
 import { SavedFilterBar } from "../components/SavedFilterBar";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
@@ -102,6 +103,28 @@ export function IncomePage() {
     filtered,
     useCallback((inc: (typeof filtered)[0]) => inc.date, [])
   );
+
+  // Cmd+N (GlobalShortcuts) opens the inline form on this page.
+  useEffect(() => {
+    const open = () => { setDroppedReceiptPath(null); setEditing(null); setShowForm(true); };
+    window.addEventListener("sm:new-item", open);
+    return () => window.removeEventListener("sm:new-item", open);
+  }, []);
+
+  // Keyboard row navigation over the visible (expanded) rows.
+  const visibleRows = useMemo(
+    () => groupedByYear.flatMap(([year, rows]) => (expandedYears.has(year) ? rows : [])),
+    [groupedByYear, expandedYears]
+  );
+  const rowIdxById = useMemo(
+    () => new Map(visibleRows.map((r, i) => [r.id, i])),
+    [visibleRows]
+  );
+  const { focusIdx } = useListNavigation({
+    items: visibleRows,
+    onOpen: useCallback((inc: Income) => { setShowForm(false); setEditing(inc); }, []),
+    onMenu: useCallback((inc: Income, pos: { x: number; y: number }) => setCtxMenu({ ...pos, item: inc }), []),
+  });
 
   const { isDragging, parsing } = useReceiptDrop({
     onResult: (extracted, filePath) => {
@@ -286,7 +309,8 @@ export function IncomePage() {
                     yearIncomes.map((inc) => (
                       <tr
                         key={inc.id}
-                        className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md group"
+                        data-list-row
+                        className={`border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md group${rowIdxById.get(inc.id) === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
                         onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: inc }); }}
                       >
                         <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>

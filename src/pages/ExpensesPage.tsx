@@ -26,6 +26,7 @@ import {
 import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
 import { BulkActionBar } from "../components/BulkActionBar";
 import { useReceiptDrop } from "../hooks/useReceiptDrop";
+import { useListNavigation } from "../hooks/useListNavigation";
 import { useDetectedFields } from "../hooks/useDetectedFields";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import type { Expense } from "../types/expense";
@@ -109,6 +110,37 @@ export function ExpensesPage() {
     filtered,
     useCallback((exp: (typeof filtered)[0]) => exp.invoice_date, [])
   );
+
+  // Cmd+N (GlobalShortcuts) opens the inline form on this page.
+  useEffect(() => {
+    const open = () => { setPrefill(null); setShowForm(true); };
+    window.addEventListener("sm:new-item", open);
+    return () => window.removeEventListener("sm:new-item", open);
+  }, []);
+
+  // Keyboard row navigation over the visible (expanded) rows. Expenses have
+  // no full edit form, so Enter opens the row menu like Space.
+  const visibleRows = useMemo(
+    () => groupedByYear.flatMap(([year, rows]) => (expandedYears.has(year) ? rows : [])),
+    [groupedByYear, expandedYears]
+  );
+  const rowIdxById = useMemo(
+    () => new Map(visibleRows.map((r, i) => [r.id, i])),
+    [visibleRows]
+  );
+  const openRowMenu = useCallback(
+    (exp: Expense, pos: { x: number; y: number }) => setCtxMenu({ ...pos, item: exp }),
+    []
+  );
+  const { focusIdx } = useListNavigation({
+    items: visibleRows,
+    onOpen: useCallback((exp: Expense) => {
+      const el = document.querySelectorAll("[data-list-row]")[rowIdxById.get(exp.id) ?? 0];
+      const r = el?.getBoundingClientRect();
+      openRowMenu(exp, { x: r ? r.left + 32 : 80, y: r ? r.bottom : 80 });
+    }, [openRowMenu, rowIdxById]),
+    onMenu: openRowMenu,
+  });
 
   const bulk = useBulkSelect(filtered);
 
@@ -303,7 +335,8 @@ export function ExpensesPage() {
                     yearExpenses.map((exp) => (
                       <tr
                         key={exp.id}
-                        className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md group"
+                        data-list-row
+                        className={`border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md group${rowIdxById.get(exp.id) === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
                         onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: exp }); }}
                       >
                         <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
