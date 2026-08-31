@@ -372,7 +372,7 @@ export function SettingsPage() {
         <nav className="space-y-3 px-1">
           {categorySections.map((section) => (
             <div key={section.label}>
-              <div className="text-[9px] font-medium uppercase tracking-widest text-muted px-3 mb-1">{section.label}</div>
+              <div className="text-[10px] font-medium uppercase tracking-widest text-muted px-3 mb-1">{section.label}</div>
               <div className="space-y-px">
                 {section.items.map((cat) => (
                   <button
@@ -562,7 +562,7 @@ export function SettingsPage() {
                       <option value={calendarName}>{calendarName}</option>
                     )}
                   </Select>
-                  {loadingCalendars && <span className="text-[11px] text-muted">{t.loading}</span>}
+                  {loadingCalendars && <span className="text-xs text-muted">{t.loading}</span>}
                 </div>
               </SettingRow>
               <SettingRow label={t.sync_to_apple} desc={t.calendar_hint}>
@@ -667,7 +667,7 @@ export function SettingsPage() {
                   <button type="button" onClick={handleRestoreSnapshot} disabled={restoringSnapshot || !hasSnapshotFile || testMode} className="flex items-center gap-1 px-2.5 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
                     <RotateCcw size={12} /> {restoringSnapshot ? t.loading : t.restore_snapshot}
                   </button>
-                  {!hasSnapshotFile && <span className="text-[11px] text-muted">{t.no_snapshot_available}</span>}
+                  {!hasSnapshotFile && <span className="text-xs text-muted">{t.no_snapshot_available}</span>}
                 </div>
               </SettingRow>
               </SettingsCard>
@@ -721,7 +721,7 @@ export function SettingsPage() {
                     <option value={43200}>{t.monthly}</option>
                   </Select>
                   {autoBackupInterval > 0 && lastAutoBackup > 0 && (
-                    <span className="text-[11px] text-muted">
+                    <span className="text-xs text-muted">
                       Last: {new Date(lastAutoBackup).toLocaleString()}
                     </span>
                   )}
@@ -775,7 +775,7 @@ function SettingRow({ label, desc, children }: { label: string; desc?: string; c
     <div className="flex items-center justify-between py-2.5 min-h-[36px] border-b border-[var(--color-border-divider)]">
       <div className="flex-1 min-w-0 pr-4">
         <div className="text-sm">{label}</div>
-        {desc && <div className="text-[11px] text-muted leading-tight mt-0.5">{desc}</div>}
+        {desc && <div className="text-xs text-muted leading-tight mt-0.5">{desc}</div>}
       </div>
       <div className="shrink-0">{children}</div>
     </div>
@@ -797,7 +797,7 @@ function SectionHeader({ title, desc }: { title: string; desc?: string }) {
   return (
     <div className="border-b border-[var(--color-border-divider)] pb-2 mb-3">
       <h2 className="text-[10px] font-medium uppercase tracking-widest text-muted">{title}</h2>
-      {desc && <p className="text-[11px] text-muted mt-1 normal-case tracking-normal">{desc}</p>}
+      {desc && <p className="text-xs text-muted mt-1 normal-case tracking-normal">{desc}</p>}
     </div>
   );
 }
@@ -1486,7 +1486,7 @@ function TimeEntriesManager() {
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div className="flex flex-col gap-1">
-          <label className="text-[11px] text-muted">{t.start}</label>
+          <label className="text-xs text-muted">{t.start}</label>
           <input
             type="date"
             value={startDate}
@@ -1495,7 +1495,7 @@ function TimeEntriesManager() {
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-[11px] text-muted">{t.end_date}</label>
+          <label className="text-xs text-muted">{t.end_date}</label>
           <input
             type="date"
             value={endDate}
@@ -1504,7 +1504,7 @@ function TimeEntriesManager() {
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-[11px] text-muted">{t.filter_by_project}</label>
+          <label className="text-xs text-muted">{t.filter_by_project}</label>
           <select
             value={projectFilter ?? ""}
             onChange={(e) => setProjectFilter(e.target.value ? Number(e.target.value) : undefined)}

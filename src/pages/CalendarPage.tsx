@@ -373,7 +373,7 @@ export function CalendarPage() {
     const done = status === "done";
     const wrap = !arg.event.allDay;
     return (
-      <div className={`${wrap ? "whitespace-normal break-words" : "truncate"} text-[11px] leading-tight px-1 ${done ? "line-through opacity-60" : ""}`}>
+      <div className={`${wrap ? "whitespace-normal break-words" : "truncate"} text-xs leading-tight px-1 ${done ? "line-through opacity-60" : ""}`}>
         {isSubtask && <span className="opacity-60">↳ </span>}
         {isDeadline && <span className="font-semibold">!</span>}
         {(isInvoice || isQuote) && <span className="font-semibold mr-0.5">$</span>}
@@ -641,7 +641,7 @@ function QuickCreatePopup({
       className="fixed z-[9999] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] p-3 w-[260px]"
       style={{ top, left }}
     >
-      <div className="text-[11px] text-muted mb-2">
+      <div className="text-xs text-muted mb-2">
         {date} · {timeLabel}
       </div>
       <select

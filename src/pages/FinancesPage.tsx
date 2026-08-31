@@ -213,6 +213,7 @@ export function FinancesPage() {
       )}
 
       {/* Monthly revenue vs expenses chart */}
+      <div className="text-[10px] font-medium uppercase tracking-widest text-muted mb-2">{t.finances_overview}</div>
       <Card className="mb-6">
         <h2 className="text-sm font-medium mb-4">{t.revenue_vs_expenses}</h2>
         <ResponsiveContainer width="100%" height={200}>
@@ -231,6 +232,7 @@ export function FinancesPage() {
         </ResponsiveContainer>
       </Card>
 
+      <div className="text-[10px] font-medium uppercase tracking-widest text-muted mb-2">{t.finances_breakdown}</div>
       <div className="grid grid-cols-2 gap-6">
         {/* Expense breakdown pie chart */}
         {pieData.length > 0 && (

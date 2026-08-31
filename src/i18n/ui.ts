@@ -116,6 +116,8 @@ const ui = {
     first_run_dashboard: "Start by adding your first client — projects, invoices and stats build from there.",
     add_first_client: "Add a client",
     first_run_finances: "Charts appear once you have invoices or expenses.",
+    finances_overview: "Overview",
+    finances_breakdown: "Breakdown",
     first_run_calendar: "Tasks and subtasks with due dates appear here automatically.",
     first_run_wiki: "Keep notes, processes and reference docs here.",
 
@@ -1051,6 +1053,8 @@ const ui = {
     first_run_dashboard: "Commencez par ajouter votre premier client — projets, factures et statistiques en decoulent.",
     add_first_client: "Ajouter un client",
     first_run_finances: "Les graphiques apparaissent des que vous avez des factures ou des depenses.",
+    finances_overview: "Vue d'ensemble",
+    finances_breakdown: "Repartition",
     first_run_calendar: "Les taches et sous-taches avec echeance apparaissent ici automatiquement.",
     first_run_wiki: "Conservez ici notes, processus et documents de reference.",
 

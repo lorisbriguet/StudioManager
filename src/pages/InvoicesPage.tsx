@@ -532,7 +532,7 @@ export function InvoicesPage() {
                         onClick={async () => {
                           if (!(await ask(t.confirm_delete_template, { kind: "warning" }))) return;
                           deleteTemplate.mutate(tmpl.id, {
-                            onSuccess: () => toast.success(t.template_deleted),
+                            onSuccess: () => undoableFromStore(t.template_deleted),
                           });
                         }}
                         className="text-muted hover:text-[var(--color-danger-text)]"

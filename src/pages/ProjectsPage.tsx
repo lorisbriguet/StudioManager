@@ -349,7 +349,7 @@ export function ProjectsPage() {
 
                 {stats.total > 0 && (
                   <div className="mb-3">
-                    <div className="flex justify-between text-[11px] text-muted mb-1">
+                    <div className="flex justify-between text-xs text-muted mb-1">
                       <span>{stats.total} {t.tasks.toLowerCase()}</span>
                       <span>{pct}%</span>
                     </div>
@@ -362,10 +362,10 @@ export function ProjectsPage() {
                   </div>
                 )}
                 {stats.total === 0 && (
-                  <div className="text-[11px] text-muted mb-3">{t.no_tasks}</div>
+                  <div className="text-xs text-muted mb-3">{t.no_tasks}</div>
                 )}
 
-                <div className="flex items-center justify-between text-[11px] text-muted">
+                <div className="flex items-center justify-between text-xs text-muted">
                   <span>{p.deadline ? formatDisplayDate(p.deadline) : t.no_deadline}</span>
                   {stats.total > 0 && (
                     <span className={`dot ${

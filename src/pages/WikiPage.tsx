@@ -713,7 +713,7 @@ function FolderSidebar({
   return (
     <div className="w-48 shrink-0 border-r border-[var(--color-border-divider)] flex flex-col h-full py-4">
       <div className="flex items-center justify-between px-3 mb-1">
-        <span className="text-[9px] font-medium uppercase tracking-widest text-muted">
+        <span className="text-[10px] font-medium uppercase tracking-widest text-muted">
           {t.folder}
         </span>
         <button

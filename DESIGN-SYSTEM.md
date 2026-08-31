@@ -79,7 +79,28 @@ Tokens handle dark mode automatically. **Never use `dark:` prefix** for colors t
 | Card/block title | `text-sm font-semibold tracking-tight` |
 | Table column header | `text-xs text-muted` (lowercase, not uppercase) |
 | Body/row text | `text-sm` |
+| Fine print (timestamps, hints, chart legends) | `text-xs text-muted` |
 | Muted secondary | `text-muted` |
+
+**Scale rule:** the only permitted sizes are `text-xl`, `text-sm`, `text-xs`,
+and the 10px section label (`text-[10px]`). No other `text-[Npx]` arbitrary
+sizes — 9px/11px/13px were folded into this scale (2026-08, audit item 345).
+
+---
+
+## Spacing
+
+4px base grid — use Tailwind spacing steps (including quarter steps like
+`py-1.75`), never `p-[Npx]` arbitrary values.
+
+| Context | Classes |
+|---------|---------|
+| Table row cell | `px-4 py-2.5` |
+| Card padding | `p-4` (compact: `px-3 py-2.5`) |
+| Form field grid | `grid gap-3` |
+| Button row | `flex gap-2`, primary action rightmost, destructive pushed left with `mr-auto` |
+| Sidebar nav item | `px-3.5 py-1.5 mx-2` |
+| Page sections | `mb-4` between blocks, `mb-6` after the page header |
 
 ---
 

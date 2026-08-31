@@ -773,45 +773,20 @@ export function InvoiceFormPage() {
           />
         </FormField>
 
-        <div className="flex gap-2">
-          <Button
-            size="lg"
-            onClick={() => save()}
-            disabled={createInvoice.isPending || updateInvoice.isPending}
-          >
-            {isEdit ? t.update_invoice : t.create_invoice}
-          </Button>
-          <Button
-            variant="secondary"
-            size="lg"
-            icon={<Eye size={14} />}
-            onClick={() => save("preview")}
-            disabled={createInvoice.isPending || updateInvoice.isPending}
-          >
-            {t.save_and_preview}
-          </Button>
-          <Button
-            variant="secondary"
-            size="lg"
-            onClick={async () => {
-              if (await confirmIfDirty("/invoices")) navigate("/invoices");
-            }}
-          >
-            {t.cancel}
-          </Button>
+        <div className="flex gap-2 justify-end">
           {isEdit && existingInvoice?.status === "draft" && !showDeleteConfirm && (
             <Button
               variant="secondary"
               size="lg"
               icon={<Trash2 size={14} />}
               onClick={() => setShowDeleteConfirm(true)}
-              className="ml-auto text-danger border-danger/30 hover:bg-danger/5"
+              className="mr-auto text-danger border-danger/30 hover:bg-danger/5"
             >
               {t.delete}
             </Button>
           )}
           {showDeleteConfirm && existingInvoice && (
-            <div className="ml-auto flex items-center gap-2">
+            <div className="mr-auto flex items-center gap-2">
               <span className="text-sm text-danger">{t.delete} {existingInvoice.reference}?</span>
               <Button
                 variant="danger"
@@ -836,6 +811,31 @@ export function InvoiceFormPage() {
               </Button>
             </div>
           )}
+          <Button
+            variant="secondary"
+            size="lg"
+            onClick={async () => {
+              if (await confirmIfDirty("/invoices")) navigate("/invoices");
+            }}
+          >
+            {t.cancel}
+          </Button>
+          <Button
+            variant="secondary"
+            size="lg"
+            icon={<Eye size={14} />}
+            onClick={() => save("preview")}
+            disabled={createInvoice.isPending || updateInvoice.isPending}
+          >
+            {t.save_and_preview}
+          </Button>
+          <Button
+            size="lg"
+            onClick={() => save()}
+            disabled={createInvoice.isPending || updateInvoice.isPending}
+          >
+            {isEdit ? t.update_invoice : t.create_invoice}
+          </Button>
         </div>
       </div>
 
