@@ -1,6 +1,5 @@
 import { variantClasses, type BadgeVariant } from "../components/ui/Badge";
 import type { InvoiceStatus } from "../types/invoice";
-import type { ProjectStatus } from "../types/project";
 import type { QuoteStatus } from "../types/quote";
 import type { TaskStatus } from "../types/task";
 
@@ -30,12 +29,6 @@ const TASK_VARIANT: Record<TaskStatus, BadgeVariant> = {
   done: "success",
 };
 
-const PROJECT_VARIANT: Record<ProjectStatus, BadgeVariant> = {
-  active: "accent",
-  completed: "success",
-  on_hold: "warning",
-  cancelled: "neutral",
-};
 
 export function invoiceStatusVariant(s: InvoiceStatus): BadgeVariant {
   return INVOICE_VARIANT[s];
@@ -47,10 +40,6 @@ export function quoteStatusVariant(s: QuoteStatus): BadgeVariant {
 
 export function taskStatusVariant(s: TaskStatus): BadgeVariant {
   return TASK_VARIANT[s];
-}
-
-export function projectStatusVariant(s: ProjectStatus): BadgeVariant {
-  return PROJECT_VARIANT[s];
 }
 
 /**

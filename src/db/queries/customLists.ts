@@ -78,8 +78,3 @@ export async function setCustomListItems(
   );
   await batch.commit();
 }
-
-export async function isListInUse(_listId: number): Promise<boolean> {
-  // Can be enhanced later to check project_tables column_config and workload columns
-  return false;
-}

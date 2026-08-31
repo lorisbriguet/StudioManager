@@ -27,17 +27,6 @@ export async function getWorkloadTemplates(): Promise<WorkloadTemplate[]> {
   return rows.map(parseTemplate);
 }
 
-export async function getWorkloadTemplate(
-  id: number
-): Promise<WorkloadTemplate | null> {
-  const db = await getDb();
-  const rows = await db.select<WorkloadTemplateRow[]>(
-    "SELECT * FROM workload_templates WHERE id = $1",
-    [id]
-  );
-  return rows[0] ? parseTemplate(rows[0]) : null;
-}
-
 export async function createWorkloadTemplate(
   name: string,
   columns: WorkloadColumn[]
@@ -283,20 +272,4 @@ export async function getAllProjectWorkloadConfigs(): Promise<
     }
   }
   return map;
-}
-
-/** Get aggregated time data across all projects (for Time Overview) */
-export async function getTimeOverviewData(): Promise<
-  { project_id: number; project_name: string; task_id: number; task_title: string; tracked_minutes: number; planned_minutes: number | null; date: string }[]
-> {
-  const db = await getDb();
-  return db.select(
-    `SELECT t.id as task_id, t.title as task_title, t.project_id,
-            p.name as project_name, t.tracked_minutes,
-            t.planned_minutes, t.updated_at as date
-     FROM tasks t
-     JOIN projects p ON t.project_id = p.id
-     WHERE t.tracked_minutes > 0
-     ORDER BY t.updated_at DESC`
-  );
 }

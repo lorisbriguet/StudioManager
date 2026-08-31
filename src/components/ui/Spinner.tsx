@@ -3,7 +3,7 @@ interface SpinnerProps {
   className?: string;
 }
 
-export function Spinner({ size = 16, className = "" }: SpinnerProps) {
+function Spinner({ size = 16, className = "" }: SpinnerProps) {
   return (
     <div
       className={`border-2 border-accent border-t-transparent rounded-full animate-spin ${className}`}

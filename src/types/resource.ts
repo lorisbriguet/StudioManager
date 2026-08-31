@@ -12,8 +12,3 @@ export interface ResourceTag {
   resource_id: number;
   tag: string;
 }
-
-export interface ResourceProject {
-  resource_id: number;
-  project_id: number;
-}

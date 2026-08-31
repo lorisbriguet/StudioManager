@@ -4,7 +4,7 @@ import { PDFDocument, rgb, degrees, StandardFonts } from "pdf-lib";
  * Add a VOID watermark diagonally across every page.
  * Big red semi-transparent "VOID" text.
  */
-export async function addVoidOverlay(pdfBytes: Uint8Array): Promise<Uint8Array> {
+async function addVoidOverlay(pdfBytes: Uint8Array): Promise<Uint8Array> {
   const doc = await PDFDocument.load(pdfBytes);
   const font = await doc.embedFont(StandardFonts.HelveticaBold);
   const pages = doc.getPages();

@@ -1,4 +1,3 @@
-export type { TagColorName } from "../lib/tagColors";
 import type { TagColorName } from "../lib/tagColors";
 
 export interface ExpenseCategory {

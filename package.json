@@ -38,8 +38,6 @@
     "@react-pdf/renderer": "^4.3.2",
     "@tanstack/react-query": "^5.90.21",
     "@tanstack/react-query-devtools": "^5.91.3",
-    "@tanstack/react-table": "^8.21.3",
-    "@tanstack/react-virtual": "^3.13.23",
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-dialog": "^2.7.0",
     "@tauri-apps/plugin-fs": "^2.5.0",
@@ -49,7 +47,6 @@
     "@tauri-apps/plugin-shell": "^2.3.5",
     "@tauri-apps/plugin-sql": "^2.4.0",
     "@tauri-apps/plugin-updater": "^2.10.0",
-    "@tauri-apps/plugin-window-state": "^2.4.1",
     "@tiptap/extension-link": "^3.21.0",
     "@tiptap/extension-placeholder": "^3.21.0",
     "@tiptap/pm": "^3.21.0",
@@ -71,5 +68,10 @@
     "sonner": "^2.0.7",
     "swissqrbill": "^4.3.0",
     "zustand": "^5.0.11"
+  },
+  "knip": {
+    "ignore": [
+      "scripts/**"
+    ]
   }
 }

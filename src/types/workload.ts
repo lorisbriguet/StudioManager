@@ -62,12 +62,6 @@ export interface WorkloadRow {
   updated_at: string;
 }
 
-/** Column definitions stored on project-level (copied from template, then customisable) */
-export interface ProjectWorkloadConfig {
-  template_id: number | null;
-  columns: WorkloadColumn[];
-}
-
 export const DEFAULT_WORKLOAD_COLUMNS: WorkloadColumn[] = [
   { key: "asset", name: "Asset", type: "link", width: 160 },
   {

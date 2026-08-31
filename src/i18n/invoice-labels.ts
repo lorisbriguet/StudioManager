@@ -90,4 +90,3 @@ export const invoiceLabels = {
 } as const;
 
 export type InvoiceLanguage = keyof typeof invoiceLabels;
-export type LabelKey = keyof typeof invoiceLabels.FR;

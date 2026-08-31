@@ -26,14 +26,6 @@ export function useQuotesByProject(projectId: number) {
   });
 }
 
-export function useQuoteLineItems(quoteId: number) {
-  return useQuery({
-    queryKey: ["quote-line-items", quoteId],
-    queryFn: () => q.getQuoteLineItems(quoteId),
-    enabled: !!quoteId,
-  });
-}
-
 export function useCreateQuote() {
   const qc = useQueryClient();
   return useMutation({
