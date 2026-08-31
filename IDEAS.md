@@ -51,6 +51,11 @@
 - [x] Untranslated-activity nudge in editor and on EN invoices
 - [x] Receipt parser: US dates, month-comma dates, header/id line skips
 
+## V1.15.0 — Done (QoL + audit round 2)
+
+- [x] Backup rotation retries on synced folders (Synology ENOTEMPTY race)
+- [x] Full audit round 2: discoverability, button order, type scale, muted contrast, Settings cards, first-run guidance, Save & Preview, Cmd+N / arrow-key nav / Cmd+B sidebar toggle, undo affordance on contact/address/template deletes
+
 ## Maintenance — dependency audit (2026-08-12)
 
 ### Do now (safe batch) — Done (2026-08-14)
@@ -133,32 +138,32 @@ Five-front audit (security, data integrity, frontend quality, performance, tests
 
 False alarms reviewed and rejected: $LAST_INSERT_ID injection (i64-only), localStorage mode switching (webview already has execute_batch by design), javascript:/file: URLs via shell.open (plugin's default validator blocks them), supplier-merge finance invalidation (finance never aggregates by supplier).
 
-## UI design audit — round 2 (2026-08-14)
+## UI design audit — round 2 (2026-08-14) — shipped in v1.15.0
 
 Code-level review by three design lenses (visual language, layout consistency, interaction). Verdict: the token system is excellent (zero hardcoded grays, 301 token usages, full dark-mode parity, reduced-motion respected); the design debt sits in discoverability, paradigm consistency and micro-typography. A visual (screenshot) pass is still pending — needs Screen Recording permission or user-provided captures.
 
 ### Discoverability (highest impact)
-- [ ] Row-action menu trigger (Settings2) is invisible until hover on Invoices/Expenses/Quotes — make it persistently visible at rest (muted)
-- [ ] IncomePage has no row context menu at all (delete only) — bring it to parity with Expenses
-- [ ] Contact/address card edit affordances are hover-only — always-visible edit control
+- [x] Row-action menu trigger (Settings2) is invisible until hover on Invoices/Expenses/Quotes — make it persistently visible at rest (muted)
+- [x] IncomePage has no row context menu at all (delete only) — bring it to parity with Expenses
+- [x] Contact/address card edit affordances are hover-only — always-visible edit control
 
 ### Form paradigms & flows
-- [ ] Button order: inline Card forms put Save leftmost while modals put primary rightmost (macOS convention) — standardize primary-rightmost everywhere; consistent action placement on full-page forms
-- [ ] "Save & preview" on the invoice form to collapse the save → list → hover → menu → export flow
+- [x] Button order: inline Card forms put Save leftmost while modals put primary rightmost (macOS convention) — standardize primary-rightmost everywhere; consistent action placement on full-page forms
+- [x] "Save & preview" on the invoice form to collapse the save → list → hover → menu → export flow
 
 ### Typography & tokens
-- [ ] Fold ad-hoc font sizes (text-[13px]/[11px]/[9px]) into the documented scale
-- [ ] Slightly darken --color-muted (borderline WCAG AA ~4.4:1 at the 10-11px sizes it dominates)
-- [ ] Document spacing rhythm + type scale in DESIGN-SYSTEM.md (py-[7px]-style one-offs exist)
+- [x] Fold ad-hoc font sizes (text-[13px]/[11px]/[9px]) into the documented scale
+- [x] Slightly darken --color-muted (borderline WCAG AA ~4.4:1 at the 10-11px sizes it dominates)
+- [x] Document spacing rhythm + type scale in DESIGN-SYSTEM.md (py-[7px]-style one-offs exist)
 
 ### Information architecture & guidance
-- [ ] SettingsPage: card-based sectioning per topic (currently one undifferentiated 1,679-line column)
-- [ ] FinancesPage: empty state for fresh profiles + clearer chart sectioning
-- [ ] First-run guidance for Dashboard/Calendar/Wiki (list pages already have good EmptyState CTAs)
+- [x] SettingsPage: card-based sectioning per topic (currently one undifferentiated 1,679-line column)
+- [x] FinancesPage: empty state for fresh profiles + clearer chart sectioning
+- [x] First-run guidance for Dashboard/Calendar/Wiki (list pages already have good EmptyState CTAs)
 
 ### Keyboard & undo
-- [ ] Cmd+N for new invoice/expense/income; arrow-key row navigation + keyboard path to the row menu
-- [ ] Undo for recurring-template delete and contact/address operations (currently permanent)
+- [x] Cmd+N for new invoice/expense/income; arrow-key row navigation + keyboard path to the row menu
+- [x] Undo for recurring-template delete and contact/address operations (currently permanent)
 
 Reviewer claims rejected: "radius hierarchy inverted" (frequency ≠ inversion), "PageHeader missing on half the pages" (spot-checked false; only Dashboard/Settings are custom, defensibly), "under-elevated" (flat border-defined depth with overlay-only shadows is a deliberate, good model).
 
