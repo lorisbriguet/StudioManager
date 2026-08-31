@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ListTodo, Trash2, ArrowLeft, AlertTriangle } from "lucide-react";
+import { ListTodo, Trash2, ArrowLeft, AlertTriangle, Eye } from "lucide-react";
 import { isUntranslatedActivity } from "../lib/activityNudge";
 import { Button, Input, Select, FormField } from "../components/ui";
 import * as v from "../lib/validate";
@@ -352,7 +352,7 @@ export function InvoiceFormPage() {
 
   const availableTasks = projectTasks ?? [];
 
-  const save = async () => {
+  const save = async (dest: "list" | "preview" = "list") => {
     // Phase 2 E2 — field-level validation replaces the old toast branches
     // (toasts remain the backstop for DB failures via onError below).
     const errs = v.validateForm<InvoiceField>(
@@ -423,7 +423,7 @@ export function InvoiceFormPage() {
             onSuccess: () => {
               setFormDirty(false);
               toast.success(t.invoice_updated);
-              navigate("/invoices");
+              navigate(dest === "preview" ? `/invoices/${invoiceId}/preview` : "/invoices");
             },
             onError: (e) => toast.error(String(e)),
           }
@@ -478,7 +478,7 @@ export function InvoiceFormPage() {
               }
               setFormDirty(false);
               toast.success(fromQuoteId ? t.quote_converted : t.invoice_created);
-              navigate("/invoices");
+              navigate(dest === "preview" ? `/invoices/${invoiceId}/preview` : "/invoices");
             },
             onError: (e) => toast.error(String(e)),
           }
@@ -776,10 +776,19 @@ export function InvoiceFormPage() {
         <div className="flex gap-2">
           <Button
             size="lg"
-            onClick={save}
+            onClick={() => save()}
             disabled={createInvoice.isPending || updateInvoice.isPending}
           >
             {isEdit ? t.update_invoice : t.create_invoice}
+          </Button>
+          <Button
+            variant="secondary"
+            size="lg"
+            icon={<Eye size={14} />}
+            onClick={() => save("preview")}
+            disabled={createInvoice.isPending || updateInvoice.isPending}
+          >
+            {t.save_and_preview}
           </Button>
           <Button
             variant="secondary"
