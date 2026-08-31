@@ -255,7 +255,7 @@ const effectiveInitialAccent = getInitialAccentForTheme();
 export const useAppStore = create<AppState>((set) => ({
   commandPaletteOpen: false,
   quickTimerOpen: false,
-  sidebarCollapsed: false,
+  sidebarCollapsed: localStorage.getItem("sidebarCollapsed") === "true",
   darkMode: initialDark,
   themeId: localStorage.getItem("themeId") ?? "default-light",
   testMode: localStorage.getItem("testMode") === "true",
@@ -320,7 +320,12 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
   toggleQuickTimer: () => set((s) => ({ quickTimerOpen: !s.quickTimerOpen })),
   closeQuickTimer: () => set({ quickTimerOpen: false }),
-  toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+  toggleSidebar: () =>
+    set((s) => {
+      const next = !s.sidebarCollapsed;
+      localStorage.setItem("sidebarCollapsed", String(next));
+      return { sidebarCollapsed: next };
+    }),
   toggleDarkMode: () =>
     set((s) => {
       const next = !s.darkMode;

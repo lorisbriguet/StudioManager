@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useAppStore } from "../stores/app-store";
 
 /** Pages whose "new item" is a route. */
 const NEW_ROUTES: Record<string, string> = {
@@ -10,9 +11,18 @@ const NEW_ROUTES: Record<string, string> = {
 /** Pages whose "new item" is an inline form — they listen for this event. */
 const NEW_EVENT_PAGES = ["/expenses", "/income"];
 
+/** True while the user is typing somewhere Cmd+B could mean formatting. */
+function inTypingContext(e: KeyboardEvent): boolean {
+  const target = e.target;
+  return (
+    target instanceof HTMLElement &&
+    !!target.closest('input, textarea, [contenteditable="true"]')
+  );
+}
+
 /**
- * Context-sensitive Cmd+N (audit item 343): creates the item for the page
- * you are on. Must render inside the Router.
+ * Context-sensitive Cmd+N (audit item 343) and Cmd+B sidebar toggle (351).
+ * Must render inside the Router.
  */
 export function GlobalShortcuts() {
   const navigate = useNavigate();
@@ -21,8 +31,14 @@ export function GlobalShortcuts() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
-      if (e.key !== "n" && e.key !== "N") return;
 
+      if ((e.key === "b" || e.key === "B") && !inTypingContext(e)) {
+        e.preventDefault();
+        useAppStore.getState().toggleSidebar();
+        return;
+      }
+
+      if (e.key !== "n" && e.key !== "N") return;
       const path = location.pathname;
       if (NEW_ROUTES[path]) {
         e.preventDefault();

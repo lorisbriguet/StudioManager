@@ -15,6 +15,8 @@ const ui = {
     notifications: "Notifications",
     profile: "Profile",
     settings: "Settings",
+    collapse_sidebar: "Collapse sidebar",
+    expand_sidebar: "Expand sidebar",
 
     // Common actions
     save: "Save",
@@ -948,6 +950,8 @@ const ui = {
     notifications: "Notifications",
     profile: "Profil",
     settings: "Parametres",
+    collapse_sidebar: "Reduire le panneau lateral",
+    expand_sidebar: "Deployer le panneau lateral",
 
     // Common actions
     save: "Enregistrer",

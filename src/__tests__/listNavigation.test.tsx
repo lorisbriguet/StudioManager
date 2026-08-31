@@ -100,6 +100,23 @@ describe("GlobalShortcuts Cmd+N", () => {
     window.removeEventListener("sm:new-item", spy);
   });
 
+  it("Cmd+B toggles the sidebar", async () => {
+    const { useAppStore } = await import("../stores/app-store");
+    useAppStore.setState({ sidebarCollapsed: false });
+    render(
+      <MemoryRouter initialEntries={["/clients"]}>
+        <GlobalShortcuts />
+        <Routes>
+          <Route path="/clients" element={<div />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    fireEvent.keyDown(window, { key: "b", metaKey: true });
+    expect(useAppStore.getState().sidebarCollapsed).toBe(true);
+    fireEvent.keyDown(window, { key: "b", metaKey: true });
+    expect(useAppStore.getState().sidebarCollapsed).toBe(false);
+  });
+
   it("does nothing on unrelated pages", () => {
     const spy = vi.fn();
     window.addEventListener("sm:new-item", spy);
