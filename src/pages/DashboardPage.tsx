@@ -1,12 +1,14 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { ResponsiveGridLayout, useContainerWidth, verticalCompactor } from "react-grid-layout";
 import type { Layout, ResponsiveLayouts } from "react-grid-layout";
-import { Plus, X, ChevronDown, Lock, Save, Trash2 } from "lucide-react";
+import { Plus, X, ChevronDown, Lock, Save, Trash2, Users } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useClients } from "../db/hooks/useClients";
 import { useDashboardStore, WIDGET_CATALOG, type WidgetType, type DashboardWidget } from "../stores/dashboard-store";
 import type { LayoutItem } from "react-grid-layout";
 import { renderWidget } from "../components/dashboard/widgets";
 import { DashboardYearContext } from "../components/dashboard/DashboardYearContext";
-import { PageHeader, Button } from "../components/ui";
+import { PageHeader, Button, EmptyState } from "../components/ui";
 import { useT } from "../i18n/useT";
 import { toast } from "sonner";
 import { useDashboardPresets, useCreateDashboardPreset, useUpdateDashboardPreset, useDeleteDashboardPreset } from "../db/hooks/useDashboardPresets";
@@ -226,6 +228,9 @@ export function DashboardPage() {
   const [year, setYear] = useState(new Date().getFullYear());
   const { width, containerRef, mounted } = useContainerWidth();
   const t = useT();
+  const navigate = useNavigate();
+  const { data: clients } = useClients();
+  const isFirstRun = clients !== undefined && clients.length === 0;
 
   // Sort widgets by grid position (top-left to bottom-right) so DOM order
   // matches visual order — important for accessibility, tab order, and animations.
@@ -320,8 +325,21 @@ export function DashboardPage() {
         );
       })()}
 
+      {/* First-run guidance: nothing feeds the widgets without a client */}
+      {isFirstRun && (
+        <EmptyState
+          message={t.first_run_dashboard}
+          icon={<Users size={32} />}
+          action={
+            <Button icon={<Plus size={16} />} onClick={() => navigate("/clients")}>
+              {t.add_first_client}
+            </Button>
+          }
+        />
+      )}
+
       {/* Grid layout */}
-      {mounted && width > 0 && (
+      {!isFirstRun && mounted && width > 0 && (
         <ResponsiveGridLayout
           width={width}
           layouts={{ lg: layout }}

@@ -455,6 +455,12 @@ export function CalendarPage() {
             </button>
           </div>
         </div>
+        {/* First-run hint: the calendar feeds off dated tasks/subtasks */}
+        {tasks !== undefined && subtasks !== undefined && tasks.length === 0 && subtasks.length === 0 && (
+          <div className="mb-3 px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border-divider)] text-xs text-muted text-center">
+            {t.first_run_calendar}
+          </div>
+        )}
         <div className="fc-studio">
           <FullCalendar
             ref={calRef}

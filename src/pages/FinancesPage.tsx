@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Download } from "lucide-react";
+import { Download, BarChart3, Plus } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -24,7 +24,8 @@ import { useClients } from "../db/hooks/useClients";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
-import { PageHeader, PageSpinner, Button, Card } from "../components/ui";
+import { PageHeader, PageSpinner, Button, Card, EmptyState } from "../components/ui";
+import { useNavigate } from "react-router-dom";
 import { useChartTheme } from "../hooks/useChartTheme";
 import { getTagColor } from "../lib/tagColors";
 import { getLineItemsForInvoices } from "../db/queries/invoices";
@@ -44,6 +45,7 @@ function getPieColor(categoryName: string, dark: boolean): string {
 export function FinancesPage() {
   const t = useT();
   const [year, setYear] = useState(new Date().getFullYear());
+  const navigate = useNavigate();
   const { data: pl, isLoading } = usePLData(year);
   const { data: monthly } = useMonthlyData(year);
   const { data: invoices } = useInvoices();
@@ -148,6 +150,24 @@ export function FinancesPage() {
   };
 
   if (isLoading) return <PageSpinner />;
+
+  // First run: no financial data at all — guide instead of empty charts.
+  if (invoices !== undefined && expenses !== undefined && invoices.length === 0 && expenses.length === 0) {
+    return (
+      <div>
+        <PageHeader title={t.finances} />
+        <EmptyState
+          message={t.first_run_finances}
+          icon={<BarChart3 size={32} />}
+          action={
+            <Button icon={<Plus size={16} />} onClick={() => navigate("/invoices/new")}>
+              {t.new_invoice}
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
 
   const chartData = monthly?.map((m, i) => ({
     name: MONTHS[i],

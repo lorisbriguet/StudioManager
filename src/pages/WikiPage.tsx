@@ -24,7 +24,7 @@ import { toast } from "sonner";
 import { useT } from "../i18n/useT";
 import { useAppStore } from "../stores/app-store";
 import { getTagColor } from "../lib/tagColors";
-import { PageHeader, SearchBar, Button } from "../components/ui";
+import { PageHeader, SearchBar, Button, EmptyState } from "../components/ui";
 import { Select } from "../components/ui/Select";
 import {
   useWikiFolders,
@@ -1052,13 +1052,25 @@ export function WikiPage() {
 
             {/* Article list */}
             <div className="flex-1 overflow-y-auto">
-              <ArticleList
-                articles={visibleArticles}
-                search={search}
-                tagFilter={tagFilter}
-                onSelectArticle={setSelectedArticleId}
-                onDeleteArticle={handleDeleteArticle}
-              />
+              {allArticles.length === 0 ? (
+                <EmptyState
+                  message={t.first_run_wiki}
+                  icon={<BookOpen size={32} />}
+                  action={
+                    <Button icon={<Plus size={16} />} onClick={handleNewArticle}>
+                      {t.new_article}
+                    </Button>
+                  }
+                />
+              ) : (
+                <ArticleList
+                  articles={visibleArticles}
+                  search={search}
+                  tagFilter={tagFilter}
+                  onSelectArticle={setSelectedArticleId}
+                  onDeleteArticle={handleDeleteArticle}
+                />
+              )}
             </div>
           </>
         )}
