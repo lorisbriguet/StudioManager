@@ -192,7 +192,7 @@ export function TaskDatePicker({
         aria-label={dueDate ? undefined : t.no_date}
       >
         <Calendar size={compact ? 12 : 14} className="shrink-0" />
-        {dueDate && <span className={compact ? "text-[11px]" : ""}>{displayLabel}</span>}
+        {dueDate && <span className={compact ? "text-xs" : ""}>{displayLabel}</span>}
       </button>
 
       {open && popoverPos && createPortal(
@@ -206,14 +206,14 @@ export function TaskDatePicker({
             <button
               type="button"
               onClick={handleToday}
-              className="px-2 py-1 text-[11px] font-medium rounded-md bg-[var(--color-input-bg)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] "
+              className="px-2 py-1 text-xs font-medium rounded-md bg-[var(--color-input-bg)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] "
             >
               {t.today}
             </button>
             <button
               type="button"
               onClick={handleTomorrow}
-              className="px-2 py-1 text-[11px] font-medium rounded-md bg-[var(--color-input-bg)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] "
+              className="px-2 py-1 text-xs font-medium rounded-md bg-[var(--color-input-bg)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] "
             >
               {t.tomorrow}
             </button>

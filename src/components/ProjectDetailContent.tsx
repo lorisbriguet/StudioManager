@@ -665,7 +665,7 @@ function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
             <button
               key={f}
               onClick={() => setTaskFilter(f)}
-              className={`px-2 py-0.5 text-[11px] rounded-full border ${
+              className={`px-2 py-0.5 text-xs rounded-full border ${
                 taskFilter === f
                   ? "bg-accent text-white border-accent"
                   : "border-[var(--color-input-border)] text-muted hover:bg-[var(--color-hover-row)]"

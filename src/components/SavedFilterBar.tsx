@@ -290,7 +290,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
           </div>
         </div>
       ))}
-      <div className="flex items-center gap-2 ml-[58px]">
+      <div className="flex items-center gap-2 ml-14.5">
         <Button
           variant="link"
           size="sm"

@@ -8,7 +8,7 @@
   --color-accent: #2563eb;
   --color-accent-hover: color-mix(in srgb, var(--color-accent) 85%, black);
   --color-accent-light: #dbeafe;
-  --color-muted: #6b7280;
+  --color-muted: #5d6570;
   --color-danger: #dc2626;
   --color-success: #16a34a;
   --color-warning: #d97706;
@@ -94,7 +94,7 @@ body {
   --color-sidebar: #161616;
   --color-sidebar-border: #333333;
   --color-accent-light: var(--color-accent-dark-light, #172554);
-  --color-muted: #a8a8a8;
+  --color-muted: #b0b0b0;
   --color-chart-1: #60a5fa;
   --color-chart-2: #4ade80;
   --color-chart-3: #fbbf24;
@@ -343,7 +343,7 @@ button:focus-visible:not(.focus-accent),
 
 .fc-studio .fc .fc-daygrid-more-link {
   font-size: 10px;
-  color: #6b7280;
+  color: var(--color-muted);
 }
 
 /* Dark mode */

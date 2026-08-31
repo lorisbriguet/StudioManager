@@ -199,7 +199,7 @@ export function Sidebar() {
         collapsed ? "w-16" : "w-56"
       }`}
     >
-      <div className={`flex items-center h-14 border-b border-sidebar-border ${collapsed ? "justify-center px-2" : "px-[22px]"}`}>
+      <div className={`flex items-center h-14 border-b border-sidebar-border ${collapsed ? "justify-center px-2" : "px-5.5"}`}>
         {collapsed ? <BrandMark className="h-3.5" /> : <BrandLogo className="h-6" />}
       </div>
       <nav ref={navRef} className="flex-1 py-2 overflow-y-auto">
@@ -226,7 +226,7 @@ export function Sidebar() {
                 }
               }}
               className={({ isActive }) =>
-                `flex items-center gap-2.5 px-3.5 py-[6px] mx-2 rounded-md text-[13px] transition-colors ${
+                `flex items-center gap-2.5 px-3.5 py-1.5 mx-2 rounded-md text-sm transition-colors ${
                   isActive
                     ? "bg-accent-light text-accent font-medium"
                     : "text-muted hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
@@ -236,7 +236,7 @@ export function Sidebar() {
               <span className="relative">
                 <Icon size={18} strokeWidth={1.5} />
                 {isNotifications && unreadCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 bg-[var(--color-danger)] text-white text-[9px] font-bold min-w-[14px] h-[14px] flex items-center justify-center rounded-full leading-none">
+                  <span className="absolute -top-1.5 -right-1.5 bg-[var(--color-danger)] text-white text-[10px] font-bold min-w-[14px] h-[14px] flex items-center justify-center rounded-full leading-none">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}

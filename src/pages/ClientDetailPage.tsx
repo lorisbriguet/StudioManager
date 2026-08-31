@@ -352,7 +352,7 @@ function ContactsSection({
     if (editingId === contact.id) setEditingId(null);
     deleteContact.mutate(
       { id: contact.id, clientId },
-      { onSuccess: () => toast.success(t.contact_removed) }
+      { onSuccess: () => undoableFromStore(t.contact_removed) }
     );
   };
 
@@ -738,7 +738,7 @@ function AddressesSection({
   const removeAddress = (addr: ClientAddress) => {
     deleteAddress.mutate(
       { id: addr.id, clientId },
-      { onSuccess: () => toast.success(t.address_removed) }
+      { onSuccess: () => undoableFromStore(t.address_removed) }
     );
   };
 

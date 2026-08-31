@@ -678,6 +678,9 @@ export function NewIncomeForm({
         </FormField>
       </div>
       <div className="flex gap-2">
+        <Button variant="secondary" onClick={onCancel}>
+          {t.cancel}
+        </Button>
         <Button
           onClick={() => {
             const errs = v.validateForm(
@@ -694,9 +697,6 @@ export function NewIncomeForm({
           }}
         >
           {t.save}
-        </Button>
-        <Button variant="secondary" onClick={onCancel}>
-          {t.cancel}
         </Button>
       </div>
     </Card>

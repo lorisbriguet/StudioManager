@@ -498,11 +498,13 @@ export function QuoteFormPage() {
 
         <div className="flex gap-2">
           <Button
+            variant="secondary"
             size="lg"
-            onClick={save}
-            disabled={createQuote.isPending || updateQuote.isPending}
+            onClick={async () => {
+              if (await confirmIfDirty("/quotes")) navigate("/quotes");
+            }}
           >
-            {isEdit ? t.update_quote : t.create_quote}
+            {t.cancel}
           </Button>
           {isEdit && (
             <Button
@@ -520,13 +522,11 @@ export function QuoteFormPage() {
             </Button>
           )}
           <Button
-            variant="secondary"
             size="lg"
-            onClick={async () => {
-              if (await confirmIfDirty("/quotes")) navigate("/quotes");
-            }}
+            onClick={save}
+            disabled={createQuote.isPending || updateQuote.isPending}
           >
-            {t.cancel}
+            {isEdit ? t.update_quote : t.create_quote}
           </Button>
         </div>
       </div>

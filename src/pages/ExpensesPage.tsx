@@ -828,6 +828,9 @@ export function NewExpenseForm({
         </div>
       )}
       <div className="flex gap-2">
+        <Button variant="secondary" onClick={onCancel}>
+          {t.cancel}
+        </Button>
         <Button
           onClick={() => {
             const errs = v.validateForm(
@@ -846,9 +849,6 @@ export function NewExpenseForm({
           }}
         >
           {t.save}
-        </Button>
-        <Button variant="secondary" onClick={onCancel}>
-          {t.cancel}
         </Button>
       </div>
     </Card>

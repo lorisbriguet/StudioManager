@@ -326,7 +326,7 @@ export function NamedTable({ table, projectId }: Props) {
                                             key={list.id}
                                             type="button"
                                             onClick={() => handleImportFromList(list.id)}
-                                            className="w-full text-left px-3 py-1 text-[11px] hover:bg-[var(--color-hover-row)]"
+                                            className="w-full text-left px-3 py-1 text-xs hover:bg-[var(--color-hover-row)]"
                                           >
                                             {list.name}
                                           </button>
