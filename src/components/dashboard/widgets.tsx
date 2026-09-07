@@ -641,7 +641,7 @@ function ExpenseBreakdown() {
         {data.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="80%" innerRadius="40%" paddingAngle={2}>
+              <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="80%" innerRadius="40%">
                 {/* Hash the category code so slices keep their color across ranking changes */}
                 {data.map((d) => <Cell key={d.code} fill={COLORS[tagHash(d.code) % COLORS.length]} />)}
               </Pie>
