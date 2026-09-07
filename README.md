@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.15.2-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.16.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="Platform">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
@@ -68,6 +68,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Automatic overdue detection on app startup with notifications
 - Late payment reminders with numbered reminder PDFs
 - Recurring invoice templates (monthly, quarterly, biannual, annual) — create from any invoice via "Make recurring...", manage templates with pause/resume
+- Due recurring drafts generate at launch, daily while the app stays open, or on demand via "Generate now"
 - Bulk PDF export — select multiple invoices and export all PDFs to a chosen folder
 - Editable PO number field, VOID overlay for cancelled invoices
 - Draft reference deferral — reference generated only on send
