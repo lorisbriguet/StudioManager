@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { Plus, Paperclip, Eye, X, ChevronRight, Upload, Trash2, CheckCircle, Receipt, Settings2, XCircle, Pencil } from "lucide-react";
+import { Plus, Paperclip, Eye, X, ChevronRight, Upload, Trash2, CheckCircle, CalendarCheck, Receipt, Settings2, XCircle, Pencil } from "lucide-react";
 import { Button, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState, Card, Modal } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
@@ -435,7 +435,10 @@ export function ExpensesPage() {
           onClose={() => setCtxMenu(null)}
           items={[
             ...(!ctxMenu.item.paid_date
-              ? [{ label: t.mark_as_paid_today, icon: <CheckCircle size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: todayLocalISO() } }, { onSuccess: () => toast.success(t.marked_as_paid) }) }]
+              ? [
+                  { label: t.mark_as_paid_today, icon: <CheckCircle size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: todayLocalISO() } }, { onSuccess: () => toast.success(t.marked_as_paid) }) },
+                  { label: t.mark_as_paid_at_invoice_date, icon: <CalendarCheck size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: ctxMenu.item.invoice_date } }, { onSuccess: () => toast.success(t.marked_as_paid) }) },
+                ]
               : [{ label: t.mark_as_unpaid, icon: <XCircle size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: null } }, { onSuccess: () => toast.success(t.marked_as_unpaid) }) }]),
             { label: t.edit_paid_date, icon: <Pencil size={14} />, onClick: () => { setEditDateValue(ctxMenu.item.paid_date ?? format(new Date(), "yyyy-MM-dd")); setEditDateExpense(ctxMenu.item); } },
             { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteExpense.mutate(ctxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_expense_deleted) }) },
