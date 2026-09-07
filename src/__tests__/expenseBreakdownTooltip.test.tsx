@@ -80,6 +80,15 @@ describe("expense breakdown widget", () => {
     expect(formatter(4686.5, "Logiciels")).toBe("CHF 4686.50");
   });
 
+  it("has no padding between slices, like the app's other pie chart", async () => {
+    renderExpenseBreakdown();
+    await waitFor(() => expect(captured.pie?.data).toBeDefined());
+
+    // paddingAngle carves constant-angle background wedges that look
+    // disproportionately large between small slices.
+    expect(captured.pie!.paddingAngle).toBeUndefined();
+  });
+
   it("labels slices with name_fr like the Expenses page", async () => {
     renderExpenseBreakdown();
     await waitFor(() => expect(captured.pie?.data).toBeDefined());
