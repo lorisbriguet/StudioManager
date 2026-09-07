@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Eye, ChevronRight, Pencil, Trash2, CheckCircle, Send, Repeat, X, AlertTriangle, ExternalLink, FileText, Settings2, Download, Mail } from "lucide-react";
+import { Plus, Eye, ChevronRight, Pencil, Trash2, CheckCircle, Send, Repeat, RefreshCw, X, AlertTriangle, ExternalLink, FileText, Settings2, Download, Mail } from "lucide-react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir } from "@tauri-apps/api/path";
@@ -19,6 +20,7 @@ import { pdfFileName } from "../lib/pdfFilename";
 import { runBulkPdfExport } from "../lib/bulkPdfExport";
 import { useClients } from "../db/hooks/useClients";
 import { useRecurringTemplates, useCreateRecurringTemplate, useDeleteRecurringTemplate, useUpdateRecurringTemplate } from "../db/hooks/useRecurring";
+import { runRecurringCheck } from "../hooks/useRecurringCheck";
 import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
 import { formatDisplayDate } from "../utils/formatDate";
 import { todayLocalISO, parseLocalDate } from "../utils/localDate";
@@ -112,6 +114,20 @@ export function InvoicesPage() {
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState<Invoice & { client_name: string }> | null>(null);
   const [sort, setSort] = useState<SortState<SortKey>>({ key: "reference", dir: "desc" });
   const [showRecurring, setShowRecurring] = useState(false);
+  const [generatingNow, setGeneratingNow] = useState(false);
+  const qc = useQueryClient();
+
+  const handleGenerateNow = async () => {
+    setGeneratingNow(true);
+    try {
+      // runRecurringCheck toasts and refetches by itself when it generates;
+      // only the "nothing due" case needs feedback here.
+      const generated = await runRecurringCheck(qc);
+      if (generated === 0) toast.info(t.recurring_none_due);
+    } finally {
+      setGeneratingNow(false);
+    }
+  };
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
   const [filterLogic, setFilterLogic] = useState<ConditionLogic>("and");
@@ -465,9 +481,20 @@ export function InvoicesPage() {
         <Card className="mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-medium">{t.recurring_invoices}</h2>
-            <button type="button" onClick={() => setShowRecurring(false)} aria-label={t.close} className="text-muted hover:text-[var(--color-text)]">
-              <X size={14} />
-            </button>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<RefreshCw size={12} />}
+                loading={generatingNow}
+                onClick={handleGenerateNow}
+              >
+                {t.generate_now}
+              </Button>
+              <button type="button" onClick={() => setShowRecurring(false)} aria-label={t.close} className="text-muted hover:text-[var(--color-text)]">
+                <X size={14} />
+              </button>
+            </div>
           </div>
           {(!templates || templates.length === 0) ? (
             <div>
