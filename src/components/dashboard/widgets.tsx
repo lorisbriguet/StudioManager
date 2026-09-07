@@ -628,7 +628,8 @@ function ExpenseBreakdown() {
     return Object.entries(byCategory)
       .map(([code, total]) => {
         const cat = categories.find((c) => c.code === code);
-        return { code, name: cat?.name_en ?? code, value: total };
+        // name_fr to match the category labels on the Expenses page
+        return { code, name: cat?.name_fr ?? code, value: total };
       })
       .sort((a, b) => b.value - a.value);
   }, [expenses, categories, year]);
@@ -644,7 +645,7 @@ function ExpenseBreakdown() {
                 {/* Hash the category code so slices keep their color across ranking changes */}
                 {data.map((d) => <Cell key={d.code} fill={COLORS[tagHash(d.code) % COLORS.length]} />)}
               </Pie>
-              <Tooltip formatter={(value) => [`CHF ${Number(value).toFixed(2)}`, ""]} contentStyle={chart.tooltipStyle} itemStyle={chart.pieItemStyle} labelStyle={{ color: "var(--color-text)" }} />
+              <Tooltip formatter={(value) => `CHF ${Number(value).toFixed(2)}`} contentStyle={chart.tooltipStyle} itemStyle={chart.pieItemStyle} labelStyle={{ color: "var(--color-text)" }} />
             </PieChart>
           </ResponsiveContainer>
         ) : (
