@@ -4,6 +4,7 @@ import { logError } from "../lib/log";
 import { getLabels } from "../lib/notifyError";
 import { todayLocalISO } from "../utils/localDate";
 import { seedUserGuide } from "./seeds/user-guide";
+import { splitSeedStatements } from "./seeds/splitSql";
 
 const SAFE_FIELD = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -114,20 +115,12 @@ export async function seedPresentationDb(): Promise<void> {
   const db = await getDb();
   // Import seed SQL as raw text (Vite raw import)
   const seedSql = (await import("./seeds/presentation.sql?raw")).default;
-  // Split on semicolons, strip comment-only lines, then execute each statement
-  const statements = seedSql
-    .split(";")
-    .map((s: string) =>
-      s
-        .split("\n")
-        .filter((line: string) => !line.trim().startsWith("--"))
-        .join("\n")
-        .trim()
-    )
-    .filter((s: string) => s.length > 0);
-  for (const stmt of statements) {
+  for (const stmt of splitSeedStatements(seedSql)) {
     await db.execute(stmt + ";");
   }
+  // The seed wipes the wiki (it may hold personal notes); put the built-in
+  // user guide back so the demo Wiki page is not empty.
+  await seedUserGuide(db);
 }
 
 export async function switchDb(dbName: string): Promise<void> {
