@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.16.2-blue" alt="Version">
-  <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="Platform">
+  <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/lorisbriguet/StudioManager?label=version&color=blue" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/platform-macOS%20(Apple%20Silicon)-lightgrey" alt="Platform">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
 
@@ -27,6 +27,8 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Freelance graphic designers, illustrators, photographers
 - Solo creatives managing their own clients and billing
 - Anyone who wants invoicing, project tracking, and finance overview in one app
+
+> **Testing the app?** Grab the latest `.dmg` from [Releases](../../releases/latest), then follow the short [Tester Guide](docs/GUIDE.md) — it covers the macOS "unverified app" step, first-launch setup, a 15-minute tour, and how to send feedback.
 
 ---
 
@@ -162,7 +164,8 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 | Calendar | FullCalendar + macOS EventKit |
 | Dashboard | react-grid-layout |
 | Charts | Recharts |
-| OCR | tesseract.js |
+| OCR | Apple Vision framework (native, via objc2) |
+| Updates | tauri-plugin-updater (GitHub Releases) |
 | Notifications | tauri-plugin-notification |
 | Forms | React Hook Form + Zod |
 | Icons | Lucide React |
@@ -173,20 +176,23 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 
 ### macOS (Apple Silicon)
 
-Download the latest `.dmg` from the [Releases](../../releases) page.
+Download the latest `StudioManager_x.y.z_aarch64.dmg` from the [Releases](../../releases/latest) page.
 
 ### Requirements
 - macOS 12.0 (Monterey) or later
-- Apple Silicon (M1/M2/M3/M4) or Intel Mac
+- Apple Silicon Mac (M1 or newer). No Intel build is published at the moment.
 
 ---
 
 ## Installation
 
-1. Download the `.dmg` file from the [Releases](../../releases) page
+1. Download the `.dmg` file from the [Releases](../../releases/latest) page
 2. Open the `.dmg` and drag **StudioManager** to your Applications folder
-3. On first launch, right-click the app and select "Open" (required for unsigned apps)
-4. The app creates its database automatically — you're ready to go
+3. Allow the app past Gatekeeper. StudioManager is not notarized (that requires a paid Apple Developer account), so macOS blocks the first launch:
+   - **macOS 15 Sequoia and later**: open the app once and dismiss the "Apple could not verify" dialog, then go to **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to StudioManager. Confirm with your password or Touch ID.
+   - **macOS 12 to 14**: right-click the app in Applications and choose **Open**, then **Open** again in the dialog.
+   - **Terminal alternative** (any version): `xattr -dr com.apple.quarantine /Applications/StudioManager.app`
+4. The app creates its database automatically — you're ready to go. Later versions install themselves through the built-in updater, so this step is only needed once.
 
 ### Data Location
 
@@ -201,7 +207,7 @@ This includes your database (`studiomanager.db`), invoice PDFs, and expense rece
 
 ## Screenshots
 
-> Screenshots coming soon.
+> Screenshots coming soon. Expected files: `assets/screenshot-dashboard.png`, `assets/screenshot-project.png`, `assets/screenshot-invoice.png`, `assets/screenshot-finances.png` (taken in Presentation Mode, 1600px wide). Uncomment the block below once they exist.
 
 <!--
 <p align="center">
@@ -215,8 +221,13 @@ This includes your database (`studiomanager.db`), invoice PDFs, and expense rece
 </p>
 
 <p align="center">
-  <img src="assets/screenshot-calendar.png" alt="Calendar" width="800">
-  <br><em>Calendar with task scheduling</em>
+  <img src="assets/screenshot-project.png" alt="Project page" width="800">
+  <br><em>Modular project page with tasks, workload and time tracking</em>
+</p>
+
+<p align="center">
+  <img src="assets/screenshot-finances.png" alt="Finances" width="800">
+  <br><em>Finances with Swiss-format P&L</em>
 </p>
 -->
 
@@ -298,6 +309,18 @@ StudioManager is designed for Swiss freelancers:
 - [ ] Project profitability view
 
 Full backlog and bug tracker: [IDEAS.md](IDEAS.md)
+
+---
+
+## Feedback & Bug Reports
+
+Found a bug or have an idea? Open an [issue](../../issues/new). Please include:
+
+- StudioManager version (shown at the bottom of the Settings sidebar) and your macOS version
+- What you did, what you expected, and what happened instead
+- A screenshot if the problem is visual
+
+Data never leaves your Mac, so if a bug depends on your data, describe it rather than sending the database. The [Tester Guide](docs/GUIDE.md) explains how to reset to a clean state.
 
 ---
 
