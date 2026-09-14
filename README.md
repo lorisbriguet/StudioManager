@@ -207,29 +207,27 @@ This includes your database (`studiomanager.db`), invoice PDFs, and expense rece
 
 ## Screenshots
 
-> Screenshots coming soon. Expected files: `docs/screenshots/dashboard.png`, `project.png`, `invoice.png`, `finances.png` (taken in Presentation Mode, 1600px wide). The landing page picks them up automatically; uncomment the block below for the README.
+Taken in Presentation Mode with demo data.
 
-<!--
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Dashboard" width="800">
   <br><em>Dashboard overview</em>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/invoice.png" alt="Invoices" width="800">
-  <br><em>Invoice management with QR-bill PDF generation</em>
+  <img src="docs/screenshots/project.png" alt="Project page" width="800">
+  <br><em>Projects with the side peek: tasks, notes, resources and workload</em>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/project.png" alt="Project page" width="800">
-  <br><em>Modular project page with tasks, workload and time tracking</em>
+  <img src="docs/screenshots/invoice.png" alt="Invoice" width="800">
+  <br><em>Invoice PDF with Swiss QR-bill</em>
 </p>
 
 <p align="center">
   <img src="docs/screenshots/finances.png" alt="Finances" width="800">
   <br><em>Finances with Swiss-format P&L</em>
 </p>
--->
 
 ---
 
