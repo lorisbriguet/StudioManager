@@ -207,26 +207,26 @@ This includes your database (`studiomanager.db`), invoice PDFs, and expense rece
 
 ## Screenshots
 
-> Screenshots coming soon. Expected files: `assets/screenshot-dashboard.png`, `assets/screenshot-project.png`, `assets/screenshot-invoice.png`, `assets/screenshot-finances.png` (taken in Presentation Mode, 1600px wide). Uncomment the block below once they exist.
+> Screenshots coming soon. Expected files: `docs/screenshots/dashboard.png`, `project.png`, `invoice.png`, `finances.png` (taken in Presentation Mode, 1600px wide). The landing page picks them up automatically; uncomment the block below for the README.
 
 <!--
 <p align="center">
-  <img src="assets/screenshot-dashboard.png" alt="Dashboard" width="800">
+  <img src="docs/screenshots/dashboard.png" alt="Dashboard" width="800">
   <br><em>Dashboard overview</em>
 </p>
 
 <p align="center">
-  <img src="assets/screenshot-invoices.png" alt="Invoices" width="800">
+  <img src="docs/screenshots/invoice.png" alt="Invoices" width="800">
   <br><em>Invoice management with QR-bill PDF generation</em>
 </p>
 
 <p align="center">
-  <img src="assets/screenshot-project.png" alt="Project page" width="800">
+  <img src="docs/screenshots/project.png" alt="Project page" width="800">
   <br><em>Modular project page with tasks, workload and time tracking</em>
 </p>
 
 <p align="center">
-  <img src="assets/screenshot-finances.png" alt="Finances" width="800">
+  <img src="docs/screenshots/finances.png" alt="Finances" width="800">
   <br><em>Finances with Swiss-format P&L</em>
 </p>
 -->
