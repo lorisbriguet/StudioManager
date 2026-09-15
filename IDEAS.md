@@ -56,6 +56,12 @@
 - [x] Backup rotation retries on synced folders (Synology ENOTEMPTY race)
 - [x] Full audit round 2: discoverability, button order, type scale, muted contrast, Settings cards, first-run guidance, Save & Preview, Cmd+N / arrow-key nav / Cmd+B sidebar toggle, undo affordance on contact/address/template deletes
 
+## V1.17.0 — Done (presentation mode rebuild + tester docs, 2026-09-15)
+- [x] Presentation seed rebuilt for the current schema: relative dates, per-year reference renumbering, activity entities, correct expense categories, VAT-exempt totals, time entries / named table / project wiki / layouts / income, personal data cleared, user guide restored; guarded by `src/__tests__/presentationSeed.test.ts`
+- [x] Seed statement splitter made comment- and quote-aware (`src/db/seeds/splitSql.ts`)
+- [x] Tester guide `docs/GUIDE.md`, README corrections, landing page rebuilt and published via GitHub Pages
+- [ ] Retake the four screenshots in `docs/screenshots/` with the new seed (current ones show the old Jan–Mar data and the real business profile on the invoice)
+
 ## Audit — round 3 (2026-08-31)
 
 Three-lens audit (correctness/data, security/platform, UI/a11y/perf/tests) after v1.15.0. Clean bill: SQL parameterization, osascript runner, wiki allowlist, updater chain, capabilities scope, date/money handling, design-system compliance (0 violations), modal/menu focus management.
@@ -149,7 +155,7 @@ Full-coverage pass: deterministic tooling (npm/cargo audit, knip, jscpd, clippy,
 ## Security hardening (2026-08-12)
 
 - [x] Retire arbitrary osascript execution (2026-08-14) — Calendar sync + PDF/HEIC extraction moved to Rust commands in `src-tauri/src/apple.rs` with fixed scripts; user data passed via argv only (`on run argv` / JXA `function run(argv)`), HEIC runs `sips` directly with no shell; `shell:allow-execute` dropped from capabilities (`shell:allow-open` kept for browser URLs). Mail sharing was already a Rust command
-- ~~Notarize the app~~ — dropped: requires the paid Apple Developer Program, which we're not getting. Unsigned builds keep using the right-click-open Gatekeeper bypass
+- ~~Notarize the app~~ — dropped: requires the paid Apple Developer Program, which we're not getting. Unsigned builds rely on the Gatekeeper bypass: right-click-open on macOS 12–14, System Settings → Privacy & Security → Open Anyway on macOS 15+ (documented in docs/GUIDE.md and the README)
 - [x] Automate dependency auditing (2026-08-14) — weekly GitHub Action runs `npm audit` + `cargo audit`; two unfixable sqlx-transitive advisories ignored with reasons in `src-tauri/.cargo/audit.toml`
 - [x] Smoke-test the osascript migration (2026-08-14): Calendar sync (timed + all-day + deletion), PDF receipt parsing, HEIC Vision OCR, Mail sharing, export dialogs, dashboard year switcher, supplier merge — all verified in the running app
 
@@ -241,9 +247,6 @@ Reviewer claims rejected: "radius hierarchy inverted" (frequency ≠ inversion),
 ### Project profitability view
 - Per-project P&L: invoiced amount vs. time cost (hours x rate) vs. expenses
 - Display in project detail or as a dashboard widget
-
-### Update presentation mode seeds
-- Refresh demo data for all features added since V1.6.0
 
 ## Low Priority
 
