@@ -57,6 +57,11 @@ export const useOrgStore = create<OrgState>((set, get) => ({
     useAppStore.setState({
       lastAutoBackup: Number(localStorage.getItem(get().orgKey("lastAutoBackup"))) || 0,
     });
+    // Reload the active organisation's timer. tab-store's own tabs reload
+    // via its useOrgStore.subscribe() (tab-store.ts) — org-store must not
+    // import tab-store, to avoid an import cycle (app-store already imports
+    // org-store, so the timer reload is wired here instead).
+    useAppStore.getState().reloadTimerForOrg();
   },
 
   load: async () => {

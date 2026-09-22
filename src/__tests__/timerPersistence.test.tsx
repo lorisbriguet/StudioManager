@@ -3,6 +3,7 @@ import { renderHook, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useAppStore } from "../stores/app-store";
+import { useOrgStore } from "../stores/org-store";
 import { useTimerActions } from "../hooks/useTimerActions";
 import { createTimeEntry } from "../db/queries/timeEntries";
 import { getTaskById } from "../db/queries/tasks";
@@ -30,34 +31,47 @@ const FIVE_MIN = 5 * 60_000;
 function seedRunningTimer() {
   const timer = { taskId: 1, projectId: 2, startedAt: Date.now() - FIVE_MIN, projectName: "Proj" };
   useAppStore.setState({ activeTimer: timer });
-  localStorage.setItem("activeTimer", JSON.stringify(timer));
+  localStorage.setItem("activeTimer:t1", JSON.stringify(timer));
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  // The timer now persists under an organisation-namespaced key (activeTimer:<id>).
+  useOrgStore.setState({ activeId: "t1" });
   useAppStore.setState({ activeTimer: null });
 });
 
 describe("app-store timer persistence", () => {
   it("startTimer persists to localStorage, clearTimer removes it", () => {
     useAppStore.getState().startTimer(1, 2, "Proj");
-    const raw = localStorage.getItem("activeTimer");
+    const raw = localStorage.getItem("activeTimer:t1");
     expect(raw).not.toBeNull();
     expect(JSON.parse(raw!)).toMatchObject({ taskId: 1, projectId: 2, projectName: "Proj" });
 
     useAppStore.getState().clearTimer();
-    expect(localStorage.getItem("activeTimer")).toBeNull();
+    expect(localStorage.getItem("activeTimer:t1")).toBeNull();
     expect(useAppStore.getState().activeTimer).toBeNull();
   });
 
-  it("restores a persisted timer on store init (app relaunch)", async () => {
+  // Adapted for organisation-namespacing (task 13, ruling R1): app-store must
+  // not call useOrgStore while its create() initial state is evaluated, so
+  // activeTimer now always starts null at module init — even with a
+  // persisted timer on disk — and restoration happens only via the explicit
+  // reloadTimerForOrg() call (wired from org-store's applyRegistry once the
+  // active organisation is known).
+  it("does not auto-restore a persisted timer at module init; reloadTimerForOrg() restores it once the org is known", async () => {
     localStorage.setItem(
-      "activeTimer",
+      "activeTimer:t1",
       JSON.stringify({ taskId: 7, projectId: 3, startedAt: 1234, projectName: "P" })
     );
     vi.resetModules();
     const fresh = await import("../stores/app-store");
+    expect(fresh.useAppStore.getState().activeTimer).toBeNull();
+
+    const freshOrg = await import("../stores/org-store");
+    freshOrg.useOrgStore.setState({ activeId: "t1" });
+    fresh.useAppStore.getState().reloadTimerForOrg();
     expect(fresh.useAppStore.getState().activeTimer).toEqual({
       taskId: 7,
       projectId: 3,
@@ -66,10 +80,13 @@ describe("app-store timer persistence", () => {
     });
   });
 
-  it("ignores a corrupted persisted timer", async () => {
-    localStorage.setItem("activeTimer", "{not valid json");
+  it("ignores a corrupted persisted timer (reloadTimerForOrg falls back to null)", async () => {
+    localStorage.setItem("activeTimer:t1", "{not valid json");
     vi.resetModules();
     const fresh = await import("../stores/app-store");
+    const freshOrg = await import("../stores/org-store");
+    freshOrg.useOrgStore.setState({ activeId: "t1" });
+    fresh.useAppStore.getState().reloadTimerForOrg();
     expect(fresh.useAppStore.getState().activeTimer).toBeNull();
   });
 });
@@ -98,7 +115,7 @@ describe("stopAndSave", () => {
     );
     expect(timerAtWriteTime).not.toBeNull();
     expect(useAppStore.getState().activeTimer).toBeNull();
-    expect(localStorage.getItem("activeTimer")).toBeNull();
+    expect(localStorage.getItem("activeTimer:t1")).toBeNull();
   });
 
   it("keeps the timer running (state + persistence) when the DB write fails", async () => {
@@ -114,7 +131,7 @@ describe("stopAndSave", () => {
 
     expect(saved).toBe(false);
     expect(useAppStore.getState().activeTimer).not.toBeNull();
-    expect(localStorage.getItem("activeTimer")).not.toBeNull();
+    expect(localStorage.getItem("activeTimer:t1")).not.toBeNull();
     expect(notifyError).toHaveBeenCalledTimes(1);
   });
 
@@ -135,7 +152,7 @@ describe("stopAndSave", () => {
       expect.objectContaining({ task_id: null, project_id: 2, duration_minutes: 5 })
     );
     expect(useAppStore.getState().activeTimer).toBeNull();
-    expect(localStorage.getItem("activeTimer")).toBeNull();
+    expect(localStorage.getItem("activeTimer:t1")).toBeNull();
   });
 
   it("discards the timer with a visible error when the project was deleted too", async () => {
@@ -153,7 +170,7 @@ describe("stopAndSave", () => {
     expect(createTimeEntry).not.toHaveBeenCalled();
     expect(notifyError).toHaveBeenCalledTimes(1);
     expect(useAppStore.getState().activeTimer).toBeNull();
-    expect(localStorage.getItem("activeTimer")).toBeNull();
+    expect(localStorage.getItem("activeTimer:t1")).toBeNull();
   });
 
   it("toggleTimer does not overwrite an unsaved timer when saving fails", async () => {

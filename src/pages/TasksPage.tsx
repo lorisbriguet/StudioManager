@@ -31,6 +31,7 @@ import { BulkActionBar } from "../components/BulkActionBar";
 import { SavedFilterBar } from "../components/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
+import { useOrgStore } from "../stores/org-store";
 import { useTimerActions } from "../hooks/useTimerActions";
 import { useT } from "../i18n/useT";
 import { PageHeader, SearchBar, TableSkeleton, EmptyState } from "../components/ui";
@@ -71,13 +72,13 @@ export function TasksPage() {
   const [headerCtxMenu, setHeaderCtxMenu] = useState<ContextMenuState<{ projectId: number; projectName: string }> | null>(null);
   const [collapsedProjects, setCollapsedProjects] = useState<Set<number>>(() => {
     try {
-      const stored = localStorage.getItem("tasksCollapsedProjects");
+      const stored = localStorage.getItem(useOrgStore.getState().orgKey("tasksCollapsedProjects"));
       return stored ? new Set(JSON.parse(stored)) : new Set();
     } catch { return new Set(); }
   });
   const [projectOrder, setProjectOrder] = useState<number[]>(() => {
     try {
-      const stored = localStorage.getItem("tasksProjectOrder");
+      const stored = localStorage.getItem(useOrgStore.getState().orgKey("tasksProjectOrder"));
       return stored ? JSON.parse(stored) : [];
     } catch { return []; }
   });
@@ -203,7 +204,7 @@ export function TasksPage() {
       ids.splice(fromIdx, 1);
       ids.splice(toIdx, 0, activeId);
       setProjectOrder(ids);
-      localStorage.setItem("tasksProjectOrder", JSON.stringify(ids));
+      localStorage.setItem(useOrgStore.getState().orgKey("tasksProjectOrder"), JSON.stringify(ids));
     },
     [grouped]
   );
@@ -274,7 +275,7 @@ export function TasksPage() {
                   if (next.has(g.projectId)) next.delete(g.projectId);
                   else next.add(g.projectId);
                   setCollapsedProjects(next);
-                  localStorage.setItem("tasksCollapsedProjects", JSON.stringify([...next]));
+                  localStorage.setItem(useOrgStore.getState().orgKey("tasksCollapsedProjects"), JSON.stringify([...next]));
                 }}
                 className="flex items-center gap-2 flex-1 text-left"
               >

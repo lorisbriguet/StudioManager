@@ -122,10 +122,13 @@ export interface ActiveTimer {
 
 // The running timer is persisted so a quit or crash never loses a session.
 // Elapsed time is always derived from startedAt, so restoring the stored
-// value on launch is enough for the UI to keep counting.
+// value on launch is enough for the UI to keep counting. Namespaced per
+// organisation: the key is only resolved when this is called (never at
+// module evaluation time), since useOrgStore's activeId isn't settled yet
+// when this module first loads.
 function loadActiveTimer(): ActiveTimer | null {
   try {
-    const raw = localStorage.getItem("activeTimer");
+    const raw = localStorage.getItem(useOrgStore.getState().orgKey("activeTimer"));
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (
@@ -186,6 +189,8 @@ export interface AppState {
   startTimer: (taskId: number, projectId: number, projectName?: string) => void;
   /** Clear the timer state WITHOUT saving. Callers must persist the entry first (useTimerActions.stopAndSave). */
   clearTimer: () => void;
+  /** Reload the active timer from the (now current) organisation's namespaced key. */
+  reloadTimerForOrg: () => void;
   setClientsSortKey: (key: string) => void;
   setClientsSortDir: (dir: "asc" | "desc") => void;
   setLanguage: (lang: AppLanguage) => void;
@@ -284,19 +289,23 @@ export const useAppStore = create<AppState>((set) => ({
   clientsSortKey: localStorage.getItem("clientsSortKey") ?? "name",
   clientsSortDir: (localStorage.getItem("clientsSortDir") as "asc" | "desc") ?? "asc",
   calendarView: (localStorage.getItem("calendarView") as CalendarViewOption) ?? "timeGridWeek",
-  activeTimer: loadActiveTimer(),
+  // Not loadActiveTimer() here: useOrgStore's activeId isn't settled at
+  // module-evaluation time. The real per-organisation timer is loaded via
+  // reloadTimerForOrg(), called from org-store's applyRegistry.
+  activeTimer: null,
   currentContext: {},
   // Overwrites any existing timer — callers that care about the running
   // session must stop-and-save it first (useTimerActions does).
   startTimer: (taskId, projectId, projectName) => {
     const timer: ActiveTimer = { taskId, projectId, startedAt: Date.now(), projectName };
-    localStorage.setItem("activeTimer", JSON.stringify(timer));
+    localStorage.setItem(useOrgStore.getState().orgKey("activeTimer"), JSON.stringify(timer));
     set({ activeTimer: timer });
   },
   clearTimer: () => {
-    localStorage.removeItem("activeTimer");
+    localStorage.removeItem(useOrgStore.getState().orgKey("activeTimer"));
     set({ activeTimer: null });
   },
+  reloadTimerForOrg: () => set({ activeTimer: loadActiveTimer() }),
   setClientsSortKey: (key) => {
     localStorage.setItem("clientsSortKey", key);
     set({ clientsSortKey: key });
