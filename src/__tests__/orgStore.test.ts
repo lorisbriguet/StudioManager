@@ -8,8 +8,14 @@ vi.mock("../lib/log", () => ({
   logInfo: vi.fn(),
 }));
 
+vi.mock("../lib/notifyError", () => ({
+  notifyError: vi.fn(),
+  getLabels: () => new Proxy({}, { get: (_t, k) => String(k) }),
+}));
+
 import { useOrgStore, prefsFromLocalStorage } from "../stores/org-store";
 import { useAppStore } from "../stores/app-store";
+import { notifyError } from "../lib/notifyError";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 import type { Registry } from "../lib/orgs";
 
@@ -23,6 +29,7 @@ beforeEach(() => {
   localStorage.clear();
   clearInvokedCommands();
   useOrgStore.setState({ organisations: [], activeId: "", loaded: false });
+  vi.mocked(notifyError).mockClear();
 });
 afterEach(() => setInvokeHandler(null));
 
@@ -81,6 +88,17 @@ describe("org store", () => {
     await useOrgStore.getState().savePrefs({ showIncome: false });
     const set = invokedCommands.find((c) => c.cmd === "set_organisation_prefs");
     expect(set?.args).toMatchObject({ prefs: { showIncome: false, calendarName: "StudioManager" } });
+  });
+
+  it("savePrefs surfaces a write-through failure and keeps the optimistic local state", async () => {
+    setInvokeHandler((cmd) => {
+      if (cmd === "set_organisation_prefs") throw new Error("db unavailable");
+      return null;
+    });
+    useOrgStore.getState().applyRegistry(reg({ showIncome: true, showTasksPage: true, showTimeOverview: true, calendarSync: false, calendarName: "StudioManager", backupPath: "", exportLanguage: "FR" }));
+    await useOrgStore.getState().savePrefs({ showIncome: false });
+    expect(notifyError).toHaveBeenCalledTimes(1);
+    expect(useAppStore.getState().showIncome).toBe(false);
   });
 
   it("prefsFromLocalStorage uses the same defaults as the app store", () => {

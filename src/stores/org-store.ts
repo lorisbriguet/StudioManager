@@ -3,6 +3,7 @@ import { useAppStore } from "./app-store";
 import { listOrganisations, setOrganisationPrefs, type Organisation, type OrgPrefs, type Registry } from "../lib/orgs";
 import type { AppLanguage } from "../i18n/ui";
 import { logWarn } from "../lib/log";
+import { notifyError, getLabels } from "../lib/notifyError";
 
 /** localStorage keys that used to hold what is now per-organisation. */
 const LEGACY_PREF_KEYS = ["showIncome", "showTasksPage", "showTimeOverview", "calendarSync", "calendarName", "backupPath", "exportLanguage"] as const;
@@ -86,7 +87,13 @@ export const useOrgStore = create<OrgState>((set, get) => ({
     if (!current || !id) return;
     const next = { ...current, ...partial };
     applyPrefsToAppStore(next);
-    const reg = await setOrganisationPrefs(id, next);
-    set({ organisations: reg.organisations });
+    try {
+      const reg = await setOrganisationPrefs(id, next);
+      set({ organisations: reg.organisations });
+    } catch (e) {
+      // Keep the optimistic local state (already applied above); just surface
+      // the failure so it isn't a silent unhandled rejection.
+      notifyError(getLabels().operation_failed, e);
+    }
   },
 }));
