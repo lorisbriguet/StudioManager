@@ -8,8 +8,8 @@ import {
   readTextFile,
   remove,
 } from "@tauri-apps/plugin-fs";
-import { appDataDir } from "@tauri-apps/api/path";
 import { logWarn, logInfo } from "./log";
+import { orgPaths } from "./orgPaths";
 
 /** Shared lock to prevent concurrent backup operations (auto + manual) */
 let _backupRunning = false;
@@ -172,8 +172,7 @@ export async function createBackup(
   }
 
   // Copy receipt files
-  const dataDir = await appDataDir();
-  const receiptsDir = `${dataDir}/receipts`;
+  const { invoicesDir, receiptsDir } = await orgPaths();
   if (await exists(receiptsDir)) {
     try {
       const entries = await readDir(receiptsDir);
@@ -192,7 +191,6 @@ export async function createBackup(
   }
 
   // Copy stored invoice PDFs
-  const invoicesDir = `${dataDir}/invoices`;
   if (await exists(invoicesDir)) {
     try {
       const entries = await readDir(invoicesDir);
@@ -574,10 +572,9 @@ export async function restoreFromBackup(
   }
 
   // Restore receipt files
-  const appDir = await appDataDir();
+  const { invoicesDir, receiptsDir } = await orgPaths();
   const receiptsBackup = `${backupPath}/receipts`;
   if (await exists(receiptsBackup)) {
-    const receiptsDir = `${appDir}/receipts`;
     await mkdir(receiptsDir, { recursive: true });
     try {
       const entries = await readDir(receiptsBackup);
@@ -595,7 +592,6 @@ export async function restoreFromBackup(
   // Restore invoice PDFs
   const invoicesBackup = `${backupPath}/invoices`;
   if (await exists(invoicesBackup)) {
-    const invoicesDir = `${appDir}/invoices`;
     await mkdir(invoicesDir, { recursive: true });
     try {
       const entries = await readDir(invoicesBackup);

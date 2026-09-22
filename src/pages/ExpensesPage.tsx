@@ -12,8 +12,8 @@ import { formatDisplayDate } from "../utils/formatDate";
 import { todayLocalISO } from "../utils/localDate";
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { copyFile, mkdir, exists } from "@tauri-apps/plugin-fs";
-import { appDataDir } from "@tauri-apps/api/path";
 import { readFile } from "@tauri-apps/plugin-fs";
+import { orgPaths } from "../lib/orgPaths";
 import {
   useExpenses,
   useExpenseCategories,
@@ -184,8 +184,7 @@ export function ExpensesPage() {
       if (!selected) return;
       const filePath = typeof selected === "string" ? selected : selected;
       const ext = filePath.split(".").pop() ?? "pdf";
-      const dataDir = await appDataDir();
-      const receiptsDir = `${dataDir}/receipts`;
+      const { receiptsDir } = await orgPaths();
       if (!(await exists(receiptsDir))) {
         await mkdir(receiptsDir, { recursive: true });
       }
@@ -258,8 +257,7 @@ export function ExpensesPage() {
             if (prefill?.receiptPath && !receiptPath) {
               try {
                 const ext = prefill.receiptPath.split(".").pop() ?? "pdf";
-                const dataDir = await appDataDir();
-                const receiptsDir = `${dataDir}/receipts`;
+                const { receiptsDir } = await orgPaths();
                 if (!(await exists(receiptsDir))) {
                   await mkdir(receiptsDir, { recursive: true });
                 }

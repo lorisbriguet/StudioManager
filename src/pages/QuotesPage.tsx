@@ -4,11 +4,11 @@ import { Plus, Eye, Pencil, FileOutput, Trash2, Send, ExternalLink, FolderPlus, 
 import { toast } from "sonner";
 import { pdf } from "@react-pdf/renderer";
 import { invoke } from "@tauri-apps/api/core";
-import { appDataDir } from "@tauri-apps/api/path";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { undoable, undoableFromStore } from "../lib/undo";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { pdfFileName } from "../lib/pdfFilename";
+import { orgPaths } from "../lib/orgPaths";
 import { runBulkPdfExport } from "../lib/bulkPdfExport";
 import { useClients } from "../db/hooks/useClients";
 import { useQuotes, useUpdateQuote, useDeleteQuote } from "../db/hooks/useQuotes";
@@ -178,8 +178,8 @@ export function QuotesPage() {
         toast.error(t.quote_not_found, { id: toastId });
         return;
       }
-      const dataDir = await appDataDir();
-      const tempPath = `${dataDir}/temp_${pdfFileName(result.reference, result.client.name)}`;
+      const { root } = await orgPaths();
+      const tempPath = `${root}/temp_${pdfFileName(result.reference, result.client.name)}`;
       await writeFile(tempPath, result.bytes);
 
       await invoke("share_pdf_via_mail", {
