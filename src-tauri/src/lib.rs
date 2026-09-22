@@ -1,5 +1,6 @@
 mod apple;
 mod dbfiles;
+mod migrate;
 mod orgs;
 
 use tauri::Manager;
