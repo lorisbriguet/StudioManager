@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! One-time move from the legacy single-database layout to `orgs/<id>/`.
 //! Same-volume renames (per file), a snapshot first, row/file counts before
 //! and after, and a full rollback of completed renames on any error.
@@ -9,9 +8,6 @@
 //! rather than deleted, and the returned error names precisely what could
 //! and could not be reversed. This module never claims "rolled back" while
 //! silently discarding data.
-//!
-//! `#![allow(dead_code)]`: nothing outside `upgrade.rs` uses this module yet.
-//! Task 5 wires it into Tauri commands and this allow should be removed then.
 
 use crate::orgs::{org_dir, Registry, DB_FILE, ORGS_DIR, REGISTRY_FILE};
 use std::path::{Path, PathBuf};

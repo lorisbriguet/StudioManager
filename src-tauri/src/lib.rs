@@ -6,14 +6,45 @@ mod seed;
 mod upgrade;
 
 use tauri::Manager;
-use tauri_plugin_sql::{Migration, MigrationKind};
+use orgs::{OrgPrefs, Registry, DB_FILE};
 use serde_json::Value as JsonValue;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-/// Global state: the active DB filename (default: "studiomanager.db").
-/// In test mode this switches to "studiomanager_test.db".
-struct ActiveDb(Mutex<String>);
+/// Global state: the active organisation folder and which database file
+/// inside it is live (production, test or presentation copy).
+#[derive(Clone, Debug)]
+pub struct ActiveOrg {
+    pub id: String,
+    pub dir: PathBuf,
+    pub db_name: String,
+}
+
+impl ActiveOrg {
+    pub fn db_path(&self) -> PathBuf { self.dir.join(&self.db_name) }
+    pub fn prod_db_path(&self) -> PathBuf { self.dir.join(DB_FILE) }
+    pub fn file(&self, name: &str) -> PathBuf { self.dir.join(name) }
+    pub fn relative_db(&self) -> String { format!("{}/{}/{}", orgs::ORGS_DIR, self.id, self.db_name) }
+    pub fn in_mode(&self) -> bool { self.db_name != DB_FILE }
+}
+
+struct ActiveOrgState(Mutex<ActiveOrg>);
+
+fn app_data_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    app.path().app_data_dir().map_err(|e| format!("Failed to get app data dir: {e}"))
+}
+
+fn active_org(app: &tauri::AppHandle) -> Result<ActiveOrg, String> {
+    let state = app.state::<ActiveOrgState>();
+    let guard = state.0.lock().map_err(|e| format!("Lock error: {e}"))?;
+    Ok(guard.clone())
+}
+
+fn set_active_db_name(app: &tauri::AppHandle, name: &str) -> Result<(), String> {
+    let state = app.state::<ActiveOrgState>();
+    state.0.lock().map_err(|e| format!("Lock error: {e}"))?.db_name = name.to_string();
+    Ok(())
+}
 
 /// A single SQL statement with optional bind parameters.
 #[derive(serde::Deserialize)]
@@ -41,13 +72,7 @@ fn execute_batch(
             statements.len()
         ));
     }
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-    let active_db = app.state::<ActiveDb>();
-    let db_name = active_db.0.lock().map_err(|e| format!("Lock error: {e}"))?.clone();
-    let db_path: PathBuf = app_dir.join(&db_name);
+    let db_path = active_org(&app)?.db_path();
 
     let conn =
         rusqlite::Connection::open(&db_path).map_err(|e| format!("Failed to open DB: {e}"))?;
@@ -163,13 +188,10 @@ fn json_to_sql(v: &JsonValue) -> Box<dyn rusqlite::types::ToSql> {
 /// Snapshot production DB and copy to test DB. Returns the test DB path.
 #[tauri::command]
 fn enter_test_mode(app: tauri::AppHandle) -> Result<String, String> {
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-    let prod_db = app_dir.join("studiomanager.db");
-    let snapshot_db = app_dir.join("studiomanager_snapshot.db");
-    let test_db = app_dir.join("studiomanager_test.db");
+    let org = active_org(&app)?;
+    let prod_db = org.prod_db_path();
+    let snapshot_db = org.file("studiomanager_snapshot.db");
+    let test_db = org.file("studiomanager_test.db");
 
     // Snapshot production DB (safety net) — WAL-safe consistent image
     dbfiles::snapshot_db_file(&prod_db, &snapshot_db)
@@ -180,8 +202,7 @@ fn enter_test_mode(app: tauri::AppHandle) -> Result<String, String> {
         .map_err(|e| format!("Failed to create test DB: {e}"))?;
 
     // Switch active DB to test
-    let active_db = app.state::<ActiveDb>();
-    *active_db.0.lock().map_err(|e| format!("Lock error: {e}"))? = "studiomanager_test.db".to_string();
+    set_active_db_name(&app, "studiomanager_test.db")?;
 
     Ok(test_db.to_string_lossy().to_string())
 }
@@ -189,15 +210,11 @@ fn enter_test_mode(app: tauri::AppHandle) -> Result<String, String> {
 /// Exit test mode: switch back to production DB and remove test DB.
 #[tauri::command]
 fn exit_test_mode(app: tauri::AppHandle) -> Result<(), String> {
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-    let test_db = app_dir.join("studiomanager_test.db");
+    let org = active_org(&app)?;
+    let test_db = org.file("studiomanager_test.db");
 
     // Switch back to production DB
-    let active_db = app.state::<ActiveDb>();
-    *active_db.0.lock().map_err(|e| format!("Lock error: {e}"))? = "studiomanager.db".to_string();
+    set_active_db_name(&app, DB_FILE)?;
 
     // Remove test DB together with its WAL/SHM companions
     dbfiles::remove_db_files(&test_db);
@@ -208,13 +225,10 @@ fn exit_test_mode(app: tauri::AppHandle) -> Result<(), String> {
 /// Enter presentation mode: snapshot prod DB, create empty presentation DB, switch to it.
 #[tauri::command]
 fn enter_presentation_mode(app: tauri::AppHandle) -> Result<String, String> {
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-    let prod_db = app_dir.join("studiomanager.db");
-    let snapshot_db = app_dir.join("studiomanager_snapshot.db");
-    let pres_db = app_dir.join("studiomanager_presentation.db");
+    let org = active_org(&app)?;
+    let prod_db = org.prod_db_path();
+    let snapshot_db = org.file("studiomanager_snapshot.db");
+    let pres_db = org.file("studiomanager_presentation.db");
 
     // Snapshot production DB (safety net) — WAL-safe consistent image
     dbfiles::snapshot_db_file(&prod_db, &snapshot_db)
@@ -225,8 +239,7 @@ fn enter_presentation_mode(app: tauri::AppHandle) -> Result<String, String> {
         .map_err(|e| format!("Failed to create presentation DB: {e}"))?;
 
     // Switch active DB to presentation
-    let active_db = app.state::<ActiveDb>();
-    *active_db.0.lock().map_err(|e| format!("Lock error: {e}"))? = "studiomanager_presentation.db".to_string();
+    set_active_db_name(&app, "studiomanager_presentation.db")?;
 
     Ok(pres_db.to_string_lossy().to_string())
 }
@@ -234,15 +247,11 @@ fn enter_presentation_mode(app: tauri::AppHandle) -> Result<String, String> {
 /// Exit presentation mode: switch back to production DB and remove presentation DB.
 #[tauri::command]
 fn exit_presentation_mode(app: tauri::AppHandle) -> Result<(), String> {
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-    let pres_db = app_dir.join("studiomanager_presentation.db");
+    let org = active_org(&app)?;
+    let pres_db = org.file("studiomanager_presentation.db");
 
     // Switch back to production DB
-    let active_db = app.state::<ActiveDb>();
-    *active_db.0.lock().map_err(|e| format!("Lock error: {e}"))? = "studiomanager.db".to_string();
+    set_active_db_name(&app, DB_FILE)?;
 
     // Remove presentation DB together with its WAL/SHM companions
     dbfiles::remove_db_files(&pres_db);
@@ -253,12 +262,9 @@ fn exit_presentation_mode(app: tauri::AppHandle) -> Result<(), String> {
 /// Create a manual snapshot of the production DB.
 #[tauri::command]
 fn snapshot_db(app: tauri::AppHandle) -> Result<String, String> {
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-    let prod_db = app_dir.join("studiomanager.db");
-    let snapshot_db = app_dir.join("studiomanager_snapshot.db");
+    let org = active_org(&app)?;
+    let prod_db = org.prod_db_path();
+    let snapshot_db = org.file("studiomanager_snapshot.db");
 
     dbfiles::snapshot_db_file(&prod_db, &snapshot_db)
         .map_err(|e| format!("Failed to snapshot DB: {e}"))?;
@@ -269,12 +275,9 @@ fn snapshot_db(app: tauri::AppHandle) -> Result<String, String> {
 /// Restore production DB from snapshot.
 #[tauri::command]
 fn restore_snapshot(app: tauri::AppHandle) -> Result<(), String> {
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-    let prod_db = app_dir.join("studiomanager.db");
-    let snapshot_db = app_dir.join("studiomanager_snapshot.db");
+    let org = active_org(&app)?;
+    let prod_db = org.prod_db_path();
+    let snapshot_db = org.file("studiomanager_snapshot.db");
 
     if !snapshot_db.exists() {
         return Err("No snapshot found".to_string());
@@ -291,19 +294,149 @@ fn restore_snapshot(app: tauri::AppHandle) -> Result<(), String> {
 /// Check if a snapshot file exists.
 #[tauri::command]
 fn has_snapshot(app: tauri::AppHandle) -> Result<bool, String> {
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-    Ok(app_dir.join("studiomanager_snapshot.db").exists())
+    Ok(active_org(&app)?.file("studiomanager_snapshot.db").exists())
 }
 
 /// Get the currently active DB name.
 #[tauri::command]
 fn get_active_db(app: tauri::AppHandle) -> Result<String, String> {
-    let active_db = app.state::<ActiveDb>();
-    let name = active_db.0.lock().map_err(|e| format!("Lock error: {e}"))?.clone();
-    Ok(name)
+    Ok(active_org(&app)?.relative_db())
+}
+
+fn load_registry(app: &tauri::AppHandle) -> Result<Registry, String> {
+    Registry::load(&app_data_dir(app)?)?.ok_or_else(|| "organisation registry missing".to_string())
+}
+
+fn save_registry(app: &tauri::AppHandle, reg: &Registry) -> Result<(), String> {
+    reg.save(&app_data_dir(app)?)
+}
+
+#[tauri::command]
+fn list_organisations(app: tauri::AppHandle) -> Result<Registry, String> {
+    load_registry(&app)
+}
+
+#[tauri::command]
+fn create_organisation(app: tauri::AppHandle, name: String, seed_from_current: bool, prefs: OrgPrefs) -> Result<Registry, String> {
+    let app_dir = app_data_dir(&app)?;
+    let mut reg = load_registry(&app)?;
+    let id = reg.add(&name, Some(prefs))?.id.clone();
+    let dir = orgs::org_dir(&app_dir, &id);
+    let result = (|| -> Result<(), String> {
+        std::fs::create_dir_all(dir.join("invoices")).map_err(|e| format!("create folders: {e}"))?;
+        std::fs::create_dir_all(dir.join("receipts")).map_err(|e| format!("create folders: {e}"))?;
+        migrate::migrate_db(&dir.join(DB_FILE))?;
+        if seed_from_current {
+            let current = active_org(&app)?;
+            if current.in_mode() {
+                return Err("leave test or presentation mode before creating an organisation from it".to_string());
+            }
+            let copied = seed::copy_settings_tables(&current.prod_db_path(), &dir.join(DB_FILE))?;
+            log::info!("seeded new organisation {id} from current: {copied:?}");
+        }
+        Ok(())
+    })();
+    if let Err(e) = result {
+        let _ = std::fs::remove_dir_all(&dir);
+        return Err(e);
+    }
+    save_registry(&app, &reg)?;
+    Ok(reg)
+}
+
+#[tauri::command]
+fn rename_organisation(app: tauri::AppHandle, id: String, name: String) -> Result<Registry, String> {
+    let mut reg = load_registry(&app)?;
+    reg.rename(&id, &name)?;
+    save_registry(&app, &reg)?;
+    Ok(reg)
+}
+
+#[tauri::command]
+fn reorder_organisations(app: tauri::AppHandle, ids: Vec<String>) -> Result<Registry, String> {
+    let mut reg = load_registry(&app)?;
+    reg.reorder(&ids)?;
+    save_registry(&app, &reg)?;
+    Ok(reg)
+}
+
+#[tauri::command]
+fn delete_organisation(app: tauri::AppHandle, id: String) -> Result<Registry, String> {
+    let app_dir = app_data_dir(&app)?;
+    let mut reg = load_registry(&app)?;
+    if id == active_org(&app)?.id {
+        return Err("switch to another organisation before deleting this one".to_string());
+    }
+    reg.remove(&id)?;
+    let dir = orgs::org_dir(&app_dir, &id);
+    if dir.exists() {
+        trash::delete(&dir).map_err(|e| format!("move organisation folder to Trash: {e}"))?;
+    }
+    save_registry(&app, &reg)?;
+    Ok(reg)
+}
+
+#[tauri::command]
+fn switch_organisation(app: tauri::AppHandle, id: String) -> Result<Registry, String> {
+    let app_dir = app_data_dir(&app)?;
+    if active_org(&app)?.in_mode() {
+        return Err("leave test or presentation mode before switching organisation".to_string());
+    }
+    let mut reg = load_registry(&app)?;
+    reg.set_active(&id)?;
+    let dir = orgs::org_dir(&app_dir, &id);
+    migrate::migrate_db(&dir.join(DB_FILE))?;
+    save_registry(&app, &reg)?;
+    let state = app.state::<ActiveOrgState>();
+    *state.0.lock().map_err(|e| format!("Lock error: {e}"))? = ActiveOrg { id, dir, db_name: DB_FILE.to_string() };
+    Ok(reg)
+}
+
+#[tauri::command]
+fn set_organisation_prefs(app: tauri::AppHandle, id: String, prefs: OrgPrefs) -> Result<Registry, String> {
+    let mut reg = load_registry(&app)?;
+    reg.set_prefs(&id, prefs)?;
+    save_registry(&app, &reg)?;
+    Ok(reg)
+}
+
+/// Startup: upgrade the legacy layout if present, create a first
+/// organisation on a fresh install, migrate the active database, and
+/// install the ActiveOrg state.
+fn init_organisations(app: &tauri::AppHandle) -> Result<(), String> {
+    let app_dir = app_data_dir(app)?;
+    std::fs::create_dir_all(&app_dir).map_err(|e| format!("create app dir: {e}"))?;
+    let reg = if upgrade::needs_upgrade(&app_dir) {
+        upgrade::run(&app_dir)?
+    } else if let Some(reg) = Registry::load(&app_dir)? {
+        upgrade::discard_snapshot(&app_dir);
+        reg
+    } else {
+        let orgs_dir = app_dir.join(orgs::ORGS_DIR);
+        let orgs_dir_has_subfolders = orgs_dir
+            .read_dir()
+            .map(|it| it.filter_map(Result::ok).any(|entry| entry.path().is_dir()))
+            .unwrap_or(false);
+        if orgs_dir_has_subfolders {
+            return Err(
+                "organisation registry missing but orgs/ contains data; refusing to start to avoid creating an empty organisation next to existing data"
+                    .to_string(),
+            );
+        }
+        let mut reg = Registry::empty();
+        let id = reg.add("Studio", Some(OrgPrefs::default()))?.id.clone();
+        reg.set_active(&id)?;
+        let dir = orgs::org_dir(&app_dir, &id);
+        std::fs::create_dir_all(dir.join("invoices")).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(dir.join("receipts")).map_err(|e| e.to_string())?;
+        reg.save(&app_dir)?;
+        reg
+    };
+    let active = reg.active().ok_or_else(|| "registry has no active organisation".to_string())?;
+    let dir = orgs::org_dir(&app_dir, &active.id);
+    migrate::migrate_db(&dir.join(DB_FILE))?;
+    app.manage(ActiveOrgState(Mutex::new(ActiveOrg { id: active.id.clone(), dir, db_name: DB_FILE.to_string() })));
+    Ok(())
 }
 
 /// Open a directory in Finder, or reveal a file in its enclosing folder
@@ -338,52 +471,8 @@ async fn open_in_finder(path: String) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let migrations = vec![
-        Migration {
-            version: 1,
-            description: "create_initial_schema",
-            sql: include_str!("../migrations/001_initial_schema.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 2,
-            description: "add_billing_name_update_task_status",
-            sql: include_str!("../migrations/002_billing_name_task_status.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 3,
-            description: "add_invoice_po_number",
-            sql: include_str!("../migrations/003_invoice_po_number.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 4,
-            description: "create_subtasks_table",
-            sql: include_str!("../migrations/004_subtasks.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 5,
-            description: "consolidate_schema",
-            sql: include_str!("../migrations/005_consolidate_schema.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 6,
-            description: "create_activities_table",
-            sql: include_str!("../migrations/006_activities.sql"),
-            kind: MigrationKind::Up,
-        },
-    ];
-
     tauri::Builder::default()
-        .manage(ActiveDb(Mutex::new("studiomanager.db".to_string())))
-        .plugin(
-            tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:studiomanager.db", migrations)
-                .build(),
-        )
+        .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
@@ -401,6 +490,13 @@ pub fn run() {
             restore_snapshot,
             has_snapshot,
             get_active_db,
+            list_organisations,
+            create_organisation,
+            rename_organisation,
+            reorder_organisations,
+            delete_organisation,
+            switch_organisation,
+            set_organisation_prefs,
             apple::share_pdf_via_mail,
             open_in_finder,
             apple::extract_pdf_text,
@@ -410,6 +506,11 @@ pub fn run() {
             apple::calendar_delete_event,
         ])
         .setup(|app| {
+            if let Err(e) = init_organisations(app.handle()) {
+                // Surface loudly: the frontend cannot open any database without this.
+                eprintln!("[organisations] startup failed: {e}");
+                return Err(e.into());
+            }
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -467,5 +568,16 @@ mod tests {
         assert_eq!(q(&serde_json::json!(1.5)), Value::Real(1.5));
         assert_eq!(q(&serde_json::json!(true)), Value::Integer(1));
         assert_eq!(q(&serde_json::json!(null)), Value::Null);
+    }
+
+    #[test]
+    fn active_org_paths_are_inside_the_org_folder() {
+        let a = ActiveOrg { id: "abc123".into(), dir: PathBuf::from("/tmp/app/orgs/abc123"), db_name: "studiomanager.db".into() };
+        assert_eq!(a.db_path(), PathBuf::from("/tmp/app/orgs/abc123/studiomanager.db"));
+        assert_eq!(a.prod_db_path(), PathBuf::from("/tmp/app/orgs/abc123/studiomanager.db"));
+        assert_eq!(a.relative_db(), "orgs/abc123/studiomanager.db");
+        let t = ActiveOrg { db_name: "studiomanager_test.db".into(), ..a.clone() };
+        assert_eq!(t.db_path(), PathBuf::from("/tmp/app/orgs/abc123/studiomanager_test.db"));
+        assert!(t.in_mode());
     }
 }
