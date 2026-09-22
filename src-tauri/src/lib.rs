@@ -3,6 +3,7 @@ mod dbfiles;
 mod migrate;
 mod orgs;
 mod seed;
+mod upgrade;
 
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
