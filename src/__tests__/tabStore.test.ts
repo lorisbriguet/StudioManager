@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useTabStore, predictNextActiveTab, type Tab } from "../stores/tab-store";
+import { useOrgStore } from "../stores/org-store";
 
 const tab = (id: string, path: string, pinned = false): Tab => ({
   id,
@@ -14,6 +15,8 @@ function seed(tabs: Tab[], activeTabId: string) {
 
 beforeEach(() => {
   localStorage.clear();
+  // Tabs now persist under an organisation-namespaced key (open-tabs:<id>).
+  useOrgStore.setState({ activeId: "t1" });
   seed([tab("a", "/a"), tab("b", "/b"), tab("c", "/c")], "b");
 });
 
@@ -79,7 +82,7 @@ describe("tab store", () => {
   it("reorderTabs moves a tab and persists", () => {
     useTabStore.getState().reorderTabs(0, 2);
     expect(useTabStore.getState().tabs.map((t) => t.id)).toEqual(["b", "c", "a"]);
-    const persisted = JSON.parse(localStorage.getItem("open-tabs")!);
+    const persisted = JSON.parse(localStorage.getItem("open-tabs:t1")!);
     expect(persisted.tabs.map((t: Tab) => t.id)).toEqual(["b", "c", "a"]);
   });
 });

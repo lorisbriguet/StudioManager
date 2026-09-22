@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useOrgStore } from "./org-store";
 
 export interface Tab {
   id: string;
@@ -7,26 +8,30 @@ export interface Tab {
   pinned: boolean;
 }
 
-const STORAGE_KEY = "open-tabs";
+const storageKey = () => useOrgStore.getState().orgKey("open-tabs");
 
 function generateId() {
   return `tab-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
+function defaultTabs(): { tabs: Tab[]; activeTabId: string } {
+  const id = generateId();
+  return { tabs: [{ id, path: "/", label: "Dashboard", pinned: false }], activeTabId: id };
+}
+
 function loadTabs(): { tabs: Tab[]; activeTabId: string } {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey());
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed.tabs?.length > 0) return parsed;
     }
   } catch { /* ignore */ }
-  const id = generateId();
-  return { tabs: [{ id, path: "/", label: "Dashboard", pinned: false }], activeTabId: id };
+  return defaultTabs();
 }
 
 function persist(tabs: Tab[], activeTabId: string) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ tabs, activeTabId }));
+  localStorage.setItem(storageKey(), JSON.stringify({ tabs, activeTabId }));
 }
 
 /**
@@ -54,9 +59,16 @@ interface TabState {
   reopenClosedTab: () => Tab | null;
   togglePin: (id: string) => void;
   reorderTabs: (fromIdx: number, toIdx: number) => void;
+  closeAllTabs: () => void;
+  reloadForOrg: () => void;
 }
 
-const initial = loadTabs();
+// Must not read the org-namespaced key at module evaluation time (org-store's
+// activeId isn't settled yet, and tab-store must not participate in an
+// import-time cycle with org-store). Start with plain defaults; the real
+// per-organisation tabs are loaded via reloadForOrg() once the active
+// organisation is known (see the useOrgStore subscription below).
+const initial = defaultTabs();
 
 export const useTabStore = create<TabState>((set, get) => ({
   tabs: initial.tabs,
@@ -139,4 +151,22 @@ export const useTabStore = create<TabState>((set, get) => ({
     persist(tabs, get().activeTabId);
     set({ tabs });
   },
+
+  closeAllTabs: () => {
+    const home = defaultTabs();
+    set({ tabs: home.tabs, activeTabId: home.activeTabId });
+    persist(home.tabs, home.activeTabId);
+  },
+
+  reloadForOrg: () => {
+    const { tabs, activeTabId } = loadTabs();
+    set({ tabs, activeTabId });
+  },
 }));
+
+// Reload the open tabs whenever the active organisation changes. org-store.ts
+// must not import this module (that would create an import cycle), so the
+// dependency runs the other way: tab-store subscribes to org-store here.
+useOrgStore.subscribe((s, prev) => {
+  if (s.activeId !== prev.activeId) useTabStore.getState().reloadForOrg();
+});
