@@ -1,5 +1,6 @@
 mod apple;
 mod dbfiles;
+mod orgs;
 
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
