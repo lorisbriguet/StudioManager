@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { AppLanguage } from "../i18n/ui";
 import { getThemeById } from "../lib/themes";
 import type { ThemeDefinition } from "../types/theme";
+import { useOrgStore } from "./org-store";
 
 function getInitialDarkMode(): boolean {
   const stored = localStorage.getItem("darkMode");
@@ -306,10 +307,7 @@ export const useAppStore = create<AppState>((set) => ({
     localStorage.setItem("appLanguage", lang);
     set({ language: lang });
   },
-  setExportLanguage: (lang) => {
-    localStorage.setItem("exportLanguage", lang);
-    set({ exportLanguage: lang });
-  },
+  setExportLanguage: (lang) => { set({ exportLanguage: lang }); void useOrgStore.getState().savePrefs({ exportLanguage: lang }); },
   setCalendarView: (view) => {
     localStorage.setItem("calendarView", view);
     set({ calendarView: view });
@@ -352,18 +350,9 @@ export const useAppStore = create<AppState>((set) => ({
       );
       return { accentColor: preset };
     }),
-  setCalendarSync: (enabled) => {
-    localStorage.setItem("calendarSync", String(enabled));
-    set({ calendarSync: enabled });
-  },
-  setCalendarName: (name) => {
-    localStorage.setItem("calendarName", name);
-    set({ calendarName: name });
-  },
-  setBackupPath: (path) => {
-    localStorage.setItem("backupPath", path);
-    set({ backupPath: path });
-  },
+  setCalendarSync: (enabled) => { set({ calendarSync: enabled }); void useOrgStore.getState().savePrefs({ calendarSync: enabled }); },
+  setCalendarName: (name) => { set({ calendarName: name }); void useOrgStore.getState().savePrefs({ calendarName: name }); },
+  setBackupPath: (path) => { set({ backupPath: path }); void useOrgStore.getState().savePrefs({ backupPath: path }); },
   setBackupPath2: (path) => {
     localStorage.setItem("backupPath2", path);
     set({ backupPath2: path });
@@ -384,18 +373,9 @@ export const useAppStore = create<AppState>((set) => ({
     localStorage.setItem("projectOpenMode", mode);
     set({ projectOpenMode: mode });
   },
-  setShowTasksPage: (show) => {
-    localStorage.setItem("showTasksPage", String(show));
-    set({ showTasksPage: show });
-  },
-  setShowIncome: (show) => {
-    localStorage.setItem("showIncome", String(show));
-    set({ showIncome: show });
-  },
-  setShowTimeOverview: (show) => {
-    localStorage.setItem("showTimeOverview", String(show));
-    set({ showTimeOverview: show });
-  },
+  setShowTasksPage: (show) => { set({ showTasksPage: show }); void useOrgStore.getState().savePrefs({ showTasksPage: show }); },
+  setShowIncome: (show) => { set({ showIncome: show }); void useOrgStore.getState().savePrefs({ showIncome: show }); },
+  setShowTimeOverview: (show) => { set({ showTimeOverview: show }); void useOrgStore.getState().savePrefs({ showTimeOverview: show }); },
   setContext: (ctx) =>
     set((s) => ({ currentContext: { ...s.currentContext, ...ctx } })),
   clearContext: () => set({ currentContext: {} }),
