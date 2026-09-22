@@ -4,17 +4,14 @@ import { TabBar } from "./TabBar";
 import { useTabSync } from "../../hooks/useTabSync";
 import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
-import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { switchDb } from "../../db/index";
+import { exitTestMode as exitTestModeShared, exitPresentationMode as exitPresentationModeShared } from "../../lib/modes";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 
 export function MainLayout() {
   const testMode = useAppStore((s) => s.testMode);
-  const setTestMode = useAppStore((s) => s.setTestMode);
   const presentationMode = useAppStore((s) => s.presentationMode);
-  const setPresentationMode = useAppStore((s) => s.setPresentationMode);
   const t = useT();
 
   useTabSync();
@@ -24,9 +21,7 @@ export function MainLayout() {
     const confirmed = await ask(t.test_mode_confirm_exit, { kind: "warning" });
     if (!confirmed) return;
     try {
-      await invoke("exit_test_mode");
-      await switchDb("studiomanager.db");
-      setTestMode(false);
+      await exitTestModeShared();
       toast.success(t.toast_test_mode_exited);
       setTimeout(() => window.location.reload(), 500);
     } catch {
@@ -38,9 +33,7 @@ export function MainLayout() {
     const confirmed = await ask(t.presentation_mode_confirm_exit, { kind: "warning" });
     if (!confirmed) return;
     try {
-      await invoke("exit_presentation_mode");
-      await switchDb("studiomanager.db");
-      setPresentationMode(false);
+      await exitPresentationModeShared();
       toast.success(t.toast_presentation_exited);
       setTimeout(() => window.location.reload(), 500);
     } catch {
