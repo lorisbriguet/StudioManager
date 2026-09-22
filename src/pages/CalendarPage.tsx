@@ -543,7 +543,7 @@ export function CalendarPage() {
   );
 }
 
-function QuickCreatePopup({
+export function QuickCreatePopup({
   pos,
   date,
   startTime,
@@ -686,10 +686,14 @@ function QuickCreatePopup({
             }}
             onFocus={() => setShowSuggestions(true)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !showSuggestions) handleSubmit();
-              if (e.key === "Enter" && suggestions.length > 0 && showSuggestions) {
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              // Enter picks the first visible suggestion; otherwise it adds the event.
+              // (Suggestions are shown on focus, so "hidden" cannot be the only submit path.)
+              if (showSuggestions && suggestions.length > 0) {
                 handleSelectTask(suggestions[0]);
-                e.preventDefault();
+              } else {
+                handleSubmit();
               }
             }}
             placeholder={t.new_task}
