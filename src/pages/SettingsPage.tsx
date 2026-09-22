@@ -6,7 +6,8 @@ import { FolderOpen, HardDrive, RotateCcw, FlaskConical, Camera, Settings2, Pale
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { purgeAllCalendarEvents, syncAllExisting, listWritableCalendars } from "../lib/appleCalendar";
 import { createBackup, listBackups, restoreFromBackup, RestoreError, validateBackupPath, isBackupRunning, setBackupRunning, isScopeDenied } from "../lib/backup";
-import { switchDb, resetDb, seedPresentationDb } from "../db";
+import { resetDb } from "../db";
+import { enterTestMode, exitTestMode, enterPresentationMode, exitPresentationMode } from "../lib/modes";
 import { useExpenseCategories, useCreateExpenseCategory, useUpdateExpenseCategory, useDeleteExpenseCategory, isDefaultCategory, useSupplierCounts, useMergeSuppliers } from "../db/hooks/useExpenses";
 import { suggestSupplierGroups, type SupplierCount } from "../lib/supplierMerge";
 import { undoableFromStore } from "../lib/undo";
@@ -75,9 +76,7 @@ export function SettingsPage() {
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>("general");
   const [appVersion, setAppVersion] = useState("");
   const testMode = useAppStore((s) => s.testMode);
-  const setTestMode = useAppStore((s) => s.setTestMode);
   const presentationMode = useAppStore((s) => s.presentationMode);
-  const setPresentationMode = useAppStore((s) => s.setPresentationMode);
   const [togglingTestMode, setTogglingTestMode] = useState(false);
   const [togglingPresentation, setTogglingPresentation] = useState(false);
   const [snapshotting, setSnapshotting] = useState(false);
@@ -97,9 +96,7 @@ export function SettingsPage() {
   const handleEnterTestMode = async () => {
     setTogglingTestMode(true);
     try {
-      await invoke<string>("enter_test_mode");
-      await switchDb("studiomanager_test.db");
-      setTestMode(true);
+      await enterTestMode();
       toast.success(t.toast_test_mode_entered);
     } catch (e) {
       logError("Enter test mode failed:", e);
@@ -114,9 +111,7 @@ export function SettingsPage() {
     if (!confirmed) return;
     setTogglingTestMode(true);
     try {
-      await invoke("exit_test_mode");
-      await switchDb("studiomanager.db");
-      setTestMode(false);
+      await exitTestMode();
       toast.success(t.toast_test_mode_exited);
       setTimeout(() => window.location.reload(), 500);
     } catch (e) {
@@ -130,10 +125,7 @@ export function SettingsPage() {
   const handleEnterPresentation = async () => {
     setTogglingPresentation(true);
     try {
-      await invoke<string>("enter_presentation_mode");
-      await switchDb("studiomanager_presentation.db");
-      await seedPresentationDb();
-      setPresentationMode(true);
+      await enterPresentationMode();
       toast.success(t.toast_presentation_entered);
       setTimeout(() => window.location.reload(), 500);
     } catch (e) {
@@ -149,9 +141,7 @@ export function SettingsPage() {
     if (!confirmed) return;
     setTogglingPresentation(true);
     try {
-      await invoke("exit_presentation_mode");
-      await switchDb("studiomanager.db");
-      setPresentationMode(false);
+      await exitPresentationMode();
       toast.success(t.toast_presentation_exited);
       setTimeout(() => window.location.reload(), 500);
     } catch (e) {

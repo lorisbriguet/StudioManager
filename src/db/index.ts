@@ -5,6 +5,7 @@ import { getLabels } from "../lib/notifyError";
 import { todayLocalISO } from "../utils/localDate";
 import { seedUserGuide } from "./seeds/user-guide";
 import { splitSeedStatements } from "./seeds/splitSql";
+import { useOrgStore } from "../stores/org-store";
 
 const SAFE_FIELD = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -88,10 +89,16 @@ function showFatalDbError(err: unknown): void {
   }
 }
 
+/** SQL plugin connection string for a database file of the active organisation. */
+export function dbUrlFor(name: string): string {
+  const id = useOrgStore.getState().activeId;
+  return id ? `sqlite:orgs/${id}/${name}` : `sqlite:${name}`;
+}
+
 export async function getDb(): Promise<Database> {
   if (!dbPromise) {
     dbPromise = (async () => {
-      const database = await Database.load(`sqlite:${currentDbName}`);
+      const database = await Database.load(dbUrlFor(currentDbName));
       try {
         await ensureSchema(database);
       } catch (e) {
