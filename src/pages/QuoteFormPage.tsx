@@ -309,7 +309,10 @@ export function QuoteFormPage() {
         </h1>
       </div>
 
-      <div className="space-y-4 max-w-3xl" onChange={markDirty} onInput={markDirty}>
+      {/* Dirty tracking on change only. React's onChange already fires per keystroke
+          for text fields; listening to `input` as well made the first <select> pick
+          re-render the form before WebKit's `change`, reverting the controlled value. */}
+      <div className="space-y-4 max-w-3xl" onChange={markDirty}>
         {/* Template selector */}
         {invoiceTemplates && invoiceTemplates.length > 0 && (
           <div className="max-w-xs">
