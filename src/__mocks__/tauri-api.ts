@@ -1,17 +1,23 @@
 // Catch-all stub for all @tauri-apps/* modules
 import { executedStatements } from "./tauri-sql";
 
+type InvokeHandler = (cmd: string, args: Record<string, unknown>) => unknown;
+let invokeHandler: InvokeHandler | null = null;
+export const invokedCommands: { cmd: string; args: Record<string, unknown> }[] = [];
+export function setInvokeHandler(handler: InvokeHandler | null): void { invokeHandler = handler; }
+export function clearInvokedCommands(): void { invokedCommands.length = 0; }
+
 export async function invoke(cmd?: string, args?: Record<string, unknown>): Promise<unknown> {
-  // Log TransactionBatch statements so tests can assert on batched SQL too
-  if (cmd === "execute_batch" && Array.isArray(args?.statements)) {
-    for (const stmt of args.statements as { sql: string; params: unknown[] }[]) {
+  const c = cmd ?? "";
+  const a = args ?? {};
+  invokedCommands.push({ cmd: c, args: a });
+  if (c === "execute_batch" && Array.isArray(a.statements)) {
+    for (const stmt of a.statements as { sql: string; params: unknown[] }[]) {
       executedStatements.push({ sql: stmt.sql, params: stmt.params });
     }
-    // The real command resolves to { lastInsertId }; return the same shape so
-    // callers that read the result (createInvoiceWithLineItems) run under test.
     return { lastInsertId: 1 };
   }
-  return null;
+  return invokeHandler ? await invokeHandler(c, a) : null;
 }
 export async function appDataDir(): Promise<string> {
   return "/tmp/test-app-data";
