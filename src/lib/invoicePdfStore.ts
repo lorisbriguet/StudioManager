@@ -1,7 +1,6 @@
 import { createElement } from "react";
 import { pdf } from "@react-pdf/renderer";
 import { writeFile, mkdir, exists } from "@tauri-apps/plugin-fs";
-import { appDataDir } from "@tauri-apps/api/path";
 import { InvoicePDF } from "../components/invoice/InvoicePDF";
 import { getInvoice, getInvoiceLineItems, updateInvoice } from "../db/queries/invoices";
 import { getClient, getClientContact, getClientAddresses } from "../db/queries/clients";
@@ -9,6 +8,7 @@ import { getBusinessProfile } from "../db/queries/business-profile";
 import { getInvoiceTemplate } from "../db/queries/invoiceTemplates";
 import { getProject } from "../db/queries/projects";
 import { logError } from "./log";
+import { orgPaths } from "./orgPaths";
 import { postProcessInvoicePdf } from "./pdfPostProcess";
 
 function sanitizeFilename(name: string): string {
@@ -83,8 +83,7 @@ export async function generateAndStoreInvoicePdf(
       isCancelled: invoice.status === "cancelled",
     }));
 
-    const dataDir = await appDataDir();
-    const invoicesDir = `${dataDir}/invoices`;
+    const { invoicesDir } = await orgPaths();
     if (!(await exists(invoicesDir))) {
       await mkdir(invoicesDir, { recursive: true });
     }

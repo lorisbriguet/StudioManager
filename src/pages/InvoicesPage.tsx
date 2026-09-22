@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
-import { appDataDir } from "@tauri-apps/api/path";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { pdf } from "@react-pdf/renderer";
 import { undoable, undoableFromStore } from "../lib/undo";
@@ -17,6 +16,7 @@ import { getProject } from "../db/queries/projects";
 import { InvoicePDF } from "../components/invoice/InvoicePDF";
 import { postProcessInvoicePdf } from "../lib/pdfPostProcess";
 import { pdfFileName } from "../lib/pdfFilename";
+import { orgPaths } from "../lib/orgPaths";
 import { runBulkPdfExport } from "../lib/bulkPdfExport";
 import { useClients } from "../db/hooks/useClients";
 import { useRecurringTemplates, useCreateRecurringTemplate, useDeleteRecurringTemplate, useUpdateRecurringTemplate } from "../db/hooks/useRecurring";
@@ -315,8 +315,8 @@ export function InvoicesPage() {
         toast.error(t.invoice_not_found, { id: toastId });
         return;
       }
-      const dataDir = await appDataDir();
-      const tempPath = `${dataDir}/temp_${pdfFileName(result.reference, result.client.name)}`;
+      const { root } = await orgPaths();
+      const tempPath = `${root}/temp_${pdfFileName(result.reference, result.client.name)}`;
       await writeFile(tempPath, result.bytes);
 
       await invoke("share_pdf_via_mail", {

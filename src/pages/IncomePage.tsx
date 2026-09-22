@@ -8,7 +8,7 @@ import { format } from "date-fns";
 import { formatDisplayDate } from "../utils/formatDate";
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { copyFile, mkdir, exists, readFile } from "@tauri-apps/plugin-fs";
-import { appDataDir } from "@tauri-apps/api/path";
+import { orgPaths } from "../lib/orgPaths";
 import {
   useIncomes,
   useCreateIncome,
@@ -149,8 +149,7 @@ export function IncomePage() {
       if (!selected) return;
       const filePath = typeof selected === "string" ? selected : selected;
       const ext = filePath.split(".").pop() ?? "pdf";
-      const dataDir = await appDataDir();
-      const receiptsDir = `${dataDir}/receipts`;
+      const { receiptsDir } = await orgPaths();
       if (!(await exists(receiptsDir))) {
         await mkdir(receiptsDir, { recursive: true });
       }
@@ -233,8 +232,7 @@ export function IncomePage() {
             if (droppedReceiptPath && !receiptPath) {
               try {
                 const ext = droppedReceiptPath.split(".").pop() ?? "pdf";
-                const dataDir = await appDataDir();
-                const receiptsDir = `${dataDir}/receipts`;
+                const { receiptsDir } = await orgPaths();
                 if (!(await exists(receiptsDir))) {
                   await mkdir(receiptsDir, { recursive: true });
                 }
