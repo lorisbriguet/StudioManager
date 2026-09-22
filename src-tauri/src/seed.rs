@@ -48,15 +48,15 @@ pub fn copy_settings_tables(src: &Path, dest: &Path) -> Result<Vec<String>, Stri
         }
         Ok(())
     })();
-    match result {
-        Ok(()) => conn.execute_batch("COMMIT").map_err(|e| format!("commit: {e}"))?,
+    let final_result = match result {
+        Ok(()) => conn.execute_batch("COMMIT").map_err(|e| format!("commit: {e}")).map(|()| copied),
         Err(e) => {
             let _ = conn.execute_batch("ROLLBACK");
-            return Err(e);
+            Err(e)
         }
-    }
+    };
     let _ = conn.execute("DETACH DATABASE src", []);
-    Ok(copied)
+    final_result
 }
 
 #[cfg(test)]
