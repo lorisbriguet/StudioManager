@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
-import { createBackup, restoreFromBackup, RestoreError } from "../lib/backup";
+import { createBackup, restoreFromBackup, RestoreError, listBackups } from "../lib/backup";
 import { getDb } from "../db";
+import { useOrgStore } from "../stores/org-store";
 import {
   setSelectHandler,
   executedStatements,
@@ -95,6 +96,12 @@ const fileText = (path: string): string => {
   return typeof v === "string" ? v : new TextDecoder().decode(v);
 };
 
+// Stub readDir for a directory to a fixed list of child folder names, without
+// needing to seed nested files/dirs under each one individually.
+const setReadDirEntries = (dir: string, names: string[]): void => {
+  for (const name of names) memfs.dirs.add(`${dir}/${name}`);
+};
+
 beforeAll(async () => {
   await getDb();
 });
@@ -103,6 +110,7 @@ beforeEach(() => {
   memfs.reset();
   clearExecutedStatements();
   setSelectHandler(null);
+  useOrgStore.setState({ activeId: "" });
 });
 
 describe("createBackup", () => {
@@ -198,6 +206,18 @@ describe("createBackup", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("names the backup folder with the organisation id", async () => {
+    useOrgStore.setState({ activeId: "k3f9a2" });
+    const path = await createBackup("/backups", 5);
+    expect(path).toMatch(/\/backups\/backup-k3f9a2-\d{4}-\d{2}-\d{2}/);
+  });
+
+  it("rotation and listing ignore other organisations' backups", async () => {
+    useOrgStore.setState({ activeId: "k3f9a2" });
+    setReadDirEntries("/backups", ["backup-k3f9a2-2026-01-01", "backup-zzz999-2026-01-02", "backup-2026-01-03"]);
+    expect(await listBackups("/backups")).toEqual(["backup-k3f9a2-2026-01-01"]);
   });
 });
 

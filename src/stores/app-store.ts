@@ -272,7 +272,9 @@ export const useAppStore = create<AppState>((set) => ({
   backupPath2: localStorage.getItem("backupPath2") ?? "",
   maxBackups: Number(localStorage.getItem("maxBackups")) || 5,
   autoBackupInterval: Number(localStorage.getItem("autoBackupInterval")) || 0,
-  lastAutoBackup: Number(localStorage.getItem("lastAutoBackup")) || 0,
+  // Namespaced per organisation; the org store loads the active org's value
+  // on applyRegistry (org-store.ts), so no plain "lastAutoBackup" key here.
+  lastAutoBackup: 0,
   projectOpenMode: (localStorage.getItem("projectOpenMode") as ProjectOpenMode) ?? "peek",
   showTasksPage: localStorage.getItem("showTasksPage") !== "false",
   showIncome: localStorage.getItem("showIncome") === "true",
@@ -366,7 +368,7 @@ export const useAppStore = create<AppState>((set) => ({
     set({ autoBackupInterval: minutes });
   },
   setLastAutoBackup: (ts) => {
-    localStorage.setItem("lastAutoBackup", String(ts));
+    localStorage.setItem(useOrgStore.getState().orgKey("lastAutoBackup"), String(ts));
     set({ lastAutoBackup: ts });
   },
   setProjectOpenMode: (mode) => {

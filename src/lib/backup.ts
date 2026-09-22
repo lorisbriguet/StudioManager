@@ -10,6 +10,7 @@ import {
 } from "@tauri-apps/plugin-fs";
 import { logWarn, logInfo } from "./log";
 import { orgPaths } from "./orgPaths";
+import { useOrgStore } from "../stores/org-store";
 
 /** Shared lock to prevent concurrent backup operations (auto + manual) */
 let _backupRunning = false;
@@ -94,6 +95,15 @@ export const TABLES = [
   "custom_list_items",
 ];
 
+/** Backup folder name prefix for the active organisation. No active
+ *  organisation (empty id, e.g. before the org registry loads) falls back to
+ *  the legacy unprefixed "backup-" naming — same convention as orgPaths.ts,
+ *  and keeps pre-organisation backups discoverable by rotation/listing. */
+function backupPrefix(): string {
+  const id = useOrgStore.getState().activeId;
+  return id ? `backup-${id}-` : "backup-";
+}
+
 /** Sanitize a file name to prevent path traversal */
 function safeName(name: string): string | null {
   const cleaned = name
@@ -151,7 +161,7 @@ export async function createBackup(
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   const ts = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
-  const backupPath = `${backupDir}/backup-${ts}`;
+  const backupPath = `${backupDir}/${backupPrefix()}${ts}`;
 
   // Create directory structure
   await mkdir(`${backupPath}/data`, { recursive: true });
@@ -246,9 +256,11 @@ async function rotateBackups(
   if (!Number.isFinite(limit) || limit <= 0) return;
   try {
     const entries = await readDir(backupDir);
-    // Use name prefix as primary filter — isFile may be unreliable in Tauri v2 DirEntry
+    // Use name prefix as primary filter — isFile may be unreliable in Tauri v2 DirEntry.
+    // Prefix is org-scoped so rotation only ever touches the active organisation's backups.
+    const prefix = backupPrefix();
     const backups = entries
-      .filter((e) => e.name?.startsWith("backup-"))
+      .filter((e) => e.name?.startsWith(prefix))
       .map((e) => e.name as string)
       .sort();
 
@@ -273,8 +285,9 @@ export async function listBackups(backupDir: string): Promise<string[]> {
   if (!backupDir) return [];
   try {
     const entries = await readDir(backupDir);
+    const prefix = backupPrefix();
     return entries
-      .filter((e) => e.name?.startsWith("backup-"))
+      .filter((e) => e.name?.startsWith(prefix))
       .map((e) => e.name as string)
       .sort()
       .reverse();

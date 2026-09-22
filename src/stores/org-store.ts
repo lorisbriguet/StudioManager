@@ -54,6 +54,9 @@ export const useOrgStore = create<OrgState>((set, get) => ({
     set({ organisations: reg.organisations, activeId: reg.activeId });
     const prefs = get().activePrefs();
     if (prefs) applyPrefsToAppStore(prefs);
+    useAppStore.setState({
+      lastAutoBackup: Number(localStorage.getItem(get().orgKey("lastAutoBackup"))) || 0,
+    });
   },
 
   load: async () => {
