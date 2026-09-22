@@ -1,4 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+// plugin-log needs the real Tauri bridge — unmocked it surfaces unhandled
+// rejections ("Cannot read properties of undefined (reading 'invoke')").
+vi.mock("../lib/log", () => ({
+  logError: vi.fn(),
+  logWarn: vi.fn(),
+  logInfo: vi.fn(),
+}));
+
 import { useOrgStore, prefsFromLocalStorage } from "../stores/org-store";
 import { useAppStore } from "../stores/app-store";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
@@ -39,6 +48,26 @@ describe("org store", () => {
     expect(set?.args).toMatchObject({ id: "aaa111", prefs: { showIncome: true, calendarName: "Old", backupPath: "/old" } });
     expect(localStorage.getItem("showIncome")).toBeNull();
     expect(localStorage.getItem("calendarName")).toBeNull();
+  });
+
+  it("keeps the app usable and finishes loading when seeding fails", async () => {
+    localStorage.setItem("showIncome", "true");
+    localStorage.setItem("calendarName", "Old");
+    localStorage.setItem("backupPath", "/old");
+    setInvokeHandler((cmd) => {
+      if (cmd === "list_organisations") return reg(null);
+      if (cmd === "set_organisation_prefs") throw new Error("db unavailable");
+      return null;
+    });
+    await expect(useOrgStore.getState().load()).resolves.toBeUndefined();
+    expect(useOrgStore.getState().loaded).toBe(true);
+    const s = useAppStore.getState();
+    expect(s.showIncome).toBe(true);
+    expect(s.calendarName).toBe("Old");
+    expect(s.backupPath).toBe("/old");
+    expect(localStorage.getItem("showIncome")).toBe("true");
+    expect(localStorage.getItem("calendarName")).toBe("Old");
+    expect(localStorage.getItem("backupPath")).toBe("/old");
   });
 
   it("orgKey namespaces localStorage keys by active id", async () => {

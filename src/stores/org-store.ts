@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { useAppStore } from "./app-store";
 import { listOrganisations, setOrganisationPrefs, type Organisation, type OrgPrefs, type Registry } from "../lib/orgs";
 import type { AppLanguage } from "../i18n/ui";
+import { logWarn } from "../lib/log";
 
 /** localStorage keys that used to hold what is now per-organisation. */
 const LEGACY_PREF_KEYS = ["showIncome", "showTasksPage", "showTimeOverview", "calendarSync", "calendarName", "backupPath", "exportLanguage"] as const;
@@ -61,9 +62,16 @@ export const useOrgStore = create<OrgState>((set, get) => ({
     if (active && active.prefs === null) {
       // First launch after the layout upgrade: adopt the legacy localStorage values once.
       const seeded = prefsFromLocalStorage();
-      const updated = await setOrganisationPrefs(active.id, seeded);
-      for (const k of LEGACY_PREF_KEYS) localStorage.removeItem(k);
-      get().applyRegistry(updated);
+      try {
+        const updated = await setOrganisationPrefs(active.id, seeded);
+        for (const k of LEGACY_PREF_KEYS) localStorage.removeItem(k);
+        get().applyRegistry(updated);
+      } catch (e) {
+        // Could not persist the seed (e.g. offline/DB error): keep the app usable this
+        // session with the seeded values, but leave the legacy keys so the next launch retries.
+        logWarn("org-store: failed to seed organisation prefs from localStorage:", e);
+        applyPrefsToAppStore(seeded);
+      }
     }
     set({ loaded: true });
   },
