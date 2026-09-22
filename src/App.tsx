@@ -35,6 +35,7 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { CommandPalette } from "./components/CommandPalette";
 import { QuickTimerModal } from "./components/QuickTimerModal";
+import { OrgGate } from "./components/OrgGate";
 import { PageSpinner } from "./components/ui";
 import { useOverdueCheck } from "./hooks/useOverdueCheck";
 import { useRecurringCheck } from "./hooks/useRecurringCheck";
@@ -43,6 +44,7 @@ import { useErrorNotifications } from "./hooks/useErrorNotifications";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useUndoStore } from "./stores/undo-store";
 import { useAppStore } from "./stores/app-store";
+import { useOrgStore } from "./stores/org-store";
 import { getLabels, notifyError } from "./lib/notifyError";
 import { requestNotificationPermission } from "./lib/nativeNotification";
 
@@ -153,43 +155,46 @@ function StartupChecks() {
 }
 
 export default function App() {
+  const activeId = useOrgStore((s) => s.activeId);
   return (
     <QueryClientProvider client={queryClient}>
-      <StartupChecks />
-      <BrowserRouter>
-        <GlobalShortcuts />
-        <ErrorBoundary FallbackComponent={ErrorFallback}>
-          <Routes>
-            <Route element={<MainLayout />}>
-              <Route index element={<DashboardPage />} />
-              <Route path="clients" element={<ClientsPage />} />
-              <Route path="clients/:id" element={<ClientDetailPage />} />
-              <Route path="projects" element={<ProjectsPage />} />
-              <Route path="projects/:id" element={<ProjectDetailPage />} />
-              <Route path="tasks" element={<TasksPage />} />
-              <Route path="calendar" element={<Suspense fallback={<PageSpinner />}><CalendarPage /></Suspense>} />
-              <Route path="invoices" element={<InvoicesPage />} />
-              <Route path="invoices/new" element={<InvoiceFormPage />} />
-              <Route path="invoices/:id/edit" element={<InvoiceFormPage />} />
-              <Route path="invoices/:id/preview" element={<InvoicePreviewPage />} />
-              <Route path="quotes" element={<QuotesPage />} />
-              <Route path="quotes/new" element={<QuoteFormPage />} />
-              <Route path="quotes/:id/edit" element={<QuoteFormPage />} />
-              <Route path="quotes/:id/preview" element={<QuotePreviewPage />} />
-              <Route path="expenses" element={<ExpensesPage />} />
-              <Route path="income" element={<IncomePage />} />
-              <Route path="finances" element={<FinancesPage />} />
-              <Route path="wiki" element={<Suspense fallback={<PageSpinner />}><WikiPage /></Suspense>} />
-              <Route path="resources" element={<ResourcesPage />} />
-              <Route path="notifications" element={<NotificationsPage />} />
-              <Route path="settings" element={<SettingsPage />} />
-              <Route path="profile" element={<ProfilePage />} />
-            </Route>
-          </Routes>
-          <CommandPalette />
-          <QuickTimerModal />
-        </ErrorBoundary>
-      </BrowserRouter>
+      <OrgGate>
+        <StartupChecks key={activeId} />
+        <BrowserRouter>
+          <GlobalShortcuts />
+          <ErrorBoundary FallbackComponent={ErrorFallback}>
+            <Routes>
+              <Route element={<MainLayout />}>
+                <Route index element={<DashboardPage />} />
+                <Route path="clients" element={<ClientsPage />} />
+                <Route path="clients/:id" element={<ClientDetailPage />} />
+                <Route path="projects" element={<ProjectsPage />} />
+                <Route path="projects/:id" element={<ProjectDetailPage />} />
+                <Route path="tasks" element={<TasksPage />} />
+                <Route path="calendar" element={<Suspense fallback={<PageSpinner />}><CalendarPage /></Suspense>} />
+                <Route path="invoices" element={<InvoicesPage />} />
+                <Route path="invoices/new" element={<InvoiceFormPage />} />
+                <Route path="invoices/:id/edit" element={<InvoiceFormPage />} />
+                <Route path="invoices/:id/preview" element={<InvoicePreviewPage />} />
+                <Route path="quotes" element={<QuotesPage />} />
+                <Route path="quotes/new" element={<QuoteFormPage />} />
+                <Route path="quotes/:id/edit" element={<QuoteFormPage />} />
+                <Route path="quotes/:id/preview" element={<QuotePreviewPage />} />
+                <Route path="expenses" element={<ExpensesPage />} />
+                <Route path="income" element={<IncomePage />} />
+                <Route path="finances" element={<FinancesPage />} />
+                <Route path="wiki" element={<Suspense fallback={<PageSpinner />}><WikiPage /></Suspense>} />
+                <Route path="resources" element={<ResourcesPage />} />
+                <Route path="notifications" element={<NotificationsPage />} />
+                <Route path="settings" element={<SettingsPage />} />
+                <Route path="profile" element={<ProfilePage />} />
+              </Route>
+            </Routes>
+            <CommandPalette />
+            <QuickTimerModal />
+          </ErrorBoundary>
+        </BrowserRouter>
+      </OrgGate>
       <Toaster position="bottom-right" />
       <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
     </QueryClientProvider>

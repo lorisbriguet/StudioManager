@@ -60,7 +60,7 @@ let dbFatalShown = false;
  * hooks), so a schema-migration failure never reaches the React
  * ErrorBoundary — this guard makes it visibly fatal regardless.
  */
-function showFatalDbError(err: unknown): void {
+export function showFatalDbError(err: unknown): void {
   if (dbFatalShown) return;
   dbFatalShown = true;
   try {
