@@ -1,10 +1,6 @@
-#![allow(dead_code)]
 //! Organisation registry: `organisations.json` in the app data folder plus
 //! one folder per organisation under `orgs/<id>/`. Pure functions over
 //! `&Path` so they are unit-testable without a Tauri app handle.
-//!
-//! `#![allow(dead_code)]`: nothing outside `orgs.rs` uses this module yet.
-//! Task 5 wires it into Tauri commands and this allow should be removed then.
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};

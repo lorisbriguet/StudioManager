@@ -1,11 +1,7 @@
-#![allow(dead_code)]
 //! Schema migration runner that works on any database file (the SQL plugin
 //! only migrates the one connection string it was configured with).
 //! Progress lives in `schema_migrations`; files the plugin migrated earlier
 //! are recognised through `_sqlx_migrations` and never re-run.
-//!
-//! `#![allow(dead_code)]`: nothing outside `migrate.rs` uses this module yet.
-//! Task 5 wires it into Tauri commands and this allow should be removed then.
 
 use std::path::Path;
 
@@ -23,6 +19,10 @@ pub const MIGRATIONS: &[SqlMigration] = &[
     SqlMigration { version: 6, sql: include_str!("../migrations/006_activities.sql") },
 ];
 
+// Only referenced from this module's own tests (as the expected "fully
+// migrated" version); nothing in the production path needs it, since
+// `migrate_db` derives what to apply from `MIGRATIONS` itself.
+#[allow(dead_code)]
 pub const LATEST_VERSION: i64 = 6;
 
 fn table_exists(conn: &rusqlite::Connection, name: &str) -> Result<bool, String> {

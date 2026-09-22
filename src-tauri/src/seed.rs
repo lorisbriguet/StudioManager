@@ -1,12 +1,8 @@
-#![allow(dead_code)]
 //! Copy the settings-type tables from one organisation database into a
 //! freshly migrated one ("start from the current organisation's settings").
 //! Tables the frontend creates at runtime (templates) may be absent in the
 //! destination: their DDL is copied verbatim from the source's sqlite_master
 //! so constraints and AUTOINCREMENT survive.
-//!
-//! `#![allow(dead_code)]`: nothing outside `seed.rs` uses this module yet.
-//! Task 5 wires it into Tauri commands and this allow should be removed then.
 
 use std::path::Path;
 
