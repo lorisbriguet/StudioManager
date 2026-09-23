@@ -35,7 +35,10 @@ export function defaultSwitchDeps(navigate: (p: string) => void, stopTimer: () =
   };
 }
 
-/** Ordered switch. Returns false when the user declined or the timer could not be saved. */
+/**
+ * Ordered switch. Returns false when the user declined or the timer could
+ * not be saved; any other failure rejects.
+ */
 export async function switchOrganisation(id: string, deps: SwitchDeps): Promise<boolean> {
   if (!(await deps.confirmIfDirty())) return false;
   const { testMode, presentationMode, activeTimer } = useAppStore.getState();
@@ -48,9 +51,19 @@ export async function switchOrganisation(id: string, deps: SwitchDeps): Promise<
   const reg = await deps.switchCmd(id);
   // Registry first: resetDb reopens the connection with a URL built from activeId.
   deps.applyRegistry(reg);
-  await deps.resetDb();
-  deps.clearQueries();
-  deps.closeAllTabs();
-  deps.navigate("/");
+  try {
+    await deps.resetDb();
+  } finally {
+    // switchCmd already succeeded, so the new organisation is active
+    // (Rust persisted it) and applyRegistry has updated the frontend
+    // stores. The UI must end up consistent with that even if reopening
+    // the database fails, so these always run — clearing the stale query
+    // cache, closing the old organisation's tabs, and landing on the
+    // dashboard — regardless of resetDb's outcome. Its rejection still
+    // propagates to the caller once this finishes.
+    deps.clearQueries();
+    deps.closeAllTabs();
+    deps.navigate("/");
+  }
   return true;
 }
