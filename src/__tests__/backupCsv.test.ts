@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   serializeCsv,
   parseCsv,
@@ -6,8 +6,10 @@ import {
   assertRestorableData,
   RestoreError,
   TABLES,
+  validateBackupPath,
   type TableColumnInfo,
 } from "../lib/backup";
+import { writtenFiles, removedPaths, setWriteFileError, clearFsWrites } from "../__mocks__/tauri-api";
 
 describe("assertRestorableData", () => {
   it("throws RestoreError(backup_empty) when the backup has no CSVs at all", () => {
@@ -489,5 +491,34 @@ describe("applyNotNullDefaults", () => {
     );
     expect(values).toEqual([""]);
     expect(substitutions).toBe(1);
+  });
+});
+
+describe("validateBackupPath", () => {
+  beforeEach(() => {
+    clearFsWrites();
+  });
+
+  it("probes writability with a non-dot file and cleans it up", async () => {
+    const result = await validateBackupPath("/some/backup/dir");
+
+    expect(result).toBe(true);
+    expect(writtenFiles).toHaveLength(1);
+    const probePath = writtenFiles[0].path;
+    const basename = probePath.split("/").pop()!;
+    // A leading-dot basename is rejected by the Tauri fs scope's
+    // require_literal_leading_dot glob matching on Unix.
+    expect(basename.startsWith(".")).toBe(false);
+    expect(basename.startsWith("sm-write-test-")).toBe(true);
+    expect(removedPaths).toEqual([probePath]);
+  });
+
+  it("returns false when the probe write is rejected", async () => {
+    setWriteFileError(new Error("forbidden path: /some/backup/dir"));
+
+    const result = await validateBackupPath("/some/backup/dir");
+
+    expect(result).toBe(false);
+    expect(removedPaths).toEqual([]);
   });
 });
