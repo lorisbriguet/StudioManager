@@ -79,6 +79,14 @@ All 12 checklist items pass after three fixes found by the pass:
 - Verified: upgrade of the live folder (rows, files and checksums identical; 175 paths rewritten), rename, create-with-seeding, switch (title, dashboard, finances, per-org sidebar prefs), timer entry logged in the source org only, unsaved-changes prompt with Stay, test and presentation modes exit on switch and keep their files inside the org folder, per-org backups in one parent (`backup-<id>-…`) with isolated restore lists, per-org calendar name/toggle, delete to Trash, relaunch on the last active org with the upgrade snapshot removed
 - Follow-ups (parked): after a switch the destination's restored active tab is relabelled Dashboard (navigate to the restored tab instead); `openDb` should use `resetDb` to force a reopen; default calendar name could include the organisation name; legacy backup folders sort after org-prefixed ones in the restore list; `studiomanager_snapshot.db` stays in the org folder after exiting test mode (pre-existing)
 
+## V2.1.0 — Done (demo app)
+
+- [x] Separate **StudioManager Demo** build (`npm run build:demo`, `src-tauri/tauri.demo.conf.json`): own identifier and data folder, dead updater endpoint, no updater artefacts; never published
+- [x] Persona seeds under `src/db/seeds/personas/<id>/{config,data}.sql` with a registry and one loader; presentation mode in the real app keeps loading the designer data layer only
+- [x] Music persona "Aurore": grants in Income, concerts, a tour, workshops
+- [x] Demo-build-only Settings › Data › Demo data card: pick a persona, confirm, load into the current organisation and apply its preferences
+- [ ] Follow-up: a demo persona for a two-person studio, if a presentation ever needs it
+
 ## Audit — round 3 (2026-08-31)
 
 Three-lens audit (correctness/data, security/platform, UI/a11y/perf/tests) after v1.15.0. Clean bill: SQL parameterization, osascript runner, wiki allowlist, updater chain, capabilities scope, date/money handling, design-system compliance (0 violations), modal/menu focus management.
