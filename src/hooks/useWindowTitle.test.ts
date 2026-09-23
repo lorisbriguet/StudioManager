@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { renderHook, cleanup, waitFor } from "@testing-library/react";
 import { useWindowTitle } from "./useWindowTitle";
 import { windowTitles } from "../__mocks__/tauri-api";
@@ -6,6 +6,7 @@ import { windowTitles } from "../__mocks__/tauri-api";
 afterEach(() => {
   cleanup();
   windowTitles.length = 0;
+  vi.unstubAllEnvs();
 });
 
 describe("useWindowTitle", () => {
@@ -33,5 +34,11 @@ describe("useWindowTitle", () => {
 
     await waitFor(() => expect(windowTitles[windowTitles.length - 1]).toBe("StudioManager — Studio"));
     expect(document.title).toBe("StudioManager — Studio");
+  });
+
+  it("uses the demo app name as the base in the demo build", async () => {
+    vi.stubEnv("VITE_DEMO_BUILD", "1");
+    renderHook(() => useWindowTitle("Aurore"));
+    await waitFor(() => expect(windowTitles[windowTitles.length - 1]).toBe("StudioManager Demo — Aurore"));
   });
 });
