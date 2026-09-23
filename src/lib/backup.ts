@@ -35,7 +35,10 @@ export function isScopeDenied(e: unknown): boolean {
 
 /** Test if a directory is writable by creating and removing a temp file */
 export async function validateBackupPath(dir: string): Promise<boolean> {
-  const testPath = `${dir}/.sm-write-test-${Date.now()}`;
+  // Must not start with "." — tauri-plugin-fs enforces
+  // require_literal_leading_dot on Unix, so a dotfile basename never matches
+  // the capability scope glob and the write is rejected as a forbidden path.
+  const testPath = `${dir}/sm-write-test-${Date.now()}.tmp`;
   try {
     await writeFile(testPath, new Uint8Array([0]));
     await remove(testPath);
