@@ -13,6 +13,7 @@ export default defineConfig({
       "@tauri-apps/api/path": path.resolve(__dirname, "./src/__mocks__/tauri-api.ts"),
       "@tauri-apps/api/app": path.resolve(__dirname, "./src/__mocks__/tauri-api.ts"),
       "@tauri-apps/api/webview": path.resolve(__dirname, "./src/__mocks__/tauri-api.ts"),
+      "@tauri-apps/api/window": path.resolve(__dirname, "./src/__mocks__/tauri-api.ts"),
       "@tauri-apps/plugin-fs": path.resolve(__dirname, "./src/__mocks__/tauri-api.ts"),
       "@tauri-apps/plugin-dialog": path.resolve(__dirname, "./src/__mocks__/tauri-api.ts"),
       "@tauri-apps/plugin-shell": path.resolve(__dirname, "./src/__mocks__/tauri-api.ts"),

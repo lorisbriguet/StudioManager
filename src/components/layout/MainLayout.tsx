@@ -1,8 +1,8 @@
-import { useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { TabBar } from "./TabBar";
 import { useTabSync } from "../../hooks/useTabSync";
+import { useWindowTitle } from "../../hooks/useWindowTitle";
 import { useAppStore } from "../../stores/app-store";
 import { useOrgStore } from "../../stores/org-store";
 import { useT } from "../../i18n/useT";
@@ -20,10 +20,9 @@ export function MainLayout() {
   useTabSync();
   const location = useLocation();
 
-  // Tauri syncs document.title to the native window title.
-  useEffect(() => {
-    document.title = orgName ? `StudioManager — ${orgName}` : "StudioManager";
-  }, [orgName]);
+  // Keeps document.title AND the native window title in sync — Tauri v2
+  // does not mirror one onto the other.
+  useWindowTitle(orgName);
 
   const exitTestMode = async () => {
     const confirmed = await ask(t.test_mode_confirm_exit, { kind: "warning" });

@@ -53,6 +53,14 @@ export function getCurrentWebview() {
     onDragDropEvent: async () => () => {},
   };
 }
+export const windowTitles: string[] = [];
+export function getCurrentWindow() {
+  return {
+    setTitle: async (t: string) => {
+      windowTitles.push(t);
+    },
+  };
+}
 export class Command {
   static create() {
     return { execute: async () => ({ stdout: "", stderr: "", code: 0 }) };
