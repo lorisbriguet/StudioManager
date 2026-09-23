@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
-import { FolderOpen, HardDrive, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield, X, Clock, Pencil, Trash2, Check, Plus, Store } from "lucide-react";
+import { FolderOpen, HardDrive, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield, X, Clock, Pencil, Trash2, Check, Plus, Store, Building2 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { purgeAllCalendarEvents, syncAllExisting, listWritableCalendars } from "../lib/appleCalendar";
 import { createBackup, listBackups, restoreFromBackup, RestoreError, validateBackupPath, isBackupRunning, setBackupRunning, isScopeDenied } from "../lib/backup";
@@ -26,8 +27,11 @@ import { WorkloadTemplateManager } from "../components/workload/WorkloadTemplate
 import { Input, Select, Button } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
+import { OrganisationsCard } from "../components/settings/OrganisationsCard";
 
-type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "workload" | "categories" | "suppliers" | "lists" | "time_entries" | "updates" | "backup" | "sandbox";
+type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "workload" | "organisations" | "categories" | "suppliers" | "lists" | "time_entries" | "updates" | "backup" | "sandbox";
+
+const SETTINGS_CATEGORIES: SettingsCategory[] = ["general", "appearance", "behavior", "calendar", "workload", "organisations", "categories", "suppliers", "lists", "time_entries", "updates", "backup", "sandbox"];
 
 export function SettingsPage() {
   const dateFormat = useAppStore((s) => s.dateFormat);
@@ -73,7 +77,13 @@ export function SettingsPage() {
   const [loadingBackups, setLoadingBackups] = useState(false);
   const [availableCalendars, setAvailableCalendars] = useState<string[]>([]);
   const [loadingCalendars, setLoadingCalendars] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<SettingsCategory>("general");
+  const [searchParams] = useSearchParams();
+  const requestedCategory = searchParams.get("category");
+  const initialCategory: SettingsCategory =
+    requestedCategory && (SETTINGS_CATEGORIES as string[]).includes(requestedCategory)
+      ? (requestedCategory as SettingsCategory)
+      : "general";
+  const [activeCategory, setActiveCategory] = useState<SettingsCategory>(initialCategory);
   const [appVersion, setAppVersion] = useState("");
   const testMode = useAppStore((s) => s.testMode);
   const presentationMode = useAppStore((s) => s.presentationMode);
@@ -309,6 +319,7 @@ export function SettingsPage() {
     {
       label: t.settings_group_data,
       items: [
+        { key: "organisations", label: t.organisations, icon: <Building2 size={14} /> },
         { key: "categories", label: t.expense_categories, icon: <Tags size={14} /> },
         { key: "suppliers", label: t.suppliers, icon: <Store size={14} /> },
         { key: "lists", label: t.custom_lists, icon: <LayoutList size={14} /> },
@@ -580,6 +591,8 @@ export function SettingsPage() {
               <WorkloadTemplateManager />
             </SettingsCard>
           )}
+
+          {activeCategory === "organisations" && <OrganisationsCard />}
 
           {activeCategory === "categories" && (
             <SettingsCard title={t.expense_categories} desc={t.expense_categories_desc}>
