@@ -59,6 +59,13 @@ interface OrgState {
   organisations: Organisation[];
   activeId: string;
   loaded: boolean;
+  /** Optimistic merge base for a `savePrefs` call still in flight. Without
+   *  it, two `savePrefs` calls issued back-to-back (e.g. applying several
+   *  persona preferences after a demo data load) each compute `current` from
+   *  the same not-yet-updated `organisations`/localStorage source, and the
+   *  second call's merge silently clobbers the first. Cleared whenever the
+   *  registry is (re)applied, so it never leaks across an organisation switch. */
+  pendingPrefs: OrgPrefs | null;
   load: () => Promise<void>;
   applyRegistry: (reg: Registry) => void;
   active: () => Organisation | undefined;
@@ -71,9 +78,10 @@ export const useOrgStore = create<OrgState>((set, get) => ({
   organisations: [],
   activeId: "",
   loaded: false,
+  pendingPrefs: null,
 
   applyRegistry: (reg) => {
-    set({ organisations: reg.organisations, activeId: reg.activeId });
+    set({ organisations: reg.organisations, activeId: reg.activeId, pendingPrefs: null });
     const prefs = get().activePrefs();
     if (prefs) applyPrefsToAppStore(prefs);
     useAppStore.setState({
@@ -122,8 +130,12 @@ export const useOrgStore = create<OrgState>((set, get) => ({
     // in load() — usually because that write failed. Dropping the change on
     // the floor there turns every preference toggle into a silent no-op, so
     // merge over the same legacy values load() would have seeded from.
-    const current = get().activePrefs() ?? prefsFromLocalStorage();
+    // A still-in-flight savePrefs' own optimistic result (pendingPrefs) wins
+    // over both, so a second call issued before the first resolves merges
+    // onto its result instead of the same stale base.
+    const current = get().pendingPrefs ?? get().activePrefs() ?? prefsFromLocalStorage();
     const next = { ...current, ...partial };
+    set({ pendingPrefs: next });
     applyPrefsToAppStore(next);
     try {
       const reg = await setOrganisationPrefs(id, next);
