@@ -154,15 +154,18 @@ export const useTabStore = create<TabState>((set, get) => ({
 
   closeAllTabs: () => {
     const home = defaultTabs();
-    // Also clear the reopen stack: a tab closed here must not resurface via
-    // reopenClosedTab() after switching to a different organisation.
-    set({ tabs: home.tabs, activeTabId: home.activeTabId, closedTabs: [] });
+    set({ tabs: home.tabs, activeTabId: home.activeTabId });
     persist(home.tabs, home.activeTabId);
   },
 
   reloadForOrg: () => {
     const { tabs, activeTabId } = loadTabs();
-    set({ tabs, activeTabId });
+    // Clear the reopen stack too: it holds tabs of the organisation we are
+    // leaving, and reopenClosedTab() must not resurface them here. Never
+    // persist from here — loadTabs() just read this organisation's own
+    // saved tabs, and writing them straight back would only risk
+    // overwriting them with the defaults when it found none.
+    set({ tabs, activeTabId, closedTabs: [] });
   },
 }));
 

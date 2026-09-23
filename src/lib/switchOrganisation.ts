@@ -1,9 +1,8 @@
 import { useAppStore } from "../stores/app-store";
 import { useOrgStore } from "../stores/org-store";
-import { useTabStore } from "../stores/tab-store";
 import { confirmIfDirty } from "./dirty-guard";
 import { exitPresentationMode, exitTestMode } from "./modes";
-import { resetDb } from "../db";
+import { closeDb, getDb } from "../db";
 import { switchOrganisationCmd, type Registry } from "./orgs";
 import { queryClient } from "./queryClient";
 
@@ -12,11 +11,11 @@ export interface SwitchDeps {
   stopTimer: () => Promise<boolean>;
   exitTestMode: () => Promise<void>;
   exitPresentationMode: () => Promise<void>;
-  resetDb: () => Promise<void>;
+  closeDb: () => Promise<void>;
+  openDb: () => Promise<unknown>;
   switchCmd: (id: string) => Promise<Registry>;
   applyRegistry: (r: Registry) => void;
   clearQueries: () => void;
-  closeAllTabs: () => void;
   navigate: (path: string) => void;
 }
 
@@ -26,11 +25,11 @@ export function defaultSwitchDeps(navigate: (p: string) => void, stopTimer: () =
     stopTimer,
     exitTestMode,
     exitPresentationMode,
-    resetDb,
+    closeDb,
+    openDb: getDb,
     switchCmd: switchOrganisationCmd,
     applyRegistry: (r) => useOrgStore.getState().applyRegistry(r),
     clearQueries: () => queryClient.clear(),
-    closeAllTabs: () => useTabStore.getState().closeAllTabs(),
     navigate,
   };
 }
@@ -48,21 +47,24 @@ export async function switchOrganisation(id: string, deps: SwitchDeps): Promise<
     const saved = await deps.stopTimer();
     if (!saved) return false;
   }
+  // Spec §4 order: close the old connection first, so the outgoing
+  // organisation's database is not held open while Rust swaps the active
+  // one. Registry next — the URL the connection reopens on is built from
+  // the org store's activeId — and only then reopen.
+  await deps.closeDb();
   const reg = await deps.switchCmd(id);
-  // Registry first: resetDb reopens the connection with a URL built from activeId.
   deps.applyRegistry(reg);
   try {
-    await deps.resetDb();
+    await deps.openDb();
   } finally {
     // switchCmd already succeeded, so the new organisation is active
     // (Rust persisted it) and applyRegistry has updated the frontend
-    // stores. The UI must end up consistent with that even if reopening
-    // the database fails, so these always run — clearing the stale query
-    // cache, closing the old organisation's tabs, and landing on the
-    // dashboard — regardless of resetDb's outcome. Its rejection still
-    // propagates to the caller once this finishes.
+    // stores — which also reloaded the new organisation's saved tabs. The
+    // UI must end up consistent with that even if reopening the database
+    // fails, so these always run — clearing the stale query cache and
+    // landing on the dashboard — regardless of openDb's outcome. Its
+    // rejection still propagates to the caller once this finishes.
     deps.clearQueries();
-    deps.closeAllTabs();
     deps.navigate("/");
   }
   return true;

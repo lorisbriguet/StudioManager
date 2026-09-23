@@ -16,14 +16,29 @@ describe("organisation-namespaced localStorage", () => {
     expect(useTabStore.getState().tabs.filter((t) => t.path === "/clients")).toHaveLength(0);
   });
 
-  it("closeAllTabs leaves only the dashboard tab and clears the reopen stack", () => {
+  it("closeAllTabs leaves only the dashboard tab", () => {
+    useTabStore.getState().reloadForOrg();
+    useTabStore.getState().openTab("/clients", "Clients");
+    useTabStore.getState().closeAllTabs();
+    expect(useTabStore.getState().tabs.map((t) => t.path)).toEqual(["/"]);
+  });
+
+  it("reloadForOrg restores the saved tabs and drops the reopen stack", () => {
+    localStorage.setItem(
+      "open-tabs:o2",
+      JSON.stringify({ tabs: [{ id: "t-inv", path: "/invoices", label: "Invoices", pinned: false }], activeTabId: "t-inv" })
+    );
     useTabStore.getState().reloadForOrg();
     const id = useTabStore.getState().openTab("/clients", "Clients");
     useTabStore.getState().closeTab(id);
-    useTabStore.getState().closeAllTabs();
-    expect(useTabStore.getState().tabs.map((t) => t.path)).toEqual(["/"]);
+
+    useOrgStore.setState({ activeId: "o2" });
+    useTabStore.getState().reloadForOrg();
+    expect(useTabStore.getState().tabs.map((t) => t.path)).toEqual(["/invoices"]);
     // A tab closed in one organisation must not be reopenable in another.
     expect(useTabStore.getState().reopenClosedTab()).toBeNull();
+    // Reloading must not write over what it just read.
+    expect(localStorage.getItem("open-tabs:o2")).toContain("/invoices");
   });
 
   it("timer persists under activeTimer:<id>", () => {
