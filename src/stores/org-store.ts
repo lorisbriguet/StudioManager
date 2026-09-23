@@ -130,19 +130,27 @@ export const useOrgStore = create<OrgState>((set, get) => ({
     // in load() — usually because that write failed. Dropping the change on
     // the floor there turns every preference toggle into a silent no-op, so
     // merge over the same legacy values load() would have seeded from.
-    // A still-in-flight savePrefs' own optimistic result (pendingPrefs) wins
-    // over both, so a second call issued before the first resolves merges
-    // onto its result instead of the same stale base.
+    // A still-in-flight (or still-failed) savePrefs' own optimistic result
+    // (pendingPrefs) wins over both, so a second call issued before the first
+    // resolves — or after the first failed — merges onto it instead of the
+    // same stale base.
     const current = get().pendingPrefs ?? get().activePrefs() ?? prefsFromLocalStorage();
     const next = { ...current, ...partial };
     set({ pendingPrefs: next });
     applyPrefsToAppStore(next);
     try {
       const reg = await setOrganisationPrefs(id, next);
-      set({ organisations: reg.organisations });
+      // Cleared on success: `reg.organisations` now carries this call's own
+      // `next` as the registry's source of truth, so `activePrefs()` alone is
+      // a correct merge base for the next call. Left set otherwise it would
+      // permanently shadow `activePrefs()` for the rest of the session.
+      set({ organisations: reg.organisations, pendingPrefs: null });
     } catch (e) {
-      // Keep the optimistic local state (already applied above); just surface
-      // the failure so it isn't a silent unhandled rejection.
+      // Keep the optimistic local state (already applied above) — and keep it
+      // as pendingPrefs too: the write-through failed, so `activePrefs()`
+      // still reflects the pre-change registry value. Falling back to it on
+      // the next call would drop this change from that call's merge and
+      // re-send the stale value to the backend on the next successful save.
       notifyError(getLabels().operation_failed, e);
     }
   },

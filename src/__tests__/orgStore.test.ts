@@ -135,4 +135,29 @@ describe("org store", () => {
   it("prefsFromLocalStorage uses the same defaults as the app store", () => {
     expect(prefsFromLocalStorage()).toEqual({ showIncome: false, showTasksPage: true, showTimeOverview: false, calendarSync: false, calendarName: "", backupPath: "", exportLanguage: "FR" });
   });
+
+  it("two savePrefs calls issued back-to-back both land, not just the last one", async () => {
+    setInvokeHandler((cmd, args) => (cmd === "set_organisation_prefs" ? reg(args.prefs as never) : null));
+    useOrgStore.getState().applyRegistry(reg({ showIncome: false, showTasksPage: false, showTimeOverview: false, calendarSync: false, calendarName: "", backupPath: "", exportLanguage: "FR" }));
+    // No await between these two — both must read/merge before either's
+    // write-through resolves, which is exactly what clobbered the first
+    // call's change before the pendingPrefs fix.
+    const p1 = useOrgStore.getState().savePrefs({ showIncome: true });
+    const p2 = useOrgStore.getState().savePrefs({ showTasksPage: true });
+    await Promise.all([p1, p2]);
+    const calls = invokedCommands.filter((c) => c.cmd === "set_organisation_prefs");
+    expect(calls).toHaveLength(2);
+    // The second call's own write-through payload must already carry the
+    // first call's change too, merged in via pendingPrefs.
+    expect(calls[1].args.prefs).toMatchObject({ showIncome: true, showTasksPage: true });
+    expect(useAppStore.getState().showIncome).toBe(true);
+    expect(useAppStore.getState().showTasksPage).toBe(true);
+  });
+
+  it("clears pendingPrefs once a savePrefs call succeeds", async () => {
+    setInvokeHandler((cmd, args) => (cmd === "set_organisation_prefs" ? reg(args.prefs as never) : null));
+    useOrgStore.getState().applyRegistry(reg({ showIncome: false, showTasksPage: false, showTimeOverview: false, calendarSync: false, calendarName: "", backupPath: "", exportLanguage: "FR" }));
+    await useOrgStore.getState().savePrefs({ showIncome: true });
+    expect(useOrgStore.getState().pendingPrefs).toBeNull();
+  });
 });
