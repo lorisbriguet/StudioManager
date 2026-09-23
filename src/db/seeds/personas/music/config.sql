@@ -2,7 +2,7 @@
 PRAGMA foreign_keys = OFF;
 
 UPDATE business_profile SET
-  owner_name = 'Lea Morel',
+  owner_name = 'Lea Morel — Aurore',
   address = 'Rue de la Louve 8',
   postal_code = '1003',
   city = 'Lausanne',

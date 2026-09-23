@@ -140,11 +140,13 @@ export const useOrgStore = create<OrgState>((set, get) => ({
     applyPrefsToAppStore(next);
     try {
       const reg = await setOrganisationPrefs(id, next);
-      // Cleared on success: `reg.organisations` now carries this call's own
-      // `next` as the registry's source of truth, so `activePrefs()` alone is
-      // a correct merge base for the next call. Left set otherwise it would
-      // permanently shadow `activePrefs()` for the rest of the session.
-      set({ organisations: reg.organisations, pendingPrefs: null });
+      // Only adopt/clear if THIS call's `next` is still the pending value.
+      // Two calls issued back-to-back each capture their own `next` before
+      // awaiting; if they resolve out of order, the earlier call's `reg`
+      // reflects a now-stale write and must not overwrite the later call's
+      // (already-applied) result. When it's stale, leave state untouched —
+      // the later call already adopted its own (superset) registry.
+      set((s) => (s.pendingPrefs === next ? { organisations: reg.organisations, pendingPrefs: null } : {}));
     } catch (e) {
       // Keep the optimistic local state (already applied above) — and keep it
       // as pendingPrefs too: the write-through failed, so `activePrefs()`

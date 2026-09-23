@@ -160,4 +160,41 @@ describe("org store", () => {
     await useOrgStore.getState().savePrefs({ showIncome: true });
     expect(useOrgStore.getState().pendingPrefs).toBeNull();
   });
+
+  it("keeps the later-completing savePrefs call's result when two calls resolve out of order", async () => {
+    const initial = { showIncome: false, showTasksPage: false, showTimeOverview: false, calendarSync: false, calendarName: "", backupPath: "", exportLanguage: "FR" as const };
+    let resolveFirst!: (r: Registry) => void;
+    let resolveSecond!: (r: Registry) => void;
+    let call = 0;
+    setInvokeHandler((cmd, args) => {
+      if (cmd !== "set_organisation_prefs") return null;
+      call += 1;
+      if (call === 1) return new Promise<Registry>((resolve) => { resolveFirst = resolve; });
+      if (call === 2) return new Promise<Registry>((resolve) => { resolveSecond = resolve; });
+      return reg(args.prefs as never);
+    });
+    useOrgStore.getState().applyRegistry(reg(initial));
+
+    // Two calls in flight at once — the second reads pendingPrefs from the
+    // first (still unresolved) before either write-through completes.
+    const p1 = useOrgStore.getState().savePrefs({ showIncome: true });
+    const p2 = useOrgStore.getState().savePrefs({ showTasksPage: true });
+
+    // The SECOND call's write-through completes first, carrying both changes.
+    resolveSecond(reg({ ...initial, showIncome: true, showTasksPage: true }));
+    await p2;
+    // The FIRST call resolves last, with its own (now stale) result — it must
+    // not clobber the more complete state the second call just landed.
+    resolveFirst(reg({ ...initial, showIncome: true }));
+    await p1;
+
+    expect(useOrgStore.getState().pendingPrefs).toBeNull();
+    expect(useOrgStore.getState().activePrefs()).toMatchObject({ showIncome: true, showTasksPage: true });
+
+    // A third call afterwards must merge onto that complete state, not the
+    // stale one the first call would have left behind.
+    await useOrgStore.getState().savePrefs({ showTimeOverview: true });
+    const calls = invokedCommands.filter((c) => c.cmd === "set_organisation_prefs");
+    expect(calls[2].args.prefs).toMatchObject({ showIncome: true, showTasksPage: true, showTimeOverview: true });
+  });
 });

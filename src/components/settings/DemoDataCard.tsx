@@ -60,7 +60,7 @@ export function DemoDataCard() {
         </Select>
       </div>
       <div className="pt-1">
-        <Button type="button" size="sm" icon={<DatabaseIcon size={12} />} onClick={() => void load()} disabled={blocked || loading} loading={loading} title={blocked ? t.demo_data_blocked : undefined}>
+        <Button type="button" size="sm" icon={<DatabaseIcon size={12} />} onClick={() => void load()} disabled={blocked || loading} loading={loading} title={testMode ? t.demo_data_blocked_test : presentationMode ? t.demo_data_blocked_presentation : undefined}>
           {t.demo_data_load}
         </Button>
       </div>

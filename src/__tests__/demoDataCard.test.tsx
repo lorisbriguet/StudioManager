@@ -43,7 +43,17 @@ describe("DemoDataCard", () => {
   it("is disabled while test mode is on", () => {
     useAppStore.setState({ testMode: true });
     renderCard();
-    expect(screen.getByRole("button", { name: /load into this organisation/i })).toBeDisabled();
+    const button = screen.getByRole("button", { name: /load into this organisation/i });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("title", expect.stringMatching(/exit test mode/i));
+  });
+
+  it("is disabled while presentation mode is on", () => {
+    useAppStore.setState({ presentationMode: true });
+    renderCard();
+    const button = screen.getByRole("button", { name: /load into this organisation/i });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("title", expect.stringMatching(/exit presentation mode/i));
   });
 
   it("does nothing when the confirmation is declined", async () => {

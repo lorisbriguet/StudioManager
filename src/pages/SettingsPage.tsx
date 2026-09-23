@@ -33,7 +33,7 @@ import { isDemoBuild } from "../lib/demoBuild";
 
 type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "workload" | "organisations" | "categories" | "suppliers" | "lists" | "time_entries" | "updates" | "backup" | "sandbox" | "demo_data";
 
-const SETTINGS_CATEGORIES: SettingsCategory[] = ["general", "appearance", "behavior", "calendar", "workload", "organisations", "categories", "suppliers", "lists", "time_entries", "updates", "backup", "sandbox", "demo_data"];
+const SETTINGS_CATEGORIES_BASE: SettingsCategory[] = ["general", "appearance", "behavior", "calendar", "workload", "organisations", "categories", "suppliers", "lists", "time_entries", "updates", "backup", "sandbox"];
 
 export function SettingsPage() {
   const dateFormat = useAppStore((s) => s.dateFormat);
@@ -81,8 +81,12 @@ export function SettingsPage() {
   const [loadingCalendars, setLoadingCalendars] = useState(false);
   const [searchParams] = useSearchParams();
   const requestedCategory = searchParams.get("category");
+  // demo_data is only a valid ?category= target in the demo build — in the
+  // real build it would otherwise resolve to an empty pane instead of
+  // falling back to "general".
+  const settingsCategories: SettingsCategory[] = isDemoBuild() ? [...SETTINGS_CATEGORIES_BASE, "demo_data"] : SETTINGS_CATEGORIES_BASE;
   const validCategory: SettingsCategory | null =
-    requestedCategory && (SETTINGS_CATEGORIES as string[]).includes(requestedCategory)
+    requestedCategory && (settingsCategories as string[]).includes(requestedCategory)
       ? (requestedCategory as SettingsCategory)
       : null;
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>(validCategory ?? "general");

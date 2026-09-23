@@ -9,9 +9,9 @@ vi.mock("../lib/demoBuild", () => ({ isDemoBuild: vi.fn(() => false) }));
 import { isDemoBuild } from "../lib/demoBuild";
 import { SettingsPage } from "../pages/SettingsPage";
 
-function renderPage() {
+function renderPage(initialEntries?: string[]) {
   const qc = new QueryClient();
-  return render(<QueryClientProvider client={qc}><MemoryRouter><SettingsPage /></MemoryRouter></QueryClientProvider>);
+  return render(<QueryClientProvider client={qc}><MemoryRouter initialEntries={initialEntries}><SettingsPage /></MemoryRouter></QueryClientProvider>);
 }
 
 beforeEach(() => {
@@ -31,5 +31,11 @@ describe("Settings › Demo data category", () => {
     vi.mocked(isDemoBuild).mockReturnValue(true);
     renderPage();
     expect(screen.getByRole("button", { name: /demo data/i })).toBeInTheDocument();
+  });
+
+  it("falls back to the General card, not an empty pane, when ?category=demo_data is requested in the real build", () => {
+    vi.mocked(isDemoBuild).mockReturnValue(false);
+    renderPage(["/settings?category=demo_data"]);
+    expect(screen.getByRole("heading", { name: /general/i })).toBeInTheDocument();
   });
 });
