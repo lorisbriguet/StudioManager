@@ -1,0 +1,28 @@
+{
+  "productName": "StudioManager Demo",
+  "identifier": "ch.studiomanager.demo",
+  "app": {
+    "windows": [
+      {
+        "title": "StudioManager Demo",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/lorisbriguet/StudioManager/releases/latest/download/demo-latest.json"
+      ]
+    }
+  },
+  "bundle": {
+    "createUpdaterArtifacts": false,
+    "targets": ["app", "dmg"]
+  }
+}
