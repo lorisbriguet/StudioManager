@@ -75,9 +75,9 @@ Everything lives in one folder:
 ~/Library/Application Support/ch.studiomanager.app/
 ```
 
-It holds the database (`studiomanager.db`), generated invoice PDFs, and expense receipts. It survives app updates.
+It holds `organisations.json` (the list of your organisations) and one `orgs/<id>/` folder per organisation. Each organisation folder has its own database (`studiomanager.db`), generated invoice PDFs (`invoices/`), and expense receipts (`receipts/`). It survives app updates.
 
-- **Backups**: Settings → Backup exports everything (CSV plus files) to a folder of your choice, on a schedule if you want.
+- **Backups**: Settings → Backup exports everything (CSV plus files) to a folder of your choice, on a schedule if you want. Each organisation backs up separately — backup folders are named `backup-<organisation id>-<timestamp>`.
 - **Start over**: quit the app and delete that folder. The next launch creates a fresh database.
 - **Uninstall**: drag the app to the Trash and delete the folder above.
 

@@ -201,7 +201,7 @@ All your data is stored locally at:
 ~/Library/Application Support/ch.studiomanager.app/
 ```
 
-This includes your database (`studiomanager.db`), invoice PDFs, and expense receipts. This folder persists across app updates.
+That folder holds `organisations.json` (the list of your organisations) and one `orgs/<id>/` folder per organisation. Each organisation folder has its own database (`studiomanager.db`), invoice PDFs (`invoices/`), and expense receipts (`receipts/`). This folder persists across app updates.
 
 ---
 
