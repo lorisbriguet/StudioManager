@@ -15,7 +15,7 @@ vi.mock("../db/seeds/user-guide", () => ({
   seedUserGuide: vi.fn(async () => {}),
 }));
 import { seedUserGuide } from "../db/seeds/user-guide";
-import { PERSONA_IDS } from "../db/seeds/personas";
+import { PERSONA_IDS, PERSONAS } from "../db/seeds/personas";
 
 const DATA_SEEDS = import.meta.glob<string>("../db/seeds/personas/*/data.sql", { query: "?raw", import: "default", eager: true });
 const CONFIG_SEEDS = import.meta.glob<string>("../db/seeds/personas/*/config.sql", { query: "?raw", import: "default", eager: true });
@@ -471,6 +471,45 @@ for (const [path, sql] of Object.entries(CONFIG_SEEDS)) {
     });
   });
 }
+
+describe("persona music — the grants story", () => {
+  const sql = DATA_SEEDS["../db/seeds/personas/music/data.sql"];
+  it("exists", () => expect(sql).toBeDefined());
+  const statements = splitSeedStatements(sql ?? "");
+  const inserts = parseInserts(statements);
+  const rowsOf = (table: string): Row[] => inserts.filter((i) => i.table === table).flatMap((i) => i.rows);
+
+  it("logs at least four grants from distinct public funders", () => {
+    const grants = rowsOf("income").filter((r) => r.category === "grant");
+    expect(grants.length).toBeGreaterThanOrEqual(4);
+    expect(new Set(grants.map((r) => r.source)).size).toBeGreaterThanOrEqual(4);
+    for (const g of grants) expect(String(g.notes).length, `grant ${g.reference} has no note`).toBeGreaterThan(10);
+  });
+
+  it("has income spread over the year and other income kinds too", () => {
+    const income = rowsOf("income");
+    expect(income.length).toBeGreaterThanOrEqual(8);
+    const kinds = new Set(income.map((r) => r.category));
+    expect(kinds.has("other")).toBe(true);
+    expect(kinds.has("side_income")).toBe(true);
+  });
+
+  it("bills venues for concerts and the school for workshops", () => {
+    expect(rowsOf("clients").length).toBeGreaterThanOrEqual(6);
+    expect(rowsOf("invoices").length).toBeGreaterThanOrEqual(12);
+    expect(rowsOf("quotes").length).toBeGreaterThanOrEqual(4);
+    expect(rowsOf("expenses").length).toBeGreaterThanOrEqual(40);
+    expect(rowsOf("tasks").length).toBeGreaterThanOrEqual(35);
+    expect(rowsOf("time_entries").length).toBeGreaterThanOrEqual(50);
+    expect(rowsOf("wiki_articles").length).toBeGreaterThanOrEqual(3);
+    expect(rowsOf("project_tables").length).toBeGreaterThanOrEqual(1);
+    expect(rowsOf("recurring_invoice_templates").length).toBe(1);
+  });
+
+  it("turns the Income tab on", () => {
+    expect(PERSONAS.music.prefs.showIncome).toBe(true);
+  });
+});
 
 describe("seedPresentationDb loader", () => {
   beforeEach(() => {

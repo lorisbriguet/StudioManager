@@ -2,7 +2,7 @@ import type Database from "@tauri-apps/plugin-sql";
 import { splitSeedStatements } from "../splitSql";
 import { seedUserGuide } from "../user-guide";
 
-export type PersonaId = "designer";
+export type PersonaId = "designer" | "music";
 
 export interface Persona {
   id: PersonaId;
@@ -24,6 +24,13 @@ export const PERSONAS: Record<PersonaId, Persona> = {
     prefs: { showIncome: false, showTasksPage: true },
     config: () => raw(import("./designer/config.sql?raw")),
     data: () => raw(import("./designer/data.sql?raw")),
+  },
+  music: {
+    id: "music",
+    labelKey: "persona_music",
+    prefs: { showIncome: true, showTasksPage: true },
+    config: () => raw(import("./music/config.sql?raw")),
+    data: () => raw(import("./music/data.sql?raw")),
   },
 };
 
