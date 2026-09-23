@@ -38,7 +38,9 @@ find "$WORK/invoices" "$WORK/receipts" -type f -exec md5 -q {} + | sort > "$WORK
 reroot() {
   local table="$1" column="$2" dir="$3"
   local src_prefix="$SRC/$dir/" work_prefix="$WORK/$dir/"
-  sqlite3 "$WORK/studiomanager.db" "UPDATE $table SET $column = '$work_prefix' || substr($column, length('$src_prefix') + 1) WHERE substr($column, 1, length('$src_prefix')) = '$src_prefix'; SELECT changes();"
+  # Double any literal single quotes before splicing into the SQL string.
+  local src_sql="${src_prefix//\'/\'\'}" work_sql="${work_prefix//\'/\'\'}"
+  sqlite3 "$WORK/studiomanager.db" "UPDATE $table SET $column = '$work_sql' || substr($column, length('$src_sql') + 1) WHERE substr($column, 1, length('$src_sql')) = '$src_sql'; SELECT changes();"
 }
 REROOT_EXPENSES=$(reroot expenses receipt_path receipts)
 REROOT_INVOICES=$(reroot invoices pdf_path invoices)
@@ -51,10 +53,24 @@ REROOT_TOTAL=$((REROOT_EXPENSES + REROOT_INVOICES))
 ORG=$(ls "$WORK/orgs")
 echo "== after (org $ORG) =="; before_counts "$WORK/orgs/$ORG/studiomanager.db" | tee "$WORK/after.txt"
 find "$WORK/orgs/$ORG/invoices" "$WORK/orgs/$ORG/receipts" -type f -exec md5 -q {} + | sort > "$WORK/files-after.md5"
-diff "$WORK/before.txt" "$WORK/after.txt" && echo "row counts identical"
-diff "$WORK/files-before.md5" "$WORK/files-after.md5" && echo "file checksums identical"
 
 FAILED=0
+
+if diff "$WORK/before.txt" "$WORK/after.txt" > "$WORK/counts.diff"; then
+  echo "PASS: row counts identical"
+else
+  echo "FAIL: row counts differ:"
+  cat "$WORK/counts.diff"
+  FAILED=1
+fi
+
+if diff "$WORK/files-before.md5" "$WORK/files-after.md5" > "$WORK/checksums.diff"; then
+  echo "PASS: file checksums identical"
+else
+  echo "FAIL: file checksums differ:"
+  cat "$WORK/checksums.diff"
+  FAILED=1
+fi
 
 # Check A: nothing should still be sitting at the pre-move, top-level
 # scratch paths after the upgrade — everything re-rooted onto $WORK should
