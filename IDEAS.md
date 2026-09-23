@@ -71,6 +71,14 @@
 - [x] Per-organisation preferences, namespaced storage keys, and separate backups (`backup-<organisation id>-<timestamp>`)
 - [x] One-time upgrade from the legacy single-database layout to `orgs/<id>/`, with full rollback on failure and a rehearsal script (`scripts/rehearse-org-upgrade.sh`) to dry-run it against real data before release
 
+### Manual pass on real data (2026-09-23, dev build driven by UI automation)
+All 12 checklist items pass after three fixes found by the pass:
+- [x] Seeding a new organisation from the current one failed on runtime-added columns (`business_profile` 18 vs 19 columns) — settings tables are now recreated from the source schema (`seed.rs`)
+- [x] Native window title stayed "StudioManager" — `document.title` is not mirrored by Tauri v2; `useWindowTitle` now calls `setTitle` (needs `core:window:allow-set-title`)
+- [x] Choosing any backup folder said "not writable" (pre-existing since V1.4.0): the probe file started with a dot and the fs scope rejects dotfiles on Unix — probe renamed `sm-write-test-<ts>.tmp`
+- Verified: upgrade of the live folder (rows, files and checksums identical; 175 paths rewritten), rename, create-with-seeding, switch (title, dashboard, finances, per-org sidebar prefs), timer entry logged in the source org only, unsaved-changes prompt with Stay, test and presentation modes exit on switch and keep their files inside the org folder, per-org backups in one parent (`backup-<id>-…`) with isolated restore lists, per-org calendar name/toggle, delete to Trash, relaunch on the last active org with the upgrade snapshot removed
+- Follow-ups (parked): after a switch the destination's restored active tab is relabelled Dashboard (navigate to the restored tab instead); `openDb` should use `resetDb` to force a reopen; default calendar name could include the organisation name; legacy backup folders sort after org-prefixed ones in the restore list; `studiomanager_snapshot.db` stays in the org folder after exiting test mode (pre-existing)
+
 ## Audit — round 3 (2026-08-31)
 
 Three-lens audit (correctness/data, security/platform, UI/a11y/perf/tests) after v1.15.0. Clean bill: SQL parameterization, osascript runner, wiki allowlist, updater chain, capabilities scope, date/money handling, design-system compliance (0 violations), modal/menu focus management.
