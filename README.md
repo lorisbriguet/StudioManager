@@ -134,6 +134,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - **19 Accent Colors** — customize the app appearance
 - **Smooth Animations** — page transitions, card fade-ins, counter animations (with reduce-motion support)
 - **Presentation Mode** — demo environment with seeded data for client presentations
+- **Organisations** — run several fully separate businesses in one install (own database, documents, bank details, preferences and backups per organisation); switch with Cmd+Shift+O
 - **Batch Operations** — multi-select with bulk actions on all list pages
 - **Saved Filters** — save and quick-apply filter configurations per page
 - **Client Activity Timeline** — chronological feed of invoices, quotes, and projects
