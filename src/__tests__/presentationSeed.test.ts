@@ -7,7 +7,6 @@
  * sets, and the internal invariants the app maintains at runtime.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import seedSql from "../db/seeds/presentation.sql?raw";
 import { splitSeedStatements } from "../db/seeds/splitSql";
 import { seedPresentationDb } from "../db";
 import { executedStatements, clearExecutedStatements } from "../__mocks__/tauri-sql";
@@ -16,6 +15,11 @@ vi.mock("../db/seeds/user-guide", () => ({
   seedUserGuide: vi.fn(async () => {}),
 }));
 import { seedUserGuide } from "../db/seeds/user-guide";
+import { PERSONA_IDS } from "../db/seeds/personas";
+
+const DATA_SEEDS = import.meta.glob<string>("../db/seeds/personas/*/data.sql", { query: "?raw", import: "default", eager: true });
+const CONFIG_SEEDS = import.meta.glob<string>("../db/seeds/personas/*/config.sql", { query: "?raw", import: "default", eager: true });
+const personaOf = (path: string) => path.match(/personas\/([^/]+)\//)![1];
 
 // ── Schema snapshot (mirrors PRAGMA table_info on the production DB) ──────
 
@@ -157,272 +161,316 @@ function parseInserts(statements: string[]): Insert[] {
   return inserts;
 }
 
-const statements = splitSeedStatements(seedSql);
-const inserts = parseInserts(statements);
-const rowsOf = (table: string): Row[] => inserts.filter((i) => i.table === table).flatMap((i) => i.rows);
-const idsOf = (table: string, col = "id"): Set<Value> => new Set(rowsOf(table).map((r) => r[col]));
+for (const [path, seedSql] of Object.entries(DATA_SEEDS)) {
+  describe(`persona ${personaOf(path)} — data.sql`, () => {
+    const statements = splitSeedStatements(seedSql);
+    const inserts = parseInserts(statements);
+    const rowsOf = (table: string): Row[] => inserts.filter((i) => i.table === table).flatMap((i) => i.rows);
+    const idsOf = (table: string, col = "id"): Set<Value> => new Set(rowsOf(table).map((r) => r[col]));
 
-// ── Tests ────────────────────────────────────────────────────────────────
+    // ── Tests ────────────────────────────────────────────────────────────────
 
-describe("presentation seed — structure", () => {
-  it("contains only PRAGMA, DELETE, INSERT and UPDATE statements", () => {
-    for (const s of statements) {
-      expect(s, s.slice(0, 60)).toMatch(/^(PRAGMA|DELETE FROM|INSERT INTO|UPDATE)\b/i);
-    }
+    describe("presentation seed — structure", () => {
+      it("contains only PRAGMA, DELETE, INSERT and UPDATE statements", () => {
+        for (const s of statements) {
+          expect(s, s.slice(0, 60)).toMatch(/^(PRAGMA|DELETE FROM|INSERT INTO|UPDATE)\b/i);
+        }
+      });
+
+      it("only inserts into known columns", () => {
+        for (const ins of inserts) {
+          expect(SCHEMA, `unknown table ${ins.table}`).toHaveProperty(ins.table);
+          for (const col of ins.columns) {
+            expect(SCHEMA[ins.table], `${ins.table}.${col} does not exist`).toContain(col);
+          }
+        }
+      });
+
+      it("clears every personal-data table before inserting", () => {
+        const cleared = statements
+          .map((s) => s.match(/^DELETE FROM (\w+)/i)?.[1])
+          .filter((t): t is string => !!t);
+        for (const t of MUST_CLEAR) expect(cleared, `${t} is not cleared`).toContain(t);
+        const firstInsert = statements.findIndex((s) => /^INSERT/i.test(s));
+        const lastDelete = statements.map((s) => /^DELETE/i.test(s)).lastIndexOf(true);
+        expect(lastDelete).toBeLessThan(firstInsert);
+      });
+
+      it("resets autoincrement counters so demo ids are stable", () => {
+        expect(statements.some((s) => /^DELETE FROM sqlite_sequence/i.test(s))).toBe(true);
+      });
+
+      it("never touches user configuration tables", () => {
+        for (const s of statements) {
+          for (const t of MUST_KEEP) {
+            expect(s, `statement touches ${t}`).not.toMatch(new RegExp(`\\b(DELETE FROM|INSERT INTO)\\s+${t}\\b`, "i"));
+          }
+        }
+      });
+    });
+
+    describe("presentation seed — values match the current app", () => {
+      it("uses only current enum values", () => {
+        for (const [table, cols] of Object.entries(ENUMS)) {
+          for (const row of rowsOf(table)) {
+            for (const [col, allowed] of Object.entries(cols)) {
+              if (!(col in row)) continue;
+              expect(allowed, `${table}.${col} = ${JSON.stringify(row[col])}`).toContain(row[col]);
+            }
+          }
+        }
+      });
+
+      it("uses the reference formats the generators produce", () => {
+        for (const [table, re] of Object.entries(REFERENCE_FORMATS)) {
+          const rows = rowsOf(table);
+          expect(rows.length, `${table} has no rows`).toBeGreaterThan(0);
+          for (const row of rows) expect(String(row.reference), `${table}.reference`).toMatch(re);
+        }
+      });
+
+      it("renumbers references per year from each row's own date, like the generators do", () => {
+        const updates = statements.filter((s) => /^UPDATE/i.test(s));
+        // SQLite's strftime has no two-digit-year format, so short years must use substr.
+        for (const [table, yearExpr] of [
+          ["invoices", "strftime('%Y', invoice_date)"],
+          ["quotes", "strftime('%Y', quote_date)"],
+          ["expenses", "substr(strftime('%Y', invoice_date), 3, 2)"],
+          ["income", "substr(strftime('%Y', date), 3, 2)"],
+        ]) {
+          const u = updates.find((s) => new RegExp(`^UPDATE ${table}\\s+SET reference`, "i").test(s));
+          expect(u, `no reference renumbering for ${table}`).toBeDefined();
+          expect(u).toContain(yearExpr);
+          expect(u, `${table} uses unsupported %y`).not.toContain("%y");
+          expect(u).toMatch(/printf\('%03d'/);
+        }
+        // Drafts keep their DRAFT- placeholder
+        const inv = updates.find((s) => /^UPDATE invoices\s+SET reference/i.test(s))!;
+        expect(inv).toMatch(/WHERE reference NOT LIKE 'DRAFT-%'/);
+      });
+
+      it("expresses every date relative to today, never as a literal", () => {
+        expect(seedSql).not.toMatch(/'\d{4}-\d{2}-\d{2}/);
+        for (const [table, cols] of Object.entries(DATE_COLUMNS)) {
+          for (const row of rowsOf(table)) {
+            for (const col of cols) {
+              const v = row[col];
+              if (v === undefined || v === null) continue;
+              expect(isExpr(v) && /date\('now'/.test(v.expr), `${table}.${col} = ${JSON.stringify(v)}`).toBe(true);
+            }
+          }
+        }
+      });
+
+      it("links invoices and quotes to an activity entity via subquery", () => {
+        for (const table of ["invoices", "quotes"]) {
+          for (const row of rowsOf(table)) {
+            const v = row.activity_id;
+            expect(isExpr(v) && /SELECT id FROM activities/i.test(v.expr), `${table} ${row.reference}`).toBe(true);
+          }
+        }
+      });
+    });
+
+    describe("presentation seed — referential integrity", () => {
+      const fk = (child: string, col: string, parent: string, parentCol = "id", nullable = false) => {
+        it(`${child}.${col} points at a seeded ${parent}`, () => {
+          const parents = idsOf(parent, parentCol);
+          for (const row of rowsOf(child)) {
+            const v = row[col];
+            if (nullable && (v === null || v === undefined)) continue;
+            expect(parents, `${child}.${col} = ${JSON.stringify(v)}`).toContain(v);
+          }
+        });
+      };
+      fk("client_contacts", "client_id", "clients");
+      fk("client_addresses", "client_id", "clients");
+      fk("projects", "client_id", "clients");
+      fk("tasks", "project_id", "projects");
+      fk("subtasks", "task_id", "tasks");
+      fk("invoices", "client_id", "clients");
+      fk("invoices", "project_id", "projects", "id", true);
+      fk("invoice_line_items", "invoice_id", "invoices");
+      fk("quotes", "client_id", "clients");
+      fk("quotes", "project_id", "projects", "id", true);
+      fk("quotes", "converted_to_project_id", "projects", "id", true);
+      fk("quote_line_items", "quote_id", "quotes");
+      fk("resource_tags", "resource_id", "resources");
+      fk("resource_projects", "resource_id", "resources");
+      fk("resource_projects", "project_id", "projects");
+      fk("recurring_invoice_templates", "base_invoice_id", "invoices");
+      fk("recurring_invoice_templates", "client_id", "clients");
+      fk("time_entries", "project_id", "projects");
+      fk("time_entries", "task_id", "tasks", "id", true);
+      fk("project_tables", "project_id", "projects");
+      fk("project_table_rows", "table_id", "project_tables");
+      fk("wiki_articles", "folder_id", "wiki_folders", "id", true);
+      fk("wiki_articles", "project_id", "projects", "id", true);
+      fk("wiki_article_tags", "article_id", "wiki_articles");
+
+      it("time entries belong to the same project as their task", () => {
+        const taskProject = new Map(rowsOf("tasks").map((t) => [t.id, t.project_id]));
+        for (const te of rowsOf("time_entries")) {
+          if (te.task_id === null) continue;
+          expect(taskProject.get(te.task_id), `time entry on task ${te.task_id}`).toBe(te.project_id);
+        }
+      });
+
+      it("invoices bill the client that owns the linked project", () => {
+        const projectClient = new Map(rowsOf("projects").map((p) => [p.id, p.client_id]));
+        for (const inv of rowsOf("invoices")) {
+          if (inv.project_id === null) continue;
+          expect(projectClient.get(inv.project_id), `invoice ${inv.reference}`).toBe(inv.client_id);
+        }
+      });
+    });
+
+    describe("presentation seed — runtime invariants the app maintains", () => {
+      const round2 = (n: number) => Math.round(n * 100) / 100;
+
+      const lineItemsConsistent = (docTable: string, itemTable: string, fkCol: string) => {
+        it(`${itemTable} amounts and ${docTable} totals add up`, () => {
+          const items = rowsOf(itemTable);
+          for (const it of items) {
+            expect(it.amount, `${itemTable} "${it.designation}"`).toBe(round2(Number(it.quantity) * Number(it.rate)));
+          }
+          for (const doc of rowsOf(docTable)) {
+            const sum = round2(items.filter((i) => i[fkCol] === doc.id).reduce((a, i) => a + Number(i.amount), 0));
+            expect(doc.subtotal, `${docTable} ${doc.reference} subtotal`).toBe(sum);
+            const expectedTotal = doc.discount_applied === 1 ? round2(sum * (1 - Number(doc.discount_rate))) : sum;
+            expect(doc.total, `${docTable} ${doc.reference} total`).toBe(expectedTotal);
+          }
+        });
+      };
+      lineItemsConsistent("invoices", "invoice_line_items", "invoice_id");
+      lineItemsConsistent("quotes", "quote_line_items", "quote_id");
+
+      it("CHF invoices carry chf_equivalent equal to total", () => {
+        for (const inv of rowsOf("invoices")) {
+          expect(inv.chf_equivalent, `invoice ${inv.reference}`).toBe(inv.total);
+          expect(inv.exchange_rate).toBe(1);
+        }
+      });
+
+      it("discounted invoices go to clients flagged for the cultural discount", () => {
+        const discountClients = new Set(rowsOf("clients").filter((c) => c.has_discount === 1).map((c) => c.id));
+        expect(discountClients.size).toBeGreaterThan(0);
+        for (const inv of rowsOf("invoices")) {
+          if (inv.discount_applied === 1) expect(discountClients, `invoice ${inv.reference}`).toContain(inv.client_id);
+        }
+      });
+
+      it("task tracked_minutes equals the sum of its time entries", () => {
+        const sums = new Map<Value, number>();
+        for (const te of rowsOf("time_entries")) {
+          if (te.task_id === null) continue;
+          sums.set(te.task_id, (sums.get(te.task_id) ?? 0) + Number(te.duration_minutes));
+        }
+        for (const t of rowsOf("tasks")) {
+          expect(t.tracked_minutes ?? 0, `task ${t.id} "${t.title}"`).toBe(sums.get(t.id) ?? 0);
+        }
+      });
+
+      it("paid invoices have a paid_date and unpaid ones do not", () => {
+        for (const inv of rowsOf("invoices")) {
+          if (inv.status === "paid") expect(inv.paid_date, `invoice ${inv.reference}`).not.toBeNull();
+          else expect(inv.paid_date ?? null, `invoice ${inv.reference}`).toBeNull();
+        }
+      });
+
+      it("JSON columns hold valid JSON", () => {
+        const jsonCols: [string, string][] = [
+          ["projects", "layout_config"], ["projects", "workload_columns"],
+          ["project_tables", "column_config"], ["project_table_rows", "data"],
+          ["tasks", "workload_cells"],
+        ];
+        for (const [table, col] of jsonCols) {
+          for (const row of rowsOf(table)) {
+            const v = row[col];
+            if (v === undefined || v === null) continue;
+            expect(() => JSON.parse(String(v)), `${table}.${col}`).not.toThrow();
+          }
+        }
+      });
+    });
+
+    describe("presentation seed — demo coverage", () => {
+      it("shows a believable mix of document and task states", () => {
+        const invStatuses = new Set(rowsOf("invoices").map((i) => i.status));
+        for (const s of ["paid", "sent", "overdue", "draft"]) expect(invStatuses).toContain(s);
+        const quoteStatuses = new Set(rowsOf("quotes").map((q) => q.status));
+        for (const s of ["accepted", "sent", "rejected", "draft"]) expect(quoteStatuses).toContain(s);
+        const projStatuses = new Set(rowsOf("projects").map((p) => p.status));
+        for (const s of ["active", "completed", "on_hold"]) expect(projStatuses).toContain(s);
+        expect(rowsOf("tasks").some((t) => t.status === "todo")).toBe(true);
+        expect(rowsOf("tasks").some((t) => t.status === "done")).toBe(true);
+      });
+
+      it("seeds the features added since v1.6", () => {
+        expect(rowsOf("time_entries").length).toBeGreaterThanOrEqual(30);
+        expect(rowsOf("project_tables").length).toBeGreaterThanOrEqual(1);
+        expect(rowsOf("project_table_rows").length).toBeGreaterThanOrEqual(3);
+        expect(rowsOf("wiki_articles").filter((a) => a.project_id !== null).length).toBeGreaterThanOrEqual(3);
+        expect(rowsOf("income").length).toBeGreaterThanOrEqual(3);
+        expect(rowsOf("projects").filter((p) => p.layout_config !== null && p.layout_config !== undefined).length).toBeGreaterThanOrEqual(2);
+        expect(rowsOf("recurring_invoice_templates").length).toBeGreaterThanOrEqual(1);
+      });
+
+      it("covers roughly a year of invoices and expenses for the finance charts", () => {
+        const monthsBack = (rows: Row[], col: string) =>
+          rows.map((r) => Number((r[col] as Expr).expr.match(/-(\d+) months?/)?.[1] ?? 0));
+        expect(Math.max(...monthsBack(rowsOf("invoices"), "invoice_date"))).toBeGreaterThanOrEqual(10);
+        expect(Math.max(...monthsBack(rowsOf("expenses"), "invoice_date"))).toBeGreaterThanOrEqual(10);
+        expect(rowsOf("expenses").length).toBeGreaterThanOrEqual(30);
+      });
+
+      it("uses every expense category so the P&L breakdown is populated", () => {
+        const used = new Set(rowsOf("expenses").map((e) => e.category_code));
+        for (const c of ["AM", "FA", "FD", "FR", "LO", "CS"]) expect(used).toContain(c);
+      });
+    });
   });
+}
 
-  it("only inserts into known columns", () => {
-    for (const ins of inserts) {
-      expect(SCHEMA, `unknown table ${ins.table}`).toHaveProperty(ins.table);
-      for (const col of ins.columns) {
-        expect(SCHEMA[ins.table], `${ins.table}.${col} does not exist`).toContain(col);
-      }
-    }
-  });
-
-  it("clears every personal-data table before inserting", () => {
-    const cleared = statements
-      .map((s) => s.match(/^DELETE FROM (\w+)/i)?.[1])
-      .filter((t): t is string => !!t);
-    for (const t of MUST_CLEAR) expect(cleared, `${t} is not cleared`).toContain(t);
-    const firstInsert = statements.findIndex((s) => /^INSERT/i.test(s));
-    const lastDelete = statements.map((s) => /^DELETE/i.test(s)).lastIndexOf(true);
-    expect(lastDelete).toBeLessThan(firstInsert);
-  });
-
-  it("resets autoincrement counters so demo ids are stable", () => {
-    expect(statements.some((s) => /^DELETE FROM sqlite_sequence/i.test(s))).toBe(true);
-  });
-
-  it("never touches user configuration tables", () => {
-    for (const s of statements) {
-      for (const t of MUST_KEEP) {
-        expect(s, `statement touches ${t}`).not.toMatch(new RegExp(`\\b(DELETE FROM|INSERT INTO)\\s+${t}\\b`, "i"));
-      }
-    }
+describe("persona files match the registry", () => {
+  it("every registered persona has both layers and nothing is orphaned", () => {
+    const dataIds = Object.keys(DATA_SEEDS).map(personaOf).sort();
+    const configIds = Object.keys(CONFIG_SEEDS).map(personaOf).sort();
+    expect(dataIds).toEqual([...PERSONA_IDS].sort());
+    expect(configIds).toEqual([...PERSONA_IDS].sort());
   });
 });
 
-describe("presentation seed — values match the current app", () => {
-  it("uses only current enum values", () => {
-    for (const [table, cols] of Object.entries(ENUMS)) {
-      for (const row of rowsOf(table)) {
-        for (const [col, allowed] of Object.entries(cols)) {
-          if (!(col in row)) continue;
-          expect(allowed, `${table}.${col} = ${JSON.stringify(row[col])}`).toContain(row[col]);
-        }
-      }
-    }
-  });
-
-  it("uses the reference formats the generators produce", () => {
-    for (const [table, re] of Object.entries(REFERENCE_FORMATS)) {
-      const rows = rowsOf(table);
-      expect(rows.length, `${table} has no rows`).toBeGreaterThan(0);
-      for (const row of rows) expect(String(row.reference), `${table}.reference`).toMatch(re);
-    }
-  });
-
-  it("renumbers references per year from each row's own date, like the generators do", () => {
-    const updates = statements.filter((s) => /^UPDATE/i.test(s));
-    // SQLite's strftime has no two-digit-year format, so short years must use substr.
-    for (const [table, yearExpr] of [
-      ["invoices", "strftime('%Y', invoice_date)"],
-      ["quotes", "strftime('%Y', quote_date)"],
-      ["expenses", "substr(strftime('%Y', invoice_date), 3, 2)"],
-      ["income", "substr(strftime('%Y', date), 3, 2)"],
-    ]) {
-      const u = updates.find((s) => new RegExp(`^UPDATE ${table}\\s+SET reference`, "i").test(s));
-      expect(u, `no reference renumbering for ${table}`).toBeDefined();
-      expect(u).toContain(yearExpr);
-      expect(u, `${table} uses unsupported %y`).not.toContain("%y");
-      expect(u).toMatch(/printf\('%03d'/);
-    }
-    // Drafts keep their DRAFT- placeholder
-    const inv = updates.find((s) => /^UPDATE invoices\s+SET reference/i.test(s))!;
-    expect(inv).toMatch(/WHERE reference NOT LIKE 'DRAFT-%'/);
-  });
-
-  it("expresses every date relative to today, never as a literal", () => {
-    expect(seedSql).not.toMatch(/'\d{4}-\d{2}-\d{2}/);
-    for (const [table, cols] of Object.entries(DATE_COLUMNS)) {
-      for (const row of rowsOf(table)) {
-        for (const col of cols) {
-          const v = row[col];
-          if (v === undefined || v === null) continue;
-          expect(isExpr(v) && /date\('now'/.test(v.expr), `${table}.${col} = ${JSON.stringify(v)}`).toBe(true);
-        }
-      }
-    }
-  });
-
-  it("links invoices and quotes to an activity entity via subquery", () => {
-    for (const table of ["invoices", "quotes"]) {
-      for (const row of rowsOf(table)) {
-        const v = row.activity_id;
-        expect(isExpr(v) && /SELECT id FROM activities/i.test(v.expr), `${table} ${row.reference}`).toBe(true);
-      }
-    }
-  });
-});
-
-describe("presentation seed — referential integrity", () => {
-  const fk = (child: string, col: string, parent: string, parentCol = "id", nullable = false) => {
-    it(`${child}.${col} points at a seeded ${parent}`, () => {
-      const parents = idsOf(parent, parentCol);
-      for (const row of rowsOf(child)) {
-        const v = row[col];
-        if (nullable && (v === null || v === undefined)) continue;
-        expect(parents, `${child}.${col} = ${JSON.stringify(v)}`).toContain(v);
+for (const [path, sql] of Object.entries(CONFIG_SEEDS)) {
+  describe(`persona ${personaOf(path)} — config.sql`, () => {
+    const statements = splitSeedStatements(sql);
+    it("contains only PRAGMA, UPDATE, DELETE and INSERT statements", () => {
+      for (const s of statements) expect(s, s.slice(0, 40)).toMatch(/^(PRAGMA|UPDATE|DELETE FROM|INSERT INTO)\b/i);
+    });
+    it("touches only business_profile and activities", () => {
+      for (const s of statements) {
+        const m = s.match(/^(?:UPDATE|DELETE FROM|INSERT INTO)\s+(\w+)/i);
+        if (m) expect(["business_profile", "activities"], s.slice(0, 40)).toContain(m[1]);
       }
     });
-  };
-  fk("client_contacts", "client_id", "clients");
-  fk("client_addresses", "client_id", "clients");
-  fk("projects", "client_id", "clients");
-  fk("tasks", "project_id", "projects");
-  fk("subtasks", "task_id", "tasks");
-  fk("invoices", "client_id", "clients");
-  fk("invoices", "project_id", "projects", "id", true);
-  fk("invoice_line_items", "invoice_id", "invoices");
-  fk("quotes", "client_id", "clients");
-  fk("quotes", "project_id", "projects", "id", true);
-  fk("quotes", "converted_to_project_id", "projects", "id", true);
-  fk("quote_line_items", "quote_id", "quotes");
-  fk("resource_tags", "resource_id", "resources");
-  fk("resource_projects", "resource_id", "resources");
-  fk("resource_projects", "project_id", "projects");
-  fk("recurring_invoice_templates", "base_invoice_id", "invoices");
-  fk("recurring_invoice_templates", "client_id", "clients");
-  fk("time_entries", "project_id", "projects");
-  fk("time_entries", "task_id", "tasks", "id", true);
-  fk("project_tables", "project_id", "projects");
-  fk("project_table_rows", "table_id", "project_tables");
-  fk("wiki_articles", "folder_id", "wiki_folders", "id", true);
-  fk("wiki_articles", "project_id", "projects", "id", true);
-  fk("wiki_article_tags", "article_id", "wiki_articles");
-
-  it("time entries belong to the same project as their task", () => {
-    const taskProject = new Map(rowsOf("tasks").map((t) => [t.id, t.project_id]));
-    for (const te of rowsOf("time_entries")) {
-      if (te.task_id === null) continue;
-      expect(taskProject.get(te.task_id), `time entry on task ${te.task_id}`).toBe(te.project_id);
-    }
-  });
-
-  it("invoices bill the client that owns the linked project", () => {
-    const projectClient = new Map(rowsOf("projects").map((p) => [p.id, p.client_id]));
-    for (const inv of rowsOf("invoices")) {
-      if (inv.project_id === null) continue;
-      expect(projectClient.get(inv.project_id), `invoice ${inv.reference}`).toBe(inv.client_id);
-    }
-  });
-});
-
-describe("presentation seed — runtime invariants the app maintains", () => {
-  const round2 = (n: number) => Math.round(n * 100) / 100;
-
-  const lineItemsConsistent = (docTable: string, itemTable: string, fkCol: string) => {
-    it(`${itemTable} amounts and ${docTable} totals add up`, () => {
-      const items = rowsOf(itemTable);
-      for (const it of items) {
-        expect(it.amount, `${itemTable} "${it.designation}"`).toBe(round2(Number(it.quantity) * Number(it.rate)));
-      }
-      for (const doc of rowsOf(docTable)) {
-        const sum = round2(items.filter((i) => i[fkCol] === doc.id).reduce((a, i) => a + Number(i.amount), 0));
-        expect(doc.subtotal, `${docTable} ${doc.reference} subtotal`).toBe(sum);
-        const expectedTotal = doc.discount_applied === 1 ? round2(sum * (1 - Number(doc.discount_rate))) : sum;
-        expect(doc.total, `${docTable} ${doc.reference} total`).toBe(expectedTotal);
-      }
+    it("updates the single business profile row", () => {
+      const updates = statements.filter((s) => /^UPDATE business_profile/i.test(s));
+      expect(updates).toHaveLength(1);
+      expect(updates[0]).toMatch(/WHERE id = 1$/);
+      expect(updates[0]).toMatch(/owner_name = '[^']+'/);
+      expect(updates[0]).toMatch(/iban = '[^']+'/);
     });
-  };
-  lineItemsConsistent("invoices", "invoice_line_items", "invoice_id");
-  lineItemsConsistent("quotes", "quote_line_items", "quote_id");
-
-  it("CHF invoices carry chf_equivalent equal to total", () => {
-    for (const inv of rowsOf("invoices")) {
-      expect(inv.chf_equivalent, `invoice ${inv.reference}`).toBe(inv.total);
-      expect(inv.exchange_rate).toBe(1);
-    }
+    it("replaces the activities with at least one", () => {
+      expect(statements.some((s) => /^DELETE FROM activities$/i.test(s))).toBe(true);
+      const ins = parseInserts(statements).filter((i) => i.table === "activities");
+      expect(ins.flatMap((i) => i.rows).length).toBeGreaterThan(0);
+      for (const i of ins) expect(i.columns).toEqual(["name_fr", "name_en", "sort_order"]);
+    });
+    it("never uses a literal date", () => {
+      expect(sql).not.toMatch(/'\d{4}-\d{2}-\d{2}/);
+    });
   });
-
-  it("discounted invoices go to clients flagged for the cultural discount", () => {
-    const discountClients = new Set(rowsOf("clients").filter((c) => c.has_discount === 1).map((c) => c.id));
-    expect(discountClients.size).toBeGreaterThan(0);
-    for (const inv of rowsOf("invoices")) {
-      if (inv.discount_applied === 1) expect(discountClients, `invoice ${inv.reference}`).toContain(inv.client_id);
-    }
-  });
-
-  it("task tracked_minutes equals the sum of its time entries", () => {
-    const sums = new Map<Value, number>();
-    for (const te of rowsOf("time_entries")) {
-      if (te.task_id === null) continue;
-      sums.set(te.task_id, (sums.get(te.task_id) ?? 0) + Number(te.duration_minutes));
-    }
-    for (const t of rowsOf("tasks")) {
-      expect(t.tracked_minutes ?? 0, `task ${t.id} "${t.title}"`).toBe(sums.get(t.id) ?? 0);
-    }
-  });
-
-  it("paid invoices have a paid_date and unpaid ones do not", () => {
-    for (const inv of rowsOf("invoices")) {
-      if (inv.status === "paid") expect(inv.paid_date, `invoice ${inv.reference}`).not.toBeNull();
-      else expect(inv.paid_date ?? null, `invoice ${inv.reference}`).toBeNull();
-    }
-  });
-
-  it("JSON columns hold valid JSON", () => {
-    const jsonCols: [string, string][] = [
-      ["projects", "layout_config"], ["projects", "workload_columns"],
-      ["project_tables", "column_config"], ["project_table_rows", "data"],
-      ["tasks", "workload_cells"],
-    ];
-    for (const [table, col] of jsonCols) {
-      for (const row of rowsOf(table)) {
-        const v = row[col];
-        if (v === undefined || v === null) continue;
-        expect(() => JSON.parse(String(v)), `${table}.${col}`).not.toThrow();
-      }
-    }
-  });
-});
-
-describe("presentation seed — demo coverage", () => {
-  it("shows a believable mix of document and task states", () => {
-    const invStatuses = new Set(rowsOf("invoices").map((i) => i.status));
-    for (const s of ["paid", "sent", "overdue", "draft"]) expect(invStatuses).toContain(s);
-    const quoteStatuses = new Set(rowsOf("quotes").map((q) => q.status));
-    for (const s of ["accepted", "sent", "rejected", "draft"]) expect(quoteStatuses).toContain(s);
-    const projStatuses = new Set(rowsOf("projects").map((p) => p.status));
-    for (const s of ["active", "completed", "on_hold"]) expect(projStatuses).toContain(s);
-    expect(rowsOf("tasks").some((t) => t.status === "todo")).toBe(true);
-    expect(rowsOf("tasks").some((t) => t.status === "done")).toBe(true);
-  });
-
-  it("seeds the features added since v1.6", () => {
-    expect(rowsOf("time_entries").length).toBeGreaterThanOrEqual(30);
-    expect(rowsOf("project_tables").length).toBeGreaterThanOrEqual(1);
-    expect(rowsOf("project_table_rows").length).toBeGreaterThanOrEqual(3);
-    expect(rowsOf("wiki_articles").filter((a) => a.project_id !== null).length).toBeGreaterThanOrEqual(3);
-    expect(rowsOf("income").length).toBeGreaterThanOrEqual(3);
-    expect(rowsOf("projects").filter((p) => p.layout_config !== null && p.layout_config !== undefined).length).toBeGreaterThanOrEqual(2);
-    expect(rowsOf("recurring_invoice_templates").length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("covers roughly a year of invoices and expenses for the finance charts", () => {
-    const monthsBack = (rows: Row[], col: string) =>
-      rows.map((r) => Number((r[col] as Expr).expr.match(/-(\d+) months?/)?.[1] ?? 0));
-    expect(Math.max(...monthsBack(rowsOf("invoices"), "invoice_date"))).toBeGreaterThanOrEqual(10);
-    expect(Math.max(...monthsBack(rowsOf("expenses"), "invoice_date"))).toBeGreaterThanOrEqual(10);
-    expect(rowsOf("expenses").length).toBeGreaterThanOrEqual(30);
-  });
-
-  it("uses every expense category so the P&L breakdown is populated", () => {
-    const used = new Set(rowsOf("expenses").map((e) => e.category_code));
-    for (const c of ["AM", "FA", "FD", "FR", "LO", "CS"]) expect(used).toContain(c);
-  });
-});
+}
 
 describe("seedPresentationDb loader", () => {
   beforeEach(() => {
@@ -433,7 +481,8 @@ describe("seedPresentationDb loader", () => {
   it("executes every seed statement and then restores the user guide", async () => {
     await seedPresentationDb();
     const executed = executedStatements.map((s) => s.sql.replace(/;$/, ""));
-    for (const s of statements) expect(executed).toContain(s);
+    const designerStatements = splitSeedStatements(DATA_SEEDS["../db/seeds/personas/designer/data.sql"]);
+    for (const s of designerStatements) expect(executed).toContain(s);
     expect(seedUserGuide).toHaveBeenCalledTimes(1);
   });
 });

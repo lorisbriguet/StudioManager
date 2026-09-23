@@ -4,7 +4,7 @@ import { logError } from "../lib/log";
 import { getLabels } from "../lib/notifyError";
 import { todayLocalISO } from "../utils/localDate";
 import { seedUserGuide } from "./seeds/user-guide";
-import { splitSeedStatements } from "./seeds/splitSql";
+import { seedPersona } from "./seeds/personas";
 import { useOrgStore } from "../stores/org-store";
 
 const SAFE_FIELD = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -120,14 +120,8 @@ export async function getDb(): Promise<Database> {
  */
 export async function seedPresentationDb(): Promise<void> {
   const db = await getDb();
-  // Import seed SQL as raw text (Vite raw import)
-  const seedSql = (await import("./seeds/presentation.sql?raw")).default;
-  for (const stmt of splitSeedStatements(seedSql)) {
-    await db.execute(stmt + ";");
-  }
-  // The seed wipes the wiki (it may hold personal notes); put the built-in
-  // user guide back so the demo Wiki page is not empty.
-  await seedUserGuide(db);
+  // Presentation mode keeps the owner's configuration: data layer only.
+  await seedPersona(db, "designer", { withConfig: false });
 }
 
 export async function switchDb(dbName: string): Promise<void> {
