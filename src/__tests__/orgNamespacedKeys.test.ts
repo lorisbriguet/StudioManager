@@ -16,11 +16,14 @@ describe("organisation-namespaced localStorage", () => {
     expect(useTabStore.getState().tabs.filter((t) => t.path === "/clients")).toHaveLength(0);
   });
 
-  it("closeAllTabs leaves only the dashboard tab", () => {
+  it("closeAllTabs leaves only the dashboard tab and clears the reopen stack", () => {
     useTabStore.getState().reloadForOrg();
-    useTabStore.getState().openTab("/clients", "Clients");
+    const id = useTabStore.getState().openTab("/clients", "Clients");
+    useTabStore.getState().closeTab(id);
     useTabStore.getState().closeAllTabs();
     expect(useTabStore.getState().tabs.map((t) => t.path)).toEqual(["/"]);
+    // A tab closed in one organisation must not be reopenable in another.
+    expect(useTabStore.getState().reopenClosedTab()).toBeNull();
   });
 
   it("timer persists under activeTimer:<id>", () => {

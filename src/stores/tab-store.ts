@@ -154,7 +154,9 @@ export const useTabStore = create<TabState>((set, get) => ({
 
   closeAllTabs: () => {
     const home = defaultTabs();
-    set({ tabs: home.tabs, activeTabId: home.activeTabId });
+    // Also clear the reopen stack: a tab closed here must not resurface via
+    // reopenClosedTab() after switching to a different organisation.
+    set({ tabs: home.tabs, activeTabId: home.activeTabId, closedTabs: [] });
     persist(home.tabs, home.activeTabId);
   },
 
