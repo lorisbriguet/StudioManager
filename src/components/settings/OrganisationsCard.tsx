@@ -14,19 +14,41 @@ export function OrganisationsCard() {
   const organisations = useOrgStore((s) => s.organisations);
   const activeId = useOrgStore((s) => s.activeId);
   const [editing, setEditing] = useState<{ id: string; name: string } | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null);
   const [typed, setTyped] = useState("");
 
-  const apply = (reg: { organisations: typeof organisations; activeId: string }) =>
-    useOrgStore.setState({ organisations: reg.organisations, activeId: reg.activeId });
+  const startEditing = (o: { id: string; name: string }) => {
+    setEditing({ id: o.id, name: o.name });
+    setRenameError(null);
+  };
 
   const commitRename = async () => {
     if (!editing) return;
-    try {
-      apply(await renameOrganisation(editing.id, editing.name));
+    const trimmed = editing.name.trim();
+    if (trimmed === "") {
+      setRenameError(t.organisation_name_required);
+      return;
+    }
+    const original = organisations.find((o) => o.id === editing.id);
+    if (original && trimmed === original.name) {
+      // No actual change: just close the edit, no backend call needed.
       setEditing(null);
+      setRenameError(null);
+      return;
+    }
+    const taken = organisations.some((o) => o.id !== editing.id && o.name.toLowerCase() === trimmed.toLowerCase());
+    if (taken) {
+      setRenameError(t.organisation_name_taken);
+      return;
+    }
+    try {
+      useOrgStore.getState().applyRegistry(await renameOrganisation(editing.id, trimmed));
+      setEditing(null);
+      setRenameError(null);
     } catch (e) {
-      notifyError(t.organisation_name_taken, e);
+      notifyError(t.operation_failed, e);
+      // Keep the edit open so the user can retry.
     }
   };
 
@@ -36,7 +58,7 @@ export function OrganisationsCard() {
     if (j < 0 || j >= ids.length) return;
     [ids[idx], ids[j]] = [ids[j], ids[idx]];
     try {
-      apply(await reorderOrganisations(ids));
+      useOrgStore.getState().applyRegistry(await reorderOrganisations(ids));
     } catch (e) {
       notifyError(t.operation_failed, e);
     }
@@ -45,7 +67,7 @@ export function OrganisationsCard() {
   const commitDelete = async () => {
     if (!deleting) return;
     try {
-      apply(await deleteOrganisation(deleting.id));
+      useOrgStore.getState().applyRegistry(await deleteOrganisation(deleting.id));
       toast.success(t.organisation_deleted);
       setDeleting(null);
       setTyped("");
@@ -67,15 +89,28 @@ export function OrganisationsCard() {
           return (
             <li key={o.id} className="flex items-center gap-2 py-2 border-b border-[var(--color-border-divider)] last:border-b-0">
               {editing?.id === o.id ? (
-                <Input
-                  value={editing.name}
-                  onChange={(e) => setEditing({ id: o.id, name: e.target.value })}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void commitRename();
-                    if (e.key === "Escape") setEditing(null);
-                  }}
-                  autoFocus
-                />
+                <div className="flex-1 min-w-0">
+                  <Input
+                    value={editing.name}
+                    onChange={(e) => {
+                      setEditing({ id: o.id, name: e.target.value });
+                      setRenameError(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void commitRename();
+                      if (e.key === "Escape") {
+                        setEditing(null);
+                        setRenameError(null);
+                      }
+                    }}
+                    autoFocus
+                  />
+                  {renameError && (
+                    <p role="alert" className="text-xs text-danger-text mt-1">
+                      {renameError}
+                    </p>
+                  )}
+                </div>
               ) : (
                 <span className="flex-1 text-sm truncate">
                   {o.name}
@@ -84,7 +119,7 @@ export function OrganisationsCard() {
               )}
               <Button variant="ghost" size="sm" icon={<ArrowUp size={12} />} aria-label={t.move_up} disabled={idx === 0} onClick={() => void move(idx, -1)} />
               <Button variant="ghost" size="sm" icon={<ArrowDown size={12} />} aria-label={t.move_down} disabled={idx === organisations.length - 1} onClick={() => void move(idx, 1)} />
-              <Button variant="ghost" size="sm" icon={<Pencil size={12} />} aria-label={t.rename_organisation} onClick={() => setEditing({ id: o.id, name: o.name })} />
+              <Button variant="ghost" size="sm" icon={<Pencil size={12} />} aria-label={t.rename_organisation} onClick={() => startEditing(o)} />
               <Button
                 variant="ghost"
                 size="sm"
