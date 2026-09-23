@@ -50,4 +50,13 @@ describe("switchOrganisation", () => {
     expect(await switchOrganisation("o2", d)).toBe(false);
     expect(calls).not.toContain("switch:o2");
   });
+
+  it("still clears queries, closes tabs and navigates home if resetDb rejects, but the rejection propagates", async () => {
+    useAppStore.setState({ testMode: false, presentationMode: false, activeTimer: null });
+    const { d, calls } = deps({
+      resetDb: vi.fn(async () => { calls.push("resetDb"); throw new Error("db reopen failed"); }),
+    });
+    await expect(switchOrganisation("o2", d)).rejects.toThrow("db reopen failed");
+    expect(calls).toEqual(["confirm", "switch:o2", "apply", "resetDb", "clear", "closeTabs", "nav:/"]);
+  });
 });
