@@ -1,11 +1,9 @@
--- StudioManager Presentation Mode Seed Data
--- Realistic demo data for showcasing the application.
---
--- Presentation mode copies the production DB and runs this file on the copy.
--- Every date is relative to today via date('now', ...) so the demo never
--- goes stale. User configuration (business profile, expense categories,
--- activities, dashboard presets, invoice templates, workload templates) is
--- kept; everything client-related is wiped and replaced.
+-- StudioManager demo seed: the "designer" persona (Lea Morel, solo graphic designer).
+-- Data layer only: user configuration (business profile, expense categories,
+-- activities, dashboard presets, invoice templates, workload templates) is kept;
+-- everything client-related is wiped and replaced. The real app's presentation
+-- mode runs this file on a copy of the production DB; the demo app runs
+-- config.sql first. Every date is relative to today via date('now', ...).
 --
 -- Validated by src/__tests__/presentationSeed.test.ts — keep them in sync.
 
