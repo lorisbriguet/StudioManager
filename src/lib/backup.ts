@@ -280,6 +280,14 @@ async function rotateBackups(
   }
 }
 
+/** Folder names written before organisations existed: `backup-<timestamp>`,
+ *  the timestamp starting `YYYY-MM-DD-`. Organisation ids are six base-36
+ *  characters, so `backup-<id>-2026-…` can never match this. Listing (not
+ *  rotation) accepts these: they hold the user's pre-upgrade backups and
+ *  must stay restorable from Settings, while rotation stays strictly
+ *  org-scoped so it never deletes a backup it does not own. */
+const LEGACY_BACKUP_DIR = /^backup-\d{4}-\d{2}-\d{2}-/;
+
 /** List available backup folders in the backup directory, sorted newest first */
 export async function listBackups(backupDir: string): Promise<string[]> {
   if (!backupDir) return [];
@@ -287,7 +295,7 @@ export async function listBackups(backupDir: string): Promise<string[]> {
     const entries = await readDir(backupDir);
     const prefix = backupPrefix();
     return entries
-      .filter((e) => e.name?.startsWith(prefix))
+      .filter((e) => e.name?.startsWith(prefix) || (e.name != null && LEGACY_BACKUP_DIR.test(e.name)))
       .map((e) => e.name as string)
       .sort()
       .reverse();

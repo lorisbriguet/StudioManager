@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useRecurringCheck, runRecurringCheck } from "../hooks/useRecurringCheck";
 import { useAppStore } from "../stores/app-store";
+import { useOrgStore } from "../stores/org-store";
 import { getDueTemplates, updateRecurringTemplate } from "../db/queries/recurring";
 import { getInvoice, getInvoiceLineItems, createInvoiceWithLineItems } from "../db/queries/invoices";
 import { todayLocalISO } from "../utils/localDate";
@@ -218,5 +219,23 @@ describe("useRecurringCheck", () => {
     await new Promise((r) => setTimeout(r, 20));
 
     expect(getDueTemplates).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes nothing when the organisation changed while the check was running", async () => {
+    useOrgStore.setState({ activeId: "o1" });
+    vi.mocked(getDueTemplates).mockImplementation(async () => {
+      // A switch lands while the templates are being read: from here on
+      // every write would go into the organisation we just moved to.
+      useOrgStore.setState({ activeId: "o2" });
+      return [
+        { id: 1, base_invoice_id: 5, client_id: "c1", frequency: "monthly", next_due: isoMonthsAgo(3), active: 1 },
+      ] as never;
+    });
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    expect(await runRecurringCheck(qc)).toBe(0);
+    expect(createInvoiceWithLineItems).not.toHaveBeenCalled();
+    expect(updateRecurringTemplate).not.toHaveBeenCalled();
+    useOrgStore.setState({ activeId: "" });
   });
 });

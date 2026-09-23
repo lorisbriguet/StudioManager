@@ -9,6 +9,7 @@ import { notifyError, getLabels } from "../lib/notifyError";
 import { logWarn } from "../lib/log";
 import { todayLocalISO, parseLocalDate } from "../utils/localDate";
 import { advanceDate } from "../utils/recurringDates";
+import { useOrgStore } from "../stores/org-store";
 import { addDays, format } from "date-fns";
 
 // Safety cap on catch-up generations per template (5 years of monthly periods)
@@ -34,13 +35,19 @@ export async function runRecurringCheck(qc: QueryClient): Promise<number> {
   if (inFlight) return 0;
   inFlight = true;
   lastRunDay = todayLocalISO();
+  // Everything below writes to whichever database is active when it runs. A
+  // switch mid-check would generate this organisation's drafts inside the
+  // next one, so every write is gated on still being where we started.
+  const org = useOrgStore.getState().activeId;
+  const sameOrg = () => useOrgStore.getState().activeId === org;
   let generated = 0;
   try {
     const templates = await getDueTemplates();
-    if (templates.length === 0) return 0;
+    if (templates.length === 0 || !sameOrg()) return 0;
 
     const today = todayLocalISO();
     for (const tmpl of templates) {
+      if (!sameOrg()) break;
       // Fail soft per-template: one broken template must not block the others.
       try {
         // A corrupt next_due would silently skip (or spin) the catch-up
@@ -66,7 +73,7 @@ export async function runRecurringCheck(qc: QueryClient): Promise<number> {
         // Catch up ALL overdue periods, not just one per run.
         let nextDue = tmpl.next_due;
         let steps = 0;
-        while (nextDue <= today && steps < MAX_CATCHUP_PER_TEMPLATE) {
+        while (nextDue <= today && steps < MAX_CATCHUP_PER_TEMPLATE && sameOrg()) {
           // Each draft is dated on its own period (nextDue), not today:
           // a template 3 months behind yields 3 distinct period drafts.
           const dueDate = format(
@@ -126,7 +133,7 @@ export async function runRecurringCheck(qc: QueryClient): Promise<number> {
           generated++;
           steps++;
         }
-        if (steps >= MAX_CATCHUP_PER_TEMPLATE && nextDue <= today) {
+        if (steps >= MAX_CATCHUP_PER_TEMPLATE && nextDue <= today && sameOrg()) {
           logWarn(
             `Recurring catch-up cap (${MAX_CATCHUP_PER_TEMPLATE}) hit for template ${tmpl.id}; remaining periods will generate on next launch`
           );
@@ -151,7 +158,7 @@ export async function runRecurringCheck(qc: QueryClient): Promise<number> {
       }
     }
 
-    if (generated > 0) {
+    if (generated > 0 && sameOrg()) {
       qc.invalidateQueries({ queryKey: ["invoices"] });
       qc.invalidateQueries({ queryKey: ["finance"] });
       qc.invalidateQueries({ queryKey: ["recurring_templates"] });

@@ -49,9 +49,9 @@ const articles: ArticleSeed[] = [
 <p>Most actions can be undone with <strong>Cmd+Z</strong> and redone with <strong>Cmd+Shift+Z</strong>. A toast notification appears confirming the undo. This works for creating, editing, and deleting clients, projects, tasks, invoices, quotes, expenses, and more.</p>
 
 <h2>Data Storage</h2>
-<p>All data is stored locally in a SQLite database at:</p>
-<p><code>~/Library/Application Support/ch.studiomanager.app/studiomanager.db</code></p>
-<p>Receipts and invoice PDFs are stored alongside the database. Use the <strong>Backup</strong> feature in Settings to create regular backups of everything.</p>`,
+<p>Each organisation keeps its own SQLite database, receipts and invoice PDFs in its own folder:</p>
+<p><code>~/Library/Application Support/ch.studiomanager.app/orgs/&lt;id&gt;/</code></p>
+<p>The list of organisations lives beside it in <code>organisations.json</code>. Use the <strong>Backup</strong> feature in Settings to create regular backups of everything.</p>`,
   },
 
   // ── 2. Clients & Contacts ────────────────────────────────────────
