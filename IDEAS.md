@@ -62,7 +62,7 @@
 - [x] Tester guide `docs/GUIDE.md`, README corrections, landing page rebuilt and published via GitHub Pages
 - [ ] Retake the four screenshots in `docs/screenshots/` with the new seed (current ones show the old Jan–Mar data and the real business profile on the invoice)
 
-## V1.18.0 — Done (organisations)
+## V2.0.0 — Done (organisations)
 
 - [x] Organisations with per-org folders (`orgs/<id>/`, each with its own database, `invoices/`, and `receipts/`)
 - [x] Organisation registry (`organisations.json`) tracking the list of organisations and the active one
