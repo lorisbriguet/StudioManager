@@ -1,9 +1,9 @@
 mod apple;
 mod dbfiles;
 mod migrate;
-mod orgs;
+pub mod orgs;
 mod seed;
-mod upgrade;
+pub mod upgrade;
 
 use tauri::Manager;
 use orgs::{OrgPrefs, Registry, DB_FILE};

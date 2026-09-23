@@ -62,6 +62,15 @@
 - [x] Tester guide `docs/GUIDE.md`, README corrections, landing page rebuilt and published via GitHub Pages
 - [ ] Retake the four screenshots in `docs/screenshots/` with the new seed (current ones show the old Jan–Mar data and the real business profile on the invoice)
 
+## V1.18.0 — Done (organisations)
+
+- [x] Organisations with per-org folders (`orgs/<id>/`, each with its own database, `invoices/`, and `receipts/`)
+- [x] Organisation registry (`organisations.json`) tracking the list of organisations and the active one
+- [x] Sidebar organisation switcher (`OrgSwitcher`)
+- [x] Create and manage organisations (`OrgCreateDialog`, `OrganisationsCard` in Settings)
+- [x] Per-organisation preferences, namespaced storage keys, and separate backups (`backup-<organisation id>-<timestamp>`)
+- [x] One-time upgrade from the legacy single-database layout to `orgs/<id>/`, with full rollback on failure and a rehearsal script (`scripts/rehearse-org-upgrade.sh`) to dry-run it against real data before release
+
 ## Audit — round 3 (2026-08-31)
 
 Three-lens audit (correctness/data, security/platform, UI/a11y/perf/tests) after v1.15.0. Clean bill: SQL parameterization, osascript runner, wiki allowlist, updater chain, capabilities scope, date/money handling, design-system compliance (0 violations), modal/menu focus management.
