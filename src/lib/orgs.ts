@@ -35,6 +35,11 @@ export const DEFAULT_ORG_PREFS: OrgPrefs = {
   exportLanguage: "FR",
 };
 
+/** The startup failure message, or null when the layout was set up cleanly.
+ *  Must be checked before anything opens a database: on failure the app is
+ *  running on the legacy root and the registry does not exist. */
+export const getInitError = () => invoke<string | null>("get_init_error");
+export const getActiveDb = () => invoke<string>("get_active_db");
 export const listOrganisations = () => invoke<Registry>("list_organisations");
 export const createOrganisation = (name: string, seedFromCurrent: boolean, prefs: OrgPrefs) =>
   invoke<Registry>("create_organisation", { name, seedFromCurrent, prefs });

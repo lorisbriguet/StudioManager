@@ -144,17 +144,26 @@ export async function switchDb(dbName: string): Promise<void> {
 }
 
 /**
+ * Close the connection without reopening it. The organisation switch closes
+ * here BEFORE asking Rust to move the active organisation (spec §4), so the
+ * old database is never held open across the swap; it reopens with getDb()
+ * once the new organisation is live.
+ */
+export async function closeDb(): Promise<void> {
+  if (!dbPromise) return;
+  try {
+    const db = await dbPromise;
+    await db.close();
+  } catch { /* ignore close errors */ }
+  dbPromise = null;
+}
+
+/**
  * Reset the DB connection (e.g., after restoring a snapshot).
  * Closes and reopens with the same DB name.
  */
 export async function resetDb(): Promise<void> {
-  if (dbPromise) {
-    try {
-      const db = await dbPromise;
-      await db.close();
-    } catch { /* ignore close errors */ }
-    dbPromise = null;
-  }
+  await closeDb();
   await getDb();
 }
 
