@@ -21,7 +21,8 @@ function inTypingContext(e: KeyboardEvent): boolean {
 }
 
 /**
- * Context-sensitive Cmd+N (audit item 343) and Cmd+B sidebar toggle (351).
+ * Context-sensitive Cmd+N (audit item 343), Cmd+B sidebar toggle (351), and
+ * Cmd+Shift+O organisation switcher (Task 16).
  * Must render inside the Router.
  */
 export function GlobalShortcuts() {
@@ -30,7 +31,14 @@ export function GlobalShortcuts() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+
+      if (e.shiftKey && (e.key === "o" || e.key === "O") && !inTypingContext(e)) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("sm:open-org-switcher"));
+        return;
+      }
+      if (e.shiftKey) return;
 
       if ((e.key === "b" || e.key === "B") && !inTypingContext(e)) {
         e.preventDefault();

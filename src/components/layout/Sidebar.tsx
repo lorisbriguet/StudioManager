@@ -21,6 +21,8 @@ import {
   PanelLeftOpen,
 } from "lucide-react";
 import { BrandLogo, BrandMark } from "../BrandLogo";
+import { OrgSwitcher } from "./OrgSwitcher";
+import { OrgCreateDialog } from "../OrgCreateDialog";
 import { useAppStore } from "../../stores/app-store";
 import { useTabStore } from "../../stores/tab-store";
 import { confirmIfDirty } from "../../lib/dirty-guard";
@@ -77,6 +79,7 @@ export function Sidebar() {
   // Track keyboard focus index (-1 = no keyboard focus)
   const [focusIdx, setFocusIdx] = useState(-1);
   const navRef = useRef<HTMLElement>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const keyNavRef = useRef(false); // true when navigation was triggered by keyboard
 
   // Reset focus index when navigating via click (not keyboard)
@@ -202,6 +205,10 @@ export function Sidebar() {
       <div className={`flex items-center h-14 border-b border-sidebar-border ${collapsed ? "justify-center px-2" : "px-5.5"}`}>
         {collapsed ? <BrandMark className="h-3.5" /> : <BrandLogo className="h-6" />}
       </div>
+      <div className="px-2 pt-2">
+        <OrgSwitcher collapsed={collapsed} onCreate={() => setCreateOpen(true)} />
+      </div>
+      <OrgCreateDialog open={createOpen} onClose={() => setCreateOpen(false)} />
       <nav ref={navRef} className="flex-1 py-2 overflow-y-auto">
         {allVisible.map((item, i) => {
           if ("divider" in item) {

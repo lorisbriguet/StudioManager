@@ -1,8 +1,10 @@
+import { useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { TabBar } from "./TabBar";
 import { useTabSync } from "../../hooks/useTabSync";
 import { useAppStore } from "../../stores/app-store";
+import { useOrgStore } from "../../stores/org-store";
 import { useT } from "../../i18n/useT";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { exitTestMode as exitTestModeShared, exitPresentationMode as exitPresentationModeShared } from "../../lib/modes";
@@ -12,10 +14,16 @@ import { X } from "lucide-react";
 export function MainLayout() {
   const testMode = useAppStore((s) => s.testMode);
   const presentationMode = useAppStore((s) => s.presentationMode);
+  const orgName = useOrgStore((s) => s.active()?.name ?? "");
   const t = useT();
 
   useTabSync();
   const location = useLocation();
+
+  // Tauri syncs document.title to the native window title.
+  useEffect(() => {
+    document.title = orgName ? `StudioManager — ${orgName}` : "StudioManager";
+  }, [orgName]);
 
   const exitTestMode = async () => {
     const confirmed = await ask(t.test_mode_confirm_exit, { kind: "warning" });
@@ -47,7 +55,7 @@ export function MainLayout() {
       <main className="flex-1 overflow-hidden flex flex-col">
         {testMode && (
           <div className="bg-[var(--color-banner-test)] text-white text-sm font-semibold py-1.5 px-4 shrink-0 flex items-center justify-center gap-3">
-            <span>{t.test_mode_banner}</span>
+            <span>{t.test_mode_banner}{" "}{t.mode_in_organisation.replace("{name}", orgName)}</span>
             <button
               onClick={exitTestMode}
               className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[var(--color-banner-test-hover)] hover:opacity-80 text-xs"
@@ -58,7 +66,7 @@ export function MainLayout() {
         )}
         {presentationMode && (
           <div className="bg-[var(--color-banner-presentation)] text-white text-sm font-semibold py-1.5 px-4 shrink-0 flex items-center justify-center gap-3">
-            <span>{t.presentation_mode_banner}</span>
+            <span>{t.presentation_mode_banner}{" "}{t.mode_in_organisation.replace("{name}", orgName)}</span>
             <button
               onClick={exitPresentationMode}
               className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[var(--color-banner-presentation-hover)] hover:opacity-80 text-xs"
