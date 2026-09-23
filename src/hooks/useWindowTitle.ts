@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { isDemoBuild } from "../lib/demoBuild";
 
 /**
  * Keeps both document.title and the native macOS window title in sync with
@@ -9,7 +10,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
  */
 export function useWindowTitle(orgName: string): void {
   useEffect(() => {
-    const title = orgName ? `StudioManager — ${orgName}` : "StudioManager";
+    const base = isDemoBuild() ? "StudioManager Demo" : "StudioManager";
+    const title = orgName ? `${base} — ${orgName}` : base;
     document.title = title;
     // Cosmetic only: never let a rejected promise surface as an error.
     getCurrentWindow().setTitle(title).catch(() => {});

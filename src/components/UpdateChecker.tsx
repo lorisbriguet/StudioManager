@@ -3,6 +3,7 @@ import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { useT } from "../i18n/useT";
 import { logError } from "../lib/log";
+import { isDemoBuild } from "../lib/demoBuild";
 
 export function UpdateChecker() {
   const t = useT();
@@ -59,10 +60,14 @@ export function UpdateChecker() {
     await relaunch();
   };
 
-  // Check on mount
+  // Check on mount (never in the demo build: its updater endpoint is a dead manifest by design)
   useEffect(() => {
-    checkForUpdate();
+    if (!isDemoBuild()) checkForUpdate();
   }, []);
+
+  if (isDemoBuild()) {
+    return <div className="text-sm text-muted">{t.updates_demo_build}</div>;
+  }
 
   if (status === "idle" || status === "checking") {
     return (
