@@ -239,15 +239,22 @@ pub fn run_with_hooks(app_dir: &Path, fail_point: Option<FailPoint>) -> Result<R
             return Err("row or file counts differ after the move".to_string());
         }
 
-        for f in DISPOSABLE {
-            crate::dbfiles::remove_db_files(&app_dir.join(f));
-        }
         reg.save(app_dir)?;
         Ok(())
     })();
 
     match result {
-        Ok(()) => Ok(reg),
+        Ok(()) => {
+            // Only once the move is verified AND the registry is on disk:
+            // deleting these inside the guarded closure destroyed a test or
+            // presentation session's databases even when the upgrade then
+            // failed and rolled the layout back. They are disposable copies,
+            // but only the successful path is entitled to dispose of them.
+            for f in DISPOSABLE {
+                crate::dbfiles::remove_db_files(&app_dir.join(f));
+            }
+            Ok(reg)
+        }
         Err(e) => match rollback(app_dir, &org, &legacy_db, &done) {
             Ok(()) => Err(format!("upgrade failed and was rolled back to the legacy layout: {e}")),
             Err(rollback_err) => Err(format!("upgrade failed ({e}); {rollback_err}")),
@@ -370,6 +377,27 @@ mod tests {
         assert_eq!(receipt, rec.to_string_lossy());
         let ext: String = c.query_row("SELECT receipt_path FROM expenses WHERE reference='F-26-002'", [], |r| r.get(0)).unwrap();
         assert_eq!(ext, "/Volumes/External/keep.pdf", "path outside the app dir must stay untouched");
+    }
+
+    #[test]
+    fn a_failure_while_saving_the_registry_keeps_the_disposable_databases() {
+        let app = legacy_fixture("registry-save-fails");
+        // Block the registry's atomic write: it writes organisations.json.tmp
+        // first, and a directory there makes that write fail — the last
+        // fallible step of the upgrade, after every rename and check passed.
+        std::fs::create_dir_all(app.join(format!("{REGISTRY_FILE}.tmp"))).unwrap();
+
+        let err = run(&app).unwrap_err();
+        assert!(err.contains("write registry"), "{err}");
+        assert!(!app.join(REGISTRY_FILE).exists());
+        // Rolled back to the legacy layout...
+        assert!(app.join(DB_FILE).exists());
+        assert!(app.join("invoices/2026-001_ACME.pdf").exists());
+        // ...and the disposable copies are still there: they belong to the
+        // legacy layout the app just went back to, so only a successful
+        // upgrade may delete them.
+        assert!(app.join("studiomanager_test.db").exists());
+        assert!(app.join("studiomanager_presentation.db-wal").exists());
     }
 
     #[test]
