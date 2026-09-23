@@ -49,9 +49,9 @@ describe("OrgSwitcher", () => {
     expect(onCreate).toHaveBeenCalled();
   });
 
-  it("opens on the Cmd+Shift+O window event", () => {
+  it("opens on the Cmd+Shift+O window event", async () => {
     mount();
     window.dispatchEvent(new CustomEvent("sm:open-org-switcher"));
-    expect(screen.getByRole("menuitem", { name: /label/i })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("menuitem", { name: /label/i })).toBeInTheDocument());
   });
 });

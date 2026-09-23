@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Check, ChevronsUpDown, Plus, Settings2 } from "lucide-react";
 import { toast } from "sonner";
@@ -26,10 +25,7 @@ export function OrgSwitcher({ collapsed, onCreate }: { collapsed: boolean; onCre
   };
 
   useEffect(() => {
-    // Triggered from GlobalShortcuts' native keydown listener, outside React's
-    // event system — flushSync so the menu is on screen synchronously (both
-    // for the real shortcut and for the test that asserts right after dispatch).
-    const handler = () => flushSync(() => openMenu());
+    const handler = () => openMenu();
     window.addEventListener("sm:open-org-switcher", handler);
     return () => window.removeEventListener("sm:open-org-switcher", handler);
   }, []);
