@@ -8,7 +8,7 @@ pub mod upgrade;
 use tauri::Manager;
 use orgs::{OrgPrefs, Registry, DB_FILE};
 use serde_json::Value as JsonValue;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 /// Global state: the active organisation folder and which database file
@@ -29,6 +29,12 @@ impl ActiveOrg {
 }
 
 struct ActiveOrgState(Mutex<ActiveOrg>);
+
+/// The startup error, when `init_organisations` failed. The app still starts
+/// (with `ActiveOrgState` pointing at the legacy root) so no command panics;
+/// the frontend reads this and shows the fatal overlay instead of opening a
+/// database. `None` on a healthy launch.
+struct InitError(Mutex<Option<String>>);
 
 fn app_data_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path().app_data_dir().map_err(|e| format!("Failed to get app data dir: {e}"))
@@ -303,6 +309,16 @@ fn get_active_db(app: tauri::AppHandle) -> Result<String, String> {
     Ok(active_org(&app)?.relative_db())
 }
 
+/// The startup failure message, if the organisation layout could not be set
+/// up. `None` on a healthy launch. The frontend calls this before it touches
+/// the registry or any database.
+#[tauri::command]
+fn get_init_error(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let state = app.state::<InitError>();
+    let guard = state.0.lock().map_err(|e| format!("Lock error: {e}"))?;
+    Ok(guard.clone())
+}
+
 fn load_registry(app: &tauri::AppHandle) -> Result<Registry, String> {
     Registry::load(&app_data_dir(app)?)?.ok_or_else(|| "organisation registry missing".to_string())
 }
@@ -368,11 +384,16 @@ fn delete_organisation(app: tauri::AppHandle, id: String) -> Result<Registry, St
         return Err("switch to another organisation before deleting this one".to_string());
     }
     reg.remove(&id)?;
+    // Persist the registry BEFORE touching the folder. If the save fails here
+    // nothing was lost — the folder is still on disk and still listed. The
+    // reverse order can move the data to the Trash and then leave it listed
+    // as a live organisation; an orphan folder under orgs/ is the safer of
+    // the two failure modes.
+    save_registry(&app, &reg)?;
     let dir = orgs::org_dir(&app_dir, &id);
     if dir.exists() {
         trash::delete(&dir).map_err(|e| format!("move organisation folder to Trash: {e}"))?;
     }
-    save_registry(&app, &reg)?;
     Ok(reg)
 }
 
@@ -385,6 +406,13 @@ fn switch_organisation(app: tauri::AppHandle, id: String) -> Result<Registry, St
     let mut reg = load_registry(&app)?;
     reg.set_active(&id)?;
     let dir = orgs::org_dir(&app_dir, &id);
+    // migrate_db would happily create a fresh, empty database here. A missing
+    // folder means the organisation's data is gone (moved or removed outside
+    // the app) — say so instead of silently manufacturing an empty replacement
+    // and switching the user into it.
+    if !dir.is_dir() {
+        return Err(format!("organisation folder is missing: {}", dir.display()));
+    }
     migrate::migrate_db(&dir.join(DB_FILE))?;
     save_registry(&app, &reg)?;
     let state = app.state::<ActiveOrgState>();
@@ -400,10 +428,32 @@ fn set_organisation_prefs(app: tauri::AppHandle, id: String, prefs: OrgPrefs) ->
     Ok(reg)
 }
 
+/// Does `orgs/` hold at least one organisation folder?
+///
+/// A missing `orgs/` is a legitimate "no" (fresh install). Every other
+/// failure — permissions, an unreadable entry, `orgs` being a file — is
+/// propagated: the caller must never read "could not look" as "nothing
+/// there" and create an empty organisation next to data it failed to see.
+fn orgs_dir_has_subfolders(app_dir: &Path) -> Result<bool, String> {
+    let orgs_dir = app_dir.join(orgs::ORGS_DIR);
+    let entries = match std::fs::read_dir(&orgs_dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => return Err(format!("read {}: {e}", orgs_dir.display())),
+    };
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("read an entry of {}: {e}", orgs_dir.display()))?;
+        if entry.path().is_dir() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 /// Startup: upgrade the legacy layout if present, create a first
 /// organisation on a fresh install, migrate the active database, and
-/// install the ActiveOrg state.
-fn init_organisations(app: &tauri::AppHandle) -> Result<(), String> {
+/// return the ActiveOrg to install as state.
+fn init_organisations(app: &tauri::AppHandle) -> Result<ActiveOrg, String> {
     let app_dir = app_data_dir(app)?;
     std::fs::create_dir_all(&app_dir).map_err(|e| format!("create app dir: {e}"))?;
     let reg = if upgrade::needs_upgrade(&app_dir) {
@@ -412,16 +462,19 @@ fn init_organisations(app: &tauri::AppHandle) -> Result<(), String> {
         upgrade::discard_snapshot(&app_dir);
         reg
     } else {
-        let orgs_dir = app_dir.join(orgs::ORGS_DIR);
-        let orgs_dir_has_subfolders = orgs_dir
-            .read_dir()
-            .map(|it| it.filter_map(Result::ok).any(|entry| entry.path().is_dir()))
-            .unwrap_or(false);
-        if orgs_dir_has_subfolders {
-            return Err(
-                "organisation registry missing but orgs/ contains data; refusing to start to avoid creating an empty organisation next to existing data"
-                    .to_string(),
-            );
+        match orgs_dir_has_subfolders(&app_dir) {
+            Ok(false) => {}
+            Ok(true) => {
+                return Err(
+                    "organisation registry missing but orgs/ contains data; refusing to start to avoid creating an empty organisation next to existing data"
+                        .to_string(),
+                )
+            }
+            Err(e) => {
+                return Err(format!(
+                    "organisation registry missing and orgs/ could not be read ({e}); refusing to start to avoid creating an empty organisation next to existing data"
+                ))
+            }
         }
         let mut reg = Registry::empty();
         let id = reg.add("Studio", Some(OrgPrefs::default()))?.id.clone();
@@ -435,8 +488,31 @@ fn init_organisations(app: &tauri::AppHandle) -> Result<(), String> {
     let active = reg.active().ok_or_else(|| "registry has no active organisation".to_string())?;
     let dir = orgs::org_dir(&app_dir, &active.id);
     migrate::migrate_db(&dir.join(DB_FILE))?;
-    app.manage(ActiveOrgState(Mutex::new(ActiveOrg { id: active.id.clone(), dir, db_name: DB_FILE.to_string() })));
-    Ok(())
+    Ok(ActiveOrg { id: active.id.clone(), dir, db_name: DB_FILE.to_string() })
+}
+
+/// The state to install at startup, from the outcome of `init_organisations`.
+///
+/// A failed init must never abort `setup`: the window is already up by then,
+/// so returning an error kills the app with no way to tell the user why. The
+/// app starts on the legacy root instead — every command keeps working
+/// against a managed state rather than panicking on a missing one — and the
+/// message (with the upgrade snapshot path appended when that snapshot
+/// exists) travels to the frontend's fatal overlay via `get_init_error`.
+fn startup_state(app_dir: &Path, init: Result<ActiveOrg, String>) -> (ActiveOrg, Option<String>) {
+    match init {
+        Ok(org) => (org, None),
+        Err(e) => {
+            let snapshot = app_dir.join(upgrade::UPGRADE_SNAPSHOT);
+            let message = if snapshot.exists() {
+                format!("{e}\n\nA copy of your database from before the upgrade is kept at: {}", snapshot.display())
+            } else {
+                e
+            };
+            let legacy = ActiveOrg { id: String::new(), dir: app_dir.to_path_buf(), db_name: DB_FILE.to_string() };
+            (legacy, Some(message))
+        }
+    }
 }
 
 /// Open a directory in Finder, or reveal a file in its enclosing folder
@@ -490,6 +566,7 @@ pub fn run() {
             restore_snapshot,
             has_snapshot,
             get_active_db,
+            get_init_error,
             list_organisations,
             create_organisation,
             rename_organisation,
@@ -506,11 +583,17 @@ pub fn run() {
             apple::calendar_delete_event,
         ])
         .setup(|app| {
-            if let Err(e) = init_organisations(app.handle()) {
+            let handle = app.handle();
+            // app_data_dir() failing is itself an init error; default to an
+            // empty path so the legacy-root fallback is still installable.
+            let app_dir = app_data_dir(handle).unwrap_or_default();
+            let (active, init_error) = startup_state(&app_dir, init_organisations(handle));
+            if let Some(e) = &init_error {
                 // Surface loudly: the frontend cannot open any database without this.
                 eprintln!("[organisations] startup failed: {e}");
-                return Err(e.into());
             }
+            handle.manage(ActiveOrgState(Mutex::new(active)));
+            handle.manage(InitError(Mutex::new(init_error)));
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -568,6 +651,57 @@ mod tests {
         assert_eq!(q(&serde_json::json!(1.5)), Value::Real(1.5));
         assert_eq!(q(&serde_json::json!(true)), Value::Integer(1));
         assert_eq!(q(&serde_json::json!(null)), Value::Null);
+    }
+
+    fn tmp_dir(name: &str) -> PathBuf {
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("sm-lib-{nanos}-{name}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn orgs_dir_is_only_reported_as_populated_when_it_holds_a_folder() {
+        let app = tmp_dir("orgs-guard");
+        // absent orgs/ — a fresh install, not a failure
+        assert_eq!(orgs_dir_has_subfolders(&app), Ok(false));
+        // orgs/ with only files (stray .DS_Store and friends) is still empty
+        let orgs = app.join(orgs::ORGS_DIR);
+        std::fs::create_dir_all(&orgs).unwrap();
+        std::fs::write(orgs.join(".DS_Store"), b"x").unwrap();
+        assert_eq!(orgs_dir_has_subfolders(&app), Ok(false));
+        // one organisation folder — refuse to start
+        std::fs::create_dir_all(orgs.join("k3f9a2")).unwrap();
+        assert_eq!(orgs_dir_has_subfolders(&app), Ok(true));
+        std::fs::remove_dir_all(&app).unwrap();
+    }
+
+    #[test]
+    fn a_failed_init_still_yields_a_state_to_manage() {
+        let app = tmp_dir("startup-state");
+        let (org, err) = startup_state(&app, Err("orgs/ could not be read".to_string()));
+        // The app must start: a managed ActiveOrg on the legacy root, so no
+        // command panics on missing state while the overlay is up.
+        assert_eq!(org.id, "");
+        assert_eq!(org.dir, app);
+        assert_eq!(org.db_path(), app.join(DB_FILE));
+        let message = err.expect("the failure must be kept for the frontend");
+        assert!(message.contains("orgs/ could not be read"), "{message}");
+        assert!(!message.contains(upgrade::UPGRADE_SNAPSHOT), "no snapshot on disk, none named: {message}");
+
+        // With an upgrade snapshot on disk, the message points the user at it.
+        std::fs::write(app.join(upgrade::UPGRADE_SNAPSHOT), b"x").unwrap();
+        let (_, err) = startup_state(&app, Err("upgrade failed".to_string()));
+        let message = err.unwrap();
+        assert!(message.contains(app.join(upgrade::UPGRADE_SNAPSHOT).to_string_lossy().as_ref()), "{message}");
+
+        // A healthy init passes its organisation through untouched.
+        let good = ActiveOrg { id: "k3f9a2".into(), dir: app.join("orgs/k3f9a2"), db_name: DB_FILE.into() };
+        let (org, err) = startup_state(&app, Ok(good.clone()));
+        assert_eq!(org.id, good.id);
+        assert_eq!(org.dir, good.dir);
+        assert_eq!(err, None);
+        std::fs::remove_dir_all(&app).unwrap();
     }
 
     #[test]

@@ -21,13 +21,29 @@ cleanup() {
 trap cleanup EXIT
 
 echo "copying $SRC -> $WORK"
-rsync -a --exclude 'studiomanager_test.db*' --exclude 'studiomanager_presentation.db*' "$SRC/" "$WORK/"
+# Copy everything, disposable mode databases included: the upgrade deletes
+# those itself, and excluding them here would leave that path unrehearsed.
+rsync -a "$SRC/" "$WORK/"
 
 before_counts() {
   sqlite3 "$1" "SELECT 'invoices',COUNT(*) FROM invoices UNION ALL SELECT 'expenses',COUNT(*) FROM expenses UNION ALL SELECT 'clients',COUNT(*) FROM clients UNION ALL SELECT 'tasks',COUNT(*) FROM tasks UNION ALL SELECT 'time_entries',COUNT(*) FROM time_entries;"
 }
+# Checksum every file under the directories that exist. A folder the install
+# never created (no receipts yet) must not abort the whole run under `set -e`,
+# and an absent folder legitimately contributes no checksums.
+md5_tree() {
+  local out="$1" d
+  shift
+  : > "$out"
+  for d in "$@"; do
+    [ -d "$d" ] || { echo "note: $d does not exist — no files to checksum"; continue; }
+    find "$d" -type f -exec md5 -q {} + >> "$out"
+  done
+  sort -o "$out" "$out"
+}
+
 echo "== before =="; before_counts "$WORK/studiomanager.db" | tee "$WORK/before.txt"
-find "$WORK/invoices" "$WORK/receipts" -type f -exec md5 -q {} + | sort > "$WORK/files-before.md5"
+md5_tree "$WORK/files-before.md5" "$WORK/invoices" "$WORK/receipts"
 
 # The copied database still holds absolute paths pointing at the SOURCE
 # folder (rsync copies bytes, not path values). Production's upgrade always
@@ -49,10 +65,10 @@ echo "re-rooted invoices.pdf_path: $REROOT_INVOICES row(s)"
 REROOT_TOTAL=$((REROOT_EXPENSES + REROOT_INVOICES))
 
 # Run the upgrade through the Rust test harness binary
-( cd "$(dirname "$0")/../src-tauri" && cargo run --quiet --bin rehearse-upgrade -- "$WORK" )
+( cd "$(dirname "$0")/../src-tauri" && cargo run --quiet --example rehearse-upgrade -- "$WORK" )
 ORG=$(ls "$WORK/orgs")
 echo "== after (org $ORG) =="; before_counts "$WORK/orgs/$ORG/studiomanager.db" | tee "$WORK/after.txt"
-find "$WORK/orgs/$ORG/invoices" "$WORK/orgs/$ORG/receipts" -type f -exec md5 -q {} + | sort > "$WORK/files-after.md5"
+md5_tree "$WORK/files-after.md5" "$WORK/orgs/$ORG/invoices" "$WORK/orgs/$ORG/receipts"
 
 FAILED=0
 
