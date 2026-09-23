@@ -31,13 +31,15 @@ pub fn copy_settings_tables(src: &Path, dest: &Path) -> Result<Vec<String>, Stri
                 )
                 .ok();
             let Some(ddl) = ddl else { continue };
-            let in_dest: i64 = conn
-                .query_row("SELECT COUNT(*) FROM main.sqlite_master WHERE type='table' AND name=?1", [table], |r| r.get(0))
-                .map_err(|e| e.to_string())?;
-            if in_dest == 0 {
-                conn.execute_batch(&ddl).map_err(|e| format!("create {table}: {e}"))?;
-            }
-            conn.execute(&format!("DELETE FROM main.\"{table}\""), []).map_err(|e| format!("clear {table}: {e}"))?;
+            // The destination is always a freshly created, empty organisation
+            // database (migration seed rows only), so it's safe to drop and
+            // recreate the table from the source's own DDL: that's the only way
+            // to guarantee the column set matches what `SELECT *` below yields,
+            // since the source may have runtime-added columns (e.g. the
+            // frontend's schema step) that the destination's migration-era
+            // shape doesn't have.
+            conn.execute(&format!("DROP TABLE IF EXISTS main.\"{table}\""), []).map_err(|e| format!("drop {table}: {e}"))?;
+            conn.execute_batch(&ddl).map_err(|e| format!("create {table}: {e}"))?;
             conn.execute(&format!("INSERT INTO main.\"{table}\" SELECT * FROM src.\"{table}\""), [])
                 .map_err(|e| format!("copy {table}: {e}"))?;
             copied.push((*table).to_string());
@@ -105,5 +107,37 @@ mod tests {
         assert!(tpl_sql.contains("AUTOINCREMENT"), "DDL copied verbatim");
         let clients: i64 = d.query_row("SELECT COUNT(*) FROM clients", [], |r| r.get(0)).unwrap();
         assert_eq!(clients, 0);
+    }
+
+    #[test]
+    fn copies_runtime_added_columns_absent_from_destinations_migrated_shape() {
+        let src = temp_db("src-runtime-cols");
+        let dest = temp_db("dest-runtime-cols");
+        crate::migrate::migrate_db(&src).unwrap();
+        crate::migrate::migrate_db(&dest).unwrap();
+        let s = Connection::open(&src).unwrap();
+        s.execute_batch(
+            "ALTER TABLE business_profile ADD COLUMN qr_iban TEXT;
+             ALTER TABLE expense_categories ADD COLUMN color TEXT;
+             UPDATE business_profile SET qr_iban='CH21 3080 8001 2345 6782 7' WHERE id=1;
+             UPDATE expense_categories SET color='#ff0000';",
+        )
+        .unwrap();
+        drop(s);
+
+        let copied = copy_settings_tables(&src, &dest).unwrap();
+        // invoice_templates is frontend-created (see the other test); this test
+        // never creates it in src, so it's absent from both and not copied.
+        assert_eq!(copied, vec!["business_profile", "activities", "expense_categories", "workload_templates"]);
+
+        let d = Connection::open(&dest).unwrap();
+        let qr_iban: String =
+            d.query_row("SELECT qr_iban FROM business_profile WHERE id=1", [], |r| r.get(0)).unwrap();
+        assert_eq!(qr_iban, "CH21 3080 8001 2345 6782 7");
+        let cats: i64 = d.query_row("SELECT COUNT(*) FROM expense_categories", [], |r| r.get(0)).unwrap();
+        assert_eq!(cats, 6);
+        let color_count: i64 =
+            d.query_row("SELECT COUNT(*) FROM expense_categories WHERE color='#ff0000'", [], |r| r.get(0)).unwrap();
+        assert_eq!(color_count, 6);
     }
 }
