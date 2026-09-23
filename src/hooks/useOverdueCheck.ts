@@ -5,6 +5,7 @@ import { markOverdueInvoices } from "../db/queries/invoices";
 import { createNotification } from "../db/queries/notifications";
 import { logError } from "../lib/log";
 import { sendNativeNotification } from "../lib/nativeNotification";
+import { useOrgStore } from "../stores/org-store";
 
 export function useOverdueCheck() {
   const qc = useQueryClient();
@@ -13,8 +14,13 @@ export function useOverdueCheck() {
   useEffect(() => {
     if (ran.current) return;
     ran.current = true;
+    const org = useOrgStore.getState().activeId;
 
     markOverdueInvoices().then(async (overdue) => {
+      // A switch may have landed while the query ran: the notification below
+      // would be written into the organisation we just moved to, about
+      // invoices belonging to the one we left.
+      if (useOrgStore.getState().activeId !== org) return;
       if (overdue.length > 0) {
         qc.invalidateQueries({ queryKey: ["invoices"] });
         qc.invalidateQueries({ queryKey: ["finance"] });

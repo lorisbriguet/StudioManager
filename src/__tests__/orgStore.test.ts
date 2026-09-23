@@ -77,6 +77,37 @@ describe("org store", () => {
     expect(localStorage.getItem("backupPath")).toBe("/old");
   });
 
+  it("renames the pre-organisation localStorage keys onto the upgraded organisation", async () => {
+    const timer = JSON.stringify({ taskId: 7, projectId: 2, startedAt: 1700000000000 });
+    localStorage.setItem("activeTimer", timer);
+    localStorage.setItem("open-tabs", '{"tabs":[{"id":"t1","path":"/clients","label":"Clients","pinned":false}],"activeTabId":"t1"}');
+    localStorage.setItem("lastAutoBackup", "1700000000000");
+    setInvokeHandler((cmd, args) => (cmd === "list_organisations" ? reg(null) : cmd === "set_organisation_prefs" ? reg(args.prefs as never) : null));
+
+    await useOrgStore.getState().load();
+
+    expect(localStorage.getItem("activeTimer:aaa111")).toBe(timer);
+    expect(localStorage.getItem("activeTimer")).toBeNull();
+    expect(localStorage.getItem("open-tabs:aaa111")).toContain("/clients");
+    expect(localStorage.getItem("open-tabs")).toBeNull();
+    expect(localStorage.getItem("lastAutoBackup:aaa111")).toBe("1700000000000");
+    // The rename lands before applyRegistry, so the timer is picked up on
+    // this very launch rather than silently lost.
+    expect(useAppStore.getState().activeTimer).toMatchObject({ taskId: 7, projectId: 2 });
+    expect(useAppStore.getState().lastAutoBackup).toBe(1700000000000);
+  });
+
+  it("savePrefs still writes through while prefs are null", async () => {
+    localStorage.setItem("calendarName", "Old");
+    setInvokeHandler((cmd, args) => (cmd === "set_organisation_prefs" ? reg(args.prefs as never) : null));
+    useOrgStore.getState().applyRegistry(reg(null));
+    await useOrgStore.getState().savePrefs({ showIncome: true });
+    const set = invokedCommands.find((c) => c.cmd === "set_organisation_prefs");
+    // Merged over the legacy localStorage values, not dropped.
+    expect(set?.args).toMatchObject({ id: "aaa111", prefs: { showIncome: true, calendarName: "Old" } });
+    expect(useAppStore.getState().showIncome).toBe(true);
+  });
+
   it("orgKey namespaces localStorage keys by active id", async () => {
     useOrgStore.setState({ activeId: "aaa111" });
     expect(useOrgStore.getState().orgKey("open-tabs")).toBe("open-tabs:aaa111");

@@ -8,6 +8,28 @@ import { notifyError, getLabels } from "../lib/notifyError";
 /** localStorage keys that used to hold what is now per-organisation. */
 const LEGACY_PREF_KEYS = ["showIncome", "showTasksPage", "showTimeOverview", "calendarSync", "calendarName", "backupPath", "exportLanguage"] as const;
 
+/** localStorage keys that are now written as `<key>:<organisation id>`. */
+const NAMESPACED_KEYS = ["open-tabs", "activeTimer", "tasksCollapsedProjects", "tasksProjectOrder", "lastAutoBackup"] as const;
+
+/**
+ * Rename the pre-organisation keys onto the upgraded organisation. Without
+ * this the first launch after the upgrade reads `open-tabs:<id>` and
+ * `activeTimer:<id>`, finds nothing, and the user silently loses their open
+ * tabs, a running timer, the collapsed-project state and the auto-backup
+ * clock (which then runs a backup immediately). Copy then remove, and never
+ * overwrite a namespaced value that already exists.
+ */
+export function migrateLegacyKeysTo(id: string): void {
+  if (!id) return;
+  for (const key of NAMESPACED_KEYS) {
+    const value = localStorage.getItem(key);
+    if (value === null) continue;
+    const target = `${key}:${id}`;
+    if (localStorage.getItem(target) === null) localStorage.setItem(target, value);
+    localStorage.removeItem(key);
+  }
+}
+
 /** Mirrors the app store's own localStorage defaults (pre-organisations). */
 export function prefsFromLocalStorage(): OrgPrefs {
   return {
@@ -66,10 +88,14 @@ export const useOrgStore = create<OrgState>((set, get) => ({
 
   load: async () => {
     const reg = await listOrganisations();
-    get().applyRegistry(reg);
     const active = reg.organisations.find((o) => o.id === reg.activeId);
+    // Null prefs mark the first launch after the layout upgrade. Rename the
+    // legacy keys BEFORE applyRegistry, which reloads the tabs and the timer
+    // from their namespaced keys.
+    if (active && active.prefs === null) migrateLegacyKeysTo(active.id);
+    get().applyRegistry(reg);
     if (active && active.prefs === null) {
-      // First launch after the layout upgrade: adopt the legacy localStorage values once.
+      // Adopt the legacy localStorage preference values once.
       const seeded = prefsFromLocalStorage();
       try {
         const updated = await setOrganisationPrefs(active.id, seeded);
@@ -90,9 +116,13 @@ export const useOrgStore = create<OrgState>((set, get) => ({
   orgKey: (base) => `${base}:${get().activeId}`,
 
   savePrefs: async (partial) => {
-    const current = get().activePrefs();
     const id = get().activeId;
-    if (!current || !id) return;
+    if (!id) return;
+    // prefs is null only between the layout upgrade and the seed write-through
+    // in load() — usually because that write failed. Dropping the change on
+    // the floor there turns every preference toggle into a silent no-op, so
+    // merge over the same legacy values load() would have seeded from.
+    const current = get().activePrefs() ?? prefsFromLocalStorage();
     const next = { ...current, ...partial };
     applyPrefsToAppStore(next);
     try {

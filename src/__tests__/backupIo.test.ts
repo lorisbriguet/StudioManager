@@ -219,6 +219,20 @@ describe("createBackup", () => {
     setReadDirEntries("/backups", ["backup-k3f9a2-2026-01-01", "backup-zzz999-2026-01-02", "backup-2026-01-03"]);
     expect(await listBackups("/backups")).toEqual(["backup-k3f9a2-2026-01-01"]);
   });
+
+  it("listing still shows pre-upgrade backups, which have no organisation id", async () => {
+    useOrgStore.setState({ activeId: "k3f9a2" });
+    setReadDirEntries("/backups", [
+      "backup-k3f9a2-2026-01-04-09-00-00",
+      "backup-2025-12-31-23-59-59", // written before the organisations layout
+      "backup-zzz999-2026-01-02-10-00-00", // another organisation: still hidden
+      "notes", // unrelated folder
+    ]);
+    expect(await listBackups("/backups")).toEqual([
+      "backup-k3f9a2-2026-01-04-09-00-00",
+      "backup-2025-12-31-23-59-59",
+    ]);
+  });
 });
 
 describe("restoreFromBackup", () => {

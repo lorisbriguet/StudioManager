@@ -79,11 +79,11 @@ export function SettingsPage() {
   const [loadingCalendars, setLoadingCalendars] = useState(false);
   const [searchParams] = useSearchParams();
   const requestedCategory = searchParams.get("category");
-  const initialCategory: SettingsCategory =
+  const validCategory: SettingsCategory | null =
     requestedCategory && (SETTINGS_CATEGORIES as string[]).includes(requestedCategory)
       ? (requestedCategory as SettingsCategory)
-      : "general";
-  const [activeCategory, setActiveCategory] = useState<SettingsCategory>(initialCategory);
+      : null;
+  const [activeCategory, setActiveCategory] = useState<SettingsCategory>(validCategory ?? "general");
   const [appVersion, setAppVersion] = useState("");
   const testMode = useAppStore((s) => s.testMode);
   const presentationMode = useAppStore((s) => s.presentationMode);
@@ -93,6 +93,13 @@ export function SettingsPage() {
   const [restoringSnapshot, setRestoringSnapshot] = useState(false);
   const [hasSnapshotFile, setHasSnapshotFile] = useState(false);
   const t = useT();
+
+  // ?category= is not only an initial value: "Manage organisations…" in the
+  // switcher navigates here while Settings may already be mounted, and the
+  // initial state alone would leave the page on whatever category was open.
+  useEffect(() => {
+    if (validCategory) setActiveCategory(validCategory);
+  }, [validCategory]);
 
   useEffect(() => {
     getVersion().then(setAppVersion).catch((e) => logError("Failed to read app version:", e));
