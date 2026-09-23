@@ -255,6 +255,9 @@ npm run tauri dev
 
 # Build for production
 npm run tauri build
+
+# Build the separate demo app (own data folder, never published)
+npm run build:demo
 ```
 
 The production build outputs a `.dmg` file in `src-tauri/target/release/bundle/dmg/`.

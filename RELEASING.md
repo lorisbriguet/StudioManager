@@ -115,6 +115,10 @@ gh release create vX.Y.Z \
 - On an installed previous version: Settings → check for updates → the update downloads AND installs (this is the real signature test).
 - Note follow-ups/risks in `IDEAS.md`.
 
+## Demo build (never published)
+
+`npm run build:demo` builds **StudioManager Demo** from `src-tauri/tauri.demo.conf.json`: identifier `ch.studiomanager.demo`, own data folder at `~/Library/Application Support/ch.studiomanager.demo/`, updater pointed at a manifest that does not exist, no updater artefacts, so no signing key is needed. It installs next to the real app. Use it for presentations only; the release procedure above always uses the plain `npm run tauri build`. The demo build sets `VITE_DEMO_BUILD=1`, which enables the Settings › Data › Demo data card and disables the startup update check.
+
 ## Common failure modes
 
 | Symptom | Cause |

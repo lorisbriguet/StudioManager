@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:demo": "VITE_DEMO_BUILD=1 tauri build --config src-tauri/tauri.demo.conf.json",
     "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest",
