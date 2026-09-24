@@ -26,17 +26,9 @@ The app opens on an empty dashboard. Fill in the essentials so PDFs come out rig
 
 If macOS asks for **Calendar** or **Notifications** permission, that is the optional iCloud Calendar sync and the overdue-invoice reminders. You can decline both and everything else still works.
 
-## 3. Explore with demo data first
+## 3. Start with your own data
 
-Before entering your own data, look around with a realistic studio year loaded:
-
-1. Open **Settings → Test Mode** and click **Enter Presentation Mode**.
-2. A banner at the top reminds you that you are in the demo. Browse the dashboard, the finances, a project page, an invoice PDF.
-3. Click **Exit Presentation Mode** when done. The demo database is discarded and your own data comes back untouched.
-
-Five fictional clients, eight projects, a year of invoices and expenses, time entries and a couple of wiki notes are included. Dates are relative to today, so you will see an overdue invoice, tasks due this week, and a draft waiting to be sent.
-
-The same Settings page also has **Test Mode**, a sandbox copy of your own database for trying things without consequences.
+The app starts empty on purpose: add one client and one project, and the dashboard, calendar and finances fill in as you go. Dates and numbers are yours from the first minute, so what you see is what you will use.
 
 ## 4. A fifteen-minute tour
 
@@ -89,6 +81,6 @@ Please include:
 
 - The app version, shown at the bottom of the Settings sidebar, and your macOS version.
 - What you did, what you expected, and what happened instead.
-- A screenshot if it is visual. Presentation Mode is handy for screenshots that contain no real client data.
+- A screenshot if it is visual. Blur or crop anything you would not want a stranger to read.
 
 Questions of the form "why does it work this way" are just as useful as bugs. Thank you.
