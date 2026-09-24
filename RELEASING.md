@@ -9,6 +9,7 @@ Step-by-step guidelines for publishing a new release on GitHub. Follow in order;
 - `gh` CLI authenticated against `lorisbriguet/StudioManager`.
 - Tauri updater signing key at `~/.tauri/StudioManager.key`. **Never commit it.** Its public key is pinned in `src-tauri/tauri.conf.json` — if the private key is ever lost, shipped apps can no longer auto-update.
 - Node **20.19+ or 22.12+** (Vite 7 requirement) and stable Rust.
+- Use **npm 11** for installs and lockfile changes (`npx -y npm@11 install`): npm 10.9 crashes with `Cannot read properties of null (reading 'edgesOut')` on Vitest 4's peer set.
 - On this machine: the repo lives on Synology Drive, which corrupts `node_modules` and `src-tauri/target`. Build with a **local** cargo target dir (see step 4) and run `npm ci` if node_modules acts up. Ideally exclude both folders from sync.
 
 ## 1. Pre-release validation (all must pass)
