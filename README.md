@@ -129,11 +129,9 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - **Command Palette** (Cmd+K) — quick search and actions
 - **Undo/Redo** (Cmd+Z / Cmd+Shift+Z) — full undo/redo with state restoration
 - **Context Menus** — right-click on any list row for contextual actions
-- **Test Mode** — sandbox environment to experiment without affecting production data
 - **10 Color Themes** — curated full-app palettes (Default, Nord, Rose Pine, Catppuccin, Tokyo Night, Evergreen, Midnight, Sand, Lavender)
 - **19 Accent Colors** — customize the app appearance
 - **Smooth Animations** — page transitions, card fade-ins, counter animations (with reduce-motion support)
-- **Presentation Mode** — demo environment with seeded data for client presentations
 - **Organisations** — run several fully separate businesses in one install (own database, documents, bank details, preferences and backups per organisation); switch with Cmd+Shift+O
 - **Batch Operations** — multi-select with bulk actions on all list pages
 - **Saved Filters** — save and quick-apply filter configurations per page
@@ -208,7 +206,7 @@ That folder holds `organisations.json` (the list of your organisations) and one 
 
 ## Screenshots
 
-Taken in Presentation Mode with demo data.
+Taken with fictional demo data.
 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Dashboard" width="800">

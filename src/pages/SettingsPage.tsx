@@ -33,7 +33,7 @@ import { isDemoBuild } from "../lib/demoBuild";
 
 type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "workload" | "organisations" | "categories" | "suppliers" | "lists" | "time_entries" | "updates" | "backup" | "sandbox" | "demo_data";
 
-const SETTINGS_CATEGORIES_BASE: SettingsCategory[] = ["general", "appearance", "behavior", "calendar", "workload", "organisations", "categories", "suppliers", "lists", "time_entries", "updates", "backup", "sandbox"];
+const SETTINGS_CATEGORIES_BASE: SettingsCategory[] = ["general", "appearance", "behavior", "calendar", "workload", "organisations", "categories", "suppliers", "lists", "time_entries", "updates", "backup"];
 
 export function SettingsPage() {
   const dateFormat = useAppStore((s) => s.dateFormat);
@@ -84,7 +84,8 @@ export function SettingsPage() {
   // demo_data is only a valid ?category= target in the demo build — in the
   // real build it would otherwise resolve to an empty pane instead of
   // falling back to "general".
-  const settingsCategories: SettingsCategory[] = isDemoBuild() ? [...SETTINGS_CATEGORIES_BASE, "demo_data"] : SETTINGS_CATEGORIES_BASE;
+  // Test and presentation modes are demo-build tools: the real app keeps only the exit paths (banners) for anyone mid-mode at update time.
+  const settingsCategories: SettingsCategory[] = isDemoBuild() ? [...SETTINGS_CATEGORIES_BASE, "sandbox", "demo_data"] : SETTINGS_CATEGORIES_BASE;
   const validCategory: SettingsCategory | null =
     requestedCategory && (settingsCategories as string[]).includes(requestedCategory)
       ? (requestedCategory as SettingsCategory)
@@ -338,8 +339,12 @@ export function SettingsPage() {
         { key: "lists", label: t.custom_lists, icon: <LayoutList size={14} /> },
         { key: "time_entries", label: t.time_entries_management, icon: <Clock size={14} /> },
         { key: "backup", label: t.backup, icon: <Archive size={14} /> },
-        { key: "sandbox", label: t.test_mode, icon: <Shield size={14} /> },
-        ...(isDemoBuild() ? [{ key: "demo_data" as const, label: t.demo_data, icon: <DatabaseIcon size={14} /> }] : []),
+        ...(isDemoBuild()
+          ? [
+              { key: "sandbox" as const, label: t.test_mode, icon: <Shield size={14} /> },
+              { key: "demo_data" as const, label: t.demo_data, icon: <DatabaseIcon size={14} /> },
+            ]
+          : []),
       ],
     },
     {
@@ -640,7 +645,7 @@ export function SettingsPage() {
             </SettingsCard>
           )}
 
-          {activeCategory === "sandbox" && (
+          {activeCategory === "sandbox" && isDemoBuild() && (
             <div className="space-y-4">
               <SettingsCard title={t.test_mode} desc={t.test_mode_desc}>
               <SettingRow label={t.test_mode}>
@@ -674,20 +679,6 @@ export function SettingsPage() {
                     {togglingPresentation ? t.loading : t.enter_presentation_mode}
                   </button>
                 )}
-              </SettingRow>
-              </SettingsCard>
-
-              <SettingsCard title={t.snapshot} desc={t.snapshot_desc}>
-              <SettingRow label={t.snapshot}>
-                <div className="flex items-center gap-2">
-                  <Button type="button" size="sm" icon={<Camera size={12} />} onClick={handleCreateSnapshot} disabled={snapshotting || testMode}>
-                    {snapshotting ? t.loading : t.create_snapshot}
-                  </Button>
-                  <button type="button" onClick={handleRestoreSnapshot} disabled={restoringSnapshot || !hasSnapshotFile || testMode} className="flex items-center gap-1 px-2.5 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
-                    <RotateCcw size={12} /> {restoringSnapshot ? t.loading : t.restore_snapshot}
-                  </button>
-                  {!hasSnapshotFile && <span className="text-xs text-muted">{t.no_snapshot_available}</span>}
-                </div>
               </SettingRow>
               </SettingsCard>
             </div>
@@ -777,6 +768,20 @@ export function SettingsPage() {
                   <button type="button" onClick={runRestore} disabled={restoring || !selectedBackup || !backupPath} className="flex items-center gap-1 px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
                     <RotateCcw size={12} /> {restoring ? t.restoring : t.restore}
                   </button>
+                </div>
+              </SettingRow>
+              </SettingsCard>
+
+              <SettingsCard title={t.snapshot} desc={t.snapshot_desc}>
+              <SettingRow label={t.snapshot}>
+                <div className="flex items-center gap-2">
+                  <Button type="button" size="sm" icon={<Camera size={12} />} onClick={handleCreateSnapshot} disabled={snapshotting || testMode}>
+                    {snapshotting ? t.loading : t.create_snapshot}
+                  </Button>
+                  <button type="button" onClick={handleRestoreSnapshot} disabled={restoringSnapshot || !hasSnapshotFile || testMode} className="flex items-center gap-1 px-2.5 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
+                    <RotateCcw size={12} /> {restoringSnapshot ? t.loading : t.restore_snapshot}
+                  </button>
+                  {!hasSnapshotFile && <span className="text-xs text-muted">{t.no_snapshot_available}</span>}
                 </div>
               </SettingRow>
               </SettingsCard>

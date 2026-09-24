@@ -39,3 +39,29 @@ describe("Settings › Demo data category", () => {
     expect(screen.getByRole("heading", { name: /general/i })).toBeInTheDocument();
   });
 });
+
+describe("Settings › Test Mode category (test + presentation modes)", () => {
+  it("is hidden in the real build", () => {
+    vi.mocked(isDemoBuild).mockReturnValue(false);
+    renderPage();
+    expect(screen.queryByRole("button", { name: /^test mode$/i })).toBeNull();
+  });
+
+  it("is present in the demo build", () => {
+    vi.mocked(isDemoBuild).mockReturnValue(true);
+    renderPage();
+    expect(screen.getByRole("button", { name: /^test mode$/i })).toBeInTheDocument();
+  });
+
+  it("falls back to the General card when ?category=sandbox is requested in the real build", () => {
+    vi.mocked(isDemoBuild).mockReturnValue(false);
+    renderPage(["/settings?category=sandbox"]);
+    expect(screen.getByRole("heading", { name: /general/i })).toBeInTheDocument();
+  });
+
+  it("keeps the Snapshot card reachable under Backup in the real build", () => {
+    vi.mocked(isDemoBuild).mockReturnValue(false);
+    renderPage(["/settings?category=backup"]);
+    expect(screen.getByRole("heading", { name: /^snapshot$/i })).toBeInTheDocument();
+  });
+});
