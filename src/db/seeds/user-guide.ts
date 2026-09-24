@@ -24,6 +24,7 @@ const articles: ArticleSeed[] = [
   <li><strong>Create a project</strong> — From the <strong>Projects</strong> page, create a project linked to your client and start adding tasks.</li>
   <li><strong>Send your first invoice</strong> — Go to <strong>Invoices</strong>, create one, add line items, and export the PDF with a Swiss QR-bill.</li>
 </ol>
+<p>Running more than one business? Each one can be its own <strong>organisation</strong> with separate clients, documents, bank details and finances. See the <strong>Organisations</strong> article.</p>
 
 <h2>Navigation</h2>
 <p>The <strong>sidebar</strong> on the left gives you access to every section of the app. Sections are grouped logically:</p>
@@ -52,6 +53,43 @@ const articles: ArticleSeed[] = [
 <p>Each organisation keeps its own SQLite database, receipts and invoice PDFs in its own folder:</p>
 <p><code>~/Library/Application Support/ch.studiomanager.app/orgs/&lt;id&gt;/</code></p>
 <p>The list of organisations lives beside it in <code>organisations.json</code>. Use the <strong>Backup</strong> feature in Settings to create regular backups of everything.</p>`,
+  },
+
+  // ── Organisations ────────────────────────────────────────────────
+  {
+    title: "Organisations",
+    tags: ["guide", "organisations"],
+    content: `<h2>One app, several businesses</h2>
+<p>An <strong>organisation</strong> is a fully separate business inside StudioManager: its own clients, projects, tasks, invoices, quotes, expenses, income, wiki, resources, business profile and bank details. Nothing is shared between organisations, so a design studio and a side project can live in the same app without mixing numbers.</p>
+<p>The name of the active organisation appears at the top of the sidebar and in the window title.</p>
+
+<h2>Switching</h2>
+<ul>
+  <li>Click the organisation name at the top of the sidebar, or press <strong>Cmd+Shift+O</strong>, and pick another one.</li>
+  <li>A running timer is saved as a time entry in the organisation you leave.</li>
+  <li>If a form has unsaved changes, the app asks before switching.</li>
+  <li>After the switch you land on the dashboard of the other organisation, with its own tabs restored.</li>
+</ul>
+
+<h2>Creating an organisation</h2>
+<p>Open the switcher and choose <strong>New organisation</strong>. Give it a name and pick a start:</p>
+<ul>
+  <li><strong>Start empty</strong> — A fresh database. You fill in the profile, bank details, activities and categories.</li>
+  <li><strong>Start from the current organisation's settings</strong> — Copies the business profile, bank details, activities, expense categories and invoice and workload templates. No clients or documents are copied.</li>
+</ul>
+<p>Invoice and quote numbering starts again at 001 in a new organisation.</p>
+
+<h2>Managing organisations</h2>
+<p>Go to <strong>Settings &gt; Organisations</strong> (also reachable from the switcher) to rename, reorder or delete an organisation. Deleting asks you to type its name; the folder is moved to the Trash, not erased, so it can be recovered from there.</p>
+
+<h2>Preferences per organisation</h2>
+<p>These settings are remembered separately for each organisation: the Income page and Tasks page visibility, the Time Overview, calendar sync and the calendar name, the backup folders and the PDF export language. Themes, accent colour and the interface language are shared.</p>
+
+<h2>Backups per organisation</h2>
+<p>Each organisation backs up on its own, into folders named <code>backup-&lt;organisation id&gt;-&lt;timestamp&gt;</code>. Several organisations can share the same parent folder; the Restore list only shows backups that belong to the current organisation (plus backups made before organisations existed).</p>
+
+<h2>Where the data lives</h2>
+<p><code>~/Library/Application Support/ch.studiomanager.app/orgs/&lt;id&gt;/</code> holds one organisation: its database, invoice PDFs and receipts. The list of organisations is in <code>organisations.json</code> next to it. The first time version 2.0 starts, existing data is moved into this layout automatically and a snapshot is kept until the next successful launch.</p>`,
   },
 
   // ── 2. Clients & Contacts ────────────────────────────────────────
@@ -476,6 +514,10 @@ const articles: ArticleSeed[] = [
   <li><strong>Time overview</strong> — Show or hide the Time Overview page</li>
   <li><strong>Native notifications</strong> — Enable macOS notification banners for overdue invoices and backups</li>
 </ul>
+<p>Page visibility, calendar and backup settings are stored per organisation; see the <strong>Organisations</strong> article.</p>
+
+<h2>Organisations</h2>
+<p>Rename, reorder or delete your organisations. Creating one happens from the organisation switcher at the top of the sidebar (<strong>Cmd+Shift+O</strong>).</p>
 
 <h2>Calendar</h2>
 <ul>
@@ -493,14 +535,8 @@ const articles: ArticleSeed[] = [
   <li><strong>Max backups</strong> — How many backups to keep before rotating</li>
   <li><strong>Auto-backup interval</strong> — Automatic backups every X minutes (0 = disabled)</li>
   <li><strong>Manual backup</strong> — Create a backup on demand</li>
-  <li><strong>Restore</strong> — Restore from a previous backup</li>
-</ul>
-
-<h2>Sandbox</h2>
-<ul>
-  <li><strong>Test Mode</strong> — Create a snapshot of your database and switch to a test copy. Experiment freely, then discard changes and return to your real data.</li>
-  <li><strong>Presentation Mode</strong> — Switch to a pre-populated demo database with sample clients, projects, invoices, and more. Perfect for demos or screenshots.</li>
-  <li><strong>Snapshot</strong> — Manually snapshot and restore your database at any point.</li>
+  <li><strong>Restore</strong> — Restore from a previous backup. Each organisation only sees its own backups.</li>
+  <li><strong>Snapshot</strong> — Take a quick safety copy of the current organisation's database before a risky change, and restore it in one click.</li>
 </ul>
 
 <h2>Updates</h2>
@@ -520,6 +556,7 @@ const articles: ArticleSeed[] = [
   <tr><td><strong>Cmd+W</strong></td><td>Close current tab</td></tr>
   <tr><td><strong>Cmd+Shift+Y</strong></td><td>Reopen last closed tab</td></tr>
   <tr><td><strong>Cmd+Shift+T</strong></td><td>Open Quick Timer</td></tr>
+  <tr><td><strong>Cmd+Shift+O</strong></td><td>Switch organisation</td></tr>
   <tr><td><strong>Ctrl+Tab</strong></td><td>Next tab</td></tr>
   <tr><td><strong>Ctrl+Shift+Tab</strong></td><td>Previous tab</td></tr>
 </table>
