@@ -23,6 +23,16 @@
   },
   "bundle": {
     "createUpdaterArtifacts": false,
-    "targets": ["app", "dmg"]
+    "targets": [
+      "app",
+      "dmg"
+    ],
+    "icon": [
+      "icons-demo/32x32.png",
+      "icons-demo/128x128.png",
+      "icons-demo/128x128@2x.png",
+      "icons-demo/icon.icns",
+      "icons-demo/icon.ico"
+    ]
   }
 }
