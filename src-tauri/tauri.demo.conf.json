@@ -33,6 +33,11 @@
       "icons-demo/128x128@2x.png",
       "icons-demo/icon.icns",
       "icons-demo/icon.ico"
-    ]
+    ],
+    "macOS": {
+      "files": {
+        "Resources/Assets.car": "icons-demo/Assets.car"
+      }
+    }
   }
 }
