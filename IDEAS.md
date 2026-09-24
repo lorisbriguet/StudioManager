@@ -79,6 +79,12 @@ All 12 checklist items pass after three fixes found by the pass:
 - Verified: upgrade of the live folder (rows, files and checksums identical; 175 paths rewritten), rename, create-with-seeding, switch (title, dashboard, finances, per-org sidebar prefs), timer entry logged in the source org only, unsaved-changes prompt with Stay, test and presentation modes exit on switch and keep their files inside the org folder, per-org backups in one parent (`backup-<id>-…`) with isolated restore lists, per-org calendar name/toggle, delete to Trash, relaunch on the last active org with the upgrade snapshot removed
 - Follow-ups (parked): after a switch the destination's restored active tab is relabelled Dashboard (navigate to the restored tab instead); `openDb` should use `resetDb` to force a reopen; default calendar name could include the organisation name; legacy backup folders sort after org-prefixed ones in the restore list; `studiomanager_snapshot.db` stays in the org folder after exiting test mode (pre-existing)
 
+## V2.0.1 — Done (maintenance)
+
+- [x] Dependency audit green again: Tiptap 3.31.3 (prototype-pollution and ReDoS advisories), Vitest 4.1.11 (mocker path traversal, dev-only), rustls 0.23.45 (RUSTSEC-2026-0285); lockfile regenerated with npm 11 (npm 10.9 crashes on Vitest's peer set)
+- [x] Test Mode and Presentation Mode are demo-build tools now: their Settings category is hidden in the real app (banners and exit paths stay for anyone mid-mode at update time); the Snapshot card moved under Backup
+- [x] Docs: guide, README and landing page no longer point testers at Presentation Mode
+
 ## V2.1.0 — Done (demo app)
 
 - [x] Separate **StudioManager Demo** build (`npm run build:demo`, `src-tauri/tauri.demo.conf.json`): own identifier and data folder, dead updater endpoint, no updater artefacts; never published
