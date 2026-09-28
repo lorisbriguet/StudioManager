@@ -1,14 +1,16 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
-import { Plus, Paperclip, Eye, X, ChevronRight, Trash2, Upload, Wallet, Pencil, Settings2 } from "lucide-react";
+import { Plus, Paperclip, Eye, ChevronRight, Trash2, Upload, Wallet, Pencil, Settings2 } from "lucide-react";
 import { PageHeader, SearchBar, Button, Card, EmptyState, FormField, Input, Select, TableSkeleton } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { formatDisplayDate } from "../utils/formatDate";
-import { open, ask } from "@tauri-apps/plugin-dialog";
-import { copyFile, mkdir, exists, readFile } from "@tauri-apps/plugin-fs";
+import { ask } from "@tauri-apps/plugin-dialog";
+import { copyFile, mkdir, exists } from "@tauri-apps/plugin-fs";
 import { orgPaths } from "../lib/orgPaths";
+import { attachReceipt as attachReceiptFlow } from "../lib/attachReceipt";
+import { ReceiptPreview } from "../components/ReceiptPreview";
 import {
   useIncomes,
   useCreateIncome,
@@ -23,7 +25,6 @@ import { useReceiptDrop } from "../hooks/useReceiptDrop";
 import { useDetectedFields } from "../hooks/useDetectedFields";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useT } from "../i18n/useT";
-import { notifyError } from "../lib/notifyError";
 import type { Income } from "../types/income";
 import { logError } from "../lib/log";
 import { useYearGrouping } from "../hooks/useYearGrouping";
@@ -140,31 +141,17 @@ export function IncomePage() {
     },
   });
 
-  const attachReceipt = async (incomeId: number, reference: string, source: string) => {
-    try {
-      const selected = await open({
-        multiple: false,
-        filters: [{ name: "Files", extensions: ["pdf", "png", "jpg", "jpeg", "heic"] }],
-      });
-      if (!selected) return;
-      const filePath = typeof selected === "string" ? selected : selected;
-      const ext = filePath.split(".").pop() ?? "pdf";
-      const { receiptsDir } = await orgPaths();
-      if (!(await exists(receiptsDir))) {
-        await mkdir(receiptsDir, { recursive: true });
-      }
-      const safeRef = reference.replace(/[/\\]/g, "_").replace(/\.\./g, "_");
-      const safeSrc = source.replace(/[/\\]/g, "_").replace(/\.\./g, "_");
-      const destPath = `${receiptsDir}/${safeRef}_${safeSrc}.${ext}`;
-      await copyFile(filePath, destPath);
-      updateIncome.mutate(
-        { id: incomeId, data: { receipt_path: destPath } },
-        { onSuccess: () => toast.success(t.receipt_attached) }
-      );
-    } catch {
-      toast.error(t.failed_to_attach_receipt);
-    }
-  };
+  const attachReceipt = (incomeId: number, reference: string, source: string) =>
+    attachReceiptFlow(
+      reference,
+      source,
+      (destPath) =>
+        updateIncome.mutate(
+          { id: incomeId, data: { receipt_path: destPath } },
+          { onSuccess: () => toast.success(t.receipt_attached) }
+        ),
+      () => toast.error(t.failed_to_attach_receipt)
+    );
 
   if (isLoading) return (
     <div className="relative">
@@ -396,6 +383,8 @@ export function IncomePage() {
           path={preview.path}
           reference={preview.reference}
           onClose={() => setPreview(null)}
+          bgClassName="bg-[var(--color-input-bg)]"
+          roundedClassName="rounded-lg"
         />
       )}
       {ctxMenu && (
@@ -420,77 +409,6 @@ export function IncomePage() {
           { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
         ]}
       />
-    </div>
-  );
-}
-
-function ReceiptPreview({
-  path,
-  reference,
-  onClose,
-}: {
-  path: string;
-  reference: string;
-  onClose: () => void;
-}) {
-  const t = useT();
-  const ext = path.split(".").pop()?.toLowerCase() ?? "";
-  const isImage = ["png", "jpg", "jpeg", "webp"].includes(ext);
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    let url: string | null = null;
-    readFile(path)
-      .then((bytes) => {
-        const mime = isImage
-          ? `image/${ext === "jpg" ? "jpeg" : ext}`
-          : "application/pdf";
-        const blob = new Blob([bytes], { type: mime });
-        url = URL.createObjectURL(blob);
-        setBlobUrl(url);
-      })
-      .catch((err) => {
-        setBlobUrl(null);
-        notifyError(t.receipt_load_failed, err);
-      });
-    return () => {
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [path, ext, isImage, t.receipt_load_failed]);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
-    >
-      <div
-        className="bg-[var(--color-input-bg)] rounded-lg shadow-xl w-[80vw] h-[85vh] flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-input-border)]">
-          <h2 className="text-sm font-semibold">{reference}</h2>
-          <button onClick={onClose} aria-label={t.close} className="text-muted hover:text-[var(--color-text)]">
-            <X size={16} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-auto bg-[var(--color-input-bg)] flex items-center justify-center">
-          {!blobUrl ? (
-            <span className="text-sm text-muted">{t.loading}</span>
-          ) : isImage ? (
-            <img
-              src={blobUrl}
-              alt={reference}
-              className="max-w-full max-h-full object-contain"
-            />
-          ) : (
-            <iframe
-              src={blobUrl}
-              title={reference}
-              className="w-full h-full border-0"
-            />
-          )}
-        </div>
-      </div>
     </div>
   );
 }
