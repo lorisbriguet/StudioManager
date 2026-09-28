@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: typecheck, lint, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # This repo's lockfile requires npm 11: npm 10.9 (bundled with Node 22
+      # on GitHub-hosted runners) crashes with "Cannot read properties of
+      # null (reading 'edgesOut')" resolving Vitest 4's peer set — see
+      # RELEASING.md, prerequisites. Upgrade before `npm ci`.
+      - run: npm install -g npm@11
+      - run: npm ci
+
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npx vitest run
+
+      # No Rust job here on purpose: the Tauri build needs macOS and system
+      # libraries it doesn't make sense to provision in CI, and releases are
+      # built and smoke-tested locally per RELEASING.md. Rust dependencies
+      # are still covered separately by the weekly `cargo audit` job in
+      # dependency-audit.yml.
