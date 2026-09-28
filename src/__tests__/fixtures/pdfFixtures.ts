@@ -9,7 +9,7 @@
  */
 import type { Invoice, InvoiceLineItem } from "../../types/invoice";
 import type { Quote, QuoteLineItem } from "../../types/quote";
-import type { Client } from "../../types/client";
+import type { Client, ClientAddress } from "../../types/client";
 import type { BusinessProfile } from "../../types/business-profile";
 import type { InvoiceTemplate } from "../../types/invoice-template";
 
@@ -74,6 +74,25 @@ export const templateFixture: InvoiceTemplate = {
   updated_at: "2026-01-01 00:00:00",
 };
 
+/**
+ * Every show_* flag off — exercises the "hide" side of every template
+ * conditional (notes, project name, PO number, bank details, QR bill,
+ * footer) in one pass. This is what a shared-layout extraction most needs
+ * a snapshot guarding: template flags gate almost every optional block in
+ * both InvoicePDF and QuotePDF.
+ */
+export const hiddenTemplateFixture: InvoiceTemplate = {
+  ...templateFixture,
+  id: 2,
+  name: "Minimal",
+  show_notes: 0,
+  show_project_name: 0,
+  show_po_number: 0,
+  show_bank_details: 0,
+  show_qr_bill: 0,
+  show_footer: 0,
+};
+
 export const invoiceFixture: Invoice = {
   id: 42,
   reference: "2026-014",
@@ -133,6 +152,40 @@ export const quoteFixture: Quote = {
   created_at: "2026-02-10 08:00:00",
   updated_at: "2026-02-10 08:00:00",
 };
+
+/**
+ * An English, VAT-exempt, DRAFT-reference quote — three normally-separate
+ * minor branches (language, vat_exempt, DRAFT reference display) folded
+ * into one cheap fixture/case rather than three near-duplicate snapshots.
+ */
+export const enDraftQuoteFixture: Quote = {
+  ...quoteFixture,
+  language: "EN",
+  reference: "DRAFT-2026-Q-010",
+};
+
+/** Pairs with enDraftQuoteFixture to also exercise the VAT-exempt note. */
+export const vatExemptProfileFixture: BusinessProfile = {
+  ...profileFixture,
+  vat_exempt: 1,
+};
+
+/**
+ * Billing-address override and named contact — exercises the "att: <name>"
+ * line and the billingAddress-over-client fallback in both InvoicePDF
+ * (around the header client block) and QuotePDF (same shape).
+ */
+export const billingAddressFixture: ClientAddress = {
+  id: 1,
+  client_id: "client-1",
+  label: "Bureau comptable",
+  billing_name: "Atelier Verriere Sarl - Comptabilite",
+  address_line1: "Avenue de la Gare 8",
+  address_line2: "",
+  postal_city: "1003 Lausanne",
+};
+
+export const contactNameFixture = "Morgane Aebischer";
 
 /**
  * Three items with mixed rates and units — hits the per-row rate/unit
