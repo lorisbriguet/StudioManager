@@ -190,11 +190,10 @@ function ChartRevenue() {
 
 function RecentInvoices() {
   const { data: invoices } = useInvoices();
-  const { data: clients } = useQuery({ queryKey: ["clients"], queryFn: async () => {
-    const { getDb } = await import("../../db");
-    const db = await getDb();
-    return db.select<{ id: string; name: string }[]>("SELECT id, name FROM clients");
-  }});
+  // Shares the ["clients"] cache key with useClients() (Clients page, etc.) —
+  // must use the same hook rather than a narrower inline query, or its
+  // result poisons that shared cache entry with truncated rows.
+  const { data: clients } = useClients();
   const t = useT();
 
   const clientsMap = useMemo(() => new Map(clients?.map((c) => [c.id, c.name]) ?? []), [clients]);
