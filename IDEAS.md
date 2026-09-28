@@ -117,7 +117,7 @@ All 12 checklist items pass after three fixes found by the pass:
 Four independent reading passes (correctness/data, security/platform, UI/a11y/perf, tests/tooling) over 51k lines of TypeScript and 2.5k of Rust, plus deterministic tooling. Full report: `docs/audits/2026-09-28-full-audit.md`. Clean bill on the organisations layer, the data upgrade, SQL parameterisation, capabilities and CSP, the updater chain, and design-system compliance.
 
 ### P1
-- [ ] `docs/screenshots/*.png` on the public site show the owner's real address, phone, bank details and a scannable QR slip — retake them from the demo app
+- [x] `docs/screenshots/*.png` on the public site showed the owner's real address, phone, bank details and a scannable QR slip — all four retaken in the StudioManager Demo build (fictional profile), and a real street address dropped from an expense-parser fixture
 - [x] Redo after an undone delete re-finds by name and can destroy a different record — fixed in all four hooks, each with a collision test
 - [x] QR payment slip swallows render errors — now surfaced to the user, the space-check patch restored in a finally, and the drawing code executed by a test
 - [x] CI runs tsc, eslint and vitest on push and PRs (.github/workflows/ci.yml); Rust stays local, documented in the workflow
@@ -131,6 +131,7 @@ Four independent reading passes (correctness/data, security/platform, UI/a11y/pe
 - [ ] No test varies quantities/rates/discount against the computed total; trustee PDFs and the exchange-rate freeze are untested
 - [ ] `SavedFilterBar.tsx:277-278` AND/OR has no i18n key; two screens leak English into French
 - [ ] Dashboard widget layout is not organisation-namespaced
+- [ ] Dashboard layout is destroyed by a narrow window. `DashboardPage.tsx:343-348` stores one layout under `lg` but persists whatever `onLayoutChange` reports, so at any smaller breakpoint react-grid-layout's bounds-corrected layout (clamped to 10, 6 or 4 columns) is written back over it. Seen in the demo build: picking a preset at a 1200 pt window left every widget stacked in one column, with `w:6` saved. Keep a layout per breakpoint, or only persist changes the user actually made
 - [ ] Three bespoke modals lose Escape and focus trap; workload column menus are mouse-only
 - [ ] Receipt filename extension is not sanitised
 - [ ] CHF formatting duplicated in seven places
