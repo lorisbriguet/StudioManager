@@ -127,7 +127,7 @@ Four independent reading passes (correctness/data, security/platform, UI/a11y/pe
 - [ ] Golden PDF snapshots record the runner's ICU number formatting (the Swiss U+2019 separator), so they are environment-dependent; CI runs on macOS to match, but injecting a fixed formatter in the tests would make them portable
 - [ ] `db/index.ts:245-264` re-creates a deleted client address on every startup and org switch
 - [ ] QR slip debtor can differ from the invoice header when a client has several addresses
-- [ ] Personal data still reachable in public git history (needs filter-repo + force push, or a private repo)
+- [x] Personal data purged from the public git history (2026-09-28): `scripts/migrate-data.mjs` and the two `attach-*.mjs` scripts dropped from every commit, the eight pre-28-September `docs/screenshots/*.png` blobs stripped, and the street address in the expense-parser fixture replaced — git-filter-repo, then a force-push of `main` and all 36 tags. HEAD's tree is byte-identical; one commit that only touched the stripped images was pruned. GitHub still serves the old objects by direct SHA until it garbage-collects: request drafted in the backup mirror at `~/Documents/GitHub/StudioManager-history-backup-20260928.git/GITHUB-SUPPORT-REQUEST.md`
 - [ ] No test varies quantities/rates/discount against the computed total; trustee PDFs and the exchange-rate freeze are untested
 - [ ] `SavedFilterBar.tsx:277-278` AND/OR has no i18n key; two screens leak English into French
 - [ ] Dashboard widget layout is not organisation-namespaced
