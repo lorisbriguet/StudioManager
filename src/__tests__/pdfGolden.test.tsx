@@ -100,26 +100,41 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+/**
+ * Canonicalise the Swiss thousands separator before snapshotting.
+ *
+ * `toLocaleString("de-CH")` returns U+2019 (’) on some ICU builds and a plain
+ * apostrophe on others, so the same code snapshots differently on a developer
+ * Mac and on a CI runner. That character comes from ICU's locale data, not
+ * from anything this app decides, so pinning it would make the golden test
+ * report version drift in Node as if the documents had changed. The layout,
+ * which is what these snapshots exist to protect, is unaffected.
+ */
+function canonical(html: string): string {
+  return html.replace(/(\d)[\u2019'](\d)/g, "$1\u2019$2");
+}
+
+
 describe("invoice PDF golden", () => {
   it("renders the standard invoice unchanged", () => {
     const { container } = render(
       <InvoicePDF invoice={invoiceFixture} lineItems={lineItemsFixture} client={clientFixture} profile={profileFixture} template={templateFixture} projectName="Brand refresh" />
     );
-    expect(container.innerHTML).toMatchSnapshot();
+    expect(canonical(container.innerHTML)).toMatchSnapshot();
   });
 
   it("renders a reminder invoice unchanged", () => {
     const { container } = render(
       <InvoicePDF invoice={invoiceFixture} lineItems={lineItemsFixture} client={clientFixture} profile={profileFixture} template={templateFixture} reminderCount={2} />
     );
-    expect(container.innerHTML).toMatchSnapshot();
+    expect(canonical(container.innerHTML)).toMatchSnapshot();
   });
 
   it("renders the collapsed global-rate table unchanged", () => {
     const { container } = render(
       <InvoicePDF invoice={invoiceFixture} lineItems={uniformLineItemsFixture} client={clientFixture} profile={profileFixture} template={templateFixture} />
     );
-    expect(container.innerHTML).toMatchSnapshot();
+    expect(canonical(container.innerHTML)).toMatchSnapshot();
   });
 
   it("renders with a billing address override and contact name", () => {
@@ -134,7 +149,7 @@ describe("invoice PDF golden", () => {
         billingAddress={billingAddressFixture}
       />
     );
-    expect(container.innerHTML).toMatchSnapshot();
+    expect(canonical(container.innerHTML)).toMatchSnapshot();
   });
 
   it("renders with all show_* template flags hidden (no QR bill)", () => {
@@ -145,14 +160,14 @@ describe("invoice PDF golden", () => {
     const { container } = render(
       <InvoicePDF invoice={invoiceFixture} lineItems={lineItemsFixture} client={clientFixture} profile={profileFixture} template={hiddenTemplateFixture} projectName="Brand refresh" />
     );
-    expect(container.innerHTML).toMatchSnapshot();
+    expect(canonical(container.innerHTML)).toMatchSnapshot();
   });
 
   it("renders with no template supplied (defaults)", () => {
     const { container } = render(
       <InvoicePDF invoice={invoiceFixture} lineItems={lineItemsFixture} client={clientFixture} profile={profileFixture} />
     );
-    expect(container.innerHTML).toMatchSnapshot();
+    expect(canonical(container.innerHTML)).toMatchSnapshot();
   });
 });
 
@@ -161,7 +176,7 @@ describe("quote PDF golden", () => {
     const { container } = render(
       <QuotePDF quote={quoteFixture} lineItems={lineItemsFixture} client={clientFixture} profile={profileFixture} template={templateFixture} projectName="Brand refresh" />
     );
-    expect(container.innerHTML).toMatchSnapshot();
+    expect(canonical(container.innerHTML)).toMatchSnapshot();
   });
 
   it("renders with a billing address override and contact name", () => {
@@ -176,20 +191,20 @@ describe("quote PDF golden", () => {
         billingAddress={billingAddressFixture}
       />
     );
-    expect(container.innerHTML).toMatchSnapshot();
+    expect(canonical(container.innerHTML)).toMatchSnapshot();
   });
 
   it("renders with all show_* template flags hidden", () => {
     const { container } = render(
       <QuotePDF quote={quoteFixture} lineItems={lineItemsFixture} client={clientFixture} profile={profileFixture} template={hiddenTemplateFixture} projectName="Brand refresh" />
     );
-    expect(container.innerHTML).toMatchSnapshot();
+    expect(canonical(container.innerHTML)).toMatchSnapshot();
   });
 
   it("renders an EN draft quote with VAT exemption", () => {
     const { container } = render(
       <QuotePDF quote={enDraftQuoteFixture} lineItems={lineItemsFixture} client={clientFixture} profile={vatExemptProfileFixture} template={templateFixture} />
     );
-    expect(container.innerHTML).toMatchSnapshot();
+    expect(canonical(container.innerHTML)).toMatchSnapshot();
   });
 });

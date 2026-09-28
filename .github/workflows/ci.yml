@@ -8,12 +8,10 @@ on:
 jobs:
   test:
     name: typecheck, lint, test
-    # macOS, not Linux: the app ships only to macOS, and the golden PDF
-    # snapshots record Swiss number formatting (the U+2019 thousands
-    # separator) produced by the runner's ICU build. A Linux runner formats
-    # those amounts differently and the snapshots fail for a reason that has
-    # nothing to do with the code. Testing on the target platform is both
-    # more correct and free for public repositories.
+    # macOS because that is the only platform the app ships to, so the
+    # tests run where the product runs. (Runner choice is not what fixes the
+    # golden PDF snapshots: those depend on the Node build's ICU data, and
+    # the test canonicalises the Swiss thousands separator itself.)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
