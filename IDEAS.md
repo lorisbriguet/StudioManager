@@ -95,6 +95,23 @@ All 12 checklist items pass after three fixes found by the pass:
 - [x] One-time notification per organisation when its wiki guide predates the shipped one, linking to Settings › General › Reset guide (`useGuideUpdateCheck`)
 - [ ] Follow-up: a demo persona for a two-person studio, if a presentation ever needs it
 
+### Quality pass (spec + plan: `docs/superpowers/{specs,plans}/2026-09-28-v2.1.0-quality-pass.md`)
+
+- [x] Arrow-key row navigation on **Clients**, **Projects** and **Tasks**, bringing them level with the finance pages; on Tasks the cycle skips collapsed projects
+- [x] Double submits blocked on client, task and wiki creation, including the window before the client id was fetched
+- [x] Wiki autosave checks the article id when the timer fires and when it flushes on unmount, and surfaces a failed save instead of swallowing it
+- [x] Trustee export counts invoice PDFs it could not generate and warns, instead of producing a folder that looks complete
+- [x] Income edit form shows translated category names, agreeing with the row badge
+- [x] Indexes on `time_entries(project_id)`, `time_entries(date)` and `quotes(client_id)`; resource tags inserted in one statement
+- [x] **ProjectDetailContent** 997 to 382 lines (six pieces into `src/components/project/`), **SettingsPage** 1712 to 791 (seven into `src/components/settings/`), **NamedTable** 602 to 363 (`TableCell`, `ColumnEditorPopover`) - all verbatim moves, the last behind 26 characterisation tests written first
+- [x] One shared PDF layout behind both documents: **InvoicePDF** 499 to 124, **QuotePDF** 429 to 80, with `src/components/pdf/{documentStyles,PdfDocumentLayout}`; guarded by ten golden snapshots of the element trees required to come back byte-identical
+- [x] Receipt preview and attachment flow shared between Expenses and Income
+- [ ] **Declined, not forgotten:** unifying the invoice and quote *forms*. Their overlap is structural, but the invoice carries currency and exchange rates, contacts, purchase orders, delete and quote conversion while the quote carries task import and its own validity rule. A shared form behind a mode flag would hide those differences on the two screens that matter most and have the thinnest coverage.
+- [ ] Follow-up: `useListNavigation` clamps focus by array index, so a list shrinking under the user can move the ring to an unrelated row - re-key focus by item id (affects all six wired pages)
+- [ ] Follow-up: the Projects card grid steps in reading order, so ArrowDown moves to the next card rather than the one visually below in a multi-column layout - needs Left/Right binding and a column count
+- [ ] Follow-up: the Tasks "+" button and subtask creation share the double-submit pattern that was fixed elsewhere
+- [ ] Follow-up: `NamedTable` has no optimistic cell update - a cell only reflects an edit once the row query refetches (surfaced by the characterisation tests, pre-existing)
+
 ## Audit — round 3 (2026-08-31)
 
 Three-lens audit (correctness/data, security/platform, UI/a11y/perf/tests) after v1.15.0. Clean bill: SQL parameterization, osascript runner, wiki allowlist, updater chain, capabilities scope, date/money handling, design-system compliance (0 violations), modal/menu focus management.
@@ -131,19 +148,19 @@ Full-coverage pass: deterministic tooling (npm/cargo audit, knip, jscpd, clippy,
 
 ### Correctness / UX (P2)
 - [x] Silent-failure class: no global mutation onError and these lack local ones — Calendar event drag/resize, ClientDetail saveField + createContact, Wiki debounced article save, ProjectDetail delete, NamedTable save-as-list
-- [ ] Wiki debounced save: stale-articleId hazard only ref-mitigated; add id check at fire time + onError
-- [ ] Keyboard nav parity: Tasks/Projects/Clients lack the arrow-key row navigation Invoices/Expenses/Quotes/Income got in v1.15.0
-- [ ] Double-submit windows: create buttons without isPending disable (Clients form, TasksPage Enter, Wiki new article, Settings test/presentation-mode buttons)
-- [ ] Trustee export: per-invoice PDF failures skipped silently — report failed count; verify `exporting` flag resets on mid-chain throw
-- [ ] ResourcesPage tag-loading effect: no abort on unmount (setState-after-unmount)
-- [ ] IncomePage edit form renders category values raw (`c.replace(/_/g," ")`) — bypasses i18n while the row badge translates
-- [ ] `createResource` inserts tags in a loop — batch it
-- [ ] Missing indexes: time_entries(project_id), time_entries(date), quotes(client_id)
+- [x] Wiki debounced save: id checked at fire time and on the unmount flush, with onError surfacing (v2.1.0). Note: not reachable in today's UI - the editor fully remounts between articles - so this is defensive
+- [x] Keyboard nav parity: Tasks/Projects/Clients wired to `useListNavigation` (v2.1.0)
+- [x] Double-submit windows: Clients quick-create, TasksPage Enter and the Wiki new-article button guarded (v2.1.0); the Tasks "+" button and subtask create remain
+- [x] Trustee export: failed invoice PDFs are counted and reported; the `exporting` flag already reset in a finally (v2.1.0)
+- [x] ResourcesPage tag-loading effect: stale entry - the `cancelled` guard has been there since the file was written (verified v2.1.0)
+- [x] IncomePage edit form renders category values raw - fixed, both sites now use the same translation (v2.1.0)
+- [x] `createResource` inserts tags in a loop - now one statement (v2.1.0); blank tags are dropped rather than stored as empty rows
+- [x] Missing indexes added (v2.1.0)
 - [ ] SavedFilterBar portal menu lacks role/ARIA parity with ContextMenu
 
 ### Polish (P3)
-- [ ] Duplication debt (4.1%): InvoicePDF↔QuotePDF 273 dup lines, InvoiceForm↔QuoteForm 265, Expenses↔Income 191 — extract shared document/form cores when next touching them
-- [ ] Component bloat: NamedTable 602L, ProjectDetailContent 1000L+, SettingsPage 1700L
+- [x] Duplication debt (4.1%): PDFs and the Expenses/Income receipt preview extracted (v2.1.0); the invoice and quote forms deliberately left separate, see V2.1.0 above
+- [x] Component bloat: NamedTable, ProjectDetailContent and SettingsPage all split (v2.1.0)
 - [ ] Memoize per-row color/status computations (category IIFE in ExpensesPage, getTagColor, statusClasses); React.memo row components
 - [ ] dirty-guard `confirming` flag → promise-based lock
 - [ ] notifyError dedupe contract broken by interpolated message in useAutoBackup (latch already prevents spam)
