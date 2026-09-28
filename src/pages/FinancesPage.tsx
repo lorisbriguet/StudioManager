@@ -35,6 +35,7 @@ import { InvoicesListPDF } from "../components/finance/InvoicesListPDF";
 import { ExpensesListPDF } from "../components/finance/ExpensesListPDF";
 import { getMonthlyData } from "../db/queries/finance";
 import { missingChfEquivalent } from "../lib/chfEquivalent";
+import { logError } from "../lib/log";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 /** Derive pie-chart fill color from category name using the tag color palette */
@@ -102,6 +103,7 @@ export function FinancesPage() {
       // @react-pdf renders are CPU-bound and concurrent renders have wedged
       // before (see the mark-sent-and-export soft-lock).
       const lineItemsByInvoice = await getLineItemsForInvoices(yearInvoices.map((i) => i.id));
+      let invoicePdfsFailed = 0;
       for (const inv of yearInvoices) {
         try {
           const client = clients?.find((c) => c.id === inv.client_id);
@@ -111,9 +113,15 @@ export function FinancesPage() {
             const blob = await pdf(doc as never).toBlob();
             await writeFile(`${basePath}/factures/justificatifs/${inv.reference}_${client.name}.pdf`, new Uint8Array(await blob.arrayBuffer()));
           }
-        } catch {
-          // PDF generation may fail for some invoices
+        } catch (e) {
+          // One bad invoice must not abort the export, but a silent omission
+          // would leave a bookkeeping folder that looks complete and is not.
+          invoicePdfsFailed++;
+          logError("Trustee export: invoice PDF failed", inv.reference, e);
         }
+      }
+      if (invoicePdfsFailed > 0) {
+        toast.warning(t.export_invoices_failed.replace("{count}", String(invoicePdfsFailed)));
       }
 
       // Export expenses list PDF + copy receipts

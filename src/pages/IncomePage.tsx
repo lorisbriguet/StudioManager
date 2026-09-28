@@ -625,7 +625,7 @@ export function NewIncomeForm({
             className="py-2"
           >
             {INCOME_CATEGORIES.map((c) => (
-              <option key={c} value={c}>{c.replace(/_/g, " ")}</option>
+              <option key={c} value={c}>{(t as Record<string, string>)[c] ?? c}</option>
             ))}
           </Select>
         </FormField>

@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { useT } from "../i18n/useT";
 import { useAppStore } from "../stores/app-store";
 import { getTagColor } from "../lib/tagColors";
+import { notifyError, getLabels } from "../lib/notifyError";
 import { PageHeader, SearchBar, Button, EmptyState } from "../components/ui";
 import { Select } from "../components/ui/Select";
 import {
@@ -299,7 +300,8 @@ function SlashCommandMenu({
 }
 
 // ─── Article Editor ───────────────────────────────────────────────
-function ArticleEditor({
+// Exported for testability (wikiAutosave.test.tsx exercises it directly).
+export function ArticleEditor({
   articleId,
   onBack,
 }: {
@@ -326,6 +328,12 @@ function ArticleEditor({
   const [linkPopup, setLinkPopup] = useState<{ top: number; left: number } | null>(null);
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tracks which article the currently-pending debounced save belongs to,
+  // so the unmount flush below can apply the exact same id check.
+  const pendingSaveArticleIdRef = useRef<number | null>(null);
+
+  const articleIdRef = useRef(articleId);
+  useEffect(() => { articleIdRef.current = articleId; }, [articleId]);
 
   // Sync state when article loads
   useEffect(() => {
@@ -338,8 +346,19 @@ function ArticleEditor({
   const debouncedSave = useCallback(
     (content: string) => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      const scheduledFor = articleId;
+      pendingSaveArticleIdRef.current = scheduledFor;
       saveTimeoutRef.current = setTimeout(() => {
-        updateArticle.mutate({ id: articleId, data: { content } });
+        // The editor may have moved to another article inside the debounce
+        // window; this content belongs to the one that was open when it was
+        // typed, and writing it anywhere else would corrupt that article.
+        saveTimeoutRef.current = null;
+        pendingSaveArticleIdRef.current = null;
+        if (articleIdRef.current !== scheduledFor) return;
+        updateArticle.mutate(
+          { id: scheduledFor, data: { content } },
+          { onError: (e) => notifyError(getLabels().operation_failed, e) }
+        );
       }, 2000);
     },
     [articleId, updateArticle]
@@ -441,11 +460,10 @@ function ArticleEditor({
     }
   }, [articleId, deleteArticle, onBack, t.delete]);
 
-  // Keep refs for unmount cleanup to avoid stale closures
+  // Keep a ref for unmount cleanup to avoid a stale closure over `editor`
+  // (articleIdRef is declared above, next to the debounce it also guards)
   const editorRef = useRef(editor);
   editorRef.current = editor;
-  const articleIdRef = useRef(articleId);
-  articleIdRef.current = articleId;
 
   // Flush pending debounced save on unmount
   useEffect(() => {
@@ -453,8 +471,16 @@ function ArticleEditor({
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
         const ed = editorRef.current;
-        if (ed) {
-          updateArticle.mutate({ id: articleIdRef.current, data: { content: ed.getHTML() } });
+        const pendingId = pendingSaveArticleIdRef.current;
+        // Same id check as the debounce itself: only flush if the article
+        // open when the edit happened is still the one open now, so the
+        // editor's current HTML is guaranteed to belong to it. A flush that
+        // writes the wrong article would be the same bug by another path.
+        if (ed && pendingId !== null && pendingId === articleIdRef.current) {
+          updateArticle.mutate(
+            { id: pendingId, data: { content: ed.getHTML() } },
+            { onError: (e) => notifyError(getLabels().operation_failed, e) }
+          );
         }
       }
     };
