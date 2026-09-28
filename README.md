@@ -215,7 +215,7 @@ Taken with fictional demo data.
 
 <p align="center">
   <img src="docs/screenshots/project.png" alt="Project page" width="800">
-  <br><em>Projects with the side peek: tasks, notes, resources and workload</em>
+  <br><em>Projects with the side peek: tasks, workload, tables and linked wiki</em>
 </p>
 
 <p align="center">
