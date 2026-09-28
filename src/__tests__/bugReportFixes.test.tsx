@@ -3,7 +3,7 @@ import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { DndContext } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useAppStore } from "../stores/app-store";
-import { SortableSubtaskRow } from "../components/ProjectDetailContent";
+import { SortableSubtaskRow } from "../components/project/SortableSubtaskRow";
 
 // App bug reports:
 // #311 the calendar forgets the last selected view across launches
