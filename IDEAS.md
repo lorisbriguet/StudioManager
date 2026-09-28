@@ -118,10 +118,10 @@ Four independent reading passes (correctness/data, security/platform, UI/a11y/pe
 
 ### P1
 - [ ] `docs/screenshots/*.png` on the public site show the owner's real address, phone, bank details and a scannable QR slip — retake them from the demo app
-- [ ] Redo after an undone delete re-finds by name and can destroy a different record: `useProjectTables.ts:53-59`, `useWiki.ts:134-143`, `useResources.ts:123-130` (capture the new id, as `useIncome.ts` does); `useDeleteQuote` shares the pattern but is currently safe
-- [ ] QR payment slip swallows render errors and ships a slip-less invoice; its `isSpaceSufficient` patch is not restored on the throw path, poisoning later renders; no test executes the drawing code
-- [ ] No CI runs vitest/tsc/eslint — only the weekly dependency audit
-- [ ] `widgets.tsx:192-196` shares the `["clients"]` query key with a truncated SELECT, so the Clients page renders blank rows from the poisoned cache
+- [x] Redo after an undone delete re-finds by name and can destroy a different record — fixed in all four hooks, each with a collision test
+- [x] QR payment slip swallows render errors — now surfaced to the user, the space-check patch restored in a finally, and the drawing code executed by a test
+- [x] CI runs tsc, eslint and vitest on push and PRs (.github/workflows/ci.yml); Rust stays local, documented in the workflow
+- [x] `widgets.tsx` now uses the shared useClients() hook, so the truncated query no longer poisons the cache
 
 ### P2
 - [ ] `db/index.ts:245-264` re-creates a deleted client address on every startup and org switch
