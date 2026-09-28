@@ -1,7 +1,7 @@
 import { Canvas } from "@react-pdf/renderer";
 import { SwissQRBill } from "swissqrbill/pdf";
 import type { Data } from "swissqrbill/types";
-import { logError } from "../../lib/log";
+import { notifyError, getLabels } from "../../lib/notifyError";
 
 interface QRBillCanvasProps {
   data: Data;
@@ -103,6 +103,8 @@ export function QRBillCanvas({ data, language }: QRBillCanvasProps) {
   return (
     <Canvas
       paint={(painter, _availableWidth, _availableHeight) => {
+        // Override space check to prevent addPage call
+        const origCheck = SwissQRBill.isSpaceSufficient;
         try {
           const qrBill = new SwissQRBill(data, {
             language,
@@ -110,16 +112,17 @@ export function QRBillCanvas({ data, language }: QRBillCanvasProps) {
             outlines: true,
           });
 
-          // Override space check to prevent addPage call
-          const origCheck = SwissQRBill.isSpaceSufficient;
           SwissQRBill.isSpaceSufficient = () => true;
 
           const doc = createDocWrapper(painter);
           qrBill.attachTo(doc as never, 0, 0);
-
-          SwissQRBill.isSpaceSufficient = origCheck;
         } catch (e) {
-          logError("QR bill render failed:", e);
+          notifyError(getLabels().qr_bill_render_failed, e);
+        } finally {
+          // Always restore, even if attachTo threw — otherwise the patched
+          // isSpaceSufficient leaks into every later render in this session
+          // (e.g. the trustee export, which renders many invoices in a loop).
+          SwissQRBill.isSpaceSufficient = origCheck;
         }
         return null;
       }}
