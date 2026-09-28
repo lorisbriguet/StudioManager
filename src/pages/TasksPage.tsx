@@ -583,6 +583,7 @@ export function TasksPage() {
                 }
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
+                    if (createTask.isPending) return;
                     const text = (newTaskText[g.projectId] ?? "").trim();
                     if (!text) return;
                     createTask.mutate(

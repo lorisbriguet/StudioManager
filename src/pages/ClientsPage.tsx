@@ -134,6 +134,7 @@ export function ClientsPage() {
 
       {showForm && (
         <NewClientForm
+          saving={createClient.isPending}
           onSave={async (data) => {
             const id = await getNextClientId();
             createClient.mutate(
@@ -250,9 +251,11 @@ const clientSchema: v.FormSchema<ClientFormField> = {
 function NewClientForm({
   onSave,
   onCancel,
+  saving,
 }: {
   onSave: (data: Omit<Client, "id" | "created_at" | "updated_at">) => void;
   onCancel: () => void;
+  saving: boolean;
 }) {
   const t = useT();
   const [form, setForm] = useState({
@@ -361,7 +364,7 @@ function NewClientForm({
         </label>
       </div>
       <div className="flex gap-2">
-        <Button onClick={submit}>{t.save}</Button>
+        <Button onClick={submit} disabled={saving}>{t.save}</Button>
         <Button variant="secondary" onClick={onCancel}>
           {t.cancel}
         </Button>

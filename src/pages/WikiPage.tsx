@@ -1014,7 +1014,7 @@ export function WikiPage() {
             {/* Page header */}
             <div className="px-8 pt-6">
               <PageHeader title={t.wiki}>
-                <Button icon={<Plus size={16} />} onClick={handleNewArticle}>
+                <Button icon={<Plus size={16} />} onClick={handleNewArticle} disabled={createArticle.isPending}>
                   {t.new_article}
                 </Button>
               </PageHeader>
@@ -1057,7 +1057,7 @@ export function WikiPage() {
                   message={t.first_run_wiki}
                   icon={<BookOpen size={32} />}
                   action={
-                    <Button icon={<Plus size={16} />} onClick={handleNewArticle}>
+                    <Button icon={<Plus size={16} />} onClick={handleNewArticle} disabled={createArticle.isPending}>
                       {t.new_article}
                     </Button>
                   }
