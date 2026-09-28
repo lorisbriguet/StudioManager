@@ -112,6 +112,28 @@ All 12 checklist items pass after three fixes found by the pass:
 - [ ] Follow-up: the Tasks "+" button and subtask creation share the double-submit pattern that was fixed elsewhere
 - [ ] Follow-up: `NamedTable` has no optimistic cell update - a cell only reflects an edit once the row query refetches (surfaced by the characterisation tests, pre-existing)
 
+## Audit — round 5, full application (2026-09-28)
+
+Four independent reading passes (correctness/data, security/platform, UI/a11y/perf, tests/tooling) over 51k lines of TypeScript and 2.5k of Rust, plus deterministic tooling. Full report: `docs/audits/2026-09-28-full-audit.md`. Clean bill on the organisations layer, the data upgrade, SQL parameterisation, capabilities and CSP, the updater chain, and design-system compliance.
+
+### P1
+- [ ] `docs/screenshots/*.png` on the public site show the owner's real address, phone, bank details and a scannable QR slip — retake them from the demo app
+- [ ] Redo after an undone delete re-finds by name and can destroy a different record: `useProjectTables.ts:53-59`, `useWiki.ts:134-143`, `useResources.ts:123-130` (capture the new id, as `useIncome.ts` does); `useDeleteQuote` shares the pattern but is currently safe
+- [ ] QR payment slip swallows render errors and ships a slip-less invoice; its `isSpaceSufficient` patch is not restored on the throw path, poisoning later renders; no test executes the drawing code
+- [ ] No CI runs vitest/tsc/eslint — only the weekly dependency audit
+- [ ] `widgets.tsx:192-196` shares the `["clients"]` query key with a truncated SELECT, so the Clients page renders blank rows from the poisoned cache
+
+### P2
+- [ ] `db/index.ts:245-264` re-creates a deleted client address on every startup and org switch
+- [ ] QR slip debtor can differ from the invoice header when a client has several addresses
+- [ ] Personal data still reachable in public git history (needs filter-repo + force push, or a private repo)
+- [ ] No test varies quantities/rates/discount against the computed total; trustee PDFs and the exchange-rate freeze are untested
+- [ ] `SavedFilterBar.tsx:277-278` AND/OR has no i18n key; two screens leak English into French
+- [ ] Dashboard widget layout is not organisation-namespaced
+- [ ] Three bespoke modals lose Escape and focus trap; workload column menus are mouse-only
+- [ ] Receipt filename extension is not sanitised
+- [ ] CHF formatting duplicated in seven places
+
 ## Audit — round 3 (2026-08-31)
 
 Three-lens audit (correctness/data, security/platform, UI/a11y/perf/tests) after v1.15.0. Clean bill: SQL parameterization, osascript runner, wiki allowlist, updater chain, capabilities scope, date/money handling, design-system compliance (0 violations), modal/menu focus management.
