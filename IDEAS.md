@@ -124,6 +124,7 @@ Four independent reading passes (correctness/data, security/platform, UI/a11y/pe
 - [x] `widgets.tsx` now uses the shared useClients() hook, so the truncated query no longer poisons the cache
 
 ### P2
+- [ ] Golden PDF snapshots record the runner's ICU number formatting (the Swiss U+2019 separator), so they are environment-dependent; CI runs on macOS to match, but injecting a fixed formatter in the tests would make them portable
 - [ ] `db/index.ts:245-264` re-creates a deleted client address on every startup and org switch
 - [ ] QR slip debtor can differ from the invoice header when a client has several addresses
 - [ ] Personal data still reachable in public git history (needs filter-repo + force push, or a private repo)
