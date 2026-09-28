@@ -43,6 +43,13 @@ const INCOME_CATEGORIES = [
   "other",
 ] as const;
 
+/** The five income category codes are stored raw in the database; both the row
+ *  badge and the edit form must show the same translated label. */
+function incomeCategoryLabel(t: ReturnType<typeof useT>, code: string): string {
+  const key = `income_cat_${code}` as keyof typeof t;
+  return (t[key] as string | undefined) ?? code.replace(/_/g, " ");
+}
+
 export function IncomePage() {
   const t = useT();
   const { data: incomes, isLoading } = useIncomes();
@@ -71,7 +78,7 @@ export function IncomePage() {
   const incomeFields = useMemo<FilterableField[]>(() => [
     { key: "reference", label: t.reference, type: "string" },
     { key: "source", label: t.source, type: "string" },
-    { key: "category", label: t.category, type: "select", options: INCOME_CATEGORIES.map((c) => ({ value: c, label: (t as Record<string, string>)[c] ?? c })) },
+    { key: "category", label: t.category, type: "select", options: INCOME_CATEGORIES.map((c) => ({ value: c, label: incomeCategoryLabel(t, c) })) },
     { key: "amount", label: t.amount, type: "number" },
   ], [t]);
 
@@ -310,7 +317,7 @@ export function IncomePage() {
                         <td className="px-4 py-2.5">{inc.source}</td>
                         <td className="px-4 py-2.5">
                           <span className="px-2 py-0.5 text-xs rounded-full bg-[var(--color-input-bg)]">
-                            {inc.category}
+                            {incomeCategoryLabel(t, inc.category)}
                           </span>
                           {inc.description && (
                             <span className="ml-1 text-xs text-muted">{inc.description}</span>
@@ -543,7 +550,7 @@ export function NewIncomeForm({
             className="py-2"
           >
             {INCOME_CATEGORIES.map((c) => (
-              <option key={c} value={c}>{(t as Record<string, string>)[c] ?? c}</option>
+              <option key={c} value={c}>{incomeCategoryLabel(t, c)}</option>
             ))}
           </Select>
         </FormField>

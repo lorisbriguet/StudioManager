@@ -1,17 +1,30 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { IncomePage } from "../pages/IncomePage";
 import { useAppStore } from "../stores/app-store";
-import { uiLabels } from "../i18n/ui";
 import { getDb } from "../db";
 import { setSelectHandler, clearExecutedStatements } from "../__mocks__/tauri-sql";
 
-// The edit form used to render category codes via `c.replace(/_/g, " ")`
-// while the filter bar's category options used the i18n lookup — the two
-// disagreed on the same value. Both must go through one shared expression.
+// Item 1 regression: the row badge (around line 313) rendered the raw
+// category code, and the edit form's `(t as Record<string,string>)[c] ?? c`
+// lookup missed too (the codes were never in ui.ts), so it also fell back
+// to the raw code. Both sites must show the same translated label and
+// never the raw `side_income`-style code.
 
-const INCOME_CATEGORIES = ["side_income", "grant", "refund", "interest", "other"];
+const income = {
+  id: 1,
+  reference: "INC-0001",
+  source: "Freelance gig",
+  description: "",
+  category: "side_income",
+  date: "2026-01-10",
+  amount: 250,
+  receipt_path: null,
+  notes: "",
+  created_at: "",
+  updated_at: "",
+};
 
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -24,8 +37,7 @@ function renderPage() {
 
 beforeEach(async () => {
   await getDb();
-  useAppStore.setState({ language: "EN" });
-  setSelectHandler(() => []);
+  setSelectHandler((sql) => (sql.replace(/\s+/g, " ").includes("FROM income") ? [income] : []));
   clearExecutedStatements();
 });
 
@@ -35,19 +47,32 @@ afterEach(() => {
 });
 
 describe("Income category labels", () => {
-  it("renders the edit form's category options through the same i18n lookup as the filter bar", async () => {
+  it("shows the translated label on the row badge and in the edit form, agreeing with each other (EN)", async () => {
+    useAppStore.setState({ language: "EN" });
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: /new income/i }));
 
-    const select = (await screen.findByLabelText(uiLabels.EN.category)) as HTMLSelectElement;
-    const optionLabels = Array.from(select.options).map((o) => o.textContent);
+    const row = (await screen.findByText("Freelance gig")).closest("tr")!;
+    expect(within(row).getByText("Side income")).toBeInTheDocument();
+    expect(within(row).queryByText("side_income")).not.toBeInTheDocument();
 
-    const t = uiLabels.EN as unknown as Record<string, string>;
-    const expected = INCOME_CATEGORIES.map((c) => t[c] ?? c);
-    expect(optionLabels).toEqual(expected);
+    fireEvent.contextMenu(row);
+    fireEvent.click(await screen.findByRole("menuitem", { name: /edit/i }));
 
-    // Underscore-replaced text ("side income") must no longer appear — that
-    // was the edit-form-only rendering that disagreed with the filter bar.
-    expect(optionLabels).not.toContain("side income");
+    const select = (await screen.findByDisplayValue("Side income")) as HTMLSelectElement;
+    expect(select.value).toBe("side_income");
+    expect(screen.queryByText("side_income")).not.toBeInTheDocument();
+  });
+
+  it("shows the translated label in FR", async () => {
+    useAppStore.setState({ language: "FR" });
+    renderPage();
+
+    const row = (await screen.findByText("Freelance gig")).closest("tr")!;
+    expect(within(row).getByText("Revenu accessoire")).toBeInTheDocument();
+
+    fireEvent.contextMenu(row);
+    fireEvent.click(await screen.findByRole("menuitem", { name: /modifier|edit/i }));
+
+    expect(await screen.findByDisplayValue("Revenu accessoire")).toBeInTheDocument();
   });
 });

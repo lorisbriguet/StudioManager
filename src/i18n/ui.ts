@@ -280,6 +280,11 @@ const ui = {
     tasks_due: "tasks due",
     invoiced_revenue: "Invoiced",
     other_income: "Other income",
+    income_cat_side_income: "Side income",
+    income_cat_grant: "Grant",
+    income_cat_refund: "Refund",
+    income_cat_interest: "Interest",
+    income_cat_other: "Other",
 
     // Notifications
     mark_all_read: "Mark all read",
@@ -1228,6 +1233,11 @@ const ui = {
     tasks_due: "taches prevues",
     invoiced_revenue: "Facture",
     other_income: "Autres revenus",
+    income_cat_side_income: "Revenu accessoire",
+    income_cat_grant: "Subvention",
+    income_cat_refund: "Remboursement",
+    income_cat_interest: "Interets",
+    income_cat_other: "Autre",
 
     // Notifications
     mark_all_read: "Tout marquer comme lu",
