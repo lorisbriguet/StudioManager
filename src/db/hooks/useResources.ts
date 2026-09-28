@@ -109,10 +109,13 @@ export function useDeleteResource() {
       const prevTags = await q.getResourceTags(id);
       await q.deleteResource(id);
       if (prev) {
+        // The restore assigns a fresh rowid; redo targets exactly that id —
+        // a name+url lookup could hit a different row with the same values.
+        let restoredId: number | null = null;
         useUndoStore.getState().push({
           label: `${getLabels().undo_delete_resource} "${prev.name}"`,
           execute: async () => {
-            await q.createResource({
+            restoredId = await q.createResource({
               name: prev.name,
               url: prev.url,
               price: prev.price,
@@ -121,10 +124,8 @@ export function useDeleteResource() {
             invalidate();
           },
           redo: async () => {
-            const resources = await q.getResources();
-            const restored = resources.find((r) => r.name === prev.name && r.url === prev.url);
-            if (restored) {
-              await q.deleteResource(restored.id);
+            if (restoredId !== null) {
+              await q.deleteResource(restoredId);
               invalidate();
             }
           },

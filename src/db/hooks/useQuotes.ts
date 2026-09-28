@@ -132,10 +132,13 @@ export function useDeleteQuote() {
       if (prev) {
         const { id: _id, created_at, updated_at, ...data } = prev;
         const items = prevItems.map(({ id: _iid, quote_id, ...rest }) => rest);
+        // The restore assigns a fresh rowid; redo targets exactly that id —
+        // a reference lookup could hit a different row with the same reference.
+        let restoredId: number | null = null;
         useUndoStore.getState().push({
           label: `${getLabels().undo_delete_quote} "${prev.reference}"`,
           execute: async () => {
-            await q.createQuoteWithLineItems(
+            restoredId = await q.createQuoteWithLineItems(
               data as Omit<Quote, "id" | "created_at" | "updated_at">,
               items
             );
@@ -143,10 +146,8 @@ export function useDeleteQuote() {
             qc.invalidateQueries({ queryKey: ["finance"] });
           },
           redo: async () => {
-            const quotes = await q.getQuotes();
-            const restored = quotes.find((qu) => qu.reference === prev.reference);
-            if (restored) {
-              await q.deleteQuote(restored.id);
+            if (restoredId !== null) {
+              await q.deleteQuote(restoredId);
               qc.invalidateQueries({ queryKey: ["quotes"] });
               qc.invalidateQueries({ queryKey: ["finance"] });
             }

@@ -119,25 +119,24 @@ export function useDeleteWikiArticle() {
       const prevTags = await getWikiArticleTags(id);
       await deleteWikiArticle(id);
       if (prev) {
+        // The restore assigns a fresh rowid; redo targets exactly that id —
+        // a title+folder lookup could hit a different row with the same title.
+        let restoredId: number | null = null;
         useUndoStore.getState().push({
           label: `${getLabels().undo_delete_article} "${prev.title}"`,
           execute: async () => {
-            const newId = await createWikiArticle({
+            restoredId = await createWikiArticle({
               folder_id: prev.folder_id,
               project_id: prev.project_id,
               title: prev.title,
             });
-            await updateWikiArticle(newId, { content: prev.content });
-            await setWikiArticleTags(newId, prevTags);
+            await updateWikiArticle(restoredId, { content: prev.content });
+            await setWikiArticleTags(restoredId, prevTags);
             invalidate();
           },
           redo: async () => {
-            const articles = await getWikiArticles();
-            const restored = articles.find(
-              (a) => a.title === prev.title && a.folder_id === prev.folder_id
-            );
-            if (restored) {
-              await deleteWikiArticle(restored.id);
+            if (restoredId !== null) {
+              await deleteWikiArticle(restoredId);
               invalidate();
             }
           },

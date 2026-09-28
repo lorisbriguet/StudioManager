@@ -41,20 +41,20 @@ export function useDeleteProjectTable(projectId: number) {
       const rows = await q.getProjectTableRows(id);
       await q.deleteProjectTable(id);
       if (table) {
+        // The restore assigns a fresh rowid; redo targets exactly that id —
+        // a name lookup could hit a different row with the same name.
+        let restoredId: number | null = null;
         useUndoStore.getState().push({
           label: `${getLabels().undo_delete_table} "${table.name}"`,
           execute: async () => {
-            const newId = await q.createProjectTable(projectId, table.name, table.column_config);
+            restoredId = await q.createProjectTable(projectId, table.name, table.column_config);
             for (const row of rows) {
-              await q.createProjectTableRow(newId, row.data);
+              await q.createProjectTableRow(restoredId, row.data);
             }
             qc.invalidateQueries({ queryKey: ["project-tables", projectId] });
           },
           redo: async () => {
-            // After undo, need to find the re-created table by name to delete again
-            const current = await q.getProjectTables(projectId);
-            const match = current.find((t) => t.name === table.name);
-            if (match) await q.deleteProjectTable(match.id);
+            if (restoredId !== null) await q.deleteProjectTable(restoredId);
             qc.invalidateQueries({ queryKey: ["project-tables", projectId] });
           },
         });
