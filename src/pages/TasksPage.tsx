@@ -30,6 +30,7 @@ import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
 import { BulkActionBar } from "../components/BulkActionBar";
 import { SavedFilterBar } from "../components/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
+import { useListNavigation } from "../hooks/useListNavigation";
 import { useTabStore } from "../stores/tab-store";
 import { useOrgStore } from "../stores/org-store";
 import { useTimerActions } from "../hooks/useTimerActions";
@@ -159,6 +160,32 @@ export function TasksPage() {
 
   const flatTasks = useMemo(() => grouped.flatMap((g) => g.tasks), [grouped]);
   const bulk = useBulkSelect(flatTasks);
+
+  // Keyboard row navigation — only the tasks of non-collapsed projects are
+  // navigation stops. Group headers and subtasks are not.
+  const navigableTasks = useMemo(
+    () => grouped.filter((g) => !collapsedProjects.has(g.projectId)).flatMap((g) => g.tasks),
+    [grouped, collapsedProjects]
+  );
+  const taskIdxById = useMemo(
+    () => new Map(navigableTasks.map((tk, i) => [tk.id, i])),
+    [navigableTasks]
+  );
+
+  const toggleTaskExpanded = useCallback((taskId: number) => {
+    setExpandedTasks((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  }, []);
+
+  const { focusIdx } = useListNavigation({
+    items: navigableTasks,
+    onOpen: useCallback((tk: Task) => toggleTaskExpanded(tk.id), [toggleTaskExpanded]),
+    onMenu: useCallback((tk: Task, pos: { x: number; y: number }) => setCtxMenu({ ...pos, item: tk }), []),
+  });
 
   const bulkMarkDone = useCallback(() => {
     const ids = [...bulk.selected] as number[];
@@ -306,7 +333,8 @@ export function TasksPage() {
                 return (
                   <div key={tk.id} data-task-row>
                     <div
-                      className="flex items-center gap-3 px-4 py-2.5 group/task"
+                      data-list-row
+                      className={`flex items-center gap-3 px-4 py-2.5 group/task${taskIdxById.get(tk.id) === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
                       onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: tk }); }}
                     >
                       <input
@@ -317,12 +345,7 @@ export function TasksPage() {
                         className="accent-[var(--accent)] shrink-0"
                       />
                       <button
-                        onClick={() => {
-                          const next = new Set(expandedTasks);
-                          if (next.has(tk.id)) next.delete(tk.id);
-                          else next.add(tk.id);
-                          setExpandedTasks(next);
-                        }}
+                        onClick={() => toggleTaskExpanded(tk.id)}
                         className="text-muted hover:text-[var(--color-text-secondary)] p-0.5"
                         aria-label={isExpanded ? t.collapse : t.expand}
                       >
