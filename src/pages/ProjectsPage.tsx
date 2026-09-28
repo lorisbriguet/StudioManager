@@ -245,6 +245,7 @@ export function ProjectsPage() {
         setCtxMenu({ ...pos, item: { id: p.id, name: p.name } }),
       []
     ),
+    enabled: peekId === null,
   });
 
   const filterLabels: Record<ProjectStatus | "all", string> = {

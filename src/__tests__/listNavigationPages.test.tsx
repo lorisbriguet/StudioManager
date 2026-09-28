@@ -1,13 +1,21 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { ClientsPage } from "../pages/ClientsPage";
 import { ProjectsPage } from "../pages/ProjectsPage";
 import { TasksPage } from "../pages/TasksPage";
+import { IncomePage } from "../pages/IncomePage";
+import { ExpensesPage } from "../pages/ExpensesPage";
 import { useAppStore } from "../stores/app-store";
 import { getDb } from "../db";
 import { setSelectHandler, clearExecutedStatements } from "../__mocks__/tauri-sql";
+
+// Receipt OCR/PDF extraction is irrelevant to the Income/Expenses cases below.
+vi.mock("../lib/pdfExtract", () => ({
+  extractPdfText: vi.fn(),
+  extractImageText: vi.fn(),
+}));
 
 // Task 5 — arrow-key row navigation on Clients and Projects, mirroring the
 // finance pages (Invoices/Quotes/Expenses/Income) that already wire
@@ -121,6 +129,34 @@ describe("ProjectsPage arrow-key navigation", () => {
     fireEvent.keyDown(window, { key: "Enter" });
     expect(await screen.findByTestId("project-detail")).toBeInTheDocument();
   });
+
+  // Item 2 — the peek panel is not role="dialog", so the list stayed
+  // mounted underneath it and the hook kept handling keys: ArrowDown moved
+  // the focus ring on a card hidden behind the peek, Space opened a context
+  // menu on it, and Enter swapped the peek to a different project.
+  it("does not move the focus ring while the side peek panel is open", async () => {
+    useAppStore.setState({ projectOpenMode: "peek" });
+    setSelectHandler((sql) => {
+      const flat = sql.replace(/\s+/g, " ");
+      if (flat.includes("FROM projects")) return [projectA, projectB];
+      if (flat.includes("FROM clients")) return [clientA];
+      if (flat.includes("FROM tasks")) return [];
+      if (flat.includes("FROM subtasks")) return [];
+      return [];
+    });
+
+    renderRoute(<ProjectsPage />, "/projects", "/projects/:id", "project-detail");
+
+    const cardA = (await screen.findByText("Website Revamp")).closest("[data-list-row]") as HTMLElement;
+    fireEvent.click(cardA);
+
+    // Peek panel open — its "open full page" link only renders inside it.
+    await screen.findByTitle("Open full page");
+    expect(cardA.className).not.toContain("ring-2");
+
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    expect(cardA.className).not.toContain("ring-2");
+  });
 });
 
 // Task 6 — Tasks is the last page and the only grouped one: the cycle must
@@ -224,5 +260,102 @@ describe("TasksPage arrow-key navigation", () => {
     expect(screen.queryByPlaceholderText("New subtask...")).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: "Enter" });
     expect(await screen.findByPlaceholderText("New subtask...")).toBeInTheDocument();
+  });
+});
+
+// Item 2 (extra finding) — ReceiptPreview is the same shape of hazard as the
+// Projects peek panel: a fixed, full-screen overlay with no role="dialog",
+// opened while the row list stays mounted underneath it. Income and
+// Expenses both wire useListNavigation unconditionally, so ArrowDown/Enter/
+// Space kept acting on the hidden list while the receipt preview was open.
+describe("IncomePage arrow-key navigation — receipt preview overlay", () => {
+  const income = {
+    id: 1,
+    reference: "INC-0001",
+    source: "Freelance gig",
+    description: "",
+    category: "other",
+    date: "2026-01-10",
+    amount: 100,
+    receipt_path: "/tmp/receipt.jpg",
+    notes: "",
+    created_at: "",
+    updated_at: "",
+  };
+
+  function renderIncomePage() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={qc}>
+        <IncomePage />
+      </QueryClientProvider>
+    );
+  }
+
+  it("does not move the focus ring while the receipt preview is open", async () => {
+    URL.createObjectURL = vi.fn(() => "blob:mock");
+    setSelectHandler((sql) => {
+      const flat = sql.replace(/\s+/g, " ");
+      if (flat.includes("FROM income")) return [income];
+      return [];
+    });
+
+    renderIncomePage();
+
+    const row = (await screen.findByText("Freelance gig")).closest("[data-list-row]") as HTMLElement;
+    fireEvent.click(screen.getByRole("button", { name: /^view$/i }));
+
+    // Preview overlay open — its header shows the reference.
+    await screen.findByRole("heading", { name: "INC-0001" });
+    expect(row.className).not.toContain("ring-2");
+
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    expect(row.className).not.toContain("ring-2");
+  });
+});
+
+describe("ExpensesPage arrow-key navigation — receipt preview overlay", () => {
+  const expense = {
+    id: 1,
+    reference: "EXP-0001",
+    supplier: "ACME",
+    category_code: "FA",
+    invoice_date: "2026-01-10",
+    due_date: null,
+    amount: 42,
+    paid_date: null,
+    receipt_path: "/tmp/receipt.jpg",
+    notes: "",
+    created_at: "",
+    updated_at: "",
+  };
+
+  function renderExpensesPage() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={qc}>
+        <ExpensesPage />
+      </QueryClientProvider>
+    );
+  }
+
+  it("does not move the focus ring while the receipt preview is open", async () => {
+    URL.createObjectURL = vi.fn(() => "blob:mock");
+    setSelectHandler((sql) => {
+      const flat = sql.replace(/\s+/g, " ");
+      if (flat.includes("FROM expenses")) return [expense];
+      return [];
+    });
+
+    renderExpensesPage();
+
+    const row = (await screen.findByText("ACME")).closest("[data-list-row]") as HTMLElement;
+    fireEvent.click(screen.getByRole("button", { name: /^view$/i }));
+
+    await screen.findByRole("heading", { name: "EXP-0001" });
+    expect(row.className).not.toContain("ring-2");
+
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    expect(row.className).not.toContain("ring-2");
   });
 });

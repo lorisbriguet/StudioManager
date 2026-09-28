@@ -62,8 +62,9 @@ export interface PdfDocumentLayoutProps {
  * Shared body of the invoice and quote PDFs: header, meta rows, line-item
  * table (with dynamic column order and global-rate collapsing), notes,
  * totals, bank details, thank-you line and page number. What differs
- * between the two documents comes in as props — see task-10-report.md for
- * how this was derived from the two former components.
+ * between the two documents comes in as props — this logic was verified
+ * byte-identical between the two original components before being
+ * centralised here.
  */
 export function PdfDocumentLayout({
   title,

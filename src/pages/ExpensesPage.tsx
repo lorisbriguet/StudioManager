@@ -13,7 +13,7 @@ import { todayLocalISO } from "../utils/localDate";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { copyFile, mkdir, exists } from "@tauri-apps/plugin-fs";
 import { orgPaths } from "../lib/orgPaths";
-import { attachReceipt as attachReceiptFlow } from "../lib/attachReceipt";
+import { attachReceipt as attachReceiptFlow, sanitizeSegment } from "../lib/attachReceipt";
 import { ReceiptPreview } from "../components/ReceiptPreview";
 import {
   useExpenses,
@@ -140,6 +140,7 @@ export function ExpensesPage() {
       openRowMenu(exp, { x: r ? r.left + 32 : 80, y: r ? r.bottom : 80 });
     }, [openRowMenu, rowIdxById]),
     onMenu: openRowMenu,
+    enabled: preview === null,
   });
 
   const bulk = useBulkSelect(filtered);
@@ -247,8 +248,8 @@ export function ExpensesPage() {
                 if (!(await exists(receiptsDir))) {
                   await mkdir(receiptsDir, { recursive: true });
                 }
-                const safeRef = reference.replace(/[/\\]/g, "_").replace(/\.\./g, "_");
-                const safeSup = (data.supplier || "").replace(/[/\\]/g, "_").replace(/\.\./g, "_");
+                const safeRef = sanitizeSegment(reference);
+                const safeSup = sanitizeSegment(data.supplier || "");
                 const destPath = `${receiptsDir}/${safeRef}_${safeSup}.${ext}`;
                 await copyFile(prefill.receiptPath, destPath);
                 receiptPath = destPath;

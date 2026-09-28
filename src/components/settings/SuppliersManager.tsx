@@ -6,7 +6,7 @@ import { suggestSupplierGroups, type SupplierCount } from "../../lib/supplierMer
 import { undoableFromStore } from "../../lib/undo";
 
 /** One suggested variant group: pick the canonical name and merge. */
-export function SupplierGroupCard({
+function SupplierGroupCard({
   group,
   onMerge,
   merging,

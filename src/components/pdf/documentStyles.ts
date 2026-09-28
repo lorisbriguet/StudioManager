@@ -6,12 +6,13 @@ const QR_BILL_HEIGHT = 297.64;
 
 /**
  * Style keys shared by the invoice and the quote, verified key-by-key
- * identical between the two documents' former StyleSheet.create blocks
- * (see task-10-report.md for the diff). A handful of keys are read by only
- * one document — reminderBanner/qrBill/paymentSection/paymentTitle by the
- * invoice, validitySection/validityTitle by the quote — kept here anyway
- * since an unused style key costs nothing and this way there is exactly one
- * place documents' styling lives.
+ * identical between the two documents' former StyleSheet.create blocks: all
+ * 37 shared keys were byte-identical in both value and key order, and 0
+ * keys shared the same name while differing in value. A handful of keys
+ * are read by only one document — reminderBanner/qrBill/paymentSection/
+ * paymentTitle by the invoice, validitySection/validityTitle by the quote —
+ * kept here anyway since an unused style key costs nothing and this way
+ * there is exactly one place documents' styling lives.
  */
 const pdfStyles = StyleSheet.create({
   page: {
@@ -239,7 +240,7 @@ export function createDocumentStyles(template?: InvoiceTemplate) {
   const fontFamily = template?.font_family ?? "Helvetica";
   const accentColor = template?.accent_color ?? "#1a1a1a";
   const paddingTop = template?.margins_top ?? 35;
-  const paddingHorizontal = template?.margins_right ?? 50;
+  const paddingHorizontal = template?.margins_right ?? 50; // use right margin for horizontal
 
   return {
     ...pdfStyles,

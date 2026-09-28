@@ -3,7 +3,7 @@ import { copyFile, mkdir, exists } from "@tauri-apps/plugin-fs";
 import { orgPaths } from "./orgPaths";
 
 /** Strip path separators and `..` so a reference/supplier can't escape receiptsDir. */
-function sanitizeSegment(segment: string): string {
+export function sanitizeSegment(segment: string): string {
   return segment.replace(/[/\\]/g, "_").replace(/\.\./g, "_");
 }
 
@@ -28,7 +28,7 @@ export async function attachReceipt(
       filters: [{ name: "Files", extensions: ["pdf", "png", "jpg", "jpeg", "heic"] }],
     });
     if (!selected) return;
-    const filePath = typeof selected === "string" ? selected : selected;
+    const filePath = selected;
     const ext = filePath.split(".").pop() ?? "pdf";
     const { receiptsDir } = await orgPaths();
     if (!(await exists(receiptsDir))) {

@@ -1,5 +1,7 @@
+import type { ReactNode } from "react";
+
 /** Compact inline row: label left, control right, separated by faint dividers */
-export function SettingRow({ label, desc, children }: { label: string; desc?: string; children: React.ReactNode }) {
+export function SettingRow({ label, desc, children }: { label: string; desc?: string; children: ReactNode }) {
   return (
     <div className="flex items-center justify-between py-2.5 min-h-[36px] border-b border-[var(--color-border-divider)]">
       <div className="flex-1 min-w-0 pr-4">
@@ -12,7 +14,7 @@ export function SettingRow({ label, desc, children }: { label: string; desc?: st
 }
 
 /** Topic card: a SectionHeader and its rows inside a bounded surface */
-export function SettingsCard({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
+export function SettingsCard({ title, desc, children }: { title: string; desc?: string; children: ReactNode }) {
   return (
     <section className="rounded-xl bg-[var(--color-surface)] border border-[var(--color-border-divider)] px-4 pt-3 pb-1">
       <SectionHeader title={title} desc={desc} />

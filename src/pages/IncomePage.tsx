@@ -9,7 +9,7 @@ import { formatDisplayDate } from "../utils/formatDate";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { copyFile, mkdir, exists } from "@tauri-apps/plugin-fs";
 import { orgPaths } from "../lib/orgPaths";
-import { attachReceipt as attachReceiptFlow } from "../lib/attachReceipt";
+import { attachReceipt as attachReceiptFlow, sanitizeSegment } from "../lib/attachReceipt";
 import { ReceiptPreview } from "../components/ReceiptPreview";
 import {
   useIncomes,
@@ -132,6 +132,7 @@ export function IncomePage() {
     items: visibleRows,
     onOpen: useCallback((inc: Income) => { setShowForm(false); setEditing(inc); }, []),
     onMenu: useCallback((inc: Income, pos: { x: number; y: number }) => setCtxMenu({ ...pos, item: inc }), []),
+    enabled: preview === null,
   });
 
   const { isDragging, parsing } = useReceiptDrop({
@@ -230,8 +231,8 @@ export function IncomePage() {
                 if (!(await exists(receiptsDir))) {
                   await mkdir(receiptsDir, { recursive: true });
                 }
-                const safeRef = reference.replace(/[/\\]/g, "_").replace(/\.\./g, "_");
-                const safeSrc = (data.source || "").replace(/[/\\]/g, "_").replace(/\.\./g, "_");
+                const safeRef = sanitizeSegment(reference);
+                const safeSrc = sanitizeSegment(data.source || "");
                 const destPath = `${receiptsDir}/${safeRef}_${safeSrc}.${ext}`;
                 await copyFile(droppedReceiptPath, destPath);
                 receiptPath = destPath;
