@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Trash2, GripVertical, ChevronDown, ChevronRight, Pencil, X, Link, Unlink } from "lucide-react";
+import { Plus, Trash2, GripVertical, ChevronDown, ChevronRight, Pencil } from "lucide-react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { Button } from "./ui";
+import { TableCell } from "./named-table/TableCell";
+import { ColumnEditorPopover } from "./named-table/ColumnEditorPopover";
 import {
   useProjectTableRows,
   useCreateProjectTableRow,
@@ -13,7 +15,6 @@ import {
 } from "../db/hooks/useProjectTables";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useSetCustomListItems } from "../db/hooks/useCustomLists";
 import { useT } from "../i18n/useT";
-import { getTagColor } from "../lib/tagColors";
 import { useAppStore } from "../stores/app-store";
 import { toast } from "sonner";
 import type { ProjectTable, TableColumnDef, ProjectTableRow } from "../types/project-table";
@@ -51,7 +52,6 @@ export function NamedTable({ table, projectId }: Props) {
   const nameInputRef = useRef<HTMLInputElement>(null);
   const cellInputRef = useRef<HTMLInputElement>(null);
   const colPickerRef = useRef<HTMLDivElement>(null);
-  const colEditorRef = useRef<HTMLDivElement>(null);
 
   const cols = table.column_config;
 
@@ -91,15 +91,6 @@ export function NamedTable({ table, projectId }: Props) {
     const newData = { ...row.data, [col.id]: parsedValue };
     updateRow.mutate({ id: row.id, data: newData });
     setEditingCell(null);
-  };
-
-  const toggleCheckbox = (row: ProjectTableRow, colId: string) => {
-    const current = !!row.data[colId];
-    updateRow.mutate({ id: row.id, data: { ...row.data, [colId]: !current } });
-  };
-
-  const updateSelect = (row: ProjectTableRow, colId: string, value: string) => {
-    updateRow.mutate({ id: row.id, data: { ...row.data, [colId]: value } });
   };
 
   // Close column picker on outside click
@@ -174,19 +165,6 @@ export function NamedTable({ table, projectId }: Props) {
     setEditingCol(null);
     setColEditorPos(null);
   }, [editingCol, cols, colName, colOptions, colLinkedListId, updateTable, table.id]);
-
-  // Close column editor on outside click (depends on commitColEdit so the
-  // listener always commits with the latest editor state)
-  useEffect(() => {
-    if (!editingCol) return;
-    const handler = (e: MouseEvent) => {
-      if (colEditorRef.current && !colEditorRef.current.contains(e.target as Node)) {
-        commitColEdit();
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [editingCol, commitColEdit]);
 
   const deleteColumn = (colId: string) => {
     const updated = cols.filter((c) => c.id !== colId);
@@ -270,157 +248,29 @@ export function NamedTable({ table, projectId }: Props) {
                     >
                       {col.name}
                     </button>
-                    {editingCol === col.id && colEditorPos && createPortal(
-                      <div
-                        ref={colEditorRef}
-                        className="fixed z-[9999] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] p-3 min-w-[200px]"
-                        style={{ top: colEditorPos.top, left: colEditorPos.left }}
-                      >
-                        <label className="block text-[10px] text-muted mb-1">{t.rename}</label>
-                        <input
-                          value={colName}
-                          onChange={(e) => setColName(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === "Enter") commitColEdit(); }}
-                          className="w-full border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-xs mb-2"
-                          autoFocus
-                        />
-                        {(col.type === "select" || col.type === "tags") && (
-                          <>
-                            <div className="flex items-center justify-between mb-1">
-                              <label className="text-[10px] text-muted">{t.options ?? "Options"}</label>
-                              {colLinkedListId ? (
-                                <div className="flex items-center gap-1">
-                                  <span className="text-[10px] text-accent flex items-center gap-0.5">
-                                    <Link size={9} />
-                                    {(customLists ?? []).find((l) => l.id === colLinkedListId)?.name ?? ""}
-                                  </span>
-                                  <Button
-                                    type="button"
-                                    variant="link"
-                                    size="sm"
-                                    icon={<Unlink size={12} />}
-                                    onClick={handleUnlinkList}
-                                    className="text-muted hover:text-[var(--color-danger-text)]"
-                                  >
-                                    {t.unlink_list}
-                                  </Button>
-                                </div>
-                              ) : (
-                                <div className="relative">
-                                  <Button
-                                    type="button"
-                                    variant="link"
-                                    size="sm"
-                                    icon={<Link size={12} />}
-                                    onClick={() => setShowImportListDropdown((v) => !v)}
-                                  >
-                                    {t.import_from_list}
-                                  </Button>
-                                  {showImportListDropdown && (
-                                    <div className="absolute right-0 top-full mt-1 z-[10000] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-lg shadow-lg py-1 min-w-[140px]">
-                                      {(customLists ?? []).length === 0 ? (
-                                        <p className="text-[10px] text-muted px-3 py-1">{t.no_lists}</p>
-                                      ) : (
-                                        (customLists ?? []).map((list) => (
-                                          <button
-                                            key={list.id}
-                                            type="button"
-                                            onClick={() => handleImportFromList(list.id)}
-                                            className="w-full text-left px-3 py-1 text-xs hover:bg-[var(--color-hover-row)]"
-                                          >
-                                            {list.name}
-                                          </button>
-                                        ))
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            {colOptions.map((opt, i) => (
-                              <div key={i} className="flex items-center gap-1 mb-1">
-                                <input
-                                  value={opt}
-                                  onChange={(e) => {
-                                    if (colLinkedListId) return; // read-only when linked
-                                    const next = [...colOptions];
-                                    next[i] = e.target.value;
-                                    setColOptions(next);
-                                  }}
-                                  readOnly={!!colLinkedListId}
-                                  className={`flex-1 border border-[var(--color-input-border)] rounded-lg px-2 py-0.5 text-xs ${colLinkedListId ? "opacity-60 cursor-not-allowed" : ""}`}
-                                />
-                                {!colLinkedListId && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setColOptions(colOptions.filter((_, j) => j !== i))}
-                                    className="text-muted hover:text-[var(--color-danger-text)]"
-                                    aria-label={t.delete}
-                                  >
-                                    <Trash2 size={10} />
-                                  </button>
-                                )}
-                              </div>
-                            ))}
-                            {!colLinkedListId && (
-                              <>
-                                <Button
-                                  type="button"
-                                  variant="link"
-                                  size="sm"
-                                  icon={<Plus size={12} />}
-                                  onClick={() => setColOptions([...colOptions, ""])}
-                                >
-                                  {t.add_row}
-                                </Button>
-                                <div className="border-t border-[var(--color-border-divider)] mt-2 pt-2">
-                                  {showSaveAsListInput ? (
-                                    <div className="flex gap-1">
-                                      <input
-                                        value={saveAsListName}
-                                        onChange={(e) => setSaveAsListName(e.target.value)}
-                                        onKeyDown={(e) => { if (e.key === "Enter") handleSaveAsList(); if (e.key === "Escape") setShowSaveAsListInput(false); }}
-                                        placeholder={t.list_name}
-                                        className="flex-1 border border-[var(--color-input-border)] rounded-lg px-2 py-0.5 text-[10px]"
-                                        autoFocus
-                                      />
-                                      <button type="button" onClick={handleSaveAsList} className="text-[10px] text-accent hover:underline">{t.save}</button>
-                                    </div>
-                                  ) : (
-                                    <Button
-                                      type="button"
-                                      variant="link"
-                                      size="sm"
-                                      icon={<Link size={12} />}
-                                      onClick={() => setShowSaveAsListInput(true)}
-                                      className="text-muted hover:text-accent"
-                                    >
-                                      {t.save_as_list}
-                                    </Button>
-                                  )}
-                                </div>
-                              </>
-                            )}
-                          </>
-                        )}
-                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--color-border-divider)]">
-                          <button
-                            type="button"
-                            onClick={() => deleteColumn(col.id)}
-                            className="text-[10px] text-[var(--color-danger-text)] hover:underline"
-                          >
-                            {t.delete_column}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={commitColEdit}
-                            className="text-[10px] text-accent hover:underline"
-                          >
-                            {t.save}
-                          </button>
-                        </div>
-                      </div>,
-                      document.body
+                    {editingCol === col.id && colEditorPos && (
+                      <ColumnEditorPopover
+                        col={col}
+                        pos={colEditorPos}
+                        t={t}
+                        colName={colName}
+                        setColName={setColName}
+                        colOptions={colOptions}
+                        setColOptions={setColOptions}
+                        colLinkedListId={colLinkedListId}
+                        customLists={customLists}
+                        showImportListDropdown={showImportListDropdown}
+                        setShowImportListDropdown={setShowImportListDropdown}
+                        showSaveAsListInput={showSaveAsListInput}
+                        setShowSaveAsListInput={setShowSaveAsListInput}
+                        saveAsListName={saveAsListName}
+                        setSaveAsListName={setSaveAsListName}
+                        onImportFromList={handleImportFromList}
+                        onUnlinkList={handleUnlinkList}
+                        onSaveAsList={handleSaveAsList}
+                        onDelete={() => deleteColumn(col.id)}
+                        onCommit={commitColEdit}
+                      />
                     )}
                   </th>
                 ))}
@@ -467,7 +317,20 @@ export function NamedTable({ table, projectId }: Props) {
                   </td>
                   {cols.map((col) => (
                     <td key={col.id} className="px-3 py-1.5" style={{ width: col.width ?? 150 }}>
-                      {renderCell(row, col)}
+                      <TableCell
+                        row={row}
+                        col={col}
+                        darkMode={darkMode}
+                        t={t}
+                        isEditing={editingCell?.rowId === row.id && editingCell?.colId === col.id}
+                        editValue={editValue}
+                        cellInputRef={cellInputRef}
+                        onStartEdit={() => startEditing(row, col)}
+                        onEditValueChange={setEditValue}
+                        onCommitEdit={() => commitCell(row, col)}
+                        onCancelEdit={() => setEditingCell(null)}
+                        onChange={(data) => updateRow.mutate({ id: row.id, data })}
+                      />
                     </td>
                   ))}
                   <td className="w-10" />
@@ -497,106 +360,4 @@ export function NamedTable({ table, projectId }: Props) {
       )}
     </div>
   );
-
-  function renderCell(row: ProjectTableRow, col: TableColumnDef) {
-    const isEditing = editingCell?.rowId === row.id && editingCell?.colId === col.id;
-
-    switch (col.type) {
-      case "checkbox":
-        return (
-          <input
-            type="checkbox"
-            checked={!!row.data[col.id]}
-            onChange={() => toggleCheckbox(row, col.id)}
-            className="accent-[var(--accent)]"
-          />
-        );
-      case "select":
-        return (
-          <select
-            value={(row.data[col.id] as string) ?? ""}
-            onChange={(e) => updateSelect(row, col.id, e.target.value)}
-            className="text-xs bg-transparent border-0 outline-none cursor-pointer"
-          >
-            <option value="">—</option>
-            {(col.options ?? []).map((opt) => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
-          </select>
-        );
-      case "tags": {
-        const selected = (row.data[col.id] as string[] | undefined) ?? [];
-        const available = (col.options ?? []).filter((o) => !selected.includes(o));
-        const addTag = (tag: string) => {
-          updateRow.mutate({ id: row.id, data: { ...row.data, [col.id]: [...selected, tag] } });
-        };
-        const removeTag = (tag: string) => {
-          updateRow.mutate({ id: row.id, data: { ...row.data, [col.id]: selected.filter((t) => t !== tag) } });
-        };
-        return (
-          <div className="flex flex-wrap gap-1 items-center">
-            {selected.map((tag) => {
-              const color = getTagColor(tag, darkMode);
-              return (
-                <span
-                  key={tag}
-                  style={{ background: color.bg, color: color.text }}
-                  className="px-1.5 py-0.5 text-[10px] rounded-full flex items-center gap-0.5"
-                >
-                  {tag}
-                  <button type="button" onClick={() => removeTag(tag)} aria-label={`${t.remove_tag} ${tag}`} className="hover:text-danger">
-                    <X size={10} />
-                  </button>
-                </span>
-              );
-            })}
-            {available.map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => addTag(opt)}
-                className="px-1.5 py-0.5 rounded-full text-[10px] bg-[var(--color-input-bg)] text-muted hover:text-accent hover:bg-accent-light transition-colors"
-              >
-                + {opt}
-              </button>
-            ))}
-          </div>
-        );
-      }
-      case "date":
-        return (
-          <input
-            type="date"
-            value={(row.data[col.id] as string) ?? ""}
-            onChange={(e) => updateRow.mutate({ id: row.id, data: { ...row.data, [col.id]: e.target.value } })}
-            className="text-xs bg-transparent border-0 outline-none"
-          />
-        );
-      default:
-        if (isEditing) {
-          return (
-            <input
-              ref={cellInputRef}
-              type={col.type === "number" ? "number" : "text"}
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              onBlur={() => commitCell(row, col)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") commitCell(row, col);
-                if (e.key === "Escape") setEditingCell(null);
-              }}
-              className="w-full bg-transparent border-b border-accent outline-none text-sm"
-            />
-          );
-        }
-        return (
-          <span
-            className="cursor-pointer hover:text-accent block truncate"
-            onDoubleClick={() => startEditing(row, col)}
-          >
-            {row.data[col.id] != null ? String(row.data[col.id]) : <span className="text-muted">—</span>}
-          </span>
-        );
-    }
-  }
 }
