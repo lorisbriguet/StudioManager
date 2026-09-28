@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus, Eye, Trash2, ExternalLink, Users } from "lucide-react";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import { BulkActionBar } from "../components/BulkActionBar";
 import { SavedFilterBar } from "../components/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
+import { useListNavigation } from "../hooks/useListNavigation";
 import { Button, Badge, Card, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
@@ -31,6 +32,13 @@ export function ClientsPage() {
   const openTab = useTabStore((s) => s.openTab);
   const createClient = useCreateClient();
   const deleteClient = useDeleteClient();
+  // Synchronous guard for the quick-create form: `onSave` awaits
+  // getNextClientId() before calling createClient.mutate(), so isPending
+  // stays false for that whole await — a second click/Enter in that window
+  // isn't caught by the `disabled={createClient.isPending}` prop below. This
+  // ref is set synchronously at the top of onSave (before any await), so a
+  // second call in the same window returns immediately.
+  const creatingClientRef = useRef(false);
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState<Client & { status: string }> | null>(null);
   const clientsSortKey = useAppStore((s) => s.clientsSortKey);
   const clientsSortDir = useAppStore((s) => s.clientsSortDir);
@@ -94,6 +102,13 @@ export function ClientsPage() {
     return sortRows(rows, sort.key, sort.dir);
   }, [clients, search, sort, activeClientIds, filterConditions, filterLogic]);
 
+  // Keyboard row navigation (flat list — every filtered row is visible).
+  const { focusIdx } = useListNavigation({
+    items: filtered,
+    onOpen: useCallback((c: (typeof filtered)[0]) => navigate(`/clients/${c.id}`), [navigate]),
+    onMenu: useCallback((c: (typeof filtered)[0], pos: { x: number; y: number }) => setCtxMenu({ ...pos, item: c }), []),
+  });
+
   const bulk = useBulkSelect(filtered);
 
   const bulkDelete = useCallback(async () => {
@@ -136,16 +151,25 @@ export function ClientsPage() {
         <NewClientForm
           saving={createClient.isPending}
           onSave={async (data) => {
-            const id = await getNextClientId();
-            createClient.mutate(
-              { ...data, id },
-              {
-                onSuccess: () => {
-                  toast.success(t.toast_client_created);
-                  setShowForm(false);
-                },
-              }
-            );
+            if (creatingClientRef.current) return;
+            creatingClientRef.current = true;
+            try {
+              const id = await getNextClientId();
+              createClient.mutate(
+                { ...data, id },
+                {
+                  onSuccess: () => {
+                    toast.success(t.toast_client_created);
+                    setShowForm(false);
+                  },
+                  onSettled: () => {
+                    creatingClientRef.current = false;
+                  },
+                }
+              );
+            } catch {
+              creatingClientRef.current = false;
+            }
           }}
           onCancel={() => setShowForm(false)}
         />
@@ -166,10 +190,11 @@ export function ClientsPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((c) => (
+            {filtered.map((c, ci) => (
               <tr
                 key={c.id}
-                className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md"
+                data-list-row
+                className={`border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md${ci === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
                 onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: c }); }}
               >
                 <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>

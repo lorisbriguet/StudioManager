@@ -96,6 +96,28 @@ describe("ClientsPage quick-create", () => {
       executedStatements.filter((s) => s.sql.includes("INSERT INTO clients")).length
     ).toBe(1);
   });
+
+  // ClientsPage's onSave awaits getNextClientId() *before* calling
+  // createClient.mutate() — isPending stays false for that whole await, so
+  // the disabled-button guard above doesn't cover it. Two clicks fired back
+  // to back, with no await between them, land inside that window.
+  it("does not create the client twice when Save is clicked twice with no await between", async () => {
+    renderPage(<ClientsPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /^new client$/i }));
+    fireEvent.change(screen.getByLabelText(/display name/i), {
+      target: { value: "ACME SA" },
+    });
+
+    const saveBtn = screen.getByRole("button", { name: /^save$/i });
+    fireEvent.click(saveBtn);
+    fireEvent.click(saveBtn);
+
+    await flush();
+    expect(
+      executedStatements.filter((s) => s.sql.includes("INSERT INTO clients")).length
+    ).toBe(1);
+  });
 });
 
 describe("TasksPage Enter-to-create", () => {

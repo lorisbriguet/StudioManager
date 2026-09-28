@@ -15,6 +15,7 @@ import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
 import { BulkActionBar } from "../components/BulkActionBar";
 import { SavedFilterBar } from "../components/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
+import { useListNavigation } from "../hooks/useListNavigation";
 import { formatDisplayDate } from "../utils/formatDate";
 import { ProjectDetailContent } from "../components/ProjectDetailContent";
 import type { ProjectStatus } from "../types/project";
@@ -222,18 +223,29 @@ export function ProjectsPage() {
     bulk.clearSelection();
   }, [bulk, deleteProject, t]);
 
-  const handleProjectClick = (projectId: number) => {
+  const handleProjectClick = useCallback((projectId: number) => {
     if (projectOpenMode === "peek") {
       setClosingPeek(false);
       setPeekId(projectId);
     } else {
       navigate(`/projects/${projectId}`);
     }
-  };
+  }, [projectOpenMode, navigate]);
 
   const handleClosePeek = () => {
     setClosingPeek(true);
   };
+
+  // Keyboard card navigation (flat list, visual/card order; no Left/Right).
+  const { focusIdx } = useListNavigation({
+    items: filtered,
+    onOpen: useCallback((p: (typeof filtered)[0]) => handleProjectClick(p.id), [handleProjectClick]),
+    onMenu: useCallback(
+      (p: (typeof filtered)[0], pos: { x: number; y: number }) =>
+        setCtxMenu({ ...pos, item: { id: p.id, name: p.name } }),
+      []
+    ),
+  });
 
   const filterLabels: Record<ProjectStatus | "all", string> = {
     all: t.all,
@@ -310,13 +322,14 @@ export function ProjectsPage() {
         )}
 
         <div className="grid gap-4 p-px" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
-          {filtered.map((p) => {
+          {filtered.map((p, pi) => {
             const stats = taskStats[p.id] ?? { total: 0, pct: 0, maxPriority: "low" as TaskPriority };
             const pct = stats.pct;
 
             return (
               <div
                 key={p.id}
+                data-list-row
                 onClick={() => handleProjectClick(p.id)}
                 onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: { id: p.id, name: p.name } }); }}
                 className={`group block rounded-xl p-4 transition-all cursor-pointer ${
@@ -325,7 +338,7 @@ export function ProjectsPage() {
                     : bulk.selected.has(p.id)
                       ? "bg-[var(--color-hover-row)] outline outline-1 outline-accent"
                       : "bg-[var(--color-surface)] hover:bg-[var(--color-hover-row)]"
-                }`}
+                }${pi === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2 min-w-0">
