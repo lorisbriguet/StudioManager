@@ -40,6 +40,7 @@ import { PageSpinner } from "./components/ui";
 import { useOverdueCheck } from "./hooks/useOverdueCheck";
 import { useRecurringCheck } from "./hooks/useRecurringCheck";
 import { useAutoBackup } from "./hooks/useAutoBackup";
+import { useGuideUpdateCheck } from "./hooks/useGuideUpdateCheck";
 import { useErrorNotifications } from "./hooks/useErrorNotifications";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useUndoStore } from "./stores/undo-store";
@@ -54,6 +55,7 @@ function StartupChecks() {
   useOverdueCheck();
   useRecurringCheck();
   useAutoBackup();
+  useGuideUpdateCheck();
   useErrorNotifications();
 
   useEffect(() => {

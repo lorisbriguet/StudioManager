@@ -709,6 +709,33 @@ const articles: ArticleSeed[] = [
   },
 ];
 
+/** Bump when a release changes the guide, so every organisation is offered the
+ *  new content once. Paired with `guideUpdateNotified:<organisation id>` in
+ *  localStorage by `useGuideUpdateCheck`. */
+export const USER_GUIDE_VERSION = 2;
+
+/** Titles this version ships, in order. The guide of an organisation created by
+ *  an earlier release is missing the ones added since. */
+export const USER_GUIDE_TITLES: string[] = articles.map((a) => a.title);
+
+/** True when the organisation has a User Guide whose articles predate this
+ *  version — i.e. resetting it from Settings would actually add something.
+ *  False when there is no guide at all: a fresh organisation seeds the current
+ *  one, and an owner who deleted the folder chose to live without it. */
+export async function isUserGuideOutdated(db: Database): Promise<boolean> {
+  const folders = await db.select<{ id: number }[]>(
+    "SELECT id FROM wiki_folders WHERE name = 'User Guide'"
+  );
+  if (folders.length === 0) return false;
+  const placeholders = folders.map((_, i) => `$${i + 1}`).join(", ");
+  const rows = await db.select<{ title: string }[]>(
+    `SELECT title FROM wiki_articles WHERE folder_id IN (${placeholders})`,
+    folders.map((f) => f.id)
+  );
+  const present = new Set(rows.map((r) => r.title));
+  return USER_GUIDE_TITLES.some((title) => !present.has(title));
+}
+
 export async function seedUserGuide(db: Database): Promise<void> {
   // Create the "User Guide" folder
   const folderResult = await db.execute(

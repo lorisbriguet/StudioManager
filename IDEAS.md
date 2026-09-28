@@ -91,6 +91,8 @@ All 12 checklist items pass after three fixes found by the pass:
 - [x] Persona seeds under `src/db/seeds/personas/<id>/{config,data}.sql` with a registry and one loader; presentation mode in the real app keeps loading the designer data layer only
 - [x] Music persona "Aurore": grants in Income, concerts, a tour, workshops
 - [x] Demo-build-only Settings › Data › Demo data card: pick a persona, confirm, load into the current organisation and apply its preferences
+- [x] In-app user guide refreshed: new **Organisations** article, per-organisation settings noted, Snapshot documented under Backup, Cmd+Shift+O added; `USER_GUIDE_VERSION` + `isUserGuideOutdated()` in the seed module
+- [x] One-time notification per organisation when its wiki guide predates the shipped one, linking to Settings › General › Reset guide (`useGuideUpdateCheck`)
 - [ ] Follow-up: a demo persona for a two-person studio, if a presentation ever needs it
 
 ## Audit — round 3 (2026-08-31)
