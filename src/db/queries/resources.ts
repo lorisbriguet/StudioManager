@@ -48,10 +48,12 @@ export async function createResource(
     [data.name, data.url, data.price]
   );
   const id = result.lastInsertId ?? 0;
-  for (const tag of data.tags) {
+  const tags = data.tags.map((t) => t.trim()).filter(Boolean);
+  if (tags.length > 0) {
+    const values = tags.map((_, i) => `($${i * 2 + 1}, $${i * 2 + 2})`).join(", ");
     await db.execute(
-      "INSERT INTO resource_tags (resource_id, tag) VALUES ($1, $2)",
-      [id, tag.trim()]
+      `INSERT INTO resource_tags (resource_id, tag) VALUES ${values}`,
+      tags.flatMap((tag) => [id, tag])
     );
   }
   return id;

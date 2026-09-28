@@ -776,6 +776,9 @@ async function ensureSchema(db: Database) {
     "CREATE INDEX IF NOT EXISTS idx_time_entries_task ON time_entries(task_id)",
     "CREATE INDEX IF NOT EXISTS idx_invoice_line_items_invoice ON invoice_line_items(invoice_id)",
     "CREATE INDEX IF NOT EXISTS idx_quote_line_items_quote ON quote_line_items(quote_id)",
+    "CREATE INDEX IF NOT EXISTS idx_time_entries_project ON time_entries(project_id)",
+    "CREATE INDEX IF NOT EXISTS idx_time_entries_date ON time_entries(date)",
+    "CREATE INDEX IF NOT EXISTS idx_quotes_client ON quotes(client_id)",
   ];
   for (const stmt of indexes) {
     await db.execute(stmt).catch((e) => logError("[DB] index creation failed:", e));
