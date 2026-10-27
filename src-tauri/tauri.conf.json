@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
+    "beforeDevCommand": "bash scripts/build-mcp.sh && npm run dev",
+    "beforeBuildCommand": "bash scripts/build-mcp.sh && npm run build"
   },
   "app": {
     "windows": [
@@ -44,6 +44,9 @@
       "icons/icon.ico"
     ],
     "createUpdaterArtifacts": true,
+    "externalBin": [
+      "binaries/studiomanager-mcp"
+    ],
     "macOS": {
       "signingIdentity": "-",
       "files": {

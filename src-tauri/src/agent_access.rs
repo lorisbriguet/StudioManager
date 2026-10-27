@@ -16,6 +16,8 @@ use tauri::{Emitter, Manager};
 pub const ACCESS_FILE: &str = "agent-access.json";
 pub const LOG_FILE: &str = "agent-log.jsonl";
 pub const SERVER_NAME: &str = "studiomanager";
+pub const DEMO_SERVER_NAME: &str = "studiomanager-demo";
+pub const DEMO_IDENTIFIER: &str = "ch.studiomanager.demo";
 pub const MCP_BINARY: &str = "studiomanager-mcp";
 pub const CHANGED_EVENT: &str = "db-changed";
 const INVALID_CLAUDE_CONFIG: &str =
@@ -100,9 +102,23 @@ pub fn read_recent(dir: &Path, limit: usize) -> Vec<LogEntry> {
         .collect()
 }
 
-/// Claude Desktop's config with `mcpServers.studiomanager` set to the server,
+/// The MCP server key for an app identifier: the demo build gets its own
+/// key so both can be registered side by side.
+pub fn server_name(identifier: &str) -> &'static str {
+    if identifier == DEMO_IDENTIFIER {
+        DEMO_SERVER_NAME
+    } else {
+        SERVER_NAME
+    }
+}
+
+/// Claude Desktop's config with `mcpServers.<name>` set to the server,
 /// every other key kept. `existing` is the current file's text, if any.
-pub fn merge_claude_config(existing: Option<&str>, mcp_path: &str) -> Result<String, String> {
+pub fn merge_claude_config(
+    existing: Option<&str>,
+    name: &str,
+    mcp_path: &str,
+) -> Result<String, String> {
     let mut root = match existing.map(str::trim) {
         None | Some("") => Map::new(),
         Some(text) => match serde_json::from_str::<Value>(text) {
@@ -117,7 +133,7 @@ pub fn merge_claude_config(existing: Option<&str>, mcp_path: &str) -> Result<Str
     let Value::Object(servers) = servers else {
         return Err(UNEXPECTED_CLAUDE_CONFIG.to_string());
     };
-    servers.insert(SERVER_NAME.to_string(), server_entry(mcp_path));
+    servers.insert(name.to_string(), server_entry(mcp_path));
     let out = serde_json::to_string_pretty(&Value::Object(root)).map_err(|e| e.to_string())?;
     Ok(format!("{out}\n"))
 }
@@ -133,6 +149,7 @@ fn server_entry(mcp_path: &str) -> Value {
 /// Returns the backup path, `None` when there was no file.
 pub fn install_claude_config_at(
     config: &Path,
+    name: &str,
     mcp_path: &str,
     expected: &str,
     stamp: &str,
@@ -142,7 +159,7 @@ pub fn install_claude_config_at(
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => return Err(format!("Failed to read {}: {e}", config.display())),
     };
-    if merge_claude_config(existing.as_deref(), mcp_path)? != expected {
+    if merge_claude_config(existing.as_deref(), name, mcp_path)? != expected {
         return Err(CLAUDE_CONFIG_CHANGED.to_string());
     }
     if let Some(parent) = config.parent() {
@@ -194,14 +211,14 @@ fn write_backup(config: &Path, text: &str, stamp: &str) -> Result<PathBuf, Strin
 }
 
 /// `claude mcp add` line for Claude Code; the path single-quoted for the shell.
-pub fn claude_code_command(mcp_path: &str) -> String {
+pub fn claude_code_command(name: &str, mcp_path: &str) -> String {
     let quoted = mcp_path.replace('\'', r"'\''");
-    format!("claude mcp add {SERVER_NAME} -- '{quoted}'")
+    format!("claude mcp add {name} -- '{quoted}'")
 }
 
 /// The `mcpServers` snippet for any other MCP client.
-pub fn generic_config(mcp_path: &str) -> String {
-    let value = serde_json::json!({ "mcpServers": { SERVER_NAME: server_entry(mcp_path) } });
+pub fn generic_config(name: &str, mcp_path: &str) -> String {
+    let value = serde_json::json!({ "mcpServers": { name: server_entry(mcp_path) } });
     serde_json::to_string_pretty(&value).unwrap_or_default()
 }
 
@@ -253,13 +270,14 @@ pub fn get_agent_access(app: tauri::AppHandle) -> Result<AgentAccess, String> {
     let dir = crate::app_data_dir(&app)?;
     let settings = read_access(&dir);
     let path = mcp_path();
+    let name = server_name(&app.config().identifier);
     Ok(AgentAccess {
         enabled: settings.enabled,
         allow_money: settings.allow_money,
         orgs: settings.orgs,
         claude_desktop_installed: claude_desktop_installed(),
-        claude_code_command: claude_code_command(&path),
-        generic_config: generic_config(&path),
+        claude_code_command: claude_code_command(name, &path),
+        generic_config: generic_config(name, &path),
         mcp_path: path,
     })
 }
@@ -283,22 +301,32 @@ pub fn set_agent_access(
 }
 
 #[tauri::command]
-pub fn preview_claude_desktop() -> Result<String, String> {
+pub fn preview_claude_desktop(app: tauri::AppHandle) -> Result<String, String> {
     let existing = match std::fs::read_to_string(claude_config_path()) {
         Ok(text) => Some(text),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => return Err(format!("Failed to read Claude Desktop's settings: {e}")),
     };
-    merge_claude_config(existing.as_deref(), &mcp_path())
+    merge_claude_config(
+        existing.as_deref(),
+        server_name(&app.config().identifier),
+        &mcp_path(),
+    )
 }
 
 /// `expected` is the text `preview_claude_desktop` returned and the user
 /// approved; it is written as-is, or refused if the file changed meanwhile.
 /// Returns the backup path, or an empty string when there was no file to back up.
 #[tauri::command]
-pub fn install_claude_desktop(expected: String) -> Result<String, String> {
+pub fn install_claude_desktop(app: tauri::AppHandle, expected: String) -> Result<String, String> {
     let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
-    let backup = install_claude_config_at(&claude_config_path(), &mcp_path(), &expected, &stamp)?;
+    let backup = install_claude_config_at(
+        &claude_config_path(),
+        server_name(&app.config().identifier),
+        &mcp_path(),
+        &expected,
+        &stamp,
+    )?;
     Ok(backup
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_default())
@@ -492,6 +520,7 @@ mod tests {
 }"#;
         let out = merge_claude_config(
             Some(existing),
+            "studiomanager",
             "/Apps/StudioManager.app/Contents/MacOS/studiomanager-mcp",
         )
         .unwrap();
@@ -514,7 +543,7 @@ mod tests {
 
     #[test]
     fn merge_creates_file_when_missing() {
-        let out = merge_claude_config(None, "/x/studiomanager-mcp").unwrap();
+        let out = merge_claude_config(None, "studiomanager", "/x/studiomanager-mcp").unwrap();
         let v: Value = serde_json::from_str(&out).unwrap();
         assert_eq!(
             v,
@@ -523,9 +552,14 @@ mod tests {
 
         let dir = tmp_dir("claude-missing");
         let config = dir.join("Claude").join("claude_desktop_config.json");
-        let backup =
-            install_claude_config_at(&config, "/x/studiomanager-mcp", &out, "20261027-120000")
-                .unwrap();
+        let backup = install_claude_config_at(
+            &config,
+            "studiomanager",
+            "/x/studiomanager-mcp",
+            &out,
+            "20261027-120000",
+        )
+        .unwrap();
         assert_eq!(backup, None);
         assert_eq!(std::fs::read_to_string(&config).unwrap(), out);
         std::fs::remove_dir_all(&dir).unwrap();
@@ -537,11 +571,17 @@ mod tests {
         let config = dir.join("claude_desktop_config.json");
         let original = r#"{"mcpServers":{"other":{"command":"o"}}}"#;
         std::fs::write(&config, original).unwrap();
-        let preview = merge_claude_config(Some(original), "/x/studiomanager-mcp").unwrap();
-        let backup =
-            install_claude_config_at(&config, "/x/studiomanager-mcp", &preview, "20261027-120000")
-                .unwrap()
-                .expect("a backup when the file existed");
+        let preview =
+            merge_claude_config(Some(original), "studiomanager", "/x/studiomanager-mcp").unwrap();
+        let backup = install_claude_config_at(
+            &config,
+            "studiomanager",
+            "/x/studiomanager-mcp",
+            &preview,
+            "20261027-120000",
+        )
+        .unwrap()
+        .expect("a backup when the file existed");
         assert_eq!(
             backup,
             dir.join("claude_desktop_config.json.studiomanager-backup-20261027-120000")
@@ -561,11 +601,12 @@ mod tests {
         let dir = tmp_dir("claude-changed");
         let config = dir.join("claude_desktop_config.json");
         std::fs::write(&config, r#"{"a":1}"#).unwrap();
-        let preview = merge_claude_config(Some(r#"{"a":1}"#), "/x").unwrap();
+        let preview = merge_claude_config(Some(r#"{"a":1}"#), "studiomanager", "/x").unwrap();
         // Claude Desktop rewrites its file after the preview was shown.
         std::fs::write(&config, r#"{"a":2}"#).unwrap();
         assert_eq!(
-            install_claude_config_at(&config, "/x", &preview, "20261027-120000").unwrap_err(),
+            install_claude_config_at(&config, "studiomanager", "/x", &preview, "20261027-120000")
+                .unwrap_err(),
             "Claude Desktop's settings changed; review again."
         );
         assert_eq!(std::fs::read_to_string(&config).unwrap(), r#"{"a":2}"#);
@@ -582,10 +623,16 @@ mod tests {
         for i in 0..3 {
             let text = format!(r#"{{"n":{i}}}"#);
             std::fs::write(&config, &text).unwrap();
-            let preview = merge_claude_config(Some(&text), "/x").unwrap();
-            let backup = install_claude_config_at(&config, "/x", &preview, "20261027-120000")
-                .unwrap()
-                .unwrap();
+            let preview = merge_claude_config(Some(&text), "studiomanager", "/x").unwrap();
+            let backup = install_claude_config_at(
+                &config,
+                "studiomanager",
+                "/x",
+                &preview,
+                "20261027-120000",
+            )
+            .unwrap()
+            .unwrap();
             assert_eq!(std::fs::read_to_string(&backup).unwrap(), text);
             backups.push(backup.file_name().unwrap().to_string_lossy().to_string());
         }
@@ -612,13 +659,16 @@ mod tests {
     #[test]
     fn merge_rejects_invalid_json_without_writing() {
         assert_eq!(
-            merge_claude_config(Some("{ not json"), "/x").unwrap_err(),
+            merge_claude_config(Some("{ not json"), "studiomanager", "/x").unwrap_err(),
             "Claude Desktop's settings file isn't valid JSON; nothing was changed."
         );
         let dir = tmp_dir("claude-invalid");
         let config = dir.join("claude_desktop_config.json");
         std::fs::write(&config, "{ not json").unwrap();
-        assert!(install_claude_config_at(&config, "/x", "{}", "20261027-120000").is_err());
+        assert!(
+            install_claude_config_at(&config, "studiomanager", "/x", "{}", "20261027-120000")
+                .is_err()
+        );
         assert_eq!(std::fs::read_to_string(&config).unwrap(), "{ not json");
         let entries: Vec<_> = std::fs::read_dir(&dir).unwrap().collect();
         assert_eq!(entries.len(), 1, "no backup or temp file left behind");
@@ -680,21 +730,44 @@ mod tests {
     #[test]
     fn claude_code_command_quotes_the_path() {
         assert_eq!(
-            claude_code_command("/Apps/Studio Manager.app/x"),
+            claude_code_command("studiomanager", "/Apps/Studio Manager.app/x"),
             "claude mcp add studiomanager -- '/Apps/Studio Manager.app/x'"
         );
         assert_eq!(
-            claude_code_command("/a'b"),
+            claude_code_command("studiomanager", "/a'b"),
             r"claude mcp add studiomanager -- '/a'\''b'"
         );
     }
 
     #[test]
     fn generic_config_is_the_server_entry() {
-        let v: Value = serde_json::from_str(&generic_config("/x/studiomanager-mcp")).unwrap();
+        let v: Value =
+            serde_json::from_str(&generic_config("studiomanager", "/x/studiomanager-mcp")).unwrap();
         assert_eq!(
             v,
             serde_json::json!({ "mcpServers": { "studiomanager": { "command": "/x/studiomanager-mcp" } } })
         );
+    }
+
+    #[test]
+    fn demo_identifier_gets_its_own_server_name() {
+        assert_eq!(server_name("ch.studiomanager.app"), "studiomanager");
+        assert_eq!(server_name("ch.studiomanager.demo"), "studiomanager-demo");
+        assert_eq!(
+            claude_code_command("studiomanager-demo", "/a"),
+            "claude mcp add studiomanager-demo -- '/a'"
+        );
+        let out = merge_claude_config(
+            Some(r#"{"mcpServers":{"studiomanager":{"command":"/real"}}}"#),
+            "studiomanager-demo",
+            "/demo",
+        )
+        .unwrap();
+        let v: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["mcpServers"]["studiomanager"]["command"], "/real");
+        assert_eq!(v["mcpServers"]["studiomanager-demo"]["command"], "/demo");
+        let g: Value =
+            serde_json::from_str(&generic_config("studiomanager-demo", "/demo")).unwrap();
+        assert_eq!(g["mcpServers"]["studiomanager-demo"]["command"], "/demo");
     }
 }

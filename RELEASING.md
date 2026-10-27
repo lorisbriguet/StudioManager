@@ -18,7 +18,10 @@ Step-by-step guidelines for publishing a new release on GitHub. Follow in order;
 npx tsc --noEmit        # zero errors
 npx vitest run          # all tests green
 npm run lint            # exit 0, zero findings
+(cd src-tauri/mcp && CARGO_TARGET_DIR=~/cargo-target-studiomanager-mcp cargo test && CARGO_TARGET_DIR=~/cargo-target-studiomanager-mcp cargo clippy --all-targets -- -D warnings)
 ```
+
+The `studiomanager-mcp` crate (`src-tauri/mcp`) needs Rust 1.88+. Never run `cargo fmt` there: it reformats the files it shares with the app through `#[path]` includes.
 
 - Working tree contains only the changes meant for this release; no debug code, `console.log` leftovers, or commented-out hacks.
 - No secrets/PII in the diff (keys, IBANs, personal paths). `scripts/migrate-data.mjs` was deleted in the 2026-08 audit for exactly this reason — anything similar must read personal values from env, never hardcode them. Note the repo is PUBLIC.
@@ -52,6 +55,8 @@ export TAURI_SIGNING_PRIVATE_KEY=$(cat ~/.tauri/StudioManager.key)
 export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
 CARGO_TARGET_DIR=~/cargo-target-studiomanager npm run tauri build
 ```
+
+`scripts/build-mcp.sh` runs automatically as part of `beforeBuildCommand` (and `beforeDevCommand`), before the frontend build. It builds the `studiomanager-mcp` server in release mode into `~/cargo-target-studiomanager-mcp` and copies it to `src-tauri/binaries/studiomanager-mcp-<target-triple>` (git-ignored), which Tauri bundles as `Contents/MacOS/studiomanager-mcp`. Check it is there after the build, and that `StudioManager.app/Contents/MacOS/studiomanager-mcp --print-data-dir` ends in `ch.studiomanager.app`. A `universal-apple-darwin` target builds both architectures and joins them with `lipo`. See `docs/agent-access.md` for the feature itself.
 
 **Without the signing env vars the build still succeeds but produces an invalid update signature** — users' updaters download to 100% then fail with "Update check failed". Never skip them.
 
@@ -118,7 +123,7 @@ gh release create vX.Y.Z \
 
 ## Demo build (never published)
 
-`npm run build:demo` builds **StudioManager Demo** from `src-tauri/tauri.demo.conf.json`: identifier `ch.studiomanager.demo`, own data folder at `~/Library/Application Support/ch.studiomanager.demo/`, updater pointed at a manifest that does not exist, no updater artefacts, so no signing key is needed. It installs next to the real app. Use it for presentations only; the release procedure above always uses the plain `npm run tauri build`. The demo build sets `VITE_DEMO_BUILD=1`, which enables the Settings › Data › Demo data card and disables the startup update check.
+`npm run build:demo` builds **StudioManager Demo** from `src-tauri/tauri.demo.conf.json`: identifier `ch.studiomanager.demo`, own data folder at `~/Library/Application Support/ch.studiomanager.demo/`, updater pointed at a manifest that does not exist, no updater artefacts, so no signing key is needed. It installs next to the real app and bundles its own copy of the MCP server, which resolves the demo data folder (`--print-data-dir` ends in `ch.studiomanager.demo`) and registers as `studiomanager-demo`. Use it for presentations only; the release procedure above always uses the plain `npm run tauri build`. The demo build sets `VITE_DEMO_BUILD=1`, which enables the Settings › Data › Demo data card and disables the startup update check.
 
 ## Common failure modes
 
