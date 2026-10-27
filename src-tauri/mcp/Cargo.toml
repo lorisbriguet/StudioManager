@@ -1,0 +1,26 @@
+[package]
+name = "studiomanager-mcp"
+version = "0.1.0"
+description = "StudioManager agent access (MCP server)"
+edition = "2021"
+rust-version = "1.77.2"
+publish = false
+
+# Standalone package (not part of the app crate): keep it its own workspace root.
+[workspace]
+
+[lib]
+name = "studiomanager_mcp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "studiomanager-mcp"
+path = "src/main.rs"
+
+[dependencies]
+# Same pin as the app crate (see src-tauri/Cargo.toml).
+rusqlite = { version = "0.32", features = ["bundled", "backup"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+unicode-normalization = "0.1"

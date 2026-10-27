@@ -38,3 +38,4 @@ V1.6.0-PLAN.md
 # Logs
 *.log
 npm-debug.log*
+src-tauri/mcp/target/

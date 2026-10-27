@@ -1,0 +1,120 @@
+//! Safety copy before the first agent write: SQLite backup API into
+//! `<data dir>/backups/agent/<org>-<yyyyMMdd-HHmmss>.db`, newest 20 kept.
+
+use crate::guard::Org;
+use std::path::{Path, PathBuf};
+
+pub const KEEP: usize = 20;
+
+pub fn backup_dir(dir: &Path) -> PathBuf {
+    dir.join("backups").join("agent")
+}
+
+/// `<org>-yyyyMMdd-HHmmss.db` for exactly this organisation id.
+fn is_backup_of(name: &str, org_id: &str) -> bool {
+    let Some(stamp) = name
+        .strip_prefix(org_id)
+        .and_then(|r| r.strip_prefix('-'))
+        .and_then(|r| r.strip_suffix(".db"))
+    else {
+        return false;
+    };
+    let b = stamp.as_bytes();
+    b.len() == 15
+        && b[8] == b'-'
+        && b.iter()
+            .enumerate()
+            .all(|(i, c)| i == 8 || c.is_ascii_digit())
+}
+
+pub fn ensure(dir: &Path, org: &Org) -> Result<(), String> {
+    let bdir = backup_dir(dir);
+    std::fs::create_dir_all(&bdir).map_err(|e| format!("create backup folder: {e}"))?;
+    let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+    let dest = bdir.join(format!("{}-{stamp}.db", org.id));
+
+    let src =
+        rusqlite::Connection::open_with_flags(&org.db, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .map_err(|e| format!("backup: open database: {e}"))?;
+    src.busy_timeout(std::time::Duration::from_millis(5000))
+        .map_err(|e| format!("backup: busy_timeout: {e}"))?;
+    let mut dst =
+        rusqlite::Connection::open(&dest).map_err(|e| format!("backup: create file: {e}"))?;
+    rusqlite::backup::Backup::new(&src, &mut dst)
+        .map_err(|e| format!("backup: start: {e}"))?
+        .run_to_completion(64, std::time::Duration::from_millis(50), None)
+        .map_err(|e| format!("backup failed: {e}"))?;
+    drop(dst);
+
+    prune(&bdir, &org.id);
+    Ok(())
+}
+
+/// Keep the `KEEP` newest backups of `org_id`; the timestamp in the name
+/// sorts chronologically.
+fn prune(bdir: &Path, org_id: &str) {
+    let Ok(entries) = std::fs::read_dir(bdir) else {
+        return;
+    };
+    let mut names: Vec<String> = entries
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| is_backup_of(n, org_id))
+        .collect();
+    names.sort();
+    let excess = names.len().saturating_sub(KEEP);
+    for name in &names[..excess] {
+        crate::dbfiles::remove_db_files(&bdir.join(name));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::guard;
+    use crate::test_support::ready_dir;
+
+    fn backups(dir: &std::path::Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir.join("backups").join("agent"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn backup_once_and_keeps_20() {
+        let dir = ready_dir("bkp001", "Studio");
+        let bdir = dir.join("backups").join("agent");
+        std::fs::create_dir_all(&bdir).unwrap();
+        for i in 0..25 {
+            std::fs::write(bdir.join(format!("bkp001-20200101-0000{i:02}.db")), "old").unwrap();
+        }
+        // Another organisation's backups are never pruned.
+        std::fs::write(bdir.join("other1-20200101-000000.db"), "old").unwrap();
+
+        let org = guard::resolve_org(&dir, None).unwrap();
+        guard::open_write(&dir, &org).unwrap();
+        guard::open_write(&dir, &org).unwrap();
+
+        let all = backups(&dir);
+        let mine: Vec<&String> = all.iter().filter(|n| n.starts_with("bkp001-")).collect();
+        assert_eq!(mine.len(), 20);
+        let fresh: Vec<&&String> = mine
+            .iter()
+            .filter(|n| !n.starts_with("bkp001-2020"))
+            .collect();
+        assert_eq!(fresh.len(), 1, "one backup per process per org: {mine:?}");
+        assert!(all.contains(&"other1-20200101-000000.db".to_string()));
+        // The fresh backup is a real database copy.
+        let conn = rusqlite::Connection::open(bdir.join(fresh[0])).unwrap();
+        let n: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name='wiki_articles'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 1);
+    }
+}
