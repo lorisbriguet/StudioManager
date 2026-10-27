@@ -132,6 +132,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - **10 Color Themes** — curated full-app palettes (Default, Nord, Rose Pine, Catppuccin, Tokyo Night, Evergreen, Midnight, Sand, Lavender)
 - **19 Accent Colors** — customize the app appearance
 - **Smooth Animations** — page transitions, card fade-ins, counter animations (with reduce-motion support)
+- **Agent access** — let AI agents (Claude Desktop, Claude Code, other MCP apps) read and update your projects, tasks, clients and wiki: off by default, per organisation, never deletes, backs up before the first change; invoices and expenses only on request, read-only ([docs](docs/agent-access.md))
 - **Organisations** — run several fully separate businesses in one install (own database, documents, bank details, preferences and backups per organisation); switch with Cmd+Shift+O
 - **Batch Operations** — multi-select with bulk actions on all list pages
 - **Saved Filters** — save and quick-apply filter configurations per page

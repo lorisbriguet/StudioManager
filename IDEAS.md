@@ -85,6 +85,16 @@ All 12 checklist items pass after three fixes found by the pass:
 - [x] Test Mode and Presentation Mode are demo-build tools now: their Settings category is hidden in the real app (banners and exit paths stay for anyone mid-mode at update time); the Snapshot card moved under Backup
 - [x] Docs: guide, README and landing page no longer point testers at Presentation Mode
 
+## V2.2.0 — Done (agent access)
+
+- [x] `studiomanager-mcp`, a stdio MCP server bundled in the app (`src-tauri/mcp`): 26 tools for projects, tasks, subtasks, clients, wiki, tool links, folder linking and the due list; invoices, quotes, expenses and P&L read-only behind their own switch
+- [x] Safety: no deletes, backup before the first write per session and organisation, writes paused in test/presentation mode, refuses databases the app has not opened, exact-name matching, hidden organisations never named, demo build isolated
+- [x] Settings › Agent access card: main switch, per-organisation switches, money switch, connect Claude Desktop (preview + confirm + backup), copy Claude Code command / generic config, recent agent changes
+- [x] Live refresh: the app watches `PRAGMA data_version` and refreshes when another process changes the database
+- [ ] Follow-up: in-app user guide article for Agent access
+- [ ] Follow-up: agent edits to a task's dates/status reach Apple Calendar only on the next in-app edit
+- [ ] Follow-up: decide whether new organisations start allowed or unticked once Agent access is on
+
 ## V2.1.0 — Done (demo app)
 
 - [x] Separate **StudioManager Demo** build (`npm run build:demo`, `src-tauri/tauri.demo.conf.json`): own identifier and data folder, dead updater endpoint, no updater artefacts; never published
