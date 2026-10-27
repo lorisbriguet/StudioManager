@@ -198,6 +198,7 @@ fn stdio_round_trip() {
     );
     let refused = server.call("list_invoices", json!({}));
     assert_eq!(refused["isError"], json!(true), "{refused}");
+    assert_eq!(text_of(&refused), studiomanager_mcp::money::MONEY_OFF);
 }
 
 #[test]
@@ -223,12 +224,49 @@ fn errors_are_tool_errors_with_exact_text() {
     assert_eq!(off["isError"], json!(true));
     assert_eq!(text_of(&off), studiomanager_mcp::guard::OFF_OVERALL);
 
-    // list_organisations still answers, with every organisation refused.
+    let orgs_off = server.call("list_organisations", json!({}));
+    assert_eq!(orgs_off["isError"], json!(true), "{orgs_off}");
+    assert_eq!(text_of(&orgs_off), studiomanager_mcp::guard::OFF_OVERALL);
+
+    // Access on: "Studio B" is allowed but never opened by the app, "Hidden
+    // Studio" is switched off and must not appear anywhere.
+    test_support::write_registry(
+        &dir,
+        &[
+            ("org-a", "Studio A"),
+            ("org-b", "Studio B"),
+            ("org-c", "Hidden Studio"),
+        ],
+    );
+    test_support::write_access(
+        &dir,
+        r#"{"enabled": true, "allowMoney": false, "orgs": {"org-c": false}}"#,
+    );
+
     let orgs = server.call("list_organisations", json!({}));
     assert_ne!(orgs["isError"], json!(true), "{orgs}");
+    assert!(!text_of(&orgs).contains("Hidden Studio"), "{orgs}");
     let body: Value = serde_json::from_str(&text_of(&orgs)).unwrap();
     let list = body["organisations"].as_array().unwrap();
-    assert_eq!(list.len(), 1);
-    assert_eq!(list[0]["allowed"], json!(false));
+    assert_eq!(list.len(), 2, "{body}");
+    assert_eq!(list[0]["name"], "Studio A");
     assert_eq!(list[0]["active"], json!(true));
+    assert_eq!(list[1]["active"], json!(false));
+    assert!(list[0].get("allowed").is_none());
+
+    // A named organisation that cannot be opened: the guard's exact text.
+    let due = server.call("whats_due", json!({"org": "Studio B"}));
+    assert_eq!(due["isError"], json!(true), "{due}");
+    assert_eq!(text_of(&due), studiomanager_mcp::guard::NOT_OPENED);
+
+    // Across every organisation it is listed under errors instead.
+    let found = server.call("find_project_for_folder", json!({"path": "/nowhere"}));
+    assert_ne!(found["isError"], json!(true), "{found}");
+    let body: Value = serde_json::from_str(&text_of(&found)).unwrap();
+    assert_eq!(body["project"], Value::Null);
+    let errors = body["errors"].as_array().unwrap();
+    assert_eq!(errors.len(), 1, "{body}");
+    assert_eq!(errors[0]["org"], "Studio B");
+    assert_eq!(errors[0]["error"], studiomanager_mcp::guard::NOT_OPENED);
+    assert!(!text_of(&found).contains("Hidden Studio"));
 }

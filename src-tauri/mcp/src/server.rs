@@ -390,66 +390,92 @@ fn allowed_orgs(dir: &Path) -> R<Vec<Org>> {
         .collect()
 }
 
+/// Only organisations agent access allows are listed; hidden ones are not
+/// mentioned at all.
 fn list_organisations(dir: &Path) -> R<Value> {
     let access = AccessConfig::load(dir);
+    if !access.enabled {
+        return Err(guard::OFF_OVERALL.to_string());
+    }
     let registry = Registry::load(dir)?.ok_or_else(|| guard::NOT_OPENED.to_string())?;
     let orgs: Vec<Value> = registry
         .organisations
         .iter()
+        .filter(|o| access.org_allowed(&o.id))
         .map(|o| {
             json!({
                 "id": o.id,
                 "name": o.name,
                 "active": o.id == registry.active_id,
-                "allowed": access.org_allowed(&o.id),
             })
         })
         .collect();
-    Ok(json!({"enabled": access.enabled, "organisations": orgs}))
+    Ok(json!({"organisations": orgs}))
+}
+
+/// The organisations a call covers: the named one, or every allowed one.
+fn target_orgs(dir: &Path, explicit: Option<&str>) -> R<Vec<Org>> {
+    match explicit {
+        Some(o) => Ok(vec![guard::resolve_org(dir, Some(o))?]),
+        None => allowed_orgs(dir),
+    }
+}
+
+fn explicit_org(org: Option<&str>) -> Option<&str> {
+    org.map(str::trim).filter(|o| !o.is_empty())
+}
+
+/// Open each organisation for reading. A named organisation that fails is
+/// the call's error; across every organisation, failures are collected as
+/// `{org, error}` so the rest still answer.
+fn open_each(orgs: &[Org], explicit: bool, errors: &mut Vec<Value>) -> R<Vec<(Org, Connection)>> {
+    let mut out = Vec::new();
+    for o in orgs {
+        match guard::open_read(o) {
+            Ok(c) => out.push((o.clone(), c)),
+            Err(e) if explicit => return Err(e),
+            Err(e) => errors.push(json!({"org": o.name, "error": e})),
+        }
+    }
+    Ok(out)
 }
 
 fn find_project_for_folder(dir: &Path, org: Option<&str>, path: &str) -> R<Value> {
-    let explicit = org.map(str::trim).filter(|o| !o.is_empty());
-    let orgs = match explicit {
-        Some(o) => vec![guard::resolve_org(dir, Some(o))?],
-        None => allowed_orgs(dir)?,
-    };
+    let explicit = explicit_org(org);
+    let orgs = target_orgs(dir, explicit)?;
+    let mut errors = Vec::new();
     let mut matches = Vec::new();
-    for o in &orgs {
-        // Searching every organisation skips one the app has not opened yet.
-        let conn = match guard::open_read(o) {
-            Ok(c) => c,
-            Err(e) if explicit.is_some() => return Err(e),
-            Err(_) => continue,
-        };
+    for (o, conn) in open_each(&orgs, explicit.is_some(), &mut errors)? {
         if let Some(p) = read::find_project_for_folder(&conn, path) {
             matches.push(json!({"org": o.name, "project": p}));
         }
     }
-    Ok(match matches.len() {
+    let mut out = match matches.len() {
         0 => json!({"project": null}),
         1 => matches.remove(0),
         _ => json!({"matches": matches}),
-    })
+    };
+    if !errors.is_empty() {
+        out["errors"] = json!(errors);
+    }
+    Ok(out)
 }
 
 fn whats_due(dir: &Path, org: Option<&str>, days: Option<i64>) -> R<Value> {
     let days = days.unwrap_or(7);
     let today = today();
-    let orgs = match org.map(str::trim).filter(|o| !o.is_empty()) {
-        Some(o) => vec![guard::resolve_org(dir, Some(o))?],
-        None => allowed_orgs(dir)?,
-    };
+    let explicit = explicit_org(org);
+    let orgs = target_orgs(dir, explicit)?;
     let mut items: Vec<Value> = Vec::new();
     let mut errors: Vec<Value> = Vec::new();
-    for o in &orgs {
-        let found = guard::open_read(o).and_then(|conn| read::whats_due(&conn, days, today));
-        match found {
+    for (o, conn) in open_each(&orgs, explicit.is_some(), &mut errors)? {
+        match read::whats_due(&conn, days, today) {
             Ok(list) => {
                 for item in list {
-                    items.push(with_org(o, to_json(item)?));
+                    items.push(with_org(&o, to_json(item)?));
                 }
             }
+            Err(e) if explicit.is_some() => return Err(e),
             Err(e) => errors.push(json!({"org": o.name, "error": e})),
         }
     }
@@ -499,9 +525,7 @@ impl Server {
 
 #[tool_router]
 impl Server {
-    #[tool(
-        description = "List the StudioManager organisations with whether agent access allows each."
-    )]
+    #[tool(description = "List the StudioManager organisations agent access allows.")]
     async fn list_organisations(&self) -> CallToolResult {
         self.run(list_organisations).await
     }
