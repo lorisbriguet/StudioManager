@@ -1,3 +1,4 @@
+import { useDbChangedListener } from "./hooks/useDbChangedListener";
 import { useEffect, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -57,6 +58,7 @@ function StartupChecks() {
   useAutoBackup();
   useGuideUpdateCheck();
   useErrorNotifications();
+  useDbChangedListener();
 
   useEffect(() => {
     requestNotificationPermission();
