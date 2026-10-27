@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AgentAccessCard } from "../components/settings/AgentAccessCard";
 import { useOrgStore } from "../stores/org-store";
@@ -86,6 +86,47 @@ describe("AgentAccessCard", () => {
     fireEvent.click(sw);
     expect((await screen.findByRole("alert")).textContent).toContain("disk full");
     expect(sw.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("a stale failed save does not revert a newer one", async () => {
+    let rejectFirst: (e: string) => void = () => {};
+    let calls = 0;
+    setInvokeHandler((cmd) => {
+      if (cmd === "get_agent_access") return { enabled: false, allowMoney: false, orgs: {}, mcpPath: "", claudeDesktopInstalled: false, claudeCodeCommand: "", genericConfig: "" };
+      if (cmd === "set_agent_access") {
+        calls += 1;
+        if (calls === 1) return new Promise((_, rej) => { rejectFirst = rej; });
+        return null;
+      }
+      if (cmd === "recent_agent_changes") return [];
+      return null;
+    });
+    renderCard();
+    fireEvent.click(await screen.findByRole("switch", { name: "Allow AI agents to use StudioManager" }));
+    fireEvent.click(await screen.findByLabelText("Label"));
+    await waitFor(() => expect(calls).toBe(2));
+    rejectFirst("late failure");
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByLabelText("Label")).toBeTruthy();
+    expect((screen.getByLabelText("Label") as HTMLInputElement).checked).toBe(false);
+  });
+
+  it("Copied clears after a while and copy errors show beside the row", async () => {
+    state.enabled = true;
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderCard();
+      fireEvent.click(await screen.findByRole("button", { name: "Copy command" }));
+      expect(await screen.findByText("Copied")).toBeTruthy();
+      await act(async () => { await vi.advanceTimersByTimeAsync(2100); });
+      expect(screen.queryByText("Copied")).toBeNull();
+      clipboard.writeText.mockRejectedValueOnce(new Error("denied"));
+      fireEvent.click(screen.getByRole("button", { name: "Copy config" }));
+      const err = await screen.findByText("denied");
+      expect(err.closest("li, div")?.textContent).toContain("Copy config");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("Claude Desktop: preview first, install only after confirm", async () => {

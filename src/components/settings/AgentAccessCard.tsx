@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
@@ -38,6 +38,10 @@ export function AgentAccessCard() {
   const [log, setLog] = useState<LogEntry[]>([]);
   const [preview, setPreview] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<{ key: string; message: string } | null>(null);
+  const saveSeq = useRef(0);
+  const confirmed = useRef<AgentAccess | null>(null);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [installed, setInstalled] = useState(false);
   const [installError, setInstallError] = useState<string | null>(null);
 
@@ -46,23 +50,26 @@ export function AgentAccessCard() {
   }, []);
 
   useEffect(() => {
-    invoke<AgentAccess>("get_agent_access").then(setInfo).catch((e) => setError(msg(e)));
+    invoke<AgentAccess>("get_agent_access").then((i) => { confirmed.current = i; setInfo(i); }).catch((e) => setError(msg(e)));
     loadLog();
     let unlisten: (() => void) | undefined;
     let cancelled = false;
     listen("db-changed", loadLog).then((fn) => { if (cancelled) fn(); else unlisten = fn; }).catch(() => {});
-    return () => { cancelled = true; unlisten?.(); };
+    return () => { cancelled = true; unlisten?.(); clearTimeout(copiedTimer.current); };
   }, [loadLog]);
 
   const save = async (next: Settings) => {
     if (!info) return;
-    const prev = info;
+    const seq = ++saveSeq.current;
     setInfo({ ...info, ...next });
     setError(null);
     try {
       await invoke("set_agent_access", next);
+      if (confirmed.current) confirmed.current = { ...confirmed.current, ...next };
     } catch (e) {
-      setInfo(prev);
+      // Only the latest save may revert; an older failure must not undo a newer one.
+      if (seq !== saveSeq.current) return;
+      if (confirmed.current) setInfo(confirmed.current);
       setError(msg(e));
     }
   };
@@ -70,9 +77,13 @@ export function AgentAccessCard() {
   const copy = async (key: string, text: string) => {
     try {
       await navigator.clipboard.writeText(text);
+      setCopyError(null);
       setCopied(key);
+      clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopied(null), 2000);
     } catch (e) {
-      setError(msg(e));
+      setCopied(null);
+      setCopyError({ key, message: msg(e) });
     }
   };
 
@@ -162,12 +173,14 @@ export function AgentAccessCard() {
             <SettingRow label={t.agent_access_claude_code}>
               <span className="flex items-center gap-2">
                 {copied === "code" && <span className="text-xs text-muted">{t.agent_access_copied}</span>}
+                {copyError?.key === "code" && <span role="alert" className="text-xs text-danger-text">{copyError.message}</span>}
                 <Button size="sm" variant="secondary" onClick={() => void copy("code", info.claudeCodeCommand)}>{t.agent_access_copy_command}</Button>
               </span>
             </SettingRow>
             <SettingRow label={t.agent_access_other}>
               <span className="flex items-center gap-2">
                 {copied === "config" && <span className="text-xs text-muted">{t.agent_access_copied}</span>}
+                {copyError?.key === "config" && <span role="alert" className="text-xs text-danger-text">{copyError.message}</span>}
                 <Button size="sm" variant="secondary" onClick={() => void copy("config", info.genericConfig)}>{t.agent_access_copy_config}</Button>
               </span>
             </SettingRow>
