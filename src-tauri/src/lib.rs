@@ -612,7 +612,10 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Focused(true) = event {
-                agent_access::check_for_changes(window.app_handle());
+                agent_access::check_for_changes(
+                    window.app_handle(),
+                    agent_access::Trigger::Focus,
+                );
             }
         })
         .run(tauri::generate_context!())

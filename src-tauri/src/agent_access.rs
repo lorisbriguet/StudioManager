@@ -20,6 +20,7 @@ pub const MCP_BINARY: &str = "studiomanager-mcp";
 pub const CHANGED_EVENT: &str = "db-changed";
 const INVALID_CLAUDE_CONFIG: &str =
     "Claude Desktop's settings file isn't valid JSON; nothing was changed.";
+const CLAUDE_CONFIG_CHANGED: &str = "Claude Desktop's settings changed; review again.";
 const UNEXPECTED_CLAUDE_CONFIG: &str =
     "Claude Desktop's settings file has an unexpected layout; nothing was changed.";
 
@@ -62,7 +63,11 @@ fn write_atomic(path: &Path, contents: &str) -> Result<(), String> {
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
-    let tmp = path.with_file_name(format!("{name}.tmp"));
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tmp = path.with_file_name(format!("{name}.{}-{nanos}.tmp", std::process::id()));
     std::fs::write(&tmp, contents)
         .map_err(|e| format!("Failed to write {}: {e}", tmp.display()))?;
     std::fs::rename(&tmp, path).map_err(|e| {
@@ -121,12 +126,15 @@ fn server_entry(mcp_path: &str) -> Value {
     serde_json::json!({ "command": mcp_path })
 }
 
-/// Back up the existing config (if any) next to it, then write the merged
-/// one atomically. Returns the backup path, `None` when there was no file.
-/// Invalid JSON fails before anything is written.
+/// Write `expected` (the preview the user approved) to Claude Desktop's
+/// config, after backing up the current file (if any) next to it. The merge
+/// is recomputed from the file as it is now; if it no longer equals
+/// `expected`, the file changed since the preview and nothing is written.
+/// Returns the backup path, `None` when there was no file.
 pub fn install_claude_config_at(
     config: &Path,
     mcp_path: &str,
+    expected: &str,
     stamp: &str,
 ) -> Result<Option<PathBuf>, String> {
     let existing = match std::fs::read_to_string(config) {
@@ -134,26 +142,55 @@ pub fn install_claude_config_at(
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => return Err(format!("Failed to read {}: {e}", config.display())),
     };
-    let merged = merge_claude_config(existing.as_deref(), mcp_path)?;
+    if merge_claude_config(existing.as_deref(), mcp_path)? != expected {
+        return Err(CLAUDE_CONFIG_CHANGED.to_string());
+    }
     if let Some(parent) = config.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create {}: {e}", parent.display()))?;
     }
     let backup = match &existing {
-        Some(text) => {
-            let name = config
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_default();
-            let backup = config.with_file_name(format!("{name}.studiomanager-backup-{stamp}"));
-            std::fs::write(&backup, text)
-                .map_err(|e| format!("Failed to back up {}: {e}", config.display()))?;
-            Some(backup)
-        }
+        Some(text) => Some(write_backup(config, text, stamp)?),
         None => None,
     };
-    write_atomic(config, &merged)?;
+    write_atomic(config, expected)?;
     Ok(backup)
+}
+
+/// `<file>.studiomanager-backup-<stamp>`, then `-2`, `-3`, ... if taken;
+/// never overwrites an earlier backup.
+fn write_backup(config: &Path, text: &str, stamp: &str) -> Result<PathBuf, String> {
+    use std::io::Write;
+    let name = config
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let base = format!("{name}.studiomanager-backup-{stamp}");
+    for n in 1..1000 {
+        let candidate = if n == 1 {
+            config.with_file_name(&base)
+        } else {
+            config.with_file_name(format!("{base}-{n}"))
+        };
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(mut file) => {
+                return file
+                    .write_all(text.as_bytes())
+                    .map(|_| candidate)
+                    .map_err(|e| format!("Failed to back up {}: {e}", config.display()));
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(format!("Failed to back up {}: {e}", config.display())),
+        }
+    }
+    Err(format!(
+        "Failed to back up {}: too many backups",
+        config.display()
+    ))
 }
 
 /// `claude mcp add` line for Claude Code; the path single-quoted for the shell.
@@ -171,6 +208,12 @@ pub fn generic_config(mcp_path: &str) -> String {
 /// A change since the last read; the first read only records the value.
 pub fn changed(prev: Option<i64>, now: i64) -> bool {
     matches!(prev, Some(p) if p != now)
+}
+
+/// Emit when the value moved, or once after reconnecting following an error
+/// (changes made while the database was unreadable would otherwise be missed).
+pub fn should_emit(prev: Option<i64>, now: i64, resync: bool) -> bool {
+    resync || changed(prev, now)
 }
 
 // ------------------------------------------------------------- environment
@@ -249,11 +292,13 @@ pub fn preview_claude_desktop() -> Result<String, String> {
     merge_claude_config(existing.as_deref(), &mcp_path())
 }
 
+/// `expected` is the text `preview_claude_desktop` returned and the user
+/// approved; it is written as-is, or refused if the file changed meanwhile.
 /// Returns the backup path, or an empty string when there was no file to back up.
 #[tauri::command]
-pub fn install_claude_desktop() -> Result<String, String> {
+pub fn install_claude_desktop(expected: String) -> Result<String, String> {
     let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
-    let backup = install_claude_config_at(&claude_config_path(), &mcp_path(), &stamp)?;
+    let backup = install_claude_config_at(&claude_config_path(), &mcp_path(), &expected, &stamp)?;
     Ok(backup
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_default())
@@ -274,6 +319,8 @@ struct PollState {
     path: Option<PathBuf>,
     conn: Option<Connection>,
     prev: Option<i64>,
+    /// Set after a read error; the next good read emits once.
+    resync: bool,
     last_error: Option<String>,
 }
 
@@ -287,33 +334,103 @@ pub fn start_poller(app: &tauri::AppHandle) {
         .name("db-change-poller".into())
         .spawn(move || loop {
             std::thread::sleep(POLL_INTERVAL);
-            check_for_changes(&handle);
+            check_for_changes(&handle, Trigger::Timer);
         });
     if let Err(e) = spawned {
         log::warn!("[agent-access] could not start the change poller: {e}");
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Trigger {
+    /// The background thread.
+    Timer,
+    /// `WindowEvent::Focused(true)`, on the main thread.
+    Focus,
+}
+
 /// One poll: read `data_version` on the active database and emit
 /// `db-changed` when it moved and the main window is visible. A change seen
 /// while hidden is kept pending until the window shows. Never panics.
-pub fn check_for_changes(app: &tauri::AppHandle) {
+///
+/// Locking: no lock is ever held across a window call or `emit` (those can
+/// wait on the main thread). The focus path runs on the main thread, so it
+/// only `try_lock`s and skips when the poller is mid-read, and it skips the
+/// visibility check (a focused window is visible).
+pub fn check_for_changes(app: &tauri::AppHandle, trigger: Trigger) {
+    let focus = trigger == Trigger::Focus;
     let Some(poller) = app.try_state::<ChangePoller>() else {
         return;
     };
     let Some(org_state) = app.try_state::<ActiveOrgState>() else {
         return;
     };
-    let path = match org_state.0.lock() {
-        Ok(org) => org.db_path(),
-        Err(_) => return,
+    let path = {
+        let org = if focus {
+            org_state.0.try_lock().ok()
+        } else {
+            org_state.0.lock().ok()
+        };
+        match org {
+            Some(org) => org.db_path(),
+            None => return,
+        }
     };
-    let Ok(mut state) = poller.0.lock() else {
-        return;
+
+    // Phase 1, under the state lock: read the value and decide.
+    let now = {
+        let state = if focus {
+            poller.0.try_lock().ok()
+        } else {
+            poller.0.lock().ok()
+        };
+        let Some(mut state) = state else { return };
+        let Some(now) = read_version(&mut state, &path) else {
+            return;
+        };
+        if !should_emit(state.prev, now, state.resync) {
+            state.prev = Some(now);
+            return;
+        }
+        now
     };
-    if state.path.as_ref() != Some(&path) {
+
+    // Phase 2, no lock held: visibility (timer only) and emit.
+    if !focus {
+        let visible = app
+            .get_webview_window("main")
+            .and_then(|w| w.is_visible().ok())
+            .unwrap_or(false);
+        if !visible {
+            return; // stays pending: prev/resync untouched
+        }
+    }
+    if let Err(e) = app.emit(CHANGED_EVENT, ()) {
+        log::warn!("[agent-access] emit {CHANGED_EVENT}: {e}");
+    }
+
+    // Phase 3, re-lock to commit what was emitted (same path only).
+    let state = if focus {
+        poller.0.try_lock().ok()
+    } else {
+        poller.0.lock().ok()
+    };
+    if let Some(mut state) = state {
+        if state.path.as_ref() == Some(&path) {
+            state.prev = Some(now);
+            state.resync = false;
+        }
+    }
+}
+
+/// Read `PRAGMA data_version` through the long-lived read-only connection,
+/// (re)opening it when the active path changed or after an error. `None` on
+/// error (logged once per distinct message; the next good read resyncs).
+fn read_version(state: &mut PollState, path: &Path) -> Option<i64> {
+    if state.path.as_deref() != Some(path) {
         *state = PollState {
-            path: Some(path.clone()),
+            path: Some(path.to_path_buf()),
+            resync: state.resync,
             last_error: state.last_error.take(),
             ..Default::default()
         };
@@ -321,7 +438,7 @@ pub fn check_for_changes(app: &tauri::AppHandle) {
     let read = (|| -> Result<i64, String> {
         if state.conn.is_none() {
             let conn = Connection::open_with_flags(
-                &path,
+                path,
                 OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
             )
             .map_err(|e| format!("open {}: {e}", path.display()))?;
@@ -331,33 +448,22 @@ pub fn check_for_changes(app: &tauri::AppHandle) {
         conn.query_row("PRAGMA data_version", [], |r| r.get::<_, i64>(0))
             .map_err(|e| format!("data_version: {e}"))
     })();
-    let now = match read {
-        Ok(v) => v,
+    match read {
+        Ok(v) => {
+            state.last_error = None;
+            Some(v)
+        }
         Err(e) => {
-            // Reopen next time (the file may have been replaced); warn once per distinct error.
             state.conn = None;
             state.prev = None;
+            state.resync = true;
             if state.last_error.as_deref() != Some(e.as_str()) {
                 log::warn!("[agent-access] change poller: {e}");
                 state.last_error = Some(e);
             }
-            return;
-        }
-    };
-    state.last_error = None;
-    if changed(state.prev, now) {
-        let visible = app
-            .get_webview_window("main")
-            .and_then(|w| w.is_visible().ok())
-            .unwrap_or(false);
-        if !visible {
-            return;
-        }
-        if let Err(e) = app.emit(CHANGED_EVENT, ()) {
-            log::warn!("[agent-access] emit {CHANGED_EVENT}: {e}");
+            None
         }
     }
-    state.prev = Some(now);
 }
 
 #[cfg(test)]
@@ -418,7 +524,8 @@ mod tests {
         let dir = tmp_dir("claude-missing");
         let config = dir.join("Claude").join("claude_desktop_config.json");
         let backup =
-            install_claude_config_at(&config, "/x/studiomanager-mcp", "20261027-120000").unwrap();
+            install_claude_config_at(&config, "/x/studiomanager-mcp", &out, "20261027-120000")
+                .unwrap();
         assert_eq!(backup, None);
         assert_eq!(std::fs::read_to_string(&config).unwrap(), out);
         std::fs::remove_dir_all(&dir).unwrap();
@@ -430,9 +537,11 @@ mod tests {
         let config = dir.join("claude_desktop_config.json");
         let original = r#"{"mcpServers":{"other":{"command":"o"}}}"#;
         std::fs::write(&config, original).unwrap();
-        let backup = install_claude_config_at(&config, "/x/studiomanager-mcp", "20261027-120000")
-            .unwrap()
-            .expect("a backup when the file existed");
+        let preview = merge_claude_config(Some(original), "/x/studiomanager-mcp").unwrap();
+        let backup =
+            install_claude_config_at(&config, "/x/studiomanager-mcp", &preview, "20261027-120000")
+                .unwrap()
+                .expect("a backup when the file existed");
         assert_eq!(
             backup,
             dir.join("claude_desktop_config.json.studiomanager-backup-20261027-120000")
@@ -448,6 +557,59 @@ mod tests {
     }
 
     #[test]
+    fn install_refuses_when_settings_changed_since_preview() {
+        let dir = tmp_dir("claude-changed");
+        let config = dir.join("claude_desktop_config.json");
+        std::fs::write(&config, r#"{"a":1}"#).unwrap();
+        let preview = merge_claude_config(Some(r#"{"a":1}"#), "/x").unwrap();
+        // Claude Desktop rewrites its file after the preview was shown.
+        std::fs::write(&config, r#"{"a":2}"#).unwrap();
+        assert_eq!(
+            install_claude_config_at(&config, "/x", &preview, "20261027-120000").unwrap_err(),
+            "Claude Desktop's settings changed; review again."
+        );
+        assert_eq!(std::fs::read_to_string(&config).unwrap(), r#"{"a":2}"#);
+        let entries: Vec<_> = std::fs::read_dir(&dir).unwrap().collect();
+        assert_eq!(entries.len(), 1, "no backup or temp file left behind");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn backups_in_the_same_second_do_not_collide() {
+        let dir = tmp_dir("claude-collide");
+        let config = dir.join("claude_desktop_config.json");
+        let mut backups = Vec::new();
+        for i in 0..3 {
+            let text = format!(r#"{{"n":{i}}}"#);
+            std::fs::write(&config, &text).unwrap();
+            let preview = merge_claude_config(Some(&text), "/x").unwrap();
+            let backup = install_claude_config_at(&config, "/x", &preview, "20261027-120000")
+                .unwrap()
+                .unwrap();
+            assert_eq!(std::fs::read_to_string(&backup).unwrap(), text);
+            backups.push(backup.file_name().unwrap().to_string_lossy().to_string());
+        }
+        assert_eq!(
+            backups,
+            [
+                "claude_desktop_config.json.studiomanager-backup-20261027-120000",
+                "claude_desktop_config.json.studiomanager-backup-20261027-120000-2",
+                "claude_desktop_config.json.studiomanager-backup-20261027-120000-3",
+            ]
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn should_emit_on_change_or_after_reconnect() {
+        assert!(!should_emit(None, 1, false), "first read only records");
+        assert!(!should_emit(Some(1), 1, false));
+        assert!(should_emit(Some(1), 2, false));
+        assert!(should_emit(None, 1, true), "once after a reconnect");
+        assert!(should_emit(Some(1), 1, true));
+    }
+
+    #[test]
     fn merge_rejects_invalid_json_without_writing() {
         assert_eq!(
             merge_claude_config(Some("{ not json"), "/x").unwrap_err(),
@@ -456,7 +618,7 @@ mod tests {
         let dir = tmp_dir("claude-invalid");
         let config = dir.join("claude_desktop_config.json");
         std::fs::write(&config, "{ not json").unwrap();
-        assert!(install_claude_config_at(&config, "/x", "20261027-120000").is_err());
+        assert!(install_claude_config_at(&config, "/x", "{}", "20261027-120000").is_err());
         assert_eq!(std::fs::read_to_string(&config).unwrap(), "{ not json");
         let entries: Vec<_> = std::fs::read_dir(&dir).unwrap().collect();
         assert_eq!(entries.len(), 1, "no backup or temp file left behind");
@@ -480,7 +642,11 @@ mod tests {
         assert_eq!(raw["enabled"], true);
         assert_eq!(raw["allowMoney"], false);
         assert_eq!(raw["orgs"]["aaa111"], false);
-        assert!(!dir.join(format!("{ACCESS_FILE}.tmp")).exists());
+        let names: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        assert_eq!(names, [ACCESS_FILE], "no temp file left behind");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
