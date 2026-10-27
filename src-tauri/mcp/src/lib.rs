@@ -18,6 +18,7 @@ pub mod env;
 pub mod guard;
 pub mod log;
 pub mod markdown;
+pub mod money;
 pub mod read;
 pub mod text;
 pub mod write;

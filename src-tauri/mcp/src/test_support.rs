@@ -48,6 +48,22 @@ pub const APP_ONLY_SCHEMA: &str = "
     ALTER TABLE tasks ADD COLUMN workload_sort_order INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE subtasks ADD COLUMN calendar_event_id TEXT DEFAULT NULL;
     ALTER TABLE clients ADD COLUMN postal_city TEXT NOT NULL DEFAULT '';
+    ALTER TABLE invoices ADD COLUMN currency TEXT NOT NULL DEFAULT 'CHF';
+    ALTER TABLE invoices ADD COLUMN exchange_rate REAL NOT NULL DEFAULT 1.0;
+    ALTER TABLE invoices ADD COLUMN chf_equivalent REAL NOT NULL DEFAULT 0;
+    CREATE TABLE IF NOT EXISTS income (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      reference TEXT NOT NULL,
+      date TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      amount REAL NOT NULL DEFAULT 0,
+      category TEXT NOT NULL DEFAULT 'side_income',
+      source TEXT NOT NULL DEFAULT '',
+      receipt_path TEXT,
+      notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
     CREATE TABLE IF NOT EXISTS wiki_folders (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,

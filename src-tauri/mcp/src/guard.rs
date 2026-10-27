@@ -25,14 +25,19 @@ pub fn org_off(name: &str) -> String {
 
 /// Tables and columns the tools rely on that only the app's `ensureSchema()`
 /// creates (not the numbered migrations).
-const APP_TABLES: [&str; 5] = [
+const APP_TABLES: [&str; 6] = [
+    "income",
     "resources",
     "resource_projects",
     "wiki_folders",
     "wiki_articles",
     "wiki_article_tags",
 ];
-const APP_COLUMNS: [(&str, &str); 1] = [("projects", "folder_path")];
+const APP_COLUMNS: [(&str, &str); 3] = [
+    ("projects", "folder_path"),
+    ("invoices", "currency"),
+    ("invoices", "chf_equivalent"),
+];
 
 #[derive(Deserialize, Default, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
