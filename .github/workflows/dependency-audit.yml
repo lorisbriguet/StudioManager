@@ -10,6 +10,7 @@ on:
     paths:
       - package-lock.json
       - src-tauri/Cargo.lock
+      - src-tauri/mcp/Cargo.lock
       - .github/workflows/dependency-audit.yml
 
 jobs:
@@ -33,3 +34,5 @@ jobs:
           tool: cargo-audit
       - run: cargo audit
         working-directory: src-tauri
+      - run: cargo audit
+        working-directory: src-tauri/mcp

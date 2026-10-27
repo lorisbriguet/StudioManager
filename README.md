@@ -248,6 +248,10 @@ cd StudioManager
 # Install dependencies
 npm install
 
+# Build the bundled MCP server once; cargo commands in src-tauri
+# (test, clippy, build) fail without it (needs Rust 1.88+)
+bash scripts/build-mcp.sh
+
 # Run in development mode
 npm run tauri dev
 

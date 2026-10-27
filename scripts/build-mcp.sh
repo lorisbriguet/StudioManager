@@ -9,6 +9,13 @@ TARGET_DIR="${MCP_CARGO_TARGET_DIR:-${HOME}/cargo-target-studiomanager-mcp}"
 OUT_DIR="$ROOT/src-tauri/binaries"
 NAME=studiomanager-mcp
 
+ver="$(rustc --version | sed -n 's/^rustc \([0-9]*\)\.\([0-9]*\).*/\1 \2/p')"
+major="${ver% *}"; minor="${ver#* }"
+if [ -z "$ver" ] || [ "$major" -lt 1 ] || { [ "$major" -eq 1 ] && [ "$minor" -lt 88 ]; }; then
+  echo "build-mcp: Rust 1.88 or newer is required (found: $(rustc --version 2>&1)). Run: rustup update stable" >&2
+  exit 1
+fi
+
 triple="${TAURI_ENV_TARGET_TRIPLE:-}"
 if [ -z "$triple" ]; then
   triple="$(rustc -vV | sed -n 's/host: //p')"
