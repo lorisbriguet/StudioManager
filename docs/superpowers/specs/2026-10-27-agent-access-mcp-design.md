@@ -15,8 +15,8 @@ the project wiki", "what's due this week?".
 Loris already does this for himself with the `sm` CLI in the agent-bar repo (Python, writes the SQLite files
 directly, backups, no deletes). It works, but it is tied to his machine, his orgs and his rules. This turns
 the idea into a feature of the app: any user flips a switch in Settings and their agents get a safe,
-documented set of tools. It also fits the "sell the method, not the client code" direction: generic, no Art
-Basel code.
+documented set of tools. It also fits the "sell the method, not the client code" direction: generic, no client-specific
+code.
 
 **Success:** a new user goes from "Agent access: off" to an agent creating a task they can see in the app,
 in under two minutes, without editing a config file by hand; and nothing an agent does can lose data.
@@ -39,7 +39,7 @@ in under two minutes, without editing a config file by hand; and nothing an agen
 - Remote access. The server only talks to an agent on the same Mac, over stdio.
 - Windows/Linux (the app is macOS only).
 - Moving projects between organisations (stays in `sm` for now).
-- Art Basel or any other user-specific rule in the server. Per-user rules belong in the user's own agent
+- Any user-specific rule in the server. Per-user rules belong in the user's own agent
   instructions (for Loris: his skill).
 
 ## 4. Anti-goals
@@ -154,7 +154,7 @@ of this build.
 ## 6. Constraints
 
 - Tauri 2, Rust; frontend React 19 + TanStack Query. No new network listener; CSP unchanged.
-- Repo is public: no personal data, org ids or Art Basel references in code, tests or docs.
+- Repo is public: no personal data, org ids or client references in code, tests or docs.
 - Release: the binary is part of the existing release (`.dmg`, `.app.tar.gz`, updater). Ad-hoc signing
   ("-"), like the app. Version numbers stay in sync in the four places `RELEASING.md` lists.
 - EN/FR key parity is a release gate for the new strings.
