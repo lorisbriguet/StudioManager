@@ -38,15 +38,23 @@ pub fn ensure(dir: &Path, org: &Org) -> Result<(), String> {
             .map_err(|e| format!("backup: open database: {e}"))?;
     src.busy_timeout(std::time::Duration::from_millis(5000))
         .map_err(|e| format!("backup: busy_timeout: {e}"))?;
+    if let Err(e) = copy_into(&src, &dest) {
+        // Never leave a partial file that pruning would count as a backup.
+        crate::dbfiles::remove_db_files(&dest);
+        return Err(e);
+    }
+
+    prune(&bdir, &org.id);
+    Ok(())
+}
+
+fn copy_into(src: &rusqlite::Connection, dest: &Path) -> Result<(), String> {
     let mut dst =
-        rusqlite::Connection::open(&dest).map_err(|e| format!("backup: create file: {e}"))?;
-    rusqlite::backup::Backup::new(&src, &mut dst)
+        rusqlite::Connection::open(dest).map_err(|e| format!("backup: create file: {e}"))?;
+    rusqlite::backup::Backup::new(src, &mut dst)
         .map_err(|e| format!("backup: start: {e}"))?
         .run_to_completion(64, std::time::Duration::from_millis(50), None)
         .map_err(|e| format!("backup failed: {e}"))?;
-    drop(dst);
-
-    prune(&bdir, &org.id);
     Ok(())
 }
 
@@ -116,5 +124,20 @@ mod tests {
             )
             .unwrap();
         assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn failed_backup_leaves_no_partial_file() {
+        let dir = crate::test_support::temp_data_dir();
+        let db = dir.join("orgs").join("bad001").join("studiomanager.db");
+        std::fs::create_dir_all(db.parent().unwrap()).unwrap();
+        std::fs::write(&db, vec![0x5au8; 8192]).unwrap(); // not a database
+        let org = guard::Org {
+            id: "bad001".into(),
+            name: "Bad".into(),
+            db,
+        };
+        assert!(super::ensure(&dir, &org).is_err());
+        assert!(backups(&dir).is_empty(), "{:?}", backups(&dir));
     }
 }

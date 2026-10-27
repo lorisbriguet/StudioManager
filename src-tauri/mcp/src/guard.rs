@@ -120,14 +120,25 @@ fn find_by_name<'a>(
             ))
         }
         many => {
-            let names: Vec<String> = many
-                .iter()
-                .map(|o| format!("{} (id {})", o.name, o.id))
-                .collect();
-            Err(format!(
-                "More than one organisation matches \"{query}\": {}. Use the id.",
-                names.join(", ")
-            ))
+            // Candidates are limited to organisations agent access allows.
+            let allowed: Vec<&&orgs::Organisation> =
+                many.iter().filter(|o| access.org_allowed(&o.id)).collect();
+            match allowed.as_slice() {
+                [one] => Ok(**one),
+                // None allowed: hand back a match so the caller refuses it
+                // with the per-organisation message.
+                [] => Ok(many[0]),
+                several => {
+                    let names: Vec<String> = several
+                        .iter()
+                        .map(|o| format!("{} (id {})", o.name, o.id))
+                        .collect();
+                    Err(format!(
+                        "More than one organisation matches \"{query}\": {}. Use the id.",
+                        names.join(", ")
+                    ))
+                }
+            }
         }
     }
 }
@@ -329,6 +340,43 @@ mod tests {
         );
         let err = resolve_org(&dir, Some("ETUDE")).unwrap_err();
         assert!(err.contains("Étude") && err.contains("etude"), "{err}");
+    }
+
+    #[test]
+    fn ambiguous_name_hides_disabled_organisations() {
+        let dir = temp_data_dir();
+        write_registry(
+            &dir,
+            &[
+                ("org001", "Étude"),
+                ("org002", "etude"),
+                ("org003", "ETUDE"),
+            ],
+        );
+        write_access(
+            &dir,
+            r#"{"enabled": true, "allowMoney": false, "orgs": {"org003": false}}"#,
+        );
+        let err = resolve_org(&dir, Some("Etude")).unwrap_err();
+        assert!(err.contains("org001") && err.contains("org002"), "{err}");
+        assert!(
+            !err.contains("org003"),
+            "disabled organisations stay hidden: {err}"
+        );
+        // With only one allowed candidate left, that one is used.
+        write_access(
+            &dir,
+            r#"{"enabled": true, "allowMoney": false, "orgs": {"org002": false, "org003": false}}"#,
+        );
+        assert_eq!(resolve_org(&dir, Some("Etude")).unwrap().id, "org001");
+        // None allowed: the per-organisation refusal.
+        write_access(
+            &dir,
+            r#"{"enabled": true, "allowMoney": false, "orgs": {"org001": false, "org002": false, "org003": false}}"#,
+        );
+        assert!(resolve_org(&dir, Some("Etude"))
+            .unwrap_err()
+            .starts_with("Agent access is off for the organisation"));
     }
 
     #[test]
