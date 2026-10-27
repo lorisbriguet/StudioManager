@@ -25,9 +25,13 @@ pub fn append(dir: &Path, org: &str, tool: &str, summary: &str) {
     let skip = lines.len().saturating_sub(MAX_LINES);
     let mut out = lines[skip..].join("\n");
     out.push('\n');
-    let tmp = dir.join(format!("{LOG_FILE}.tmp"));
-    if std::fs::write(&tmp, out).is_ok() {
-        let _ = std::fs::rename(&tmp, &path);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tmp = dir.join(format!("{LOG_FILE}.{}.{nanos}.tmp", std::process::id()));
+    if std::fs::write(&tmp, out).is_ok() && std::fs::rename(&tmp, &path).is_err() {
+        let _ = std::fs::remove_file(&tmp);
     }
 }
 

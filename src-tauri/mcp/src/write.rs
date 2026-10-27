@@ -668,7 +668,7 @@ fn insert_article(
     content: &str,
 ) -> R<i64> {
     let folder = wiki_folder(conn, project)?;
-    let order = next_sort_order(conn, "wiki_articles", "project_id", project_id)?;
+    let order = next_sort_order(conn, "wiki_articles", "folder_id", folder)?;
     db(conn.execute(
         "INSERT INTO wiki_articles (folder_id, project_id, title, content, sort_order) \
          VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -1391,6 +1391,30 @@ mod tests {
     }
 
     // ── Wiki ─────────────────────────────────────────────────
+
+    #[test]
+    fn wiki_article_sort_order_is_per_folder() {
+        let (dir, org, conn) = fixture();
+        let a = put_wiki_article(&dir, &org, "1", "Overview", "x").unwrap();
+        let folder: i64 = one(
+            &conn,
+            &format!("SELECT folder_id FROM wiki_articles WHERE id = {}", a.id),
+        );
+        conn.execute(
+            &format!(
+                "INSERT INTO wiki_articles (folder_id, title, content, sort_order) \
+                 VALUES ({folder}, 'Loose', '', 7)"
+            ),
+            [],
+        )
+        .unwrap();
+        let b = put_wiki_article(&dir, &org, "1", "Next", "y").unwrap();
+        let so: i64 = one(
+            &conn,
+            &format!("SELECT sort_order FROM wiki_articles WHERE id = {}", b.id),
+        );
+        assert_eq!(so, 8);
+    }
 
     #[test]
     fn put_wiki_article_creates_folder_article_and_tags() {
