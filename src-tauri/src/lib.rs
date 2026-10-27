@@ -1,3 +1,4 @@
+mod agent_access;
 mod apple;
 mod dbfiles;
 mod migrate;
@@ -581,6 +582,11 @@ pub fn run() {
             apple::calendar_list_writable,
             apple::calendar_create_event,
             apple::calendar_delete_event,
+            agent_access::get_agent_access,
+            agent_access::set_agent_access,
+            agent_access::preview_claude_desktop,
+            agent_access::install_claude_desktop,
+            agent_access::recent_agent_changes,
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -594,6 +600,7 @@ pub fn run() {
             }
             handle.manage(ActiveOrgState(Mutex::new(active)));
             handle.manage(InitError(Mutex::new(init_error)));
+            agent_access::start_poller(handle);
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -602,6 +609,11 @@ pub fn run() {
                 )?;
             }
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Focused(true) = event {
+                agent_access::check_for_changes(window.app_handle());
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
