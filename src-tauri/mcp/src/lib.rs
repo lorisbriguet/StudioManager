@@ -20,6 +20,7 @@ pub mod log;
 pub mod markdown;
 pub mod money;
 pub mod read;
+pub mod server;
 pub mod text;
 pub mod write;
 
