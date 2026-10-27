@@ -19,6 +19,9 @@ pub const MODE_ACTIVE: &str =
 pub const NOT_OPENED: &str = "Open StudioManager once with this organisation, then try again.";
 pub const DB_NEWER: &str = "This database is newer than the agent tools. Update StudioManager.";
 
+pub const OFF_ACTIVE: &str = "Agent access is off for the active organisation.";
+pub const OFF_THAT: &str = "Agent access is off for that organisation.";
+
 pub fn org_off(name: &str) -> String {
     format!("Agent access is off for the organisation \"{name}\".")
 }
@@ -87,7 +90,13 @@ pub fn resolve_org(dir: &Path, org: Option<&str>) -> Result<Org, String> {
         },
     };
     if !access.org_allowed(&found.id) {
-        return Err(org_off(&found.name));
+        // Name the organisation only when the agent typed that name itself;
+        // an omitted or id-given organisation must not leak a hidden name.
+        return Err(match org.map(str::trim) {
+            None | Some("") => OFF_ACTIVE.to_string(),
+            Some(q) if q == found.id => OFF_THAT.to_string(),
+            Some(q) => org_off(q),
+        });
     }
     Ok(Org {
         id: found.id.clone(),
@@ -299,10 +308,15 @@ mod tests {
             r#"{"enabled": true, "allowMoney": false, "orgs": {"org001": false}}"#,
         );
         assert_eq!(
-            resolve_org(&dir, Some("org001")).unwrap_err(),
+            resolve_org(&dir, Some("Studio")).unwrap_err(),
             "Agent access is off for the organisation \"Studio\"."
         );
-        assert!(resolve_org(&dir, None).is_err());
+        let by_id = resolve_org(&dir, Some("org001")).unwrap_err();
+        assert_eq!(by_id, OFF_THAT);
+        assert!(!by_id.contains("Studio"));
+        let active = resolve_org(&dir, None).unwrap_err();
+        assert_eq!(active, OFF_ACTIVE);
+        assert!(!active.contains("Studio"));
     }
 
     #[test]
