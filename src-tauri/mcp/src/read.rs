@@ -9,7 +9,7 @@ use serde::Serialize;
 
 type R<T> = Result<T, String>;
 
-fn db<T>(r: rusqlite::Result<T>) -> R<T> {
+pub(crate) fn db<T>(r: rusqlite::Result<T>) -> R<T> {
     r.map_err(|e| format!("Database error: {e}"))
 }
 
@@ -150,7 +150,7 @@ fn is_digits(s: &str) -> bool {
 
 /// Pick one candidate by exact folded name. Several exact hits list the
 /// candidates; no exact hit suggests partial matches but never picks one.
-fn pick<T: Clone>(
+pub(crate) fn pick<T: Clone>(
     kind: &str,
     key: &str,
     items: &[(T, String, String)], // (value, display id, name)
@@ -195,7 +195,7 @@ fn pick<T: Clone>(
     }
 }
 
-fn resolve_project(conn: &Connection, key: &str) -> R<i64> {
+pub(crate) fn resolve_project(conn: &Connection, key: &str) -> R<i64> {
     let key = key.trim();
     if is_digits(key) {
         let id: i64 = key
@@ -216,7 +216,7 @@ fn resolve_project(conn: &Connection, key: &str) -> R<i64> {
     pick("project", key, &items)
 }
 
-fn resolve_client(conn: &Connection, key: &str) -> R<String> {
+pub(crate) fn resolve_client(conn: &Connection, key: &str) -> R<String> {
     let key = key.trim();
     let by_id = |id: &str| -> R<Option<String>> {
         db(conn
@@ -324,7 +324,7 @@ pub fn list_projects(
     Ok(out)
 }
 
-fn project_ref(conn: &Connection, id: i64) -> R<ProjectRef> {
+pub(crate) fn project_ref(conn: &Connection, id: i64) -> R<ProjectRef> {
     db(conn.query_row(
         &format!("{PROJECT_SELECT} WHERE p.id = ?1"),
         [id],

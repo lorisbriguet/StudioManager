@@ -38,6 +38,16 @@ pub const APP_ONLY_SCHEMA: &str = "
       PRIMARY KEY (resource_id, project_id)
     );
     ALTER TABLE projects ADD COLUMN folder_path TEXT DEFAULT NULL;
+    ALTER TABLE projects ADD COLUMN calendar_deadline_id TEXT DEFAULT NULL;
+    ALTER TABLE projects ADD COLUMN workload_columns TEXT DEFAULT NULL;
+    ALTER TABLE projects ADD COLUMN workload_template_id INTEGER DEFAULT NULL;
+    ALTER TABLE projects ADD COLUMN layout_config TEXT DEFAULT NULL;
+    ALTER TABLE tasks ADD COLUMN planned_minutes INTEGER DEFAULT NULL;
+    ALTER TABLE tasks ADD COLUMN tracked_minutes INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE tasks ADD COLUMN workload_cells TEXT NOT NULL DEFAULT '{}';
+    ALTER TABLE tasks ADD COLUMN workload_sort_order INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE subtasks ADD COLUMN calendar_event_id TEXT DEFAULT NULL;
+    ALTER TABLE clients ADD COLUMN postal_city TEXT NOT NULL DEFAULT '';
     CREATE TABLE IF NOT EXISTS wiki_folders (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,

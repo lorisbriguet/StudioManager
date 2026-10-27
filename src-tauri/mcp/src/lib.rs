@@ -17,8 +17,10 @@ pub mod backup;
 pub mod env;
 pub mod guard;
 pub mod log;
+pub mod markdown;
 pub mod read;
 pub mod text;
+pub mod write;
 
 #[cfg(test)]
 pub mod test_support;
