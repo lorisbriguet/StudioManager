@@ -148,27 +148,39 @@ fn is_digits(s: &str) -> bool {
     !s.is_empty() && s.chars().all(|c| c.is_ascii_digit())
 }
 
-/// Pick one candidate by folded name: exact match first, else substring.
-/// Zero matches and several matches are errors; `Err(None)`-style cases are
-/// reported through the callers' messages.
+/// Pick one candidate by exact folded name. Several exact hits list the
+/// candidates; no exact hit suggests partial matches but never picks one.
 fn pick<T: Clone>(
     kind: &str,
     key: &str,
     items: &[(T, String, String)], // (value, display id, name)
 ) -> R<T> {
     let k = fold(key.trim());
-    let mut hits: Vec<&(T, String, String)> = items
+    let hits: Vec<&(T, String, String)> = items
         .iter()
         .filter(|(_, _, n)| fold(n.trim()) == k)
         .collect();
-    if hits.is_empty() && !k.is_empty() {
-        hits = items
-            .iter()
-            .filter(|(_, _, n)| fold(n).contains(&k))
-            .collect();
-    }
     match hits.len() {
-        0 => Err(format!("No {kind} matches \"{key}\".")),
+        0 => {
+            let near: Vec<String> = if k.is_empty() {
+                Vec::new()
+            } else {
+                items
+                    .iter()
+                    .filter(|(_, _, n)| fold(n).contains(&k))
+                    .take(5)
+                    .map(|(_, id, n)| format!("{n} (id {id})"))
+                    .collect()
+            };
+            if near.is_empty() {
+                Err(format!("No {kind} matches \"{key}\"."))
+            } else {
+                Err(format!(
+                    "No {kind} matches \"{key}\". Did you mean: {}? Use the id.",
+                    near.join(", ")
+                ))
+            }
+        }
         1 => Ok(hits[0].0.clone()),
         _ => {
             let list: Vec<String> = hits
@@ -795,21 +807,44 @@ mod tests {
     #[test]
     fn ambiguous_name_lists_candidates() {
         let c = fixture();
-        let e = get_project(&c, "catalogue").unwrap_err();
+        c.execute(
+            "INSERT INTO projects (id, client_id, name) VALUES (12, 'C-002', 'catalogue printemps')",
+            [],
+        )
+        .unwrap();
+        let e = get_project(&c, "Catalogue Printemps").unwrap_err();
         assert_eq!(
             e,
-            "Several projects match \"catalogue\": Catalogue Printemps (id 3), Catalogue Automne (id 9). Use the id."
+            "Several projects match \"Catalogue Printemps\": Catalogue Printemps (id 3), catalogue printemps (id 12). Use the id."
         );
         assert_eq!(
             get_project(&c, "9").unwrap().project.name,
             "Catalogue Automne"
         );
-        let e = get_client(&c, "e").unwrap_err();
-        assert!(e.starts_with("Several clients match \"e\": "), "{e}");
+        c.execute("INSERT INTO clients (id, name) VALUES ('C-003', 'atelier lumen')", [])
+            .unwrap();
+        let e = get_client(&c, "Atelier Lumen").unwrap_err();
+        assert!(e.starts_with("Several clients match \"Atelier Lumen\": "), "{e}");
         assert!(
             e.contains("(id C-001)") && e.ends_with("Use the id."),
             "{e}"
         );
+    }
+
+    #[test]
+    fn partial_name_does_not_resolve() {
+        let c = fixture();
+        assert_eq!(
+            get_project(&c, "site").unwrap_err(),
+            "No project matches \"site\". Did you mean: Site Web (id 2)? Use the id."
+        );
+        let e = get_project(&c, "catalogue").unwrap_err();
+        assert_eq!(
+            e,
+            "No project matches \"catalogue\". Did you mean: Catalogue Printemps (id 3), Catalogue Automne (id 9)? Use the id."
+        );
+        assert!(get_client(&c, "lumen").unwrap_err().contains("Did you mean: Atelier Lumen (id C-001)"));
+        assert!(list_tasks(&c, Some("site"), None, None).is_err());
     }
 
     #[test]
