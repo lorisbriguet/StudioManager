@@ -60,6 +60,24 @@ describe("consumables queries", () => {
     expect(rows[0].currency).toBe("CHF");
   });
 
+  it("getConsumables sorts items without a reorder level last", async () => {
+    const { getConsumables } = await import("../db/queries/consumables");
+    let seen = "";
+    setSelectHandler((sql) => { seen = sql; return []; });
+    await getConsumables();
+    expect(seen).toContain(
+      "ORDER BY (reorder_level = 0) ASC, stock / NULLIF(reorder_level, 0) ASC, name ASC"
+    );
+  });
+
+  it("logConsumableUsage and restockConsumable reject amounts not above zero", async () => {
+    await expect(logConsumableUsage(4, 0, null, "2026-10-28")).rejects.toThrow();
+    await expect(logConsumableUsage(4, -1, null, "2026-10-28")).rejects.toThrow();
+    await expect(restockConsumable(4, 0)).rejects.toThrow();
+    await expect(restockConsumable(4, -3)).rejects.toThrow();
+    expect(executedStatements).toHaveLength(0);
+  });
+
   it("isLow is stock below reorder level", () => {
     expect(isLow({ stock: 1, reorder_level: 2 })).toBe(true);
     expect(isLow({ stock: 2, reorder_level: 2 })).toBe(false);

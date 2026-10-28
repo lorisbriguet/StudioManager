@@ -27,11 +27,14 @@ export function isLow(c: Pick<Consumable, "stock" | "reorder_level">): boolean {
   return c.stock < c.reorder_level;
 }
 
-/** Lowest relative stock first; items without a reorder level go last. */
+/**
+ * Lowest relative stock first. Items without a reorder level (0) go last:
+ * SQLite sorts the NULL ratio first, so they are pushed down explicitly.
+ */
 export async function getConsumables(): Promise<Consumable[]> {
   const db = await getDb();
   return db.select<Consumable[]>(
-    "SELECT * FROM consumables ORDER BY stock / NULLIF(reorder_level, 0) ASC, name ASC"
+    "SELECT * FROM consumables ORDER BY (reorder_level = 0) ASC, stock / NULLIF(reorder_level, 0) ASC, name ASC"
   );
 }
 
@@ -82,6 +85,7 @@ export async function logConsumableUsage(
   projectId: number | null,
   usedOnISO: string
 ): Promise<void> {
+  if (!(amount > 0)) throw new Error("Amount must be greater than zero");
   const batch = new TransactionBatch();
   batch.add(
     `INSERT INTO consumable_usage (consumable_id, project_id, used_on, amount, cost)
@@ -98,6 +102,7 @@ export async function logConsumableUsage(
 
 /** Add stock; clears the low-stock notification once stock is above the reorder level. */
 export async function restockConsumable(id: number, amount: number): Promise<void> {
+  if (!(amount > 0)) throw new Error("Amount must be greater than zero");
   const batch = new TransactionBatch();
   batch.add(
     "UPDATE consumables SET stock = stock + $1, updated_at = datetime('now') WHERE id = $2",
