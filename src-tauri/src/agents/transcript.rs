@@ -105,6 +105,7 @@ fn summarise_lines<I: Iterator<Item = String>>(lines: I, limit: usize) -> Vec<It
 }
 
 /// The last `limit` items of a transcript.
+#[allow(dead_code)] // used by tests
 pub fn summarise(jsonl: &str, limit: usize) -> Vec<Item> {
     summarise_lines(jsonl.lines().map(String::from), limit)
 }

@@ -607,6 +607,7 @@ pub fn run() {
             agents::pty::agents_send,
             agents::prompt::agents_prompt,
             agents::prompt::agents_answer,
+            agents::poller::agents_list,
         ])
         .setup(|app| {
             let handle = app.handle();

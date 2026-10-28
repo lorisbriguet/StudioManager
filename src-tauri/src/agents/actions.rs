@@ -75,7 +75,7 @@ fn last_backgrounded_id(out: &str) -> Option<String> {
             let id: String = rest.chars().take(8).collect();
             valid_short_id(&id).then_some(id)
         })
-        .last()
+        .next_back()
 }
 
 fn trim_slash(s: &str) -> &str {
@@ -205,6 +205,22 @@ pub fn find_agent(cli: &dyn Cli, session_id: &str) -> Result<Agent, String> {
         .ok_or_else(|| "Agent not found".to_string())
 }
 
+/// Like `find_agent`, but looks in the poller's last list first and asks the
+/// CLI only when the agent is not in it (or the list is empty).
+pub fn find_agent_cached(
+    cli: &dyn Cli,
+    cache: &[Agent],
+    session_id: &str,
+) -> Result<Agent, String> {
+    if !valid_session_id(session_id) {
+        return Err("Invalid session id".into());
+    }
+    match cache.iter().find(|a| a.session_id == session_id) {
+        Some(a) => Ok(a.clone()),
+        None => find_agent(cli, session_id),
+    }
+}
+
 pub(super) fn home_dir() -> PathBuf {
     std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default()
 }
@@ -260,7 +276,8 @@ pub async fn agents_switch_model(
     model: String,
 ) -> Result<String, String> {
     let cli = ready(&state)?;
-    let agent = find_agent(&cli, &session_id)?;
+    let cache = state.cached();
+    let agent = find_agent_cached(&cli, &cache, &session_id)?;
     switch_model(&cli, &home_dir(), &agent, &model, &state.app_dir)
 }
 
@@ -451,5 +468,17 @@ mod tests {
         assert!(find_agent(&cli, "11111111-1111-1111-1111-111111111111").is_err());
         assert_eq!(cli.calls()[0].0, args(&["agents", "--json", "--all"]));
         assert!(fetch_agents(&cli).is_err());
+    }
+
+    #[test]
+    fn find_agent_cached_asks_cli_only_on_miss() {
+        let json = format!(r#"[{{"sessionId":"{SID}","id":"0a1b2c3d","kind":"bg"}}]"#);
+        let cli = FakeCli::new(vec![ok(&json)]);
+        let cached = parse_agents(&json).unwrap();
+        assert_eq!(find_agent_cached(&cli, &cached, SID).unwrap().session_id, SID);
+        assert!(cli.calls().is_empty());
+        assert_eq!(find_agent_cached(&cli, &[], SID).unwrap().session_id, SID);
+        assert_eq!(cli.calls().len(), 1);
+        assert!(find_agent_cached(&cli, &cached, "../x").is_err());
     }
 }

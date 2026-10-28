@@ -6,7 +6,7 @@
 
 use super::actions::fetch_agents;
 use super::cli::Cli;
-use super::model::Kind;
+use super::model::{Agent, Kind};
 use super::pty::TerminalHub;
 use super::validate::valid_short_id;
 use serde::Serialize;
@@ -272,14 +272,19 @@ fn choose(
 }
 
 /// Prompts are read and answered for background agents only.
-fn require_background(cli: &dyn Cli, short_id: &str) -> Result<(), String> {
+/// Looks in `cache` (the poller's last list) first, then asks the CLI.
+fn require_background(cli: &dyn Cli, cache: &[Agent], short_id: &str) -> Result<(), String> {
     if !valid_short_id(short_id) {
         return Err("Invalid agent id".into());
     }
-    let agent = fetch_agents(cli)?
-        .into_iter()
-        .find(|a| a.short_id.as_deref() == Some(short_id))
-        .ok_or("Agent not found")?;
+    let is_it = |a: &&Agent| a.short_id.as_deref() == Some(short_id);
+    let agent = match cache.iter().find(is_it) {
+        Some(a) => a.clone(),
+        None => fetch_agents(cli)?
+            .into_iter()
+            .find(|a| a.short_id.as_deref() == Some(short_id))
+            .ok_or("Agent not found")?,
+    };
     if agent.kind != Kind::Background {
         return Err("Only background agents can be answered here".into());
     }
@@ -295,8 +300,9 @@ pub async fn agents_prompt(
 ) -> Result<Option<Prompt>, String> {
     let cli = super::actions::ready(&state)?;
     let hub = state.hub.clone();
+    let cache = state.cached();
     super::pty::blocking(move || {
-        require_background(&cli, &short_id)?;
+        require_background(&cli, &cache, &short_id)?;
         read_prompt(&hub, &short_id)
     })
     .await
@@ -312,8 +318,9 @@ pub async fn agents_answer(
 ) -> Result<(), String> {
     let cli = super::actions::ready(&state)?;
     let hub = state.hub.clone();
+    let cache = state.cached();
     super::pty::blocking(move || {
-        require_background(&cli, &short_id)?;
+        require_background(&cli, &cache, &short_id)?;
         answer(&hub, &short_id, number, &label, &fingerprint)
     })
     .await

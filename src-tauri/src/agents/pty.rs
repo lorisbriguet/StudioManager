@@ -216,6 +216,7 @@ impl TerminalHub {
     }
 
     /// Number of live terminals.
+    #[allow(dead_code)] // used by tests
     pub fn len(&self) -> usize {
         lock(&self.inner.terms).live.len()
     }
@@ -513,8 +514,9 @@ pub async fn agents_send(
 ) -> Result<(), String> {
     let cli = super::actions::ready(&state)?;
     let hub = state.hub.clone();
+    let cache = state.cached();
     blocking(move || {
-        let agent = super::actions::find_agent(&cli, &session_id)?;
+        let agent = super::actions::find_agent_cached(&cli, &cache, &session_id)?;
         send_message(&hub, &agent, &text)
     })
     .await
