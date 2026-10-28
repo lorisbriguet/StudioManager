@@ -8,6 +8,7 @@ pub mod pty;
 pub mod statusline;
 pub mod transcript;
 pub mod uploads;
+pub mod usage;
 pub mod validate;
 
 use std::path::PathBuf;

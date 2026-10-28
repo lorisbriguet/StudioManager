@@ -229,6 +229,15 @@ fn stamp() -> String {
     chrono::Local::now().format("%Y%m%d-%H%M%S").to_string()
 }
 
+/// A status line of StudioManager's is installed in Claude Code's settings. A settings file that
+/// cannot be read counts as not set up.
+pub fn is_set_up(app_dir: &Path) -> bool {
+    let saved = read_settings(app_dir).previous_status_line;
+    preview_at(&settings_path(), &our_command(), saved.as_ref())
+        .map(|p| p.installed)
+        .unwrap_or(false)
+}
+
 fn path_text(backup: Option<PathBuf>) -> String {
     backup.map(|p| p.to_string_lossy().to_string()).unwrap_or_default()
 }

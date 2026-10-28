@@ -6,6 +6,7 @@ use super::actions::{fetch_agents, home_dir, read_state, retain_dismissed, CopyO
 use super::cli::read_settings;
 use super::model::{apply_quiet, Agent, Group};
 use super::projects::{load_index, FolderIndex};
+use super::usage::limits::{check_alerts, now_ms as limits_now_ms, LIMITS_FILE};
 use super::transcript::{last_change_ms, last_model, locate, model_alias, model_label};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -182,7 +183,8 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
         let Some(state) = app.try_state::<super::AgentsState>() else {
             continue;
         };
-        if !read_settings(&state.app_dir).enabled {
+        let settings = read_settings(&state.app_dir);
+        if !settings.enabled {
             // Off: forget everything so turning it on starts a new baseline.
             if poll.baseline_done || !poll.last_good.is_empty() {
                 poll = PollState::default();
@@ -225,6 +227,16 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
                 .show();
             if let Err(e) = shown {
                 log::warn!("[agents] notification failed: {e}");
+            }
+        }
+        // Plan-limit alerts belong to the menu bar; a small file read, no CLI involved.
+        if settings.menu_bar && state.app_dir.join(LIMITS_FILE).exists() {
+            let alerts = check_alerts(&state.app_dir, limits_now_ms(), settings.limit_alerts);
+            for a in &alerts {
+                log::info!("[agents] limit alert: {}", a.key);
+                if let Err(e) = app.notification().builder().title(&a.title).body(&a.body).show() {
+                    log::warn!("[agents] notification failed: {e}");
+                }
             }
         }
     }

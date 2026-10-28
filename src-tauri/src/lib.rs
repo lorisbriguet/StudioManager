@@ -614,6 +614,7 @@ pub fn run() {
             agents::statusline::agents_status_line_preview,
             agents::statusline::agents_status_line_install,
             agents::statusline::agents_status_line_remove,
+            agents::usage::agents_usage_limits,
             agents::projects::agents_start_folders,
             agents::actions::agents_start,
             agents::actions::agents_stop,
