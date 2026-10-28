@@ -15,9 +15,9 @@ Turning the switch off hides the page and closes any open terminals.
 
 Agents are grouped as **Needs you**, **Working**, **Idle** and **Done**. Each one is labelled Organisation > Client > Project when its folder is linked to a project, across all organisations. Otherwise it shows the folder name.
 
-An agent that has waited for you for more than 2 hours with no change, or that you dismiss, moves to Idle.
+An agent in Needs you that has waited for more than 2 hours with no change, or that you dismiss, moves to Idle.
 
-For each agent you can read the conversation, send a message, switch model, stop it, delete it or dismiss it.
+For each agent you can read the conversation, send a message, switch model, stop it or delete it. In Needs you you can also dismiss it.
 
 - **Send a message:** not while a prompt is open, and not for agents started in a terminal.
 - **Switch model:** stops the agent and continues the same conversation as a new agent on the model you pick.
@@ -30,7 +30,7 @@ Pick a folder, write the task, choose a model (haiku, sonnet, opus or fable) and
 
 When an agent asks a question or wants to run a command, the page shows what is being asked and a button for each option. A click answers only if the same prompt is still on screen and the option you chose is highlighted. If not, it tells you to use the terminal. Options that need typed text go to the terminal too.
 
-Agents started in a terminal can be listed, read, stopped and attached, but have no message, model switch or answer buttons.
+Agents started in a terminal are listed and you can read their conversation. Stop, terminal, messages, model switch and answer buttons only work for agents started in the background (from this page or with `claude --bg`).
 
 ## Terminal
 
