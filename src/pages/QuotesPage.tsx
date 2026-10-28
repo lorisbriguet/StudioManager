@@ -27,7 +27,7 @@ import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { QuoteToProjectWizard } from "../components/QuoteToProjectWizard";
 import { useTabStore } from "../stores/tab-store";
-import { Checkbox, PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Select, IconButton } from "../components/ui";
+import { PageHeader, SearchBar, Table, TableSkeleton, Button, EmptyState, Select, IconButton } from "../components/ui";
 import { quoteStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Quote, QuoteStatus, QuoteLineItem } from "../types/quote";
 import type { Client } from "../types/client";
@@ -228,9 +228,10 @@ export function QuotesPage() {
   }, [enriched, search, sort, filterConditions, filterLogic]);
 
   // Keyboard row navigation (flat list — every filtered row is visible).
+  const openQuote = useCallback((q: Quote) => navigate(`/quotes/${q.id}/edit`), [navigate]);
   const { focusIdx } = useListNavigation({
     items: filtered,
-    onOpen: useCallback((q: Quote) => navigate(`/quotes/${q.id}/edit`), [navigate]),
+    onOpen: openQuote,
     onMenu: useCallback((q: (typeof filtered)[0], pos: { x: number; y: number }) => setCtxMenu({ ...pos, item: q }), []),
   });
 
@@ -281,7 +282,7 @@ export function QuotesPage() {
           {t.new_quote}
         </Button>
       </PageHeader>
-      <TableSkeleton columns={5} />
+      <TableSkeleton columns={7} />
     </div>
   );
 
@@ -303,87 +304,78 @@ export function QuotesPage() {
         fields={quoteFields}
       />
 
-      <div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[var(--color-border-header)]">
-              <th className="w-8 px-2 py-2">
-                <Checkbox checked={bulk.isAllSelected} indeterminate={bulk.selected.size > 0 && !bulk.isAllSelected} onChange={bulk.toggleAll} />
-              </th>
-              <th className="w-8" />
-              <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
-              <SortHeader label={t.client} sortKey="client_name" current={sort} onSort={setSort} />
-              <SortHeader label={t.date} sortKey="quote_date" current={sort} onSort={setSort} />
-              <SortHeader label={t.status} sortKey="status" current={sort} onSort={setSort} />
-              <SortHeader label={t.amount} sortKey="total" current={sort} onSort={setSort} align="right" />
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((q, qi) => (
-              <tr
-                key={q.id}
-                data-list-row
-                className={`border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md group${qi === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
-                onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: q }); }}
-              >
-                <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                  <Checkbox
-                    checked={bulk.selected.has(q.id)}
-                    onChange={(e) => bulk.toggleItem(q.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-                  />
-                </td>
-                <td className="w-8 px-1">
-                  <IconButton size="xs"
-                    icon={Settings2}
-                    label={t.more_actions}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setCtxMenu({ x: e.clientX, y: e.clientY, item: q });
-                    }}
-                  />
-                </td>
-                <td className="px-4 py-2.5">
-                  <span className="font-medium">{q.reference.startsWith("DRAFT") ? t.draft : q.reference}</span>
-                </td>
-                <td className="px-4 py-2.5">{q.client_name}</td>
-                <td className="px-4 py-2.5 text-muted">{formatDisplayDate(q.quote_date)}</td>
-                <td className="px-4 py-2.5">
-                  <Select
-                    value={q.status}
-                    onChange={(e) => {
-                      const status = e.target.value as QuoteStatus;
-                      updateQuote.mutate({ id: q.id, data: { status } });
-                    }}
-                    variant="bare"
-                    fullWidth={false}
-                    className={`${PILL} ${statusClasses(quoteStatusVariant(q.status))}`}
-                  >
-                    {q.status === "draft" && <option value="draft">{t.draft}</option>}
-                    <option value="sent">{t.sent}</option>
-                    <option value="accepted">{t.accepted}</option>
-                    <option value="rejected">{t.rejected}</option>
-                    <option value="expired">{t.expired}</option>
-                  </Select>
-                </td>
-                <td className="px-4 py-2.5 text-right font-medium">
-                  CHF {q.total.toFixed(2)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {filtered.length === 0 && !isLoading && (
-          <EmptyState
-            message={(quotes?.length ?? 0) === 0 ? t.no_quotes_yet : t.no_matching_quotes}
-            icon={<FileText size={32} />}
-            action={(quotes?.length ?? 0) === 0 ? (
-              <Button icon={<Plus size={12} />} onClick={() => navigate("/quotes/new")}>
-                {t.new_quote}
-              </Button>
-            ) : undefined}
-          />
-        )}
-      </div>
+      <Table>
+        <Table.Head>
+          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} />
+          <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
+          <SortHeader label={t.client} sortKey="client_name" current={sort} onSort={setSort} />
+          <SortHeader label={t.date} sortKey="quote_date" current={sort} onSort={setSort} />
+          <SortHeader label={t.status} sortKey="status" current={sort} onSort={setSort} />
+          <SortHeader label={t.amount} sortKey="total" current={sort} onSort={setSort} align="right" />
+          <Table.ActionsTh />
+        </Table.Head>
+        <Table.Body>
+          {filtered.map((q, qi) => (
+            <Table.Row
+              key={q.id}
+              data-list-row
+              focused={qi === focusIdx}
+              selected={bulk.selected.has(q.id)}
+              onOpen={() => openQuote(q)}
+              onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: q }); }}
+            >
+              <Table.Select checked={bulk.selected.has(q.id)} onToggle={(shift) => bulk.toggleItem(q.id, shift)} />
+              <Table.Td>
+                <span className="font-medium">{q.reference.startsWith("DRAFT") ? t.draft : q.reference}</span>
+              </Table.Td>
+              <Table.Td>{q.client_name}</Table.Td>
+              <Table.Td muted>{formatDisplayDate(q.quote_date)}</Table.Td>
+              <Table.Td>
+                <Select
+                  value={q.status}
+                  onChange={(e) => {
+                    const status = e.target.value as QuoteStatus;
+                    updateQuote.mutate({ id: q.id, data: { status } });
+                  }}
+                  variant="bare"
+                  fullWidth={false}
+                  className={`${PILL} ${statusClasses(quoteStatusVariant(q.status))}`}
+                >
+                  {q.status === "draft" && <option value="draft">{t.draft}</option>}
+                  <option value="sent">{t.sent}</option>
+                  <option value="accepted">{t.accepted}</option>
+                  <option value="rejected">{t.rejected}</option>
+                  <option value="expired">{t.expired}</option>
+                </Select>
+              </Table.Td>
+              <Table.Td numeric className="font-medium">
+                CHF {q.total.toFixed(2)}
+              </Table.Td>
+              <Table.Actions>
+                <IconButton
+                  size="xs"
+                  icon={Settings2}
+                  label={t.more_actions}
+                  onClick={(e) => setCtxMenu({ x: e.clientX, y: e.clientY, item: q })}
+                />
+              </Table.Actions>
+            </Table.Row>
+          ))}
+          {filtered.length === 0 && (
+            <Table.Empty colSpan={7}>
+              <EmptyState
+                message={(quotes?.length ?? 0) === 0 ? t.no_quotes_yet : t.no_matching_quotes}
+                icon={<FileText size={32} />}
+                action={(quotes?.length ?? 0) === 0 ? (
+                  <Button icon={<Plus size={12} />} onClick={() => navigate("/quotes/new")}>
+                    {t.new_quote}
+                  </Button>
+                ) : undefined}
+              />
+            </Table.Empty>
+          )}
+        </Table.Body>
+      </Table>
       {ctxMenu && (
         <ContextMenu
           x={ctxMenu.x}

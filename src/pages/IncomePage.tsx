@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
-import { Plus, Paperclip, Eye, ChevronRight, Trash2, Upload, Wallet, Pencil, Settings2 } from "lucide-react";
-import { Checkbox, PageHeader, SearchBar, Button, Card, DatePicker, EmptyState, FormField, Input, Select, TableSkeleton, IconButton, SectionLabel } from "../components/ui";
+import { Plus, Paperclip, Eye, Trash2, Upload, Wallet, Pencil, Settings2 } from "lucide-react";
+import { PageHeader, SearchBar, Button, Card, DatePicker, EmptyState, FormField, Input, Select, Table, TableSkeleton, IconButton, Tag } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
 import { toast } from "sonner";
@@ -128,9 +128,10 @@ export function IncomePage() {
     () => new Map(visibleRows.map((r, i) => [r.id, i])),
     [visibleRows]
   );
+  const openIncome = useCallback((inc: Income) => { setShowForm(false); setEditing(inc); }, []);
   const { focusIdx } = useListNavigation({
     items: visibleRows,
-    onOpen: useCallback((inc: Income) => { setShowForm(false); setEditing(inc); }, []),
+    onOpen: openIncome,
     onMenu: useCallback((inc: Income, pos: { x: number; y: number }) => setCtxMenu({ ...pos, item: inc }), []),
     enabled: preview === null,
   });
@@ -168,7 +169,7 @@ export function IncomePage() {
           {t.new_income}
         </Button>
       </PageHeader>
-      <TableSkeleton columns={6} />
+      <TableSkeleton columns={8} />
     </div>
   );
 
@@ -256,129 +257,105 @@ export function IncomePage() {
         />
       )}
 
-      <div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[var(--color-border-header)]">
-              <th className="w-8 px-2 py-2">
-                <Checkbox checked={bulk.isAllSelected} indeterminate={bulk.selected.size > 0 && !bulk.isAllSelected} onChange={bulk.toggleAll} />
-              </th>
-              <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
-              <SortHeader label={t.source} sortKey="source" current={sort} onSort={setSort} />
-              <SortHeader label={t.description} sortKey="category" current={sort} onSort={setSort} />
-              <SortHeader label={t.date} sortKey="date" current={sort} onSort={setSort} />
-              <SortHeader label={t.amount} sortKey="amount" current={sort} onSort={setSort} align="right" />
-              <th className="px-4 py-2.5 font-medium text-muted text-left">{t.receipt}</th>
-              <th className="px-4 py-2.5"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {groupedByYear.map(([year, yearIncomes]) => {
-              const isOpen = expandedYears.has(year);
-              const yearTotal = yearIncomes.reduce((s, i) => s + i.amount, 0);
-              return (
-                <React.Fragment key={year}>
-                  <tr
-                    className="border-b border-[var(--color-border-divider)] cursor-pointer hover:bg-[var(--color-hover-row)] rounded-md"
-                    onClick={() => toggleYear(year)}
-                  >
-                    <td colSpan={8} className="px-4 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <ChevronRight
-                          size={14}
-                          className={`text-muted transition-transform ${isOpen ? "rotate-90" : ""}`}
-                        />
-                        <SectionLabel as="span">{year}</SectionLabel>
-                        <span className="text-xs text-muted">
-                          {yearIncomes.length} {yearIncomes.length !== 1 ? t.incomes_count_plural : t.incomes_count_singular}
-                        </span>
-                        <span className="ml-auto text-sm font-medium">
-                          CHF {yearTotal.toFixed(2)}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                  {isOpen &&
-                    yearIncomes.map((inc) => (
-                      <tr
-                        key={inc.id}
-                        data-list-row
-                        className={`border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md group${rowIdxById.get(inc.id) === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
-                        onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: inc }); }}
-                      >
-                        <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                          <Checkbox
-                            checked={bulk.selected.has(inc.id)}
-                            onChange={(e) => bulk.toggleItem(inc.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-                          />
-                        </td>
-                        <td className="px-4 py-2.5 font-medium">{inc.reference}</td>
-                        <td className="px-4 py-2.5">{inc.source}</td>
-                        <td className="px-4 py-2.5">
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-[var(--color-input-bg)]">
-                            {incomeCategoryLabel(t, inc.category)}
-                          </span>
-                          {inc.description && (
-                            <span className="ml-1 text-xs text-muted">{inc.description}</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2.5 text-muted">{formatDisplayDate(inc.date)}</td>
-                        <td className="px-4 py-2.5 text-right font-medium">
-                          CHF {inc.amount.toFixed(2)}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          {inc.receipt_path ? (
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="link"
-                                icon={<Eye size={12} />}
-                                onClick={() => setPreview({ path: inc.receipt_path!, reference: inc.reference })}
-                              >
-                                {t.view}
-                              </Button>
-                              <span className="text-xs text-success flex items-center gap-1">
-                                <Paperclip size={12} />
-                              </span>
-                            </div>
-                          ) : (
+      <Table>
+        <Table.Head>
+          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} />
+          <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
+          <SortHeader label={t.source} sortKey="source" current={sort} onSort={setSort} />
+          <SortHeader label={t.description} sortKey="category" current={sort} onSort={setSort} />
+          <SortHeader label={t.date} sortKey="date" current={sort} onSort={setSort} />
+          <SortHeader label={t.amount} sortKey="amount" current={sort} onSort={setSort} align="right" />
+          <Table.Th>{t.receipt}</Table.Th>
+          <Table.ActionsTh />
+        </Table.Head>
+        <Table.Body>
+          {groupedByYear.map(([year, yearIncomes]) => {
+            const isOpen = expandedYears.has(year);
+            const yearTotal = yearIncomes.reduce((s, i) => s + i.amount, 0);
+            return (
+              <React.Fragment key={year}>
+                <Table.Group
+                  colSpan={8}
+                  label={year}
+                  count={`${yearIncomes.length} ${yearIncomes.length !== 1 ? t.incomes_count_plural : t.incomes_count_singular}`}
+                  total={`CHF ${yearTotal.toFixed(2)}`}
+                  open={isOpen}
+                  onToggle={() => toggleYear(year)}
+                />
+                {isOpen &&
+                  yearIncomes.map((inc) => (
+                    <Table.Row
+                      key={inc.id}
+                      data-list-row
+                      focused={rowIdxById.get(inc.id) === focusIdx}
+                      selected={bulk.selected.has(inc.id)}
+                      onOpen={() => openIncome(inc)}
+                      onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: inc }); }}
+                    >
+                      <Table.Select checked={bulk.selected.has(inc.id)} onToggle={(shift) => bulk.toggleItem(inc.id, shift)} />
+                      <Table.Td className="font-medium">{inc.reference}</Table.Td>
+                      <Table.Td>{inc.source}</Table.Td>
+                      <Table.Td>
+                        <Tag name={inc.category}>{incomeCategoryLabel(t, inc.category)}</Tag>
+                        {inc.description && (
+                          <span className="ml-1 text-xs text-muted">{inc.description}</span>
+                        )}
+                      </Table.Td>
+                      <Table.Td muted>{formatDisplayDate(inc.date)}</Table.Td>
+                      <Table.Td numeric className="font-medium">
+                        CHF {inc.amount.toFixed(2)}
+                      </Table.Td>
+                      <Table.Td>
+                        {inc.receipt_path ? (
+                          <div className="flex items-center gap-2">
                             <Button
                               variant="link"
-                              icon={<Paperclip size={12} />}
-                              onClick={() => attachReceipt(inc.id, inc.reference, inc.source)}
+                              icon={<Eye size={12} />}
+                              onClick={() => setPreview({ path: inc.receipt_path!, reference: inc.reference })}
                             >
-                              {t.attach}
+                              {t.view}
                             </Button>
-                          )}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <IconButton size="xs"
-                            icon={Settings2}
-                            label={t.more_actions}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCtxMenu({ x: e.clientX, y: e.clientY, item: inc });
-                            }}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-        {filtered.length === 0 && !isLoading && (
-          <EmptyState
-            message={(incomes?.length ?? 0) === 0 ? t.no_incomes_yet : t.no_matching_incomes}
-            icon={<Wallet size={32} />}
-            action={(incomes?.length ?? 0) === 0 ? (
-              <Button icon={<Plus size={12} />} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
-                {t.new_income}
-              </Button>
-            ) : undefined}
-          />
-        )}
-      </div>
+                            <span className="text-xs text-success flex items-center gap-1">
+                              <Paperclip size={12} />
+                            </span>
+                          </div>
+                        ) : (
+                          <Button
+                            variant="link"
+                            icon={<Paperclip size={12} />}
+                            onClick={() => attachReceipt(inc.id, inc.reference, inc.source)}
+                          >
+                            {t.attach}
+                          </Button>
+                        )}
+                      </Table.Td>
+                      <Table.Actions>
+                        <IconButton size="xs"
+                          icon={Settings2}
+                          label={t.more_actions}
+                          onClick={(e) => setCtxMenu({ x: e.clientX, y: e.clientY, item: inc })}
+                        />
+                      </Table.Actions>
+                    </Table.Row>
+                  ))}
+              </React.Fragment>
+            );
+          })}
+          {filtered.length === 0 && !isLoading && (
+            <Table.Empty colSpan={8}>
+              <EmptyState
+                message={(incomes?.length ?? 0) === 0 ? t.no_incomes_yet : t.no_matching_incomes}
+                icon={<Wallet size={32} />}
+                action={(incomes?.length ?? 0) === 0 ? (
+                  <Button icon={<Plus size={12} />} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
+                    {t.new_income}
+                  </Button>
+                ) : undefined}
+              />
+            </Table.Empty>
+          )}
+        </Table.Body>
+      </Table>
 
       {preview && (
         <ReceiptPreview

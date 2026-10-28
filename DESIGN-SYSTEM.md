@@ -66,7 +66,6 @@ Tokens handle dark mode automatically. **Never use `dark:` prefix** for colors t
 | Inputs, buttons, selects | `rounded-lg` | 8px |
 | Buttons, fields, dropdown triggers (the 26px controls) | `rounded-md` | 6px |
 | Badges, tags, pills | `rounded-full` | 99px |
-| Table rows on hover | `rounded-md` | 6px |
 
 ---
 
@@ -109,7 +108,7 @@ Every small uppercase label uses `src/components/ui/SectionLabel.tsx`. There is 
 
 | Context | Classes |
 |---------|---------|
-| Table row cell | `px-4 py-2.5` |
+| Table cells | `Table` sets them: 16px sides (12px compact), see [Tables](#tables) |
 | Card padding | `p-4` (compact: `px-3 py-2.5`) |
 | Form field grid | `grid gap-3` |
 | Button row | `flex gap-2`, primary action rightmost, destructive pushed left with `mr-auto` |
@@ -152,7 +151,7 @@ All icons use **lucide-react**. Never use unicode characters (no `✕`, `←`, `
 | Page header action buttons | `16` | `<Plus size={16} />` |
 | Modal/dialog close button | `16` | `<X size={16} />` |
 | Back navigation | `18` | `<ArrowLeft size={18} />` |
-| Table row action icons | `14` | `<Trash2 size={14} />` |
+| Table row action icons | `12` | `IconButton size="xs"` in `Table.Actions` |
 | Settings category nav | `14` | `<Palette size={14} />` |
 | Small inline icons (clear, tags) | `12` | `<X size={12} />` |
 | Tiny indicator icons | `10` | `<X size={10} />` (inside tag pills) |
@@ -480,35 +479,48 @@ import { invoiceStatusVariant, quoteStatusVariant, taskStatusVariant, projectSta
 
 ---
 
-## Table Pattern
+## Tables
+
+Every data table uses `Table` (`src/components/ui/Table.tsx`). Don't write `<table>`, `<th>` or `<td>` classes by hand.
 
 ```tsx
-<table className="w-full text-sm">
-  <thead>
-    <tr className="border-b border-[var(--color-border-header)]">
-      <th className="text-left px-4 py-2.5 text-xs text-muted">Column</th>
-    </tr>
-  </thead>
-  <tbody>
-    {rows.map((row) => (
-      <tr key={row.id} className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md">
-        <td className="px-4 py-2.5">Content</td>
-      </tr>
-    ))}
-  </tbody>
-</table>
+<Table density="default">                     {/* or "compact" */}
+  <Table.Head>
+    <Table.SelectAll all={…} some={…} onToggle={bulk.toggleAll} />
+    <SortHeader label={t.date} sortKey="date" current={sort} onSort={setSort} />
+    <Table.Th numeric>{t.amount}</Table.Th>
+    <Table.ActionsTh />
+  </Table.Head>
+  <Table.Body>
+    <Table.Group colSpan={4} label="2026" count="3 invoices" total="CHF 18 130.50" open={open} onToggle={toggle} />
+    <Table.Row data-list-row onOpen={() => open(row)} focused={i === focusIdx} selected={…} onContextMenu={…}>
+      <Table.Select checked={…} onToggle={(shift) => bulk.toggleItem(row.id, shift)} />
+      <Table.Td muted>{date}</Table.Td>
+      <Table.Td numeric>{amount}</Table.Td>
+      <Table.Actions><IconButton size="xs" icon={Settings2} label={t.more_actions} onClick={…} /></Table.Actions>
+    </Table.Row>
+    {rows.length === 0 && <Table.Empty colSpan={4}><EmptyState … /></Table.Empty>}
+  </Table.Body>
+  <Table.Foot>…totals…</Table.Foot>
+</Table>
 ```
 
-- Row dividers: `border-[var(--color-border-divider)]`
-- Header border: `border-[var(--color-border-header)]`
-- Row padding: `px-4 py-2.5`
-- Hover: `hover:bg-[var(--color-hover-row)]`
-- No container borders around tables
+| Density | Rows | Cell sides | For |
+|--|--|--|--|
+| `default` | 40px | 16px | Lists: invoices, quotes, expenses, income, clients, resources |
+| `compact` | 32px | 12px | Settings lists and editing grids: time entries, categories, named tables, workload, line items |
 
-### Year/Section Groups
-```tsx
-<SectionLabel as="span">2026</SectionLabel>
-```
+- **Header:** 32px in both densities, `text-xs font-medium text-muted`, lowercase, header line under it. Sortable or not, it looks the same.
+- **Rows:** a minimum height, so a row holding a 26px field or a pill is as tall as a text row. Divider line, hover tint, accent tint when selected.
+- **Opening a row:** `onOpen` makes a single click anywhere on the row open it (pointer cursor). Clicks on checkboxes, buttons, links and fields act on themselves. Enter (`useListNavigation`) and the context menu still work. Editing grids have no `onOpen`.
+- **Row actions:** always the last column, `IconButton size="xs"` inside `Table.Actions`, shown on row hover, keyboard focus or while a menu from it is open.
+- **Numbers:** `numeric` on `Th` and `Td` right-aligns them with tabular digits.
+- **Empty:** `Table.Empty` inside the body, so the header stays. **Loading:** `TableSkeleton` with the same `density`.
+- **Totals:** `Table.Foot`, inside the table.
+- **Groups:** `Table.Group`, a collapsible row with a chevron, `SectionLabel`, a count and a total on the right.
+- No container border; the table scrolls sideways when it is too wide.
+
+Not tables: the projects card grid, notifications, dashboard widget lists and the P&L lines are lists with their own layout.
 
 ---
 
@@ -523,6 +535,7 @@ Shared class strings and small parts that the components are built from (`src/co
 | `SURFACE` / `SURFACE_FILL` | A raised surface with / without a border. Add the shadow per use | Popover, Modal / BulkActionBar |
 | `PILL` / `PILL_XS` | The 20px and 16px label pills | Tag, Badge, CountBadge, status pills |
 | `MENU_TONE` | Menu row tones | Dropdown, ContextMenu |
+| `TABLE_X` / `TABLE_ROW_H` / `TABLE_TH` / `NUMERIC` | Table geometry per density: cell sides, row height, header text, numbers | Table, SortHeader, TableSkeleton |
 | `revealClass(reveal)` | Reveal-on-hover for `true` or a named group (`"task"` → `group/task`) | IconButton, DragHandle |
 | `useTagColor(name, color?)` | A tag's colours for the current mode | Tag, FilterChip |
 | `<PanelTitle title action? tone? variant?>` | A title on the left and an action on the right | Modal header, SectionLabel with `action`, dashboard widgets, line items |
@@ -787,6 +800,7 @@ Before merging any new UI work, verify:
 - [ ] Navigation rows use `NavItem` / `navItemClass`
 - [ ] Dialogs use `Modal` (no hand-built overlay), key hints use `Kbd`
 - [ ] Hints use `Tooltip` (no `title` on buttons/links); progress, notices, confirms and drag grips use the Feedback components
+- [ ] Data tables use `Table` (no hand-styled `<th>`/`<td>`), row actions in `Table.Actions`
 - [ ] 2–4 way choices use `SegmentedControl`
 - [ ] Tag pills use `Tag`, filter pills use `FilterChip`, number pills use `CountBadge`
 - [ ] No hand-made floating panel (use `Popover`, `Dropdown` or `ContextMenu`)

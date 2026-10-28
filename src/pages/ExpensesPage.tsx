@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { Plus, Paperclip, Eye, ChevronRight, Upload, Trash2, CheckCircle, CalendarCheck, Receipt, Settings2, XCircle, Pencil } from "lucide-react";
-import { Checkbox, Button, DatePicker, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState, Card, Modal, Popover, IconButton, Tag, SectionLabel, Callout, Tooltip } from "../components/ui";
+import { Plus, Paperclip, Eye, Upload, Trash2, CheckCircle, CalendarCheck, Receipt, Settings2, XCircle, Pencil } from "lucide-react";
+import { Button, DatePicker, Input, Select, FormField, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, Card, Modal, Popover, IconButton, Tag, Callout, Tooltip } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
@@ -125,13 +125,14 @@ export function ExpensesPage() {
     (exp: Expense, pos: { x: number; y: number }) => setCtxMenu({ ...pos, item: exp }),
     []
   );
+  const openExpenseMenu = useCallback((exp: Expense) => {
+    const el = document.querySelectorAll("[data-list-row]")[rowIdxById.get(exp.id) ?? 0];
+    const r = el?.getBoundingClientRect();
+    openRowMenu(exp, { x: r ? r.left + 32 : 80, y: r ? r.bottom : 80 });
+  }, [openRowMenu, rowIdxById]);
   const { focusIdx } = useListNavigation({
     items: visibleRows,
-    onOpen: useCallback((exp: Expense) => {
-      const el = document.querySelectorAll("[data-list-row]")[rowIdxById.get(exp.id) ?? 0];
-      const r = el?.getBoundingClientRect();
-      openRowMenu(exp, { x: r ? r.left + 32 : 80, y: r ? r.bottom : 80 });
-    }, [openRowMenu, rowIdxById]),
+    onOpen: openExpenseMenu,
     onMenu: openRowMenu,
     enabled: preview === null,
   });
@@ -186,7 +187,7 @@ export function ExpensesPage() {
       <PageHeader title={t.expenses}>
         <Button icon={<Plus size={12} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
       </PageHeader>
-      <TableSkeleton columns={7} />
+      <TableSkeleton columns={9} />
     </div>
   );
 
@@ -266,129 +267,107 @@ export function ExpensesPage() {
         />
       )}
 
-      <div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[var(--color-border-header)]">
-              <th className="w-8 px-2 py-2">
-                <Checkbox checked={bulk.isAllSelected} indeterminate={bulk.selected.size > 0 && !bulk.isAllSelected} onChange={bulk.toggleAll} />
-              </th>
-              <th className="w-8" />
-              <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
-              <SortHeader label={t.supplier} sortKey="supplier" current={sort} onSort={setSort} />
-              <SortHeader label={t.category} sortKey="category_code" current={sort} onSort={setSort} />
-              <SortHeader label={t.date} sortKey="invoice_date" current={sort} onSort={setSort} />
-              <SortHeader label={t.paid} sortKey="paid_date" current={sort} onSort={setSort} />
-              <th className="px-4 py-2.5 font-medium text-muted text-left">{t.receipt}</th>
-              <SortHeader label={t.amount} sortKey="amount" current={sort} onSort={setSort} align="right" />
-            </tr>
-          </thead>
-          <tbody>
-            {groupedByYear.map(([year, yearExpenses]) => {
-              const isOpen = expandedYears.has(year);
-              const yearTotal = yearExpenses.reduce((s, e) => s + e.amount, 0);
-              return (
-                <React.Fragment key={year}>
-                  <tr
-                    className="border-b border-[var(--color-border-divider)] cursor-pointer hover:bg-[var(--color-hover-row)] rounded-md"
-                    onClick={() => toggleYear(year)}
-                  >
-                    <td colSpan={9} className="px-4 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <ChevronRight
-                          size={14}
-                          className={`text-muted transition-transform ${isOpen ? "rotate-90" : ""}`}
+      <Table>
+        <Table.Head>
+          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} />
+          <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
+          <SortHeader label={t.supplier} sortKey="supplier" current={sort} onSort={setSort} />
+          <SortHeader label={t.category} sortKey="category_code" current={sort} onSort={setSort} />
+          <SortHeader label={t.date} sortKey="invoice_date" current={sort} onSort={setSort} />
+          <SortHeader label={t.paid} sortKey="paid_date" current={sort} onSort={setSort} />
+          <Table.Th>{t.receipt}</Table.Th>
+          <SortHeader label={t.amount} sortKey="amount" current={sort} onSort={setSort} align="right" />
+          <Table.ActionsTh />
+        </Table.Head>
+        <Table.Body>
+          {groupedByYear.map(([year, yearExpenses]) => {
+            const isOpen = expandedYears.has(year);
+            const yearTotal = yearExpenses.reduce((s, e) => s + e.amount, 0);
+            return (
+              <React.Fragment key={year}>
+                <Table.Group
+                  colSpan={9}
+                  label={year}
+                  count={`${yearExpenses.length} ${yearExpenses.length !== 1 ? t.expenses_count_plural : t.expenses_count_singular}`}
+                  total={`CHF ${yearTotal.toFixed(2)}`}
+                  open={isOpen}
+                  onToggle={() => toggleYear(year)}
+                />
+                {isOpen &&
+                  yearExpenses.map((exp) => (
+                    <Table.Row
+                      key={exp.id}
+                      data-list-row
+                      focused={rowIdxById.get(exp.id) === focusIdx}
+                      selected={bulk.selected.has(exp.id)}
+                      onOpen={(e) => openRowMenu(exp, { x: e.clientX, y: e.clientY })}
+                      onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: exp }); }}
+                    >
+                      <Table.Select checked={bulk.selected.has(exp.id)} onToggle={(shift) => bulk.toggleItem(exp.id, shift)} />
+                      <Table.Td className="font-medium">{exp.reference}</Table.Td>
+                      <Table.Td>{exp.supplier}</Table.Td>
+                      <Table.Td>
+                        <Tag name={exp.category_code} color={categoryMap.get(exp.category_code)?.color || undefined} />
+                        <span className="ml-1 text-xs text-muted">{categoryName(exp.category_code)}</span>
+                      </Table.Td>
+                      <Table.Td muted>{formatDisplayDate(exp.invoice_date)}</Table.Td>
+                      <Table.Td className={exp.paid_date ? "text-[var(--color-success-text)]" : "text-[var(--color-danger-text)]"}>
+                        {exp.paid_date ? formatDisplayDate(exp.paid_date) : "\u2014"}
+                      </Table.Td>
+                      <Table.Td>
+                        {exp.receipt_path ? (
+                          <div className="flex items-center gap-2">
+                            <Tooltip content={t.preview_receipt}>
+                              <Button
+                                variant="link"
+                                icon={<Eye size={12} />}
+                                onClick={() => setPreview({ path: exp.receipt_path!, reference: exp.reference })}
+                              >
+                                {t.view}
+                              </Button>
+                            </Tooltip>
+                            <span className="text-xs text-success flex items-center gap-1">
+                              <Paperclip size={12} />
+                            </span>
+                          </div>
+                        ) : (
+                          <Button
+                            variant="link"
+                            icon={<Paperclip size={12} />}
+                            onClick={() => attachReceipt(exp.id, exp.reference, exp.supplier)}
+                          >
+                            {t.attach}
+                          </Button>
+                        )}
+                      </Table.Td>
+                      <Table.Td numeric className="font-medium">
+                        CHF {exp.amount.toFixed(2)}
+                      </Table.Td>
+                      <Table.Actions>
+                        <IconButton size="xs"
+                          icon={Settings2}
+                          label={t.more_actions}
+                          onClick={(e) => setCtxMenu({ x: e.clientX, y: e.clientY, item: exp })}
                         />
-                        <SectionLabel as="span">{year}</SectionLabel>
-                        <span className="text-xs text-muted">
-                          {yearExpenses.length} {yearExpenses.length !== 1 ? t.expenses_count_plural : t.expenses_count_singular}
-                        </span>
-                        <span className="ml-auto text-sm font-medium">
-                          CHF {yearTotal.toFixed(2)}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                  {isOpen &&
-                    yearExpenses.map((exp) => (
-                      <tr
-                        key={exp.id}
-                        data-list-row
-                        className={`border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md group${rowIdxById.get(exp.id) === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
-                        onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: exp }); }}
-                      >
-                        <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                          <Checkbox
-                            checked={bulk.selected.has(exp.id)}
-                            onChange={(e) => bulk.toggleItem(exp.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-                          />
-                        </td>
-                        <td className="w-8 px-1">
-                          <IconButton size="xs"
-                            icon={Settings2}
-                            label={t.more_actions}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCtxMenu({ x: e.clientX, y: e.clientY, item: exp });
-                            }}
-                          />
-                        </td>
-                        <td className="px-4 py-2.5 font-medium">{exp.reference}</td>
-                        <td className="px-4 py-2.5">{exp.supplier}</td>
-                        <td className="px-4 py-2.5">
-                          <Tag name={exp.category_code} color={categoryMap.get(exp.category_code)?.color || undefined} />
-                          <span className="ml-1 text-xs text-muted">{categoryName(exp.category_code)}</span>
-                        </td>
-                        <td className="px-4 py-2.5 text-muted">{formatDisplayDate(exp.invoice_date)}</td>
-                        <td className={`px-4 py-2.5 ${exp.paid_date ? "text-[var(--color-success-text)]" : "text-[var(--color-danger-text)]"}`}>
-                          {exp.paid_date ? formatDisplayDate(exp.paid_date) : "\u2014"}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          {exp.receipt_path ? (
-                            <div className="flex items-center gap-2">
-                              <Tooltip content={t.preview_receipt}>
-                                <Button
-                                  variant="link"
-                                  icon={<Eye size={12} />}
-                                  onClick={() => setPreview({ path: exp.receipt_path!, reference: exp.reference })}
-                                >
-                                  {t.view}
-                                </Button>
-                              </Tooltip>
-                              <span className="text-xs text-success flex items-center gap-1">
-                                <Paperclip size={12} />
-                              </span>
-                            </div>
-                          ) : (
-                            <Button
-                              variant="link"
-                              icon={<Paperclip size={12} />}
-                              onClick={() => attachReceipt(exp.id, exp.reference, exp.supplier)}
-                            >
-                              {t.attach}
-                            </Button>
-                          )}
-                        </td>
-                        <td className="px-4 py-2.5 text-right font-medium">
-                          CHF {exp.amount.toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-        {filtered.length === 0 && !isLoading && (
-          <EmptyState
-            message={(expenses?.length ?? 0) === 0 ? (t.no_expenses_yet ?? "No expenses yet") : (t.no_matching_expenses ?? "No matching expenses")}
-            icon={<Receipt size={32} />}
-            action={(expenses?.length ?? 0) === 0 ? (
-              <Button icon={<Plus size={12} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
-            ) : undefined}
-          />
-        )}
-      </div>
+                      </Table.Actions>
+                    </Table.Row>
+                  ))}
+              </React.Fragment>
+            );
+          })}
+          {filtered.length === 0 && !isLoading && (
+            <Table.Empty colSpan={9}>
+              <EmptyState
+                message={(expenses?.length ?? 0) === 0 ? (t.no_expenses_yet ?? "No expenses yet") : (t.no_matching_expenses ?? "No matching expenses")}
+                icon={<Receipt size={32} />}
+                action={(expenses?.length ?? 0) === 0 ? (
+                  <Button icon={<Plus size={12} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
+                ) : undefined}
+              />
+            </Table.Empty>
+          )}
+        </Table.Body>
+      </Table>
 
       {preview && (
         <ReceiptPreview

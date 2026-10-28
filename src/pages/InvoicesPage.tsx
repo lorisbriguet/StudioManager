@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Eye, ChevronRight, Pencil, Trash2, CheckCircle, Send, Repeat, RefreshCw, X, AlertTriangle, ExternalLink, FileText, Settings2, Download, Mail } from "lucide-react";
+import { Plus, Eye, Pencil, Trash2, CheckCircle, Send, Repeat, RefreshCw, X, AlertTriangle, ExternalLink, FileText, Settings2, Download, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { ask } from "@tauri-apps/plugin-dialog";
@@ -33,7 +33,7 @@ import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { Checkbox, PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Card, Modal, FormField, DatePicker, Select, IconButton, CountBadge, SectionLabel, Toggle } from "../components/ui";
+import { PageHeader, SearchBar, Table, TableSkeleton, Button, EmptyState, Card, Modal, FormField, DatePicker, Select, IconButton, CountBadge, Toggle } from "../components/ui";
 import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
 import { isDraftReference } from "../types/invoice";
 import type { Invoice, InvoiceStatus } from "../types/invoice";
@@ -248,9 +248,10 @@ export function InvoicesPage() {
     () => new Map(visibleRows.map((r, i) => [r.id, i])),
     [visibleRows]
   );
+  const openInvoice = useCallback((inv: Invoice) => navigate(`/invoices/${inv.id}/edit`), [navigate]);
   const { focusIdx } = useListNavigation({
     items: visibleRows,
-    onOpen: useCallback((inv: (typeof visibleRows)[0]) => navigate(`/invoices/${inv.id}/edit`), [navigate]),
+    onOpen: openInvoice,
     onMenu: useCallback((inv: (typeof visibleRows)[0], pos: { x: number; y: number }) => setCtxMenu({ ...pos, item: inv }), []),
   });
 
@@ -467,7 +468,7 @@ export function InvoicesPage() {
   if (isLoading) return (
     <div>
       {header}
-      <TableSkeleton columns={6} />
+      <TableSkeleton columns={7} />
     </div>
   );
 
@@ -498,31 +499,29 @@ export function InvoicesPage() {
               <p className="text-sm text-muted mt-1">{t.recurring_empty_hint}</p>
             </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--color-border-header)] text-left text-xs text-muted">
-                  <th className="py-2 pr-2">{t.base_invoice}</th>
-                  <th className="py-2 pr-2">{t.client}</th>
-                  <th className="py-2 pr-2 text-right">{t.amount}</th>
-                  <th className="py-2 pr-2">{t.frequency}</th>
-                  <th className="py-2 pr-2">{t.next_due}</th>
-                  <th className="py-2 pr-2">{t.status}</th>
-                  <th className="py-2 w-16" />
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <Table.Head>
+                <Table.Th>{t.base_invoice}</Table.Th>
+                <Table.Th>{t.client}</Table.Th>
+                <Table.Th numeric>{t.amount}</Table.Th>
+                <Table.Th>{t.frequency}</Table.Th>
+                <Table.Th>{t.next_due}</Table.Th>
+                <Table.Th>{t.status}</Table.Th>
+                <Table.ActionsTh />
+              </Table.Head>
+              <Table.Body>
                 {templates.map((tmpl) => {
                   const baseInv = invoices?.find((i) => i.id === tmpl.base_invoice_id);
                   return (
-                  <tr key={tmpl.id} className="border-b border-[var(--color-border-divider)]">
-                    <td className="py-2 pr-2">
+                  <Table.Row key={tmpl.id}>
+                    <Table.Td>
                       {baseInv ? (isDraftReference(baseInv.reference) ? t.draft : baseInv.reference) : `#${tmpl.base_invoice_id}`}
-                    </td>
-                    <td className="py-2 pr-2">{clientsMap.get(tmpl.client_id) ?? tmpl.client_id}</td>
-                    <td className="py-2 pr-2 text-right">
+                    </Table.Td>
+                    <Table.Td>{clientsMap.get(tmpl.client_id) ?? tmpl.client_id}</Table.Td>
+                    <Table.Td numeric>
                       {baseInv ? `CHF ${(baseInv.chf_equivalent ?? baseInv.total).toFixed(2)}` : "—"}
-                    </td>
-                    <td className="py-2 pr-2">
+                    </Table.Td>
+                    <Table.Td>
                       <Select
                         value={tmpl.frequency}
                         onChange={(e) =>
@@ -534,18 +533,19 @@ export function InvoicesPage() {
                           <option key={f} value={f}>{t[f] ?? f}</option>
                         ))}
                       </Select>
-                    </td>
-                    <td className="py-2 pr-2 text-muted">{formatDisplayDate(tmpl.next_due)}</td>
-                    <td className="py-2 pr-2">
+                    </Table.Td>
+                    <Table.Td muted>{formatDisplayDate(tmpl.next_due)}</Table.Td>
+                    <Table.Td>
                       <Toggle
                         size="sm"
                         checked={!!tmpl.active}
                         onChange={(on) => updateTemplate.mutate({ id: tmpl.id, data: { active: on ? 1 : 0 } })}
                         ariaLabel={t.active}
                       />
-                    </td>
-                    <td className="py-2 text-right">
-                      <IconButton size="xs"
+                    </Table.Td>
+                    <Table.Actions>
+                      <IconButton
+                        size="xs"
                         icon={Trash2}
                         label={t.delete_template}
                         tone="danger"
@@ -556,12 +556,12 @@ export function InvoicesPage() {
                           });
                         }}
                       />
-                    </td>
-                  </tr>
+                    </Table.Actions>
+                  </Table.Row>
                   );
                 })}
-              </tbody>
-            </table>
+              </Table.Body>
+            </Table>
           )}
         </Card>
       )}
@@ -581,77 +581,45 @@ export function InvoicesPage() {
         fields={invoiceFields}
       />
 
-      <div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[var(--color-border-header)]">
-              <th className="w-8 px-2 py-2">
-                <Checkbox checked={bulk.isAllSelected} indeterminate={bulk.selected.size > 0 && !bulk.isAllSelected} onChange={bulk.toggleAll} />
-              </th>
-              <th className="w-8" />
-              <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
-              <SortHeader label={t.client} sortKey="client_name" current={sort} onSort={setSort} />
-              <SortHeader label={t.date} sortKey="invoice_date" current={sort} onSort={setSort} />
-              <SortHeader label={t.status} sortKey="status" current={sort} onSort={setSort} />
-              <SortHeader label={t.amount} sortKey="total" current={sort} onSort={setSort} align="right" />
-            </tr>
-          </thead>
-          <tbody>
+      <Table>
+        <Table.Head>
+          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} />
+          <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
+          <SortHeader label={t.client} sortKey="client_name" current={sort} onSort={setSort} />
+          <SortHeader label={t.date} sortKey="invoice_date" current={sort} onSort={setSort} />
+          <SortHeader label={t.status} sortKey="status" current={sort} onSort={setSort} />
+          <SortHeader label={t.amount} sortKey="total" current={sort} onSort={setSort} align="right" />
+          <Table.ActionsTh />
+        </Table.Head>
+        <Table.Body>
             {groupedByYear.map(([year, yearInvoices]) => {
               const isOpen = expandedYears.has(year);
               const yearTotal = yearInvoices.reduce((s, i) => i.status === "cancelled" ? s : s + (i.chf_equivalent ?? i.total), 0);
               return (
                 <React.Fragment key={year}>
-                  <tr
-                    className="border-b border-[var(--color-border-divider)] cursor-pointer hover:bg-[var(--color-hover-row)] rounded-md"
-                    onClick={() => toggleYear(year)}
-                  >
-                    <td colSpan={7} className="px-4 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <ChevronRight
-                          size={14}
-                          className={`text-muted transition-transform ${isOpen ? "rotate-90" : ""}`}
-                        />
-                        <SectionLabel as="span">{year}</SectionLabel>
-                        <span className="text-xs text-muted">
-                          {yearInvoices.length} {yearInvoices.length !== 1 ? t.invoices_count_plural : t.invoices_count_singular}
-                        </span>
-                        <span className="ml-auto text-sm font-medium">
-                          CHF {yearTotal.toFixed(2)}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
+                  <Table.Group
+                    colSpan={7}
+                    label={year}
+                    count={`${yearInvoices.length} ${yearInvoices.length !== 1 ? t.invoices_count_plural : t.invoices_count_singular}`}
+                    total={`CHF ${yearTotal.toFixed(2)}`}
+                    open={isOpen}
+                    onToggle={() => toggleYear(year)}
+                  />
                   {isOpen &&
                     yearInvoices.map((inv) => (
-                      <tr
+                      <Table.Row
                         key={inv.id}
                         data-list-row
-                        className={`border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md group${rowIdxById.get(inv.id) === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
+                        focused={rowIdxById.get(inv.id) === focusIdx}
+                        selected={bulk.selected.has(inv.id)}
+                        onOpen={() => openInvoice(inv)}
                         onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: inv }); }}
                       >
-                        <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                          <Checkbox
-                            checked={bulk.selected.has(inv.id)}
-                            onChange={(e) => bulk.toggleItem(inv.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-                          />
-                        </td>
-                        <td className="w-8 px-1">
-                          <IconButton size="xs"
-                            icon={Settings2}
-                            label={t.more_actions}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCtxMenu({ x: e.clientX, y: e.clientY, item: inv });
-                            }}
-                          />
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <span>{inv.reference.startsWith("DRAFT") ? t.draft : inv.reference}</span>
-                        </td>
-                        <td className="px-4 py-2.5">{inv.client_name}</td>
-                        <td className="px-4 py-2.5 text-muted">{formatDisplayDate(inv.invoice_date)}</td>
-                        <td className="px-4 py-2.5">
+                        <Table.Select checked={bulk.selected.has(inv.id)} onToggle={(shift) => bulk.toggleItem(inv.id, shift)} />
+                        <Table.Td>{inv.reference.startsWith("DRAFT") ? t.draft : inv.reference}</Table.Td>
+                        <Table.Td>{inv.client_name}</Table.Td>
+                        <Table.Td muted>{formatDisplayDate(inv.invoice_date)}</Table.Td>
+                        <Table.Td>
                           <Select
                             value={inv.status}
                             onChange={(e) => {
@@ -683,8 +651,8 @@ export function InvoicesPage() {
                             <option value="overdue">{t.overdue}</option>
                             <option value="cancelled">{t.cancelled}</option>
                           </Select>
-                        </td>
-                        <td className="px-4 py-2.5 text-right font-medium">
+                        </Table.Td>
+                        <Table.Td numeric className="font-medium">
                           {inv.status === "cancelled" ? (
                             <span className="text-muted">CHF 0.00</span>
                           ) : inv.currency && inv.currency !== "CHF" ? (
@@ -696,26 +664,35 @@ export function InvoicesPage() {
                           ) : (
                             <span>CHF {inv.total.toFixed(2)}</span>
                           )}
-                        </td>
-                      </tr>
+                        </Table.Td>
+                        <Table.Actions>
+                          <IconButton
+                            size="xs"
+                            icon={Settings2}
+                            label={t.more_actions}
+                            onClick={(e) => setCtxMenu({ x: e.clientX, y: e.clientY, item: inv })}
+                          />
+                        </Table.Actions>
+                      </Table.Row>
                     ))}
                 </React.Fragment>
               );
             })}
-          </tbody>
-        </table>
-        {filtered.length === 0 && (
-          <EmptyState
-            message={(invoices?.length ?? 0) === 0 ? t.no_invoices_yet : t.no_matching_invoices}
-            icon={<FileText size={32} />}
-            action={(invoices?.length ?? 0) === 0 ? (
-              <Button icon={<Plus size={12} />} onClick={() => navigate("/invoices/new")}>
-                {t.new_invoice}
-              </Button>
-            ) : undefined}
-          />
-        )}
-      </div>
+            {filtered.length === 0 && (
+              <Table.Empty colSpan={7}>
+                <EmptyState
+                  message={(invoices?.length ?? 0) === 0 ? t.no_invoices_yet : t.no_matching_invoices}
+                  icon={<FileText size={32} />}
+                  action={(invoices?.length ?? 0) === 0 ? (
+                    <Button icon={<Plus size={12} />} onClick={() => navigate("/invoices/new")}>
+                      {t.new_invoice}
+                    </Button>
+                  ) : undefined}
+                />
+              </Table.Empty>
+            )}
+        </Table.Body>
+      </Table>
       {ctxMenu && (
         <ContextMenu
           x={ctxMenu.x}

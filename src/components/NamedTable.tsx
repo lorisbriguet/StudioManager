@@ -17,6 +17,7 @@ import { useT } from "../i18n/useT";
 import { toast } from "sonner";
 import type { ProjectTable, TableColumnDef, ProjectTableRow } from "../types/project-table";
 import { IconButton } from "./ui/IconButton";
+import { Table } from "./ui/Table";
 
 interface Props {
   table: ProjectTable;
@@ -209,14 +210,13 @@ export function NamedTable({ table, projectId }: Props) {
 
       {!collapsed && (
         <>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--color-border-header)]">
-                <th className="w-6 px-1" />
-                {cols.map((col) => (
-                  <th
+          <Table density="compact">
+            <Table.Head>
+              <Table.Th narrow />
+              {cols.map((col) => (
+                  <Table.Th
                     key={col.id}
-                    className="px-3 py-1.5 text-left text-xs text-muted relative"
+                    className="relative"
                     style={{ width: col.width ?? 150 }}
                   >
                     <button
@@ -250,9 +250,10 @@ export function NamedTable({ table, projectId }: Props) {
                         onCommit={commitColEdit}
                       />
                     )}
-                  </th>
-                ))}
-                <th className="w-10">
+                  </Table.Th>
+              ))}
+              {/* The actions column: "add column" in its header, row actions below. */}
+              <Table.ActionsTh>
                   <Dropdown
                     align="end"
                     trigger={
@@ -263,18 +264,16 @@ export function NamedTable({ table, projectId }: Props) {
                       onSelect: () => addColumn(type),
                     }))}
                   />
-                </th>
-                <th className="w-8" />
-              </tr>
-            </thead>
-            <tbody>
+              </Table.ActionsTh>
+            </Table.Head>
+            <Table.Body>
               {(rows ?? []).map((row) => (
-                <tr key={row.id} className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] group">
-                  <td className="w-6 px-1">
+                <Table.Row key={row.id}>
+                  <Table.Td narrow>
                     <DragHandle size={12} />
-                  </td>
+                  </Table.Td>
                   {cols.map((col) => (
-                    <td key={col.id} className="px-3 py-1.5" style={{ width: col.width ?? 150 }}>
+                    <Table.Td key={col.id} style={{ width: col.width ?? 150 }}>
                       <TableCell
                         row={row}
                         col={col}
@@ -287,16 +286,15 @@ export function NamedTable({ table, projectId }: Props) {
                         onCancelEdit={() => setEditingCell(null)}
                         onChange={(data) => updateRow.mutate({ id: row.id, data })}
                       />
-                    </td>
+                    </Table.Td>
                   ))}
-                  <td className="w-10" />
-                  <td className="w-8 text-right pr-2">
-                    <IconButton icon={Trash2} label={t.delete} size="xs" tone="danger" reveal onClick={() => deleteRow.mutate(row.id)} />
-                  </td>
-                </tr>
+                  <Table.Actions>
+                    <IconButton icon={Trash2} label={t.delete} size="xs" tone="danger" onClick={() => deleteRow.mutate(row.id)} />
+                  </Table.Actions>
+                </Table.Row>
               ))}
-            </tbody>
-          </table>
+            </Table.Body>
+          </Table>
           <Button
             variant="link"
             icon={<Plus size={12} />}

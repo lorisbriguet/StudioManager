@@ -38,6 +38,15 @@ import { evaluateFormula } from "../../lib/formulaEval";
 import { useT } from "../../i18n/useT";
 import { useTimerActions } from "../../hooks/useTimerActions";
 import { IconButton } from "../ui/IconButton";
+import { Table } from "../ui/Table";
+import { MUTED_INTERACTIVE, TABLE_ROW_H, TABLE_TH, TABLE_X } from "../ui/tokens";
+
+/** Header cells open the column menu on click. */
+const HEADER_BUTTON = `cursor-pointer ${MUTED_INTERACTIVE}`;
+/** "Pin first column": the drag handle (w-8) and the task column stay put. */
+const STICKY_HANDLE = "sticky left-0 z-10 bg-[var(--color-surface)]";
+const STICKY_TASK = "sticky left-8 z-10 bg-[var(--color-surface)]";
+
 
 interface Props {
   projectId: number;
@@ -451,15 +460,13 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
       {/* Table */}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
-      <div className="overflow-x-auto">
-          <table className="text-sm" style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}>
-            <thead>
-              <tr className="border-b border-[var(--color-border-header)] select-none">
+          <Table density="compact" style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}>
+            <Table.Head>
                 {/* Drag handle column */}
-                <th className={`w-8 px-2 ${stickyFirstCol ? "sticky left-0 z-10 bg-[var(--color-surface)]" : ""}`} />
+                <th className={`${TABLE_TH} w-8 px-2 ${stickyFirstCol ? STICKY_HANDLE : ""}`} />
                 {/* System: Task */}
-                <th
-                  className={`relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-[var(--color-text-secondary)] select-none ${stickyFirstCol ? "sticky left-8 z-10 bg-[var(--color-surface)]" : ""}`}
+                <Table.Th
+                  className={`relative ${HEADER_BUTTON} ${stickyFirstCol ? STICKY_TASK : ""}`}
                   style={{ width: taskColWidth, minWidth: 80 }}
                   onClick={(e) => {
                     headerMenuAnchorRef.current = e.currentTarget;
@@ -477,10 +484,11 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                     onPointerDown={(e) => { e.stopPropagation(); onTaskColResizeStart(e); }}
                     className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-accent/30 active:bg-accent/50"
                   />
-                </th>
+                </Table.Th>
                 {/* System: Duration */}
-                <th
-                  className="relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-[var(--color-text-secondary)] select-none"
+                <Table.Th
+                  numeric
+                  className={`relative ${HEADER_BUTTON}`}
                   style={{ width: 90, minWidth: 60 }}
                   onClick={(e) => {
                     headerMenuAnchorRef.current = e.currentTarget;
@@ -489,14 +497,15 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                     );
                   }}
                 >
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center justify-end gap-1">
+                    {sortKey === "__duration" && (sortDir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
                     <span className="truncate">{t.duration}</span>
-                    {sortKey === "__duration" && <span className="ml-auto">{sortDir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />}</span>}
                   </div>
-                </th>
+                </Table.Th>
                 {/* System: Planned */}
-                <th
-                  className="relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-[var(--color-text-secondary)] select-none"
+                <Table.Th
+                  numeric
+                  className={`relative ${HEADER_BUTTON}`}
                   style={{ width: 90, minWidth: 60 }}
                   onClick={(e) => {
                     headerMenuAnchorRef.current = e.currentTarget;
@@ -505,18 +514,18 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                     );
                   }}
                 >
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center justify-end gap-1">
+                    {sortKey === "__planned" && (sortDir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
                     <span className="truncate">{t.planned}</span>
-                    {sortKey === "__planned" && <span className="ml-auto">{sortDir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />}</span>}
                   </div>
-                </th>
+                </Table.Th>
                 {/* Custom columns */}
                 {columns.map((col, ci) => {
                   const w = getColWidth(col);
                   return (
-                    <th
+                    <Table.Th
                       key={`${col.key}_${ci}`}
-                      className="relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-[var(--color-text-secondary)] select-none"
+                      className={`relative ${HEADER_BUTTON}`}
                       style={{ width: w, minWidth: 24 }}
                       onClick={(e) => {
                         headerMenuAnchorRef.current = e.currentTarget;
@@ -547,13 +556,12 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                         }}
                         className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-accent/30 active:bg-accent/50"
                       />
-                    </th>
+                    </Table.Th>
                   );
                 })}
-                <th className="w-14" />
-              </tr>
-            </thead>
-            <tbody>
+                <Table.ActionsTh />
+            </Table.Head>
+            <Table.Body>
               {sortedRows.map((row) => (
                 <SortableRow
                   key={row.id}
@@ -573,48 +581,40 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                   toggleTimer={toggleTimer}
                 />
               ))}
-              {/* Summary row */}
-              {summaryRow && sortedRows.length > 0 && (
-                <tr className="border-t border-[var(--color-border-header)] font-medium">
-                  <td className={`${stickyFirstCol ? "sticky left-0 z-10 bg-[var(--color-surface)]" : ""}`} />
-                  {/* System: Task total label */}
-                  <td className={`px-4 py-2 text-sm ${stickyFirstCol ? "sticky left-8 z-10 bg-[var(--color-surface)]" : ""}`}>
-                    <span className="text-muted">{t.total}</span>
-                  </td>
-                  {/* System: Duration total */}
-                  <td className="px-4 py-2 text-sm text-right">
-                    {fmtMin(summaryRow.__duration)}
-                  </td>
-                  {/* System: Planned total */}
-                  <td className="px-4 py-2 text-sm text-right">
-                    {fmtMin(summaryRow.__planned)}
-                  </td>
-                  {/* Custom columns */}
-                  {columns.map((col, ci) => (
-                    <td
-                      key={`${col.key}_${ci}`}
-                      className="px-4 py-2 text-sm"
-                    >
-                      {(col.type === "number" || col.type === "formula") && summaryRow[col.key] !== undefined ? (
-                        <span className="block text-right">
-                          {Math.round(summaryRow[col.key] * 100) / 100}
-                        </span>
-                      ) : null}
-                    </td>
-                  ))}
-                  <td />
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            </Table.Body>
+            {/* Summary row */}
+            {summaryRow && sortedRows.length > 0 && (
+              <Table.Foot>
+                <td className={stickyFirstCol ? STICKY_HANDLE : ""} />
+                {/* System: Task total label */}
+                <Table.Td muted className={stickyFirstCol ? STICKY_TASK : ""}>
+                  {t.total}
+                </Table.Td>
+                {/* System: Duration total */}
+                <Table.Td numeric>{fmtMin(summaryRow.__duration)}</Table.Td>
+                {/* System: Planned total */}
+                <Table.Td numeric>{fmtMin(summaryRow.__planned)}</Table.Td>
+                {/* Custom columns */}
+                {columns.map((col, ci) =>
+                  (col.type === "number" || col.type === "formula") && summaryRow[col.key] !== undefined ? (
+                    <Table.Td key={`${col.key}_${ci}`} numeric>
+                      {Math.round(summaryRow[col.key] * 100) / 100}
+                    </Table.Td>
+                  ) : (
+                    <Table.Td key={`${col.key}_${ci}`} />
+                  )
+                )}
+                <td />
+              </Table.Foot>
+            )}
+          </Table>
 
         {/* Add row button */}
         <Button
           variant="link"
           icon={<Plus size={12} />}
           onClick={handleAddRow}
-          className="w-full px-4 py-2 text-muted hover:text-accent hover:no-underline! hover:bg-[var(--color-hover-row)] border-t border-[var(--color-border-divider)]"
+          className={`w-full ${TABLE_X.compact} py-2 text-muted hover:text-accent hover:no-underline! hover:bg-[var(--color-hover-row)] border-t border-[var(--color-border-divider)]`}
         >
           {t.new_row}
         </Button>
@@ -829,22 +829,14 @@ function SortableRow({
   const isTimerActive = activeTimer?.taskId === row.id;
 
   return (
-    <tr
-      ref={setNodeRef}
-      style={style}
-      className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] group/row"
-    >
+    <Table.Row ref={setNodeRef} style={style}>
       {/* Drag handle */}
-      <td className={`${stickyFirstCol ? "sticky left-0 z-10" : ""} bg-inherit`}>
-        <DragHandle
-          {...attributes}
-          {...listeners}
-          className="flex items-center justify-center w-full h-full min-h-[32px] opacity-0 group-hover/row:opacity-50"
-        />
+      <td className={`${TABLE_ROW_H.compact} px-2 align-middle bg-inherit ${stickyFirstCol ? "sticky left-0 z-10" : ""}`}>
+        <DragHandle {...attributes} {...listeners} reveal="row" className="flex items-center justify-center" />
       </td>
 
-      {/* System: Task title + timer button */}
-      <td className={`px-4 py-2 ${stickyFirstCol ? "sticky left-8 z-10 bg-inherit" : ""}`} style={{ width: taskColWidth }}>
+      {/* System: Task title + timer button (the timer stays visible while it runs) */}
+      <Table.Td className={stickyFirstCol ? "sticky left-8 z-10 bg-inherit" : ""} style={{ width: taskColWidth }}>
         <div className="flex items-center gap-1">
           <IconButton
             icon={isTimerActive ? Square : Play}
@@ -852,7 +844,7 @@ function SortableRow({
             size="xs"
             color={isTimerActive ? "danger" : undefined}
             tone={isTimerActive ? "danger" : "accent"}
-            className={isTimerActive ? "" : "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"}
+            reveal={isTimerActive ? false : "row"}
             onClick={() => toggleTimer(row.id, projectId)}
           />
           <InlineTitle
@@ -860,31 +852,30 @@ function SortableRow({
             onChange={(v) => handleSystemChange(row, "title", v)}
           />
         </div>
-      </td>
+      </Table.Td>
 
       {/* System: Duration (tracked_minutes) */}
-      <td className="px-4 py-2" style={{ width: 90 }}>
+      <Table.Td numeric style={{ width: 90 }}>
         <InlineDuration
           value={row.tracked_minutes}
           isTimerActive={isTimerActive}
           timerStartedAt={isTimerActive ? activeTimer!.startedAt : undefined}
           onChange={(v) => handleSystemChange(row, "tracked_minutes", v)}
         />
-      </td>
+      </Table.Td>
 
       {/* System: Planned (planned_minutes) */}
-      <td className="px-4 py-2" style={{ width: 90 }}>
+      <Table.Td numeric style={{ width: 90 }}>
         <InlineDuration
           value={row.planned_minutes ?? 0}
           onChange={(v) => handleSystemChange(row, "planned_minutes", v)}
         />
-      </td>
+      </Table.Td>
 
       {/* Custom columns */}
       {columns.map((col, ci) => (
-        <td
+        <Table.Td
           key={`${col.key}_${ci}`}
-          className="px-4 py-2"
           style={{ width: getColWidth(col), minWidth: 24 }}
         >
           <WorkloadCell
@@ -898,17 +889,14 @@ function SortableRow({
                 : undefined
             }
           />
-        </td>
+        </Table.Td>
       ))}
 
-      {/* Row actions */}
-      <td className="px-2 text-center">
-        <div className="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100">
-          <IconButton icon={Copy} label={t.duplicate_row} size="xs" tone="accent" onClick={() => handleDuplicateRow(row)} />
-          <IconButton icon={Trash2} label={t.delete} size="xs" tone="danger" onClick={() => deleteRow.mutate(row.id)} />
-        </div>
-      </td>
-    </tr>
+      <Table.Actions>
+        <IconButton icon={Copy} label={t.duplicate_row} size="xs" tone="accent" onClick={() => handleDuplicateRow(row)} />
+        <IconButton icon={Trash2} label={t.delete} size="xs" tone="danger" onClick={() => deleteRow.mutate(row.id)} />
+      </Table.Actions>
+    </Table.Row>
   );
 }
 

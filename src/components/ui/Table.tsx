@@ -1,4 +1,4 @@
-import { createContext, useContext, type HTMLAttributes, type MouseEvent, type ReactNode, type TdHTMLAttributes, type ThHTMLAttributes } from "react";
+import { createContext, useContext, type HTMLAttributes, type MouseEvent, type ReactNode, type Ref, type TdHTMLAttributes, type ThHTMLAttributes } from "react";
 import { ChevronRight } from "lucide-react";
 import { Checkbox } from "./Checkbox";
 import { SectionLabel } from "./SectionLabel";
@@ -53,14 +53,18 @@ function Head({ children, className = "" }: { children: ReactNode; className?: s
   );
 }
 
+/** A column as narrow as its content (drag handles, icons): 8px sides, no wrapping. */
+const NARROW = "w-px px-2 whitespace-nowrap";
+
 interface ThProps extends ThHTMLAttributes<HTMLTableCellElement> {
   numeric?: boolean;
+  narrow?: boolean;
 }
 
-function Th({ numeric, className = "", children, ...rest }: ThProps) {
+function Th({ numeric, narrow, className = "", children, ...rest }: ThProps) {
   const d = useTableDensity();
   return (
-    <th className={`${TABLE_TH} ${TABLE_X[d]} ${numeric ? "text-right" : "text-left"} ${className}`} {...rest}>
+    <th className={`${TABLE_TH} ${narrow ? NARROW : TABLE_X[d]} ${numeric ? "text-right" : "text-left"} ${className}`} {...rest}>
       {children}
     </th>
   );
@@ -74,14 +78,16 @@ function Body({ children, className = "" }: { children: ReactNode; className?: s
 const OWN_CLICK = 'a, button, input, select, textarea, label, [role="button"], [role="checkbox"], [role="switch"], [contenteditable="true"], [data-no-row-click]';
 
 interface RowProps extends HTMLAttributes<HTMLTableRowElement> {
-  /** A single click anywhere on the row (outside its controls) opens it. */
-  onOpen?: () => void;
+  /** A single click anywhere on the row (outside its controls) opens it. Gets the click, e.g. to open a menu at the cursor. */
+  onOpen?: (e: MouseEvent<HTMLTableRowElement>) => void;
   selected?: boolean;
   /** Keyboard focus from useListNavigation. */
   focused?: boolean;
+  /** For drag-and-drop (dnd-kit setNodeRef). */
+  ref?: Ref<HTMLTableRowElement>;
 }
 
-function Row({ onOpen, selected, focused, className = "", onClick, children, ...rest }: RowProps) {
+function Row({ onOpen, selected, focused, className = "", onClick, children, ref, ...rest }: RowProps) {
   const handleClick = (e: MouseEvent<HTMLTableRowElement>) => {
     onClick?.(e);
     if (!onOpen || e.defaultPrevented) return;
@@ -89,10 +95,11 @@ function Row({ onOpen, selected, focused, className = "", onClick, children, ...
     const own = target.closest(OWN_CLICK);
     if (own && e.currentTarget.contains(own)) return;
     if (window.getSelection()?.toString()) return;
-    onOpen();
+    onOpen(e);
   };
   return (
     <tr
+      ref={ref}
       className={`group/row border-b border-[var(--color-border-divider)] transition-colors ${
         selected ? "bg-accent-tint" : "hover:bg-[var(--color-hover-row)]"
       } ${onOpen ? "cursor-pointer" : ""} ${focused ? "ring-2 ring-accent/40 ring-inset" : ""} ${className}`}
@@ -107,13 +114,14 @@ function Row({ onOpen, selected, focused, className = "", onClick, children, ...
 interface TdProps extends TdHTMLAttributes<HTMLTableCellElement> {
   numeric?: boolean;
   muted?: boolean;
+  narrow?: boolean;
 }
 
-function Td({ numeric, muted, className = "", children, ...rest }: TdProps) {
+function Td({ numeric, muted, narrow, className = "", children, ...rest }: TdProps) {
   const d = useTableDensity();
   return (
     <td
-      className={`${TABLE_ROW_H[d]} ${TABLE_X[d]} py-1 align-middle ${numeric ? NUMERIC : ""} ${muted ? "text-muted" : ""} ${className}`}
+      className={`${TABLE_ROW_H[d]} ${narrow ? NARROW : TABLE_X[d]} py-1 align-middle ${numeric ? NUMERIC : ""} ${muted ? "text-muted" : ""} ${className}`}
       {...rest}
     >
       {children}
@@ -121,12 +129,10 @@ function Td({ numeric, muted, className = "", children, ...rest }: TdProps) {
   );
 }
 
-const NARROW = "w-8 px-2";
-
 /** Header checkbox: selects all, shows "some selected" as indeterminate. */
 function SelectAll({ all, some, onToggle, label }: { all: boolean; some: boolean; onToggle: () => void; label?: string }) {
   return (
-    <th className={`${TABLE_TH} ${NARROW}`}>
+    <th className={`${TABLE_TH} w-8 px-2`}>
       <Checkbox checked={all} indeterminate={some && !all} onChange={onToggle} aria-label={label} />
     </th>
   );
@@ -136,7 +142,7 @@ function SelectAll({ all, some, onToggle, label }: { all: boolean; some: boolean
 function Select({ checked, onToggle, label }: { checked: boolean; onToggle: (shift: boolean) => void; label?: string }) {
   const d = useTableDensity();
   return (
-    <td className={`${TABLE_ROW_H[d]} ${NARROW} align-middle`}>
+    <td className={`${TABLE_ROW_H[d]} w-8 px-2 align-middle`}>
       <Checkbox
         checked={checked}
         aria-label={label}
@@ -146,21 +152,24 @@ function Select({ checked, onToggle, label }: { checked: boolean; onToggle: (shi
   );
 }
 
-/** Empty header over the actions column. */
-function ActionsTh() {
-  return <th className={`${TABLE_TH} w-px px-2`} />;
+/** Header over the actions column: empty, or a column-level action (add column). */
+function ActionsTh({ children }: { children?: ReactNode }) {
+  return <th className={`${TABLE_TH} w-px px-2 text-right`}>{children}</th>;
 }
 
 /**
  * Row actions: always the last column, xs IconButtons, shown on row hover,
- * keyboard focus, or while one of its menus is open.
+ * keyboard focus, or while one of its menus is open. `always` keeps them
+ * visible (Save / Cancel on a row being edited).
  */
-function Actions({ children }: { children?: ReactNode }) {
+function Actions({ children, always }: { children?: ReactNode; always?: boolean }) {
   const d = useTableDensity();
   return (
     <td className={`${TABLE_ROW_H[d]} w-px px-2 align-middle whitespace-nowrap`}>
       <div
-        className={`flex items-center justify-end gap-0.5 ${REVEAL_CLASSES.row} group-focus-within/row:opacity-100 has-[[aria-expanded=true]]:opacity-100`}
+        className={`flex items-center justify-end gap-0.5 ${
+          always ? "" : `${REVEAL_CLASSES.row} group-focus-within/row:opacity-100 has-[[aria-expanded=true]]:opacity-100`
+        }`}
       >
         {children}
       </div>

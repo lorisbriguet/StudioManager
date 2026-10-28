@@ -10,7 +10,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Button, DragHandle, Select, IconButton, Input } from "../ui";
+import { Button, DragHandle, Select, IconButton, Input, Table } from "../ui";
 import { PanelTitle } from "../ui/PanelTitle";
 import type { LineItem } from "../../lib/lineItems";
 import { useT } from "../../i18n/useT";
@@ -96,22 +96,20 @@ export function LineItemsTable({
       )}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={lineItemIds} strategy={verticalListSortingStrategy}>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-muted">
-                <th className="w-12"></th>
-                <th className="text-left pb-2">{t.designation}</th>
-                {!hideRate && <th className="text-right pb-2 w-24">{t.rate}</th>}
-                {!hideRate && <th className="text-left pb-2 w-24">{t.unit}</th>}
-                <th className="text-right pb-2 w-20">{t.qty}</th>
-                <th className="text-right pb-2 w-28">{t.amount}</th>
-                <th className="w-8"></th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table density="compact">
+            <Table.Head>
+              <Table.Th narrow />
+              <Table.Th>{t.designation}</Table.Th>
+              {!hideRate && <Table.Th numeric className="w-24">{t.rate}</Table.Th>}
+              {!hideRate && <Table.Th className="w-24">{t.unit}</Table.Th>}
+              <Table.Th numeric className="w-20">{t.qty}</Table.Th>
+              <Table.Th numeric className="w-28">{t.amount}</Table.Th>
+              <Table.ActionsTh />
+            </Table.Head>
+            <Table.Body>
               {items.map((item, i) => (
                 <SortableLineItemRow key={item._id} id={item._id}>
-                  <td className="py-1 w-12">
+                  <Table.Td narrow>
                     <div className="flex items-center">
                       <SortableLineItemHandle id={item._id} />
                       <div className="flex flex-col">
@@ -119,8 +117,8 @@ export function LineItemsTable({
                         <IconButton size="xs" icon={ChevronDown} label={t.move_down} onClick={() => moveRow(i, i + 1)} disabled={i === items.length - 1} />
                       </div>
                     </div>
-                  </td>
-                  <td className="pr-2 py-1">
+                  </Table.Td>
+                  <Table.Td>
                     {renderDesignation ? (
                       renderDesignation(item, i)
                     ) : (
@@ -130,9 +128,9 @@ export function LineItemsTable({
                         placeholder={t.description}
                       />
                     )}
-                  </td>
+                  </Table.Td>
                   {!hideRate && (
-                    <td className="px-1 py-1">
+                    <Table.Td numeric>
                       <Input
                         type="number"
                         value={item.rate ?? ""}
@@ -140,10 +138,10 @@ export function LineItemsTable({
                         className="text-right"
                         placeholder="0"
                       />
-                    </td>
+                    </Table.Td>
                   )}
                   {!hideRate && (
-                    <td className="px-1 py-1">
+                    <Table.Td>
                       <Select
                         value={item.unit ?? ""}
                         onChange={(e) => onUpdate(i, "unit", e.target.value || null)}
@@ -154,55 +152,64 @@ export function LineItemsTable({
                         <option value="units">{t.units}</option>
                         <option value="flat">{t.flat_rate}</option>
                       </Select>
-                    </td>
+                    </Table.Td>
                   )}
-                  <td className="px-1 py-1">
+                  <Table.Td numeric>
                     <Input
                       type="number"
                       value={item.quantity}
                       onChange={(e) => onUpdate(i, "quantity", Number(e.target.value))}
                       className="text-right"
                     />
-                  </td>
-                  <td className="px-1 py-1">
+                  </Table.Td>
+                  <Table.Td numeric>
                     <Input
                       type="number"
                       value={item.amount}
                       onChange={(e) => onUpdate(i, "amount", Number(e.target.value))}
                       className="text-right"
                     />
-                  </td>
-                  <td className="pl-1 py-1">
+                  </Table.Td>
+                  <Table.Actions>
                     {items.length > 1 && (
                       <IconButton size="xs" icon={Trash2} label={t.delete} tone="danger" onClick={() => onRemove(i)} />
                     )}
-                  </td>
+                  </Table.Actions>
                 </SortableLineItemRow>
               ))}
-            </tbody>
-          </table>
+            </Table.Body>
+            {/* Totals: subtotal, discount, total, the labels under the line's fields and the sums under Amount. */}
+            <Table.Foot>
+              <td />
+              <Table.Td colSpan={hideRate ? 2 : 4} className="py-2">
+                <div className="space-y-1">
+                  <div className="text-muted font-normal">{t.subtotal}</div>
+                  {discountRate > 0 && (
+                    <div className="text-muted font-normal">
+                      {t.cultural_discount} ({(discountRate * 100).toFixed(0)}%)
+                    </div>
+                  )}
+                  <div className="font-semibold text-base">{t.total}</div>
+                </div>
+              </Table.Td>
+              <Table.Td numeric className="py-2 whitespace-nowrap">
+                <div className="space-y-1">
+                  <div className="font-normal">{currency} {subtotal.toFixed(2)}</div>
+                  {discountRate > 0 && (
+                    <div className="text-muted font-normal">- {currency} {discountAmount.toFixed(2)}</div>
+                  )}
+                  <div className="font-semibold text-base">{currency} {total.toFixed(2)}</div>
+                </div>
+              </Table.Td>
+              <td />
+            </Table.Foot>
+          </Table>
         </SortableContext>
       </DndContext>
-
-      <div className="border-t border-[var(--color-border-divider)] mt-3 pt-3 space-y-1 text-sm">
-        <div className="flex justify-between">
-          <span className="text-muted">{t.subtotal}</span>
-          <span>{currency} {subtotal.toFixed(2)}</span>
-        </div>
-        {discountRate > 0 && (
-          <div className="flex justify-between text-muted">
-            <span>{t.cultural_discount} ({(discountRate * 100).toFixed(0)}%)</span>
-            <span>- {currency} {discountAmount.toFixed(2)}</span>
-          </div>
-        )}
-        <div className="flex justify-between font-semibold text-base pt-1">
-          <span>{t.total}</span>
-          <span>{currency} {total.toFixed(2)}</span>
-        </div>
-      </div>
     </div>
   );
 }
+
 
 function SortableLineItemRow({ id, children }: { id: number; children: React.ReactNode }) {
   const { setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -214,9 +221,9 @@ function SortableLineItemRow({ id, children }: { id: number; children: React.Rea
   };
 
   return (
-    <tr ref={setNodeRef} style={style}>
+    <Table.Row ref={setNodeRef} style={style}>
       {children}
-    </tr>
+    </Table.Row>
   );
 }
 

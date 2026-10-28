@@ -14,7 +14,7 @@ import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { Checkbox, Button, Badge, Card, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState } from "../components/ui";
+import { Checkbox, Button, Badge, Card, Input, Select, FormField, PageHeader, SearchBar, Table, TableSkeleton, EmptyState } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
 import { clientStatusVariant } from "../lib/statusColors";
@@ -103,9 +103,10 @@ export function ClientsPage() {
   }, [clients, search, sort, activeClientIds, filterConditions, filterLogic]);
 
   // Keyboard row navigation (flat list — every filtered row is visible).
+  const openClient = useCallback((c: (typeof filtered)[0]) => navigate(`/clients/${c.id}`), [navigate]);
   const { focusIdx } = useListNavigation({
     items: filtered,
-    onOpen: useCallback((c: (typeof filtered)[0]) => navigate(`/clients/${c.id}`), [navigate]),
+    onOpen: openClient,
     onMenu: useCallback((c: (typeof filtered)[0], pos: { x: number; y: number }) => setCtxMenu({ ...pos, item: c }), []),
   });
 
@@ -125,7 +126,7 @@ export function ClientsPage() {
           {t.new_client}
         </Button>
       </PageHeader>
-      <TableSkeleton columns={5} />
+      <TableSkeleton columns={6} />
     </div>
   );
 
@@ -175,65 +176,58 @@ export function ClientsPage() {
         />
       )}
 
-      <div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[var(--color-border-header)]">
-              <th className="w-8 px-2 py-2">
-                <Checkbox checked={bulk.isAllSelected} indeterminate={bulk.selected.size > 0 && !bulk.isAllSelected} onChange={bulk.toggleAll} />
-              </th>
-              <SortHeader label="ID" sortKey="id" current={sort} onSort={setSort} />
-              <SortHeader label={t.display_name} sortKey="name" current={sort} onSort={setSort} />
-              <SortHeader label={t.language} sortKey="language" current={sort} onSort={setSort} />
-              <SortHeader label={t.cultural_discount} sortKey="discount_rate" current={sort} onSort={setSort} />
-              <SortHeader label="Status" sortKey="status" current={sort} onSort={setSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((c, ci) => (
-              <tr
-                key={c.id}
-                data-list-row
-                className={`border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md${ci === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
-                onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: c }); }}
-              >
-                <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                  <Checkbox
-                    checked={bulk.selected.has(c.id)}
-                    onChange={(e) => bulk.toggleItem(c.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-                  />
-                </td>
-                <td className="px-4 py-2.5 font-medium">{c.id}</td>
-                <td className="px-4 py-2.5">
-                  <Link to={`/clients/${c.id}`} className="text-accent hover:underline">
-                    {c.name}
-                  </Link>
-                </td>
-                <td className="px-4 py-2.5">{c.language}</td>
-                <td className="px-4 py-2.5">
-                  {c.has_discount ? `${(c.discount_rate * 100).toFixed(0)}%` : "-"}
-                </td>
-                <td className="px-4 py-2.5">
-                  <Badge variant={clientStatusVariant(c.status)}>
-                    {c.status === "active" ? t.active : t.inactive}
-                  </Badge>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {filtered.length === 0 && !isLoading && (
-          <EmptyState
-            message={(clients?.length ?? 0) === 0 ? t.no_clients : t.no_matching_clients}
-            icon={<Users size={32} />}
-            action={(clients?.length ?? 0) === 0 ? (
-              <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>
-                {t.new_client}
-              </Button>
-            ) : undefined}
-          />
-        )}
-      </div>
+      <Table>
+        <Table.Head>
+          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} />
+          <SortHeader label="ID" sortKey="id" current={sort} onSort={setSort} />
+          <SortHeader label={t.display_name} sortKey="name" current={sort} onSort={setSort} />
+          <SortHeader label={t.language} sortKey="language" current={sort} onSort={setSort} />
+          <SortHeader label={t.cultural_discount} sortKey="discount_rate" current={sort} onSort={setSort} align="right" />
+          <SortHeader label="Status" sortKey="status" current={sort} onSort={setSort} />
+        </Table.Head>
+        <Table.Body>
+          {filtered.map((c, ci) => (
+            <Table.Row
+              key={c.id}
+              data-list-row
+              focused={ci === focusIdx}
+              selected={bulk.selected.has(c.id)}
+              onOpen={() => openClient(c)}
+              onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: c }); }}
+            >
+              <Table.Select checked={bulk.selected.has(c.id)} onToggle={(shift) => bulk.toggleItem(c.id, shift)} />
+              <Table.Td className="font-medium">{c.id}</Table.Td>
+              <Table.Td>
+                <Link to={`/clients/${c.id}`} className="text-accent hover:underline">
+                  {c.name}
+                </Link>
+              </Table.Td>
+              <Table.Td>{c.language}</Table.Td>
+              <Table.Td numeric>
+                {c.has_discount ? `${(c.discount_rate * 100).toFixed(0)}%` : "-"}
+              </Table.Td>
+              <Table.Td>
+                <Badge variant={clientStatusVariant(c.status)}>
+                  {c.status === "active" ? t.active : t.inactive}
+                </Badge>
+              </Table.Td>
+            </Table.Row>
+          ))}
+          {filtered.length === 0 && !isLoading && (
+            <Table.Empty colSpan={6}>
+              <EmptyState
+                message={(clients?.length ?? 0) === 0 ? t.no_clients : t.no_matching_clients}
+                icon={<Users size={32} />}
+                action={(clients?.length ?? 0) === 0 ? (
+                  <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>
+                    {t.new_client}
+                  </Button>
+                ) : undefined}
+              />
+            </Table.Empty>
+          )}
+        </Table.Body>
+      </Table>
       {ctxMenu && (
         <ContextMenu
           x={ctxMenu.x}

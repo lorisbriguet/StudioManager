@@ -1,8 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { Plus, Search, ExternalLink, Trash2, X } from "lucide-react";
-import { Checkbox, PageHeader, Button, EmptyState, FormField, Select, IconButton, Tag, FilterChip, Input, Callout, Card } from "../components/ui";
+import { Plus, Search, ExternalLink, Trash2, X, Check } from "lucide-react";
+import { PageHeader, Button, EmptyState, FormField, Select, IconButton, Tag, FilterChip, Input, Callout, Card, Table, TableSkeleton } from "../components/ui";
 import * as v from "../lib/validate";
-import { Skeleton } from "../components/ui/Skeleton";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { toast } from "sonner";
 import { ask } from "@tauri-apps/plugin-dialog";
@@ -134,17 +133,7 @@ export function ResourcesPage() {
       <PageHeader title={t.resources}>
         <Button icon={<Plus size={12} />} onClick={() => {}}>{t.new_resource}</Button>
       </PageHeader>
-      <div className="space-y-3 mt-4">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-4 px-3 py-2">
-            <Skeleton width={16} height={16} rounded="sm" />
-            <Skeleton width="30%" height={14} />
-            <Skeleton width="15%" height={14} />
-            <Skeleton width="10%" height={14} />
-            <Skeleton width="20%" height={14} />
-          </div>
-        ))}
-      </div>
+      <TableSkeleton columns={6} />
     </div>
   );
 
@@ -213,60 +202,55 @@ export function ResourcesPage() {
         fields={resourceFields}
       />
 
-      {filtered.length === 0 ? (
-        <EmptyState
-          message={rows.length === 0 ? t.no_resources_yet : t.no_matching_resources}
-          action={rows.length === 0 ? (
-            <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>
-              {t.new_resource}
-            </Button>
-          ) : undefined}
-        />
-      ) : (
-        <div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--color-border-header)]">
-                <th className="w-8 px-2 py-2">
-                  <Checkbox checked={bulk.isAllSelected} indeterminate={bulk.selected.size > 0 && !bulk.isAllSelected} onChange={bulk.toggleAll} />
-                </th>
-                <SortHeader<SortKey> label={t.name} sortKey="name" current={sort} onSort={setSort} />
-                <th className="text-left px-3 py-2 font-medium text-xs text-muted">{t.type}</th>
-                <SortHeader<SortKey> label={t.price_label} sortKey="price" current={sort} onSort={setSort} />
-                <th className="text-left px-3 py-2 font-medium text-xs text-muted">{t.link}</th>
-                <th className="w-10" />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((r) => (
-                <ResourceTableRow
-                  key={r.id}
-                  resource={r}
-                  allTags={allTags ?? []}
-                  isEditing={editingId === r.id}
-                  isSelected={bulk.selected.has(r.id)}
-                  onToggleSelect={(shiftKey) => bulk.toggleItem(r.id, shiftKey)}
-                  onStartEdit={() => setEditingId(r.id)}
-                  onCancelEdit={() => setEditingId(null)}
-                  onSave={async (data, tags) => {
-                    try {
-                      await updateResource.mutateAsync({ id: r.id, data, tags });
-                      setEditingId(null);
-                      toast.success(t.save);
-                    } catch (err) {
-                      logError("Update resource failed:", err);
-                      toast.error(t.update_failed);
-                    }
-                  }}
-                  onDelete={() => handleDelete(r.id, r.name)}
-                  onOpenUrl={() => handleOpenUrl(r.url)}
-                  onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: r }); }}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <Table>
+        <Table.Head>
+          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} />
+          <SortHeader<SortKey> label={t.name} sortKey="name" current={sort} onSort={setSort} />
+          <Table.Th>{t.type}</Table.Th>
+          <SortHeader<SortKey> label={t.price_label} sortKey="price" current={sort} onSort={setSort} />
+          <Table.Th>{t.link}</Table.Th>
+          <Table.ActionsTh />
+        </Table.Head>
+        <Table.Body>
+          {filtered.map((r) => (
+            <ResourceTableRow
+              key={r.id}
+              resource={r}
+              allTags={allTags ?? []}
+              isEditing={editingId === r.id}
+              isSelected={bulk.selected.has(r.id)}
+              onToggleSelect={(shiftKey) => bulk.toggleItem(r.id, shiftKey)}
+              onStartEdit={() => setEditingId(r.id)}
+              onCancelEdit={() => setEditingId(null)}
+              onSave={async (data, tags) => {
+                try {
+                  await updateResource.mutateAsync({ id: r.id, data, tags });
+                  setEditingId(null);
+                  toast.success(t.save);
+                } catch (err) {
+                  logError("Update resource failed:", err);
+                  toast.error(t.update_failed);
+                }
+              }}
+              onDelete={() => handleDelete(r.id, r.name)}
+              onOpenUrl={() => handleOpenUrl(r.url)}
+              onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: r }); }}
+            />
+          ))}
+          {filtered.length === 0 && (
+            <Table.Empty colSpan={6}>
+              <EmptyState
+                message={rows.length === 0 ? t.no_resources_yet : t.no_matching_resources}
+                action={rows.length === 0 ? (
+                  <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>
+                    {t.new_resource}
+                  </Button>
+                ) : undefined}
+              />
+            </Table.Empty>
+          )}
+        </Table.Body>
+      </Table>
 
       <div className="text-xs text-muted mt-3">
         {filtered.length} {filtered.length === 1 ? t.resources_count_singular : t.resources_count_plural}
@@ -548,26 +532,22 @@ function ResourceTableRow({
 
   if (isEditing) {
     return (
-      <tr
-        className="border-b border-[var(--color-border-divider)] bg-accent-light/30"
+      <Table.Row
+        selected={isSelected}
+        className="bg-accent-light/30"
         onBlur={handleBlur}
         onFocus={handleFocus}
       >
-        <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-          <Checkbox
-            checked={isSelected}
-            onChange={(e) => onToggleSelect(e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-          />
-        </td>
-        <td className="px-3 py-2">
+        <Table.Select checked={isSelected} onToggle={onToggleSelect} />
+        <Table.Td>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
             size="sm"
             autoFocus
           />
-        </td>
-        <td className="px-3 py-2">
+        </Table.Td>
+        <Table.Td>
           <div className="flex flex-wrap gap-1 items-center">
             {tags.map((tag) => (
               <Tag key={tag} name={tag} onRemove={() => setTags(tags.filter((t) => t !== tag))} />
@@ -594,86 +574,71 @@ function ResourceTableRow({
               ))}
             </datalist>
           </div>
-        </td>
-        <td className="px-3 py-2">
+        </Table.Td>
+        <Table.Td>
           <Select value={price} onChange={(e) => setPrice(e.target.value)} fullWidth={false}>
             <option value="">—</option>
             <option value="free">{t.price_free}</option>
             <option value="paid">{t.price_paid}</option>
           </Select>
-        </td>
-        <td className="px-3 py-2">
+        </Table.Td>
+        <Table.Td>
           <Input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             size="sm"
           />
-        </td>
-        <td className="px-3 py-2">
-          <div className="flex gap-1">
-            <button
-              onClick={() => { if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current); doSave(); }}
-              className="text-xs text-accent hover:underline"
-            >
-              {t.save}
-            </button>
-            <button onClick={() => { if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current); onCancelEdit(); }} className="text-xs text-muted hover:text-[var(--color-text)]">
-              {t.cancel}
-            </button>
-          </div>
-        </td>
-      </tr>
+        </Table.Td>
+        <Table.Actions always>
+          <IconButton size="xs" icon={Check} label={t.save} color="accent" onClick={() => { if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current); doSave(); }} />
+          <IconButton size="xs" icon={X} label={t.cancel} onClick={() => { if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current); onCancelEdit(); }} />
+        </Table.Actions>
+      </Table.Row>
     );
   }
 
   return (
-    <tr
-      className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] group cursor-pointer transition-colors"
-      onDoubleClick={onStartEdit}
+    <Table.Row
+      selected={isSelected}
+      onOpen={onStartEdit}
       onContextMenu={onContextMenu}
     >
-      <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-        <Checkbox
-          checked={isSelected}
-          onChange={(e) => onToggleSelect(e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-        />
-      </td>
-      <td className="px-3 py-2 font-medium">{resource.name}</td>
-      <td className="px-3 py-2">
+      <Table.Select checked={isSelected} onToggle={onToggleSelect} />
+      <Table.Td className="font-medium">{resource.name}</Table.Td>
+      <Table.Td>
         <div className="flex flex-wrap gap-1">
           {resource.tags.map((tag) => (
             <Tag key={tag} name={tag} />
           ))}
         </div>
-      </td>
-      <td className="px-3 py-2">
+      </Table.Td>
+      <Table.Td>
         {resource.price && (
           <Tag name={resource.price} color={resource.price === "free" ? "green" : "red"}>
             {resource.price === "free" ? t.price_free : t.price_paid}
           </Tag>
         )}
-      </td>
-      <td className="px-3 py-2">
+      </Table.Td>
+      <Table.Td>
         {resource.url && (
           <Button
             variant="link"
             icon={<ExternalLink size={12} />}
-            onClick={(e) => { e.stopPropagation(); onOpenUrl(); }}
+            onClick={onOpenUrl}
             className="max-w-[300px] truncate"
           >
             {resource.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
           </Button>
         )}
-      </td>
-      <td className="px-3 py-2">
+      </Table.Td>
+      <Table.Actions>
         <IconButton size="xs"
           icon={Trash2}
           label={t.delete}
           tone="danger"
-          reveal
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          onClick={onDelete}
         />
-      </td>
-    </tr>
+      </Table.Actions>
+    </Table.Row>
   );
 }

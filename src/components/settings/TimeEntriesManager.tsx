@@ -3,9 +3,9 @@ import { X, Pencil, Trash2, Check } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useTimeEntriesWithDetails, useUpdateTimeEntry, useDeleteTimeEntry } from "../../db/hooks/useTimeEntries";
 import { useProjects } from "../../db/hooks/useProjects";
-import { Button, DatePicker, Select, IconButton, Input } from "../ui";
+import { ask } from "@tauri-apps/plugin-dialog";
+import { Button, DatePicker, Select, IconButton, Input, Table, TableSkeleton } from "../ui";
 import { SectionHeader } from "../ui/Settings";
-import { ConfirmButton } from "../ui/Feedback";
 
 function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -113,38 +113,33 @@ export function TimeEntriesManager() {
 
       {/* Table */}
       {isLoading ? (
-        <p className="text-xs text-muted py-4">{t.loading}</p>
-      ) : rows.length === 0 ? (
-        <p className="text-xs text-muted py-4">{t.no_entries_found}</p>
+        <TableSkeleton columns={5} rows={6} density="compact" />
       ) : (
-        <div className="rounded-xl border border-[var(--color-border-divider)] overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-[var(--color-border-divider)] bg-[var(--color-surface)]">
-                <th className="text-left px-3 py-2 font-medium text-muted w-[130px]">{t.date}</th>
-                <th className="text-left px-3 py-2 font-medium text-muted">{t.project}</th>
-                <th className="text-left px-3 py-2 font-medium text-muted">{t.tasks}</th>
-                <th className="text-left px-3 py-2 font-medium text-muted w-[150px]">{t.duration}</th>
-                <th className="text-left px-3 py-2 font-medium text-muted w-full">{t.description}</th>
-                <th className="px-3 py-2 w-16" />
-              </tr>
-            </thead>
-            <tbody>
+          <Table density="compact">
+            <Table.Head>
+              <Table.Th className="w-[130px]">{t.date}</Table.Th>
+              <Table.Th>{t.project}</Table.Th>
+              <Table.Th>{t.tasks}</Table.Th>
+              <Table.Th numeric className="w-[150px]">{t.duration}</Table.Th>
+              <Table.Th className="w-full">{t.description}</Table.Th>
+              <Table.ActionsTh />
+            </Table.Head>
+            <Table.Body>
               {rows.map((entry) => (
-                <tr key={entry.id} className="border-b border-[var(--color-border-divider)] last:border-0 hover:bg-[var(--color-hover-row)]">
+                <Table.Row key={entry.id}>
                   {editingId === entry.id ? (
                     <>
-                      <td className="px-3 py-1.5">
+                      <Table.Td>
                         <DatePicker size="sm"
                           value={editForm.date || null}
                           onChange={(v) => setEditForm({ ...editForm, date: v ?? "" })}
                           className="min-w-[110px]"
                         />
-                      </td>
-                      <td className="px-3 py-1.5 text-muted">{entry.project_name}</td>
-                      <td className="px-3 py-1.5 text-muted">{entry.task_title ?? "—"}</td>
-                      <td className="px-3 py-1.5">
-                        <div className="flex items-center gap-1">
+                      </Table.Td>
+                      <Table.Td muted>{entry.project_name}</Table.Td>
+                      <Table.Td muted>{entry.task_title ?? "—"}</Table.Td>
+                      <Table.Td numeric>
+                        <div className="flex items-center justify-end gap-1">
                           <Input size="sm" fullWidth={false}
                             type="number"
                             min={0}
@@ -164,8 +159,8 @@ export function TimeEntriesManager() {
                           />
                           <span className="text-muted">m</span>
                         </div>
-                      </td>
-                      <td className="px-3 py-1.5">
+                      </Table.Td>
+                      <Table.Td>
                         <Input size="sm"
                           type="text"
                           value={editForm.description}
@@ -173,54 +168,56 @@ export function TimeEntriesManager() {
                           className="min-w-[200px]"
                           placeholder={t.description}
                         />
-                      </td>
-                      <td className="px-3 py-1.5">
-                        <div className="flex items-center gap-1">
-                          <IconButton size="xs"
-                            icon={Check}
-                            label={t.save}
-                            color="accent"
-                            onClick={saveEdit}
-                            disabled={updateEntry.isPending}
-                          />
-                          <IconButton size="xs" icon={X} label={t.cancel} onClick={() => setEditingId(null)} />
-                        </div>
-                      </td>
+                      </Table.Td>
+                      <Table.Actions always>
+                        <IconButton size="xs"
+                          icon={Check}
+                          label={t.save}
+                          color="accent"
+                          onClick={saveEdit}
+                          disabled={updateEntry.isPending}
+                        />
+                        <IconButton size="xs" icon={X} label={t.cancel} onClick={() => setEditingId(null)} />
+                      </Table.Actions>
                     </>
                   ) : (
                     <>
-                      <td className="px-3 py-2 tabular-nums">{entry.date}</td>
-                      <td className="px-3 py-2">{entry.project_name}</td>
-                      <td className="px-3 py-2 text-muted">{entry.task_title ?? "—"}</td>
-                      <td className="px-3 py-2 tabular-nums">{formatDuration(entry.duration_minutes)}</td>
-                      <td className="px-3 py-2 text-muted max-w-[320px] truncate" title={entry.description}>{entry.description || "—"}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-1">
-                          <IconButton icon={Pencil} label={t.edit_entry} size="xs" onClick={() => startEdit(entry)} />
-                          <ConfirmButton
-                            label={t.delete}
-                            question={t.confirm_delete_time_entry}
-                            icon={<Trash2 size={12} />}
-                            variant="outline"
-                            disabled={deleteEntry.isPending}
-                            onConfirm={() => handleDelete(entry.id)}
-                          />
-                        </div>
-                      </td>
+                      <Table.Td className="tabular-nums">{entry.date}</Table.Td>
+                      <Table.Td>{entry.project_name}</Table.Td>
+                      <Table.Td muted>{entry.task_title ?? "—"}</Table.Td>
+                      <Table.Td numeric>{formatDuration(entry.duration_minutes)}</Table.Td>
+                      <Table.Td muted className="max-w-[320px] truncate" title={entry.description}>{entry.description || "—"}</Table.Td>
+                      <Table.Actions>
+                        <IconButton icon={Pencil} label={t.edit_entry} size="xs" onClick={() => startEdit(entry)} />
+                        <IconButton
+                          icon={Trash2}
+                          label={t.delete}
+                          size="xs"
+                          tone="danger"
+                          disabled={deleteEntry.isPending}
+                          onClick={async () => {
+                            if (await ask(t.confirm_delete_time_entry, { kind: "warning" })) handleDelete(entry.id);
+                          }}
+                        />
+                      </Table.Actions>
                     </>
                   )}
-                </tr>
+                </Table.Row>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Total */}
-      {rows.length > 0 && (
-        <div className="mt-3 text-xs text-muted text-right">
-          {t.total_hours}: <span className="font-medium text-[var(--color-text)]">{formatDuration(totalMinutes)}</span>
-        </div>
+              {rows.length === 0 && (
+                <Table.Empty colSpan={6}>
+                  <p className="text-xs text-muted py-4">{t.no_entries_found}</p>
+                </Table.Empty>
+              )}
+            </Table.Body>
+            {rows.length > 0 && (
+              <Table.Foot>
+                <Table.Td colSpan={3} muted>{t.total_hours}</Table.Td>
+                <Table.Td numeric>{formatDuration(totalMinutes)}</Table.Td>
+                <Table.Td colSpan={2} />
+              </Table.Foot>
+            )}
+          </Table>
       )}
     </div>
   );
