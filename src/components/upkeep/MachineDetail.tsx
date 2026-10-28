@@ -138,7 +138,11 @@ function ProjectsSection({ machineId }: { machineId: number }) {
 }
 
 /** Full machine detail; used by the peek panel (`compact`) and the machine page. */
-export function MachineDetail({ machineId, compact = false }: { machineId: number; compact?: boolean }) {
+export function MachineDetail({ machineId, compact = false, onDeleted }: {
+  machineId: number;
+  compact?: boolean;
+  onDeleted?: () => void;
+}) {
   const t = useT();
   const navigate = useNavigate();
   const { data: machine } = useMachine(machineId);
@@ -183,7 +187,9 @@ export function MachineDetail({ machineId, compact = false }: { machineId: numbe
 
   const remove = async () => {
     if (!(await ask(t.upkeep_delete_machine_confirm, { kind: "warning" }))) return;
-    deleteMachine.mutate(machine.id, { onSuccess: () => navigate("/upkeep?tab=machines") });
+    deleteMachine.mutate(machine.id, {
+      onSuccess: () => { onDeleted?.(); navigate("/upkeep?tab=machines"); },
+    });
   };
 
   return (

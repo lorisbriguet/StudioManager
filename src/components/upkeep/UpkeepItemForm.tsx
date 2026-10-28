@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Button, FormField, Input, Modal, Select } from "../ui";
 import { useT } from "../../i18n/useT";
 import { useCreateUpkeepItem, useUpdateUpkeepItem } from "../../db/hooks/useUpkeep";
+import { useUnsavedChangesWarning } from "../../hooks/useUnsavedChangesWarning";
+import { confirmIfDirty } from "../../lib/dirty-guard";
 import { todayLocalISO } from "../../utils/localDate";
 import type { IntervalUnit, UpkeepItem } from "../../types/upkeep";
 
@@ -31,6 +33,20 @@ export function UpkeepItemForm({ open, onClose, machineId, item, allowUsage }: P
   const [notes, setNotes] = useState(item?.notes ?? "");
   const [error, setError] = useState<string | null>(null);
 
+  const dirty =
+    title !== (item?.title ?? "") ||
+    schedule !== (item?.schedule ?? "interval") ||
+    n !== String(item?.interval_n ?? 1) ||
+    unit !== (item?.interval_unit ?? "month") ||
+    every !== String(item?.usage_every ?? 100) ||
+    notes !== (item?.notes ?? "");
+  useUnsavedChangesWarning(dirty);
+
+  const close = async () => {
+    if (dirty && !(await confirmIfDirty())) return;
+    onClose();
+  };
+
   const save = () => {
     if (!title.trim()) { setError(t.upkeep_title_required); return; }
     const base = { title: title.trim(), notes: notes.trim() || null, schedule };
@@ -57,11 +73,11 @@ export function UpkeepItemForm({ open, onClose, machineId, item, allowUsage }: P
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={() => void close()}
       title={item ? t.upkeep_edit_item : t.upkeep_add_item}
       footer={
         <div className="flex gap-2 justify-end">
-          <Button variant="secondary" onClick={onClose}>{t.cancel}</Button>
+          <Button variant="secondary" onClick={() => void close()}>{t.cancel}</Button>
           <Button onClick={save}>{t.save}</Button>
         </div>
       }

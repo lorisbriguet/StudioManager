@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FileText, Link2, Paperclip, Plus, X } from "lucide-react";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { open as openExternal } from "@tauri-apps/plugin-shell";
+import { openMachineAttachment } from "../../lib/upkeep/openAttachment";
 import { Button, Input } from "../ui";
 import { useT } from "../../i18n/useT";
 import {
@@ -90,7 +90,7 @@ export function FilesSection({ machineId }: { machineId: number }) {
               <button
                 type="button"
                 className="truncate text-left hover:text-accent"
-                onClick={() => void openExternal(f.path_or_url).catch((e) => notifyError(t.upkeep_file_failed, e))}
+                onClick={() => void openMachineAttachment(f).catch((e) => notifyError(t.upkeep_file_failed, e))}
               >
                 {f.label}
               </button>

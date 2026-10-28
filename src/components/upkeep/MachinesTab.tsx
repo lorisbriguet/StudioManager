@@ -96,7 +96,7 @@ export function MachinesTab() {
             </Link>
           </div>
           <div className="p-4">
-            <MachineDetail key={peekId} machineId={peekId} compact />
+            <MachineDetail key={peekId} machineId={peekId} compact onDeleted={() => { setPeekId(null); setClosing(false); }} />
           </div>
         </div>
       )}
