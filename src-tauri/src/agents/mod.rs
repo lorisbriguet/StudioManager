@@ -4,6 +4,7 @@ pub mod actions;
 pub mod cli;
 pub mod model;
 pub mod projects;
+pub mod transcript;
 pub mod validate;
 
 use std::path::PathBuf;

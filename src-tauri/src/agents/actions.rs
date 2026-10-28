@@ -34,7 +34,7 @@ fn write_state(dir: &Path, s: &AgentsStateFile) -> Result<(), String> {
 }
 
 /// A session id as the CLI reports it: a uuid (hex digits and hyphens).
-fn valid_session_id(s: &str) -> bool {
+pub(super) fn valid_session_id(s: &str) -> bool {
     s.len() == 36 && s.chars().all(|c| matches!(c, '0'..='9' | 'a'..='f' | '-'))
 }
 
@@ -205,13 +205,13 @@ pub fn find_agent(cli: &dyn Cli, session_id: &str) -> Result<Agent, String> {
         .ok_or_else(|| "Agent not found".to_string())
 }
 
-fn home_dir() -> PathBuf {
+pub(super) fn home_dir() -> PathBuf {
     std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default()
 }
 
 // ---------------------------------------------------------------- commands
 
-fn ready(state: &super::AgentsState) -> Result<super::cli::RealCli, String> {
+pub(super) fn ready(state: &super::AgentsState) -> Result<super::cli::RealCli, String> {
     if !read_settings(&state.app_dir).enabled {
         return Err(OFF.into());
     }

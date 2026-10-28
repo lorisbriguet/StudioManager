@@ -1,0 +1,10 @@
+{"type":"agent-setting","agentSetting":"demo","sessionId":"00000000-0000-4000-8000-000000000001"}
+{"type":"queue-operation","operation":"enqueue","timestamp":"2026-01-01T10:00:00.000Z"}
+{"type":"user","timestamp":"2026-01-01T10:00:01.000Z","cwd":"/tmp/demo","message":{"role":"user","content":"Add a README to the demo project"}}
+this line is not json
+{"type":"assistant","timestamp":"2026-01-01T10:00:02.000Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"secret reasoning"},{"type":"text","text":"I will look at the folder first."},{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"ls /tmp/demo","description":"List the demo folder"}}]}}
+{"type":"user","timestamp":"2026-01-01T10:00:03.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"a.txt\nb.txt"}]}}
+{"type":"assistant","timestamp":"2026-01-01T10:00:04.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Read","input":{"file_path":"/tmp/demo/a.txt"}},{"type":"tool_use","id":"t3","name":"Bash","input":{"command":"echo hi"}}]}}
+{"type":"system","subtype":"turn_duration","timestamp":"2026-01-01T10:00:05.000Z"}
+{"type":"user","timestamp":"2026-01-01T10:00:06.000Z","message":{"role":"user","content":[{"type":"text","text":"Thanks, now write it."}]}}
+{"type":"assistant","timestamp":"2026-01-01T10:00:07.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Done."}]}}

@@ -599,6 +599,7 @@ pub fn run() {
             agents::actions::agents_delete,
             agents::actions::agents_switch_model,
             agents::actions::agents_dismiss,
+            agents::transcript::agents_conversation,
         ])
         .setup(|app| {
             let handle = app.handle();

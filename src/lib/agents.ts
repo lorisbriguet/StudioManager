@@ -34,6 +34,15 @@ export function switchModel(sessionId: string, model: string): Promise<string> {
   return invoke<string>("agents_switch_model", { sessionId, model });
 }
 
+export type Item =
+  | { kind: "user"; text: string; at: string | null }
+  | { kind: "assistant"; text: string; at: string | null }
+  | { kind: "tool"; name: string; summary: string; at: string | null };
+
+export function conversation(sessionId: string): Promise<Item[]> {
+  return invoke<Item[]>("agents_conversation", { sessionId });
+}
+
 export function dismissAgent(sessionId: string): Promise<void> {
   return invoke<void>("agents_dismiss", { sessionId });
 }
