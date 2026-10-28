@@ -6,12 +6,10 @@ use super::validate::{clamp_size, normalise_message, valid_short_id};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicI64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::collections::HashSet;
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 
 pub const MAX_TERMINALS: usize = 8;
-/// How long to wait for `claude attach` to print anything before typing anyway.
-const READY_TIMEOUT_MS: i64 = 3_000;
-const READY_POLL_MS: u64 = 50;
 /// Pause between the text and the Enter, as a person would type.
 const ENTER_AFTER_MS: u64 = 300;
 /// How long a temporary terminal stays attached after the Enter, so the agent receives the line.
@@ -125,6 +123,8 @@ struct Term {
     parser: Mutex<vt100::Parser>,
     /// Epoch ms of the latest output; 0 before any.
     last_output: AtomicI64,
+    /// Opened for one send or answer, and never handed out by `existing`.
+    temporary: bool,
 }
 
 impl Term {
@@ -148,6 +148,23 @@ struct Inner {
     spawner: Arc<dyn PtySpawner>,
     clock: Arc<dyn Clock>,
     terms: Mutex<Terms>,
+    /// Short ids being sent to or answered; see `lock_agent`.
+    busy: Mutex<HashSet<String>>,
+    freed: Condvar,
+}
+
+/// Holds an agent for one send, prompt read or answer; released on drop. Can be moved to the
+/// thread that closes a temporary terminal, so the agent stays held until it is closed.
+pub struct AgentGuard {
+    hub: TerminalHub,
+    short_id: String,
+}
+
+impl Drop for AgentGuard {
+    fn drop(&mut self) {
+        lock(&self.hub.inner.busy).remove(&self.short_id);
+        self.hub.inner.freed.notify_all();
+    }
 }
 
 /// The open terminals, each running `claude attach`. Cheap to clone.
@@ -165,7 +182,25 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 
 impl TerminalHub {
     pub fn new(spawner: Arc<dyn PtySpawner>, clock: Arc<dyn Clock>) -> Self {
-        Self { inner: Arc::new(Inner { spawner, clock, terms: Mutex::default() }) }
+        Self {
+            inner: Arc::new(Inner {
+                spawner,
+                clock,
+                terms: Mutex::default(),
+                busy: Mutex::default(),
+                freed: Condvar::new(),
+            }),
+        }
+    }
+
+    /// Waits until no other send, prompt read or answer holds `short_id`, then holds it.
+    pub fn lock_agent(&self, short_id: &str) -> AgentGuard {
+        let mut busy = lock(&self.inner.busy);
+        while busy.contains(short_id) {
+            busy = self.inner.freed.wait(busy).unwrap_or_else(|e| e.into_inner());
+        }
+        busy.insert(short_id.to_string());
+        AgentGuard { hub: self.clone(), short_id: short_id.to_string() }
     }
 
     fn get(&self, term_id: u32) -> Option<Arc<Term>> {
@@ -194,6 +229,23 @@ impl TerminalHub {
         rows: u16,
         on_data: OnData,
         on_exit: OnExit,
+    ) -> Result<u32, String> {
+        self.open_term(short_id, cols, rows, on_data, on_exit, false)
+    }
+
+    /// Attaches a terminal for one send or answer: `existing` never returns it.
+    pub fn open_temporary(&self, short_id: &str, cols: u16, rows: u16) -> Result<u32, String> {
+        self.open_term(short_id, cols, rows, Box::new(|_, _| {}), Box::new(|_| {}), true)
+    }
+
+    fn open_term(
+        &self,
+        short_id: &str,
+        cols: u16,
+        rows: u16,
+        on_data: OnData,
+        on_exit: OnExit,
+        temporary: bool,
     ) -> Result<u32, String> {
         if !valid_short_id(short_id) {
             return Err("Invalid agent id".into());
@@ -225,6 +277,7 @@ impl TerminalHub {
             process: Mutex::new(Some(process)),
             parser: Mutex::new(vt100::Parser::new(rows, cols, 0)),
             last_output: AtomicI64::new(0),
+            temporary,
         });
         t.live.insert(id, term.clone());
         drop(t);
@@ -289,10 +342,14 @@ impl TerminalHub {
         }
     }
 
-    /// The most recently opened live terminal attached to `short_id`.
+    /// The most recently opened live terminal attached to `short_id`, temporary ones excepted.
     pub fn existing(&self, short_id: &str) -> Option<u32> {
         let t = lock(&self.inner.terms);
-        t.live.iter().filter(|(_, term)| term.short_id == short_id).map(|(id, _)| *id).max()
+        t.live
+            .iter()
+            .filter(|(_, term)| term.short_id == short_id && !term.temporary)
+            .map(|(id, _)| *id)
+            .max()
     }
 
     pub fn screen(&self, term_id: u32) -> Option<String> {
@@ -326,31 +383,32 @@ pub fn send_message(hub: &TerminalHub, agent: &Agent, text: &str) -> Result<(), 
         text.replace('\t', "  ")
     };
 
+    let guard = hub.lock_agent(short_id);
     if let Some(id) = hub.existing(short_id) {
+        refuse_if_prompt(hub, id)?;
         return type_line(hub, id, &payload);
     }
 
-    let clock = hub.inner.clock.clone();
-    let id = hub.open(short_id, TEMP_COLS, TEMP_ROWS, Box::new(|_, _| {}), Box::new(|_| {}))?;
-    let start = clock.now_ms();
-    loop {
-        if hub.get(id).is_none() {
-            return Err("Could not attach to the agent".into());
-        }
-        if hub.last_output_ms(id).is_some() || clock.now_ms() - start >= READY_TIMEOUT_MS {
-            break;
-        }
-        clock.sleep_ms(READY_POLL_MS);
-    }
-    if let Err(e) = type_line(hub, id, &payload) {
+    let id = hub.open_temporary(short_id, TEMP_COLS, TEMP_ROWS)?;
+    if let Err(e) = refuse_if_prompt(hub, id).and_then(|_| type_line(hub, id, &payload)) {
         hub.close(id);
         return Err(e);
     }
     let hub = hub.clone();
     std::thread::spawn(move || {
-        clock.sleep_ms(TEMP_CLOSE_AFTER_MS);
+        hub.inner.clock.sleep_ms(TEMP_CLOSE_AFTER_MS);
         hub.close(id);
+        drop(guard);
     });
+    Ok(())
+}
+
+/// The CLI's status can lag: a prompt that opened since would take the typed text as an answer.
+fn refuse_if_prompt(hub: &TerminalHub, id: u32) -> Result<(), String> {
+    let screen = super::prompt::settled_screen(hub, id, 0)?;
+    if super::prompt::parse_prompt(&screen).is_some() {
+        return Err("Answer the open prompt first".into());
+    }
     Ok(())
 }
 
@@ -730,6 +788,20 @@ pub(super) mod tests {
         let err = send_message(&hub, &agent("bg", "waiting"), "hi").unwrap_err();
         assert_eq!(err, "Answer the open prompt first");
         assert!(spawner.handles().is_empty());
+    }
+
+    #[test]
+    fn send_refused_when_prompt_in_open_panel() {
+        // The CLI still says idle, but the panel shows a prompt.
+        let (hub, spawner, _) = hub();
+        let id = open(&hub, "0a1b2c3d").unwrap();
+        hub.write(id, "Do you want to proceed?\r\n❯ 1. Yes\r\n  2. No\r\n".as_bytes()).unwrap();
+        assert!(eventually(|| hub.screen(id).is_some_and(|s| s.contains("2. No"))));
+        spawner.handles()[0].writes.lock().unwrap().clear();
+        let err = send_message(&hub, &agent("bg", "idle"), "1").unwrap_err();
+        assert_eq!(err, "Answer the open prompt first");
+        assert!(spawner.handles()[0].writes().is_empty());
+        assert_eq!(hub.existing("0a1b2c3d"), Some(id), "the panel stays open");
     }
 
     #[test]

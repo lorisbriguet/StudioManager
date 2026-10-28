@@ -29,6 +29,8 @@ const TEMP_COLS: u16 = 120;
 const TEMP_ROWS: u16 = 40;
 /// Lines allowed between two options: an option's description, or a rule.
 const MAX_GAP_LINES: usize = 3;
+/// How far above the options to look for the rule that opens the prompt block.
+const MAX_BLOCK_LINES: usize = 20;
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -42,7 +44,13 @@ pub struct PromptOption {
 #[serde(rename_all = "camelCase")]
 pub struct Prompt {
     pub question: String,
+    /// What the prompt is about (the command, the file...): the block's lines above the question.
+    pub detail: String,
     pub options: Vec<PromptOption>,
+    /// The whole block, from the rule that opens it through the last option, with borders,
+    /// pointer and spacing normalised. Two different prompts with the same options differ here;
+    /// moving the pointer does not change it.
+    pub fingerprint: String,
 }
 
 fn is_box_drawing(c: char) -> bool {
@@ -52,6 +60,13 @@ fn is_box_drawing(c: char) -> bool {
 /// The line without box borders and surrounding spaces.
 fn strip(line: &str) -> &str {
     line.trim_matches(|c: char| c.is_whitespace() || is_box_drawing(c))
+}
+
+/// A full-width solid rule or a box's top edge: where a prompt block begins.
+/// (Dashed rules, `╌╌╌`, sit inside permission prompts.)
+fn is_block_top(line: &str) -> bool {
+    let t = line.trim();
+    t.chars().count() >= 3 && t.chars().all(|c| matches!(c, '─' | '━' | '╭' | '╮' | '┌' | '┐'))
 }
 
 /// `<pointer?> <n>. <label>`, with n from 1 to 9.
@@ -71,13 +86,18 @@ fn option_line(line: &str) -> Option<PromptOption> {
     (!label.is_empty()).then(|| PromptOption { number, label: label.to_string(), selected })
 }
 
-type Run = (usize, Vec<PromptOption>);
+/// A run of options: the indexes of its first and last option lines, and the options.
+struct Run {
+    first: usize,
+    last: usize,
+    options: Vec<PromptOption>,
+}
 
 /// Keeps `run` as the latest candidate if it has 2-9 options.
-fn finish(run: &mut Option<Run>, last: &mut Option<Run>) {
+fn finish(run: &mut Option<Run>, found: &mut Option<Run>) {
     if let Some(r) = run.take() {
-        if (2..=9).contains(&r.1.len()) {
-            *last = Some(r);
+        if (2..=9).contains(&r.options.len()) {
+            *found = Some(r);
         }
     }
 }
@@ -87,50 +107,64 @@ fn finish(run: &mut Option<Run>, last: &mut Option<Run>) {
 /// description, a rule) may sit between two options.
 pub fn parse_prompt(screen: &str) -> Option<Prompt> {
     let lines: Vec<&str> = screen.lines().collect();
-    // (index of the first option's line, options)
-    let mut last: Option<Run> = None;
+    let mut found: Option<Run> = None;
     let mut run: Option<Run> = None;
     let mut gap = 0;
     for (i, line) in lines.iter().enumerate() {
         if let Some(opt) = option_line(line) {
-            if let Some((_, opts)) = run.as_mut() {
-                if opt.number as usize == opts.len() + 1 {
-                    opts.push(opt);
+            if let Some(r) = run.as_mut() {
+                if opt.number as usize == r.options.len() + 1 {
+                    r.options.push(opt);
+                    r.last = i;
                     gap = 0;
                     continue;
                 }
             }
-            finish(&mut run, &mut last);
+            finish(&mut run, &mut found);
             if opt.number == 1 {
-                run = Some((i, vec![opt]));
+                run = Some(Run { first: i, last: i, options: vec![opt] });
                 gap = 0;
             }
         } else if run.is_some() {
             gap += 1;
             if line.trim().is_empty() || gap > MAX_GAP_LINES {
-                finish(&mut run, &mut last);
+                finish(&mut run, &mut found);
             }
         }
     }
-    finish(&mut run, &mut last);
+    finish(&mut run, &mut found);
 
-    let (first, options) = last?;
+    let Run { first, last, options } = found?;
     if options.iter().filter(|o| o.selected).count() != 1 {
         return None;
     }
-    let question = lines[..first]
+    let floor = first.saturating_sub(MAX_BLOCK_LINES);
+    let top = (floor..first).rev().find(|&i| is_block_top(lines[i])).map_or(floor, |i| i + 1);
+    let question_at = (top..first).rev().find(|&i| !strip(lines[i]).is_empty());
+    let question = question_at.map_or("", |i| strip(lines[i])).to_string();
+    let detail = lines[top..question_at.unwrap_or(top)]
         .iter()
-        .rev()
         .map(|l| strip(l))
-        .find(|l| !l.is_empty())
-        .unwrap_or("")
-        .to_string();
-    Some(Prompt { question, options })
+        .filter(|l| !l.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let fingerprint = lines[top..=last]
+        .iter()
+        .map(|l| match option_line(l) {
+            Some(o) => format!("{}. {}", o.number, o.label),
+            None => strip(l).to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    Some(Prompt { question, detail, options, fingerprint })
 }
 
 /// The screen once output has paused for 400 ms (giving up waiting after 3 s), counting only
 /// output from `since` (epoch ms) on.
-fn settled_screen(hub: &TerminalHub, id: u32, since: i64) -> Result<String, String> {
+pub(super) fn settled_screen(hub: &TerminalHub, id: u32, since: i64) -> Result<String, String> {
     let clock = hub.clock();
     let start = clock.now_ms();
     loop {
@@ -144,23 +178,20 @@ fn settled_screen(hub: &TerminalHub, id: u32, since: i64) -> Result<String, Stri
     }
 }
 
-/// The agent's open terminal, or a new temporary one (`true`).
+/// The agent's open panel, or a new temporary terminal (`true`).
 fn attach(hub: &TerminalHub, short_id: &str) -> Result<(u32, bool), String> {
-    if !valid_short_id(short_id) {
-        return Err("Invalid agent id".into());
-    }
     match hub.existing(short_id) {
         Some(id) => Ok((id, false)),
-        None => {
-            let id =
-                hub.open(short_id, TEMP_COLS, TEMP_ROWS, Box::new(|_, _| {}), Box::new(|_| {}))?;
-            Ok((id, true))
-        }
+        None => Ok((hub.open_temporary(short_id, TEMP_COLS, TEMP_ROWS)?, true)),
     }
 }
 
 /// The prompt the agent waits on, if any.
 pub fn read_prompt(hub: &TerminalHub, short_id: &str) -> Result<Option<Prompt>, String> {
+    if !valid_short_id(short_id) {
+        return Err("Invalid agent id".into());
+    }
+    let _held = hub.lock_agent(short_id);
     let (id, temp) = attach(hub, short_id)?;
     let screen = settled_screen(hub, id, 0);
     if temp {
@@ -169,22 +200,31 @@ pub fn read_prompt(hub: &TerminalHub, short_id: &str) -> Result<Option<Prompt>, 
     Ok(parse_prompt(&screen?))
 }
 
-/// Chooses option `number`, provided it still reads `expected_label`: moves the pointer with
-/// arrow keys, re-reads the screen, and presses Enter only if that option is now highlighted.
+/// Chooses option `number` of the prompt read earlier, provided the screen still shows that
+/// prompt (`fingerprint`) with that option (`expected_label`): moves the pointer with arrow keys,
+/// re-reads the screen, and presses Enter only if it is still that prompt and the option is now
+/// highlighted.
 pub fn answer(
     hub: &TerminalHub,
     short_id: &str,
     number: u8,
     expected_label: &str,
+    fingerprint: &str,
 ) -> Result<(), String> {
+    if !valid_short_id(short_id) {
+        return Err("Invalid agent id".into());
+    }
+    let held = hub.lock_agent(short_id);
     let (id, temp) = attach(hub, short_id)?;
-    let result = choose(hub, id, number, expected_label);
+    let result = choose(hub, id, number, expected_label, fingerprint);
     if temp {
         if result.is_ok() {
+            // The agent stays held until its temporary terminal is gone.
             let hub = hub.clone();
             std::thread::spawn(move || {
                 hub.clock().sleep_ms(TEMP_CLOSE_AFTER_MS);
                 hub.close(id);
+                drop(held);
             });
         } else {
             hub.close(id);
@@ -193,12 +233,25 @@ pub fn answer(
     result
 }
 
-fn choose(hub: &TerminalHub, id: u32, number: u8, expected_label: &str) -> Result<(), String> {
+/// The prompt on screen, if it is the one identified by `fingerprint` and option `number` reads
+/// `label`.
+fn same_prompt(screen: &str, number: u8, label: &str, fingerprint: &str) -> Option<Prompt> {
+    parse_prompt(screen).filter(|p| {
+        p.fingerprint == fingerprint
+            && p.options.iter().any(|o| o.number == number && o.label == label)
+    })
+}
+
+fn choose(
+    hub: &TerminalHub,
+    id: u32,
+    number: u8,
+    label: &str,
+    fingerprint: &str,
+) -> Result<(), String> {
     let clock = hub.clock();
-    let prompt = parse_prompt(&settled_screen(hub, id, 0)?).ok_or(CHANGED)?;
-    if !prompt.options.iter().any(|o| o.number == number && o.label == expected_label) {
-        return Err(CHANGED.into());
-    }
+    let screen = settled_screen(hub, id, 0)?;
+    let prompt = same_prompt(&screen, number, label, fingerprint).ok_or(CHANGED)?;
     let current = prompt.options.iter().find(|o| o.selected).map(|o| o.number).ok_or(CHANGED)?;
     let key = if number > current { DOWN } else { UP };
     let moves = number.abs_diff(current);
@@ -210,10 +263,9 @@ fn choose(hub: &TerminalHub, id: u32, number: u8, expected_label: &str) -> Resul
         }
         hub.write(id, key)?;
     }
-    let highlighted = parse_prompt(&settled_screen(hub, id, since)?).is_some_and(|p| {
-        p.options.iter().any(|o| o.number == number && o.label == expected_label && o.selected)
-    });
-    if !highlighted {
+    let screen = settled_screen(hub, id, since)?;
+    let prompt = same_prompt(&screen, number, label, fingerprint).ok_or(CHANGED)?;
+    if !prompt.options.iter().any(|o| o.number == number && o.selected) {
         return Err(NOT_SELECTED.into());
     }
     hub.write(id, b"\r")
@@ -256,12 +308,13 @@ pub async fn agents_answer(
     short_id: String,
     number: u8,
     label: String,
+    fingerprint: String,
 ) -> Result<(), String> {
     let cli = super::actions::ready(&state)?;
     let hub = state.hub.clone();
     super::pty::blocking(move || {
         require_background(&cli, &short_id)?;
-        answer(&hub, &short_id, number, &label)
+        answer(&hub, &short_id, number, &label, &fingerprint)
     })
     .await
 }
@@ -269,10 +322,11 @@ pub async fn agents_answer(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agents::model::{parse_agents, Agent};
     use crate::agents::pty::tests::{eventually, FakeClock};
-    use crate::agents::pty::{PtyProcess, PtySpawner};
+    use crate::agents::pty::{send_message, PtyProcess, PtySpawner};
     use std::io::Read;
-    use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicI64, AtomicUsize, Ordering};
     use std::sync::mpsc::{channel, Receiver, Sender};
     use std::sync::{Arc, Mutex};
 
@@ -282,6 +336,10 @@ mod tests {
 
     fn opt(number: u8, label: &str, selected: bool) -> PromptOption {
         PromptOption { number, label: label.into(), selected }
+    }
+
+    fn fingerprint(screen: &str) -> String {
+        parse_prompt(screen).expect("prompt").fingerprint
     }
 
     #[test]
@@ -297,6 +355,17 @@ mod tests {
                 opt(4, "No", false),
             ]
         );
+        assert_eq!(
+            p.detail,
+            "Bash command\n\
+             Tip: auto mode handles these prompts for you — choose \"switch to auto mode\" below\n\
+             Create empty file y.txt in fixture directory\n\
+             touch /tmp/sm-agents-fixture/y.txt"
+        );
+        assert!(p.fingerprint.starts_with("Bash command "));
+        assert!(p.fingerprint.contains("touch /tmp/sm-agents-fixture/y.txt Do you want to proceed? 1. Yes 2. Yes"));
+        assert!(p.fingerprint.ends_with("4. No"));
+        assert!(!p.fingerprint.contains('❯'));
     }
 
     #[test]
@@ -304,6 +373,7 @@ mod tests {
         // Descriptions under each option and the rule above option 5 do not break the run.
         let p = parse_prompt(CHOICE).expect("prompt");
         assert_eq!(p.question, "Which colour should the demo use?");
+        assert_eq!(p.detail, "☐ Colour");
         assert_eq!(
             p.options,
             vec![
@@ -314,6 +384,20 @@ mod tests {
                 opt(5, "Chat about this", false),
             ]
         );
+    }
+
+    #[test]
+    fn fingerprint_ignores_pointer() {
+        let moved = CHOICE.replacen("❯ 1. Red", "  1. Red", 1).replacen("  2. Green", "❯ 2. Green", 1);
+        assert_eq!(parse_prompt(&moved).unwrap().options[1], opt(2, "Green", true));
+        assert_eq!(fingerprint(&moved), fingerprint(CHOICE));
+        assert_eq!(fingerprint(MOVED), fingerprint(FIRST));
+    }
+
+    #[test]
+    fn fingerprint_tells_prompts_with_same_options_apart() {
+        assert_ne!(fingerprint(OTHER), fingerprint(FIRST));
+        assert_eq!(parse_prompt(OTHER).unwrap().options, parse_prompt(FIRST).unwrap().options);
     }
 
     #[test]
@@ -334,7 +418,9 @@ mod tests {
         let screen = "╭──────────────╮\n│ Proceed?     │\n│ > 1. Yes     │\n│   2. No      │\n╰──────────────╯\n";
         let p = parse_prompt(screen).expect("prompt");
         assert_eq!(p.question, "Proceed?");
+        assert_eq!(p.detail, "");
         assert_eq!(p.options, vec![opt(1, "Yes", true), opt(2, "No", false)]);
+        assert_eq!(p.fingerprint, "Proceed? 1. Yes 2. No");
     }
 
     #[test]
@@ -350,6 +436,9 @@ mod tests {
         after_down: Option<String>,
         writes: Arc<Mutex<Vec<String>>>,
         killed: Arc<AtomicBool>,
+        /// Processes alive now, and the most ever alive at once.
+        live: Arc<AtomicUsize>,
+        max_live: Arc<AtomicUsize>,
     }
 
     fn draw(screen: &str) -> Vec<u8> {
@@ -360,10 +449,13 @@ mod tests {
         fn spawn(&self, _: &str, _: u16, _: u16) -> Result<Box<dyn PtyProcess>, String> {
             let (tx, rx) = channel();
             tx.send(draw(&self.first)).unwrap();
+            let live = self.live.fetch_add(1, Ordering::SeqCst) + 1;
+            self.max_live.fetch_max(live, Ordering::SeqCst);
             Ok(Box::new(ScriptProc {
                 after_down: self.after_down.clone(),
                 writes: self.writes.clone(),
                 killed: self.killed.clone(),
+                live: self.live.clone(),
                 tx: Mutex::new(Some(tx)),
                 rx: Some(rx),
             }))
@@ -374,6 +466,7 @@ mod tests {
         after_down: Option<String>,
         writes: Arc<Mutex<Vec<String>>>,
         killed: Arc<AtomicBool>,
+        live: Arc<AtomicUsize>,
         tx: Mutex<Option<Sender<Vec<u8>>>>,
         rx: Option<Receiver<Vec<u8>>>,
     }
@@ -413,77 +506,158 @@ mod tests {
         }
         fn kill(&mut self) {
             self.killed.store(true, Ordering::SeqCst);
+            self.live.fetch_sub(1, Ordering::SeqCst);
             self.tx.lock().unwrap().take();
         }
     }
 
-    const FIRST: &str = "Do you want to proceed?\n❯ 1. Yes\n  2. No\n";
-    const MOVED: &str = "Do you want to proceed?\n  1. Yes\n❯ 2. No\n";
+    const FIRST: &str = "agent output\n──────────\n Bash command\n touch /tmp/demo/a\n Do you want to proceed?\n ❯ 1. Yes\n   2. No\n";
+    const MOVED: &str = "agent output\n──────────\n Bash command\n touch /tmp/demo/a\n Do you want to proceed?\n   1. Yes\n ❯ 2. No\n";
+    /// The next permission prompt: same question and options, another command.
+    const OTHER: &str = "agent output\n──────────\n Bash command\n rm -rf /tmp/demo\n Do you want to proceed?\n ❯ 1. Yes\n   2. No\n";
+    const OTHER_MOVED: &str = "agent output\n──────────\n Bash command\n rm -rf /tmp/demo\n Do you want to proceed?\n   1. Yes\n ❯ 2. No\n";
 
-    fn hub(after_down: Option<&str>) -> (TerminalHub, Arc<Mutex<Vec<String>>>, Arc<AtomicBool>) {
+    struct Fake {
+        hub: TerminalHub,
+        writes: Arc<Mutex<Vec<String>>>,
+        killed: Arc<AtomicBool>,
+        max_live: Arc<AtomicUsize>,
+    }
+
+    impl Fake {
+        fn writes(&self) -> Vec<String> {
+            self.writes.lock().unwrap().clone()
+        }
+    }
+
+    fn fake(first: &str, after_down: Option<&str>) -> Fake {
         let writes = Arc::new(Mutex::new(vec![]));
         let killed = Arc::new(AtomicBool::new(false));
+        let max_live = Arc::new(AtomicUsize::new(0));
         let spawner = ScriptSpawner {
-            first: FIRST.into(),
+            first: first.into(),
             after_down: after_down.map(String::from),
             writes: writes.clone(),
             killed: killed.clone(),
+            live: Arc::default(),
+            max_live: max_live.clone(),
         };
         let clock = Arc::new(FakeClock { now: AtomicI64::new(1_000), ..Default::default() });
-        (TerminalHub::new(Arc::new(spawner), clock), writes, killed)
+        Fake { hub: TerminalHub::new(Arc::new(spawner), clock), writes, killed, max_live }
     }
 
     #[test]
     fn answer_moves_then_confirms() {
-        let (hub, writes, killed) = hub(Some(MOVED));
-        answer(&hub, "0a1b2c3d", 2, "No").unwrap();
-        assert_eq!(*writes.lock().unwrap(), vec!["\x1b[B", "\r"]);
-        assert!(eventually(|| hub.len() == 0), "temporary terminal closed");
-        assert!(killed.load(Ordering::SeqCst));
+        let f = fake(FIRST, Some(MOVED));
+        answer(&f.hub, "0a1b2c3d", 2, "No", &fingerprint(FIRST)).unwrap();
+        assert_eq!(f.writes(), vec!["\x1b[B", "\r"]);
+        assert!(eventually(|| f.hub.len() == 0), "temporary terminal closed");
+        assert!(f.killed.load(Ordering::SeqCst));
     }
 
     #[test]
     fn answer_selected_option_sends_only_enter() {
-        let (hub, writes, _) = hub(None);
-        answer(&hub, "0a1b2c3d", 1, "Yes").unwrap();
-        assert_eq!(*writes.lock().unwrap(), vec!["\r"]);
+        let f = fake(FIRST, None);
+        answer(&f.hub, "0a1b2c3d", 1, "Yes", &fingerprint(FIRST)).unwrap();
+        assert_eq!(f.writes(), vec!["\r"]);
     }
 
     #[test]
     fn answer_refuses_when_label_changed() {
-        let (hub, writes, _) = hub(Some(MOVED));
-        assert_eq!(answer(&hub, "0a1b2c3d", 2, "Maybe").unwrap_err(), "The prompt changed");
-        assert_eq!(answer(&hub, "0a1b2c3d", 3, "No").unwrap_err(), "The prompt changed");
-        assert!(writes.lock().unwrap().is_empty());
+        let f = fake(FIRST, Some(MOVED));
+        let fp = fingerprint(FIRST);
+        assert_eq!(answer(&f.hub, "0a1b2c3d", 2, "Maybe", &fp).unwrap_err(), "The prompt changed");
+        assert_eq!(answer(&f.hub, "0a1b2c3d", 3, "No", &fp).unwrap_err(), "The prompt changed");
+        assert!(f.writes().is_empty());
+    }
+
+    #[test]
+    fn answer_refuses_another_prompt_with_same_options() {
+        // The prompt the user saw was answered elsewhere and the next one opened.
+        let f = fake(OTHER, Some(OTHER_MOVED));
+        let err = answer(&f.hub, "0a1b2c3d", 1, "Yes", &fingerprint(FIRST)).unwrap_err();
+        assert_eq!(err, "The prompt changed");
+        assert!(f.writes().is_empty());
+        assert_eq!(f.hub.len(), 0);
+    }
+
+    #[test]
+    fn answer_refuses_when_prompt_replaced_while_moving() {
+        let f = fake(FIRST, Some(OTHER_MOVED));
+        let err = answer(&f.hub, "0a1b2c3d", 2, "No", &fingerprint(FIRST)).unwrap_err();
+        assert_eq!(err, "The prompt changed");
+        assert_eq!(f.writes(), vec!["\x1b[B"]);
     }
 
     #[test]
     fn answer_never_enters_when_selection_did_not_move() {
-        let (hub, writes, _) = hub(None);
-        let err = answer(&hub, "0a1b2c3d", 2, "No").unwrap_err();
+        let f = fake(FIRST, None);
+        let err = answer(&f.hub, "0a1b2c3d", 2, "No", &fingerprint(FIRST)).unwrap_err();
         assert_eq!(err, "Could not select that option; use the terminal");
-        assert_eq!(*writes.lock().unwrap(), vec!["\x1b[B"]);
-        assert!(eventually(|| hub.len() == 0), "temporary terminal closed");
-    }
-
-    #[test]
-    fn read_prompt_through_temporary_terminal() {
-        let (hub, writes, killed) = hub(None);
-        let p = read_prompt(&hub, "0a1b2c3d").unwrap().expect("prompt");
-        assert_eq!(p.options, vec![opt(1, "Yes", true), opt(2, "No", false)]);
-        assert!(writes.lock().unwrap().is_empty());
-        assert_eq!(hub.len(), 0);
-        assert!(killed.load(Ordering::SeqCst));
-        assert!(read_prompt(&hub, "nope").is_err());
+        assert_eq!(f.writes(), vec!["\x1b[B"]);
+        assert!(eventually(|| f.hub.len() == 0), "temporary terminal closed");
     }
 
     #[test]
     fn answer_reuses_open_terminal() {
-        let (hub, writes, _) = hub(Some(MOVED));
-        let id = hub.open("0a1b2c3d", 80, 24, Box::new(|_, _| {}), Box::new(|_| {})).unwrap();
-        answer(&hub, "0a1b2c3d", 2, "No").unwrap();
-        assert_eq!(*writes.lock().unwrap(), vec!["\x1b[B", "\r"]);
+        let f = fake(FIRST, Some(MOVED));
+        let id = f.hub.open("0a1b2c3d", 80, 24, Box::new(|_, _| {}), Box::new(|_| {})).unwrap();
+        answer(&f.hub, "0a1b2c3d", 2, "No", &fingerprint(FIRST)).unwrap();
+        assert_eq!(f.writes(), vec!["\x1b[B", "\r"]);
         std::thread::sleep(std::time::Duration::from_millis(50));
-        assert_eq!(hub.existing("0a1b2c3d"), Some(id), "the panel stays open");
+        assert_eq!(f.hub.existing("0a1b2c3d"), Some(id), "the panel stays open");
+    }
+
+    #[test]
+    fn read_prompt_through_temporary_terminal() {
+        let f = fake(FIRST, None);
+        let p = read_prompt(&f.hub, "0a1b2c3d").unwrap().expect("prompt");
+        assert_eq!(p.options, vec![opt(1, "Yes", true), opt(2, "No", false)]);
+        assert_eq!(p.detail, "Bash command\ntouch /tmp/demo/a");
+        assert!(f.writes().is_empty());
+        assert_eq!(f.hub.len(), 0);
+        assert!(f.killed.load(Ordering::SeqCst));
+        assert!(read_prompt(&f.hub, "nope").is_err());
+    }
+
+    #[test]
+    fn temporary_terminal_is_not_existing() {
+        let f = fake(FIRST, None);
+        let id = f.hub.open_temporary("0a1b2c3d", 80, 24).unwrap();
+        assert_eq!(f.hub.existing("0a1b2c3d"), None);
+        assert!(f.hub.screen(id).is_some());
+    }
+
+    #[test]
+    fn one_temporary_terminal_per_agent() {
+        let f = fake(FIRST, None);
+        let threads: Vec<_> = (0..4)
+            .map(|_| {
+                let hub = f.hub.clone();
+                std::thread::spawn(move || read_prompt(&hub, "0a1b2c3d"))
+            })
+            .collect();
+        for t in threads {
+            assert!(t.join().unwrap().unwrap().is_some());
+        }
+        // An answer's terminal lingers for a second; a read meanwhile waits for it to close.
+        answer(&f.hub, "0a1b2c3d", 1, "Yes", &fingerprint(FIRST)).unwrap();
+        read_prompt(&f.hub, "0a1b2c3d").unwrap();
+        assert_eq!(f.max_live.load(Ordering::SeqCst), 1);
+    }
+
+    fn idle_agent() -> Agent {
+        let json = r#"[{"sessionId":"00000000-1111-2222-3333-444444444444","id":"0a1b2c3d","kind":"bg","status":"idle"}]"#;
+        parse_agents(json).unwrap().remove(0)
+    }
+
+    #[test]
+    fn send_refused_when_prompt_on_screen() {
+        // The CLI still says idle, but a prompt has opened: a typed "1" would confirm it.
+        let f = fake(FIRST, None);
+        let err = send_message(&f.hub, &idle_agent(), "1").unwrap_err();
+        assert_eq!(err, "Answer the open prompt first");
+        assert!(f.writes().is_empty());
+        assert_eq!(f.hub.len(), 0);
     }
 }

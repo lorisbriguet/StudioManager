@@ -91,14 +91,26 @@ export interface PromptOption {
 /** The prompt a background agent waits on, as read from its terminal. */
 export interface Prompt {
   question: string;
+  /** What the prompt is about (the command, the file…), one line per screen line. */
+  detail: string;
   options: PromptOption[];
+  /** Identifies this prompt; pass it back to `answerPrompt`. */
+  fingerprint: string;
 }
 
 export function getPrompt(shortId: string): Promise<Prompt | null> {
   return invoke<Prompt | null>("agents_prompt", { shortId });
 }
 
-/** Refused, and nothing typed, when option `number` no longer reads `label`. */
-export function answerPrompt(shortId: string, number: number, label: string): Promise<void> {
-  return invoke<void>("agents_answer", { shortId, number, label });
+/**
+ * Refused, and nothing confirmed, when the screen no longer shows the prompt identified by
+ * `fingerprint` with option `number` reading `label`.
+ */
+export function answerPrompt(
+  shortId: string,
+  number: number,
+  label: string,
+  fingerprint: string,
+): Promise<void> {
+  return invoke<void>("agents_answer", { shortId, number, label, fingerprint });
 }
