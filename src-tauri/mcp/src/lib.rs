@@ -21,6 +21,7 @@ pub mod markdown;
 pub mod money;
 pub mod read;
 pub mod server;
+pub mod statusline;
 pub mod text;
 pub mod write;
 
