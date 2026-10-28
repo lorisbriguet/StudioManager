@@ -239,6 +239,13 @@ pub async fn agents_set_enabled(
         return Err("claude not found".into());
     }
     write_settings(&state.app_dir, &AgentsSettings { enabled })?;
+    if !enabled {
+        // Each panel still gets `agents:term-exit` from its reader thread.
+        let hub = state.hub.clone();
+        tauri::async_runtime::spawn_blocking(move || hub.close_all())
+            .await
+            .map_err(|e| e.to_string())?;
+    }
     Ok(info(&state))
 }
 

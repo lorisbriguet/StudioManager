@@ -277,6 +277,14 @@ impl TerminalHub {
         }
     }
 
+    /// Closes every terminal (Agents switched off). Each reader thread still runs its `on_exit`.
+    pub fn close_all(&self) {
+        let terms: Vec<Arc<Term>> = lock(&self.inner.terms).live.drain().map(|(_, t)| t).collect();
+        for term in terms {
+            term.end();
+        }
+    }
+
     /// The most recently opened live terminal attached to `short_id`.
     pub fn existing(&self, short_id: &str) -> Option<u32> {
         let t = lock(&self.inner.terms);
@@ -426,7 +434,7 @@ pub async fn agents_term_close(
     state: tauri::State<'_, super::AgentsState>,
     term_id: u32,
 ) -> Result<(), String> {
-    super::actions::switched_on(&state)?;
+    // No switched-off guard: closing must always work.
     let hub = state.hub.clone();
     blocking(move || {
         hub.close(term_id);
@@ -633,6 +641,32 @@ mod tests {
         assert!(eventually(|| hub.len() == MAX_TERMINALS - 1));
         assert!(spawner.handles()[1].killed.load(Ordering::SeqCst), "exited process reaped");
         open(&hub, "0a1b2c3d").unwrap();
+    }
+
+    #[test]
+    fn close_all_ends_every_terminal() {
+        let (hub, spawner, _) = hub();
+        let exits = Arc::new(Mutex::new(Vec::new()));
+        let ids: Vec<u32> = (0..MAX_TERMINALS)
+            .map(|_| {
+                let e = exits.clone();
+                hub.open("0a1b2c3d", 80, 24, Box::new(|_, _| {}), Box::new(move |id| {
+                    e.lock().unwrap().push(id);
+                }))
+                .unwrap()
+            })
+            .collect();
+        hub.close_all();
+        assert_eq!(hub.len(), 0);
+        assert!(spawner.handles().iter().all(|h| h.killed.load(Ordering::SeqCst)));
+        assert!(eventually(|| exits.lock().unwrap().len() == MAX_TERMINALS), "term-exit for each");
+        let mut seen = exits.lock().unwrap().clone();
+        seen.sort();
+        assert_eq!(seen, ids);
+        for _ in 0..MAX_TERMINALS {
+            open(&hub, "0a1b2c3d").unwrap();
+        }
+        assert!(open(&hub, "0a1b2c3d").is_err());
     }
 
     #[test]
