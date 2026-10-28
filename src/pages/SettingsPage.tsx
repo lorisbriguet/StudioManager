@@ -19,6 +19,7 @@ import { Input, Select, Button } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
 import { AgentAccessCard } from "../components/settings/AgentAccessCard";
+import { AgentsCard } from "../components/settings/AgentsCard";
 import { OrganisationsCard } from "../components/settings/OrganisationsCard";
 import { DemoDataCard } from "../components/settings/DemoDataCard";
 import { isDemoBuild } from "../lib/demoBuild";
@@ -29,9 +30,9 @@ import { ExpenseCategoryManager } from "../components/settings/ExpenseCategoryMa
 import { CustomListsManager } from "../components/settings/CustomListsManager";
 import { TimeEntriesManager } from "../components/settings/TimeEntriesManager";
 
-type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "agent_access" | "workload" | "organisations" | "categories" | "suppliers" | "lists" | "time_entries" | "updates" | "backup" | "sandbox" | "demo_data";
+type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "agents" | "workload" | "organisations" | "categories" | "suppliers" | "lists" | "time_entries" | "updates" | "backup" | "sandbox" | "demo_data";
 
-const SETTINGS_CATEGORIES_BASE: SettingsCategory[] = ["general", "appearance", "behavior", "calendar", "agent_access", "workload", "organisations", "categories", "suppliers", "lists", "time_entries", "updates", "backup"];
+const SETTINGS_CATEGORIES_BASE: SettingsCategory[] = ["general", "appearance", "behavior", "calendar", "agents", "workload", "organisations", "categories", "suppliers", "lists", "time_entries", "updates", "backup"];
 
 export function SettingsPage() {
   const dateFormat = useAppStore((s) => s.dateFormat);
@@ -78,7 +79,8 @@ export function SettingsPage() {
   const [availableCalendars, setAvailableCalendars] = useState<string[]>([]);
   const [loadingCalendars, setLoadingCalendars] = useState(false);
   const [searchParams] = useSearchParams();
-  const requestedCategory = searchParams.get("category");
+  // "agent_access" was merged into "agents"; old links still land there.
+  const requestedCategory = searchParams.get("category") === "agent_access" ? "agents" : searchParams.get("category");
   // demo_data is only a valid ?category= target in the demo build — in the
   // real build it would otherwise resolve to an empty pane instead of
   // falling back to "general".
@@ -325,7 +327,7 @@ export function SettingsPage() {
         { key: "appearance", label: t.appearance, icon: <Palette size={14} /> },
         { key: "behavior", label: t.behavior, icon: <SlidersHorizontal size={14} /> },
         { key: "calendar", label: t.calendar_sync, icon: <CalendarDays size={14} /> },
-        { key: "agent_access", label: t.agent_access, icon: <Bot size={14} /> },
+        { key: "agents", label: t.agents, icon: <Bot size={14} /> },
         { key: "workload", label: t.workload_templates, icon: <LayoutList size={14} /> },
       ],
     },
@@ -384,7 +386,7 @@ export function SettingsPage() {
   }, [handleSettingsKeyDown]);
 
   return (
-    <div className="flex gap-0 h-full -m-8">
+    <div className="flex gap-0 flex-1 min-h-0 -m-8">
       {/* Category sidebar */}
       <div className="w-48 shrink-0 border-r border-[var(--color-border-divider)] py-5">
         <h1 className="text-sm font-semibold px-5 mb-4 text-muted uppercase tracking-wider">{t.settings}</h1>
@@ -555,7 +557,12 @@ export function SettingsPage() {
             </SettingsCard>
           )}
 
-          {activeCategory === "agent_access" && <AgentAccessCard />}
+          {activeCategory === "agents" && (
+            <div className="space-y-4">
+              <AgentsCard />
+              <AgentAccessCard />
+            </div>
+          )}
 
           {activeCategory === "calendar" && (
             <SettingsCard title={t.calendar_sync} desc={t.calendar_permission_help}>

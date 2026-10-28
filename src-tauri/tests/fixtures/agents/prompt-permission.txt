@@ -1,0 +1,30 @@
+
+
+⏺ Write(/tmp/sm-agents-fixture/x.txt)
+  ⎿  Wrote 1 line to /tmp/sm-agents-fixture/x.txt
+      1 hello
+
+⏺ User declined to answer questions
+  ⎿  · Which colour should the demo use? (Red / Green / Blue)
+
+✻ Baked for 6s · done 13:49
+     
+❯ Now run this exact Bash command once and nothing else: touch /tmp/sm-agents-fixture/y.txt         
+
+  Running 1 shell command…
+  ⎿  $ touch /tmp/sm-agents-fixture/y.txt
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ Bash command
+ Tip: auto mode handles these prompts for you — choose "switch to auto mode" below
+ Create empty file y.txt in fixture directory
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ touch /tmp/sm-agents-fixture/y.txt
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and always allow access to /tmp/sm-agents-fixture from this project
+   3. Yes, and switch to auto mode · auto mode handles these prompts for you
+   4. No
+
+ Esc to cancel · Tab to amend

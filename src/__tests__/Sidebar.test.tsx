@@ -52,6 +52,17 @@ describe("Sidebar", () => {
     expect(screen.getByText("Expenses")).toBeInTheDocument();
   });
 
+  it("shows Agents only when the agents switch is on", () => {
+    useAppStore.setState({ agentsEnabled: false });
+    const { unmount } = renderSidebar();
+    expect(screen.queryByText("Agents")).not.toBeInTheDocument();
+    unmount();
+    useAppStore.setState({ agentsEnabled: true });
+    renderSidebar();
+    expect(screen.getByText("Agents")).toBeInTheDocument();
+    useAppStore.setState({ agentsEnabled: false });
+  });
+
   it("shows notification badge with unread count", () => {
     renderSidebar();
     // The badge shows "3" (from our mock)

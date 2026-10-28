@@ -1,4 +1,5 @@
 mod agent_access;
+mod agents;
 mod apple;
 mod dbfiles;
 mod migrate;
@@ -590,6 +591,25 @@ pub fn run() {
             agent_access::preview_claude_desktop,
             agent_access::install_claude_desktop,
             agent_access::recent_agent_changes,
+            agents::cli::agents_get_enabled,
+            agents::cli::agents_get_settings,
+            agents::cli::agents_set_enabled,
+            agents::projects::agents_start_folders,
+            agents::actions::agents_start,
+            agents::actions::agents_stop,
+            agents::actions::agents_delete,
+            agents::actions::agents_switch_model,
+            agents::actions::agents_dismiss,
+            agents::transcript::agents_conversation,
+            agents::pty::agents_term_open,
+            agents::pty::agents_term_write,
+            agents::pty::agents_term_resize,
+            agents::pty::agents_term_close,
+            agents::pty::agents_send,
+            agents::prompt::agents_prompt,
+            agents::prompt::agents_answer,
+            agents::poller::agents_list,
+            agents::uploads::agents_save_image,
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -604,6 +624,7 @@ pub fn run() {
             handle.manage(ActiveOrgState(Mutex::new(active)));
             handle.manage(InitError(Mutex::new(init_error)));
             agent_access::start_poller(handle);
+            agents::init(handle);
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()

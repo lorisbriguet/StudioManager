@@ -28,6 +28,9 @@ import { FinancesPage } from "./pages/FinancesPage";
 import { InvoicePreviewPage } from "./pages/InvoicePreviewPage";
 import { QuotePreviewPage } from "./pages/QuotePreviewPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
+const AgentsPage = lazy(() =>
+  import("./pages/AgentsPage").then((m) => ({ default: m.AgentsPage }))
+);
 const WikiPage = lazy(() =>
   import("./pages/WikiPage").then((m) => ({ default: m.WikiPage }))
 );
@@ -49,6 +52,7 @@ import { useAppStore } from "./stores/app-store";
 import { useOrgStore } from "./stores/org-store";
 import { getLabels, notifyError } from "./lib/notifyError";
 import { requestNotificationPermission } from "./lib/nativeNotification";
+import { getAgentsEnabled } from "./lib/agents";
 
 import { queryClient } from "./lib/queryClient";
 
@@ -62,6 +66,9 @@ function StartupChecks() {
 
   useEffect(() => {
     requestNotificationPermission();
+    getAgentsEnabled()
+      .then((enabled) => useAppStore.getState().setAgentsEnabled(enabled === true))
+      .catch(() => {});
   }, []);
 
   // Suppress native WebView context menu globally (Tauri renders its own).
@@ -188,6 +195,7 @@ export default function App() {
                 <Route path="income" element={<IncomePage />} />
                 <Route path="finances" element={<FinancesPage />} />
                 <Route path="wiki" element={<Suspense fallback={<PageSpinner />}><WikiPage /></Suspense>} />
+                <Route path="agents" element={<Suspense fallback={<PageSpinner />}><AgentsPage /></Suspense>} />
                 <Route path="resources" element={<ResourcesPage />} />
                 <Route path="notifications" element={<NotificationsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
