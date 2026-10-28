@@ -297,6 +297,14 @@ import { Toggle } from "../components/ui/Toggle";
 ```
 Use for boolean settings. Don't use checkboxes for settings toggles.
 
+### ProgressBar
+```tsx
+import { ProgressBar } from "../components/ui";
+<ProgressBar value={62} />                    // 0–100, clamped
+<ProgressBar value={81} tone="warning" label="Weekly" />
+```
+Props: `value` (0–100), `tone` (`accent` default, `warning`, `danger`), `label` (accessible name when nearby text doesn't name the bar). A 1.5-tall `--color-input-bg` track with a rounded fill; role `progressbar`. Use for every share-of-a-whole bar (project progress, plan limits, which go `warning` from 75% and `danger` from 90%). Never hand-roll a track and fill.
+
 ### Skeleton
 ```tsx
 import { Skeleton } from "../components/ui/Skeleton";

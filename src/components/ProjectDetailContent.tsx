@@ -20,7 +20,7 @@ import type { ProjectStatus } from "../types/project";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu";
 import { useInvoices, useInvoicesByProject, useUpdateInvoice } from "../db/hooks/useInvoices";
 import { useQuotes, useQuotesByProject, useUpdateQuote } from "../db/hooks/useQuotes";
-import { Badge, Button, PageSpinner } from "./ui";
+import { Badge, Button, PageSpinner, ProgressBar } from "./ui";
 import { invoiceStatusVariant, quoteStatusVariant } from "../lib/statusColors";
 import { useTabStore } from "../stores/tab-store";
 import { open as openDirectory } from "@tauri-apps/plugin-dialog";
@@ -355,12 +355,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
               <span>{t.progress}</span>
               <span>{progress}%</span>
             </div>
-            <div className="h-1.5 bg-[var(--color-input)] rounded-full overflow-hidden">
-              <div
-                className="h-full bg-accent rounded-full transition-all"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
+            <ProgressBar value={progress} />
           </div>
         )}
 
