@@ -56,11 +56,30 @@ fn to_text(root: Map<String, Value>) -> Result<String, String> {
     Ok(format!("{out}\n"))
 }
 
-/// The `statusLine` is StudioManager's: its command is ours (both trimmed).
+/// The `statusLine` is StudioManager's from the current path: its command is `command` (both
+/// trimmed). This is what "installed" means.
 fn is_ours(line: Option<&Value>, command: &str) -> bool {
     line.and_then(|l| l.get("command"))
         .and_then(Value::as_str)
         .is_some_and(|c| c.trim() == command.trim())
+}
+
+/// Any StudioManager status line, whatever path it was set up from (a dev build, a moved or
+/// renamed app): the command runs a `studiomanager-mcp` binary with `--statusline`. The path
+/// is read back from the single-quoted form `status_line_command` writes, else taken as is.
+fn is_studiomanager(line: Option<&Value>) -> bool {
+    let Some(command) = line.and_then(|l| l.get("command")).and_then(Value::as_str) else {
+        return false;
+    };
+    let Some(path) = command.trim().strip_suffix(" --statusline") else {
+        return false;
+    };
+    let path = path.trim();
+    let path = match path.strip_prefix('\'').and_then(|p| p.strip_suffix('\'')) {
+        Some(quoted) => quoted.replace(r"'\''", "'"),
+        None => path.to_string(),
+    };
+    Path::new(&path).file_name().is_some_and(|n| n == crate::agent_access::MCP_BINARY)
 }
 
 /// Claude Code's settings with `statusLine` set to StudioManager's command, every other key
@@ -123,7 +142,7 @@ pub fn preview_at(
     Ok(StatusLinePreview {
         current,
         next,
-        replaces_other: line.is_some() && !installed,
+        replaces_other: line.is_some() && !is_studiomanager(line),
         installed,
         remove_next,
     })
@@ -131,8 +150,9 @@ pub fn preview_at(
 
 /// Write `expected` (the approved preview's `next`) to Claude Code's settings: refused when
 /// the file changed since the preview; otherwise the replaced `statusLine` is saved in
-/// `agents.json` (unless it was already ours: the saved one stays), then the file is backed up
-/// and written. Returns the backup path, `None` when there was no file.
+/// `agents.json` (unless it was StudioManager's, from this path or another: the saved one
+/// stays), then the file is backed up and written. Returns the backup path, `None` when there
+/// was no file.
 pub fn install_at(
     settings: &Path,
     app_dir: &Path,
@@ -146,7 +166,7 @@ pub fn install_at(
         &|existing| {
             let (text, previous) = merge_status_line(existing, command)?;
             // Only once the preview is confirmed current, and before the file is written.
-            if text == expected && !is_ours(previous.as_ref(), command) {
+            if text == expected && !is_studiomanager(previous.as_ref()) {
                 let mut s = read_settings(app_dir);
                 s.previous_status_line = previous;
                 write_settings(app_dir, &s)?;
@@ -419,6 +439,43 @@ mod tests {
             read_settings(&app).previous_status_line,
             Some(json!({ "type": "command", "command": "~/x.sh" }))
         );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn line_from_another_studiomanager_path_is_ours_not_other() {
+        let dir = tmp("moved");
+        let app = dir.join("app");
+        let settings = dir.join("settings.json");
+        let original = json!({ "type": "command", "command": "~/x.sh" });
+        std::fs::write(&settings, json!({ "model": "opus", "statusLine": original }).to_string())
+            .unwrap();
+        // Set up from path A (e.g. a dev build)…
+        let a = status_line_command("/repo/target/debug/studiomanager-mcp");
+        let p = preview_at(&settings, &a, None).unwrap();
+        install_at(&settings, &app, &a, &p.next, "1").unwrap();
+
+        // …then from path B (the installed app, with a quote in its path).
+        let b = status_line_command("/Apps/Loris's Studio.app/Contents/MacOS/studiomanager-mcp");
+        let saved = read_settings(&app).previous_status_line;
+        let p = preview_at(&settings, &b, saved.as_ref()).unwrap();
+        assert!(!p.installed, "a stale path still needs setup");
+        assert!(!p.replaces_other, "no warning for StudioManager's own line");
+        install_at(&settings, &app, &b, &p.next, "2").unwrap();
+        assert_eq!(read_settings(&app).previous_status_line, Some(original.clone()));
+
+        let saved = read_settings(&app).previous_status_line;
+        let p = preview_at(&settings, &b, saved.as_ref()).unwrap();
+        assert!(p.installed);
+        remove_at(&settings, &app, &b, &p.remove_next.unwrap(), "3").unwrap();
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
+        assert_eq!(v, json!({ "model": "opus", "statusLine": original }));
+
+        // Other scripts merely named alike are not ours.
+        let other = |c: &str| json!({ "type": "command", "command": c });
+        assert!(!is_studiomanager(Some(&other("~/bin/studiomanager-mcp-wrapper --statusline"))));
+        assert!(!is_studiomanager(Some(&other("'/x/studiomanager-mcp'"))));
+        assert!(is_studiomanager(Some(&other("/x/studiomanager-mcp --statusline"))));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

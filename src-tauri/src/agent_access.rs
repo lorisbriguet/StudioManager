@@ -169,7 +169,8 @@ pub fn install_claude_config_at(
 /// approved), the file changed since the preview: nothing is written and the
 /// error is `changed_msg`. Otherwise the current file (if any) is backed up
 /// next to it, then `expected` replaces it atomically. Returns the backup
-/// path, `None` when there was no file.
+/// path, `None` when there was no file. `recompute` runs exactly once, before
+/// the backup and the write (agents::statusline relies on it).
 pub(crate) fn install_previewed(
     config: &Path,
     expected: &str,
