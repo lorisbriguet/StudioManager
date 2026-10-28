@@ -10,6 +10,7 @@ export default defineConfig({
       // Stub out Tauri APIs in test environment
       "@tauri-apps/plugin-sql": path.resolve(__dirname, "./src/__mocks__/tauri-sql.ts"),
       "@tauri-apps/api/core": path.resolve(__dirname, "./src/__mocks__/tauri-api.ts"),
+      "@tauri-apps/api/event": path.resolve(__dirname, "./src/__mocks__/tauri-event.ts"),
       "@tauri-apps/api/path": path.resolve(__dirname, "./src/__mocks__/tauri-api.ts"),
       "@tauri-apps/api/app": path.resolve(__dirname, "./src/__mocks__/tauri-api.ts"),
       "@tauri-apps/api/webview": path.resolve(__dirname, "./src/__mocks__/tauri-api.ts"),

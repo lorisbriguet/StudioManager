@@ -114,3 +114,48 @@ export function answerPrompt(
 ): Promise<void> {
   return invoke<void>("agents_answer", { shortId, number, label, fingerprint });
 }
+
+export type Group = "needs-you" | "working" | "idle" | "done";
+
+export interface ProjectLabel {
+  orgId: string;
+  orgName: string;
+  clientName: string;
+  projectId: number;
+  projectName: string;
+  folder: string;
+}
+
+export interface Agent {
+  sessionId: string;
+  shortId: string | null;
+  pid: number | null;
+  name: string;
+  cwd: string;
+  kind: "background" | "interactive";
+  status: string;
+  state: string | null;
+  waitingFor: string | null;
+  startedAt: number;
+  group: Group;
+  quiet: "stale" | "dismissed" | null;
+  project: ProjectLabel | null;
+  model: string | null;
+}
+
+export interface StartFolder {
+  path: string;
+  label: ProjectLabel | null;
+}
+
+/** The full agent list; carried by the `agents:changed` event. */
+export const AGENTS_CHANGED = "agents:changed";
+
+/** Rejects with "Agents are switched off" while the switch is off. */
+export function listAgents(): Promise<Agent[]> {
+  return invoke<Agent[]>("agents_list");
+}
+
+export function startFolders(): Promise<StartFolder[]> {
+  return invoke<StartFolder[]>("agents_start_folders");
+}
