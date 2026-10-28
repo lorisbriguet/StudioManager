@@ -7,7 +7,8 @@ import { Badge, Button, Card, FormField, Input, Modal, Select } from "../ui";
 import { Toggle } from "../ui/Toggle";
 import { MachineForm } from "./MachineForm";
 import { MachineExpenseRow } from "./MachineExpenseRow";
-import { FilesSection, SectionTitle, ServiceLogSection } from "./MachineLogSections";
+import { CollapsibleSection } from "./CollapsibleSection";
+import { FilesSection, ServiceLogSection } from "./MachineLogSections";
 import { UpkeepItemForm } from "./UpkeepItemForm";
 import { repeatsLabel } from "./DueList";
 import { useT } from "../../i18n/useT";
@@ -102,8 +103,7 @@ function ProjectsSection({ machineId }: { machineId: number }) {
   const linked = projects.filter((p) => ids.includes(p.id));
   const rest = projects.filter((p) => !ids.includes(p.id));
   return (
-    <section>
-      <SectionTitle>{t.upkeep_linked_projects}</SectionTitle>
+    <CollapsibleSection id={`machine-${machineId}-projects`} title={t.upkeep_linked_projects}>
       <div className="flex flex-wrap items-center gap-2">
         {linked.map((p) => (
           <span key={p.id} className="inline-flex items-center gap-1 rounded-full bg-[var(--color-input-bg)] px-2.5 py-0.5 text-xs">
@@ -133,7 +133,7 @@ function ProjectsSection({ machineId }: { machineId: number }) {
         )}
         {linked.length === 0 && rest.length === 0 && <span className="text-sm text-muted">{t.none}</span>}
       </div>
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -223,6 +223,7 @@ export function MachineDetail({ machineId, compact = false, onDeleted }: {
       </div>
       {status === "retired" && <p className="text-sm text-muted">{t.upkeep_retired_note}</p>}
 
+      <CollapsibleSection id={`machine-${machine.id}-facts`} title={t.upkeep_details}>
       <Card>
         <div className={`grid gap-4 ${compact ? "grid-cols-2" : "grid-cols-2 md:grid-cols-4"}`}>
           <Fact label={t.upkeep_bought}>
@@ -247,17 +248,17 @@ export function MachineDetail({ machineId, compact = false, onDeleted }: {
           </Fact>
         </div>
       </Card>
+      </CollapsibleSection>
 
-      <section>
-        <SectionTitle
-          aside={
-            <Button size="sm" variant="secondary" icon={<Plus size={14} />} onClick={() => setItemForm({})}>
-              {t.upkeep_add_item}
-            </Button>
-          }
-        >
-          {t.upkeep_schedule}
-        </SectionTitle>
+      <CollapsibleSection
+        id={`machine-${machine.id}-schedule`}
+        title={t.upkeep_schedule}
+        aside={
+          <Button size="sm" variant="secondary" icon={<Plus size={14} />} onClick={() => setItemForm({})}>
+            {t.upkeep_add_item}
+          </Button>
+        }
+      >
         {active.length === 0 ? (
           <p className="text-sm text-muted">{t.upkeep_schedule_empty}</p>
         ) : (
@@ -309,13 +310,12 @@ export function MachineDetail({ machineId, compact = false, onDeleted }: {
             </tbody>
           </table>
         )}
-      </section>
+      </CollapsibleSection>
 
-      <section>
-        <SectionTitle>{t.upkeep_readings}</SectionTitle>
+      <CollapsibleSection id={`machine-${machine.id}-readings`} title={t.upkeep_readings}>
         {/* Replaced by ReadingsSection when a connection exists (Task 12). */}
         <p className="text-sm text-muted">{t.upkeep_no_connection}</p>
-      </section>
+      </CollapsibleSection>
 
       <FilesSection machineId={machine.id} />
       <ServiceLogSection machineId={machine.id} />

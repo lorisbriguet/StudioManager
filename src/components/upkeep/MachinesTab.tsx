@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Maximize2, Plus, X } from "lucide-react";
 import { Badge, Button, EmptyState } from "../ui";
+import { CollapsibleSection } from "./CollapsibleSection";
 import { MachineDetail } from "./MachineDetail";
 import { MachineForm } from "./MachineForm";
 import { useT } from "../../i18n/useT";
@@ -37,9 +38,11 @@ export function MachinesTab() {
   return (
     <div className="flex">
       <div className="flex-1 min-w-0">
-        <div className="flex justify-end mb-3">
-          <Button icon={<Plus size={14} />} onClick={() => setAdding(true)}>{t.upkeep_add_machine}</Button>
-        </div>
+        <CollapsibleSection
+          id="machines-list"
+          title={t.upkeep_tab_machines}
+          aside={<Button icon={<Plus size={14} />} onClick={() => setAdding(true)}>{t.upkeep_add_machine}</Button>}
+        >
         {machines.length === 0 ? (
           <EmptyState message={t.upkeep_no_machines} />
         ) : (
@@ -79,6 +82,7 @@ export function MachinesTab() {
             </tbody>
           </table>
         )}
+        </CollapsibleSection>
       </div>
 
       {peekId !== null && (

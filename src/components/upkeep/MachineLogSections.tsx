@@ -3,6 +3,7 @@ import { FileText, Link2, Paperclip, Plus, X } from "lucide-react";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { openMachineAttachment } from "../../lib/upkeep/openAttachment";
 import { Button, Input } from "../ui";
+import { CollapsibleSection } from "./CollapsibleSection";
 import { useT } from "../../i18n/useT";
 import {
   useAddMachineFile,
@@ -14,15 +15,6 @@ import {
 import { notifyError } from "../../lib/notifyError";
 import { formatDisplayDate } from "../../utils/formatDate";
 import { todayLocalISO } from "../../utils/localDate";
-
-export function SectionTitle({ children, aside }: { children: string; aside?: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between mb-3">
-      <h2 className="text-sm font-semibold">{children}</h2>
-      {aside}
-    </div>
-  );
-}
 
 const iconBtn =
   "p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors";
@@ -58,8 +50,9 @@ export function FilesSection({ machineId }: { machineId: number }) {
   };
 
   return (
-    <section>
-      <SectionTitle
+    <CollapsibleSection
+        id={`machine-${machineId}-files`}
+        title={t.upkeep_files_links}
         aside={
           <div className="flex items-center gap-2">
             <Button size="sm" variant="secondary" icon={<Paperclip size={14} />} onClick={() => void attach()}>
@@ -71,8 +64,6 @@ export function FilesSection({ machineId }: { machineId: number }) {
           </div>
         }
       >
-        {t.upkeep_files_links}
-      </SectionTitle>
       {adding && (
         <div className="flex items-center gap-2 mb-3">
           <Input placeholder={t.label} value={label} onChange={(e) => setLabel(e.target.value)} />
@@ -107,7 +98,7 @@ export function FilesSection({ machineId }: { machineId: number }) {
           ))}
         </ul>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -135,16 +126,15 @@ export function ServiceLogSection({ machineId }: { machineId: number }) {
 
   const head = "px-2 py-1.5 text-left text-xs font-normal text-muted border-b border-[var(--color-border-header)]";
   return (
-    <section>
-      <SectionTitle
+    <CollapsibleSection
+        id={`machine-${machineId}-service-log`}
+        title={t.upkeep_service_log}
         aside={
           <Button size="sm" variant="secondary" icon={<Plus size={14} />} onClick={() => setAdding((a) => !a)}>
             {t.upkeep_log_add}
           </Button>
         }
       >
-        {t.upkeep_service_log}
-      </SectionTitle>
       {adding && (
         <div className="grid grid-cols-[8rem_1fr_6rem_6rem_auto] gap-2 mb-3 items-center">
           <Input type="date" aria-label={t.date} value={doneOn} onChange={(e) => setDoneOn(e.target.value)} />
@@ -178,6 +168,6 @@ export function ServiceLogSection({ machineId }: { machineId: number }) {
           </tbody>
         </table>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }

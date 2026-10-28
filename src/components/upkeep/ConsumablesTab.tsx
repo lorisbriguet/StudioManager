@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { AlertTriangle, ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button, EmptyState, Modal } from "../ui";
+import { CollapsibleSection } from "./CollapsibleSection";
 import { ConsumableAmountModal } from "./ConsumableAmountModal";
 import { ConsumableForm } from "./ConsumableForm";
 import { PrefilledExpenseModal } from "./PrefilledExpenseModal";
@@ -64,18 +65,22 @@ export function ConsumablesTab() {
   return (
     <div className="space-y-4">
       {lowCount > 0 && (
-        <div
-          role="status"
-          className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--color-warning-bg)] text-[var(--color-warning-text)] text-sm"
-        >
-          <AlertTriangle size={16} aria-hidden="true" />
-          <span>{t.upkeep_low_banner.replace("{count}", String(lowCount))}</span>
-        </div>
+        <CollapsibleSection id="consumables-low" title={t.upkeep_low_stock}>
+          <div
+            role="status"
+            className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--color-warning-bg)] text-[var(--color-warning-text)] text-sm"
+          >
+            <AlertTriangle size={16} aria-hidden="true" />
+            <span>{t.upkeep_low_banner.replace("{count}", String(lowCount))}</span>
+          </div>
+        </CollapsibleSection>
       )}
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted">{t.upkeep_sorted_by_stock}</span>
-        <Button icon={<Plus size={14} />} onClick={() => setEditing("new")}>{t.upkeep_add_consumable}</Button>
-      </div>
+      <CollapsibleSection
+        id="consumables-list"
+        title={t.upkeep_consumables}
+        aside={<Button icon={<Plus size={14} />} onClick={() => setEditing("new")}>{t.upkeep_add_consumable}</Button>}
+      >
+      <div className="mb-2 text-xs text-muted">{t.upkeep_sorted_by_stock}</div>
       {consumables.length === 0 ? (
         <EmptyState message={t.upkeep_consumables_empty} />
       ) : (
@@ -130,6 +135,7 @@ export function ConsumablesTab() {
           </table>
         </div>
       )}
+      </CollapsibleSection>
 
       {editing && (
         <ConsumableForm consumable={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} />

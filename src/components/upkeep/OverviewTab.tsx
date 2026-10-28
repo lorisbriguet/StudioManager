@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Wrench } from "lucide-react";
 import { Badge, Card } from "../ui";
+import { CollapsibleSection } from "./CollapsibleSection";
 import { DueList } from "./DueList";
 import { useMachines, useUpkeepOverview } from "../../db/hooks/useUpkeep";
 import { useT } from "../../i18n/useT";
@@ -10,15 +11,6 @@ import type { Machine } from "../../types/upkeep";
 
 function Quiet({ children }: { children: string }) {
   return <p className="text-sm text-muted py-2">{children}</p>;
-}
-
-function SectionTitle({ children, aside }: { children: string; aside?: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between mb-3">
-      <h2 className="text-sm font-semibold">{children}</h2>
-      {aside}
-    </div>
-  );
 }
 
 function MachineCard({ machine, nextTitle }: { machine: Machine; nextTitle: string | null }) {
@@ -58,28 +50,27 @@ export function OverviewTab() {
 
   return (
     <div className="space-y-6">
-      <Card padding={false}>
-        <div className="px-4 pt-4">
-          <SectionTitle>{t.upkeep_due_soon}</SectionTitle>
-        </div>
-        {due.length === 0 ? (
-          <div className="px-4 pb-3"><Quiet>{t.upkeep_nothing_due}</Quiet></div>
-        ) : (
-          <DueList rows={due} />
-        )}
-      </Card>
+      <CollapsibleSection id="overview-due" title={t.upkeep_due_soon}>
+        <Card padding={false}>
+          {due.length === 0 ? (
+            <div className="px-4 py-3"><Quiet>{t.upkeep_nothing_due}</Quiet></div>
+          ) : (
+            <DueList rows={due} />
+          )}
+        </Card>
+      </CollapsibleSection>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <SectionTitle
-            aside={
-              <Link to="/upkeep?tab=consumables" className="text-xs text-accent hover:underline">
-                {t.upkeep_all_consumables}
-              </Link>
-            }
-          >
-            {t.upkeep_low_stock}
-          </SectionTitle>
+        <CollapsibleSection
+          id="overview-low-stock"
+          title={t.upkeep_low_stock}
+          aside={
+            <Link to="/upkeep?tab=consumables" className="text-xs text-accent hover:underline">
+              {t.upkeep_all_consumables}
+            </Link>
+          }
+        >
+          <Card>
           {lowStock.length === 0 ? (
             <Quiet>{t.upkeep_low_stock_empty}</Quiet>
           ) : (
@@ -100,10 +91,11 @@ export function OverviewTab() {
               ))}
             </ul>
           )}
-        </Card>
+          </Card>
+        </CollapsibleSection>
 
-        <Card>
-          <SectionTitle>{t.upkeep_warranty_renewals}</SectionTitle>
+        <CollapsibleSection id="overview-ending" title={t.upkeep_warranty_renewals}>
+          <Card>
           {endingSoon.length === 0 ? (
             <Quiet>{t.upkeep_warranty_renewals_empty}</Quiet>
           ) : (
@@ -121,11 +113,12 @@ export function OverviewTab() {
               ))}
             </ul>
           )}
-        </Card>
+          </Card>
+        </CollapsibleSection>
       </div>
 
-      <Card>
-        <SectionTitle>{t.upkeep_replacements}</SectionTitle>
+      <CollapsibleSection id="overview-replacements" title={t.upkeep_replacements}>
+        <Card>
         {replacements.length === 0 ? (
           <Quiet>{t.upkeep_replacements_empty}</Quiet>
         ) : (
@@ -138,18 +131,18 @@ export function OverviewTab() {
             ))}
           </ul>
         )}
-      </Card>
+        </Card>
+      </CollapsibleSection>
 
-      <section>
-        <SectionTitle
-          aside={
-            <Link to="/upkeep?tab=machines" className="text-xs text-accent hover:underline">
-              {t.upkeep_see_all}
-            </Link>
-          }
-        >
-          {t.upkeep_machines_count.replace("{count}", String(machines.length))}
-        </SectionTitle>
+      <CollapsibleSection
+        id="overview-machines"
+        title={t.upkeep_machines_count.replace("{count}", String(machines.length))}
+        aside={
+          <Link to="/upkeep?tab=machines" className="text-xs text-accent hover:underline">
+            {t.upkeep_see_all}
+          </Link>
+        }
+      >
         {machines.length === 0 ? (
           <Quiet>{t.upkeep_no_machines}</Quiet>
         ) : (
@@ -159,7 +152,7 @@ export function OverviewTab() {
             ))}
           </div>
         )}
-      </section>
+      </CollapsibleSection>
     </div>
   );
 }
