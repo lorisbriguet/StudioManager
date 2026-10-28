@@ -40,3 +40,15 @@ export const TABLE_ROW_H: Record<TableDensity, string> = { default: "h-10", comp
 export const TABLE_TH = "h-8 py-0 text-xs font-medium text-muted whitespace-nowrap select-none";
 /** Numbers: right-aligned, digits of equal width so columns line up. */
 export const NUMERIC = "text-right tabular-nums";
+
+/**
+ * Forms. One field grid gap (12px both ways), 24px between sections and
+ * before the action row, a 768px cap on page forms. The action row is
+ * right-aligned with the primary last; the Modal footer uses the same row.
+ */
+export const FORM_GAP = "gap-3";
+export const FORM_STACK = "space-y-6";
+export const FORM_WIDTH = "max-w-3xl";
+export const FORM_ACTIONS = "flex items-center justify-end gap-2";
+/** The field label: 12px muted, plain weight. FormField, and labels that can't be one. */
+export const FIELD_LABEL = "block text-xs text-muted";

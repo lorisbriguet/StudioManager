@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { IconButton } from "./IconButton";
 import { PanelTitle } from "./PanelTitle";
-import { SURFACE } from "./tokens";
+import { FORM_ACTIONS, SURFACE } from "./tokens";
 
 interface ModalProps {
   open: boolean;
@@ -148,7 +148,7 @@ export function Modal({ open, onClose, title, children, footer, size = "sm", pos
         )}
         {padding ? <div className={title ? "p-5" : "p-6"}>{children}</div> : children}
         {footer && (
-          <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-[var(--color-border-divider)]">
+          <div className={`${FORM_ACTIONS} px-5 py-3 border-t border-[var(--color-border-divider)]`}>
             {footer}
           </div>
         )}
