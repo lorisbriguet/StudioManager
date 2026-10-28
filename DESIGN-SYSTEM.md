@@ -321,25 +321,45 @@ import { SearchBar } from "../components/ui";
 
 ---
 
-## Tag Color System
+## Tags
 
-9 colors, auto-assigned by tag name hash. Same tag always gets the same color.
+9 colours: blue, purple, green, red, yellow, cyan, orange, teal, gray. A user tag gets its colour from a hash of its name, so the same tag always has the same colour. Workload options and custom-list items store a colour name instead. All three components below read dark mode themselves.
+
+### Tag
 
 ```tsx
-import { getTagColor, getNamedTagColor } from "../lib/tagColors";
+import { Tag } from "../components/ui";
 
-// Hash-based (for user tags)
-const color = getTagColor("typography", darkMode);
-<span style={{ background: color.bg, color: color.text }} className="px-2 py-0.5 text-xs rounded-full font-medium">
-  typography
-</span>
-
-// Named (for semantic fixed values)
-const green = getNamedTagColor("green", darkMode);
+<Tag name="typography" />                          // colour from the name
+<Tag name={opt.value} color={opt.color} />         // stored colour name (legacy "brown"/"pink" are mapped)
+<Tag name={tag} onRemove={() => removeTag(tag)} /> // × button, labelled "Remove tag {name}"
+<Tag name={tag} size="xs" />                       // dense rows and table cells
+<Tag name="side_income">{t.side_income}</Tag>      // translated label, colour still from the name
 ```
 
-Colors: blue, purple, green, red, yellow, cyan, orange, teal, gray.
+`sm` (default) is `text-xs px-2 py-0.5`; `xs` is `text-[10px] px-1.5 py-0.5`. Both are `rounded-full font-medium`.
 
+### FilterChip
+
+A toggle pill in a filter row (status filters, saved views, tag filters). It sets `aria-pressed`.
+
+```tsx
+<FilterChip active={filter === s} onClick={() => setFilter(s)}>{labels[s]}</FilterChip>
+<FilterChip active={id === f.id} count={conditions.length} onClick={…}>{f.name}</FilterChip>
+<FilterChip tag={tag} active={tagFilter === tag} activeIcon={<X size={10} />} onClick={…} />
+```
+
+- **Off:** `border-[var(--color-input-border)] text-muted`, with a hover-row background on hover.
+- **On:** `bg-accent text-white`. With `tag`, it takes the tag's own colour instead.
+- **Size:** `px-2.5 py-1 text-xs rounded-full`.
+
+### CountBadge
+
+`<CountBadge value={3} />`: a 16px number pill (`text-[10px]`). `tone` is `neutral` (the default), `danger`, `accent` or `inverse` (inverse sits on an accent fill). Anything above `max` (99) shows as "99+".
+
+### Raw colours
+
+For charts and other cases where no pill is drawn, use `getTagColor(name, dark)`, `getStoredTagColor(colorName, dark)` and `getNamedTagColor("green", dark)` from `lib/tagColors`. Never hand-build a coloured pill from them.
 ---
 
 ## Status Colors
@@ -557,4 +577,5 @@ Before merging any new UI work, verify:
 - [ ] Shared components used where available (Button, Badge, Input, Select / DropdownSelect / Dropdown, Modal, Card, Toggle)
 - [ ] No native `<select>`
 - [ ] Icon-only buttons use `IconButton`
+- [ ] Tag pills use `Tag`, filter pills use `FilterChip`, number pills use `CountBadge`
 - [ ] No hand-made floating panel (use `Popover`, `Dropdown` or `ContextMenu`)

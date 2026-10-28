@@ -1,6 +1,8 @@
 export { Button } from "./Button";
 export { IconButton } from "./IconButton";
 export { Badge } from "./Badge";
+export { Tag } from "./Tag";
+export { FilterChip, CountBadge } from "./FilterChip";
 export { Card } from "./Card";
 export { Input } from "./Input";
 export { Modal } from "./Modal";
