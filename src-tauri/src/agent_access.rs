@@ -154,13 +154,36 @@ pub fn install_claude_config_at(
     expected: &str,
     stamp: &str,
 ) -> Result<Option<PathBuf>, String> {
+    install_previewed(
+        config,
+        expected,
+        &|existing| merge_claude_config(existing, name, mcp_path),
+        CLAUDE_CONFIG_CHANGED,
+        stamp,
+    )
+}
+
+/// The shared preview -> backup -> write step for another app's settings file.
+/// `recompute` derives the new text from the file as it is now (`None` when
+/// there is no file); if that is not `expected` (the preview the user
+/// approved), the file changed since the preview: nothing is written and the
+/// error is `changed_msg`. Otherwise the current file (if any) is backed up
+/// next to it, then `expected` replaces it atomically. Returns the backup
+/// path, `None` when there was no file.
+pub(crate) fn install_previewed(
+    config: &Path,
+    expected: &str,
+    recompute: &dyn Fn(Option<&str>) -> Result<String, String>,
+    changed_msg: &str,
+    stamp: &str,
+) -> Result<Option<PathBuf>, String> {
     let existing = match std::fs::read_to_string(config) {
         Ok(text) => Some(text),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => return Err(format!("Failed to read {}: {e}", config.display())),
     };
-    if merge_claude_config(existing.as_deref(), name, mcp_path)? != expected {
-        return Err(CLAUDE_CONFIG_CHANGED.to_string());
+    if recompute(existing.as_deref())? != expected {
+        return Err(changed_msg.to_string());
     }
     if let Some(parent) = config.parent() {
         std::fs::create_dir_all(parent)
@@ -235,7 +258,7 @@ pub fn should_emit(prev: Option<i64>, now: i64, resync: bool) -> bool {
 
 // ------------------------------------------------------------- environment
 
-fn home() -> PathBuf {
+pub(crate) fn home() -> PathBuf {
     std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_default()
@@ -255,7 +278,7 @@ fn claude_desktop_installed() -> bool {
 
 /// The server binary ships next to the app executable. In dev builds it is
 /// usually absent; the path is still returned.
-fn mcp_path() -> String {
+pub(crate) fn mcp_path() -> String {
     std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(|p| p.join(MCP_BINARY)))

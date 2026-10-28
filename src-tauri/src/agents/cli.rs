@@ -28,11 +28,14 @@ pub struct AgentsSettings {
     pub menu_bar: bool,
     /// Notifications when a usage window nears its limit.
     pub limit_alerts: bool,
+    /// Claude Code's `statusLine` before StudioManager's replaced it, restored on removal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub previous_status_line: Option<serde_json::Value>,
 }
 
 impl Default for AgentsSettings {
     fn default() -> Self {
-        Self { enabled: false, menu_bar: false, limit_alerts: true }
+        Self { enabled: false, menu_bar: false, limit_alerts: true, previous_status_line: None }
     }
 }
 
