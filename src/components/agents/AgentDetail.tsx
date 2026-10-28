@@ -4,7 +4,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { dismissAgent, deleteAgent, sendMessage, stopAgent, switchModel, type Agent } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
 import { Button, Select } from "../ui";
-import { agentLabel } from "./AgentList";
+import { agentLabel, GROUP_LABEL_KEYS, GROUP_STYLE } from "./AgentList";
 import { Conversation } from "./Conversation";
 import { PromptAnswer } from "./PromptAnswer";
 
@@ -76,9 +76,12 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
   return (
     <div className="flex flex-col h-full min-h-0 gap-4">
       <div>
-        <div className="flex items-baseline gap-2">
+        <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold truncate">{agent.name}</h2>
-          <span className="text-sm text-muted">{agent.status}</span>
+          <span className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${GROUP_STYLE[agent.group].pill}`}>
+            <span className={`size-1.5 rounded-full ${GROUP_STYLE[agent.group].dot}`} aria-hidden />
+            {t[GROUP_LABEL_KEYS[agent.group]]}
+          </span>
         </div>
         <div className="text-sm text-muted">{agentLabel(agent)}</div>
       </div>
