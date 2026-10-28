@@ -122,9 +122,28 @@ export async function createUpkeepItem(data: UpkeepItemInput): Promise<number> {
 
 const UPDATABLE = new Set<string>([...ITEM_COLUMNS, "machine_id"]);
 
+const SCHEDULE_FIELDS = ["schedule", "interval_n", "interval_unit", "anchor_day", "last_done_on"] as const;
+
 /**
- * Update editable fields. When the schedule parameters change on an interval
- * item the next due date is recomputed from its last service (or today).
+ * Where a never-done interval item's current due date was counted from: one
+ * interval before it. Null when it has no interval due date to go back from.
+ */
+function intervalStart(item: UpkeepItem): string | null {
+  if (item.schedule !== "interval" || !item.next_due_on) return null;
+  return addInterval(
+    item.next_due_on,
+    -(item.interval_n ?? 1),
+    item.interval_unit ?? "month",
+    item.anchor_day ?? parseLocalDate(item.next_due_on).getDate()
+  );
+}
+
+/**
+ * Update editable fields. The next due date is recomputed only when a
+ * schedule value really differs from the stored row (an edit that resends
+ * the same values keeps it). An interval item counts from its last service;
+ * a never-done one from where its current due date was counted (one old
+ * interval back), so an edit never restarts it from today.
  */
 export async function updateUpkeepItem(
   id: number,
@@ -135,21 +154,21 @@ export async function updateUpkeepItem(
   for (const [k, v] of Object.entries(rest)) {
     if (v !== undefined && UPDATABLE.has(k)) patch[k] = v;
   }
+  const mayChange = start_on !== undefined || SCHEDULE_FIELDS.some((k) => k in patch);
+  const current = mayChange ? await getUpkeepItem(id) : null;
   const scheduleChanged =
-    "schedule" in patch || "interval_n" in patch || "interval_unit" in patch ||
-    "anchor_day" in patch || "last_done_on" in patch || start_on !== undefined;
-  if (scheduleChanged) {
-    const current = await getUpkeepItem(id);
-    if (current) {
-      const merged = { ...current, ...patch } as UpkeepItem;
-      if (merged.schedule === "interval") {
-        const base = merged.last_done_on ?? start_on ?? todayLocalISO();
-        const anchor = merged.anchor_day ?? parseLocalDate(base).getDate();
-        if (merged.anchor_day == null) patch.anchor_day = anchor;
-        patch.next_due_on = nextIntervalDue({ ...merged, anchor_day: anchor }, base);
-      } else {
-        patch.next_due_on = null;
-      }
+    current !== null &&
+    (start_on !== undefined ||
+      SCHEDULE_FIELDS.some((k) => k in patch && patch[k] !== current[k]));
+  if (current && scheduleChanged) {
+    const merged = { ...current, ...patch } as UpkeepItem;
+    if (merged.schedule === "interval") {
+      const base = merged.last_done_on ?? start_on ?? intervalStart(current) ?? todayLocalISO();
+      const anchor = merged.anchor_day ?? parseLocalDate(base).getDate();
+      if (merged.anchor_day == null) patch.anchor_day = anchor;
+      patch.next_due_on = nextIntervalDue({ ...merged, anchor_day: anchor }, base);
+    } else {
+      patch.next_due_on = null;
     }
   }
   const fields = Object.keys(patch);

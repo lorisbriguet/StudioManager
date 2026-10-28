@@ -63,7 +63,12 @@ export function UpkeepItemForm({ open, onClose, machineId, item, allowUsage }: P
             usage_every: Math.max(1, Number(every) || 1),
           };
     if (item) {
-      update.mutate({ id: item.id, data: { ...base, ...sched } });
+      // Only what changed: resending an unchanged schedule must not move the due date.
+      const row = item as unknown as Record<string, unknown>;
+      const changed = Object.fromEntries(
+        Object.entries({ ...base, ...sched }).filter(([k, v]) => v !== row[k])
+      );
+      if (Object.keys(changed).length > 0) update.mutate({ id: item.id, data: changed });
     } else {
       create.mutate({ machine_id: machineId, ...base, ...sched, start_on: startOn });
     }
