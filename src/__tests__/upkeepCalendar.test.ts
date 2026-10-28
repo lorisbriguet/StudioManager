@@ -22,6 +22,7 @@ import {
   removeSubscriptionEvent,
   syncAllUpkeepEvents,
   removeUpkeepEvent,
+  upkeepEventTitle,
 } from "../lib/upkeep/calendar";
 import { purgeAllCalendarEvents } from "../lib/appleCalendar";
 import { setItemCalendarEvent, getUpkeepItem } from "../db/queries/upkeepItems";
@@ -89,6 +90,12 @@ describe("alertMinutes", () => {
     expect(alertMinutes("none", "day_9am")).toBeNull();
     expect(alertMinutes("default", "day_before")).toBe(-900);
     expect(alertMinutes("default", "none")).toBeNull();
+  });
+});
+
+describe("upkeepEventTitle", () => {
+  it("is 'Item · Machine', the same in Apple Calendar and the in-app calendar", () => {
+    expect(upkeepEventTitle(item(), machine())).toBe("Clean nozzle · Bambu X1");
   });
 });
 

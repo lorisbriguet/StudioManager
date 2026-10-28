@@ -55,19 +55,31 @@ export async function createConsumable(data: ConsumableInput): Promise<number> {
   return result.lastInsertId ?? 0;
 }
 
+/**
+ * Update editable fields. A stock or level edit that puts the stock back
+ * above the level clears the low-stock notice, like a restock, so the next
+ * drop notifies again.
+ */
 export async function updateConsumable(id: number, data: Partial<ConsumableInput>): Promise<void> {
   const fields = Object.keys(data).filter(
     (k) => (CONSUMABLE_COLUMNS as readonly string[]).includes(k) && data[k as keyof ConsumableInput] !== undefined
   );
   if (fields.length === 0) return;
   validateFields(fields);
-  const db = await getDb();
   const sets = fields.map((f, i) => `${f} = $${i + 1}`);
   sets.push("updated_at = datetime('now')");
-  await db.execute(
+  const batch = new TransactionBatch();
+  batch.add(
     `UPDATE consumables SET ${sets.join(", ")} WHERE id = $${fields.length + 1}`,
     [...fields.map((f) => data[f as keyof ConsumableInput]), id]
   );
+  if (fields.includes("stock") || fields.includes("reorder_level")) {
+    batch.add(
+      "UPDATE consumables SET low_notified = 0 WHERE id = $1 AND stock > reorder_level AND low_notified != 0",
+      [id]
+    );
+  }
+  await batch.commit();
 }
 
 export async function deleteConsumable(id: number): Promise<void> {

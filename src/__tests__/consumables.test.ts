@@ -4,6 +4,7 @@ import { executedStatements, clearExecutedStatements, setSelectHandler } from ".
 import {
   logConsumableUsage,
   restockConsumable,
+  updateConsumable,
   getProjectMaterialCost,
   isLow,
 } from "../db/queries/consumables";
@@ -44,6 +45,21 @@ describe("consumables queries", () => {
     const reset = executedStatements.find((s) => s.sql.includes("low_notified = 0"));
     expect(reset).toBeDefined();
     expect(reset!.sql).toContain("stock > reorder_level");
+  });
+
+  it("editing stock or level resets low_notified once above the level, like a restock", async () => {
+    for (const data of [{ stock: 20 }, { reorder_level: 1 }]) {
+      clearExecutedStatements();
+      await updateConsumable(4, data);
+      const reset = executedStatements.find((s) => s.sql.includes("low_notified = 0"));
+      expect(reset?.sql).toContain("stock > reorder_level");
+      expect(reset?.params).toEqual([4]);
+    }
+  });
+
+  it("editing only the name leaves low_notified alone", async () => {
+    await updateConsumable(4, { name: "PLA black" });
+    expect(executedStatements.some((s) => s.sql.includes("low_notified"))).toBe(false);
   });
 
   it("restock still below level keeps low_notified", async () => {

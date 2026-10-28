@@ -24,6 +24,7 @@ import { useAllProjectWorkloadConfigs } from "../db/hooks/useWorkload";
 import { getTagColor, getNamedTagColor } from "../lib/tagColors";
 import { useActiveUpkeepItems, useMachines, useSubscriptions } from "../db/hooks/useUpkeep";
 import { effectiveDue } from "../lib/upkeep/schedule";
+import { upkeepEventTitle } from "../lib/upkeep/calendar";
 import type { WorkloadColumn } from "../types/workload";
 import { DEFAULT_WORKLOAD_COLUMNS } from "../types/workload";
 
@@ -280,7 +281,7 @@ export function CalendarPage() {
         if (!machine || machine.status === "retired" || it.archived || !due) continue;
         items.push({
           id: `up-${it.id}`,
-          title: `${machine.name}: ${it.title}`,
+          title: upkeepEventTitle(it, machine),
           start: due,
           allDay: true,
           editable: false,

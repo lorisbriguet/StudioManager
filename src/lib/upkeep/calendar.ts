@@ -71,6 +71,14 @@ export async function removeUpkeepEvent(uid: string | null): Promise<boolean> {
   }
 }
 
+/** "Item · Machine": the title of an upkeep event, in Apple Calendar and in the app. */
+export function upkeepEventTitle(
+  item: Pick<UpkeepItem, "title">,
+  machine: Pick<Machine, "name">
+): string {
+  return `${item.title} · ${machine.name}`;
+}
+
 export async function syncItemEvent(
   item: UpkeepItem,
   machine: Machine,
@@ -103,7 +111,7 @@ export async function syncItemEvent(
   }
 
   const event = {
-    title: `${item.title} · ${machine.name}`,
+    title: upkeepEventTitle(item, machine),
     date: due,
     alertMinutes: resolveAlert(item.alert),
   };
