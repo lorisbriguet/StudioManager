@@ -31,6 +31,33 @@ export function getUsageLimits(): Promise<UsageLimits> {
   return invoke<UsageLimits>("agents_usage_limits");
 }
 
+export interface DayTokens {
+  /** Local day, `YYYY-MM-DD`. */
+  date: string;
+  byClient: Record<string, number>;
+}
+
+export interface ClientTime {
+  client: string;
+  minutes: number;
+  /** [project, minutes], largest first. */
+  projects: [string, number][];
+}
+
+/** Tokens (output + fresh input, cache excluded) and agent time from the transcripts. */
+export interface Activity {
+  /** The last 7 days, oldest first. */
+  days: DayTokens[];
+  /** Stacking order, largest first; unlinked folders are "Other". */
+  clients: string[];
+  modelMix: string;
+  time: { today: ClientTime[]; week: ClientTime[] };
+}
+
+export function getUsageActivity(): Promise<Activity> {
+  return invoke<Activity>("agents_usage_activity");
+}
+
 type Labels = Pick<
   Record<UIKey, string>,
   "usage_window_five_hour" | "usage_window_weekly" | "usage_window_weekly_scoped"

@@ -1,6 +1,7 @@
 //! Plan limits: what `studiomanager-mcp --statusline` captured, shown as meters with a pace
 //! projection, and the alerts that follow from them.
 
+pub mod activity;
 pub mod limits;
 pub mod samples;
 

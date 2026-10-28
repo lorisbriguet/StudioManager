@@ -23,6 +23,8 @@ pub struct AgentsState {
     pub hub: pty::TerminalHub,
     /// The last list the poller emitted (labelled, quiet applied).
     pub last: Mutex<Vec<model::Agent>>,
+    /// The transcript scan behind the Usage tab, and its last result (60 s cache).
+    pub activity: Arc<Mutex<usage::activity::ActivityCache>>,
 }
 
 impl AgentsState {
@@ -32,7 +34,7 @@ impl AgentsState {
             Arc::new(pty::RealSpawner::new(login_env.clone())),
             Arc::new(pty::SystemClock),
         );
-        Self { app_dir, login_env, hub, last: Mutex::new(Vec::new()) }
+        Self { app_dir, login_env, hub, last: Mutex::new(Vec::new()), activity: Default::default() }
     }
 
     /// The cached login-shell environment, for use on a blocking thread: resolving it runs a
