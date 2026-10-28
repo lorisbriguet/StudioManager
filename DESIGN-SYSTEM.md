@@ -509,6 +509,7 @@ Forms are built from `FormLayout`, `FormSection`, `FormGrid`, `FormField` and `F
 - **Buttons inside a form** don't submit it unless they are `type="submit"`: `Button` defaults to `type="button"`. `FormModal`'s form is `noValidate`, so the app's own errors show, not the browser's.
 - **Errors without a visible label** (a row rename, the line-items check) use `FieldError`.
 - **A label over several controls** (a colour and its hex field, a list of checkboxes, an options editor) is a `FormGroup`; its `action` sits at the right of the label row.
+- **Options editor:** the options of a select column and the items of a custom list use `OptionsEditor` (`src/components/shared/OptionsEditor.tsx`), never a hand-built list. One row per option (its `Tag` and colour `Select`, or with `colors={false}` its name in an `Input`, renamed in place), a remove `IconButton`, and an add row (`Input`, colour, "+") where Enter adds and doesn't submit the form; empty and duplicate names are ignored. With `label` it is a `FormGroup`. `onLink` / `onUnlink` put "Import from list" (a `Dropdown`) or the linked list and "Unlink" in the label row; while linked the options are read-only. `onSaveAsList(name)` adds "Save as list". It holds no data: the caller owns the options and the custom-list calls.
 - **Small editor cards** (a contact, an address) use `FormLayout dense capped={false}`: 12px between the fields and the buttons.
 - **Width:** page forms cap at 768px (`FORM_WIDTH`). Pass `capped={false}` in modals, popovers and side panels.
 - **Not this layout:** settings rows (`SettingRow`, label left and control right), filter bars, single-field inline adds and row editing in tables.
@@ -804,7 +805,7 @@ Keys are defined in `src/i18n/ui.ts` (EN section, then FR section). Always add b
 |-----------|----------|
 | `src/components/ui/` | Shared design system components (Card, Button, Badge, etc.) |
 | `src/components/layout/` | Layout shell (Sidebar, TabBar, MainLayout) |
-| `src/components/shared/` | Shared feature components that read or write data (LineItemsTable, SavedFilterBar) |
+| `src/components/shared/` | Shared feature components used by several features (LineItemsTable, SavedFilterBar, OptionsEditor) |
 | `src/components/` | Feature components (NamedTable, CommandPalette, etc.) |
 | `src/pages/` | One file per route |
 | `src/lib/` | Utilities (tagColors, statusColors, lineItems, etc.) |

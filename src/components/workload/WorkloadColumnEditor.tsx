@@ -1,15 +1,13 @@
-import { useState, useEffect, useRef } from "react";
-import { X, Plus, Trash2, Calendar, Link, Unlink } from "lucide-react";
-import { Checkbox, Button, Select, Popover, Tag, Input, Modal, Tooltip, FormField, FormGrid, FormGroup } from "../ui";
-import { MENU_ITEM } from "../ui/Dropdown";
+import { useState, useEffect } from "react";
+import { X, Trash2, Calendar } from "lucide-react";
+import { Checkbox, Button, Select, Input, Modal, Tooltip, FormField, FormGrid, FormGroup } from "../ui";
 import { toast } from "sonner";
 import type { WorkloadColumn, WorkloadColumnType, SelectOption } from "../../types/workload";
-import { normalizeTagColorName, TAG_COLOR_NAMES } from "../../lib/tagColors";
 import { COLUMN_ICONS, COLUMN_ICON_NAMES } from "./columnIcons";
 import { evaluateFormula } from "../../lib/formulaEval";
 import { useT } from "../../i18n/useT";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useSetCustomListItems } from "../../db/hooks/useCustomLists";
-import { IconButton } from "../ui/IconButton";
+import { OptionsEditor } from "../shared/OptionsEditor";
 
 interface Props {
   column: WorkloadColumn | null; // null = creating new
@@ -40,15 +38,9 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
   const [options, setOptions] = useState<SelectOption[]>(column?.options ?? []);
   const [formula, setFormula] = useState(column?.formula ?? "");
   const [calendarColor, setCalendarColor] = useState(column?.calendarColor ?? false);
-  const [newOptValue, setNewOptValue] = useState("");
-  const [newOptColor, setNewOptColor] = useState("gray");
   const [formulaError, setFormulaError] = useState("");
   const [linkedListId, setLinkedListId] = useState<number | undefined>(column?.linked_list_id);
-  const [showImportListDropdown, setShowImportListDropdown] = useState(false);
-  const [saveAsListName, setSaveAsListName] = useState("");
-  const [showSaveAsListInput, setShowSaveAsListInput] = useState(false);
   const [importListId, setImportListId] = useState<number | null>(null);
-  const importListAnchorRef = useRef<HTMLDivElement>(null);
 
   const { data: customLists } = useCustomLists();
   const { data: importListItems } = useCustomListItems(importListId);
@@ -61,7 +53,6 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
     setOptions(importListItems.map((i) => ({ value: i.value, color: i.color ?? "gray" })));
     setLinkedListId(importListId);
     setImportListId(null);
-    setShowImportListDropdown(false);
   }, [importListItems, importListId]);
 
   const validateFormula = (f: string): string => {
@@ -117,20 +108,9 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
     onClose();
   };
 
-  const addOption = () => {
-    const val = newOptValue.trim();
-    if (!val || options.some((o) => o.value === val)) return;
-    setOptions([...options, { value: val, color: newOptColor }]);
-    setNewOptValue("");
-  };
-
-  const handleSaveAsList = async () => {
-    const name = saveAsListName.trim();
-    if (!name || options.length === 0) return;
-    const id = await createCustomList.mutateAsync(name);
+  const handleSaveAsList = async (listName: string) => {
+    const id = await createCustomList.mutateAsync(listName);
     await setCustomListItems.mutateAsync({ listId: id, items: options.map((o) => ({ value: o.value, color: o.color })) });
-    setShowSaveAsListInput(false);
-    setSaveAsListName("");
     toast.success(t.list_created ?? "List created");
   };
 
@@ -265,155 +245,16 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
 
         {/* Select options */}
         {(type === "select" || type === "multi_select") && (
-          <FormGroup
+          <OptionsEditor
             label={t.options}
-            action={linkedListId ? (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-accent flex items-center gap-0.5">
-                    <Link size={11} />
-                    {(customLists ?? []).find((l) => l.id === linkedListId)?.name ?? ""}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="link"
-                    icon={<Unlink size={12} />}
-                    onClick={() => setLinkedListId(undefined)}
-                    className="text-muted hover:text-[var(--color-danger-text)]"
-                  >
-                    {t.unlink_list}
-                  </Button>
-                </div>
-              ) : (
-                <div ref={importListAnchorRef}>
-                  <Button
-                    type="button"
-                    variant="link"
-                    icon={<Link size={12} />}
-                    onClick={() => setShowImportListDropdown((v) => !v)}
-                    aria-haspopup="dialog"
-                    aria-expanded={showImportListDropdown}
-                  >
-                    {t.import_from_list}
-                  </Button>
-                  {showImportListDropdown && (
-                    <Popover
-                      anchor={importListAnchorRef}
-                      align="end"
-                      onClose={(returnFocus) => {
-                        setShowImportListDropdown(false);
-                        if (returnFocus) importListAnchorRef.current?.querySelector("button")?.focus({ preventScroll: true });
-                      }}
-                    >
-                      {(customLists ?? []).length === 0 ? (
-                        <p className="text-xs text-muted px-2 py-1">{t.no_lists}</p>
-                      ) : (
-                        (customLists ?? []).map((list) => (
-                          <button
-                            key={list.id}
-                            type="button"
-                            onClick={() => setImportListId(list.id)}
-                            className={`${MENU_ITEM} text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]`}
-                          >
-                            {list.name}
-                          </button>
-                        ))
-                      )}
-                    </Popover>
-                  )}
-                </div>
-              )}
-          >
-            <div className="space-y-1.5 mb-2">
-              {options.map((opt, i) => {
-                return (
-                  <div key={i} className="flex items-center gap-2">
-                    <Tag name={opt.value} color={opt.color} />
-                    <Select
-                      value={normalizeTagColorName(opt.color)}
-                      onChange={(e) => {
-                        if (linkedListId) return;
-                        const next = [...options];
-                        next[i] = { ...next[i], color: e.target.value };
-                        setOptions(next);
-                      }}
-                      disabled={!!linkedListId}
-                      fullWidth={false}
-                    >
-                      {TAG_COLOR_NAMES.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </Select>
-                    {!linkedListId && (
-                      <IconButton
-                        icon={Trash2}
-                        label={t.delete}
-                        tone="danger"
-                        className="ml-auto"
-                        onClick={() => setOptions(options.filter((_, j) => j !== i))}
-                      />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            {!linkedListId && (
-              <>
-                <div className="flex gap-2 mb-2">
-                  <Input size="sm" fullWidth={false}
-                    value={newOptValue}
-                    onChange={(e) => setNewOptValue(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && addOption()}
-                    placeholder={t.new_option}
-                    className="flex-1"
-                  />
-                  <Select
-                    value={newOptColor}
-                    onChange={(e) => setNewOptColor(e.target.value)}
-                    fullWidth={false}
-                  >
-                    {TAG_COLOR_NAMES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </Select>
-                  <IconButton icon={Plus} label={t.new_option} tone="accent" onClick={addOption} />
-                </div>
-                <div className="border-t border-[var(--color-border-divider)] pt-2">
-                  {showSaveAsListInput ? (
-                    <div className="flex gap-2">
-                      <Input size="sm" fullWidth={false}
-                        value={saveAsListName}
-                        onChange={(e) => setSaveAsListName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleSaveAsList();
-                          // Esc closes only the inline input, not the whole dialog.
-                          if (e.key === "Escape") { e.stopPropagation(); setShowSaveAsListInput(false); }
-                        }}
-                        placeholder={t.list_name}
-                        className="flex-1"
-                        autoFocus
-                      />
-                      <Button type="button" onClick={handleSaveAsList}>{t.save}</Button>
-                      <IconButton icon={X} label={t.cancel} onClick={() => setShowSaveAsListInput(false)} />
-                    </div>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="link"
-                      icon={<Link size={12} />}
-                      onClick={() => setShowSaveAsListInput(true)}
-                      className="text-muted hover:text-accent"
-                    >
-                      {t.save_as_list}
-                    </Button>
-                  )}
-                </div>
-              </>
-            )}
-          </FormGroup>
+            options={options}
+            onChange={(next) => setOptions(next.map((o) => ({ value: o.value, color: o.color ?? "gray" })))}
+            lists={customLists}
+            linkedListId={linkedListId}
+            onLink={setImportListId}
+            onUnlink={() => setLinkedListId(undefined)}
+            onSaveAsList={handleSaveAsList}
+          />
         )}
       </FormGrid>
     </Modal>

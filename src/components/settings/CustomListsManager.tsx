@@ -4,9 +4,9 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { Trash2, Check, Plus } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useUpdateCustomList, useDeleteCustomList, useSetCustomListItems } from "../../db/hooks/useCustomLists";
-import { normalizeTagColorName, TAG_COLOR_NAMES } from "../../lib/tagColors";
-import { Button, Select, IconButton, Tag, Input, FormActions } from "../ui";
+import { Button, IconButton, Input, FormActions, FORM_GAP } from "../ui";
 import { navItemClass } from "../ui/NavItem";
+import { OptionsEditor } from "../shared/OptionsEditor";
 
 export function CustomListsManager() {
   const t = useT();
@@ -26,8 +26,6 @@ export function CustomListsManager() {
 
   // Local editable items for the selected list
   const [localItems, setLocalItems] = useState<{ value: string; color: string }[]>([]);
-  const [newItemValue, setNewItemValue] = useState("");
-  const [newItemColor, setNewItemColor] = useState("gray");
   const [dirty, setDirty] = useState(false);
 
   // Sync local items when selection or remote items change
@@ -59,26 +57,6 @@ export function CustomListsManager() {
     const name = renameValue.trim();
     if (name) await updateList.mutateAsync({ id: renamingId, name });
     setRenamingId(null);
-  };
-
-  const addItem = () => {
-    const val = newItemValue.trim();
-    if (!val) return;
-    setLocalItems([...localItems, { value: val, color: newItemColor }]);
-    setNewItemValue("");
-    setDirty(true);
-  };
-
-  const removeItem = (idx: number) => {
-    setLocalItems(localItems.filter((_, i) => i !== idx));
-    setDirty(true);
-  };
-
-  const updateItemColor = (idx: number, color: string) => {
-    const next = [...localItems];
-    next[idx] = { ...next[idx], color };
-    setLocalItems(next);
-    setDirty(true);
   };
 
   const saveItems = async () => {
@@ -152,47 +130,15 @@ export function CustomListsManager() {
         {selectedId === null ? (
           <p className="text-xs text-muted py-2">{allLists.length > 0 ? t.select_list_to_edit : ""}</p>
         ) : (
-          <div>
-            <div className="space-y-1.5 mb-3">
-              {localItems.map((item, i) => {
-                return (
-                <div key={i} className="flex items-center gap-2">
-                  <div className="flex-1 min-w-0">
-                    <Tag name={item.value} color={item.color} />
-                  </div>
-                  <Select
-                    value={normalizeTagColorName(item.color)}
-                    onChange={(e) => updateItemColor(i, e.target.value)}
-                    fullWidth={false}
-                  >
-                    {TAG_COLOR_NAMES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </Select>
-                  <IconButton icon={Trash2} label={t.delete} size="xs" tone="danger" onClick={() => removeItem(i)} />
-                </div>
-                );
-              })}
-            </div>
-            <div className="flex gap-2 mb-3">
-              <Input size="sm" fullWidth={false}
-                value={newItemValue}
-                onChange={(e) => setNewItemValue(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addItem()}
-                placeholder={t.new_list_item}
-                className="flex-1"
-              />
-              <Select
-                value={newItemColor}
-                onChange={(e) => setNewItemColor(e.target.value)}
-                fullWidth={false}
-              >
-                {TAG_COLOR_NAMES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </Select>
-              <IconButton icon={Plus} label={t.new_list_item} tone="accent" onClick={addItem} />
-            </div>
+          <div className={`flex flex-col ${FORM_GAP}`}>
+            <OptionsEditor
+              options={localItems}
+              onChange={(next) => {
+                setLocalItems(next.map((i) => ({ value: i.value, color: i.color ?? "gray" })));
+                setDirty(true);
+              }}
+              addLabel={t.new_list_item}
+            />
             {dirty && (
               <FormActions>
                 <Button variant="primary" onClick={saveItems}>

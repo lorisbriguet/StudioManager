@@ -43,9 +43,6 @@ export function NamedTable({ table, projectId }: Props) {
   const [colName, setColName] = useState("");
   const [colOptions, setColOptions] = useState<string[]>([]);
   const [colLinkedListId, setColLinkedListId] = useState<number | undefined>(undefined);
-  const [showImportListDropdown, setShowImportListDropdown] = useState(false);
-  const [saveAsListName, setSaveAsListName] = useState("");
-  const [showSaveAsListInput, setShowSaveAsListInput] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const cellInputRef = useRef<HTMLInputElement>(null);
 
@@ -95,7 +92,6 @@ export function NamedTable({ table, projectId }: Props) {
     setColOptions(importListItems.map((i) => i.value));
     setColLinkedListId(importListId);
     setImportListId(null);
-    setShowImportListDropdown(false);
   }, [importListItems, importListId]);
 
   const handleImportFromList = (listId: number) => {
@@ -106,13 +102,9 @@ export function NamedTable({ table, projectId }: Props) {
     setColLinkedListId(undefined);
   };
 
-  const handleSaveAsList = async () => {
-    const name = saveAsListName.trim();
-    if (!name || colOptions.length === 0) return;
+  const handleSaveAsList = async (name: string) => {
     const id = await createCustomList.mutateAsync(name);
     await setCustomListItems.mutateAsync({ listId: id, items: colOptions.map((v) => ({ value: v })) });
-    setShowSaveAsListInput(false);
-    setSaveAsListName("");
     toast.success(t.list_created ?? "List created");
   };
 
@@ -121,9 +113,6 @@ export function NamedTable({ table, projectId }: Props) {
     setColName(col.name);
     setColOptions(col.options ?? []);
     setColLinkedListId(col.linked_list_id);
-    setShowImportListDropdown(false);
-    setShowSaveAsListInput(false);
-    setSaveAsListName("");
     if (e) {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       setColEditorPos({ top: rect.bottom + 4, left: rect.left });
@@ -237,12 +226,6 @@ export function NamedTable({ table, projectId }: Props) {
                         setColOptions={setColOptions}
                         colLinkedListId={colLinkedListId}
                         customLists={customLists}
-                        showImportListDropdown={showImportListDropdown}
-                        setShowImportListDropdown={setShowImportListDropdown}
-                        showSaveAsListInput={showSaveAsListInput}
-                        setShowSaveAsListInput={setShowSaveAsListInput}
-                        saveAsListName={saveAsListName}
-                        setSaveAsListName={setSaveAsListName}
                         onImportFromList={handleImportFromList}
                         onUnlinkList={handleUnlinkList}
                         onSaveAsList={handleSaveAsList}
