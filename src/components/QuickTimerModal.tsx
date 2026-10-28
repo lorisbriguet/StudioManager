@@ -148,8 +148,7 @@ export function QuickTimerModal() {
         <Button
           type="button"
           variant="primary"
-          size="md"
-          icon={<Timer size={14} />}
+          icon={<Timer size={12} />}
           disabled={!selectedProjectId || !selectedTaskId}
           onClick={handleStart}
           className="mt-1 w-full justify-center disabled:cursor-not-allowed"

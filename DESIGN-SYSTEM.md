@@ -64,7 +64,7 @@ Tokens handle dark mode automatically. **Never use `dark:` prefix** for colors t
 |---------|-------|--------|
 | Cards, modals, dropdowns, panels | `rounded-xl` | 12px |
 | Inputs, buttons, selects | `rounded-lg` | 8px |
-| Small buttons (size="sm") | `rounded-md` | 6px |
+| Buttons, fields, dropdown triggers (the 26px controls) | `rounded-md` | 6px |
 | Badges, tags, pills | `rounded-full` | 99px |
 | Table rows on hover | `rounded-md` | 6px |
 
@@ -230,10 +230,18 @@ import { Card } from "../components/ui";
 ### Button
 ```tsx
 import { Button } from "../components/ui";
-<Button variant="primary" size="md" icon={<Plus size={16} />}>Label</Button>
+<Button icon={<Plus size={12} />}>Label</Button>
 ```
-Variants: `primary`, `secondary`, `ghost`, `danger`, `danger-outline` (destructive actions in settings: exit test mode, restore), `success`, `link`
-Sizes: `sm`, `md`, `lg`
+**One size.** Every button is 26px tall, with 12px text and `rounded-md`. That is the same height as Input, Select, DatePicker and FilterChip, so every control in a row lines up. There is no `size` prop. The main action stands out by colour (primary), not by size.
+
+**Variants:**
+- `primary`: the main action.
+- `secondary`: a grey fill.
+- `outline`: bordered and transparent; this was "ghost".
+- `danger`: outlined red, for every destructive action.
+- `link`: text only.
+
+Deep dive, with the counts behind this choice: [StudioManager Button](https://claude.ai/artifact/1wWC1A5CxpM4qxsXjd6wbw).
 
 ### Button Icon Rules
 - **Icon + text**: always use `<Button icon={<Icon size={14} />}>Label</Button>` — never raw `<button>` with icon and text side by side
@@ -273,12 +281,12 @@ These patterns keep raw `<button>` elements — do not convert them to the share
 
 - **Dropdown / context menu items** — see Dropdown below
 - **Banner action chips** — inverse-colored chips on mode banners (`MainLayout` test/presentation banners)
-- **Settings status chips** — the amber test-mode chip in `SettingsPage`. (The danger-outline chips are now `Button variant="danger-outline"`.)
+- **Settings status chips** — the amber test-mode chip in `SettingsPage`. (The danger-outline chips are now `Button variant="danger"`.)
 - **Dashed dropzones** — full-width dashed add-affordances (`ProjectBlockLayout` add-block)
 
 ### Link Button Conventions
 
-- **Icon sizes**: `12` with `size="sm"`; `14` with `size="md"` and in table-row contexts
+- **Icon sizes**: `12` inside a Button. For icon-only controls, IconButton sets the size.
 - **Sanctioned className modifiers** on `variant="link"` (only these two):
   - `text-muted hover:text-accent` — quiet links (add-condition, save-filter, folder actions)
   - `text-danger-text` — danger links (clear date)
@@ -486,7 +494,7 @@ From `src/components/ui/Feedback.tsx` and `Tooltip.tsx`:
 
 ```tsx
 <ProgressBar value={62} label={t.progress} showValue />            // tone accent|success|warning|danger, size sm|md
-<Callout tone="warning" action={<Button size="sm">…</Button>}>{msg}</Callout>  // warning|info|danger|success
+<Callout tone="warning" action={<Button>…</Button>}>{msg}</Callout>  // warning|info|danger|success
 <ConfirmButton label={t.delete} question={t.confirm_delete_client} onConfirm={remove} />
 <DragHandle {...attributes} {...listeners} reveal />                // dnd-kit grip; reveal = group hover
 <Tooltip content={t.open_full_page}><Link …><Maximize2 size={14} /></Link></Tooltip>
@@ -571,7 +579,7 @@ Every floating panel uses `src/components/ui/Popover.tsx`, including Dropdown's 
 
 ```tsx
 const pop = usePopover();
-<Button variant="secondary" size="sm" {...pop.triggerProps}>{t.columns}</Button>
+<Button variant="secondary" {...pop.triggerProps}>{t.columns}</Button>
 {pop.open && (
   <Popover anchor={pop.anchorRef} onClose={pop.close} padding="content" align="end">
     …
@@ -625,7 +633,7 @@ Every menu and select in the app uses `src/components/ui/Dropdown.tsx`. Never us
   onCreate={(name) => createClient(name)}
   options={clients.map((c) => ({ value: c.id, label: c.name, description: c.city }))} />
 
-<Dropdown align="end" trigger={<Button variant="ghost" size="sm" icon={<MoreHorizontal size={14} />} />}
+<Dropdown align="end" trigger={<IconButton icon={MoreHorizontal} label={t.more} />}
   items={[
     { label: t.edit, icon: <Pencil size={14} />, onSelect: edit },
     { divider: true },
@@ -633,7 +641,7 @@ Every menu and select in the app uses `src/components/ui/Dropdown.tsx`. Never us
   ]} />
 ```
 
-**Trigger.** Thin by default everywhere, forms included: `bg-[var(--color-input-bg)]`, no border, `px-2.5 py-1 text-xs rounded-md`, chevron 12 (same as `Button` secondary `size="sm"`). Options:
+**Trigger.** Thin by default everywhere, forms included: `bg-[var(--color-input-bg)]`, no border, `px-2.5 py-1 text-xs rounded-md`, chevron 12 (the same 26px as `Button` secondary). Options:
 - `prefix="Status:"`: a muted label inside the trigger, for toolbars and page headers.
 - `size="md"`: form height with an input border. Opt-in only.
 - `variant="bare"`: no fill, no padding, no colour of its own. For table cells and status pills.

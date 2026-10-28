@@ -612,8 +612,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
         {/* Add row button */}
         <Button
           variant="link"
-          size="md"
-          icon={<Plus size={14} />}
+          icon={<Plus size={12} />}
           onClick={handleAddRow}
           className="w-full px-4 py-2 text-muted hover:text-accent hover:no-underline! hover:bg-[var(--color-hover-row)] border-t border-[var(--color-border-divider)]"
         >

@@ -82,7 +82,7 @@ export function LineItemsTable({
         <h2 className="text-sm font-medium">{t.line_items}</h2>
         <div className="flex items-center gap-3">
           {headerActions}
-          <Button variant="link" size="sm" icon={<Plus size={14} />} onClick={onAdd}>
+          <Button variant="link" icon={<Plus size={12} />} onClick={onAdd}>
             {t.add_line}
           </Button>
         </div>

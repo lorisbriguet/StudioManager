@@ -33,7 +33,7 @@ export function ProjectDetailPage() {
             label={t.delete}
             question={t.confirm_delete_project}
             icon={<Trash2 size={14} />}
-            variant="danger-outline"
+            variant="danger"
             onConfirm={() => {
               deleteProject.mutate(projectId, {
                 onSuccess: () => {

@@ -121,7 +121,7 @@ export function ClientsPage() {
   if (isLoading) return (
     <div>
       <PageHeader title={t.clients}>
-        <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>
+        <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>
           {t.new_client}
         </Button>
       </PageHeader>
@@ -132,7 +132,7 @@ export function ClientsPage() {
   return (
     <div>
       <PageHeader title={t.clients}>
-        <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>
+        <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>
           {t.new_client}
         </Button>
       </PageHeader>
@@ -229,7 +229,7 @@ export function ClientsPage() {
             message={(clients?.length ?? 0) === 0 ? t.no_clients : t.no_matching_clients}
             icon={<Users size={32} />}
             action={(clients?.length ?? 0) === 0 ? (
-              <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>
+              <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>
                 {t.new_client}
               </Button>
             ) : undefined}

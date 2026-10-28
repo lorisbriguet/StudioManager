@@ -303,7 +303,7 @@ export function QuoteFormPage() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="sm" onClick={async () => { if (await confirmIfDirty("/quotes")) navigate("/quotes"); }} icon={<ArrowLeft size={18} />} aria-label={t.back} />
+        <Button variant="outline" onClick={async () => { if (await confirmIfDirty("/quotes")) navigate("/quotes"); }} icon={<ArrowLeft size={18} />} aria-label={t.back} />
         <h1 className="text-xl font-semibold">
           {isEdit ? t.edit_quote : t.new_quote}
         </h1>
@@ -499,7 +499,6 @@ export function QuoteFormPage() {
         <div className="flex gap-2">
           <Button
             variant="secondary"
-            size="lg"
             onClick={async () => {
               if (await confirmIfDirty("/quotes")) navigate("/quotes");
             }}
@@ -509,8 +508,7 @@ export function QuoteFormPage() {
           {isEdit && (
             <Button
               variant="secondary"
-              size="lg"
-              icon={<Eye size={14} />}
+              icon={<Eye size={12} />}
               // Preview renders the SAVED quote, so unsaved edits would be
               // silently dropped — prompt as a stopgap. Proper phase-2 fix:
               // save-then-preview.
@@ -522,7 +520,6 @@ export function QuoteFormPage() {
             </Button>
           )}
           <Button
-            size="lg"
             onClick={save}
             disabled={createQuote.isPending || updateQuote.isPending}
           >

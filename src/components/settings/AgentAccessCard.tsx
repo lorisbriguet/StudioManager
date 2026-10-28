@@ -156,7 +156,7 @@ export function AgentAccessCard() {
             <SectionLabel className="mb-1">{t.agent_access_connect}</SectionLabel>
             {info.claudeDesktopInstalled && (
               <SettingRow label={t.agent_access_claude_desktop}>
-                <Button size="sm" variant="secondary" onClick={() => void startAdd()}>{t.agent_access_add}</Button>
+                <Button variant="secondary" onClick={() => void startAdd()}>{t.agent_access_add}</Button>
               </SettingRow>
             )}
             {preview !== null && (
@@ -164,8 +164,8 @@ export function AgentAccessCard() {
                 <p className="text-xs text-muted mb-1">{t.agent_access_preview_hint}</p>
                 <pre className="text-xs overflow-auto max-h-48 whitespace-pre-wrap">{preview}</pre>
                 <div className="flex gap-2 mt-2">
-                  <Button size="sm" onClick={() => void confirmAdd()}>{t.agent_access_confirm}</Button>
-                  <Button size="sm" variant="ghost" onClick={() => setPreview(null)}>{t.agent_access_cancel}</Button>
+                  <Button onClick={() => void confirmAdd()}>{t.agent_access_confirm}</Button>
+                  <Button variant="outline" onClick={() => setPreview(null)}>{t.agent_access_cancel}</Button>
                 </div>
               </div>
             )}
@@ -175,14 +175,14 @@ export function AgentAccessCard() {
               <span className="flex items-center gap-2">
                 {copied === "code" && <span className="text-xs text-muted">{t.agent_access_copied}</span>}
                 {copyError?.key === "code" && <span role="alert" className="text-xs text-danger-text">{copyError.message}</span>}
-                <Button size="sm" variant="secondary" onClick={() => void copy("code", info.claudeCodeCommand)}>{t.agent_access_copy_command}</Button>
+                <Button variant="secondary" onClick={() => void copy("code", info.claudeCodeCommand)}>{t.agent_access_copy_command}</Button>
               </span>
             </SettingRow>
             <SettingRow label={t.agent_access_other}>
               <span className="flex items-center gap-2">
                 {copied === "config" && <span className="text-xs text-muted">{t.agent_access_copied}</span>}
                 {copyError?.key === "config" && <span role="alert" className="text-xs text-danger-text">{copyError.message}</span>}
-                <Button size="sm" variant="secondary" onClick={() => void copy("config", info.genericConfig)}>{t.agent_access_copy_config}</Button>
+                <Button variant="secondary" onClick={() => void copy("config", info.genericConfig)}>{t.agent_access_copy_config}</Button>
               </span>
             </SettingRow>
           </div>

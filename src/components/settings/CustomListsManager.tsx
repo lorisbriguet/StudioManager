@@ -138,7 +138,6 @@ export function CustomListsManager() {
           <Button
             type="button"
             variant="link"
-            size="sm"
             icon={<Plus size={12} />}
             onClick={() => setAddingList(true)}
             className="mt-2 w-full px-2 py-1"

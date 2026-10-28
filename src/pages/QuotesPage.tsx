@@ -276,7 +276,7 @@ export function QuotesPage() {
   if (isLoading) return (
     <div>
       <PageHeader title={t.quotes}>
-        <Button icon={<Plus size={16} />} onClick={() => navigate("/quotes/new")}>
+        <Button icon={<Plus size={12} />} onClick={() => navigate("/quotes/new")}>
           {t.new_quote}
         </Button>
       </PageHeader>
@@ -287,7 +287,7 @@ export function QuotesPage() {
   return (
     <div>
       <PageHeader title={t.quotes}>
-        <Button icon={<Plus size={16} />} onClick={() => navigate("/quotes/new")}>
+        <Button icon={<Plus size={12} />} onClick={() => navigate("/quotes/new")}>
           {t.new_quote}
         </Button>
       </PageHeader>
@@ -378,7 +378,7 @@ export function QuotesPage() {
             message={(quotes?.length ?? 0) === 0 ? t.no_quotes_yet : t.no_matching_quotes}
             icon={<FileText size={32} />}
             action={(quotes?.length ?? 0) === 0 ? (
-              <Button icon={<Plus size={16} />} onClick={() => navigate("/quotes/new")}>
+              <Button icon={<Plus size={12} />} onClick={() => navigate("/quotes/new")}>
                 {t.new_quote}
               </Button>
             ) : undefined}

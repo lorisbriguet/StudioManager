@@ -102,7 +102,6 @@ export function TimeEntriesManager() {
           <Button
             type="button"
             variant="link"
-            size="sm"
             icon={<X size={12} />}
             onClick={() => { setStartDate(""); setEndDate(""); setProjectFilter(undefined); }}
             className="self-end pb-1 text-muted hover:text-[var(--color-text)]"
@@ -203,7 +202,7 @@ export function TimeEntriesManager() {
                             label={t.delete}
                             question={t.confirm_delete_time_entry}
                             icon={<Trash2 size={12} />}
-                            variant="ghost"
+                            variant="outline"
                             disabled={deleteEntry.isPending}
                             onConfirm={() => handleDelete(entry.id)}
                           />

@@ -70,8 +70,8 @@ export function OrgCreateDialog({ open, onClose }: { open: boolean; onClose: () 
       title={t.new_organisation}
       footer={
         <>
-          <Button variant="ghost" size="sm" onClick={() => { reset(); onClose(); }}>{t.cancel}</Button>
-          <Button size="sm" onClick={submit} loading={busy}>{t.create_organisation}</Button>
+          <Button variant="outline" onClick={() => { reset(); onClose(); }}>{t.cancel}</Button>
+          <Button onClick={submit} loading={busy}>{t.create_organisation}</Button>
         </>
       }
     >

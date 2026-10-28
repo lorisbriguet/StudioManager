@@ -698,10 +698,10 @@ export function QuickCreatePopup({
       )}
 
       <div className="flex justify-end gap-1.5">
-        <Button variant="ghost" size="sm" onClick={onClose}>
+        <Button variant="outline" onClick={onClose}>
           {t.cancel}
         </Button>
-        <Button size="sm" onClick={handleSubmit} disabled={!canSubmit}>
+        <Button onClick={handleSubmit} disabled={!canSubmit}>
           {t.add}
         </Button>
       </div>

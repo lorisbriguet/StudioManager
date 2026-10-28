@@ -207,7 +207,6 @@ export function TaskDatePicker({
             <Button
               type="button"
               variant="link"
-              size="sm"
               icon={<X size={12} />}
               onClick={handleClear}
               className="w-full justify-center py-1 text-danger-text"

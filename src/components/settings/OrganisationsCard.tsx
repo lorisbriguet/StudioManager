@@ -115,15 +115,14 @@ export function OrganisationsCard() {
                   {isActive && <span className="ml-2 text-xs text-muted">({t.active})</span>}
                 </span>
               )}
-              <Button variant="ghost" size="sm" icon={<ArrowUp size={12} />} aria-label={t.move_up} disabled={idx === 0} onClick={() => void move(idx, -1)} />
-              <Button variant="ghost" size="sm" icon={<ArrowDown size={12} />} aria-label={t.move_down} disabled={idx === organisations.length - 1} onClick={() => void move(idx, 1)} />
-              <Button variant="ghost" size="sm" icon={<Pencil size={12} />} aria-label={t.rename_organisation} onClick={() => startEditing(o)} />
+              <Button variant="outline" icon={<ArrowUp size={12} />} aria-label={t.move_up} disabled={idx === 0} onClick={() => void move(idx, -1)} />
+              <Button variant="outline" icon={<ArrowDown size={12} />} aria-label={t.move_down} disabled={idx === organisations.length - 1} onClick={() => void move(idx, 1)} />
+              <Button variant="outline" icon={<Pencil size={12} />} aria-label={t.rename_organisation} onClick={() => startEditing(o)} />
               {/* span: a disabled button gets no mouse events, and the hint explains why it is disabled */}
               <Tooltip content={isActive ? t.delete_organisation_active : isLast ? t.delete_organisation_last : undefined}>
                 <span className="inline-flex">
                   <Button
-                    variant="ghost"
-                    size="sm"
+                    variant="outline"
                     icon={<Trash2 size={12} />}
                     aria-label={t.delete_organisation}
                     disabled={isActive || isLast}
@@ -144,8 +143,8 @@ export function OrganisationsCard() {
         title={t.delete_organisation}
         footer={
           <>
-            <Button variant="ghost" size="sm" onClick={() => setDeleting(null)}>{t.cancel}</Button>
-            <Button variant="danger" size="sm" disabled={typed.trim() !== deleting?.name} onClick={() => void commitDelete()}>{t.delete}</Button>
+            <Button variant="outline" onClick={() => setDeleting(null)}>{t.cancel}</Button>
+            <Button variant="danger" disabled={typed.trim() !== deleting?.name} onClick={() => void commitDelete()}>{t.delete}</Button>
           </>
         }
       >

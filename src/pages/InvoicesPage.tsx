@@ -448,7 +448,7 @@ export function InvoicesPage() {
     <PageHeader title={t.invoices}>
       <Button
         variant="secondary"
-        icon={<Repeat size={14} />}
+        icon={<Repeat size={12} />}
         onClick={() => setShowRecurring(!showRecurring)}
         className={showRecurring ? "border-accent text-accent bg-accent-light" : ""}
       >
@@ -457,7 +457,7 @@ export function InvoicesPage() {
           <CountBadge value={templates?.length ?? 0} className="ml-1" />
         )}
       </Button>
-      <Button icon={<Plus size={16} />} onClick={() => navigate("/invoices/new")}>
+      <Button icon={<Plus size={12} />} onClick={() => navigate("/invoices/new")}>
         {t.new_invoice}
       </Button>
     </PageHeader>
@@ -482,7 +482,6 @@ export function InvoicesPage() {
             <div className="flex items-center gap-3">
               <Button
                 variant="secondary"
-                size="sm"
                 icon={<RefreshCw size={12} />}
                 loading={generatingNow}
                 onClick={handleGenerateNow}
@@ -711,7 +710,7 @@ export function InvoicesPage() {
             message={(invoices?.length ?? 0) === 0 ? t.no_invoices_yet : t.no_matching_invoices}
             icon={<FileText size={32} />}
             action={(invoices?.length ?? 0) === 0 ? (
-              <Button icon={<Plus size={16} />} onClick={() => navigate("/invoices/new")}>
+              <Button icon={<Plus size={12} />} onClick={() => navigate("/invoices/new")}>
                 {t.new_invoice}
               </Button>
             ) : undefined}

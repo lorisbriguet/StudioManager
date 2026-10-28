@@ -36,7 +36,7 @@ function SupplierGroupCard({
             <option key={g.supplier} value={g.supplier}>{g.supplier}</option>
           ))}
         </Select>
-        <Button size="sm" onClick={() => onMerge(canonical, group.map((g) => g.supplier))} disabled={merging}>
+        <Button onClick={() => onMerge(canonical, group.map((g) => g.supplier))} disabled={merging}>
           {t.merge}
         </Button>
       </div>
@@ -107,7 +107,7 @@ export function SuppliersManager() {
                 <option key={s} value={s}>{s}</option>
               ))}
             </Select>
-            <Button size="sm" onClick={() => doMerge(manualTarget, selectedList)} disabled={mergeSuppliers.isPending}>
+            <Button onClick={() => doMerge(manualTarget, selectedList)} disabled={mergeSuppliers.isPending}>
               {t.merge}
             </Button>
           </div>

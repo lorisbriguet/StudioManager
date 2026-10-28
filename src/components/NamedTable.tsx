@@ -299,7 +299,6 @@ export function NamedTable({ table, projectId }: Props) {
           </table>
           <Button
             variant="link"
-            size="sm"
             icon={<Plus size={12} />}
             onClick={() => createRow.mutate(undefined)}
             className="w-full px-3 py-2"

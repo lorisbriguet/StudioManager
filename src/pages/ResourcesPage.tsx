@@ -132,7 +132,7 @@ export function ResourcesPage() {
   if (isLoading) return (
     <div>
       <PageHeader title={t.resources}>
-        <Button icon={<Plus size={16} />} onClick={() => {}}>{t.new_resource}</Button>
+        <Button icon={<Plus size={12} />} onClick={() => {}}>{t.new_resource}</Button>
       </PageHeader>
       <div className="space-y-3 mt-4">
         {Array.from({ length: 5 }).map((_, i) => (
@@ -151,7 +151,7 @@ export function ResourcesPage() {
   return (
     <div>
       <PageHeader title={t.resources}>
-        <Button icon={<Plus size={16} />} onClick={() => setShowForm(!showForm)}>
+        <Button icon={<Plus size={12} />} onClick={() => setShowForm(!showForm)}>
           {t.new_resource}
         </Button>
       </PageHeader>
@@ -217,7 +217,7 @@ export function ResourcesPage() {
         <EmptyState
           message={rows.length === 0 ? t.no_resources_yet : t.no_matching_resources}
           action={rows.length === 0 ? (
-            <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>
+            <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>
               {t.new_resource}
             </Button>
           ) : undefined}
@@ -436,12 +436,11 @@ function NewResourceForm({
           action={
             <div className="flex items-center gap-2">
               <Button
-                size="sm"
                 onClick={() => { if (pendingSubmit) { onSubmit(pendingSubmit); } setDuplicateWarning(null); setPendingSubmit(null); }}
               >
                 {t.save_anyway}
               </Button>
-              <Button size="sm" variant="secondary" onClick={() => { setDuplicateWarning(null); setPendingSubmit(null); }}>
+              <Button variant="secondary" onClick={() => { setDuplicateWarning(null); setPendingSubmit(null); }}>
                 {t.cancel}
               </Button>
             </div>
@@ -662,7 +661,6 @@ function ResourceTableRow({
         {resource.url && (
           <Button
             variant="link"
-            size="sm"
             icon={<ExternalLink size={12} />}
             onClick={(e) => { e.stopPropagation(); onOpenUrl(); }}
             className="max-w-[300px] truncate"

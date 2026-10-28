@@ -95,7 +95,7 @@ export function WorkloadTemplateManager() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted">{t.workload_templates_desc}</p>
-        <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={handleCreate}>
+        <Button variant="primary" icon={<Plus size={12} />} onClick={handleCreate}>
           {t.new_template}
         </Button>
       </div>
@@ -191,7 +191,6 @@ export function WorkloadTemplateManager() {
                 ))}
                 <Button
                   variant="link"
-                  size="sm"
                   icon={<Plus size={12} />}
                   onClick={() =>
                     setEditingColumn({ column: null, index: tpl.columns.length })

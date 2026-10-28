@@ -36,7 +36,6 @@ export function ProjectResources({ projectId }: { projectId: number }) {
         <div key={r.id} className="flex items-center gap-2 py-1 group text-sm">
           <Button
             variant="link"
-            size="md"
             icon={<ExternalLink size={12} />}
             onClick={() => {
               let u = r.url;
@@ -82,7 +81,7 @@ export function ProjectResources({ projectId }: { projectId: number }) {
           </button>
         </div>
       ) : (
-        <Button variant="link" size="sm" icon={<Plus size={12} />} onClick={() => setShowPicker(true)} className="mt-1">
+        <Button variant="link" icon={<Plus size={12} />} onClick={() => setShowPicker(true)} className="mt-1">
           {t.add}
         </Button>
       )}

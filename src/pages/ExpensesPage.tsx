@@ -184,7 +184,7 @@ export function ExpensesPage() {
   if (isLoading) return (
     <div className="relative">
       <PageHeader title={t.expenses}>
-        <Button icon={<Plus size={16} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
+        <Button icon={<Plus size={12} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
       </PageHeader>
       <TableSkeleton columns={7} />
     </div>
@@ -211,7 +211,7 @@ export function ExpensesPage() {
       )}
 
       <PageHeader title={t.expenses}>
-        <Button icon={<Plus size={16} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
+        <Button icon={<Plus size={12} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
       </PageHeader>
 
       <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); setFilterConditions([]); }} placeholder={t.search_expenses} className="w-64 mb-4" />
@@ -351,8 +351,7 @@ export function ExpensesPage() {
                               <Tooltip content={t.preview_receipt}>
                                 <Button
                                   variant="link"
-                                  size="sm"
-                                  icon={<Eye size={14} />}
+                                  icon={<Eye size={12} />}
                                   onClick={() => setPreview({ path: exp.receipt_path!, reference: exp.reference })}
                                 >
                                   {t.view}
@@ -365,7 +364,6 @@ export function ExpensesPage() {
                           ) : (
                             <Button
                               variant="link"
-                              size="sm"
                               icon={<Paperclip size={12} />}
                               onClick={() => attachReceipt(exp.id, exp.reference, exp.supplier)}
                             >
@@ -388,7 +386,7 @@ export function ExpensesPage() {
             message={(expenses?.length ?? 0) === 0 ? (t.no_expenses_yet ?? "No expenses yet") : (t.no_matching_expenses ?? "No matching expenses")}
             icon={<Receipt size={32} />}
             action={(expenses?.length ?? 0) === 0 ? (
-              <Button icon={<Plus size={16} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
+              <Button icon={<Plus size={12} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
             ) : undefined}
           />
         )}

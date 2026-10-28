@@ -164,7 +164,7 @@ export function IncomePage() {
   if (isLoading) return (
     <div className="relative">
       <PageHeader title={t.income}>
-        <Button icon={<Plus size={16} />} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
+        <Button icon={<Plus size={12} />} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
           {t.new_income}
         </Button>
       </PageHeader>
@@ -184,7 +184,7 @@ export function IncomePage() {
       )}
 
       <PageHeader title={t.income}>
-        <Button icon={<Plus size={16} />} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
+        <Button icon={<Plus size={12} />} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
           {t.new_income}
         </Button>
       </PageHeader>
@@ -333,8 +333,7 @@ export function IncomePage() {
                             <div className="flex items-center gap-2">
                               <Button
                                 variant="link"
-                                size="sm"
-                                icon={<Eye size={14} />}
+                                icon={<Eye size={12} />}
                                 onClick={() => setPreview({ path: inc.receipt_path!, reference: inc.reference })}
                               >
                                 {t.view}
@@ -346,7 +345,6 @@ export function IncomePage() {
                           ) : (
                             <Button
                               variant="link"
-                              size="sm"
                               icon={<Paperclip size={12} />}
                               onClick={() => attachReceipt(inc.id, inc.reference, inc.source)}
                             >
@@ -376,7 +374,7 @@ export function IncomePage() {
             message={(incomes?.length ?? 0) === 0 ? t.no_incomes_yet : t.no_matching_incomes}
             icon={<Wallet size={32} />}
             action={(incomes?.length ?? 0) === 0 ? (
-              <Button icon={<Plus size={16} />} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
+              <Button icon={<Plus size={12} />} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
                 {t.new_income}
               </Button>
             ) : undefined}

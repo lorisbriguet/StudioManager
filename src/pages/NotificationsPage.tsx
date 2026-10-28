@@ -60,12 +60,12 @@ export function NotificationsPage() {
     <div>
       <PageHeader title={`${t.notifications}${unreadCount > 0 ? ` (${unreadCount} ${t.unread})` : ""}`}>
         {unreadCount > 0 && (
-          <Button variant="secondary" size="sm" icon={<CheckCheck size={14} />} onClick={() => markAllRead.mutate()}>
+          <Button variant="secondary" icon={<CheckCheck size={12} />} onClick={() => markAllRead.mutate()}>
             {t.mark_all_read}
           </Button>
         )}
         {notifications.length > 0 && (
-          <Button variant="danger" size="sm" icon={<Trash2 size={14} />} onClick={() => clearAll.mutate()}>
+          <Button variant="danger" icon={<Trash2 size={12} />} onClick={() => clearAll.mutate()}>
             {t.clear_all}
           </Button>
         )}

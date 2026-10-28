@@ -253,7 +253,7 @@ export function ProjectsPage() {
     <div className="flex flex-1 min-h-0 -m-8">
       <div className="min-w-0 overflow-y-auto flex-1 p-8">
         <PageHeader title={t.projects}>
-          <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>{t.new_project}</Button>
+          <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>{t.new_project}</Button>
         </PageHeader>
         <TableSkeleton columns={4} />
       </div>
@@ -264,7 +264,7 @@ export function ProjectsPage() {
     <div ref={containerRef} className="flex flex-1 min-h-0 -m-8">
       <div className="min-w-0 overflow-y-auto flex-1 p-8">
         <PageHeader title={t.projects}>
-          <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>{t.new_project}</Button>
+          <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>{t.new_project}</Button>
         </PageHeader>
 
         <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -379,7 +379,7 @@ export function ProjectsPage() {
                 icon={<FolderOpen size={32} />}
                 message={(projects?.length ?? 0) === 0 ? t.no_projects : t.no_matching_projects}
                 action={(projects?.length ?? 0) === 0 ? (
-                  <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>{t.new_project}</Button>
+                  <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>{t.new_project}</Button>
                 ) : undefined}
               />
             </div>

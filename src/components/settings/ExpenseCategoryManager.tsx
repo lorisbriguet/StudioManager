@@ -167,7 +167,7 @@ export function ExpenseCategoryManager() {
                     ) : categoryUsage[cat.code] ? (
                       <span className="px-2 py-1 text-xs text-muted">{t.category_in_use}</span>
                     ) : (
-                      <Button variant="danger-outline" size="sm" onClick={() => handleDelete(cat.code)}>
+                      <Button variant="danger" onClick={() => handleDelete(cat.code)}>
                         {t.delete}
                       </Button>
                     )}

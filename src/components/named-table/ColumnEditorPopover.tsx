@@ -89,7 +89,6 @@ export function ColumnEditorPopover({
                 <Button
                   type="button"
                   variant="link"
-                  size="sm"
                   icon={<Unlink size={12} />}
                   onClick={onUnlinkList}
                   className="text-muted hover:text-[var(--color-danger-text)]"
@@ -102,7 +101,6 @@ export function ColumnEditorPopover({
                 <Button
                   type="button"
                   variant="link"
-                  size="sm"
                   icon={<Link size={12} />}
                   onClick={() => setShowImportListDropdown((v) => !v)}
                   aria-haspopup="dialog"
@@ -169,7 +167,6 @@ export function ColumnEditorPopover({
               <Button
                 type="button"
                 variant="link"
-                size="sm"
                 icon={<Plus size={12} />}
                 onClick={() => setColOptions([...colOptions, ""])}
               >
@@ -192,7 +189,6 @@ export function ColumnEditorPopover({
                   <Button
                     type="button"
                     variant="link"
-                    size="sm"
                     icon={<Link size={12} />}
                     onClick={() => setShowSaveAsListInput(true)}
                     className="text-muted hover:text-accent"

@@ -70,7 +70,7 @@ const CALLOUT = {
 };
 
 /**
- *   <Callout tone="warning" action={<Button size="sm" …>{t.fix}</Button>}>{t.receipts_missing_category}</Callout>
+ *   <Callout tone="warning" action={<Button …>{t.fix}</Button>}>{t.receipts_missing_category}</Callout>
  */
 export function Callout({
   tone = "info",
@@ -111,7 +111,6 @@ export function ConfirmButton({
   onConfirm,
   icon,
   variant = "danger",
-  size = "sm",
   disabled,
 }: {
   label: ReactNode;
@@ -120,8 +119,7 @@ export function ConfirmButton({
   confirmLabel?: ReactNode;
   onConfirm: () => void;
   icon?: ReactNode;
-  variant?: "danger" | "danger-outline" | "ghost" | "secondary";
-  size?: "sm" | "md";
+  variant?: "danger" | "outline" | "secondary";
   disabled?: boolean;
 }) {
   const t = useT();
@@ -141,7 +139,7 @@ export function ConfirmButton({
 
   if (!asking) {
     return (
-      <Button variant={variant} size={size} icon={icon} disabled={disabled} onClick={() => setAsking(true)}>
+      <Button variant={variant} icon={icon} disabled={disabled} onClick={() => setAsking(true)}>
         {label}
       </Button>
     );
@@ -162,7 +160,6 @@ export function ConfirmButton({
       <Button
         ref={confirmRef}
         variant="danger"
-        size={size}
         onClick={() => {
           setAsking(false);
           onConfirm();
@@ -170,7 +167,7 @@ export function ConfirmButton({
       >
         {confirmLabel ?? label}
       </Button>
-      <Button variant="secondary" size={size} onClick={() => setAsking(false)}>
+      <Button variant="secondary" onClick={() => setAsking(false)}>
         {t.cancel}
       </Button>
     </div>

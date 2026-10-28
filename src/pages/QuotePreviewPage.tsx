@@ -120,11 +120,11 @@ export function QuotePreviewPage() {
           {quote.reference.startsWith("DRAFT") ? t.draft : quote.reference} — {client.name}
         </h1>
         {quote.status === "accepted" && !quote.converted_to_project_id && (
-          <Button variant="secondary" icon={<FolderPlus size={14} />} onClick={() => setShowWizard(true)}>
+          <Button variant="secondary" icon={<FolderPlus size={12} />} onClick={() => setShowWizard(true)}>
             {t.generate_project}
           </Button>
         )}
-        <Button icon={<Download size={14} />} loading={exporting} onClick={downloadPdf}>
+        <Button icon={<Download size={12} />} loading={exporting} onClick={downloadPdf}>
           {t.download_pdf}
         </Button>
       </div>
@@ -152,7 +152,7 @@ export function QuotePreviewPage() {
         onClose={() => setShowDraftWarning(false)}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setShowDraftWarning(false)}>
+            <Button variant="outline" onClick={() => setShowDraftWarning(false)}>
               {t.cancel}
             </Button>
             <Button variant="secondary" onClick={() => { setShowDraftWarning(false); doDownload(); }}>

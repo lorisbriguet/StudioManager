@@ -454,8 +454,7 @@ export function SettingsPage() {
               <SettingsCard title={t.wiki}>
               <SettingRow label={t.reset_user_guide} desc={t.reset_user_guide_desc}>
                 <Button
-                  variant="ghost"
-                  size="sm"
+                  variant="outline"
                   onClick={async () => {
                     if (!(await ask(t.reset_user_guide_confirm ?? "Reset the User Guide to default? This will delete the current guide and re-create it.", { kind: "warning" }))) return;
                     try {
@@ -646,7 +645,7 @@ export function SettingsPage() {
                 {testMode ? (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-[var(--color-warning-text)] font-medium flex items-center gap-1"><FlaskConical size={12} /> {t.test_mode_active}</span>
-                    <Button variant="danger-outline" size="sm" onClick={handleExitTestMode} disabled={togglingTestMode}>
+                    <Button variant="danger" onClick={handleExitTestMode} disabled={togglingTestMode}>
                       {t.exit_test_mode}
                     </Button>
                   </div>
@@ -664,7 +663,7 @@ export function SettingsPage() {
                 {presentationMode ? (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-[var(--color-indigo-text)] font-medium">{t.presentation_active}</span>
-                    <Button variant="danger-outline" size="sm" onClick={handleExitPresentation} disabled={togglingPresentation}>
+                    <Button variant="danger" onClick={handleExitPresentation} disabled={togglingPresentation}>
                       {t.exit_presentation_mode}
                     </Button>
                   </div>
@@ -684,7 +683,7 @@ export function SettingsPage() {
               <SettingRow label={t.backup_directory}>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-muted truncate max-w-[180px]" title={backupPath}>{backupPath || t.not_set}</span>
-                  <Button type="button" variant="ghost" size="sm" icon={<FolderOpen size={12} />} onClick={() => browseBackupDir()}>
+                  <Button type="button" variant="outline" icon={<FolderOpen size={12} />} onClick={() => browseBackupDir()}>
                     {t.browse}
                   </Button>
                 </div>
@@ -692,7 +691,7 @@ export function SettingsPage() {
               <SettingRow label={t.backup_directory_2}>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-muted truncate max-w-[180px]" title={backupPath2}>{backupPath2 || t.not_set}</span>
-                  <Button type="button" variant="ghost" size="sm" icon={<FolderOpen size={12} />} onClick={() => browseBackupDir(true)}>
+                  <Button type="button" variant="outline" icon={<FolderOpen size={12} />} onClick={() => browseBackupDir(true)}>
                     {t.browse}
                   </Button>
                   {backupPath2 && (
@@ -732,7 +731,7 @@ export function SettingsPage() {
                 </div>
               </SettingRow>
               <div className="py-3 flex items-center gap-2">
-                <Button type="button" size="sm" icon={<HardDrive size={12} />} onClick={runBackup} disabled={backing || !backupPath}>
+                <Button type="button" icon={<HardDrive size={12} />} onClick={runBackup} disabled={backing || !backupPath}>
                   {backing ? t.backing_up : t.backup_now}
                 </Button>
               </div>
@@ -759,7 +758,7 @@ export function SettingsPage() {
                       <option key={name} value={name}>{name.replace("backup-", "")}</option>
                     ))}
                   </Select>
-                  <Button variant="danger-outline" size="sm" icon={<RotateCcw size={12} />} onClick={runRestore} disabled={restoring || !selectedBackup || !backupPath}>
+                  <Button variant="danger" icon={<RotateCcw size={12} />} onClick={runRestore} disabled={restoring || !selectedBackup || !backupPath}>
                     {restoring ? t.restoring : t.restore}
                   </Button>
                 </div>
@@ -769,10 +768,10 @@ export function SettingsPage() {
               <SettingsCard title={t.snapshot} desc={t.snapshot_desc}>
               <SettingRow label={t.snapshot}>
                 <div className="flex items-center gap-2">
-                  <Button type="button" size="sm" icon={<Camera size={12} />} onClick={handleCreateSnapshot} disabled={snapshotting || testMode}>
+                  <Button type="button" icon={<Camera size={12} />} onClick={handleCreateSnapshot} disabled={snapshotting || testMode}>
                     {snapshotting ? t.loading : t.create_snapshot}
                   </Button>
-                  <Button variant="danger-outline" size="sm" icon={<RotateCcw size={12} />} onClick={handleRestoreSnapshot} disabled={restoringSnapshot || !hasSnapshotFile || testMode}>
+                  <Button variant="danger" icon={<RotateCcw size={12} />} onClick={handleRestoreSnapshot} disabled={restoringSnapshot || !hasSnapshotFile || testMode}>
                     {restoringSnapshot ? t.loading : t.restore_snapshot}
                   </Button>
                   {!hasSnapshotFile && <span className="text-xs text-muted">{t.no_snapshot_available}</span>}

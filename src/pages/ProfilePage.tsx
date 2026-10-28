@@ -180,9 +180,8 @@ export function ProfilePage() {
                   {t.templates}
                 </SectionLabel>
                 <Button
-                  size="sm"
                   variant="secondary"
-                  icon={<Plus size={14} />}
+                  icon={<Plus size={12} />}
                   onClick={() => setEditingTemplate("new")}
                 >
                   {t.new_invoice_template}

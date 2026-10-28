@@ -288,7 +288,6 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
       <div className="flex items-center gap-2 ml-14.5">
         <Button
           variant="link"
-          size="sm"
           icon={<Plus size={12} />}
           onClick={addCondition}
           className="text-muted hover:text-accent"
@@ -339,7 +338,6 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
           ) : (
             <Button
               variant="link"
-              size="sm"
               icon={<Bookmark size={12} />}
               onClick={handleStartNaming}
               className="text-muted hover:text-accent"

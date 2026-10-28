@@ -94,7 +94,6 @@ function PresetDropdown() {
     <div className="relative" ref={dropdownRef}>
       <Button
         variant="secondary"
-        size="sm"
         onClick={() => (open ? closeMenu(false) : setOpen(true))}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -269,8 +268,7 @@ export function DashboardPage() {
         <PresetDropdown />
         <Button
           variant="secondary"
-          size="sm"
-          icon={<Plus size={14} />}
+          icon={<Plus size={12} />}
           onClick={() => setShowWidgetPanel(!showWidgetPanel)}
           className={showWidgetPanel ? "border-accent text-accent bg-accent-light" : ""}
         >
@@ -323,7 +321,7 @@ export function DashboardPage() {
           message={t.first_run_dashboard}
           icon={<Users size={32} />}
           action={
-            <Button icon={<Plus size={16} />} onClick={() => navigate("/clients")}>
+            <Button icon={<Plus size={12} />} onClick={() => navigate("/clients")}>
               {t.add_first_client}
             </Button>
           }

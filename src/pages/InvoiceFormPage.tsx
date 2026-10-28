@@ -493,7 +493,7 @@ export function InvoiceFormPage() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="sm" onClick={async () => { if (await confirmIfDirty("/invoices")) navigate("/invoices"); }} icon={<ArrowLeft size={18} />} aria-label={t.back} />
+        <Button variant="outline" onClick={async () => { if (await confirmIfDirty("/invoices")) navigate("/invoices"); }} icon={<ArrowLeft size={18} />} aria-label={t.back} />
         <h1 className="text-xl font-semibold">
           {isEdit ? t.edit_invoice : t.new_invoice}
         </h1>
@@ -724,9 +724,8 @@ export function InvoiceFormPage() {
             <div className="flex items-center gap-2">
               {availableTasks.length > 0 && (
                 <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={<ListTodo size={14} />}
+                  variant="outline"
+                  icon={<ListTodo size={12} />}
                   onClick={() => {
                     const existingDesignations = new Set(items.map((i) => i.designation));
                     const newTasks = availableTasks.filter(
@@ -779,8 +778,7 @@ export function InvoiceFormPage() {
           {isEdit && existingInvoice?.status === "draft" && !showDeleteConfirm && (
             <Button
               variant="secondary"
-              size="lg"
-              icon={<Trash2 size={14} />}
+              icon={<Trash2 size={12} />}
               onClick={() => setShowDeleteConfirm(true)}
               className="mr-auto text-danger border-danger/30 hover:bg-danger/5"
             >
@@ -815,7 +813,6 @@ export function InvoiceFormPage() {
           )}
           <Button
             variant="secondary"
-            size="lg"
             onClick={async () => {
               if (await confirmIfDirty("/invoices")) navigate("/invoices");
             }}
@@ -824,15 +821,13 @@ export function InvoiceFormPage() {
           </Button>
           <Button
             variant="secondary"
-            size="lg"
-            icon={<Eye size={14} />}
+            icon={<Eye size={12} />}
             onClick={() => save("preview")}
             disabled={createInvoice.isPending || updateInvoice.isPending}
           >
             {t.save_and_preview}
           </Button>
           <Button
-            size="lg"
             onClick={() => save()}
             disabled={createInvoice.isPending || updateInvoice.isPending}
           >

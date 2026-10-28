@@ -144,7 +144,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
         <>
           {!isNew && onDelete && (
             <Button
-              variant="ghost"
+              variant="outline"
               onClick={() => {
                 onDelete();
                 onClose();
@@ -289,7 +289,6 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                   <Button
                     type="button"
                     variant="link"
-                    size="sm"
                     icon={<Unlink size={12} />}
                     onClick={() => setLinkedListId(undefined)}
                     className="text-muted hover:text-[var(--color-danger-text)]"
@@ -302,7 +301,6 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                   <Button
                     type="button"
                     variant="link"
-                    size="sm"
                     icon={<Link size={12} />}
                     onClick={() => setShowImportListDropdown((v) => !v)}
                     aria-haspopup="dialog"
@@ -418,7 +416,6 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                     <Button
                       type="button"
                       variant="link"
-                      size="sm"
                       icon={<Link size={12} />}
                       onClick={() => setShowSaveAsListInput(true)}
                       className="text-muted hover:text-accent"

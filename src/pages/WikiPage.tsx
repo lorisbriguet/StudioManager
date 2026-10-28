@@ -1169,7 +1169,7 @@ export function WikiPage() {
               icon={<BookOpen size={32} />}
               action={
                 allArticles.length > 0 ? (
-                  <Button variant="secondary" icon={<Waypoints size={14} />} onClick={openGraph}>
+                  <Button variant="secondary" icon={<Waypoints size={12} />} onClick={openGraph}>
                     {t.wiki_open_graph}
                   </Button>
                 ) : undefined

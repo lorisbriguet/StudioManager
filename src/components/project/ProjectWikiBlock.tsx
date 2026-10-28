@@ -73,7 +73,7 @@ export function ProjectWikiBlock({ projectId }: { projectId: number }) {
           </button>
         </div>
       ) : (
-        <Button variant="link" size="sm" icon={<Plus size={12} />} onClick={() => setShowPicker(true)} className="mt-1">
+        <Button variant="link" icon={<Plus size={12} />} onClick={() => setShowPicker(true)} className="mt-1">
           {t.link_article}
         </Button>
       )}

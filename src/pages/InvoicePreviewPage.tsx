@@ -200,7 +200,7 @@ export function InvoicePreviewPage() {
         <h1 className="text-sm font-semibold flex-1">
           {invoice.reference} — {client.name}
         </h1>
-        <Button icon={<Download size={14} />} loading={exporting} onClick={downloadPdf}>
+        <Button icon={<Download size={12} />} loading={exporting} onClick={downloadPdf}>
           {t.download_pdf}
         </Button>
       </div>
@@ -233,7 +233,7 @@ export function InvoicePreviewPage() {
         onClose={() => setShowDraftWarning(false)}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setShowDraftWarning(false)}>
+            <Button variant="outline" onClick={() => setShowDraftWarning(false)}>
               {t.cancel}
             </Button>
             <Button variant="secondary" onClick={() => { setShowDraftWarning(false); doDownload(); }}>

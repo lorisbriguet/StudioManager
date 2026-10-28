@@ -325,7 +325,6 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
           {project.folder_path ? (
             <Button
               variant="link"
-              size="sm"
               icon={<FolderOpen size={12} />}
               onClick={() => invoke("open_in_finder", { path: project.folder_path! }).catch(() => toast.error(t.failed_open_folder))}
               className="text-muted hover:text-[var(--color-text-secondary)] cursor-pointer"
@@ -335,7 +334,6 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
           ) : (
             <Button
               variant="link"
-              size="sm"
               icon={<FolderOpen size={12} />}
               onClick={async () => {
                 const dir = await openDirectory({ directory: true, title: t.set_folder });

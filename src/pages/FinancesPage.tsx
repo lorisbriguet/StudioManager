@@ -168,7 +168,7 @@ export function FinancesPage() {
           message={t.first_run_finances}
           icon={<BarChart3 size={32} />}
           action={
-            <Button icon={<Plus size={16} />} onClick={() => navigate("/invoices/new")}>
+            <Button icon={<Plus size={12} />} onClick={() => navigate("/invoices/new")}>
               {t.new_invoice}
             </Button>
           }
@@ -211,7 +211,7 @@ export function FinancesPage() {
             <option key={y} value={y}>{y}</option>
           ))}
         </Select>
-        <Button icon={<Download size={14} />} loading={exporting} onClick={exportForTrustee}>{t.export_trustee}</Button>
+        <Button icon={<Download size={12} />} loading={exporting} onClick={exportForTrustee}>{t.export_trustee}</Button>
       </PageHeader>
 
       {missingChfCount > 0 && (

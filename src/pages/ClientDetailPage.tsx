@@ -94,7 +94,7 @@ export function ClientDetailPage() {
         <h1 className="text-xl font-semibold">{client.name}</h1>
         <div className="ml-auto flex items-center gap-2">
           {dirty && (
-            <Button size="md" icon={<Save size={14} />} onClick={save}>
+            <Button icon={<Save size={12} />} onClick={save}>
               {t.save}
             </Button>
           )}
@@ -102,7 +102,7 @@ export function ClientDetailPage() {
             label={t.delete}
             question={t.confirm_delete_client}
             icon={<Trash2 size={14} />}
-            variant="danger-outline"
+            variant="danger"
             onConfirm={() => {
               deleteClient.mutate(id!, {
                 onSuccess: () => {
@@ -343,7 +343,7 @@ function ContactsSection({
     <Card>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-medium">{t.contacts}</h2>
-        <Button variant="link" size="sm" icon={<Plus size={14} />} onClick={addDraft} className="hover:text-accent-hover">
+        <Button variant="link" icon={<Plus size={12} />} onClick={addDraft} className="hover:text-accent-hover">
           {t.add}
         </Button>
       </div>
@@ -723,7 +723,7 @@ function AddressesSection({
     <Card>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-medium">{t.billing_addresses}</h2>
-        <Button variant="link" size="sm" icon={<Plus size={14} />} onClick={addDraft} className="hover:text-accent-hover">
+        <Button variant="link" icon={<Plus size={12} />} onClick={addDraft} className="hover:text-accent-hover">
           {t.add}
         </Button>
       </div>
