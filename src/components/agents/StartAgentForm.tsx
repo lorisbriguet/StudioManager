@@ -99,9 +99,9 @@ export function StartAgentForm({ onStarted, onCancel }: StartAgentFormProps) {
           className="w-full bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-lg px-3 py-2 text-sm focus-accent"
         />
       </FormField>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-[auto_1fr] gap-3">
         <FormField label={t.agents_model}>
-          <Select value={model} onChange={(e) => setModel(e.target.value)}>
+          <Select fullWidth={false} className="w-32" value={model} onChange={(e) => setModel(e.target.value)}>
             {MODELS.map((m) => (
               <option key={m} value={m}>
                 {m}

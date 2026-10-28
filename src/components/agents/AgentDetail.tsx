@@ -105,6 +105,8 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
         )}
         {background && (
           <Select
+            fullWidth={false}
+            className="w-32"
             aria-label={t.agents_model}
             value={knownModel ? (agent.model as string) : ""}
             onChange={(e) => void run(async () => {
