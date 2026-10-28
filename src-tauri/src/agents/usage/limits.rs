@@ -4,7 +4,9 @@ use super::samples::{samples_from, Sample};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use std::time::SystemTime;
 
 pub const LIMITS_FILE: &str = "limits.json";
 pub const HISTORY_FILE: &str = "limits-history.jsonl";
@@ -43,7 +45,6 @@ const SAME_WINDOW_MS: i64 = 300_000;
 const MIN_SAMPLES: usize = 3;
 const MIN_SPAN_S: f64 = 30.0 * 60.0;
 const PACE_LEAD_MS: i64 = 3_600_000;
-const TAIL_BYTES: u64 = 64 * 1024;
 const KEEP_ALERTS_MS: i64 = 8 * 86_400_000;
 
 pub fn now_ms() -> i64 {
@@ -191,21 +192,37 @@ pub fn due_alerts(meters: &[Meter], sent: &BTreeSet<String>, now_ms: i64) -> Vec
     out
 }
 
-/// The tail of the history (it only grows): whole lines of the last 64 KB.
-fn read_history(path: &Path) -> Vec<Sample> {
-    use std::io::{Read, Seek, SeekFrom};
-    let Ok(mut f) = std::fs::File::open(path) else { return vec![] };
-    let Ok(size) = f.seek(SeekFrom::End(0)) else { return vec![] };
-    let start = size.saturating_sub(TAIL_BYTES);
-    let mut buf = Vec::new();
-    if f.seek(SeekFrom::Start(start)).is_err() || f.read_to_end(&mut buf).is_err() {
-        return vec![];
+/// The parsed history and the file state it was read from.
+struct HistoryCache {
+    path: PathBuf,
+    len: u64,
+    modified: SystemTime,
+    samples: Arc<Vec<Sample>>,
+}
+
+static HISTORY: Mutex<Option<HistoryCache>> = Mutex::new(None);
+
+/// The whole history: pace needs each window's earliest sample, which can be days back. The
+/// capture trims it to 8 days, and the parse is cached by length and modification time, so a
+/// reading while Claude is idle costs one `stat`.
+fn read_history(path: &Path) -> Arc<Vec<Sample>> {
+    let Ok(meta) = std::fs::metadata(path) else { return Arc::default() };
+    let (len, modified) = (meta.len(), meta.modified().unwrap_or(SystemTime::UNIX_EPOCH));
+    let mut cache = HISTORY.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(c) = cache.as_ref() {
+        if c.path == path && c.len == len && c.modified == modified {
+            return c.samples.clone();
+        }
     }
-    let mut lines = buf.split(|b| *b == b'\n').filter(|l| !l.is_empty());
-    if start > 0 {
-        lines.next(); // starts mid-line
-    }
-    lines.filter_map(|l| serde_json::from_slice(l).ok()).collect()
+    let Ok(buf) = std::fs::read(path) else { return Arc::default() };
+    let samples: Arc<Vec<Sample>> = Arc::new(
+        buf.split(|b| *b == b'\n')
+            .filter(|l| !l.is_empty())
+            .filter_map(|l| serde_json::from_slice(l).ok())
+            .collect(),
+    );
+    *cache = Some(HistoryCache { path: path.to_path_buf(), len, modified, samples: samples.clone() });
+    samples
 }
 
 /// The meters and when `limits.json` was written (epoch ms); None without the file.
@@ -452,22 +469,22 @@ mod tests {
         assert!(a[0].key.starts_with(&format!("five_hour@{}", next * 1000)));
     }
 
+    fn line(s: &Sample) -> String {
+        serde_json::to_string(s).unwrap() + "\n"
+    }
+
     #[test]
-    fn history_tail_is_bounded_and_load_reads_it() {
+    fn load_reads_the_whole_history() {
         let dir = tmp();
         let reset_s = NOW / 1000 + 4 * 3600;
         fs::write(dir.join(LIMITS_FILE), limits(30.0, reset_s, 1.0, reset_s)).unwrap();
         let mut text = String::new();
         // Over 64 KB of an old window, then the current one.
         for i in 0..1500 {
-            let s = sample("five_hour", 1.0, reset_s - 9 * 3600, NOW - 9 * HOUR + i);
-            text.push_str(&serde_json::to_string(&s).unwrap());
-            text.push('\n');
+            text.push_str(&line(&sample("five_hour", 1.0, reset_s - 9 * 3600, NOW - 9 * HOUR + i)));
         }
         for (p, back) in [(10.0, 2), (20.0, 1), (30.0, 0)] {
-            let s = sample("five_hour", p, reset_s, NOW - back * HOUR);
-            text.push_str(&serde_json::to_string(&s).unwrap());
-            text.push('\n');
+            text.push_str(&line(&sample("five_hour", p, reset_s, NOW - back * HOUR)));
         }
         assert!(text.len() > 100_000);
         fs::write(dir.join(HISTORY_FILE), text).unwrap();
@@ -476,5 +493,42 @@ mod tests {
         assert!(m[0].pace.is_some());
         // No limits file: nothing.
         assert!(load(&tmp(), NOW).is_none());
+    }
+
+    #[test]
+    fn weekly_pace_uses_the_earliest_sample_beyond_64_kb() {
+        let dir = tmp();
+        let five_reset_s = NOW / 1000 + 2 * 3600;
+        let week_reset_s = NOW / 1000 + 96 * 3600;
+        fs::write(dir.join(LIMITS_FILE), limits(5.0, five_reset_s, 14.0, week_reset_s)).unwrap();
+        // The week started quietly: 10% three days ago.
+        let mut text = line(&sample("seven_day", 10.0, week_reset_s, NOW - 72 * HOUR));
+        // Then a busy afternoon: 10% -> 14% over the last 4 hours, a sample of every window each
+        // minute, well over 64 KB. From those alone it would hit 100% in about 86 h of 96.
+        for i in 0..=240 {
+            let at = NOW - 4 * HOUR + i * 60_000;
+            let week = 10.0 + 4.0 * i as f64 / 240.0;
+            text.push_str(&line(&sample("five_hour", 5.0, five_reset_s, at)));
+            text.push_str(&line(&sample("seven_day", week, week_reset_s, at)));
+            text.push_str(&line(&sample("seven_day_opus", 3.0, week_reset_s, at)));
+            text.push_str(&line(&sample("seven_day_sonnet", 1.0, week_reset_s, at)));
+        }
+        assert!(text.len() > 64 * 1024, "{}", text.len());
+        fs::write(dir.join(HISTORY_FILE), &text).unwrap();
+        let (m, _) = load(&dir, NOW).unwrap();
+        let week = m.iter().find(|m| m.window == "seven_day").unwrap();
+        let p = week.pace.clone().expect("pace");
+        // 4 points in 72 h, not in 4 h: about 19% at reset, never 100% before it.
+        assert_eq!(p.hits_full_at, None, "{p:?}");
+        assert!(p.projected_percent_at_reset < 25.0, "{p:?}");
+        // So no pace alert.
+        assert!(check_alerts(&dir, NOW, true).is_empty());
+
+        // The cache follows the file: one more sample at 90% changes the meter's pace.
+        text.push_str(&line(&sample("seven_day", 90.0, week_reset_s, NOW)));
+        fs::write(dir.join(HISTORY_FILE), &text).unwrap();
+        let (m, _) = load(&dir, NOW).unwrap();
+        let week = m.iter().find(|m| m.window == "seven_day").unwrap();
+        assert!(week.pace.clone().unwrap().projected_percent_at_reset > 25.0);
     }
 }

@@ -18,6 +18,8 @@ use tauri_plugin_notification::NotificationExt;
 pub const CHANGED_EVENT: &str = "agents:changed";
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 const INDEX_RELOAD: Duration = Duration::from_secs(30);
+/// Plan-limit alerts (80%, pace) don't need the 2-s tick, and each check reads the history.
+const ALERTS_INTERVAL: Duration = Duration::from_secs(60);
 
 /// What the poller remembers between passes.
 #[derive(Default)]
@@ -178,6 +180,7 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
     let mut index = FolderIndex::default();
     let mut index_at: Option<Instant> = None;
     let mut models = ModelCache::new();
+    let mut alerts_at: Option<Instant> = None;
     loop {
         std::thread::sleep(POLL_INTERVAL);
         let Some(state) = app.try_state::<super::AgentsState>() else {
@@ -195,8 +198,12 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
             }
             continue;
         }
-        // Plan-limit alerts belong to the menu bar; a small file read, no CLI involved.
-        if settings.menu_bar && state.app_dir.join(LIMITS_FILE).exists() {
+        // Plan-limit alerts belong to the menu bar; once a minute, file reads only, no CLI.
+        if settings.menu_bar
+            && alerts_at.map_or(true, |t| t.elapsed() >= ALERTS_INTERVAL)
+            && state.app_dir.join(LIMITS_FILE).exists()
+        {
+            alerts_at = Some(Instant::now());
             let alerts = check_alerts(&state.app_dir, limits_now_ms(), settings.limit_alerts);
             for a in &alerts {
                 log::info!("[agents] limit alert: {}", a.key);
