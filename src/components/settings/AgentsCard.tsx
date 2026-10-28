@@ -39,7 +39,7 @@ export function AgentsCard() {
       <SettingRow label={t.agents_enable}>
         <Toggle
           checked={info?.enabled ?? false}
-          disabled={!info || missing}
+          disabled={!info || (missing && !info.enabled)}
           ariaLabel={t.agents_enable}
           onChange={(enabled) => void toggle(enabled)}
         />

@@ -31,6 +31,16 @@ describe("AgentsCard", () => {
     expect(screen.getByRole("switch")).toBeDisabled();
   });
 
+  it("lets the user switch off when enabled but claude is gone", async () => {
+    info = { enabled: true, claudePath: null };
+    render(<AgentsCard />);
+    await screen.findByText(/Claude was not found/i);
+    const sw = screen.getByRole("switch");
+    expect(sw).not.toBeDisabled();
+    fireEvent.click(sw);
+    await waitFor(() => expect(invokedCommands.find((c) => c.cmd === "agents_set_enabled")?.args).toEqual({ enabled: false }));
+  });
+
   it("shows the path and toggling enables agents", async () => {
     info = { enabled: false, claudePath: "/usr/local/bin/claude" };
     render(<AgentsCard />);

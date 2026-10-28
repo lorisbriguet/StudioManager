@@ -5,7 +5,15 @@ use serde::{Deserialize, Serialize};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
+
+const READER_GRACE: Duration = Duration::from_millis(500);
+const CLAUDE_MARK: &str = "__SM_CLAUDE__=";
+const PATH_MARK: &str = "__SM_PATH__=";
+/// Fixed lookup script; marker lines survive rc-file noise around them.
+const LOOKUP_SCRIPT: &str =
+    r#"printf "__SM_CLAUDE__=%s\n__SM_PATH__=%s\n" "$(command -v claude)" "$PATH""#;
 
 pub const SETTINGS_FILE: &str = "agents.json";
 const CLI_TIMEOUT: Duration = Duration::from_secs(10);
@@ -39,9 +47,15 @@ pub struct LoginEnv {
 /// Parse the two lines printed by the lookup script: `command -v claude`,
 /// then `$PATH`. An empty first line means claude was not found.
 pub fn parse_login_output(out: &str) -> LoginEnv {
-    let mut lines = out.lines();
-    let claude = lines.next().map(str::trim).filter(|l| !l.is_empty());
-    let path = lines.next().map(str::trim).unwrap_or("");
+    let mut claude = None;
+    let mut path = "";
+    for line in out.lines() {
+        if let Some(v) = line.strip_prefix(CLAUDE_MARK) {
+            claude = Some(v.trim()).filter(|v| !v.is_empty());
+        } else if let Some(v) = line.strip_prefix(PATH_MARK) {
+            path = v.trim();
+        }
+    }
     LoginEnv { claude: claude.map(PathBuf::from), path: path.to_string() }
 }
 
@@ -71,7 +85,7 @@ pub fn resolve_login_env() -> LoginEnv {
     let shell = lookup_shell(std::env::var("SHELL").ok().as_deref());
     let output = run_with_timeout(
         Command::new(shell)
-            .args(["-lic", r#"printf "%s\n%s\n" "$(command -v claude)" "$PATH""#])
+            .args(["-lic", LOOKUP_SCRIPT])
             .stdin(Stdio::null()),
         CLI_TIMEOUT,
     );
@@ -138,18 +152,10 @@ impl Cli for RealCli {
 /// process cannot be started.
 fn run_with_timeout(cmd: &mut Command, timeout: Duration) -> Option<CliOutput> {
     let mut child = cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().ok()?;
-    let mut out = child.stdout.take()?;
-    let mut err = child.stderr.take()?;
-    let out_t = std::thread::spawn(move || {
-        let mut buf = Vec::new();
-        let _ = out.read_to_end(&mut buf);
-        String::from_utf8_lossy(&buf).into_owned()
-    });
-    let err_t = std::thread::spawn(move || {
-        let mut buf = Vec::new();
-        let _ = err.read_to_end(&mut buf);
-        String::from_utf8_lossy(&buf).into_owned()
-    });
+    let out = child.stdout.take()?;
+    let err = child.stderr.take()?;
+    let (out_buf, out_done) = drain(out);
+    let (err_buf, err_done) = drain(err);
     let start = Instant::now();
     let mut timed_out = false;
     let code = loop {
@@ -165,12 +171,38 @@ fn run_with_timeout(cmd: &mut Command, timeout: Duration) -> Option<CliOutput> {
             Err(_) => break -1,
         }
     };
-    let stdout = out_t.join().unwrap_or_default();
-    let mut stderr = err_t.join().unwrap_or_default();
+    // A grandchild may keep the pipes open: give the readers a short grace
+    // period, then return what was collected (the threads end at EOF).
+    let deadline = Instant::now() + READER_GRACE;
+    let _ = out_done.recv_timeout(deadline.saturating_duration_since(Instant::now()));
+    let _ = err_done.recv_timeout(deadline.saturating_duration_since(Instant::now()));
+    let text = |b: &Arc<Mutex<Vec<u8>>>| {
+        String::from_utf8_lossy(&b.lock().unwrap_or_else(|e| e.into_inner())).into_owned()
+    };
+    let stdout = text(&out_buf);
+    let mut stderr = text(&err_buf);
     if timed_out {
         stderr.push_str("timed out");
     }
     Some(CliOutput { code, stdout, stderr })
+}
+
+/// Read a pipe on a thread into a shared buffer; the channel fires at EOF.
+fn drain<R: Read + Send + 'static>(mut r: R) -> (Arc<Mutex<Vec<u8>>>, mpsc::Receiver<()>) {
+    let buf = Arc::new(Mutex::new(Vec::new()));
+    let (tx, rx) = mpsc::channel();
+    let shared = buf.clone();
+    std::thread::spawn(move || {
+        let mut chunk = [0u8; 4096];
+        while let Ok(n) = r.read(&mut chunk) {
+            if n == 0 {
+                break;
+            }
+            shared.lock().unwrap_or_else(|e| e.into_inner()).extend_from_slice(&chunk[..n]);
+        }
+        let _ = tx.send(());
+    });
+    (buf, rx)
 }
 
 // ---------------------------------------------------------------- commands
@@ -240,14 +272,35 @@ mod tests {
 
     #[test]
     fn parse_login_output_two_lines() {
-        let e = parse_login_output("/opt/x/claude\n/usr/bin:/opt/x\n");
+        let e = parse_login_output("__SM_CLAUDE__=/opt/x/claude\n__SM_PATH__=/usr/bin:/opt/x\n");
         assert_eq!(e.claude, Some(PathBuf::from("/opt/x/claude")));
         assert_eq!(e.path, "/usr/bin:/opt/x");
     }
 
     #[test]
+    fn parse_login_output_ignores_rc_noise() {
+        let e = parse_login_output(
+            "Welcome back\nnvm: using node\n__SM_CLAUDE__=/opt/x/claude\n__SM_PATH__=/usr/bin:/opt/x\nbye\n",
+        );
+        assert_eq!(e.claude, Some(PathBuf::from("/opt/x/claude")));
+        assert_eq!(e.path, "/usr/bin:/opt/x");
+        assert_eq!(parse_login_output("just noise\nmore\n"), LoginEnv::default());
+    }
+
+    #[test]
+    fn run_returns_despite_grandchild_holding_pipes() {
+        let mut c = Command::new("/bin/sh");
+        c.args(["-c", "sleep 5 & echo hi"]);
+        let t = Instant::now();
+        let o = run_with_timeout(&mut c, Duration::from_secs(10)).unwrap();
+        assert!(t.elapsed() < Duration::from_secs(3));
+        assert_eq!(o.code, 0);
+        assert_eq!(o.stdout.trim(), "hi");
+    }
+
+    #[test]
     fn parse_login_output_missing_claude() {
-        let e = parse_login_output("\n/usr/bin:/opt/x\n");
+        let e = parse_login_output("__SM_CLAUDE__=\n__SM_PATH__=/usr/bin:/opt/x\n");
         assert_eq!(e.claude, None);
         assert_eq!(e.path, "/usr/bin:/opt/x");
     }
