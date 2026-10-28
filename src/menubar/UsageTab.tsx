@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { toast } from "sonner";
 import { BottomBar, Button, EmptyState, ProgressBar, SectionLabel, TabItem } from "../components/ui";
 import { useT } from "../i18n/useT";
 import { useAppStore } from "../stores/app-store";
@@ -236,7 +237,12 @@ export function UsageTab({ trailing }: { trailing: ReactNode }) {
           size="sm"
           variant="ghost"
           disabled={rows.length === 0}
-          onClick={() => void navigator.clipboard.writeText(timeAsText(rows))}
+          onClick={() =>
+            void navigator.clipboard
+              .writeText(timeAsText(rows))
+              .then(() => toast.success(t.copied))
+              .catch((e: unknown) => toast.error(e instanceof Error ? e.message : String(e)))
+          }
         >
           {t.usage_copy_text}
         </Button>

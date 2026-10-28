@@ -6,6 +6,9 @@ import { UsageTab } from "../menubar/UsageTab";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 import { useAppStore } from "../stores/app-store";
 import type { Activity, UsageLimits } from "../lib/usage";
+import { toast } from "sonner";
+
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 // happy-dom has no layout, so ResponsiveContainer would render nothing.
 vi.mock("recharts", async (orig) => ({
@@ -13,7 +16,7 @@ vi.mock("recharts", async (orig) => ({
   ResponsiveContainer: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
-const clipboard = { writeText: vi.fn(async () => {}) };
+const clipboard = { writeText: vi.fn<(text: string) => Promise<void>>(async () => {}) };
 
 // Local-time epochs so the tests hold in any time zone. 2026-10-28 is a Wednesday.
 const NOW = new Date(2026, 9, 28, 12, 0).getTime();
@@ -159,6 +162,17 @@ describe("UsageTab", () => {
     fireEvent.click(screen.getByRole("button", { name: "Week" }));
     fireEvent.click(screen.getByRole("button", { name: "Copy as text" }));
     expect(clipboard.writeText).toHaveBeenLastCalledWith("Alpha  2 h 05\n  Site  2 h 05");
+  });
+
+  it("says when copying failed", async () => {
+    clipboard.writeText.mockRejectedValueOnce(new Error("Clipboard blocked"));
+    serve();
+    render(<UsageTab trailing={null} />);
+    await screen.findByText("1 h 05");
+    fireEvent.click(screen.getByRole("button", { name: "Copy as text" }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Clipboard blocked"));
+    fireEvent.click(screen.getByRole("button", { name: "Copy as text" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Copied"));
   });
 
   it("refreshes limits every 30 s and activity every 60 s, and stops on unmount", async () => {
