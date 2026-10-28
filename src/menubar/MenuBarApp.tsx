@@ -2,6 +2,7 @@ import { useState } from "react";
 import { BottomBar, Button, PANEL_TOP_BAR, TabItem } from "../components/ui";
 import { AgentsTab } from "./AgentsTab";
 import { UsageTab } from "./UsageTab";
+import { DayTab } from "./DayTab";
 import { useT } from "../i18n/useT";
 import { openMainWindow } from "../lib/agents";
 
@@ -30,7 +31,7 @@ function writeTab(tab: Tab) {
 
 /**
  * The menu bar panel (route `/menubar`, its own borderless window): Agents, Usage and Day
- * tabs over the same Rust state as the Agents page. Tab bodies come with later tasks.
+ * tabs over the same Rust state as the Agents page.
  */
 export function MenuBarApp() {
   const t = useT();
@@ -64,6 +65,7 @@ export function MenuBarApp() {
         <>
           <div role="tabpanel" aria-label={labels[tab]} className="flex-1 min-h-0 overflow-y-auto flex flex-col">
             {tab === "agents" && <AgentsTab />}
+            {tab === "day" && <DayTab />}
           </div>
           <BottomBar className={tab === "agents" ? "justify-between" : "justify-end"}>
             {tab === "agents" && (

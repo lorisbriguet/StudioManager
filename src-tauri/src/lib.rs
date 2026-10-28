@@ -636,6 +636,9 @@ pub fn run() {
             agents::routines::routines_save,
             agents::routines::routines_run,
             agents::routines::routines_runs,
+            agents::routines::routines_open_result,
+            agents::routines::routines_open_link,
+            agents::routines::routines_open_folder,
             menubar::menubar_open_main,
         ])
         .setup(|app| {

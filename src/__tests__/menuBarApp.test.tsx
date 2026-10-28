@@ -61,7 +61,7 @@ describe("MenuBarApp", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open StudioManager" }));
     expect(invokedCommands).toContainEqual({
       cmd: "menubar_open_main",
-      args: { agent: null, newAgent: false },
+      args: { agent: null, newAgent: false, settings: null },
     });
   });
 });

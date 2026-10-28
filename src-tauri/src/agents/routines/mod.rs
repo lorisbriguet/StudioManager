@@ -137,3 +137,110 @@ pub async fn routines_runs(state: tauri::State<'_, super::AgentsState>) -> Resul
     })
     .await
 }
+
+/// The saved target of a routine's result link or of a section's `index`-th link. The webview
+/// only names an id (and an index); what opens comes from `routines.json`.
+fn stored_target(all: &Routines, id: &str, index: Option<usize>) -> Result<String, String> {
+    match index {
+        None => store::find(all, id)?
+            .result_link
+            .clone()
+            .ok_or_else(|| "This routine has no result link".to_string()),
+        Some(i) => all
+            .sections
+            .iter()
+            .find(|s| s.id == id)
+            .and_then(|s| s.links.get(i))
+            .map(|l| l.target.clone())
+            .ok_or_else(|| "No such link".to_string()),
+    }
+}
+
+/// The folder a routine works in: an agent's folder or a command's cwd.
+fn stored_folder(all: &Routines, id: &str) -> Result<String, String> {
+    Ok(match &store::find(all, id)?.kind {
+        RoutineKind::Agent { folder, .. } => folder.clone(),
+        RoutineKind::Command { cwd, .. } => cwd.clone(),
+    })
+}
+
+/// Opens an http(s) URL in the browser or an existing absolute path in its default app
+/// (a folder in Finder), through the system `open`; `--` keeps a target from reading as a flag.
+fn open_target(target: &str) -> Result<(), String> {
+    let is_url = target.starts_with("http://") || target.starts_with("https://");
+    if !is_url && !std::path::Path::new(target).exists() {
+        return Err(format!("Not found: {target}"));
+    }
+    let out = std::process::Command::new("open").arg("--").arg(target).output().map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
+}
+
+/// Opens the result link of the saved routine `id`.
+#[tauri::command]
+pub async fn routines_open_result(state: tauri::State<'_, super::AgentsState>, id: String) -> Result<(), String> {
+    switched_on(&state)?;
+    let dir = state.app_dir.clone();
+    blocking(move || open_target(&stored_target(&store::read_routines(&dir), &id, None)?)).await
+}
+
+/// Opens the working folder of the saved routine `id` in Finder.
+#[tauri::command]
+pub async fn routines_open_folder(state: tauri::State<'_, super::AgentsState>, id: String) -> Result<(), String> {
+    switched_on(&state)?;
+    let dir = state.app_dir.clone();
+    blocking(move || open_target(&stored_folder(&store::read_routines(&dir), &id)?)).await
+}
+
+/// Opens the `index`-th link of the saved section `section_id`.
+#[tauri::command]
+pub async fn routines_open_link(
+    state: tauri::State<'_, super::AgentsState>,
+    section_id: String,
+    index: usize,
+) -> Result<(), String> {
+    switched_on(&state)?;
+    let dir = state.app_dir.clone();
+    blocking(move || open_target(&stored_target(&store::read_routines(&dir), &section_id, Some(index))?)).await
+}
+
+#[cfg(test)]
+mod open_tests {
+    use super::*;
+    use store::{Link, Routine, RoutineKind, Section};
+
+    #[test]
+    fn stored_target_comes_from_the_saved_routines() {
+        let all = Routines {
+            sections: vec![Section {
+                id: "s1".into(),
+                name: "Personal".into(),
+                links: vec![Link { label: "Docs".into(), target: "https://example.com".into() }],
+            }],
+            routines: vec![Routine {
+                id: "r1".into(),
+                section_id: "s1".into(),
+                title: "Hours".into(),
+                idle_hint: String::new(),
+                kind: RoutineKind::Command { program: "/bin/echo".into(), args: vec![], cwd: "/tmp".into() },
+                result_link: Some("/tmp/out.md".into()),
+                schedule: None,
+            }],
+        };
+        assert_eq!(stored_target(&all, "r1", None).unwrap(), "/tmp/out.md");
+        assert_eq!(stored_target(&all, "s1", Some(0)).unwrap(), "https://example.com");
+        assert_eq!(stored_folder(&all, "r1").unwrap(), "/tmp");
+        assert!(stored_folder(&all, "nope").is_err());
+        assert!(stored_target(&all, "s1", Some(1)).is_err());
+        assert!(stored_target(&all, "nope", None).is_err());
+        assert!(stored_target(&all, "nope", Some(0)).is_err());
+    }
+
+    #[test]
+    fn open_refuses_a_missing_path() {
+        assert!(open_target("/definitely/not/here-12345").is_err());
+    }
+}

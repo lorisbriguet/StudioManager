@@ -123,8 +123,8 @@ describe("UsageTab", () => {
     render(<UsageTab trailing={null} />);
     expect(await screen.findByText(/Set up plan limits in Settings/)).toBeInTheDocument();
     expect(screen.queryByRole("progressbar")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Open StudioManager" }));
-    expect(invokedCommands.some((c) => c.cmd === "menubar_open_main")).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
+    expect(invokedCommands.find((c) => c.cmd === "menubar_open_main")?.args).toMatchObject({ settings: "agents" });
   });
 
   it("shows the model mix and the client legend", async () => {

@@ -70,7 +70,7 @@ describe("Menu bar Agents tab", () => {
     render(<MenuBarApp />);
     fireEvent.click(await screen.findByRole("button", { name: /busy-one/ }));
     await waitFor(() =>
-      expect(invokedCommands.find((c) => c.cmd === "menubar_open_main")?.args).toEqual({ agent: "sess-77", newAgent: false }),
+      expect(invokedCommands.find((c) => c.cmd === "menubar_open_main")?.args).toEqual({ agent: "sess-77", newAgent: false, settings: null }),
     );
   });
 
@@ -79,7 +79,7 @@ describe("Menu bar Agents tab", () => {
     render(<MenuBarApp />);
     fireEvent.click(await screen.findByRole("button", { name: "New agent" }));
     await waitFor(() =>
-      expect(invokedCommands.find((c) => c.cmd === "menubar_open_main")?.args).toEqual({ agent: null, newAgent: true }),
+      expect(invokedCommands.find((c) => c.cmd === "menubar_open_main")?.args).toEqual({ agent: null, newAgent: true, settings: null }),
     );
   });
 

@@ -218,7 +218,11 @@ fn toggle_panel(app: &AppHandle, item: tauri::Rect) {
 
 /// Where the main window goes when the panel opens it: an agent, the start form, or
 /// nowhere in particular.
-pub fn navigate_path(agent: Option<&str>, new_agent: bool) -> Option<String> {
+pub fn navigate_path(agent: Option<&str>, new_agent: bool, settings: Option<&str>) -> Option<String> {
+    // Only fixed Settings targets, never a path from the panel.
+    if let Some("agents") = settings {
+        return Some("/settings?category=agents".into());
+    }
     if new_agent {
         return Some("/agents?new=1".into());
     }
@@ -240,14 +244,15 @@ struct Navigate {
 }
 
 /// From the panel: hide it, bring the main window forward and, when given, open the agent
-/// (`agent`, a session id) or the start form (`newAgent`) there.
+/// (`agent`, a session id), the start form (`newAgent`) or the Agents settings (`settings: "agents"`,
+/// the only target accepted) there.
 #[tauri::command]
-pub fn menubar_open_main(app: AppHandle, agent: Option<String>, new_agent: bool) {
+pub fn menubar_open_main(app: AppHandle, agent: Option<String>, new_agent: bool, settings: Option<String>) {
     if let Some(p) = app.get_webview_window(PANEL_LABEL) {
         let _ = p.hide();
     }
     show_main(&app);
-    if let Some(path) = navigate_path(agent.as_deref(), new_agent) {
+    if let Some(path) = navigate_path(agent.as_deref(), new_agent, settings.as_deref()) {
         let _ = app.emit_to("main", NAVIGATE_EVENT, Navigate { path });
     }
 }
@@ -273,9 +278,19 @@ mod tests {
 
     #[test]
     fn navigate_path_for_agent_new_or_nothing() {
-        assert_eq!(navigate_path(None, false), None);
-        assert_eq!(navigate_path(Some("ab-12"), false).as_deref(), Some("/agents?agent=ab-12"));
-        assert_eq!(navigate_path(Some("a b&c"), false).as_deref(), Some("/agents?agent=a%20b%26c"));
-        assert_eq!(navigate_path(Some("ab"), true).as_deref(), Some("/agents?new=1"));
+        assert_eq!(navigate_path(None, false, None), None);
+        assert_eq!(navigate_path(Some("ab-12"), false, None).as_deref(), Some("/agents?agent=ab-12"));
+        assert_eq!(navigate_path(Some("a b&c"), false, None).as_deref(), Some("/agents?agent=a%20b%26c"));
+        assert_eq!(navigate_path(Some("ab"), true, None).as_deref(), Some("/agents?new=1"));
+    }
+
+    #[test]
+    fn navigate_path_settings_accepts_only_agents() {
+        assert_eq!(navigate_path(None, false, Some("agents")).as_deref(), Some("/settings?category=agents"));
+        assert_eq!(navigate_path(None, false, Some("/etc")), None);
+        assert_eq!(navigate_path(None, false, Some("general")), None);
+        assert_eq!(navigate_path(None, false, Some("agents&x=1")), None);
+        // A refused target falls back to the other arguments.
+        assert_eq!(navigate_path(Some("ab"), false, Some("../x")).as_deref(), Some("/agents?agent=ab"));
     }
 }

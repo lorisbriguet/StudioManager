@@ -203,8 +203,8 @@ export function UsageTab({ trailing }: { trailing: ReactNode }) {
               <EmptyState
                 message={t.usage_not_set_up}
                 action={
-                  <Button size="sm" variant="secondary" onClick={() => void openMainWindow()}>
-                    {t.menubar_open_app}
+                  <Button size="sm" variant="secondary" onClick={() => void openMainWindow({ settings: "agents" })}>
+                    {t.routines_open_settings}
                   </Button>
                 }
               />

@@ -60,9 +60,15 @@ export function removeStatusLine(expected: string): Promise<string> {
 }
 
 /** From the menu bar panel: bring the main window forward, on an agent (session id) or the
- *  start form when asked. Rust emits `menubar:navigate` to the main window. */
-export function openMainWindow(opts: { agent?: string | null; newAgent?: boolean } = {}): Promise<void> {
-  return invoke<void>("menubar_open_main", { agent: opts.agent ?? null, newAgent: opts.newAgent ?? false });
+ *  start form or the Agents settings when asked. Rust emits `menubar:navigate` to the main window. */
+export function openMainWindow(
+  opts: { agent?: string | null; newAgent?: boolean; settings?: "agents" } = {},
+): Promise<void> {
+  return invoke<void>("menubar_open_main", {
+    agent: opts.agent ?? null,
+    newAgent: opts.newAgent ?? false,
+    settings: opts.settings ?? null,
+  });
 }
 
 /** Sent to the main window by `menubar_open_main`. */

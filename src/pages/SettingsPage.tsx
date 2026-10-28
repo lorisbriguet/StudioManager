@@ -20,6 +20,7 @@ import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
 import { AgentAccessCard } from "../components/settings/AgentAccessCard";
 import { AgentsCard } from "../components/settings/AgentsCard";
+import { RoutinesCard } from "../components/settings/RoutinesCard";
 import { OrganisationsCard } from "../components/settings/OrganisationsCard";
 import { DemoDataCard } from "../components/settings/DemoDataCard";
 import { isDemoBuild } from "../lib/demoBuild";
@@ -560,6 +561,7 @@ export function SettingsPage() {
           {activeCategory === "agents" && (
             <div className="space-y-4">
               <AgentsCard />
+              <RoutinesCard />
               <AgentAccessCard />
             </div>
           )}

@@ -82,3 +82,18 @@ export function runRoutine(id: string): Promise<Run> {
 export function getRoutineRuns(): Promise<Run[]> {
   return invoke<Run[]>("routines_runs");
 }
+
+/** Opens the result link of a saved routine (the browser for a URL, else the default app). */
+export function openRoutineResult(id: string): Promise<void> {
+  return invoke<void>("routines_open_result", { id });
+}
+
+/** Opens the working folder of a saved routine in Finder. */
+export function openRoutineFolder(id: string): Promise<void> {
+  return invoke<void>("routines_open_folder", { id });
+}
+
+/** Opens the `index`-th link of a saved section. */
+export function openSectionLink(sectionId: string, index: number): Promise<void> {
+  return invoke<void>("routines_open_link", { sectionId, index });
+}
