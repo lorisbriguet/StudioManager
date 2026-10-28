@@ -15,14 +15,13 @@ import { useT } from "../i18n/useT";
 import type { AppLanguage } from "../i18n/ui";
 import { UpdateChecker } from "../components/UpdateChecker";
 import { WorkloadTemplateManager } from "../components/workload/WorkloadTemplateManager";
-import { Input, Select, Button, IconButton, SectionLabel } from "../components/ui";
+import { Input, Select, Button, IconButton, SectionLabel, SettingRow, SettingsCard } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
 import { AgentAccessCard } from "../components/settings/AgentAccessCard";
 import { OrganisationsCard } from "../components/settings/OrganisationsCard";
 import { DemoDataCard } from "../components/settings/DemoDataCard";
 import { isDemoBuild } from "../lib/demoBuild";
-import { SettingRow, SettingsCard } from "../components/settings/SettingsPrimitives";
 import { AccentColorPicker } from "../components/settings/AccentColorPicker";
 import { SuppliersManager } from "../components/settings/SuppliersManager";
 import { ExpenseCategoryManager } from "../components/settings/ExpenseCategoryManager";
@@ -635,9 +634,9 @@ export function SettingsPage() {
           )}
 
           {activeCategory === "time_entries" && (
-            <section className="rounded-xl bg-[var(--color-surface)] border border-[var(--color-border-divider)] px-4 pt-3 pb-1">
+            <SettingsCard>
               <TimeEntriesManager />
-            </section>
+            </SettingsCard>
           )}
 
           {activeCategory === "updates" && (

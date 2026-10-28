@@ -8,6 +8,7 @@ export { Input } from "./Input";
 export { Modal } from "./Modal";
 export { PageHeader } from "./PageHeader";
 export { SectionLabel, SECTION_LABEL } from "./SectionLabel";
+export { SettingRow, SettingsCard, SectionHeader } from "./Settings";
 export { SearchBar } from "./SearchBar";
 export { Select } from "./Select";
 export { Dropdown, DropdownSelect } from "./Dropdown";

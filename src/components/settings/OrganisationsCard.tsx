@@ -2,13 +2,13 @@ import { useState } from "react";
 import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../ui/Button";
-import { SectionLabel } from "../ui/SectionLabel";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
 import { useOrgStore } from "../../stores/org-store";
 import { renameOrganisation, reorderOrganisations, deleteOrganisation } from "../../lib/orgs";
 import { notifyError } from "../../lib/notifyError";
 import { useT } from "../../i18n/useT";
+import { SettingsCard } from "../ui/Settings";
 
 export function OrganisationsCard() {
   const t = useT();
@@ -78,11 +78,7 @@ export function OrganisationsCard() {
   };
 
   return (
-    <section className="rounded-xl bg-[var(--color-surface)] border border-[var(--color-border-divider)] px-4 pt-3 pb-1">
-      <div className="border-b border-[var(--color-border-divider)] pb-2 mb-3">
-        <SectionLabel as="h2">{t.organisations}</SectionLabel>
-        <p className="text-xs text-muted mt-1 normal-case tracking-normal">{t.organisations_desc}</p>
-      </div>
+    <SettingsCard title={t.organisations} desc={t.organisations_desc}>
       <ul>
         {organisations.map((o, idx) => {
           const isActive = o.id === activeId;
@@ -151,6 +147,6 @@ export function OrganisationsCard() {
         <p className="text-sm text-muted mb-3">{t.delete_organisation_confirm}</p>
         <Input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={deleting?.name} autoFocus />
       </Modal>
-    </section>
+    </SettingsCard>
   );
 }

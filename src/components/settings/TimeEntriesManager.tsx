@@ -4,7 +4,7 @@ import { useT } from "../../i18n/useT";
 import { useTimeEntriesWithDetails, useUpdateTimeEntry, useDeleteTimeEntry } from "../../db/hooks/useTimeEntries";
 import { useProjects } from "../../db/hooks/useProjects";
 import { Button, Select, IconButton } from "../ui";
-import { SectionHeader } from "./SettingsPrimitives";
+import { SectionHeader } from "../ui/Settings";
 
 function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);

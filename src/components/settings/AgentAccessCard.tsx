@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
-import { SettingRow, SettingsCard } from "./SettingsPrimitives";
+import { SettingRow, SettingsCard } from "../ui/Settings";
 import { Toggle } from "../ui/Toggle";
 import { Button } from "../ui/Button";
 import { SectionLabel } from "../ui/SectionLabel";

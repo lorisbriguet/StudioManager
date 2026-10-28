@@ -98,7 +98,7 @@ Every small uppercase label uses `src/components/ui/SectionLabel.tsx`. There is 
 - **Heading tag:** use `as="h2"`/`"h3"` when the label names a section.
 - **Action:** `action` puts a count or button on the right of the same row.
 - **Spacing:** it sets no margin, so the caller adds it.
-- **Class string:** for a `<th>` or a third-party heading, use the `SECTION_LABEL` class string. `MENU_GROUP_LABEL` and `SectionHeader` in `settings/SettingsPrimitives` are built on it.
+- **Class string:** for a `<th>` or a third-party heading, use the `SECTION_LABEL` class string. `MENU_GROUP_LABEL` and `SectionHeader` (`ui/Settings`) are built on it.
 
 ---
 
@@ -429,6 +429,30 @@ import { invoiceStatusVariant, quoteStatusVariant, taskStatusVariant, projectSta
 
 ---
 
+## Settings
+
+Settings pages use `src/components/ui/Settings.tsx`. Never rebuild the card shell or its header by hand.
+
+```tsx
+import { SettingsCard, SettingRow } from "../components/ui";
+
+<SettingsCard title={t.calendar_sync} desc={t.calendar_permission_help}>
+  <SettingRow label={t.week_start} desc={t.week_start_desc}><Select … /></SettingRow>
+  <SettingRow label={t.persona} htmlFor="demo-persona"><Select id="demo-persona" … /></SettingRow>
+</SettingsCard>
+```
+
+- **`SettingsCard`:**
+  - Look: `rounded-xl` surface with a `border-divider` border, `px-4 pt-3 pb-1`.
+  - With `title`, it draws a `SectionHeader`: a SectionLabel, an optional description and a divider.
+  - Without `title`, the content brings its own header (time entries draws its own `SectionHeader` and toolbar).
+- **`SettingRow`:**
+  - Layout: label (and an optional `desc`) on the left, control on the right, `py-2.5`, with faint dividers between rows. The last row has no divider.
+  - `htmlFor` turns the label into a real `<label>` for the control.
+- **`SectionHeader`:** use it on its own for a flat section inside a card.
+
+---
+
 ## Popover
 
 Every floating panel uses `src/components/ui/Popover.tsx`, including Dropdown's menus. Never build a floating panel by hand: no `absolute`/`fixed` panel, no `createPortal`, no click-outside listener and no z-index of your own.
@@ -592,5 +616,6 @@ Before merging any new UI work, verify:
 - [ ] No native `<select>`
 - [ ] Icon-only buttons use `IconButton`
 - [ ] Uppercase labels use `SectionLabel`
+- [ ] Settings sections use `SettingsCard` / `SettingRow`
 - [ ] Tag pills use `Tag`, filter pills use `FilterChip`, number pills use `CountBadge`
 - [ ] No hand-made floating panel (use `Popover`, `Dropdown` or `ContextMenu`)
