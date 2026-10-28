@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import * as m from "../queries/machines";
 import * as u from "../queries/upkeepItems";
+import * as c from "../queries/consumables";
 import { useUndoStore } from "../../stores/undo-store";
 import { getLabels } from "../../lib/notifyError";
 import type {
@@ -335,6 +336,138 @@ export function useMarkUpkeepDone() {
       invalidate();
       qc.invalidateQueries({ queryKey: ["service-log", item.machine_id] });
     },
+    onError: (e) => { toast.error(String(e)); },
+  });
+}
+
+// ── Consumables ─────────────────────────────────────────────
+
+export function useConsumables() {
+  return useQuery({ queryKey: ["consumables"], queryFn: c.getConsumables });
+}
+
+export function useProjectMaterialCost(projectId: number) {
+  return useQuery({
+    queryKey: ["project-material-cost", projectId],
+    queryFn: () => c.getProjectMaterialCost(projectId),
+  });
+}
+
+function useInvalidateConsumables() {
+  const qc = useQueryClient();
+  return () => {
+    qc.invalidateQueries({ queryKey: ["consumables"] });
+  };
+}
+
+export function useCreateConsumable() {
+  const invalidate = useInvalidateConsumables();
+  return useMutation({
+    mutationFn: async (data: c.ConsumableInput) => {
+      let id = await c.createConsumable(data);
+      useUndoStore.getState().push({
+        label: `${getLabels().undo_create_consumable} "${data.name}"`,
+        execute: async () => {
+          await c.deleteConsumable(id);
+          invalidate();
+        },
+        redo: async () => {
+          id = await c.createConsumable(data);
+          invalidate();
+        },
+      });
+      return id;
+    },
+    onSuccess: invalidate,
+    onError: (e) => { toast.error(String(e)); },
+  });
+}
+
+export function useUpdateConsumable() {
+  const invalidate = useInvalidateConsumables();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<c.ConsumableInput> }) => {
+      const prev = await c.getConsumable(id);
+      await c.updateConsumable(id, data);
+      if (prev) {
+        const prevData: Record<string, unknown> = {};
+        for (const key of Object.keys(data)) {
+          prevData[key] = (prev as unknown as Record<string, unknown>)[key];
+        }
+        useUndoStore.getState().push({
+          label: `${getLabels().undo_update_consumable} "${prev.name}"`,
+          execute: async () => {
+            await c.updateConsumable(id, prevData as Partial<c.ConsumableInput>);
+            invalidate();
+          },
+          redo: async () => {
+            await c.updateConsumable(id, data);
+            invalidate();
+          },
+        });
+      }
+    },
+    onSuccess: invalidate,
+    onError: (e) => { toast.error(String(e)); },
+  });
+}
+
+export function useDeleteConsumable() {
+  const invalidate = useInvalidateConsumables();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const prev = await c.getConsumable(id);
+      await c.deleteConsumable(id);
+      if (prev) {
+        let restoredId: number | null = null;
+        useUndoStore.getState().push({
+          label: `${getLabels().undo_delete_consumable} "${prev.name}"`,
+          execute: async () => {
+            restoredId = await c.createConsumable({
+              name: prev.name,
+              unit: prev.unit,
+              machine_id: prev.machine_id,
+              stock: prev.stock,
+              reorder_level: prev.reorder_level,
+              supplier: prev.supplier,
+              product_url: prev.product_url,
+              unit_price: prev.unit_price,
+              currency: prev.currency,
+            });
+            invalidate();
+          },
+          redo: async () => {
+            if (restoredId !== null) {
+              await c.deleteConsumable(restoredId);
+              invalidate();
+            }
+          },
+        });
+      }
+    },
+    onSuccess: invalidate,
+    onError: (e) => { toast.error(String(e)); },
+  });
+}
+
+export function useLogConsumableUsage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, amount, projectId, usedOn }: { id: number; amount: number; projectId: number | null; usedOn: string }) =>
+      c.logConsumableUsage(id, amount, projectId, usedOn),
+    onSuccess: (_, { projectId }) => {
+      qc.invalidateQueries({ queryKey: ["consumables"] });
+      qc.invalidateQueries({ queryKey: ["project-material-cost", projectId] });
+    },
+    onError: (e) => { toast.error(String(e)); },
+  });
+}
+
+export function useRestockConsumable() {
+  const invalidate = useInvalidateConsumables();
+  return useMutation({
+    mutationFn: ({ id, amount }: { id: number; amount: number }) => c.restockConsumable(id, amount),
+    onSuccess: invalidate,
     onError: (e) => { toast.error(String(e)); },
   });
 }
