@@ -27,7 +27,7 @@ import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { QuoteToProjectWizard } from "../components/QuoteToProjectWizard";
 import { useTabStore } from "../stores/tab-store";
-import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Select, IconButton } from "../components/ui";
+import { Checkbox, PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Select, IconButton } from "../components/ui";
 import { quoteStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Quote, QuoteStatus, QuoteLineItem } from "../types/quote";
 import type { Client } from "../types/client";
@@ -307,7 +307,7 @@ export function QuotesPage() {
           <thead>
             <tr className="border-b border-[var(--color-border-header)]">
               <th className="w-8 px-2 py-2">
-                <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
+                <Checkbox checked={bulk.isAllSelected} indeterminate={bulk.selected.size > 0 && !bulk.isAllSelected} onChange={bulk.toggleAll} />
               </th>
               <th className="w-8" />
               <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
@@ -326,11 +326,9 @@ export function QuotesPage() {
                 onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: q }); }}
               >
                 <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={bulk.selected.has(q.id)}
                     onChange={(e) => bulk.toggleItem(q.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-                    className="accent-[var(--accent)]"
                   />
                 </td>
                 <td className="w-8 px-1">

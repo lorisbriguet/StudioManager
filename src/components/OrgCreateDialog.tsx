@@ -5,6 +5,7 @@ import { Modal } from "./ui/Modal";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { FormField } from "./ui/FormField";
+import { Radio } from "./ui/Checkbox";
 import { createOrganisation, DEFAULT_ORG_PREFS, type Organisation } from "../lib/orgs";
 import { useOrgStore } from "../stores/org-store";
 import { useTimerActions } from "../hooks/useTimerActions";
@@ -84,33 +85,21 @@ export function OrgCreateDialog({ open, onClose }: { open: boolean; onClose: () 
             autoFocus
           />
         </FormField>
-        <fieldset className="space-y-2">
-          <label className="flex items-start gap-2 text-sm cursor-pointer">
-            <input
-              type="radio"
-              name="seed"
-              checked={!seed}
-              onChange={() => setSeed(false)}
-              className="mt-1 accent-[var(--accent)]"
-            />
-            <span>
-              <span className="font-medium">{t.start_empty}</span>
-              <span className="block text-xs text-muted">{t.start_empty_desc}</span>
-            </span>
-          </label>
-          <label className="flex items-start gap-2 text-sm cursor-pointer">
-            <input
-              type="radio"
-              name="seed"
-              checked={seed}
-              onChange={() => setSeed(true)}
-              className="mt-1 accent-[var(--accent)]"
-            />
-            <span>
-              <span className="font-medium">{t.start_from_current}</span>
-              <span className="block text-xs text-muted">{t.start_from_current_desc}</span>
-            </span>
-          </label>
+        <fieldset className="flex flex-col items-start gap-2">
+          <Radio
+            name="seed"
+            label={<span className="font-medium">{t.start_empty}</span>}
+            description={t.start_empty_desc}
+            checked={!seed}
+            onChange={() => setSeed(false)}
+          />
+          <Radio
+            name="seed"
+            label={<span className="font-medium">{t.start_from_current}</span>}
+            description={t.start_from_current_desc}
+            checked={seed}
+            onChange={() => setSeed(true)}
+          />
         </fieldset>
       </div>
     </Modal>

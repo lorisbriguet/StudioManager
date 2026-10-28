@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Plus, Search, ExternalLink, Trash2, X } from "lucide-react";
-import { PageHeader, Button, EmptyState, FormField, Select, IconButton, Tag, FilterChip, Input, Callout, Card } from "../components/ui";
+import { Checkbox, PageHeader, Button, EmptyState, FormField, Select, IconButton, Tag, FilterChip, Input, Callout, Card } from "../components/ui";
 import * as v from "../lib/validate";
 import { Skeleton } from "../components/ui/Skeleton";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
@@ -228,7 +228,7 @@ export function ResourcesPage() {
             <thead>
               <tr className="border-b border-[var(--color-border-header)]">
                 <th className="w-8 px-2 py-2">
-                  <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
+                  <Checkbox checked={bulk.isAllSelected} indeterminate={bulk.selected.size > 0 && !bulk.isAllSelected} onChange={bulk.toggleAll} />
                 </th>
                 <SortHeader<SortKey> label={t.name} sortKey="name" current={sort} onSort={setSort} />
                 <th className="text-left px-3 py-2 font-medium text-xs text-muted">{t.type}</th>
@@ -554,11 +554,9 @@ function ResourceTableRow({
         onFocus={handleFocus}
       >
         <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-          <input
-            type="checkbox"
+          <Checkbox
             checked={isSelected}
             onChange={(e) => onToggleSelect(e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-            className="accent-[var(--accent)]"
           />
         </td>
         <td className="px-3 py-2">
@@ -635,11 +633,9 @@ function ResourceTableRow({
       onContextMenu={onContextMenu}
     >
       <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-        <input
-          type="checkbox"
+        <Checkbox
           checked={isSelected}
           onChange={(e) => onToggleSelect(e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-          className="accent-[var(--accent)]"
         />
       </td>
       <td className="px-3 py-2 font-medium">{resource.name}</td>

@@ -3,7 +3,7 @@ import { Tag } from "../ui/Tag";
 import { Select } from "../ui/Select";
 import type { TableColumnDef, ProjectTableRow } from "../../types/project-table";
 
-import { DatePicker, Input } from "../ui";
+import { Checkbox, DatePicker, Input } from "../ui";
 interface Props {
   row: ProjectTableRow;
   col: TableColumnDef;
@@ -38,11 +38,9 @@ export function TableCell({
   switch (col.type) {
     case "checkbox":
       return (
-        <input
-          type="checkbox"
+        <Checkbox
           checked={!!row.data[col.id]}
           onChange={() => onChange({ ...row.data, [col.id]: !row.data[col.id] })}
-          className="accent-[var(--accent)]"
         />
       );
     case "select":

@@ -6,6 +6,7 @@ import { SettingRow, SettingsCard } from "../ui/Settings";
 import { Toggle } from "../ui/Toggle";
 import { Button } from "../ui/Button";
 import { SectionLabel } from "../ui/SectionLabel";
+import { Checkbox } from "../ui/Checkbox";
 import { useOrgStore } from "../../stores/org-store";
 import { useT } from "../../i18n/useT";
 
@@ -132,8 +133,7 @@ export function AgentAccessCard() {
               {organisations.map((o) => (
                 <li key={o.id}>
                   <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={info.orgs[o.id] !== false}
                       onChange={(e) => void save({ enabled: info.enabled, allowMoney: info.allowMoney, orgs: { ...info.orgs, [o.id]: e.target.checked } })}
                     />

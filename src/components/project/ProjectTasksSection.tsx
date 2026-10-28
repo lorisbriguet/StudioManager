@@ -30,7 +30,7 @@ import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
 import { PriorityBadge } from "./PriorityBadge";
 import { SortableSubtaskRow } from "./SortableSubtaskRow";
-import { IconButton, FilterChip, Input } from "../ui";
+import { Checkbox, IconButton, FilterChip, Input } from "../ui";
 
 export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
   projectId: number;
@@ -138,15 +138,13 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                   icon={ChevronRight}
                   iconClassName={`transition-transform ${isExpanded ? "rotate-90" : ""}`}
                 />
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={tk.status === "done"}
                   onChange={(e) => {
                     if (e.target.checked) e.target.classList.add("check-pop");
                     updateTask.mutate({ id: tk.id, data: { status: tk.status === "done" ? "todo" : "done" } });
                   }}
                   onAnimationEnd={(e) => (e.target as HTMLElement).classList.remove("check-pop")}
-                  className="rounded"
                 />
                 {editingTask === tk.id ? (
                   <Input
@@ -229,15 +227,13 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                   <SortableContext items={filteredSubtasks.map((s) => s.id)} strategy={verticalListSortingStrategy}>
                   {filteredSubtasks.map((s) => (
                     <SortableSubtaskRow key={s.id} id={s.id} hovered={hoveredSubtask === s.id} onHoverChange={setHoveredSubtask}>
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={s.status === "done"}
                         onChange={(e) => {
                           if (e.target.checked) e.target.classList.add("check-pop");
                           updateSubtask.mutate({ id: s.id, data: { status: s.status === "done" ? "todo" : "done" } });
                         }}
                         onAnimationEnd={(e) => (e.target as HTMLElement).classList.remove("check-pop")}
-                        className="rounded"
                       />
                       {editingSubtask === s.id ? (
                         <Input

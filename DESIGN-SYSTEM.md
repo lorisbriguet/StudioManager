@@ -350,6 +350,23 @@ Every date field uses `DatePicker` from `src/components/ui/DatePicker.tsx`. Neve
 - **Sizes and looks:** `size` `sm`/`md` and `variant` `default`/`bare`, as for Input. `className` goes on the wrapper (layout). `inputClassName` goes on the field (border highlights).
 - **`TaskDatePicker`** (end date, times, reminder) is built on `Calendar`, `DateShortcuts` and `Toggle size="sm"`.
 
+### Checkbox
+
+`Checkbox` and `Radio` from `src/components/ui/Checkbox.tsx`. Never use a raw `<input type="checkbox">` or `type="radio"`.
+
+```tsx
+<Checkbox checked={done} onChange={(e) => toggle(e.target.checked)} aria-label={t.done} />
+<Checkbox checked={all} indeterminate={some} onChange={selectAll} aria-label={t.select_all} />
+<Checkbox label={t.show_income} description={t.show_income_desc} checked={…} onChange={…} />
+<Radio name="seed" label={t.start_empty} description={…} checked={!seed} onChange={() => setSeed(false)} />
+```
+
+- **Look:** a 14px box on `input-bg` with an `input-border`. Checked is an accent fill with a white check. `indeterminate` (select-all with some rows selected) shows a dash.
+- **A real input:** there's a native input underneath, so `onChange(e)`, `e.nativeEvent.shiftKey`, `e.target` and `ref` all work as before.
+- **`label` and `description`:** they make the text clickable. Without a label, give it an `aria-label`.
+- **`className`:** goes on the outer wrapper, for layout only.
+- **On/off settings:** use `Toggle`. Checkbox is for selecting items or ticking things off.
+
 ### Modal
 ```tsx
 import { Modal, Kbd } from "../components/ui";
@@ -727,7 +744,7 @@ Before merging any new UI work, verify:
 - [ ] No `dark:` prefixes for colors covered by tokens
 - [ ] All badges use `rounded-full`
 - [ ] All cards use `rounded-xl` with `bg-[var(--color-surface)]`
-- [ ] Text fields use `Input` / `Textarea`, date fields use `DatePicker` (no raw `<input>`/`<textarea>`)
+- [ ] Text fields use `Input` / `Textarea`, date fields use `DatePicker`, checkboxes and radios use `Checkbox` / `Radio` (no raw `<input>`/`<textarea>`)
 - [ ] Icons use lucide-react with correct canonical icon and standard size
 - [ ] No unicode characters as icons
 - [ ] All user-visible text uses `useT()` i18n keys

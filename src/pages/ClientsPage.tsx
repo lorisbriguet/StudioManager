@@ -14,7 +14,7 @@ import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { Button, Badge, Card, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState } from "../components/ui";
+import { Checkbox, Button, Badge, Card, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
 import { clientStatusVariant } from "../lib/statusColors";
@@ -180,7 +180,7 @@ export function ClientsPage() {
           <thead>
             <tr className="border-b border-[var(--color-border-header)]">
               <th className="w-8 px-2 py-2">
-                <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
+                <Checkbox checked={bulk.isAllSelected} indeterminate={bulk.selected.size > 0 && !bulk.isAllSelected} onChange={bulk.toggleAll} />
               </th>
               <SortHeader label="ID" sortKey="id" current={sort} onSort={setSort} />
               <SortHeader label={t.display_name} sortKey="name" current={sort} onSort={setSort} />
@@ -198,11 +198,9 @@ export function ClientsPage() {
                 onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: c }); }}
               >
                 <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={bulk.selected.has(c.id)}
                     onChange={(e) => bulk.toggleItem(c.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-                    className="accent-[var(--accent)]"
                   />
                 </td>
                 <td className="px-4 py-2.5 font-medium">{c.id}</td>
@@ -380,8 +378,7 @@ function NewClientForm({
       </div>
       <div className="flex items-center gap-4">
         <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={!!form.has_discount}
             onChange={(e) => setForm({ ...form, has_discount: e.target.checked ? 1 : 0 })}
           />

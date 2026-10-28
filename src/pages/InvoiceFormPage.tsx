@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { ListTodo, Trash2, ArrowLeft, AlertTriangle, Eye } from "lucide-react";
 import { isUntranslatedActivity } from "../lib/activityNudge";
-import { Button, DatePicker, Input, Select, FormField, Popover, Textarea } from "../components/ui";
+import { Checkbox, Button, DatePicker, Input, Select, FormField, Popover, Textarea } from "../components/ui";
 import { MENU_ITEM } from "../components/ui/Dropdown";
 import * as v from "../lib/validate";
 import { toast } from "sonner";
@@ -661,8 +661,7 @@ export function InvoiceFormPage() {
         {/* Global rate toggle */}
         <div className="flex items-center gap-3 mb-2">
           <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={useGlobalRate}
               onChange={(e) => {
                 setUseGlobalRate(e.target.checked);
@@ -670,7 +669,6 @@ export function InvoiceFormPage() {
                   applyGlobalRate(globalRate);
                 }
               }}
-              className="accent-[var(--accent)]"
             />
             {t.apply_global_rate}
           </label>

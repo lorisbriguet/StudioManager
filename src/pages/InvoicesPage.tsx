@@ -33,7 +33,7 @@ import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Card, Modal, FormField, DatePicker, Select, IconButton, CountBadge, SectionLabel, Toggle } from "../components/ui";
+import { Checkbox, PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Card, Modal, FormField, DatePicker, Select, IconButton, CountBadge, SectionLabel, Toggle } from "../components/ui";
 import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
 import { isDraftReference } from "../types/invoice";
 import type { Invoice, InvoiceStatus } from "../types/invoice";
@@ -585,7 +585,7 @@ export function InvoicesPage() {
           <thead>
             <tr className="border-b border-[var(--color-border-header)]">
               <th className="w-8 px-2 py-2">
-                <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
+                <Checkbox checked={bulk.isAllSelected} indeterminate={bulk.selected.size > 0 && !bulk.isAllSelected} onChange={bulk.toggleAll} />
               </th>
               <th className="w-8" />
               <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
@@ -630,11 +630,9 @@ export function InvoicesPage() {
                         onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: inv }); }}
                       >
                         <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={bulk.selected.has(inv.id)}
                             onChange={(e) => bulk.toggleItem(inv.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-                            className="accent-[var(--accent)]"
                           />
                         </td>
                         <td className="w-8 px-1">

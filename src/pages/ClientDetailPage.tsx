@@ -3,7 +3,7 @@ import { IconButton } from "../components/ui/IconButton";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Save, Plus, Trash2, Eye, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Input, PageSpinner, Card, Select, SectionLabel, Textarea, ConfirmButton, Tooltip } from "../components/ui";
+import { Checkbox, Button, Input, PageSpinner, Card, Select, SectionLabel, Textarea, ConfirmButton, Tooltip } from "../components/ui";
 import { useTabStore } from "../stores/tab-store";
 import {
   useClient,
@@ -133,8 +133,7 @@ export function ClientDetailPage() {
             </div>
             <div className="flex items-center gap-3 mt-3">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={!!form.has_discount}
                   onChange={(e) => {
                     const v = e.target.checked ? 1 : 0;

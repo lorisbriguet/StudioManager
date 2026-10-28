@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Plus, Paperclip, Eye, ChevronRight, Trash2, Upload, Wallet, Pencil, Settings2 } from "lucide-react";
-import { PageHeader, SearchBar, Button, Card, DatePicker, EmptyState, FormField, Input, Select, TableSkeleton, IconButton, SectionLabel } from "../components/ui";
+import { Checkbox, PageHeader, SearchBar, Button, Card, DatePicker, EmptyState, FormField, Input, Select, TableSkeleton, IconButton, SectionLabel } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
 import { toast } from "sonner";
@@ -261,7 +261,7 @@ export function IncomePage() {
           <thead>
             <tr className="border-b border-[var(--color-border-header)]">
               <th className="w-8 px-2 py-2">
-                <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
+                <Checkbox checked={bulk.isAllSelected} indeterminate={bulk.selected.size > 0 && !bulk.isAllSelected} onChange={bulk.toggleAll} />
               </th>
               <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
               <SortHeader label={t.source} sortKey="source" current={sort} onSort={setSort} />
@@ -307,11 +307,9 @@ export function IncomePage() {
                         onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: inc }); }}
                       >
                         <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={bulk.selected.has(inc.id)}
                             onChange={(e) => bulk.toggleItem(inc.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-                            className="accent-[var(--accent)]"
                           />
                         </td>
                         <td className="px-4 py-2.5 font-medium">{inc.reference}</td>

@@ -22,7 +22,7 @@ import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Button, Badge, Card, PageHeader, SearchBar, TableSkeleton, DatePicker, Input, EmptyState, Select, IconButton, FilterChip, ProgressBar, Tooltip } from "../components/ui";
+import { Checkbox, Button, Badge, Card, PageHeader, SearchBar, TableSkeleton, DatePicker, Input, EmptyState, Select, IconButton, FilterChip, ProgressBar, Tooltip } from "../components/ui";
 import { undoable, undoableFromStore } from "../lib/undo";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
@@ -332,12 +332,11 @@ export function ProjectsPage() {
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={bulk.selected.has(p.id)}
                       onChange={(e) => bulk.toggleItem(p.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
                       onClick={(e) => e.stopPropagation()}
-                      className={`accent-[var(--accent)] shrink-0 transition-opacity ${
+                      className={`shrink-0 transition-opacity ${
                         bulk.selected.has(p.id) || bulk.count > 0 ? "opacity-100" : "opacity-0 group-hover:opacity-100"
                       }`}
                     />

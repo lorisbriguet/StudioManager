@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useT } from "../../i18n/useT";
-import { Select, Button } from "../ui";
+import { Checkbox, Select, Button } from "../ui";
 import { useSupplierCounts, useMergeSuppliers } from "../../db/hooks/useExpenses";
 import { suggestSupplierGroups, type SupplierCount } from "../../lib/supplierMerge";
 import { undoableFromStore } from "../../lib/undo";
@@ -115,11 +115,9 @@ export function SuppliersManager() {
         <div className="space-y-1 max-h-96 overflow-y-auto">
           {(counts ?? []).map((s) => (
             <label key={s.supplier} className="flex items-center gap-2 text-sm py-0.5 cursor-pointer">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={selected.has(s.supplier)}
                 onChange={() => toggle(s.supplier)}
-                className="accent-[var(--accent)]"
               />
               <span className="flex-1 truncate">{s.supplier}</span>
               <span className="text-xs text-muted">{s.count}</span>

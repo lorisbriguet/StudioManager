@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Plus, Trash2, Calendar, Link, Unlink } from "lucide-react";
-import { Button, Select, Popover, Tag, Input, Modal, Tooltip } from "../ui";
+import { Checkbox, Button, Select, Popover, Tag, Input, Modal, Tooltip } from "../ui";
 import { MENU_ITEM } from "../ui/Dropdown";
 import { toast } from "sonner";
 import type { WorkloadColumn, WorkloadColumnType, SelectOption } from "../../types/workload";
@@ -230,11 +230,9 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
           </div>
           {icon && (
             <label className="flex items-center gap-2 mt-2 text-xs text-muted cursor-pointer">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={iconOnly}
                 onChange={(e) => setIconOnly(e.target.checked)}
-                className="rounded"
               />
               {t.icon_only}
             </label>
@@ -244,11 +242,9 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
         {/* Calendar color toggle (select/multi_select only) */}
         {(type === "select" || type === "multi_select") && (
           <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={calendarColor}
               onChange={(e) => setCalendarColor(e.target.checked)}
-              className="rounded"
             />
             <Calendar size={14} className="shrink-0" />
             {t.calendar_color_column}

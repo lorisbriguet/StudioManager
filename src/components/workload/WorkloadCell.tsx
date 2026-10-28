@@ -4,7 +4,7 @@ import { SelectTagPicker } from "./SelectTagPicker";
 import { evaluateFormula } from "../../lib/formulaEval";
 import { Tag } from "../ui/Tag";
 
-import { Input } from "../ui";
+import { Checkbox, Input } from "../ui";
 interface Props {
   column: WorkloadColumn;
   value: unknown;
@@ -180,11 +180,9 @@ function CheckboxCell({
 }) {
   return (
     <div className="flex justify-center items-center min-h-[28px]">
-      <input
-        type="checkbox"
+      <Checkbox
         checked={value}
         onChange={() => onChange(!value)}
-        className="rounded cursor-pointer"
       />
     </div>
   );

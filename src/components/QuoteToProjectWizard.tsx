@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { format, addMonths } from "date-fns";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
-import { Button, DatePicker, FormField, Input, Modal, Textarea } from "./ui";
+import { Checkbox, Button, DatePicker, FormField, Input, Modal, Textarea } from "./ui";
 import * as v from "../lib/validate";
 import { useT } from "../i18n/useT";
 import { useCreateProjectFromQuote } from "../db/hooks/useProjects";
@@ -142,11 +142,9 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
                 task.included ? "" : "opacity-40"
               }`}
             >
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={task.included}
                 onChange={(e) => updateTask(i, { included: e.target.checked })}
-                className="accent-[var(--accent)]"
               />
               <Input
                 size="sm"

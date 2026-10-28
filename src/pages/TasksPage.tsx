@@ -36,7 +36,7 @@ import { useTabStore } from "../stores/tab-store";
 import { useOrgStore } from "../stores/org-store";
 import { useTimerActions } from "../hooks/useTimerActions";
 import { useT } from "../i18n/useT";
-import { PageHeader, SearchBar, TableSkeleton, EmptyState, Select, FilterChip, Input, DragHandle } from "../components/ui";
+import { Checkbox, PageHeader, SearchBar, TableSkeleton, EmptyState, Select, FilterChip, Input, DragHandle } from "../components/ui";
 import { taskStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Task, Subtask, TaskStatus } from "../types/task";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
@@ -334,12 +334,11 @@ export function TasksPage() {
                       className={`flex items-center gap-3 px-4 py-2.5 group/task${taskIdxById.get(tk.id) === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
                       onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: tk }); }}
                     >
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={bulk.selected.has(tk.id)}
                         onChange={(e) => bulk.toggleItem(tk.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
                         onClick={(e) => e.stopPropagation()}
-                        className="accent-[var(--accent)] shrink-0"
+                        className="shrink-0"
                       />
                       <IconButton
                         onClick={() => toggleTaskExpanded(tk.id)}
@@ -349,8 +348,7 @@ export function TasksPage() {
                         icon={ChevronRight}
                         iconClassName={`transition-transform ${isExpanded ? "rotate-90" : ""}`}
                       />
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={tk.status === "done"}
                         onChange={(e) => {
                           if (e.target.checked) e.target.classList.add("check-pop");
@@ -369,7 +367,6 @@ export function TasksPage() {
                           updateTask.mutate({ id: tk.id, data: { status: newStatus } });
                         }}
                         onAnimationEnd={(e) => (e.target as HTMLElement).classList.remove("check-pop")}
-                        className="rounded"
                       />
                       {editingTask === tk.id ? (
                         <Input
@@ -455,8 +452,7 @@ export function TasksPage() {
                       <div className="ml-12 mr-4 border-l border-[var(--color-border-divider)] pl-3 pb-2 mb-1">
                         {filteredSubs.map((s) => (
                           <div key={s.id} data-task-row className="flex items-center gap-2 py-1 group/sub" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setSubCtxMenu({ x: e.clientX, y: e.clientY, item: s }); }}>
-                            <input
-                              type="checkbox"
+                            <Checkbox
                               checked={s.status === "done"}
                               onChange={(e) => {
                                 if (e.target.checked) e.target.classList.add("check-pop");
@@ -475,7 +471,6 @@ export function TasksPage() {
                                 updateSubtask.mutate({ id: s.id, data: { status: newStatus } });
                               }}
                               onAnimationEnd={(e) => (e.target as HTMLElement).classList.remove("check-pop")}
-                              className="rounded"
                             />
                             {editingSubtask === s.id ? (
                               <Input

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Plus, Paperclip, Eye, ChevronRight, Upload, Trash2, CheckCircle, CalendarCheck, Receipt, Settings2, XCircle, Pencil } from "lucide-react";
-import { Button, DatePicker, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState, Card, Modal, Popover, IconButton, Tag, SectionLabel, Callout, Tooltip } from "../components/ui";
+import { Checkbox, Button, DatePicker, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState, Card, Modal, Popover, IconButton, Tag, SectionLabel, Callout, Tooltip } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
@@ -271,7 +271,7 @@ export function ExpensesPage() {
           <thead>
             <tr className="border-b border-[var(--color-border-header)]">
               <th className="w-8 px-2 py-2">
-                <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
+                <Checkbox checked={bulk.isAllSelected} indeterminate={bulk.selected.size > 0 && !bulk.isAllSelected} onChange={bulk.toggleAll} />
               </th>
               <th className="w-8" />
               <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
@@ -318,11 +318,9 @@ export function ExpensesPage() {
                         onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: exp }); }}
                       >
                         <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={bulk.selected.has(exp.id)}
                             onChange={(e) => bulk.toggleItem(exp.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-                            className="accent-[var(--accent)]"
                           />
                         </td>
                         <td className="w-8 px-1">

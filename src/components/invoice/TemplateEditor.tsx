@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { PDFViewer } from "@react-pdf/renderer";
 import { ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Input, Select, IconButton, SectionLabel } from "../ui";
+import { Checkbox, Button, Input, Select, IconButton, SectionLabel } from "../ui";
 import { InvoicePDF } from "./InvoicePDF";
 import { useT } from "../../i18n/useT";
 import {
@@ -379,7 +379,7 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
               { label: t.show_footer, value: showFooter, set: setShowFooter },
             ] as const).map(({ label, value, set }) => (
               <label key={label} className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="checkbox" checked={value} onChange={(e) => (set as (v: boolean) => void)(e.target.checked)} className="accent-accent rounded" />
+                <Checkbox checked={value} onChange={(e) => (set as (v: boolean) => void)(e.target.checked)} />
                 {label}
               </label>
             ))}

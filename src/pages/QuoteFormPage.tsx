@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Eye } from "lucide-react";
-import { Button, DatePicker, Input, Select, FormField, Textarea } from "../components/ui";
+import { Checkbox, Button, DatePicker, Input, Select, FormField, Textarea } from "../components/ui";
 import * as v from "../lib/validate";
 import { toast } from "sonner";
 import { addDays, format } from "date-fns";
@@ -421,8 +421,7 @@ export function QuoteFormPage() {
         {/* Global rate toggle */}
         <div className="flex items-center gap-3 mb-2">
           <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={useGlobalRate}
               onChange={(e) => {
                 setUseGlobalRate(e.target.checked);
@@ -430,7 +429,6 @@ export function QuoteFormPage() {
                   applyGlobalRate(globalRate);
                 }
               }}
-              className="accent-[var(--accent)]"
             />
             {t.apply_global_rate}
           </label>
