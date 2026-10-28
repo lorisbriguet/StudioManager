@@ -2,7 +2,7 @@
 
 Date: 2026-10-28 · Status: draft for Loris's review
 
-Plan: [2026-10-28-menu-bar.md](../plans/2026-10-28-menu-bar.md) · Follows: [Agents window design](2026-10-28-agents-window-design.md) · User guide of the Agents page: [agents.md](../../agents.md) · Design rules: [DESIGN-SYSTEM.md](../../../DESIGN-SYSTEM.md) · Ideas list: [IDEAS.md](../../../IDEAS.md)
+User guide: [menu-bar.md](../../menu-bar.md) · Retirement checklist: [retire-agentbar.md](../../retire-agentbar.md) · Plan: [2026-10-28-menu-bar.md](../plans/2026-10-28-menu-bar.md) · Follows: [Agents window design](2026-10-28-agents-window-design.md) · User guide of the Agents page: [agents.md](../../agents.md) · Design rules: [DESIGN-SYSTEM.md](../../../DESIGN-SYSTEM.md) · Ideas list: [IDEAS.md](../../../IDEAS.md)
 
 Decisions marked *[call]* were made by the designer, not by Loris; he can overturn any.
 
