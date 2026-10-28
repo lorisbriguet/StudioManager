@@ -142,9 +142,22 @@ fn window_name(kind: &str, scope: Option<&str>) -> String {
     match kind {
         "session" | "five_hour" => "five_hour".into(),
         "weekly_all" | "seven_day" => "seven_day".into(),
-        "weekly_scoped" => format!("seven_day_{}", scope.unwrap_or("scoped").to_lowercase()),
+        "weekly_scoped" => format!("seven_day_{}", slug(scope.unwrap_or("scoped"))),
         other => other.into(),
     }
+}
+
+/// Lowercase, every run of characters outside `[a-z0-9_]` becomes one `_`.
+fn slug(name: &str) -> String {
+    let mut out = String::new();
+    for c in name.to_lowercase().chars() {
+        if c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' {
+            out.push(c);
+        } else if !out.ends_with('_') {
+            out.push('_');
+        }
+    }
+    out
 }
 
 /// Epoch seconds from a number or an ISO-8601 string.
@@ -368,6 +381,14 @@ mod tests {
         );
         assert_eq!(h[0].resets_at, NOW + epoch_offset());
         assert_eq!(note(&dir)["rateLimits"], "rows");
+    }
+
+    #[test]
+    fn scope_names_become_stable_keys() {
+        let name = |s| window_name("weekly_scoped", s);
+        assert_eq!(name(Some("Claude Design")), "seven_day_claude_design");
+        assert_eq!(name(Some("Opus 4.5 (beta)")), "seven_day_opus_4_5_beta_");
+        assert_eq!(name(None), "seven_day_scoped");
     }
 
     #[test]
