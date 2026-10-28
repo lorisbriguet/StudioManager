@@ -12,7 +12,7 @@ export function MeterBar({ pct, color, className = "w-full", label }: {
   /** Accessible name; when set the bar is exposed as a `meter`. */
   label?: string;
 }) {
-  const width = Math.min(100, Math.max(0, pct));
+  const width = Math.min(100, Math.max(0, Number.isFinite(pct) ? pct : 0));
   return (
     <div
       className={`h-1.5 rounded-full bg-[var(--color-input-bg)] overflow-hidden ${className}`}

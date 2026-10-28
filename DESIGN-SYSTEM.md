@@ -310,7 +310,7 @@ import { MeterBar } from "../components/ui";
 <MeterBar pct={62} color="var(--color-accent)" />
 <MeterBar className="w-[120px]" pct={pct} color="var(--color-success-text)" label="2 years" />
 ```
-The one thin bar (`h-1.5`, `--color-input-bg` track, rounded fill) for progress, shares, stock levels and drive age. `pct` is clamped to 0–100; `className` sets the width (default `w-full`); `label` exposes it as a `meter` to screen readers. Never rebuild the track and fill by hand.
+The one thin bar (`h-1.5`, `--color-input-bg` track, rounded fill) for progress, shares, stock levels and drive age. `pct` is clamped to 0–100; `className` sets the width (default `w-full`); `label` exposes it as a `meter` to screen readers. Plan limits (menu bar Usage tab) use `--color-warning` from 75% and `--color-danger` from 90%. Never rebuild the track and fill by hand.
 
 ### SearchBar
 ```tsx

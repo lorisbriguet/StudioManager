@@ -42,6 +42,8 @@ import { NotificationsPage } from "./pages/NotificationsPage";
 import { CommandPalette } from "./components/CommandPalette";
 import { QuickTimerModal } from "./components/QuickTimerModal";
 import { OrgGate } from "./components/OrgGate";
+import { MenuBarApp } from "./menubar/MenuBarApp";
+import { useFollowAppSettings } from "./menubar/useFollowAppSettings";
 import { PageSpinner } from "./components/ui";
 import { useOverdueCheck } from "./hooks/useOverdueCheck";
 import { useUpkeepCheck } from "./hooks/useUpkeepCheck";
@@ -169,7 +171,28 @@ function StartupChecks() {
   return null;
 }
 
+/** The menu bar panel's window (route `/menubar`): no organisation gate, no app chrome and
+ *  none of the main window's startup checks. Theme and language come from the app store, and
+ *  follow changes made in the main window. */
+function MenuBarShell() {
+  useFollowAppSettings();
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ErrorBoundary FallbackComponent={ErrorFallback}>
+        <MenuBarApp />
+      </ErrorBoundary>
+      <Toaster position="bottom-right" />
+    </QueryClientProvider>
+  );
+}
+
 export default function App() {
+  // Each window loads one page for its whole life, so this never flips between renders.
+  if (window.location.pathname === "/menubar") return <MenuBarShell />;
+  return <MainApp />;
+}
+
+function MainApp() {
   const activeId = useOrgStore((s) => s.activeId);
   return (
     <QueryClientProvider client={queryClient}>

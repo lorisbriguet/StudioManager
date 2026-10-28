@@ -2,7 +2,7 @@
 
 The Agents page shows every Claude Code agent running on your Mac in one place, so you can see which ones need you without opening each terminal. It is off until you turn it on. Nothing listens on a network port: the app talks to the `claude` command on your Mac and nothing else.
 
-Design and reasons: [the design spec](superpowers/specs/2026-10-28-agents-window-design.md). For letting AI apps read your StudioManager data, see [Agent access](agent-access.md), which is a separate feature.
+Design and reasons: [the design spec](superpowers/specs/2026-10-28-agents-window-design.md). For letting AI apps read your StudioManager data, see [Agent access](agent-access.md), which is a separate feature. To see and answer agents from the Mac menu bar, see [Menu bar](menu-bar.md).
 
 ## Turning it on
 

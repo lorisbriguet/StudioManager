@@ -3,6 +3,7 @@ mod agents;
 mod apple;
 mod connectors;
 mod dbfiles;
+mod menubar;
 mod migrate;
 mod project_docs;
 pub mod orgs;
@@ -572,8 +573,22 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_window_state::Builder::new().build())
+        // The main window starts hidden (tauri.conf.json) and `setup` decides whether to show
+        // it, so the plugin must not restore visibility. The menu bar panel places itself.
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        - tauri_plugin_window_state::StateFlags::VISIBLE,
+                )
+                .with_denylist(&[menubar::PANEL_LABEL])
+                .build(),
+        )
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![menubar::STARTUP_ARG]),
+        ))
         .invoke_handler(tauri::generate_handler![
             execute_batch,
             enter_test_mode,
@@ -613,6 +628,13 @@ pub fn run() {
             agents::cli::agents_get_enabled,
             agents::cli::agents_get_settings,
             agents::cli::agents_set_enabled,
+            agents::cli::agents_set_menu_bar,
+            agents::cli::agents_set_limit_alerts,
+            agents::statusline::agents_status_line_preview,
+            agents::statusline::agents_status_line_install,
+            agents::statusline::agents_status_line_remove,
+            agents::usage::agents_usage_limits,
+            agents::usage::activity::agents_usage_activity,
             agents::projects::agents_start_folders,
             agents::actions::agents_start,
             agents::actions::agents_stop,
@@ -629,6 +651,14 @@ pub fn run() {
             agents::prompt::agents_answer,
             agents::poller::agents_list,
             agents::uploads::agents_save_image,
+            agents::routines::routines_get,
+            agents::routines::routines_save,
+            agents::routines::routines_run,
+            agents::routines::routines_runs,
+            agents::routines::routines_open_result,
+            agents::routines::routines_open_link,
+            agents::routines::routines_open_folder,
+            menubar::menubar_open_main,
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -644,6 +674,14 @@ pub fn run() {
             handle.manage(InitError(Mutex::new(init_error)));
             agent_access::start_poller(handle);
             agents::init(handle);
+            // The main window is created hidden (no flash at login). Started at login with
+            // the menu bar on: it stays hidden; otherwise show it.
+            let keep_running = menubar::keep_running(handle);
+            if !(menubar::started_hidden() && keep_running) {
+                menubar::show_main(handle);
+            }
+            // On the main thread, before any command can run: the lock is free.
+            menubar::sync_tray(handle, keep_running, &agents::cli::lock_settings());
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -660,9 +698,26 @@ pub fn run() {
                     agent_access::Trigger::Focus,
                 );
             }
+            // With the menu bar on, closing the window only hides it: the app (and its
+            // alerts) keep running. Cmd+Q still quits.
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" && menubar::keep_running(window.app_handle()) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // Dock click while the window is hidden: bring it back.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event {
+                menubar::show_main(app);
+            }
+            #[cfg(not(target_os = "macos"))]
+            let _ = (app, event);
+        });
 }
 
 #[cfg(test)]

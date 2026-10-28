@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "menubar",
+  "description": "Menu bar panel. Limits plugin permissions only: core:default, so no file, SQL, dialog, shell or notification plugin calls. The app's own commands are not gated per window (no AppManifest yet); see IDEAS.md.",
+  "windows": ["menubar"],
+  "permissions": ["core:default"]
+}

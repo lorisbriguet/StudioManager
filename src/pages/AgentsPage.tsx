@@ -31,6 +31,15 @@ export function AgentsPage() {
     }
   }, [agents, pendingShortId, setParams]);
 
+  // `?new=1` (the menu bar panel's "New agent"): open the start form, then drop the flag.
+  const wantsNew = params.get("new") === "1";
+  useEffect(() => {
+    if (!wantsNew) return;
+    setStarting(true);
+    setTerminalFor(null);
+    setParams({}, { replace: true });
+  }, [wantsNew, setParams]);
+
   if (!enabled) {
     return (
       <div>

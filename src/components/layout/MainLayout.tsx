@@ -3,6 +3,7 @@ import { Sidebar } from "./Sidebar";
 import { TabBar } from "./TabBar";
 import { useTabSync } from "../../hooks/useTabSync";
 import { useWindowTitle } from "../../hooks/useWindowTitle";
+import { useMenuBarNavigate } from "../../hooks/useMenuBarNavigate";
 import { useAppStore } from "../../stores/app-store";
 import { useOrgStore } from "../../stores/org-store";
 import { useT } from "../../i18n/useT";
@@ -18,6 +19,7 @@ export function MainLayout() {
   const t = useT();
 
   useTabSync();
+  useMenuBarNavigate();
   const location = useLocation();
 
   // Keeps document.title AND the native window title in sync — Tauri v2

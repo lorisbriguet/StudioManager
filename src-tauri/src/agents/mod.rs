@@ -5,8 +5,11 @@ pub mod poller;
 pub mod projects;
 pub mod prompt;
 pub mod pty;
+pub mod routines;
+pub mod statusline;
 pub mod transcript;
 pub mod uploads;
+pub mod usage;
 pub mod validate;
 
 use std::path::PathBuf;
@@ -21,6 +24,8 @@ pub struct AgentsState {
     pub hub: pty::TerminalHub,
     /// The last list the poller emitted (labelled, quiet applied).
     pub last: Mutex<Vec<model::Agent>>,
+    /// The transcript scan behind the Usage tab, and its last result (60 s cache).
+    pub activity: Arc<Mutex<usage::activity::ActivityCache>>,
 }
 
 impl AgentsState {
@@ -30,7 +35,7 @@ impl AgentsState {
             Arc::new(pty::RealSpawner::new(login_env.clone())),
             Arc::new(pty::SystemClock),
         );
-        Self { app_dir, login_env, hub, last: Mutex::new(Vec::new()) }
+        Self { app_dir, login_env, hub, last: Mutex::new(Vec::new()), activity: Default::default() }
     }
 
     /// The cached login-shell environment, for use on a blocking thread: resolving it runs a
@@ -56,6 +61,7 @@ pub fn init(handle: &tauri::AppHandle) {
     let app_dir = crate::app_data_dir(handle).unwrap_or_default();
     handle.manage(AgentsState::new(app_dir));
     poller::start(handle);
+    routines::schedule::start(handle);
     // Old attached images; best effort, off the startup path.
     let dir = handle.state::<AgentsState>().app_dir.clone();
     std::thread::spawn(move || uploads::clean_old(&dir, std::time::SystemTime::now()));

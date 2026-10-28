@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 
 export interface AgentsInfo {
   enabled: boolean;
+  menuBar: boolean;
+  limitAlerts: boolean;
   claudePath: string | null;
 }
 
@@ -18,6 +20,62 @@ export function getAgentsSettings(): Promise<AgentsInfo> {
 export function setAgentsEnabled(enabled: boolean): Promise<AgentsInfo> {
   return invoke<AgentsInfo>("agents_set_enabled", { enabled });
 }
+
+/** Needs the Agents switch on; also starts the app at login (hidden). */
+export function setAgentsMenuBar(on: boolean): Promise<AgentsInfo> {
+  return invoke<AgentsInfo>("agents_set_menu_bar", { on });
+}
+
+export function setAgentsLimitAlerts(on: boolean): Promise<AgentsInfo> {
+  return invoke<AgentsInfo>("agents_set_limit_alerts", { on });
+}
+
+/** What setting up (or removing) the plan-limits status line would write to Claude Code's
+ *  settings. */
+export interface StatusLinePreview {
+  /** The current status line's command, if any. */
+  current: string | null;
+  /** The settings file after setup. */
+  next: string;
+  /** A status line exists and it is not StudioManager's. */
+  replacesOther: boolean;
+  /** The status line is StudioManager's, from this app's path. */
+  installed: boolean;
+  /** The status line is StudioManager's from any path (a stale one included). */
+  present: boolean;
+  /** The settings file after removal (previous status line restored); only when present. */
+  removeNext: string | null;
+}
+
+export function statusLinePreview(): Promise<StatusLinePreview> {
+  return invoke<StatusLinePreview>("agents_status_line_preview");
+}
+
+/** `expected` is the approved `next`; refused if Claude Code's settings changed since the
+ *  preview. Resolves to the backup path ("" when there was no file). */
+export function installStatusLine(expected: string): Promise<string> {
+  return invoke<string>("agents_status_line_install", { expected });
+}
+
+/** `expected` is the approved `removeNext`; refused if the settings changed since. */
+export function removeStatusLine(expected: string): Promise<string> {
+  return invoke<string>("agents_status_line_remove", { expected });
+}
+
+/** From the menu bar panel: bring the main window forward, on an agent (session id) or the
+ *  start form or the Agents settings when asked. Rust emits `menubar:navigate` to the main window. */
+export function openMainWindow(
+  opts: { agent?: string | null; newAgent?: boolean; settings?: "agents" } = {},
+): Promise<void> {
+  return invoke<void>("menubar_open_main", {
+    agent: opts.agent ?? null,
+    newAgent: opts.newAgent ?? false,
+    settings: opts.settings ?? null,
+  });
+}
+
+/** Sent to the main window by `menubar_open_main`. */
+export const MENUBAR_NAVIGATE = "menubar:navigate";
 
 export function startAgent(
   folder: string,

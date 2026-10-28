@@ -6,6 +6,7 @@ use super::actions::{fetch_agents, home_dir, read_state, retain_dismissed, CopyO
 use super::cli::read_settings;
 use super::model::{apply_quiet, Agent, Group};
 use super::projects::{load_index, FolderIndex};
+use super::usage::limits::{check_alerts, now_ms as limits_now_ms, LIMITS_FILE};
 use super::transcript::{last_change_ms, last_model, locate, model_alias, model_label};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,6 +18,8 @@ use tauri_plugin_notification::NotificationExt;
 pub const CHANGED_EVENT: &str = "agents:changed";
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 const INDEX_RELOAD: Duration = Duration::from_secs(30);
+/// Plan-limit alerts (80%, pace) don't need the 2-s tick, and each check reads the history.
+const ALERTS_INTERVAL: Duration = Duration::from_secs(60);
 
 /// What the poller remembers between passes.
 #[derive(Default)]
@@ -51,6 +54,11 @@ pub fn poll_once(
     state.baseline_done = true;
     state.last_good = agents.clone();
     (agents, notify)
+}
+
+/// Whether any agent is waiting for you (the menu bar icon turns amber).
+pub fn needs_attention(agents: &[Agent]) -> bool {
+    agents.iter().any(|a| a.group == Group::NeedsYou)
 }
 
 /// `Organisation › Client › Project`, or the folder's last segment.
@@ -172,20 +180,37 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
     let mut index = FolderIndex::default();
     let mut index_at: Option<Instant> = None;
     let mut models = ModelCache::new();
+    let mut alerts_at: Option<Instant> = None;
     loop {
         std::thread::sleep(POLL_INTERVAL);
         let Some(state) = app.try_state::<super::AgentsState>() else {
             continue;
         };
-        if !read_settings(&state.app_dir).enabled {
+        let settings = read_settings(&state.app_dir);
+        if !settings.enabled {
             // Off: forget everything so turning it on starts a new baseline.
             if poll.baseline_done || !poll.last_good.is_empty() {
                 poll = PollState::default();
                 if let Ok(mut c) = state.last.lock() {
                     c.clear();
                 }
+                crate::menubar::set_attention(&app, false);
             }
             continue;
+        }
+        // Plan-limit alerts belong to the menu bar; once a minute, file reads only, no CLI.
+        if settings.menu_bar
+            && alerts_at.map_or(true, |t| t.elapsed() >= ALERTS_INTERVAL)
+            && state.app_dir.join(LIMITS_FILE).exists()
+        {
+            alerts_at = Some(Instant::now());
+            let alerts = check_alerts(&state.app_dir, limits_now_ms(), settings.limit_alerts);
+            for a in &alerts {
+                log::info!("[agents] limit alert: {}", a.key);
+                if let Err(e) = app.notification().builder().title(&a.title).body(&a.body).show() {
+                    log::warn!("[agents] notification failed: {e}");
+                }
+            }
         }
         let Some(cli) = state.real_cli() else {
             continue;
@@ -206,6 +231,7 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
         }
         // No lock is held from here on.
         let _ = app.emit(CHANGED_EVENT, &emit);
+        crate::menubar::set_attention(&app, needs_attention(&emit));
         for a in &notify {
             // Logged so a missing banner can be told apart from one never sent
             // (macOS may drop notifications from an unbundled dev build).
@@ -303,6 +329,17 @@ mod tests {
         fill_models(&mut v, &mut cache, &mtime_of, &read);
         assert_eq!((reads.get(), v[0].model.as_deref()), (2, Some("haiku")));
         assert!(cache.is_empty());
+    }
+
+    #[test]
+    fn attention_follows_needs_you() {
+        assert!(!needs_attention(&[]));
+        assert!(!needs_attention(&[ag("a", Group::Working), ag("b", Group::Idle), ag("c", Group::Done)]));
+        assert!(needs_attention(&[ag("a", Group::Working), ag("b", Group::NeedsYou)]));
+        // A dismissed or stale prompt has already been moved to idle: no attention.
+        let mut quiet = ag("a", Group::Idle);
+        quiet.quiet = Some(Quiet::Dismissed);
+        assert!(!needs_attention(&[quiet]));
     }
 
     #[test]
