@@ -1,5 +1,7 @@
 import { useSearchParams } from "react-router-dom";
-import { PageHeader, TabItem, EmptyState } from "../components/ui";
+import { PageHeader, TabItem } from "../components/ui";
+import { ConsumablesTab } from "../components/upkeep/ConsumablesTab";
+import { SubscriptionsTab } from "../components/upkeep/SubscriptionsTab";
 import { MachinesTab } from "../components/upkeep/MachinesTab";
 import { OverviewTab } from "../components/upkeep/OverviewTab";
 import { useT } from "../i18n/useT";
@@ -38,8 +40,10 @@ export function UpkeepPage() {
         <OverviewTab />
       ) : tab === "machines" ? (
         <MachinesTab />
+      ) : tab === "consumables" ? (
+        <ConsumablesTab />
       ) : (
-        <EmptyState message={t.upkeep_tab_soon} />
+        <SubscriptionsTab />
       )}
     </div>
   );

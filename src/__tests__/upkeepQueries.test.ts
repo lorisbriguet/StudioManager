@@ -6,6 +6,7 @@ import {
   setSelectHandler,
 } from "../__mocks__/tauri-sql";
 import { createMachine } from "../db/queries/machines";
+import { updateSubscription } from "../db/queries/subscriptions";
 import { markUpkeepDone, snoozeUpkeep } from "../db/queries/upkeepItems";
 import type { UpkeepItem } from "../types/upkeep";
 
@@ -96,5 +97,19 @@ describe("upkeep queries", () => {
     expect(items[0].params).toContain("2027-01-28");
     expect(items[0].params).toContain(28);
     expect(items[1].params).not.toContain("2027-01-28");
+  });
+
+  it("updateSubscription recomputes anchor_day when renews_on changes", async () => {
+    await updateSubscription(4, { renews_on: "2026-12-17" });
+    const upd = executedStatements.find((x) => x.sql.includes("UPDATE subscriptions"));
+    expect(upd!.sql).toContain("anchor_day");
+    expect(upd!.params).toContain(17);
+  });
+
+  it("updateSubscription keeps an explicit anchor_day", async () => {
+    await updateSubscription(4, { renews_on: "2026-12-31", anchor_day: 30 });
+    const upd = executedStatements.find((x) => x.sql.includes("UPDATE subscriptions"));
+    expect(upd!.params).toContain(30);
+    expect(upd!.params).not.toContain(31);
   });
 });

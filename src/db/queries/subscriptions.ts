@@ -46,7 +46,12 @@ export async function createSubscription(data: SubscriptionInput): Promise<numbe
   return result.lastInsertId ?? 0;
 }
 
-export async function updateSubscription(id: number, data: Partial<SubscriptionInput>): Promise<void> {
+export async function updateSubscription(id: number, inputData: Partial<SubscriptionInput>): Promise<void> {
+  // A new renewal date moves the day-of-month the subscription rolls on.
+  const data: Partial<SubscriptionInput> =
+    inputData.renews_on && inputData.anchor_day === undefined
+      ? { ...inputData, anchor_day: Number(inputData.renews_on.slice(8, 10)) }
+      : inputData;
   const fields = Object.keys(data).filter(
     (k) => (SUBSCRIPTION_COLUMNS as readonly string[]).includes(k) && data[k as keyof SubscriptionInput] !== undefined
   );
