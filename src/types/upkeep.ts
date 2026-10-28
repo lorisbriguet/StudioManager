@@ -177,3 +177,33 @@ export interface MachineDisk {
   first_seen: string;
   last_read_at: string;
 }
+
+type MachineSystemFields = "id" | "created_at" | "updated_at" | "warranty_notified_for";
+
+/** Editable machine fields; only the name is required, the DB supplies defaults. */
+export type MachineInput = Pick<Machine, "name"> &
+  Partial<Omit<Machine, MachineSystemFields | "name">>;
+
+type UpkeepItemComputedFields =
+  | "id"
+  | "created_at"
+  | "updated_at"
+  | "next_due_on"
+  | "calendar_event_id"
+  | "calendar_event_date"
+  | "overdue_notified_for"
+  | "snooze_until"
+  | "last_done_reading";
+
+/**
+ * Editable upkeep item fields. `last_done_on` may be given for an item that
+ * was already serviced; otherwise `start_on` (default today) is the base date
+ * of the first due date.
+ */
+export type UpkeepItemInput = Pick<UpkeepItem, "machine_id" | "title" | "schedule"> &
+  Partial<Omit<UpkeepItem, UpkeepItemComputedFields | "machine_id" | "title" | "schedule">> & {
+    start_on?: string;
+  };
+
+/** A template item created together with its machine (machine id not known yet). */
+export type MachineTemplateItemInput = Omit<UpkeepItemInput, "machine_id">;
