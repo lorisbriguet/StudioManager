@@ -215,6 +215,22 @@ export async function markUpkeepDone(
   return (await getUpkeepItem(id)) ?? item;
 }
 
+/**
+ * Remember the Apple Calendar event of an item. Bookkeeping only: does not
+ * touch updated_at or any user-visible field.
+ */
+export async function setItemCalendarEvent(
+  id: number,
+  eventId: string | null,
+  eventDate: string | null
+): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "UPDATE upkeep_items SET calendar_event_id = $1, calendar_event_date = $2 WHERE id = $3",
+    [eventId, eventDate, id]
+  );
+}
+
 /** Hide an item from alerts for 1, 3 or 7 days. */
 export async function snoozeUpkeep(id: number, days: 1 | 3 | 7, todayISO: string): Promise<void> {
   const db = await getDb();

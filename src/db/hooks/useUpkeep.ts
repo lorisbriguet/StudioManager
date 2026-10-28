@@ -6,6 +6,13 @@ import * as c from "../queries/consumables";
 import * as s from "../queries/subscriptions";
 import { useUndoStore } from "../../stores/undo-store";
 import { getLabels } from "../../lib/notifyError";
+import {
+  removeItemEvents,
+  removeSubscriptionEvent,
+  syncItemCalendar,
+  syncMachineItemsCalendar,
+  syncSubscriptionCalendar,
+} from "../../lib/upkeep/calendar";
 import type {
   Machine,
   MachineFile,
@@ -24,6 +31,42 @@ function useInvalidate() {
     qc.invalidateQueries({ queryKey: ["machines"] });
   };
 }
+
+// Calendar work is fire-and-forget: the save never waits for (or fails
+// because of) Apple Calendar; failures surface once through notifyError.
+
+/** After a machine edit: a rename re-titles its events; retiring removes them, un-retiring brings them back. */
+function syncMachineCalendar(id: number, prev: Machine | null, data: Partial<MachineInput>) {
+  const renamed = data.name !== undefined && data.name !== prev?.name;
+  const retiredChanged =
+    data.status !== undefined && (data.status === "retired") !== (prev?.status === "retired");
+  if (renamed || retiredChanged) void syncMachineItemsCalendar(id, { force: renamed });
+}
+
+/** Delete a machine's events (rows read before they go), then the machine. */
+async function deleteMachineWithEvents(id: number) {
+  const items = await u.getUpkeepItems(id);
+  await m.deleteMachine(id);
+  void removeItemEvents(items);
+}
+
+async function deleteItemWithEvent(id: number) {
+  const item = await u.getUpkeepItem(id);
+  await u.deleteUpkeepItem(id);
+  if (item) void removeItemEvents([item]);
+}
+
+async function deleteSubscriptionWithEvent(id: number) {
+  const sub = await s.getSubscription(id);
+  await s.deleteSubscription(id);
+  if (sub) void removeSubscriptionEvent(sub);
+}
+
+/** Title or alert changes re-create the event even when its date stays. */
+const itemNeedsRecreate = (data: object) => "title" in data || "alert" in data;
+/** Subscriptions don't store the event date: any renews_on change moves it. */
+const subNeedsRecreate = (data: object) =>
+  "name" in data || "alert" in data || "renews_on" in data;
 
 function pickMachineInput(row: Machine): MachineInput {
   const {
@@ -111,14 +154,16 @@ export function useCreateMachine() {
   return useMutation({
     mutationFn: async ({ data, items }: { data: MachineInput; items?: MachineTemplateItemInput[] }) => {
       let id = await m.createMachine(data, items ?? []);
+      void syncMachineItemsCalendar(id);
       useUndoStore.getState().push({
         label: `${getLabels().undo_create_machine} "${data.name}"`,
         execute: async () => {
-          await m.deleteMachine(id);
+          await deleteMachineWithEvents(id);
           invalidate();
         },
         redo: async () => {
           id = await m.createMachine(data, items ?? []);
+          void syncMachineItemsCalendar(id);
           invalidate();
         },
       });
@@ -135,19 +180,23 @@ export function useUpdateMachine() {
     mutationFn: async ({ id, data }: { id: number; data: Partial<MachineInput> }) => {
       const prev = await m.getMachine(id);
       await m.updateMachine(id, data);
+      syncMachineCalendar(id, prev, data);
       if (prev) {
         const prevData: Record<string, unknown> = {};
         for (const key of Object.keys(data)) {
           prevData[key] = (prev as unknown as Record<string, unknown>)[key];
         }
+        const after = { ...prev, ...data } as Machine;
         useUndoStore.getState().push({
           label: `${getLabels().undo_update_machine} "${prev.name}"`,
           execute: async () => {
             await m.updateMachine(id, prevData as Partial<MachineInput>);
+            syncMachineCalendar(id, after, prevData as Partial<MachineInput>);
             invalidate();
           },
           redo: async () => {
             await m.updateMachine(id, data);
+            syncMachineCalendar(id, prev, data);
             invalidate();
           },
         });
@@ -163,8 +212,9 @@ export function useDeleteMachine() {
   return useMutation({
     mutationFn: async (id: number) => {
       const prev = await m.getMachine(id);
-      const prevItems = prev ? await u.getUpkeepItems(id) : [];
+      const prevItems = await u.getUpkeepItems(id);
       await m.deleteMachine(id);
+      void removeItemEvents(prevItems);
       if (prev) {
         // Restore assigns a fresh id; redo deletes exactly that one.
         let restoredId: number | null = null;
@@ -172,11 +222,12 @@ export function useDeleteMachine() {
           label: `${getLabels().undo_delete_machine} "${prev.name}"`,
           execute: async () => {
             restoredId = await m.createMachine(pickMachineInput(prev), prevItems.map(pickItemInput));
+            void syncMachineItemsCalendar(restoredId);
             invalidate();
           },
           redo: async () => {
             if (restoredId !== null) {
-              await m.deleteMachine(restoredId);
+              await deleteMachineWithEvents(restoredId);
               invalidate();
             }
           },
@@ -243,14 +294,16 @@ export function useCreateUpkeepItem() {
   return useMutation({
     mutationFn: async (data: UpkeepItemInput) => {
       let id = await u.createUpkeepItem(data);
+      void syncItemCalendar(id);
       useUndoStore.getState().push({
         label: `${getLabels().undo_create_upkeep_item} "${data.title}"`,
         execute: async () => {
-          await u.deleteUpkeepItem(id);
+          await deleteItemWithEvent(id);
           invalidate();
         },
         redo: async () => {
           id = await u.createUpkeepItem(data);
+          void syncItemCalendar(id);
           invalidate();
         },
       });
@@ -267,6 +320,8 @@ export function useUpdateUpkeepItem() {
     mutationFn: async ({ id, data }: { id: number; data: Partial<UpkeepItemInput> }) => {
       const prev = await u.getUpkeepItem(id);
       await u.updateUpkeepItem(id, data);
+      const force = itemNeedsRecreate(data);
+      void syncItemCalendar(id, { force });
       if (prev) {
         const prevData: Record<string, unknown> = {};
         for (const key of Object.keys(data)) {
@@ -277,10 +332,12 @@ export function useUpdateUpkeepItem() {
           label: `${getLabels().undo_update_upkeep_item} "${prev.title}"`,
           execute: async () => {
             await u.updateUpkeepItem(id, prevData as Partial<UpkeepItemInput>);
+            void syncItemCalendar(id, { force });
             invalidate();
           },
           redo: async () => {
             await u.updateUpkeepItem(id, data);
+            void syncItemCalendar(id, { force });
             invalidate();
           },
         });
@@ -298,16 +355,18 @@ export function useDeleteUpkeepItem() {
       const prev = await u.getUpkeepItem(id);
       await u.deleteUpkeepItem(id);
       if (prev) {
+        void removeItemEvents([prev]);
         let restoredId: number | null = null;
         useUndoStore.getState().push({
           label: `${getLabels().undo_delete_upkeep_item} "${prev.title}"`,
           execute: async () => {
             restoredId = await u.createUpkeepItem({ ...pickItemInput(prev), machine_id: prev.machine_id });
+            void syncItemCalendar(restoredId);
             invalidate();
           },
           redo: async () => {
             if (restoredId !== null) {
-              await u.deleteUpkeepItem(restoredId);
+              await deleteItemWithEvent(restoredId);
               invalidate();
             }
           },
@@ -322,7 +381,10 @@ export function useDeleteUpkeepItem() {
 export function useArchiveUpkeepItem() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (id: number) => u.archiveUpkeepItem(id),
+    mutationFn: async (id: number) => {
+      await u.archiveUpkeepItem(id);
+      void syncItemCalendar(id);
+    },
     onSuccess: invalidate,
     onError: (e) => { toast.error(String(e)); },
   });
@@ -332,8 +394,11 @@ export function useMarkUpkeepDone() {
   const invalidate = useInvalidate();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, doneOn, reading, note }: { id: number; doneOn: string; reading: number | null; note?: string }) =>
-      u.markUpkeepDone(id, doneOn, reading, note),
+    mutationFn: async ({ id, doneOn, reading, note }: { id: number; doneOn: string; reading: number | null; note?: string }) => {
+      const item = await u.markUpkeepDone(id, doneOn, reading, note);
+      void syncItemCalendar(id);
+      return item;
+    },
     onSuccess: (item) => {
       invalidate();
       qc.invalidateQueries({ queryKey: ["service-log", item.machine_id] });
@@ -497,14 +562,16 @@ export function useCreateSubscription() {
   return useMutation({
     mutationFn: async (data: s.SubscriptionInput) => {
       let id = await s.createSubscription(data);
+      void syncSubscriptionCalendar(id);
       useUndoStore.getState().push({
         label: `${getLabels().undo_create_subscription} "${data.name}"`,
         execute: async () => {
-          await s.deleteSubscription(id);
+          await deleteSubscriptionWithEvent(id);
           invalidate();
         },
         redo: async () => {
           id = await s.createSubscription(data);
+          void syncSubscriptionCalendar(id);
           invalidate();
         },
       });
@@ -521,6 +588,8 @@ export function useUpdateSubscription() {
     mutationFn: async ({ id, data }: { id: number; data: Partial<s.SubscriptionInput> }) => {
       const prev = await s.getSubscription(id);
       await s.updateSubscription(id, data);
+      const force = subNeedsRecreate(data);
+      void syncSubscriptionCalendar(id, { force });
       if (prev) {
         const prevData: Record<string, unknown> = {};
         for (const key of Object.keys(data)) {
@@ -530,10 +599,12 @@ export function useUpdateSubscription() {
           label: `${getLabels().undo_update_subscription} "${prev.name}"`,
           execute: async () => {
             await s.updateSubscription(id, prevData as Partial<s.SubscriptionInput>);
+            void syncSubscriptionCalendar(id, { force });
             invalidate();
           },
           redo: async () => {
             await s.updateSubscription(id, data);
+            void syncSubscriptionCalendar(id, { force });
             invalidate();
           },
         });
@@ -550,15 +621,18 @@ export function useCancelSubscription() {
     mutationFn: async (id: number) => {
       const prev = await s.getSubscription(id);
       await s.cancelSubscription(id);
+      void syncSubscriptionCalendar(id);
       if (prev) {
         useUndoStore.getState().push({
           label: `${getLabels().undo_update_subscription} "${prev.name}"`,
           execute: async () => {
             await s.updateSubscription(id, { status: prev.status });
+            void syncSubscriptionCalendar(id);
             invalidate();
           },
           redo: async () => {
             await s.cancelSubscription(id);
+            void syncSubscriptionCalendar(id);
             invalidate();
           },
         });
@@ -576,6 +650,7 @@ export function useDeleteSubscription() {
       const prev = await s.getSubscription(id);
       await s.deleteSubscription(id);
       if (prev) {
+        void removeSubscriptionEvent(prev);
         let restoredId: number | null = null;
         useUndoStore.getState().push({
           label: `${getLabels().undo_delete_subscription} "${prev.name}"`,
@@ -586,11 +661,12 @@ export function useDeleteSubscription() {
               cost: prev.cost, currency: prev.currency, status: prev.status,
               in_calendar: prev.in_calendar, alert: prev.alert, notes: prev.notes,
             });
+            void syncSubscriptionCalendar(restoredId);
             invalidate();
           },
           redo: async () => {
             if (restoredId !== null) {
-              await s.deleteSubscription(restoredId);
+              await deleteSubscriptionWithEvent(restoredId);
               invalidate();
             }
           },
@@ -605,8 +681,12 @@ export function useDeleteSubscription() {
 export function useApplyRenewals() {
   const invalidate = useInvalidateSubscriptions();
   return useMutation({
-    mutationFn: ({ sub, todayISO }: { sub: Subscription; todayISO: string }) =>
-      s.applyRenewals(sub, todayISO),
+    mutationFn: async ({ sub, todayISO }: { sub: Subscription; todayISO: string }) => {
+      const count = await s.applyRenewals(sub, todayISO);
+      // renews_on moved forward: move the renewal event with it.
+      if (count > 0) void syncSubscriptionCalendar(sub.id, { force: true });
+      return count;
+    },
     onSuccess: invalidate,
     onError: (e) => { toast.error(String(e)); },
   });
@@ -625,8 +705,10 @@ export function useDecideRenewal() {
 export function useSnoozeUpkeep() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: ({ id, days, todayISO }: { id: number; days: 1 | 3 | 7; todayISO: string }) =>
-      u.snoozeUpkeep(id, days, todayISO),
+    mutationFn: async ({ id, days, todayISO }: { id: number; days: 1 | 3 | 7; todayISO: string }) => {
+      await u.snoozeUpkeep(id, days, todayISO);
+      void syncItemCalendar(id);
+    },
     onSuccess: invalidate,
     onError: (e) => { toast.error(String(e)); },
   });

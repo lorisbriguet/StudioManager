@@ -50,6 +50,7 @@ export function applyPrefsToAppStore(prefs: OrgPrefs): void {
     showTimeOverview: prefs.showTimeOverview,
     calendarSync: prefs.calendarSync,
     calendarName: prefs.calendarName,
+    upkeepAlertDefault: prefs.upkeepAlertDefault ?? "day_9am",
     backupPath: prefs.backupPath,
     exportLanguage: prefs.exportLanguage,
   });

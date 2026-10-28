@@ -71,7 +71,9 @@ end tell
 "#;
 
 /// Create a timed event.
-/// argv: calendar, title, notes, year, month, day, hours, minutes, durationSecs.
+/// argv: calendar, title, notes, year, month, day, hours, minutes, durationSecs,
+/// alertMinutes ("" = no alarm; otherwise minutes relative to the start,
+/// negative = before).
 pub(crate) const CAL_CREATE_TIMED: &str = r#"
 on run argv
   set calName to item 1 of argv
@@ -83,6 +85,7 @@ on run argv
   set hh to (item 7 of argv) as integer
   set mm to (item 8 of argv) as integer
   set durSecs to (item 9 of argv) as integer
+  set alertArg to item 10 of argv
   tell application "Calendar"
     tell calendar calName
       set startDate to current date
@@ -98,6 +101,9 @@ on run argv
       set minutes of startDate to mm
       set endDate to startDate + durSecs
       set newEvent to make new event with properties {summary:evTitle, start date:startDate, end date:endDate, description:evNotes}
+      if alertArg is not "" then
+        make new display alarm at end of display alarms of newEvent with properties {trigger interval:(alertArg as integer)}
+      end if
       return uid of newEvent
     end tell
   end tell
@@ -105,7 +111,9 @@ end run
 "#;
 
 /// Create an all-day event.
-/// argv: calendar, title, notes, year, month, day.
+/// argv: calendar, title, notes, year, month, day, alertMinutes ("" = no
+/// alarm; otherwise minutes relative to midnight of the day, so 540 = 9:00
+/// that day and -900 = 9:00 the day before).
 pub(crate) const CAL_CREATE_ALLDAY: &str = r#"
 on run argv
   set calName to item 1 of argv
@@ -114,6 +122,7 @@ on run argv
   set y to (item 4 of argv) as integer
   set m to (item 5 of argv) as integer
   set d to (item 6 of argv) as integer
+  set alertArg to item 7 of argv
   tell application "Calendar"
     tell calendar calName
       set eventDate to current date
@@ -126,6 +135,9 @@ on run argv
       set minutes of eventDate to 0
       set seconds of eventDate to 0
       set newEvent to make new event with properties {summary:evTitle, start date:eventDate, end date:eventDate, allday event:true, description:evNotes}
+      if alertArg is not "" then
+        make new display alarm at end of display alarms of newEvent with properties {trigger interval:(alertArg as integer)}
+      end if
       return uid of newEvent
     end tell
   end tell
@@ -216,6 +228,54 @@ pub(crate) fn parse_time(time: &str) -> Result<(u32, u32), String> {
 pub(crate) fn duration_secs(start: (u32, u32), end: (u32, u32)) -> i64 {
     let secs = (end.0 as i64 - start.0 as i64) * 3600 + (end.1 as i64 - start.1 as i64) * 60;
     if secs <= 0 { 3600 } else { secs }
+}
+
+/// argv value for the alarm offset: empty means "no alarm".
+pub(crate) fn alert_arg(alert_minutes: Option<i64>) -> String {
+    alert_minutes.map(|m| m.to_string()).unwrap_or_default()
+}
+
+/// argv for `CAL_CREATE_ALLDAY`.
+pub(crate) fn allday_argv(
+    calendar: &str,
+    title: &str,
+    notes: &str,
+    date: (u32, u32, u32),
+    alert_minutes: Option<i64>,
+) -> Vec<String> {
+    vec![
+        calendar.to_string(),
+        title.to_string(),
+        notes.to_string(),
+        date.0.to_string(),
+        date.1.to_string(),
+        date.2.to_string(),
+        alert_arg(alert_minutes),
+    ]
+}
+
+/// argv for `CAL_CREATE_TIMED`.
+pub(crate) fn timed_argv(
+    calendar: &str,
+    title: &str,
+    notes: &str,
+    date: (u32, u32, u32),
+    start: (u32, u32),
+    duration_secs: i64,
+    alert_minutes: Option<i64>,
+) -> Vec<String> {
+    vec![
+        calendar.to_string(),
+        title.to_string(),
+        notes.to_string(),
+        date.0.to_string(),
+        date.1.to_string(),
+        date.2.to_string(),
+        start.0.to_string(),
+        start.1.to_string(),
+        duration_secs.to_string(),
+        alert_arg(alert_minutes),
+    ]
 }
 
 // ── osascript runner ────────────────────────────────────────────────────────
@@ -391,6 +451,8 @@ pub(crate) async fn calendar_list_writable() -> Result<Vec<String>, String> {
 }
 
 /// Create an Apple Calendar event (timed or all-day) and return its uid.
+/// `alert_minutes` adds a display alarm that many minutes relative to the
+/// event start (negative = before); `None` = no alarm.
 #[tauri::command]
 pub(crate) async fn calendar_create_event(
     calendar: String,
@@ -399,11 +461,12 @@ pub(crate) async fn calendar_create_event(
     date: String,
     start_time: Option<String>,
     end_time: Option<String>,
+    alert_minutes: Option<i64>,
 ) -> Result<String, String> {
     spawn_osascript(move || {
-        let (y, m, d) = parse_date(&date)?;
+        let ymd = parse_date(&date)?;
         let start = start_time.as_deref().filter(|s| !s.is_empty());
-        match start {
+        let (script, argv) = match start {
             Some(st) => {
                 let start = parse_time(st)?;
                 let end = match end_time.as_deref().filter(|s| !s.is_empty()) {
@@ -411,37 +474,18 @@ pub(crate) async fn calendar_create_event(
                     None => start,
                 };
                 let dur = duration_secs(start, end);
-                run_osascript(
-                    &[],
+                (
                     CAL_CREATE_TIMED,
-                    &[
-                        &calendar,
-                        &title,
-                        &notes,
-                        &y.to_string(),
-                        &m.to_string(),
-                        &d.to_string(),
-                        &start.0.to_string(),
-                        &start.1.to_string(),
-                        &dur.to_string(),
-                    ],
-                    CAL_TIMEOUT,
+                    timed_argv(&calendar, &title, &notes, ymd, start, dur, alert_minutes),
                 )
             }
-            None => run_osascript(
-                &[],
+            None => (
                 CAL_CREATE_ALLDAY,
-                &[
-                    &calendar,
-                    &title,
-                    &notes,
-                    &y.to_string(),
-                    &m.to_string(),
-                    &d.to_string(),
-                ],
-                CAL_TIMEOUT,
+                allday_argv(&calendar, &title, &notes, ymd, alert_minutes),
             ),
-        }
+        };
+        let argv: Vec<&str> = argv.iter().map(String::as_str).collect();
+        run_osascript(&[], script, &argv, CAL_TIMEOUT)
     })
     .await
 }
@@ -587,6 +631,26 @@ mod tests {
             1024 * 1024,
         );
         assert_eq!(result.unwrap(), "ok:hello");
+    }
+
+    #[test]
+    fn allday_script_has_alarm_branch() {
+        assert!(CAL_CREATE_ALLDAY.contains("display alarm"));
+        assert!(CAL_CREATE_ALLDAY.contains("item 7 of argv"));
+        let argv = allday_argv("Cal", "T", "", (2026, 11, 3), Some(540));
+        assert_eq!(argv.len(), 7);
+        assert_eq!(argv[6], "540");
+        assert_eq!(allday_argv("Cal", "T", "", (2026, 11, 3), None)[6], "");
+    }
+
+    #[test]
+    fn timed_script_has_alarm_branch() {
+        assert!(CAL_CREATE_TIMED.contains("display alarm"));
+        assert!(CAL_CREATE_TIMED.contains("item 10 of argv"));
+        let argv = timed_argv("Cal", "T", "", (2026, 11, 3), (9, 30), 3600, Some(-15));
+        assert_eq!(argv.len(), 10);
+        assert_eq!(argv[9], "-15");
+        assert_eq!(timed_argv("Cal", "T", "", (2026, 11, 3), (9, 30), 3600, None)[9], "");
     }
 
     #[test]

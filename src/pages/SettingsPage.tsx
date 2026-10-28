@@ -6,6 +6,7 @@ import { FolderOpen, HardDrive, RotateCcw, FlaskConical, Camera, Settings2, Pale
 import { useSearchParams } from "react-router-dom";
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { purgeAllCalendarEvents, syncAllExisting, listWritableCalendars } from "../lib/appleCalendar";
+import { syncAllUpkeepEvents } from "../lib/upkeep/calendar";
 import { createBackup, listBackups, restoreFromBackup, RestoreError, validateBackupPath, isBackupRunning, setBackupRunning, isScopeDenied } from "../lib/backup";
 import { resetDb } from "../db";
 import { enterTestMode, exitTestMode, enterPresentationMode, exitPresentationMode } from "../lib/modes";
@@ -212,7 +213,7 @@ export function SettingsPage() {
       setSyncing(true);
       try {
         await purgeAllCalendarEvents();
-        const count = await syncAllExisting();
+        const count = (await syncAllExisting()) + (await syncAllUpkeepEvents());
         if (count > 0) toast.success(t.synced_events.replace("{count}", String(count)));
       } catch (e) {
         logError("Sync failed:", e);

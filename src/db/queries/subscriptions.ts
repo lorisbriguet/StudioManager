@@ -71,6 +71,15 @@ export async function deleteSubscription(id: number): Promise<void> {
 }
 
 /**
+ * Remember the Apple Calendar renewal event. Bookkeeping only: does not touch
+ * updated_at or any user-visible field.
+ */
+export async function setSubscriptionCalendarEvent(id: number, eventId: string | null): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE subscriptions SET calendar_event_id = $1 WHERE id = $2", [eventId, id]);
+}
+
+/**
  * Record every renewal that has come due and move renews_on forward, in one
  * atomic batch. Each renewal is a pending "add to expenses?" question; nothing
  * is written to Expenses. Idempotent: INSERT OR IGNORE plus the advanced

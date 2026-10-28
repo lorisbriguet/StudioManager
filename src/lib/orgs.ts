@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { AppLanguage } from "../i18n/ui";
+import type { UpkeepAlert } from "../types/upkeep";
 
 export interface OrgPrefs {
   showIncome: boolean;
@@ -7,6 +8,8 @@ export interface OrgPrefs {
   showTimeOverview: boolean;
   calendarSync: boolean;
   calendarName: string;
+  /** Absent in registries written before upkeep; read as 'day_9am'. */
+  upkeepAlertDefault?: Exclude<UpkeepAlert, "default">;
   backupPath: string;
   exportLanguage: AppLanguage;
 }
@@ -31,6 +34,7 @@ export const DEFAULT_ORG_PREFS: OrgPrefs = {
   showTimeOverview: true,
   calendarSync: false,
   calendarName: "StudioManager",
+  upkeepAlertDefault: "day_9am",
   backupPath: "",
   exportLanguage: "FR",
 };

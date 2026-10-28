@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { AppLanguage } from "../i18n/ui";
 import { getThemeById } from "../lib/themes";
 import type { ThemeDefinition } from "../types/theme";
+import type { UpkeepAlert } from "../types/upkeep";
 import { useOrgStore } from "./org-store";
 
 function getInitialDarkMode(): boolean {
@@ -166,6 +167,8 @@ export interface AppState {
   accentColor: AccentPreset;
   calendarSync: boolean;
   calendarName: string;
+  /** Alert used by upkeep items and subscriptions whose alert is 'default'. */
+  upkeepAlertDefault: Exclude<UpkeepAlert, "default">;
   backupPath: string;
   backupPath2: string;
   maxBackups: number;
@@ -207,6 +210,7 @@ export interface AppState {
   setAccentColor: (preset: AccentPreset) => void;
   setCalendarSync: (enabled: boolean) => void;
   setCalendarName: (name: string) => void;
+  setUpkeepAlertDefault: (alert: Exclude<UpkeepAlert, "default">) => void;
   setBackupPath: (path: string) => void;
   setBackupPath2: (path: string) => void;
   setMaxBackups: (count: number) => void;
@@ -273,6 +277,7 @@ export const useAppStore = create<AppState>((set) => ({
   accentColor: effectiveInitialAccent,
   calendarSync: localStorage.getItem("calendarSync") === "true",
   calendarName: localStorage.getItem("calendarName") ?? "",
+  upkeepAlertDefault: "day_9am",
   backupPath: localStorage.getItem("backupPath") ?? "",
   backupPath2: localStorage.getItem("backupPath2") ?? "",
   maxBackups: Number(localStorage.getItem("maxBackups")) || 5,
@@ -363,6 +368,7 @@ export const useAppStore = create<AppState>((set) => ({
     }),
   setCalendarSync: (enabled) => { set({ calendarSync: enabled }); void useOrgStore.getState().savePrefs({ calendarSync: enabled }); },
   setCalendarName: (name) => { set({ calendarName: name }); void useOrgStore.getState().savePrefs({ calendarName: name }); },
+  setUpkeepAlertDefault: (alert) => { set({ upkeepAlertDefault: alert }); void useOrgStore.getState().savePrefs({ upkeepAlertDefault: alert }); },
   setBackupPath: (path) => { set({ backupPath: path }); void useOrgStore.getState().savePrefs({ backupPath: path }); },
   setBackupPath2: (path) => {
     localStorage.setItem("backupPath2", path);

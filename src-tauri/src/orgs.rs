@@ -18,8 +18,15 @@ pub struct OrgPrefs {
     pub show_time_overview: bool,
     pub calendar_sync: bool,
     pub calendar_name: String,
+    /// Absent in registries written before upkeep.
+    #[serde(default = "default_upkeep_alert")]
+    pub upkeep_alert_default: String,
     pub backup_path: String,
     pub export_language: String,
+}
+
+fn default_upkeep_alert() -> String {
+    "day_9am".to_string()
 }
 
 impl Default for OrgPrefs {
@@ -30,6 +37,7 @@ impl Default for OrgPrefs {
             show_time_overview: true,
             calendar_sync: false,
             calendar_name: "StudioManager".to_string(),
+            upkeep_alert_default: default_upkeep_alert(),
             backup_path: String::new(),
             export_language: "FR".to_string(),
         }
@@ -282,6 +290,18 @@ mod tests {
         assert_eq!(reg.organisations[0].id, b);
         assert!(reg.reorder(std::slice::from_ref(&a)).is_err());
         assert!(reg.reorder(&[a, b, "zzzzzz".into()]).is_err());
+    }
+
+    #[test]
+    fn prefs_without_upkeep_alert_default_read_as_day_9am() {
+        let json = r#"{"showIncome":true,"showTasksPage":true,"showTimeOverview":true,"calendarSync":false,"calendarName":"Cal","backupPath":"","exportLanguage":"FR"}"#;
+        let prefs: OrgPrefs = serde_json::from_str(json).unwrap();
+        assert_eq!(prefs.upkeep_alert_default, "day_9am");
+        let round: OrgPrefs = serde_json::from_str(&serde_json::to_string(&OrgPrefs {
+            upkeep_alert_default: "week_before".into(),
+            ..OrgPrefs::default()
+        }).unwrap()).unwrap();
+        assert_eq!(round.upkeep_alert_default, "week_before");
     }
 
     #[test]
