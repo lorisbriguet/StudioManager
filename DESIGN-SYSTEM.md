@@ -292,18 +292,32 @@ import { Badge } from "../components/ui";
 Variants: `success`, `warning`, `danger`, `neutral`, `accent`, `info`, `indigo`
 Always `rounded-full`.
 
-### Input / Select
-```tsx
-import { Input, Select } from "../components/ui";
-<Input value={v} onChange={setV} placeholder="..." />
-<Select value={v} onChange={setV}><option>...</option></Select>
-```
-Both use: `rounded-lg`, `bg-[var(--color-input-bg)]`, `border-[var(--color-input-border)]`, `focus-accent`.
+### Inputs
 
-**When NOT to use shared Input/Select:** Inline table editing cells (too much padding). Use raw `<input>` with these classes:
+Text fields use `Input` and `Textarea` from `src/components/ui/Input.tsx`, and pickers use `Select` (see Dropdown). Never use a raw `<input>`/`<textarea>` for text, numbers, dates or search.
+
 ```tsx
-className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1 text-sm bg-transparent"
+import { Input, Textarea } from "../components/ui";
+
+<Input value={v} onChange={…} />                                  // forms (md)
+<Input size="sm" type="number" fullWidth={false} className="w-20 text-right" />  // toolbars, compact rows
+<Input variant="bare" size="sm" />                                // table cells: frame shows on hover/focus
+<Input variant="inline" autoFocus onBlur={commit} />              // rename in place: accent underline only
+<Textarea rows={4} value={notes} onChange={…} />
 ```
+
+| | Classes |
+|--|--|
+| `size="md"` (default) | `px-3 py-2 text-sm rounded-lg` |
+| `size="sm"` | `px-2.5 py-1 text-xs rounded-md` |
+| `variant="default"` | `bg-[var(--color-input-bg)] border-[var(--color-input-border)]`, `focus-accent` |
+| `variant="bare"` | transparent; border and fill appear on hover/focus |
+| `variant="inline"` | transparent, `border-b border-accent`, inherits the font size |
+
+- **Number fields:** align them right with `className="text-right"`.
+- **Width:** `fullWidth` defaults to `true`.
+- **Class string:** for the rare control that can't be one of these, use `fieldClass({ size, variant })`.
+- **Not text fields:** checkboxes, radios, colour and file inputs stay native.
 
 ### Modal
 ```tsx
@@ -651,7 +665,7 @@ Before merging any new UI work, verify:
 - [ ] No `dark:` prefixes for colors covered by tokens
 - [ ] All badges use `rounded-full`
 - [ ] All cards use `rounded-xl` with `bg-[var(--color-surface)]`
-- [ ] All inputs/selects use `rounded-lg` with input tokens
+- [ ] Text fields use `Input` / `Textarea` (no raw `<input>`/`<textarea>` for text)
 - [ ] Icons use lucide-react with correct canonical icon and standard size
 - [ ] No unicode characters as icons
 - [ ] All user-visible text uses `useT()` i18n keys

@@ -4,7 +4,7 @@ export { Badge } from "./Badge";
 export { Tag } from "./Tag";
 export { FilterChip, CountBadge } from "./FilterChip";
 export { Card } from "./Card";
-export { Input } from "./Input";
+export { Input, Textarea, fieldClass } from "./Input";
 export { Modal } from "./Modal";
 export { PageHeader } from "./PageHeader";
 export { SectionLabel, SECTION_LABEL } from "./SectionLabel";
