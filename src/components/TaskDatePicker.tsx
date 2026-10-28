@@ -1,35 +1,12 @@
 import { useState, useEffect } from "react";
-import {
-  format,
-  isToday,
-  addDays,
-  addMonths,
-  subMonths,
-  startOfMonth,
-  isSameDay,
-  getDay,
-} from "date-fns";
-import {
-  ArrowRight,
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  CalendarRange,
-  Bell,
-  X,
-} from "lucide-react";
+import { format } from "date-fns";
+import { ArrowRight, Calendar as CalendarIcon, Clock, CalendarRange, Bell, X } from "lucide-react";
 import { formatDisplayDate } from "../utils/formatDate";
-import { Button, Input, Select, IconButton } from "./ui";
+import { Button, Input, Select, Toggle } from "./ui";
+import { Calendar, DateShortcuts, parseLocalDate } from "./ui/DatePicker";
 import { Popover, usePopover } from "./ui/Popover";
 import { useT } from "../i18n/useT";
 
-/** Parse a date string safely — handles both "yyyy-MM-dd" and full ISO timestamps */
-function parseLocalDate(dateStr: string): Date {
-  // If it already contains "T", it's a full timestamp — just extract the date part
-  const datePart = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr;
-  return new Date(datePart + "T00:00:00");
-}
 import type { ReminderOption } from "../types/task";
 
 interface TaskDatePickerProps {
@@ -118,18 +95,6 @@ export function TaskDatePicker({
     pop.close();
   };
 
-  const handleToday = () => {
-    const today = format(new Date(), "yyyy-MM-dd");
-    onChange({ due_date: today });
-    setMonth(new Date());
-  };
-
-  const handleTomorrow = () => {
-    const tomorrow = format(addDays(new Date(), 1), "yyyy-MM-dd");
-    onChange({ due_date: tomorrow });
-    setMonth(addDays(new Date(), 1));
-  };
-
   // Build display label
   let displayLabel: string = t.no_date;
   if (dueDate) {
@@ -155,43 +120,25 @@ export function TaskDatePicker({
         } ${compact ? "px-1.5 py-0.5" : ""}`}
         aria-label={dueDate ? undefined : t.no_date}
       >
-        <Calendar size={compact ? 12 : 14} className="shrink-0" />
+        <CalendarIcon size={compact ? 12 : 14} className="shrink-0" />
         {dueDate && <span className={compact ? "text-xs" : ""}>{displayLabel}</span>}
       </button>
 
       {pop.open && (
         <Popover anchor={pop.anchorRef} onClose={pop.close} align="end" padding="content" className="w-[300px]">
-          {/* Quick shortcuts */}
-          <div className="flex gap-1.5 mb-2">
-            <button
-              type="button"
-              onClick={handleToday}
-              className="px-2 py-1 text-xs font-medium rounded-md bg-[var(--color-input-bg)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] "
-            >
-              {t.today}
-            </button>
-            <button
-              type="button"
-              onClick={handleTomorrow}
-              className="px-2 py-1 text-xs font-medium rounded-md bg-[var(--color-input-bg)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] "
-            >
-              {t.tomorrow}
-            </button>
-          </div>
+          <DateShortcuts
+            onPick={(d) => {
+              onChange({ due_date: format(d, "yyyy-MM-dd") });
+              setMonth(d);
+            }}
+          />
 
-          {/* Calendar header */}
-          <div className="flex items-center justify-between mb-1">
-            <IconButton icon={ChevronLeft} label={t.previous} size="md" onClick={() => setMonth(subMonths(month, 1))} />
-            <span className="text-xs font-medium">{format(month, "MMMM yyyy")}</span>
-            <IconButton icon={ChevronRight} label={t.next} size="md" onClick={() => setMonth(addMonths(month, 1))} />
-          </div>
-
-          {/* Calendar grid */}
-          <CalendarGrid
+          <Calendar
             month={month}
+            onMonthChange={setMonth}
             selected={selectedDate}
             selectedEnd={showEndDate ? selectedEndDate : undefined}
-            onDayClick={handleDayClick}
+            onSelect={handleDayClick}
           />
 
           {/* Divider */}
@@ -286,22 +233,11 @@ function ToggleRow({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="flex items-center gap-2 mb-2 cursor-pointer">
+    <div className="flex items-center gap-2 mb-2">
       <span className="text-muted shrink-0">{icon}</span>
       <span className="text-xs flex-1">{label}</span>
-      <div
-        onClick={() => onChange(!checked)}
-        className={`relative w-8 h-4.5 rounded-full transition-colors cursor-pointer ${
-          checked ? "bg-accent" : "bg-[var(--color-input-bg)]"
-        }`}
-      >
-        <div
-          className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-transform ${
-            checked ? "translate-x-4" : "translate-x-0.5"
-          }`}
-        />
-      </div>
-    </label>
+      <Toggle size="sm" checked={checked} onChange={onChange} ariaLabel={label} />
+    </div>
   );
 }
 
@@ -319,84 +255,5 @@ function TimeInput({ value, onCommit }: { value: string; onCommit: (v: string) =
       onBlur={() => { if (local !== value) onCommit(local); }}
       className="w-24"
     />
-  );
-}
-
-// Minimal calendar grid built with date-fns (no react-day-picker CSS dependency)
-function CalendarGrid({
-  month,
-  selected,
-  selectedEnd,
-  onDayClick,
-}: {
-  month: Date;
-  selected?: Date;
-  selectedEnd?: Date;
-  onDayClick: (day: Date) => void;
-}) {
-  const monthStart = startOfMonth(month);
-  // Monday = 0 for week start
-  const startDow = (getDay(monthStart) + 6) % 7; // 0=Mon
-  const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
-
-  const days: (Date | null)[] = [];
-  for (let i = 0; i < startDow; i++) days.push(null);
-  for (let d = 1; d <= daysInMonth; d++) {
-    days.push(new Date(month.getFullYear(), month.getMonth(), d));
-  }
-  // Fill remaining cells
-  while (days.length % 7 !== 0) days.push(null);
-
-  const isInRange = (day: Date) => {
-    if (!selected || !selectedEnd) return false;
-    return day > selected && day < selectedEnd;
-  };
-
-  return (
-    <div>
-      <div className="grid grid-cols-7 mb-1">
-        {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => (
-          <div
-            key={d}
-            className="text-center text-[10px] text-muted font-medium py-1"
-          >
-            {d}
-          </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-7">
-        {days.map((day, i) => {
-          if (!day) {
-            return <div key={`empty-${i}`} className="h-8" />;
-          }
-          const isSelected = selected && isSameDay(day, selected);
-          const isSelectedEnd = selectedEnd && isSameDay(day, selectedEnd);
-          const inRange = isInRange(day);
-          const today = isToday(day);
-
-          return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => onDayClick(day)}
-              className={`h-8 w-full text-xs rounded-md transition-colors relative ${
-                isSelected || isSelectedEnd
-                  ? "bg-accent text-white font-medium"
-                  : inRange
-                  ? "bg-accent/10 text-accent"
-                  : today
-                  ? "font-bold text-accent"
-                  : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
-              }`}
-            >
-              {format(day, "d")}
-              {today && !isSelected && !isSelectedEnd && (
-                <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-accent" />
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </div>
   );
 }

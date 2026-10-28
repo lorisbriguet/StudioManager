@@ -28,3 +28,5 @@ export type { ContextMenuItem, ContextMenuState } from "./ContextMenu";
 export { SortHeader, sortRows } from "./SortHeader";
 export type { SortDir, SortState } from "./SortHeader";
 export { BulkActionBar } from "./BulkActionBar";
+export { DatePicker, Calendar, DateShortcuts, parseLocalDate, toDateString } from "./DatePicker";
+export { Toggle } from "./Toggle";

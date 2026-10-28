@@ -319,6 +319,21 @@ import { Input, Textarea } from "../components/ui";
 - **Class string:** for the rare control that can't be one of these, use `fieldClass({ size, variant })`.
 - **Not text fields:** checkboxes, radios, colour and file inputs stay native.
 
+### Dates
+
+`src/components/ui/DatePicker.tsx`:
+
+```tsx
+<DatePicker value={due} onChange={setDue} />   // "yyyy-MM-dd" | null; Today / Tomorrow / Clear
+<Calendar selected={d} selectedEnd={end} onSelect={pick} month={m} onMonthChange={setM} />
+<DateShortcuts onPick={pick} />
+```
+
+- **`DatePicker`:** a field-styled trigger (sizes `sm`/`md`, like Input) that opens a Popover with the shortcuts and a calendar.
+- **`Calendar`:** the month grid. Weeks start on Monday, and the month and weekday names follow the app language. A range is tinted when `selectedEnd` is set.
+- **`TaskDatePicker`** (end date, times, reminder) is built on `Calendar`, `DateShortcuts` and `Toggle size="sm"`.
+- **Native date fields:** forms where people type a date and press Enter (expenses, invoices, table date cells) still use `<Input type="date">`.
+
 ### Modal
 ```tsx
 import { Modal } from "../components/ui";
