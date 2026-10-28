@@ -21,3 +21,5 @@ export { TableSkeleton } from "./TableSkeleton";
 export { BottomBar, BOTTOM_BAR, PANEL_TOP_BAR } from "./Bars";
 export { TabItem } from "./TabItem";
 export { NavItem, navItemClass } from "./NavItem";
+export { SegmentedControl } from "./SegmentedControl";
+export type { SegmentedOption } from "./SegmentedControl";

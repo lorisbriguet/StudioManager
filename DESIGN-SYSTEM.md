@@ -450,6 +450,27 @@ Rows in a navigation list use `src/components/ui/NavItem.tsx`: the app sidebar, 
 - **Inactive row:** `text-muted`, turning `hover-row` with secondary text on hover.
 - **Width:** rows are full width. Pass `fill: false` when the row has side margins.
 
+### Segmented control
+
+`src/components/ui/SegmentedControl.tsx` picks one of 2–4 short options shown side by side, such as the calendar's Month/Week or the invoice logo position.
+
+```tsx
+<SegmentedControl
+  aria-label={t.logo_position}
+  value={logoPosition}
+  onChange={setLogoPosition}
+  options={[{ value: "left", label: t.logo_left }, { value: "center", label: t.logo_center }]}
+/>
+```
+
+- **Look:** an `input-bg` track, `p-0.5 rounded-lg`. The selected segment is `surface` with a hairline shadow and `font-medium`. The others are `text-muted`.
+- **Options:** `size` is `sm` (the default, `px-3 py-1 text-xs`) or `md`. `fullWidth` stretches it and the segments share the width.
+- **Keyboard:** it is a radio group with one tab stop. Arrow keys and Home/End move and select, skipping disabled options.
+- **When not to use it:**
+  - More options, or options that need a description: use `Select` or radios.
+  - Filtering a list: use `FilterChip`.
+  - Buttons that act rather than choose (zoom in/out): use a row of `IconButton`.
+
 ---
 
 ## Settings
@@ -641,5 +662,6 @@ Before merging any new UI work, verify:
 - [ ] Uppercase labels use `SectionLabel`
 - [ ] Settings sections use `SettingsCard` / `SettingRow`
 - [ ] Navigation rows use `NavItem` / `navItemClass`
+- [ ] 2–4 way choices use `SegmentedControl`
 - [ ] Tag pills use `Tag`, filter pills use `FilterChip`, number pills use `CountBadge`
 - [ ] No hand-made floating panel (use `Popover`, `Dropdown` or `ContextMenu`)

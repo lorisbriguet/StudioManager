@@ -23,6 +23,7 @@ import { useAllProjectWorkloadConfigs } from "../db/hooks/useWorkload";
 import { getTagColor } from "../lib/tagColors";
 import type { WorkloadColumn } from "../types/workload";
 import { DEFAULT_WORKLOAD_COLUMNS } from "../types/workload";
+import { SegmentedControl } from "../components/ui/SegmentedControl";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 function toDateStr(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
@@ -439,20 +440,16 @@ export function CalendarPage() {
             {t.today}
           </button>
           <h1 className="text-xl font-semibold tracking-tight">{calTitle}</h1>
-          <div className="ml-auto flex gap-1">
-            <button
-              onClick={() => calSetView("dayGridMonth")}
-              className={`px-3 py-1 text-xs rounded-md transition-colors ${calView === "dayGridMonth" ? "bg-accent-light text-accent font-medium" : "border border-[var(--color-input-border)] text-muted hover:text-[var(--color-text-secondary)]"}`}
-            >
-              {t.month}
-            </button>
-            <button
-              onClick={() => calSetView("timeGridWeek")}
-              className={`px-3 py-1 text-xs rounded-md transition-colors ${calView === "timeGridWeek" ? "bg-accent-light text-accent font-medium" : "border border-[var(--color-input-border)] text-muted hover:text-[var(--color-text-secondary)]"}`}
-            >
-              {t.week}
-            </button>
-          </div>
+          <SegmentedControl
+            className="ml-auto"
+            aria-label={t.calendar}
+            value={calView === "timeGridWeek" ? "timeGridWeek" : "dayGridMonth"}
+            onChange={calSetView}
+            options={[
+              { value: "dayGridMonth", label: t.month },
+              { value: "timeGridWeek", label: t.week },
+            ]}
+          />
         </div>
         {/* First-run hint: the calendar feeds off dated tasks/subtasks */}
         {tasks !== undefined && subtasks !== undefined && tasks.length === 0 && subtasks.length === 0 && (

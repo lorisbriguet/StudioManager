@@ -11,6 +11,7 @@ import {
   useSetDefaultTemplate,
 } from "../../db/hooks/useInvoiceTemplates";
 import type { InvoiceTemplate } from "../../types/invoice-template";
+import { SegmentedControl } from "../ui/SegmentedControl";
 
 // ---------------------------------------------------------------------------
 // Sample data for live preview
@@ -333,15 +334,18 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
 
         {/* Logo position */}
         <div>
-          <label className="block text-xs font-medium text-muted mb-2">{t.logo_position}</label>
-          <div className="flex gap-3">
-            {(["left", "center", "right", "hide"] as LogoPosition[]).map((pos) => (
-              <label key={pos} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                <input type="radio" name="logo_position" value={pos} checked={logoPosition === pos} onChange={() => setLogoPosition(pos)} className="accent-accent" />
-                <span className="capitalize">{pos}</span>
-              </label>
-            ))}
-          </div>
+          <div className="text-xs font-medium text-muted mb-2">{t.logo_position}</div>
+          <SegmentedControl<LogoPosition>
+            aria-label={t.logo_position}
+            value={logoPosition}
+            onChange={setLogoPosition}
+            options={[
+              { value: "left", label: t.logo_left },
+              { value: "center", label: t.logo_center },
+              { value: "right", label: t.logo_right },
+              { value: "hide", label: t.logo_hide },
+            ]}
+          />
         </div>
 
         {/* Margins */}
