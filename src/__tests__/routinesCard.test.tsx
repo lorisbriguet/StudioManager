@@ -1,8 +1,11 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { RoutinesCard } from "../components/settings/RoutinesCard";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 import type { Routines } from "../lib/routines";
+
+const ask = vi.fn<(...args: unknown[]) => Promise<boolean>>(async () => false);
+vi.mock("@tauri-apps/plugin-dialog", async (importOriginal) => ({ ...(await importOriginal<object>()), ask: (...a: unknown[]) => ask(...a) }));
 
 const saved: Routines = {
   sections: [{ id: "s1", name: "Morning", links: [] }],
@@ -37,6 +40,7 @@ const emptySection: Routines = { sections: [{ id: "s1", name: "Morning", links: 
 describe("RoutinesCard", () => {
   beforeEach(() => {
     clearInvokedCommands();
+    ask.mockReset().mockResolvedValue(false);
   });
 
   it("adds a command routine and saves the exact structure", async () => {
@@ -101,11 +105,25 @@ describe("RoutinesCard", () => {
     expect(await screen.findByText("Program not found")).toBeInTheDocument();
   });
 
-  it("deletes a routine", async () => {
+  it("deletes a routine only after confirming", async () => {
     serve(saved);
     render(<RoutinesCard />);
     fireEvent.click(await screen.findByRole("button", { name: "Delete Hours" }));
+    await waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
+    expect(saveCalls()).toHaveLength(0);
+    ask.mockResolvedValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Delete Hours" }));
     await waitFor(() => expect(saveCalls()).toHaveLength(1));
     expect((saveCalls()[0].args.routines as Routines).routines).toEqual([]);
+  });
+
+  it("asks before deleting a section and its routines", async () => {
+    serve(saved);
+    ask.mockResolvedValue(true);
+    render(<RoutinesCard />);
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Morning" }));
+    await waitFor(() => expect(saveCalls()).toHaveLength(1));
+    expect(String(ask.mock.calls[0][0])).toContain("all its routines");
+    expect(saveCalls()[0].args.routines).toEqual({ sections: [], routines: [] });
   });
 });

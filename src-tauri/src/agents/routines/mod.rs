@@ -167,6 +167,10 @@ fn stored_folder(all: &Routines, id: &str) -> Result<String, String> {
 /// Opens an http(s) URL in the browser or an existing absolute path in its default app
 /// (a folder in Finder), through the system `open`; `--` keeps a target from reading as a flag.
 fn open_target(target: &str) -> Result<(), String> {
+    // A hand-edited routines.json must not open file: or custom schemes.
+    if !store::link_target(target) {
+        return Err("Only an absolute path or an http(s) URL can be opened".into());
+    }
     let is_url = target.starts_with("http://") || target.starts_with("https://");
     if !is_url && !std::path::Path::new(target).exists() {
         return Err(format!("Not found: {target}"));
@@ -242,5 +246,12 @@ mod open_tests {
     #[test]
     fn open_refuses_a_missing_path() {
         assert!(open_target("/definitely/not/here-12345").is_err());
+    }
+
+    #[test]
+    fn open_refuses_other_schemes_and_relative_paths() {
+        for t in ["file:///etc/hosts", "javascript:alert(1)", "x-custom://a", "relative/path", "https://a.example/\nb"] {
+            assert!(open_target(t).unwrap_err().contains("Only an absolute path"), "{t}");
+        }
     }
 }

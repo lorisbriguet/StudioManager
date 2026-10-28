@@ -81,6 +81,19 @@ describe("Day tab", () => {
     await waitFor(() => expect(invokedCommands.find((c) => c.cmd === "routines_run")?.args).toEqual({ id: "r1" }));
   });
 
+  it("shows the error when starting a routine fails", async () => {
+    setInvokeHandler((cmd) => {
+      if (cmd === "routines_get") return { sections: [section], routines: [routine("r1", "Hours")] };
+      if (cmd === "routines_runs") return [];
+      if (cmd === "agents_list") return [];
+      if (cmd === "routines_run") throw new Error("Agents are switched off");
+      return null;
+    });
+    render(<DayTab />);
+    fireEvent.click(await screen.findByRole("button", { name: "Run" }));
+    expect(await screen.findByText("Agents are switched off")).toBeInTheDocument();
+  });
+
   it("a done routine with a result link offers Open result", async () => {
     serve(
       { sections: [section], routines: [routine("r1", "Hours", { resultLink: "https://example.com/out" })] },

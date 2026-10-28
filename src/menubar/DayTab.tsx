@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { MoreHorizontal } from "lucide-react";
-import { Button, EmptyState, SectionLabel } from "../components/ui";
+import { Button, EmptyState, IconButton, SectionLabel } from "../components/ui";
 import { ContextMenu, type ContextMenuItem } from "../components/ContextMenu";
 import { useAgents } from "../components/agents/useAgents";
 import { useT } from "../i18n/useT";
@@ -65,6 +65,16 @@ function RoutineRow({ routine, run, sessionId }: { routine: Routine; run: Run | 
   const locale = useAppStore((s) => (s.language === "FR" ? "fr" : "en"));
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  /** Runs an action; a failure (e.g. "Agents are switched off") shows in the row. */
+  const attempt = async (action: () => Promise<unknown>) => {
+    setError(null);
+    try {
+      await action();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const running = run?.status === "running";
   let status = { text: routine.idleHint, tone: "text-muted" as string };
@@ -81,18 +91,13 @@ function RoutineRow({ routine, run, sessionId }: { routine: Routine; run: Run | 
 
   const start = async () => {
     setBusy(true);
-    try {
-      await runRoutine(routine.id);
-    } catch {
-      // The run record (and routines:changed) tells the story; nothing more to show here.
-    } finally {
-      setBusy(false);
-    }
+    await attempt(() => runRoutine(routine.id));
+    setBusy(false);
   };
 
   let main: { label: string; onClick: () => void; disabled?: boolean };
   if (run?.status === "done" && routine.resultLink) {
-    main = { label: t.routines_open_result, onClick: () => void openRoutineResult(routine.id).catch(() => {}) };
+    main = { label: t.routines_open_result, onClick: () => void attempt(() => openRoutineResult(routine.id)) };
   } else if (routine.kind.kind === "agent" && run?.agentShortId && sessionId) {
     main = { label: t.routines_open, onClick: () => void openMainWindow({ agent: sessionId }) };
   } else {
@@ -101,10 +106,10 @@ function RoutineRow({ routine, run, sessionId }: { routine: Routine; run: Run | 
 
   const items: ContextMenuItem[] = [
     { label: t.routines_run_now, onClick: () => void start(), disabled: running || busy },
-    { label: t.routines_open_folder, onClick: () => void openRoutineFolder(routine.id).catch(() => {}), divider: true },
+    { label: t.routines_open_folder, onClick: () => void attempt(() => openRoutineFolder(routine.id)), divider: true },
   ];
   if (routine.resultLink) {
-    items.push({ label: t.routines_open_link, onClick: () => void openRoutineResult(routine.id).catch(() => {}) });
+    items.push({ label: t.routines_open_link, onClick: () => void attempt(() => openRoutineResult(routine.id)) });
   }
 
   return (
@@ -112,22 +117,25 @@ function RoutineRow({ routine, run, sessionId }: { routine: Routine; run: Run | 
       <div className="flex-1 min-w-0">
         <div className="text-sm truncate">{routine.title}</div>
         {status.text && <div className={`text-xs truncate ${status.tone}`}>{status.text}</div>}
+        {error && (
+          <div role="alert" className="text-xs text-danger-text">
+            {error}
+          </div>
+        )}
       </div>
       <Button size="sm" variant="secondary" onClick={main.onClick} disabled={main.disabled}>
         {main.label}
       </Button>
-      <button
-        type="button"
-        aria-label={`${t.routines_more}: ${routine.title}`}
-        aria-haspopup="menu"
+      <IconButton
+        label={`${t.routines_more}: ${routine.title}`}
+        hasMenu
         onClick={(e) => {
           const r = e.currentTarget.getBoundingClientRect();
           setMenuAt({ x: r.right - 160, y: r.bottom + 4 });
         }}
-        className="p-1 rounded-md text-muted hover:text-[var(--color-text)] hover:bg-[var(--color-hover-row)] focus-accent"
       >
         <MoreHorizontal size={16} />
-      </button>
+      </IconButton>
       {menuAt && <ContextMenu x={menuAt.x} y={menuAt.y} items={items} onClose={() => setMenuAt(null)} />}
     </div>
   );

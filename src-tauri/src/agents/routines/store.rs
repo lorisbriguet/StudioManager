@@ -136,7 +136,7 @@ fn absolute(p: &str) -> bool {
 }
 
 /// What a link may open: an absolute path or an http(s) URL.
-fn link_target(t: &str) -> bool {
+pub fn link_target(t: &str) -> bool {
     absolute(t)
         || ((t.starts_with("https://") || t.starts_with("http://"))
             && !t.chars().any(char::is_control))

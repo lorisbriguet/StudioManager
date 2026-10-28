@@ -1,7 +1,8 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react";
 import { SettingRow, SettingsCard } from "./SettingsPrimitives";
-import { Button, FormField, Input, Select } from "../ui";
+import { ask } from "@tauri-apps/plugin-dialog";
+import { Button, FormField, IconButton, Input, Select } from "../ui";
 import { ModelMenu } from "../agents/ModelMenu";
 import { slugifyName } from "../agents/StartAgentForm";
 import { useT } from "../../i18n/useT";
@@ -45,21 +46,6 @@ function Choices<T extends string>({
         </label>
       ))}
     </div>
-  );
-}
-
-function IconBtn({ label, onClick, disabled, children }: { label: string; onClick: () => void; disabled?: boolean; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="p-1 rounded-md text-muted hover:text-[var(--color-text)] hover:bg-[var(--color-hover-row)] disabled:opacity-30 disabled:cursor-not-allowed focus-accent"
-    >
-      {children}
-    </button>
   );
 }
 
@@ -124,9 +110,9 @@ function SectionForm({
               value={l.target}
               onChange={(e) => setLink(i, { target: e.target.value })}
             />
-            <IconBtn label={t.delete} onClick={() => setLinks(links.filter((_, j) => j !== i))}>
+            <IconButton label={t.delete} onClick={() => setLinks(links.filter((_, j) => j !== i))}>
               <Trash2 size={14} />
-            </IconBtn>
+            </IconButton>
           </div>
         ))}
         <Button type="button" size="sm" variant="ghost" onClick={() => setLinks([...links, { label: "", target: "" }])}>
@@ -424,12 +410,20 @@ export function RoutinesCard() {
     if (await save({ ...data, routines })) setEditing(null);
   };
 
-  const deleteSection = (id: string) => {
+  const deleteSection = async (s: Section) => {
     if (!data) return;
+    if (!(await ask(t.routines_delete_section_confirm.replace("{name}", s.name), { kind: "warning" }))) return;
+    const id = s.id;
     void save({
       sections: data.sections.filter((s) => s.id !== id),
       routines: data.routines.filter((r) => r.sectionId !== id),
     });
+  };
+
+  const deleteRoutine = async (r: Routine) => {
+    if (!data) return;
+    if (!(await ask(t.routines_delete_confirm.replace("{title}", r.title), { kind: "warning" }))) return;
+    void save({ ...data, routines: data.routines.filter((x) => x.id !== r.id) });
   };
 
   const moveRoutine = (r: Routine, by: number) => {
@@ -490,50 +484,50 @@ export function RoutinesCard() {
             <div className="flex items-center justify-between pt-2">
               <div className="text-[10px] font-medium uppercase tracking-widest text-muted">{s.name}</div>
               <div className="flex items-center">
-                <IconBtn
+                <IconButton
                   label={`${t.routines_move_up}: ${s.name}`}
                   disabled={si === 0}
                   onClick={() => void save({ ...data, sections: moved(data.sections, si, si - 1) })}
                 >
                   <ArrowUp size={14} />
-                </IconBtn>
-                <IconBtn
+                </IconButton>
+                <IconButton
                   label={`${t.routines_move_down}: ${s.name}`}
                   disabled={si === data.sections.length - 1}
                   onClick={() => void save({ ...data, sections: moved(data.sections, si, si + 1) })}
                 >
                   <ArrowDown size={14} />
-                </IconBtn>
-                <IconBtn label={`${t.edit} ${s.name}`} onClick={() => setEditing({ type: "section", id: s.id })}>
+                </IconButton>
+                <IconButton label={`${t.edit} ${s.name}`} onClick={() => setEditing({ type: "section", id: s.id })}>
                   <Pencil size={14} />
-                </IconBtn>
-                <IconBtn label={`${t.delete} ${s.name}`} onClick={() => deleteSection(s.id)}>
+                </IconButton>
+                <IconButton label={`${t.delete} ${s.name}`} onClick={() => void deleteSection(s)}>
                   <Trash2 size={14} />
-                </IconBtn>
+                </IconButton>
               </div>
             </div>
             {rows.map((r, ri) => (
               <SettingRow key={r.id} label={r.title} desc={summary(r)}>
                 <div className="flex items-center">
-                  <IconBtn label={`${t.routines_move_up}: ${r.title}`} disabled={ri === 0} onClick={() => moveRoutine(r, -1)}>
+                  <IconButton label={`${t.routines_move_up}: ${r.title}`} disabled={ri === 0} onClick={() => moveRoutine(r, -1)}>
                     <ArrowUp size={14} />
-                  </IconBtn>
-                  <IconBtn
+                  </IconButton>
+                  <IconButton
                     label={`${t.routines_move_down}: ${r.title}`}
                     disabled={ri === rows.length - 1}
                     onClick={() => moveRoutine(r, 1)}
                   >
                     <ArrowDown size={14} />
-                  </IconBtn>
-                  <IconBtn label={`${t.edit} ${r.title}`} onClick={() => setEditing({ type: "routine", id: r.id, sectionId: s.id })}>
+                  </IconButton>
+                  <IconButton label={`${t.edit} ${r.title}`} onClick={() => setEditing({ type: "routine", id: r.id, sectionId: s.id })}>
                     <Pencil size={14} />
-                  </IconBtn>
-                  <IconBtn
+                  </IconButton>
+                  <IconButton
                     label={`${t.delete} ${r.title}`}
-                    onClick={() => void save({ ...data, routines: data.routines.filter((x) => x.id !== r.id) })}
+                    onClick={() => void deleteRoutine(r)}
                   >
                     <Trash2 size={14} />
-                  </IconBtn>
+                  </IconButton>
                 </div>
               </SettingRow>
             ))}
