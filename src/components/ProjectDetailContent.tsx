@@ -20,7 +20,7 @@ import type { ProjectStatus } from "../types/project";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu";
 import { useInvoices, useInvoicesByProject, useUpdateInvoice } from "../db/hooks/useInvoices";
 import { useQuotes, useQuotesByProject, useUpdateQuote } from "../db/hooks/useQuotes";
-import { Badge, Button, PageSpinner, ProgressBar } from "./ui";
+import { Badge, Button, PageSpinner, MeterBar } from "./ui";
 import { invoiceStatusVariant, quoteStatusVariant } from "../lib/statusColors";
 import { useTabStore } from "../stores/tab-store";
 import { open as openDirectory } from "@tauri-apps/plugin-dialog";
@@ -30,6 +30,7 @@ import { ProjectResources } from "./project/ProjectResources";
 import { ProjectWikiBlock } from "./project/ProjectWikiBlock";
 import { ProjectTasksSection } from "./project/ProjectTasksSection";
 import { ProjectNamedTables } from "./project/ProjectNamedTables";
+import { EquipmentBlock } from "./upkeep/EquipmentBlock";
 
 interface Props {
   projectId: number;
@@ -255,6 +256,8 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
         );
       case "wiki":
         return <ProjectWikiBlock projectId={projectId} />;
+      case "equipment":
+        return <EquipmentBlock projectId={projectId} />;
       default:
         return null;
     }
@@ -355,7 +358,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
               <span>{t.progress}</span>
               <span>{progress}%</span>
             </div>
-            <ProgressBar value={progress} />
+            <MeterBar pct={progress} color="var(--color-accent)" />
           </div>
         )}
 

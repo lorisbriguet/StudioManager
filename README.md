@@ -115,6 +115,14 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - A project's own Markdown files (README, design system, docs) show read-only straight from its folder, with their links in the graph
 - Built-in user guide, linked article to article
 
+### Studio upkeep
+- Machines and equipment (NAS, 3D printer, monitor, camera...) with their upkeep items: every N days, weeks, months or years, or every N print hours
+- What is overdue or due soon on the Upkeep page, in the calendar and in notifications; mark done, snooze, log the service and its cost
+- Consumables with stock levels and reorder alerts, subscriptions with renewals you confirm into expenses, warranties, and lending equipment out
+- Optional read-only connections to a Synology NAS (disk health) and the Bambu Lab cloud (print hours); secrets stay in the macOS Keychain, nothing connects unless you add it
+- Agents can read the machines and what is due through [the MCP server](docs/superpowers/specs/2026-10-27-agent-access-mcp-design.md); no secrets, no readings history
+- Design and decisions: [the Studio upkeep spec](docs/superpowers/specs/2026-10-28-studio-upkeep-design.md)
+
 ### Finance & P&L
 - Real-time profit & loss overview — only sent/paid/overdue invoices count as revenue (drafts excluded)
 - Revenue, operating expenses, social charges breakdown

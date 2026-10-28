@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { advanceDate } from "../utils/recurringDates";
+import { advanceDate, addInterval } from "../utils/recurringDates";
+
+describe("addInterval", () => {
+  it("keeps anchor day across short months", () => {
+    expect(addInterval("2026-01-31", 1, "month", 31)).toBe("2026-02-28");
+    expect(addInterval("2026-02-28", 1, "month", 31)).toBe("2026-03-31");
+    expect(addInterval("2028-02-29", 1, "year", 29)).toBe("2029-02-28");
+    expect(addInterval("2026-10-28", 2, "week", 28)).toBe("2026-11-11");
+    expect(addInterval("2026-10-28", 10, "day", 28)).toBe("2026-11-07");
+  });
+});
 
 // advanceDate advances a recurring template's next_due by one period,
 // targeting min(anchorDay, daysInTargetMonth) each step. The anchor is the

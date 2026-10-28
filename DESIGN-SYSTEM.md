@@ -297,20 +297,20 @@ import { Toggle } from "../components/ui/Toggle";
 ```
 Use for boolean settings. Don't use checkboxes for settings toggles.
 
-### ProgressBar
-```tsx
-import { ProgressBar } from "../components/ui";
-<ProgressBar value={62} />                    // 0–100, clamped
-<ProgressBar value={81} tone="warning" label="Weekly" />
-```
-Props: `value` (0–100), `tone` (`accent` default, `warning`, `danger`), `label` (accessible name when nearby text doesn't name the bar). A 1.5-tall `--color-input-bg` track with a rounded fill; role `progressbar`. Use for every share-of-a-whole bar (project progress, plan limits, which go `warning` from 75% and `danger` from 90%). Never hand-roll a track and fill.
-
 ### Skeleton
 ```tsx
 import { Skeleton } from "../components/ui/Skeleton";
 <Skeleton width="60%" height={14} rounded="md" />
 ```
 Use while data is loading. Match the shape of what will appear. `inline` renders a span, for a placeholder inside text or a button (a tab label still loading). Never show an empty state ("nothing here yet") before the data has loaded.
+
+### MeterBar
+```tsx
+import { MeterBar } from "../components/ui";
+<MeterBar pct={62} color="var(--color-accent)" />
+<MeterBar className="w-[120px]" pct={pct} color="var(--color-success-text)" label="2 years" />
+```
+The one thin bar (`h-1.5`, `--color-input-bg` track, rounded fill) for progress, shares, stock levels and drive age. `pct` is clamped to 0–100; `className` sets the width (default `w-full`); `label` exposes it as a `meter` to screen readers. Plan limits (menu bar Usage tab) use `--color-warning` from 75% and `--color-danger` from 90%. Never rebuild the track and fill by hand.
 
 ### SearchBar
 ```tsx

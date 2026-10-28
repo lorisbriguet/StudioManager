@@ -46,6 +46,15 @@ const SCHEMA: Record<string, string[]> = {
   wiki_folders: ["id", "name", "sort_order", "created_at"],
   wiki_articles: ["id", "folder_id", "project_id", "title", "content", "sort_order", "created_at", "updated_at"],
   wiki_article_tags: ["article_id", "tag"],
+  machines: ["id", "name", "kind", "maker", "model", "serial", "location", "status", "lent_to", "lent_until", "purchase_date", "supplier", "price", "currency", "expense_id", "warranty_until", "warranty_notified_for", "lifespan_years", "photo_path", "notes", "template_key", "connection_id", "device_id", "reading_baseline", "linked_at", "created_at", "updated_at"],
+  upkeep_items: ["id", "machine_id", "title", "notes", "schedule", "interval_n", "interval_unit", "anchor_day", "usage_metric", "usage_every", "last_done_on", "last_done_reading", "next_due_on", "snooze_until", "in_calendar", "alert", "calendar_event_id", "calendar_event_date", "overdue_notified_for", "archived", "created_at", "updated_at"],
+  service_log: ["id", "machine_id", "upkeep_item_id", "done_on", "description", "cost", "expense_id", "reading", "created_at"],
+  consumables: ["id", "name", "machine_id", "unit", "stock", "reorder_level", "supplier", "product_url", "unit_price", "currency", "low_notified", "created_at", "updated_at"],
+  consumable_usage: ["id", "consumable_id", "project_id", "used_on", "amount", "cost"],
+  subscriptions: ["id", "name", "plan", "vendor", "url", "renews_on", "anchor_day", "period", "cost", "currency", "status", "in_calendar", "alert", "calendar_event_id", "coming_notified_for", "notes", "created_at", "updated_at"],
+  subscription_renewals: ["id", "subscription_id", "renewed_on", "amount", "currency", "decision", "expense_id", "notified"],
+  machine_readings: ["id", "machine_id", "metric", "value", "read_at"],
+  machine_disks: ["id", "machine_id", "slot", "model", "serial", "size_bytes", "power_on_hours", "health", "notified_health", "bad_sectors", "temperature", "first_seen", "last_read_at"],
 };
 
 /** Tables that hold personal data and must be wiped before the demo rows go in. */
@@ -56,6 +65,8 @@ const MUST_CLEAR = [
   "time_entries", "project_tables", "project_table_rows", "workload_rows",
   "wiki_articles", "wiki_article_tags", "wiki_folders", "custom_lists", "custom_list_items",
   "notifications", "saved_filters",
+  "machine_disks", "machine_readings", "subscription_renewals", "subscriptions",
+  "consumable_usage", "consumables", "service_log", "upkeep_items", "machines",
 ];
 
 /** Configuration tables that belong to the user and must survive the seed. */
@@ -73,6 +84,11 @@ const ENUMS: Record<string, Record<string, string[]>> = {
   expenses: { category_code: ["AM", "FA", "FD", "FR", "LO", "CS"] },
   income: { category: ["side_income", "grant", "refund", "interest", "other"] },
   recurring_invoice_templates: { frequency: ["monthly", "quarterly", "yearly"] },
+  machines: { status: ["working", "attention", "broken", "lent", "retired"] },
+  upkeep_items: { schedule: ["interval", "usage"], interval_unit: ["day", "week", "month", "year"] },
+  subscriptions: { period: ["month", "year"], status: ["active", "cancelled"] },
+  subscription_renewals: { decision: ["pending", "added", "skipped"] },
+  machine_disks: { health: ["healthy", "warning", "failing"] },
 };
 
 const REFERENCE_FORMATS: Record<string, RegExp> = {
@@ -93,6 +109,12 @@ const DATE_COLUMNS: Record<string, string[]> = {
   income: ["date"],
   time_entries: ["date"],
   recurring_invoice_templates: ["next_due"],
+  machines: ["purchase_date", "warranty_until", "lent_until"],
+  upkeep_items: ["last_done_on", "next_due_on", "snooze_until"],
+  service_log: ["done_on"],
+  consumable_usage: ["used_on"],
+  subscriptions: ["renews_on"],
+  subscription_renewals: ["renewed_on"],
 };
 
 // ── Minimal SQL value parser ─────────────────────────────────────────────
@@ -214,7 +236,7 @@ for (const [path, seedSql] of Object.entries(DATA_SEEDS)) {
         for (const [table, cols] of Object.entries(ENUMS)) {
           for (const row of rowsOf(table)) {
             for (const [col, allowed] of Object.entries(cols)) {
-              if (!(col in row)) continue;
+              if (!(col in row) || row[col] === null) continue;
               expect(allowed, `${table}.${col} = ${JSON.stringify(row[col])}`).toContain(row[col]);
             }
           }
@@ -415,6 +437,44 @@ for (const [path, seedSql] of Object.entries(DATA_SEEDS)) {
         expect(rowsOf("projects").filter((p) => p.layout_config !== null && p.layout_config !== undefined).length).toBeGreaterThanOrEqual(2);
         expect(rowsOf("recurring_invoice_templates").length).toBeGreaterThanOrEqual(1);
       });
+
+      it("seeds studio upkeep: machines, items in every state, stock, subscriptions, no connections", () => {
+        expect(rowsOf("machines").length).toBeGreaterThanOrEqual(4);
+        expect(rowsOf("machines").some((m) => m.status === "lent")).toBe(true);
+        expect(rowsOf("machines").every((m) => m.connection_id === null || m.connection_id === undefined)).toBe(true);
+        expect(inserts.some((i) => i.table === "connections")).toBe(false);
+        const items = rowsOf("upkeep_items");
+        expect(items.some((i) => i.schedule === "usage")).toBe(true);
+        const offsets = items.map((i) => (isExpr(i.next_due_on as Value) ? (i.next_due_on as Expr).expr : "")).join(" ");
+        expect(offsets).toMatch(/'-\d+ days'/); // overdue
+        expect(offsets).toMatch(/'\+\d+ days'/); // soon / later
+        const consumables = rowsOf("consumables");
+        expect(consumables.length).toBeGreaterThanOrEqual(3);
+        expect(consumables.some((c) => Number(c.stock) <= Number(c.reorder_level))).toBe(true);
+        expect(rowsOf("subscriptions").length).toBeGreaterThanOrEqual(3);
+        expect(rowsOf("subscription_renewals").some((r) => r.decision === "pending")).toBe(true);
+        expect(rowsOf("machine_readings").length).toBeGreaterThan(0);
+        expect(rowsOf("machine_disks").some((d) => d.health === "warning")).toBe(true);
+      });
+
+      const upkeepFk = (child: string, col: string, parent: string, nullable = false) =>
+        it(`${child}.${col} points at a seeded ${parent}`, () => {
+          const parents = idsOf(parent);
+          for (const row of rowsOf(child)) {
+            const v = row[col];
+            if (nullable && (v === null || v === undefined)) continue;
+            expect(parents, `${child}.${col} = ${JSON.stringify(v)}`).toContain(v);
+          }
+        });
+      upkeepFk("upkeep_items", "machine_id", "machines");
+      upkeepFk("service_log", "machine_id", "machines");
+      upkeepFk("service_log", "upkeep_item_id", "upkeep_items", true);
+      upkeepFk("consumables", "machine_id", "machines", true);
+      upkeepFk("subscription_renewals", "subscription_id", "subscriptions");
+      upkeepFk("consumable_usage", "consumable_id", "consumables");
+      upkeepFk("consumable_usage", "project_id", "projects", true);
+      upkeepFk("machine_readings", "machine_id", "machines");
+      upkeepFk("machine_disks", "machine_id", "machines");
 
       it("covers roughly a year of invoices and expenses for the finance charts", () => {
         const monthsBack = (rows: Row[], col: string) =>

@@ -157,7 +157,7 @@ fn stdio_round_trip() {
     assert!(instructions.lines().count() <= 8);
 
     let names = server.tool_names();
-    assert_eq!(names.len(), 26, "{names:?}");
+    assert_eq!(names.len(), 27, "{names:?}");
     for t in MONEY_TOOLS {
         assert!(names.iter().any(|n| n == t), "missing {t}");
     }
@@ -207,7 +207,7 @@ fn money_tools_hidden_when_off_at_startup() {
     let mut server = Server::start(&dir);
     server.initialize();
     let names = server.tool_names();
-    assert_eq!(names.len(), 21, "{names:?}");
+    assert_eq!(names.len(), 22, "{names:?}");
     for t in MONEY_TOOLS {
         assert!(!names.iter().any(|n| n == t), "{t} listed");
     }

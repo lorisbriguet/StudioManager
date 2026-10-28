@@ -96,6 +96,19 @@ export const TABLES = [
   "wiki_articles",
   "wiki_article_tags",
   "custom_list_items",
+  // Studio upkeep (connections before machines; machines before their children)
+  "connections",
+  "machines",
+  "machine_files",
+  "machine_projects",
+  "upkeep_items",
+  "service_log",
+  "consumables",
+  "consumable_usage",
+  "subscriptions",
+  "subscription_renewals",
+  "machine_readings",
+  "machine_disks",
 ];
 
 /** Backup folder name prefix for the active organisation. No active

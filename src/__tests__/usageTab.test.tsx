@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { ReactNode } from "react";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import { ProgressBar } from "../components/ui";
+import { MeterBar } from "../components/ui";
 import { UsageTab } from "../menubar/UsageTab";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 import { useAppStore } from "../stores/app-store";
@@ -84,25 +84,17 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("ProgressBar", () => {
-  const fill = (c: HTMLElement) => c.querySelector("[data-fill]") as HTMLElement;
+describe("MeterBar", () => {
+  const fill = () => screen.getByRole("meter").firstElementChild as HTMLElement;
 
-  it("clamps the value to 0-100", () => {
-    const { container, rerender } = render(<ProgressBar value={140} />);
-    expect(fill(container).style.width).toBe("100%");
-    rerender(<ProgressBar value={-5} />);
-    expect(fill(container).style.width).toBe("0%");
-    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0");
-  });
-
-  it("picks the tone classes", () => {
-    const { container, rerender } = render(<ProgressBar value={50} />);
-    expect(fill(container).className).toContain("bg-accent");
-    rerender(<ProgressBar value={50} tone="warning" />);
-    expect(fill(container).className).toContain("bg-[var(--color-warning)]");
-    rerender(<ProgressBar value={50} tone="danger" />);
-    expect(fill(container).className).toContain("bg-[var(--color-danger)]");
-    expect(screen.getByRole("progressbar").className).toContain("bg-[var(--color-input-bg)]");
+  it("clamps the value to 0-100 and shows a non-number as empty", () => {
+    const { rerender } = render(<MeterBar pct={140} color="var(--color-accent)" label="Weekly" />);
+    expect(fill().style.width).toBe("100%");
+    rerender(<MeterBar pct={-5} color="var(--color-accent)" label="Weekly" />);
+    expect(fill().style.width).toBe("0%");
+    expect(screen.getByRole("meter")).toHaveAttribute("aria-valuenow", "0");
+    rerender(<MeterBar pct={NaN} color="var(--color-accent)" label="Weekly" />);
+    expect(fill().style.width).toBe("0%");
   });
 });
 
@@ -118,16 +110,16 @@ describe("UsageTab", () => {
     expect(hit.className).toContain("text-[var(--color-warning-text)]");
     expect(screen.getByText("Weekly, Opus")).toBeInTheDocument();
     expect(screen.queryByText(/On pace for 44/)).toBeNull();
-    const bars = screen.getAllByRole("progressbar");
+    const bars = screen.getAllByRole("meter");
     expect(bars.map((b) => b.getAttribute("aria-valuenow"))).toEqual(["62", "81", "44"]);
-    expect(bars[1].firstElementChild!.className).toContain("--color-warning");
+    expect((bars[1].firstElementChild as HTMLElement).style.background).toBe("var(--color-warning)");
   });
 
   it("shows the empty state when the status line is not set up", async () => {
     serve({ meters: [], setUp: false, savedAt: null });
     render(<UsageTab trailing={null} />);
     expect(await screen.findByText(/Set up plan limits in Settings/)).toBeInTheDocument();
-    expect(screen.queryByRole("progressbar")).toBeNull();
+    expect(screen.queryByRole("meter")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
     expect(invokedCommands.find((c) => c.cmd === "menubar_open_main")?.args).toMatchObject({ settings: "agents" });
   });

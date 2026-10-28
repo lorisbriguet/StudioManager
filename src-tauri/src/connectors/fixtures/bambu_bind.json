@@ -1,0 +1,29 @@
+{
+  "message": "success",
+  "code": null,
+  "error": null,
+  "devices": [
+    {
+      "dev_id": "01P00SCRUBBED01",
+      "name": "Studio P2S",
+      "online": true,
+      "print_status": "ACTIVE",
+      "dev_model_name": "N7",
+      "dev_product_name": "P2S",
+      "dev_access_code": "SCRUBBED",
+      "nozzle_diameter": 0.4,
+      "dev_structure": "CoreXY"
+    },
+    {
+      "dev_id": "03900SCRUBBED02",
+      "name": "Bench A1 mini",
+      "online": false,
+      "print_status": "SUCCESS",
+      "dev_model_name": "N1",
+      "dev_product_name": "A1 mini",
+      "dev_access_code": "SCRUBBED",
+      "nozzle_diameter": 0.4,
+      "dev_structure": "i3"
+    }
+  ]
+}

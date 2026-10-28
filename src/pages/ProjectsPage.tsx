@@ -22,7 +22,7 @@ import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Button, Badge, Card, PageHeader, SearchBar, TableSkeleton, Input, EmptyState, ProgressBar } from "../components/ui";
+import { Button, Badge, Card, PageHeader, SearchBar, TableSkeleton, Input, EmptyState, MeterBar } from "../components/ui";
 import { undoable, undoableFromStore } from "../lib/undo";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
@@ -367,7 +367,7 @@ export function ProjectsPage() {
                       <span>{stats.total} {t.tasks.toLowerCase()}</span>
                       <span>{pct}%</span>
                     </div>
-                    <ProgressBar value={pct} />
+                    <MeterBar pct={pct} color="var(--color-accent)" />
                   </div>
                 )}
                 {stats.total === 0 && (

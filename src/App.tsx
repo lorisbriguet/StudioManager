@@ -28,6 +28,8 @@ import { FinancesPage } from "./pages/FinancesPage";
 import { InvoicePreviewPage } from "./pages/InvoicePreviewPage";
 import { QuotePreviewPage } from "./pages/QuotePreviewPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
+import { UpkeepPage } from "./pages/UpkeepPage";
+import { MachinePage } from "./pages/MachinePage";
 const AgentsPage = lazy(() =>
   import("./pages/AgentsPage").then((m) => ({ default: m.AgentsPage }))
 );
@@ -44,6 +46,7 @@ import { MenuBarApp } from "./menubar/MenuBarApp";
 import { useFollowAppSettings } from "./menubar/useFollowAppSettings";
 import { PageSpinner } from "./components/ui";
 import { useOverdueCheck } from "./hooks/useOverdueCheck";
+import { useUpkeepCheck } from "./hooks/useUpkeepCheck";
 import { useRecurringCheck } from "./hooks/useRecurringCheck";
 import { useAutoBackup } from "./hooks/useAutoBackup";
 import { useGuideUpdateCheck } from "./hooks/useGuideUpdateCheck";
@@ -60,6 +63,7 @@ import { queryClient } from "./lib/queryClient";
 
 function StartupChecks() {
   useOverdueCheck();
+  useUpkeepCheck();
   useRecurringCheck();
   useAutoBackup();
   useGuideUpdateCheck();
@@ -220,7 +224,9 @@ function MainApp() {
                 <Route path="wiki" element={<Suspense fallback={<PageSpinner />}><WikiPage /></Suspense>} />
                 <Route path="agents" element={<Suspense fallback={<PageSpinner />}><AgentsPage /></Suspense>} />
                 <Route path="resources" element={<ResourcesPage />} />
-                <Route path="notifications" element={<NotificationsPage />} />
+                <Route path="upkeep" element={<UpkeepPage />} />
+                <Route path="upkeep/machines/:id" element={<MachinePage />} />
+                <Route path="notifications"element={<NotificationsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="profile" element={<ProfilePage />} />
               </Route>

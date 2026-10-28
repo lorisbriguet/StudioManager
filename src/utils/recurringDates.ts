@@ -1,5 +1,6 @@
 import { parseLocalDate, toLocalISO } from "./localDate";
 import type { RecurringFrequency } from "../types/recurring";
+import type { IntervalUnit } from "../types/upkeep";
 
 const MONTHS_PER_PERIOD: Record<RecurringFrequency, number> = {
   monthly: 1,
@@ -26,8 +27,26 @@ export function advanceDate(
   frequency: RecurringFrequency,
   anchorDay: number
 ): string {
+  return addInterval(dateISO, MONTHS_PER_PERIOD[frequency], "month", anchorDay);
+}
+
+/**
+ * Add `n` units to a date. Day/week steps are plain day arithmetic; month/year
+ * steps target `min(anchorDay, daysInTargetMonth)` exactly like `advanceDate`.
+ */
+export function addInterval(
+  dateISO: string,
+  n: number,
+  unit: IntervalUnit,
+  anchorDay: number
+): string {
   const d = parseLocalDate(dateISO);
-  const target = new Date(d.getFullYear(), d.getMonth() + MONTHS_PER_PERIOD[frequency], 1);
+  if (unit === "day" || unit === "week") {
+    const days = n * (unit === "week" ? 7 : 1);
+    return toLocalISO(new Date(d.getFullYear(), d.getMonth(), d.getDate() + days));
+  }
+  const months = unit === "year" ? n * 12 : n;
+  const target = new Date(d.getFullYear(), d.getMonth() + months, 1);
   const daysInTargetMonth = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
   target.setDate(Math.min(Math.max(anchorDay, 1), daysInTargetMonth));
   return toLocalISO(target);

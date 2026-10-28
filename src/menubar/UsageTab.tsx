@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { toast } from "sonner";
-import { BottomBar, Button, EmptyState, ProgressBar, SectionLabel, TabItem } from "../components/ui";
+import { BottomBar, Button, EmptyState, MeterBar, SectionLabel, TabItem } from "../components/ui";
 import { useT } from "../i18n/useT";
 import { useAppStore } from "../stores/app-store";
 import { useChartTheme } from "../hooks/useChartTheme";
@@ -51,10 +51,11 @@ function usePoll<T>(load: () => Promise<T>, ms: number, onResult: (value: T) => 
   }, [ms]);
 }
 
-function toneFor(percent: number): "accent" | "warning" | "danger" {
-  if (percent >= 90) return "danger";
-  if (percent >= 75) return "warning";
-  return "accent";
+/** Meter colour: warning from 75%, danger from 90%. */
+function meterColor(percent: number): string {
+  if (percent >= 90) return "var(--color-danger)";
+  if (percent >= 75) return "var(--color-warning)";
+  return "var(--color-accent)";
 }
 
 /** "N min" under an hour, else "H h MM". */
@@ -97,7 +98,7 @@ function MeterRow({ meter, locale }: { meter: Meter; locale: string }) {
         <span>{name}</span>
         <span className="text-xs text-muted">{`${percent}% · ${resets}`}</span>
       </div>
-      <ProgressBar value={meter.percent} tone={toneFor(meter.percent)} label={name} />
+      <MeterBar pct={meter.percent} color={meterColor(meter.percent)} label={name} />
       {pace &&
         (hitsFull ? (
           <div className="text-xs mt-1 text-[var(--color-warning-text)]">

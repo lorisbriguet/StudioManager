@@ -1,0 +1,8 @@
+{
+  "data": {
+    "SYNO.API.Auth": { "maxVersion": 7, "minVersion": 1, "path": "entry.cgi", "requestFormat": "JSON" },
+    "SYNO.Core.System": { "maxVersion": 3, "minVersion": 1, "path": "entry.cgi", "requestFormat": "JSON" },
+    "SYNO.Storage.CGI.Storage": { "maxVersion": 1, "minVersion": 1, "path": "entry.cgi", "requestFormat": "JSON" }
+  },
+  "success": true
+}

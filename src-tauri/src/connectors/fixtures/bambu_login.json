@@ -1,0 +1,9 @@
+{
+  "accessToken": "SCRUBBED-ACCESS-TOKEN",
+  "refreshToken": "SCRUBBED-REFRESH-TOKEN",
+  "loginType": "",
+  "expiresIn": 7776000,
+  "refreshExpiresIn": 7776000,
+  "tfaKey": "",
+  "accessMethod": ""
+}

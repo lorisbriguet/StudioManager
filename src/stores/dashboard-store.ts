@@ -49,7 +49,9 @@ export type WidgetType =
   | "billable-summary"
   | "weekly-trend"
   | "project-time-distribution"
-  | "invoice-aging";
+  | "invoice-aging"
+  // Studio upkeep
+  | "upkeep";
 
 export interface DashboardWidget {
   id: string;
@@ -105,6 +107,7 @@ export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
   // Phase 18 — Utility
   { type: "quick-create", labelKey: "quick_create", category: "utility", defaultW: 2, defaultH: 2, minW: 2, minH: 2 },
   { type: "pinned-notes", labelKey: "pinned_notes", category: "utility", defaultW: 3, defaultH: 3, minW: 3, minH: 3 },
+  { type: "upkeep", labelKey: "upkeep_widget", category: "utility", defaultW: 3, defaultH: 4, minW: 3, minH: 3 },
   // Financial — Invoice aging
   { type: "invoice-aging", labelKey: "invoice_aging", category: "financial", defaultW: 4, defaultH: 4, minW: 3, minH: 3 },
   // Phase 13 — Time tracking
@@ -125,6 +128,7 @@ const DEFAULT_WIDGETS: DashboardWidget[] = [
   { id: "w-recent-invoices", type: "recent-invoices" },
   { id: "w-today-tasks", type: "today-tasks" },
   { id: "w-overdue-tasks", type: "overdue-tasks" },
+  { id: "w-upkeep", type: "upkeep" },
 ];
 
 const DEFAULT_LAYOUT: LayoutItem[] = [
@@ -136,6 +140,7 @@ const DEFAULT_LAYOUT: LayoutItem[] = [
   { i: "w-recent-invoices", x: 8, y: 2, w: 4, h: 5, minW: 3, minH: 3 },
   { i: "w-today-tasks", x: 0, y: 7, w: 6, h: 4, minW: 3, minH: 3 },
   { i: "w-overdue-tasks", x: 6, y: 7, w: 6, h: 4, minW: 3, minH: 3 },
+  { i: "w-upkeep", x: 0, y: 11, w: 4, h: 4, minW: 3, minH: 3 },
 ];
 
 const STORAGE_KEY = "dashboard-layout";

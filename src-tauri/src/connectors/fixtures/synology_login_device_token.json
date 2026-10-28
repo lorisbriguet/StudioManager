@@ -1,0 +1,9 @@
+{
+  "data": {
+    "device_id": "SCRUBBED-DEVICE-TOKEN",
+    "is_portal_port": false,
+    "sid": "SCRUBBED-SID",
+    "synotoken": "SCRUBBED-SYNOTOKEN"
+  },
+  "success": true
+}

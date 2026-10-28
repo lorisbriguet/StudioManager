@@ -1,0 +1,9 @@
+{
+  "accessToken": "",
+  "refreshToken": "",
+  "loginType": "verifyCode",
+  "expiresIn": 0,
+  "refreshExpiresIn": 0,
+  "tfaKey": "",
+  "accessMethod": ""
+}

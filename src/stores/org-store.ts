@@ -50,6 +50,10 @@ export function applyPrefsToAppStore(prefs: OrgPrefs): void {
     showTimeOverview: prefs.showTimeOverview,
     calendarSync: prefs.calendarSync,
     calendarName: prefs.calendarName,
+    upkeepAlertDefault: prefs.upkeepAlertDefault ?? "day_9am",
+    upkeepSoonDays: prefs.upkeepSoonDays ?? 14,
+    warrantyWindowDays: prefs.warrantyWindowDays ?? 60,
+    renewalWindowDays: prefs.renewalWindowDays ?? 14,
     backupPath: prefs.backupPath,
     exportLanguage: prefs.exportLanguage,
   });
@@ -66,6 +70,8 @@ interface OrgState {
    *  second call's merge silently clobbers the first. Cleared whenever the
    *  registry is (re)applied, so it never leaks across an organisation switch. */
   pendingPrefs: OrgPrefs | null;
+  /** True while an organisation switch is between closeDb and the new DB opening. */
+  switching: boolean;
   load: () => Promise<void>;
   applyRegistry: (reg: Registry) => void;
   active: () => Organisation | undefined;
@@ -79,6 +85,7 @@ export const useOrgStore = create<OrgState>((set, get) => ({
   activeId: "",
   loaded: false,
   pendingPrefs: null,
+  switching: false,
 
   applyRegistry: (reg) => {
     set({ organisations: reg.organisations, activeId: reg.activeId, pendingPrefs: null });
