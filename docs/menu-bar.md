@@ -35,7 +35,7 @@ Until plan limits are set up, the tab points you to Settings.
 
 ### Day
 
-Your routines, grouped in sections you name. Each routine shows its status (idle hint, Running, Done at 08:12, or Failed with the reason), a **Run** button (**Open result** once it has a result) and a "..." menu: Run now, Open folder or Open link.
+Your routines, grouped in sections you name. Each routine shows its status (idle hint, Running, Done at 08:12, or Failed with the reason), a main button and a "..." menu: Run now, Open folder or Open link. The main button is **Run**; it becomes **Open result** once a run is done and the routine has a result link, and **Open** (the agent, in StudioManager) once an agent routine has started its agent.
 
 Scheduled routines catch up: if the Mac was asleep or the app was closed at the time, a routine runs when it wakes if it is less than 2 hours late. A routine runs at most once per day on its schedule. If a scheduled run fails, you get one notification.
 
@@ -45,7 +45,7 @@ Claude Code reports your plan limits through its status line. StudioManager prov
 
 In Settings > Agents, **Set up plan limits** first shows a preview of what will be written to `~/.claude/settings.json`, and backs the file up before changing it. If the file changed after the preview, or is not valid JSON, nothing is written and you are told.
 
-Only one status line can be set. If you already have another one, the preview warns that it will stop showing, and nothing changes until you confirm. **Remove** puts your previous status line back. Turning the menu bar off also offers to remove it.
+Only one status line can be set. If you already have another one, the preview warns that it will stop showing, and nothing changes until you confirm. **Remove** puts your previous status line back. Turning the menu bar off, or the Agents page with it, also offers to remove it. The Remove button stays in Settings > Agents while a StudioManager status line is set, even one from an older copy of the app or with Agents off.
 
 Limits appear after Claude Code's next reply.
 
