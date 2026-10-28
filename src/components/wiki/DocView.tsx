@@ -1,0 +1,100 @@
+import { ChevronLeft, ChevronRight, FolderOpen } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
+import { open as openUrl } from "@tauri-apps/plugin-shell";
+import { toast } from "sonner";
+import { useT } from "../../i18n/useT";
+import { logError } from "../../lib/log";
+import { parseWikiArticleId, parseWikiFileKey } from "../../lib/wikiLinks";
+import { useProjectDoc, type ProjectDoc } from "../../db/hooks/useProjectDocs";
+import type { WikiRef } from "../../lib/wikiTabs";
+import { EmptyState, PANEL_TOP_BAR } from "../ui";
+import { Skeleton } from "../ui/Skeleton";
+
+const navIconBtn =
+  "shrink-0 p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none transition-colors";
+
+/**
+ * A project's Markdown file, read-only, straight from disk. The HTML comes
+ * from the app's Rust side, which escapes raw HTML and keeps only web links
+ * and links to other Markdown files, so it is safe to insert as is.
+ */
+export function DocView({
+  doc,
+  nav,
+  onOpenRef,
+}: {
+  doc: ProjectDoc;
+  nav: { canBack: boolean; canForward: boolean; onBack: () => void; onForward: () => void };
+  onOpenRef: (ref: WikiRef, newTab: boolean) => void;
+}) {
+  const t = useT();
+  const { data: content, isLoading, isError } = useProjectDoc(doc);
+  const path = `${doc.folder.replace(/\/$/, "")}/${doc.rel}`;
+
+  const handleClick = (e: React.MouseEvent) => {
+    const anchor = (e.target as HTMLElement).closest("a");
+    if (!anchor) return;
+    e.preventDefault();
+    const href = anchor.getAttribute("href") ?? "";
+    const newTab = e.metaKey || e.ctrlKey;
+    const fileKey = parseWikiFileKey(href);
+    if (fileKey) return onOpenRef(fileKey, newTab);
+    const id = parseWikiArticleId(href);
+    if (id !== null) return onOpenRef(id, newTab);
+    if (/^https?:\/\//i.test(href)) {
+      openUrl(href).catch((err) => {
+        logError("Open URL failed:", err);
+        toast.error(t.failed_to_open_url);
+      });
+    }
+  };
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      <div className={`${PANEL_TOP_BAR} gap-1 px-3 border-[var(--color-border-divider)]`}>
+        <button type="button" onClick={nav.onBack} disabled={!nav.canBack} className={navIconBtn} aria-label={t.wiki_back} title={t.wiki_back}>
+          <ChevronLeft size={14} />
+        </button>
+        <button type="button" onClick={nav.onForward} disabled={!nav.canForward} className={navIconBtn} aria-label={t.wiki_forward} title={t.wiki_forward}>
+          <ChevronRight size={14} />
+        </button>
+        <div className="flex-1 min-w-0 text-center text-xs text-muted truncate">
+          {doc.projectName} <span className="opacity-50">/</span> <span className="text-[var(--color-text)]">{doc.rel}</span>
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            invoke("open_in_finder", { path }).catch((err) => {
+              logError("Show in Finder failed:", err);
+              toast.error(t.failed_open_folder);
+            })
+          }
+          className={navIconBtn}
+          aria-label={t.wiki_show_in_finder}
+          title={t.wiki_show_in_finder}
+        >
+          <FolderOpen size={14} />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-8 py-8">
+        <div className="max-w-[720px] mx-auto">
+          <p className="text-xs text-muted mb-6">{t.wiki_file_read_only}</p>
+          {isLoading ? (
+            <div className="space-y-3">
+              <Skeleton width="50%" height={20} rounded="md" />
+              <Skeleton width="90%" height={14} rounded="md" />
+              <Skeleton width="80%" height={14} rounded="md" />
+            </div>
+          ) : isError || !content ? (
+            <EmptyState message={t.wiki_file_unreadable} />
+          ) : (
+            <div className="tiptap-editor is-reading" onClick={handleClick}>
+              <div className="ProseMirror wiki-doc" dangerouslySetInnerHTML={{ __html: content.html }} />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

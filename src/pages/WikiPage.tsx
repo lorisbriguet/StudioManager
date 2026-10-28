@@ -5,14 +5,11 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
 import { useSearchParams } from "react-router-dom";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
-import { isAllowedWikiLink, parseWikiArticleId } from "../lib/wikiLinks";
+import { isAllowedWikiLink, parseWikiArticleId, parseWikiFileKey, wikiFileHref } from "../lib/wikiLinks";
 import { logError } from "../lib/log";
 import {
   Plus,
-  ArrowLeft,
-  FolderOpen,
   BookOpen,
-  FileText,
   X,
   Trash2,
   Heading1,
@@ -21,6 +18,14 @@ import {
   List,
   Link as LinkIcon,
   Minus,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  Pencil,
+  PanelLeft,
+  PanelRight,
+  Waypoints,
+  File,
 } from "lucide-react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
@@ -28,13 +33,10 @@ import { useT } from "../i18n/useT";
 import { useAppStore } from "../stores/app-store";
 import { getTagColor } from "../lib/tagColors";
 import { notifyError, getLabels } from "../lib/notifyError";
-import { PageHeader, SearchBar, Button, EmptyState } from "../components/ui";
+import { Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem } from "../components/ui";
 import { Select } from "../components/ui/Select";
 import {
   useWikiFolders,
-  useCreateWikiFolder,
-  useUpdateWikiFolder,
-  useDeleteWikiFolder,
   useWikiArticles,
   useWikiArticle,
   useCreateWikiArticle,
@@ -45,7 +47,20 @@ import {
   useAllWikiTags,
 } from "../db/hooks/useWiki";
 import { useProjects } from "../db/hooks/useProjects";
-import type { WikiFolder, WikiArticleWithTags } from "../types/wiki";
+import type { WikiFolder } from "../types/wiki";
+import { useOrgStore } from "../stores/org-store";
+import { buildLinkIndex, linkFirstMention, wordCount } from "../lib/wikiGraph";
+import { WikiExplorer } from "../components/wiki/WikiExplorer";
+import { WikiGraph } from "../components/wiki/WikiGraph";
+import { WikiSidePanel, DocSidePanel } from "../components/wiki/WikiSidePanel";
+import { projectColors } from "../components/wiki/wikiColors";
+import { closeTab, EMPTY_TABS, openInTabs, pruneTabs, tabArticleId, tabRef, type TabsState, type WikiRef } from "../lib/wikiTabs";
+import { useProjectDocs, type ProjectDoc } from "../db/hooks/useProjectDocs";
+import { DocView } from "../components/wiki/DocView";
+
+/** Icon-only buttons in the wiki's bars: the app tab bar's back/forward style. */
+const navIconBtn =
+  "shrink-0 p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none transition-colors";
 
 // ─── Slash Command Menu ───────────────────────────────────────────
 interface SlashMenuItem {
@@ -93,24 +108,43 @@ function getSlashCommands(t: ReturnType<typeof useT>): SlashMenuItem[] {
 }
 
 // ─── Link Insert Popup ───────────────────────────────────────────
+interface LinkTarget {
+  /** `a:<id>` for an article, the file key for a project file. */
+  key: string;
+  title: string;
+  project_id: number | null;
+  project_name?: string;
+  href: string;
+  file?: boolean;
+}
+
+/** Link picker, opened by /link or by typing [[ (then `initialQuery` is
+ *  set and articles show before anything is typed). */
 function LinkInsertPopup({
   position,
   articles,
   currentArticleId,
+  currentProjectId,
+  initialQuery,
   onInsert,
+  onCreate,
   onClose,
 }: {
   position: { top: number; left: number };
-  articles: { id: number; title: string }[];
+  articles: LinkTarget[];
   currentArticleId: number;
+  currentProjectId: number | null;
+  initialQuery?: string;
   onInsert: (href: string, text: string) => void;
+  onCreate?: (title: string) => void;
   onClose: () => void;
 }) {
   const t = useT();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery ?? "");
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
+  const bracket = initialQuery !== undefined;
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -127,18 +161,38 @@ function LinkInsertPopup({
   }, [onClose]);
 
   const isUrl = /^https?:\/\//.test(query.trim());
+  const q = query.trim().toLowerCase();
 
   const matchedArticles = useMemo(() => {
-    if (!query.trim() || isUrl) return [];
-    const q = query.toLowerCase();
+    if (isUrl || (!q && !bracket)) return [];
+    // Same project first, then titles that start with the query.
+    const rank = (a: LinkTarget) =>
+      (a.project_id === currentProjectId ? 0 : 2) + (a.title.toLowerCase().startsWith(q) ? 0 : 1);
     return articles
-      .filter((a) => a.id !== currentArticleId && a.title.toLowerCase().includes(q))
+      .filter((a) => a.key !== `a:${currentArticleId}` && (!q || a.title.toLowerCase().includes(q)))
+      .sort((a, b) => rank(a) - rank(b))
       .slice(0, 8);
-  }, [query, isUrl, articles, currentArticleId]);
+  }, [q, isUrl, bracket, articles, currentArticleId, currentProjectId]);
+
+  const canCreate =
+    !!onCreate &&
+    !isUrl &&
+    q !== "" &&
+    !articles.some((a) => !a.file && a.title.toLowerCase() === q && a.project_id === currentProjectId);
+  const optionCount = matchedArticles.length + (canCreate ? 1 : 0);
 
   useEffect(() => {
     setSelectedIdx(0);
   }, [query]);
+
+  const choose = (i: number) => {
+    if (i < matchedArticles.length) {
+      const article = matchedArticles[i];
+      onInsert(article.href, article.file ? article.title.split("/").pop()! : article.title);
+    } else if (canCreate) {
+      onCreate!(query.trim());
+    }
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
@@ -146,29 +200,26 @@ function LinkInsertPopup({
       onClose();
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (isUrl) {
-        onInsert(query.trim(), "link");
-      } else if (matchedArticles.length > 0) {
-        const article = matchedArticles[selectedIdx];
-        onInsert(`/wiki?article=${article.id}`, article.title);
-      }
+      if (isUrl) onInsert(query.trim(), "link");
+      else if (optionCount > 0) choose(selectedIdx);
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      if (matchedArticles.length > 0) {
-        setSelectedIdx((i) => (i + 1) % matchedArticles.length);
-      }
+      if (optionCount > 0) setSelectedIdx((i) => (i + 1) % optionCount);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      if (matchedArticles.length > 0) {
-        setSelectedIdx((i) => (i - 1 + matchedArticles.length) % matchedArticles.length);
-      }
+      if (optionCount > 0) setSelectedIdx((i) => (i - 1 + optionCount) % optionCount);
     }
   };
+
+  const rowClass = (i: number) =>
+    `w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] ${
+      i === selectedIdx ? "bg-[var(--color-hover-row)]" : ""
+    } hover:bg-[var(--color-hover-row)]`;
 
   return (
     <div
       ref={popupRef}
-      className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] min-w-[280px] overflow-hidden"
+      className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] w-80 overflow-hidden"
       style={{ top: position.top, left: position.left }}
     >
       <div className="px-3 pt-3 pb-2">
@@ -178,6 +229,7 @@ function LinkInsertPopup({
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={t.link_url_or_article ?? "URL or article name..."}
+          aria-label={t.wiki_link_to_article}
           className="w-full border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-3 py-1.5 text-sm placeholder:text-muted outline-none"
         />
       </div>
@@ -186,38 +238,54 @@ function LinkInsertPopup({
           <span className="text-xs text-muted">{t.press_enter_to_insert ?? "Press Enter to insert link"}</span>
         </div>
       )}
-      {!isUrl && query.trim() && matchedArticles.length > 0 && (
-        <div className="border-t border-[var(--color-border-divider)] py-1 max-h-48 overflow-y-auto">
+      {optionCount > 0 && (
+        <div className="border-t border-[var(--color-border-divider)] py-1 max-h-64 overflow-y-auto">
           <div className="px-3 py-1">
-            <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{t.wiki_articles ?? "Wiki articles"}</span>
+            <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{t.wiki_link_to_article}</span>
           </div>
           {matchedArticles.map((article, i) => (
             <button
-              key={article.id}
-              className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] ${
-                i === selectedIdx ? "bg-[var(--color-hover-row)]" : ""
-              } hover:bg-[var(--color-hover-row)]`}
+              key={article.key}
+              className={rowClass(i)}
               onMouseEnter={() => setSelectedIdx(i)}
               onMouseDown={(e) => {
                 e.preventDefault();
-                onInsert(`/wiki?article=${article.id}`, article.title);
+                choose(i);
               }}
             >
-              <BookOpen size={14} className="text-muted shrink-0" />
+              {article.file ? <File size={14} className="text-muted shrink-0" /> : <BookOpen size={14} className="text-muted shrink-0" />}
               <span className="truncate">{article.title}</span>
+              <span className="ml-auto pl-2 text-xs text-muted truncate max-w-32">
+                {article.project_id != null && article.project_id === currentProjectId
+                  ? t.wiki_this_project
+                  : article.project_name ?? ""}
+              </span>
             </button>
           ))}
+          {canCreate && (
+            <button
+              className={`${rowClass(matchedArticles.length)} border-t border-[var(--color-border-divider)]`}
+              onMouseEnter={() => setSelectedIdx(matchedArticles.length)}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                choose(matchedArticles.length);
+              }}
+            >
+              <Plus size={14} className="text-muted shrink-0" />
+              <span className="truncate">{t.wiki_new_article_named.replace("{title}", query.trim())}</span>
+            </button>
+          )}
           <div className="px-3 pt-1 pb-0.5">
             <span className="text-[10px] text-muted">{t.wiki_link_open_hint}</span>
           </div>
         </div>
       )}
-      {!isUrl && query.trim() && matchedArticles.length === 0 && (
+      {!isUrl && q && optionCount === 0 && (
         <div className="px-3 pb-2">
           <span className="text-xs text-muted">{t.no_results ?? "No results"}</span>
         </div>
       )}
-      {!query.trim() && (
+      {!q && !bracket && (
         <div className="px-3 pb-2">
           <span className="text-xs text-muted">{t.link_hint ?? "Type a URL (http...) or search wiki articles"}</span>
         </div>
@@ -307,15 +375,29 @@ function SlashCommandMenu({
 
 // ─── Article Editor ───────────────────────────────────────────────
 // Exported for testability (wikiAutosave.test.tsx exercises it directly).
+export type WikiMode = "reading" | "editing";
+
 export function ArticleEditor({
   articleId,
   onBack,
   onOpenArticle,
+  linkFiles = [],
+  mode = "editing",
+  onModeChange,
+  nav,
 }: {
   articleId: number;
-  onBack: () => void;
-  /** Called when the user Cmd/Ctrl-clicks an internal wiki link. */
-  onOpenArticle?: (id: number) => void;
+  /** Called after the article is deleted (closes its tab). */
+  onBack?: () => void;
+  /** Follows an internal wiki link; `newTab` on Cmd-click while reading. */
+  onOpenArticle?: (ref: WikiRef, newTab?: boolean) => void;
+  /** Project files the link picker offers besides articles. */
+  linkFiles?: ProjectDoc[];
+  /** Reading shows the article read-only and links open on a plain click. */
+  mode?: WikiMode;
+  onModeChange?: (mode: WikiMode) => void;
+  /** Back/forward through this tab's history, and the folder for the breadcrumb. */
+  nav?: { canBack: boolean; canForward: boolean; onBack: () => void; onForward: () => void; folderName?: string };
 }) {
   const t = useT();
   const darkMode = useAppStore((s) => s.darkMode);
@@ -334,7 +416,16 @@ export function ArticleEditor({
   const [tagInput, setTagInput] = useState("");
   const [slashMenu, setSlashMenu] = useState<{ top: number; left: number } | null>(null);
   const [slashFilter, setSlashFilter] = useState("");
-  const [linkPopup, setLinkPopup] = useState<{ top: number; left: number } | null>(null);
+  // `bracketFrom` is set when the picker was opened by typing [[: that text
+  // is replaced by the link.
+  const [linkPopup, setLinkPopup] = useState<{
+    top: number;
+    left: number;
+    bracketFrom?: number;
+    query?: string;
+  } | null>(null);
+  const createArticle = useCreateWikiArticle();
+  const reading = mode === "reading";
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Tracks which article the currently-pending debounced save belongs to,
@@ -388,6 +479,7 @@ export function ArticleEditor({
         }),
       ],
       content: article?.content ?? "",
+      editable: mode === "editing",
       onUpdate: ({ editor: ed }) => {
         const html = ed.getHTML();
         debouncedSave(html);
@@ -399,6 +491,16 @@ export function ArticleEditor({
         const $pos = state.doc.resolve(from);
         const lineStart = $pos.start();
         const textInLine = state.doc.textBetween(lineStart, from, "\0");
+        // "[[" opens the link picker; what follows becomes its search.
+        const bracketMatch = textInLine.match(/\[\[([^[\]\0]*)$/);
+        if (bracketMatch) {
+          const bracketFrom = from - bracketMatch[0].length;
+          const coords = ed.view.coordsAtPos(bracketFrom);
+          setSlashMenu(null);
+          setSlashFilter("");
+          setLinkPopup({ top: coords.bottom + 4, left: coords.left, bracketFrom, query: bracketMatch[1] });
+          return;
+        }
         // Check if there's a "/" with optional command text after it
         const slashMatch = textInLine.match(/\/(\w*)$/);
         if (slashMatch) {
@@ -413,6 +515,10 @@ export function ArticleEditor({
     },
     [article?.id]
   );
+
+  useEffect(() => {
+    editor?.setEditable(mode === "editing");
+  }, [editor, mode]);
 
   const handleTitleBlur = useCallback(() => {
     if (article && title !== article.title) {
@@ -465,7 +571,7 @@ export function ArticleEditor({
     const confirmed = await ask(t.delete + "?", { kind: "warning" });
     if (confirmed) {
       deleteArticle.mutate(articleId);
-      onBack();
+      onBack?.();
     }
   }, [articleId, deleteArticle, onBack, t.delete]);
 
@@ -528,6 +634,19 @@ export function ArticleEditor({
   const handleLinkInsert = useCallback(
     (href: string, text: string) => {
       if (!editor) return;
+      if (linkPopup?.bracketFrom !== undefined) {
+        // Replace the typed "[[query" with the link, then stop the link
+        // mark so the next characters are plain text.
+        editor
+          .chain()
+          .focus()
+          .deleteRange({ from: linkPopup.bracketFrom, to: editor.state.selection.from })
+          .insertContent({ type: "text", text, marks: [{ type: "link", attrs: { href } }] })
+          .unsetMark("link")
+          .run();
+        setLinkPopup(null);
+        return;
+      }
       const { from, to } = editor.state.selection;
       if (from === to) {
         editor
@@ -544,22 +663,49 @@ export function ArticleEditor({
       }
       setLinkPopup(null);
     },
-    [editor]
+    [editor, linkPopup]
   );
 
-  // Links can't open on a plain click: that click places the cursor so the
-  // link text stays editable. Cmd/Ctrl-click follows the link instead.
+  // A link to an article that doesn't exist yet: create it beside this one.
+  const handleLinkCreate = useCallback(
+    (newTitle: string) => {
+      createArticle.mutate(
+        { title: newTitle, folder_id: article?.folder_id ?? null, project_id: article?.project_id ?? null },
+        {
+          onSuccess: (newId: number) => handleLinkInsert(`/wiki?article=${newId}`, newTitle),
+          onError: (e) => notifyError(getLabels().operation_failed, e),
+        }
+      );
+    },
+    [createArticle, article?.folder_id, article?.project_id, handleLinkInsert]
+  );
+
+  const closeLinkPopup = useCallback(() => {
+    const fromBracket = linkPopup?.bracketFrom !== undefined;
+    setLinkPopup(null);
+    if (fromBracket) editor?.commands.focus();
+  }, [linkPopup, editor]);
+
+  // While editing, a plain click places the cursor so the link text stays
+  // editable, and Cmd/Ctrl-click follows the link. While reading, a plain
+  // click follows it and Cmd/Ctrl-click opens it in a new tab.
   const handleEditorClick = useCallback(
     (e: React.MouseEvent) => {
       const anchor = (e.target as HTMLElement).closest("a");
       if (!anchor) return;
       // Never let the webview itself navigate to a stored href.
       e.preventDefault();
-      if (!(e.metaKey || e.ctrlKey)) return;
+      const modifier = e.metaKey || e.ctrlKey;
+      if (!reading && !modifier) return;
       const href = anchor.getAttribute("href") ?? "";
+      const fileKey = parseWikiFileKey(href);
+      if (fileKey) {
+        onOpenArticle?.(fileKey, reading && modifier);
+        return;
+      }
       const targetId = parseWikiArticleId(href);
       if (targetId !== null) {
-        if (targetId !== articleId) onOpenArticle?.(targetId);
+        if (targetId !== articleId) onOpenArticle?.(targetId, reading && modifier);
         return;
       }
       if (/^https?:\/\//i.test(href)) {
@@ -569,462 +715,288 @@ export function ArticleEditor({
         });
       }
     },
-    [articleId, onOpenArticle, t.failed_to_open_url]
+    [articleId, onOpenArticle, reading, t.failed_to_open_url]
   );
 
   if (!article) return null;
 
+
   return (
-    <div className="flex-1 flex flex-col min-h-0 page-transition">
-      {/* Top bar */}
-      <div className="flex items-center gap-2 px-6 py-3 border-b border-[var(--color-border-divider)]">
-        <button
-          onClick={onBack}
-          className="text-muted hover:text-[var(--color-text-secondary)] transition-colors"
-          aria-label={t.back}
-        >
-          <ArrowLeft size={18} />
-        </button>
-        <span className="text-sm text-muted">{t.back}</span>
-        <div className="flex-1" />
+    <div className="flex-1 flex flex-col min-h-0">
+      {/* Top bar: history, breadcrumb, mode, delete */}
+      <div className={`${PANEL_TOP_BAR} gap-1 px-3 border-[var(--color-border-divider)]`}>
+        {nav && (
+          <>
+            <button onClick={nav.onBack} disabled={!nav.canBack} className={navIconBtn} aria-label={t.wiki_back} title={t.wiki_back}>
+              <ChevronLeft size={14} />
+            </button>
+            <button onClick={nav.onForward} disabled={!nav.canForward} className={navIconBtn} aria-label={t.wiki_forward} title={t.wiki_forward}>
+              <ChevronRight size={14} />
+            </button>
+          </>
+        )}
+        <div className="flex-1 min-w-0 text-center text-xs text-muted truncate">
+          {[nav?.folderName, article.project_name].filter(Boolean).map((part, i) => (
+            <span key={i}>
+              {part} <span className="opacity-50">/</span>{" "}
+            </span>
+          ))}
+          <span className="text-[var(--color-text)]">{article.title}</span>
+        </div>
+        {onModeChange && (
+          <button
+            onClick={() => onModeChange(reading ? "editing" : "reading")}
+            className={`${navIconBtn} ${reading ? "" : "text-accent hover:text-accent"}`}
+            aria-label={reading ? t.wiki_switch_to_editing : t.wiki_switch_to_reading}
+            aria-pressed={!reading}
+            title={reading ? t.wiki_switch_to_editing : t.wiki_switch_to_reading}
+          >
+            {reading ? <Pencil size={14} /> : <Eye size={14} />}
+          </button>
+        )}
         <button
           onClick={handleDeleteArticle}
-          className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger-text)] transition-colors"
+          className="p-1 rounded-md text-muted hover:text-[var(--color-danger-text)] transition-colors"
           title={t.delete}
           aria-label={t.delete}
         >
-          <Trash2 size={16} />
+          <Trash2 size={14} />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-4">
-        {/* Title */}
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={handleTitleBlur}
-          onKeyDown={handleTitleKeyDown}
-          placeholder={t.untitled}
-          className="w-full text-xl font-semibold tracking-tight bg-transparent border-none outline-none mb-3 text-[var(--color-text)] placeholder:text-muted"
-        />
+      <div className="flex-1 overflow-y-auto px-8 py-8">
+        <div className="max-w-[720px] mx-auto">
+          {/* Title */}
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={handleTitleBlur}
+            onKeyDown={handleTitleKeyDown}
+            readOnly={reading}
+            placeholder={t.untitled}
+            className="w-full text-xl font-semibold tracking-tight bg-transparent border-none outline-none mb-3 text-[var(--color-text)] placeholder:text-muted"
+          />
 
-        {/* Metadata row */}
-        <div className="flex items-center gap-3 mb-4 flex-wrap">
-          {/* Tags */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {articleTags.map((tag) => {
-              const color = getTagColor(tag, darkMode);
-              return (
-                <span
-                  key={tag}
-                  style={{ background: color.bg, color: color.text }}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full font-medium"
-                >
-                  {tag}
-                  <button
-                    onClick={() => handleRemoveTag(tag)}
-                    className="opacity-60 hover:opacity-100"
-                    aria-label={`${t.remove_tag} ${tag}`}
+          {/* Metadata row */}
+          <div className="flex items-center gap-3 mb-6 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {articleTags.map((tag) => {
+                const color = getTagColor(tag, darkMode);
+                return (
+                  <span
+                    key={tag}
+                    style={{ background: color.bg, color: color.text }}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full font-medium"
                   >
-                    <X size={10} />
-                  </button>
-                </span>
-              );
-            })}
-            <div className="relative">
-              <input
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={handleAddTag}
-                list="wiki-tags-datalist"
-                placeholder={t.add_tag}
-                className="w-24 bg-transparent border-none outline-none text-xs text-muted placeholder:text-muted"
-              />
-              <datalist id="wiki-tags-datalist">
-                {allTags
-                  .filter((tg) => !articleTags.includes(tg))
-                  .map((tg) => (
-                    <option key={tg} value={tg} />
-                  ))}
-              </datalist>
+                    {tag}
+                    {!reading && (
+                      <button
+                        onClick={() => handleRemoveTag(tag)}
+                        className="opacity-60 hover:opacity-100"
+                        aria-label={`${t.remove_tag} ${tag}`}
+                      >
+                        <X size={10} />
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
+              {!reading && (
+                <div className="relative">
+                  <input
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={handleAddTag}
+                    list="wiki-tags-datalist"
+                    placeholder={t.add_tag}
+                    className="w-24 bg-transparent border-none outline-none text-xs text-muted placeholder:text-muted"
+                  />
+                  <datalist id="wiki-tags-datalist">
+                    {allTags
+                      .filter((tg) => !articleTags.includes(tg))
+                      .map((tg) => (
+                        <option key={tg} value={tg} />
+                      ))}
+                  </datalist>
+                </div>
+              )}
             </div>
-          </div>
 
-          <div className="h-4 w-px bg-[var(--color-border-divider)]" />
-
-          {/* Project link */}
-          <Select
-            value={projectId?.toString() ?? ""}
-            onChange={handleProjectChange}
-            fullWidth={false}
-            className="text-xs w-48"
-          >
-            <option value="">{t.no_project}</option>
-            {projects.map((p: { id: number; name: string }) => (
-              <option key={p.id} value={p.id.toString()}>
-                {p.name}
-              </option>
-            ))}
-          </Select>
-        </div>
-
-        {/* Tiptap editor */}
-        <div className="tiptap-editor relative" onClick={handleEditorClick}>
-          <EditorContent editor={editor} />
-          {slashMenu && (
-            <SlashCommandMenu
-              position={slashMenu}
-              filter={slashFilter}
-              onSelect={handleSlashSelect}
-              onClose={() => { setSlashMenu(null); setSlashFilter(""); }}
-            />
-          )}
-          {linkPopup && (
-            <LinkInsertPopup
-              position={linkPopup}
-              articles={allArticlesForLink.map((a) => ({ id: a.id, title: a.title }))}
-              currentArticleId={articleId}
-              onInsert={handleLinkInsert}
-              onClose={() => setLinkPopup(null)}
-            />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Folder Sidebar ───────────────────────────────────────────────
-function FolderSidebar({
-  selectedFolderId,
-  onSelectFolder,
-  articles,
-}: {
-  selectedFolderId: number | null;
-  onSelectFolder: (id: number | null) => void;
-  articles: WikiArticleWithTags[];
-}) {
-  const t = useT();
-  const { data: folders = [] } = useWikiFolders();
-  const createFolder = useCreateWikiFolder();
-  const updateFolder = useUpdateWikiFolder();
-  const deleteFolder = useDeleteWikiFolder();
-
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editName, setEditName] = useState("");
-  const [contextMenu, setContextMenu] = useState<{
-    folderId: number;
-    x: number;
-    y: number;
-  } | null>(null);
-
-  const contextRef = useRef<HTMLDivElement>(null);
-
-  // Close context menu on outside click
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handler = (e: MouseEvent) => {
-      if (contextRef.current && !contextRef.current.contains(e.target as Node)) {
-        setContextMenu(null);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [contextMenu]);
-
-  const allCount = articles.length;
-  const folderCounts = useMemo(() => {
-    const map = new Map<number, number>();
-    for (const a of articles) {
-      if (a.folder_id != null) {
-        map.set(a.folder_id, (map.get(a.folder_id) || 0) + 1);
-      }
-    }
-    return map;
-  }, [articles]);
-
-  const handleCreateFolder = useCallback(() => {
-    createFolder.mutate(t.new_folder);
-  }, [createFolder, t.new_folder]);
-
-  const handleRenameSubmit = useCallback(
-    (id: number) => {
-      if (editName.trim()) {
-        updateFolder.mutate({ id, data: { name: editName.trim() } });
-      }
-      setEditingId(null);
-    },
-    [editName, updateFolder]
-  );
-
-  const handleDeleteFolder = useCallback(
-    (id: number) => {
-      deleteFolder.mutate(id, {
-        onSuccess: () => {
-          toast.success(t.folder_deleted ?? "Folder deleted");
-        },
-      });
-      if (selectedFolderId === id) onSelectFolder(null);
-      setContextMenu(null);
-    },
-    [deleteFolder, selectedFolderId, onSelectFolder, t.folder_deleted]
-  );
-
-  return (
-    <div className="w-48 shrink-0 border-r border-[var(--color-border-divider)] flex flex-col h-full py-4">
-      <div className="flex items-center justify-between px-3 mb-1">
-        <span className="text-[10px] font-medium uppercase tracking-widest text-muted">
-          {t.folder}
-        </span>
-        <button
-          onClick={handleCreateFolder}
-          className="text-muted hover:text-[var(--color-text-secondary)] transition-colors"
-          aria-label={t.new_folder}
-        >
-          <Plus size={14} />
-        </button>
-      </div>
-
-      <nav className="flex-1 overflow-y-auto space-y-px px-1">
-        {/* All articles */}
-        <button
-          onClick={() => onSelectFolder(null)}
-          className={`w-full text-left flex items-center gap-2 px-3 py-1.5 mx-1 rounded-md text-xs cursor-pointer transition-colors ${
-            selectedFolderId === null
-              ? "bg-accent-light text-accent font-medium"
-              : "text-muted hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
-          }`}
-        >
-          <BookOpen size={14} />
-          <span className="flex-1 truncate">{t.all_articles}</span>
-          <span className="text-xs text-muted">{allCount}</span>
-        </button>
-
-        {/* Folders */}
-        {folders.map((folder: WikiFolder) => (
-          <div key={folder.id}>
-            {editingId === folder.id ? (
-              <div className="px-3 py-1">
-                <input
-                  autoFocus
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  onBlur={() => handleRenameSubmit(folder.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleRenameSubmit(folder.id);
-                    if (e.key === "Escape") setEditingId(null);
-                  }}
-                  className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1 text-sm bg-transparent"
-                />
-              </div>
+            {reading ? (
+              article.project_name && (
+                <span className="px-2 py-0.5 text-xs rounded-full bg-accent-light text-accent">{article.project_name}</span>
+              )
             ) : (
-              <button
-                onClick={() => onSelectFolder(folder.id)}
-                onDoubleClick={() => {
-                  setEditingId(folder.id);
-                  setEditName(folder.name);
-                }}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setContextMenu({ folderId: folder.id, x: e.clientX, y: e.clientY });
-                }}
-                className={`w-full text-left flex items-center gap-2 px-3 py-1.5 mx-1 rounded-md text-xs cursor-pointer transition-colors ${
-                  selectedFolderId === folder.id
-                    ? "bg-accent-light text-accent font-medium"
-                    : "text-muted hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
-                }`}
-              >
-                <FolderOpen size={14} />
-                <span className="flex-1 truncate">{folder.name}</span>
-                <span className="text-xs text-muted">
-                  {folderCounts.get(folder.id) || 0}
-                </span>
-              </button>
+              <>
+                <div className="h-4 w-px bg-[var(--color-border-divider)]" />
+                <Select
+                  value={projectId?.toString() ?? ""}
+                  onChange={handleProjectChange}
+                  fullWidth={false}
+                  className="text-xs w-48"
+                >
+                  <option value="">{t.no_project}</option>
+                  {projects.map((p: { id: number; name: string }) => (
+                    <option key={p.id} value={p.id.toString()}>
+                      {p.name}
+                    </option>
+                  ))}
+                </Select>
+              </>
             )}
           </div>
-        ))}
-      </nav>
 
-      {/* Context menu */}
-      {contextMenu && (
-        <div
-          ref={contextRef}
-          className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[160px]"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-        >
-          <button
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-hover-row)]"
-            onClick={() => handleDeleteFolder(contextMenu.folderId)}
-          >
-            <Trash2 size={14} />
-            {t.delete}
-          </button>
+          {/* Tiptap editor */}
+          <div className={`tiptap-editor relative ${reading ? "is-reading" : ""}`} onClick={handleEditorClick}>
+            <EditorContent editor={editor} />
+            {slashMenu && (
+              <SlashCommandMenu
+                position={slashMenu}
+                filter={slashFilter}
+                onSelect={handleSlashSelect}
+                onClose={() => { setSlashMenu(null); setSlashFilter(""); }}
+              />
+            )}
+            {linkPopup && (
+              <LinkInsertPopup
+                position={linkPopup}
+                articles={[
+                  ...allArticlesForLink.map((a) => ({
+                    key: `a:${a.id}`,
+                    title: a.title,
+                    project_id: a.project_id,
+                    project_name: a.project_name,
+                    href: `/wiki?article=${a.id}`,
+                  })),
+                  ...linkFiles.map((d) => ({
+                    key: d.key,
+                    title: d.rel,
+                    project_id: d.projectId,
+                    project_name: d.projectName,
+                    href: wikiFileHref(d.projectId, d.rel),
+                    file: true,
+                  })),
+                ]}
+                currentArticleId={articleId}
+                currentProjectId={article.project_id}
+                initialQuery={linkPopup.bracketFrom !== undefined ? linkPopup.query ?? "" : undefined}
+                onInsert={handleLinkInsert}
+                onCreate={handleLinkCreate}
+                onClose={closeLinkPopup}
+              />
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
-// ─── Article List ─────────────────────────────────────────────────
-function ArticleList({
-  articles,
-  search,
-  tagFilter,
-  onSelectArticle,
-  onDeleteArticle,
-}: {
-  articles: WikiArticleWithTags[];
-  search: string;
-  tagFilter: string[];
-  onSelectArticle: (id: number) => void;
-  onDeleteArticle: (id: number) => void;
-}) {
-  const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
-  const [ctxMenu, setCtxMenu] = useState<{ id: number; x: number; y: number } | null>(null);
-  const ctxRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!ctxMenu) return;
-    const handler = (e: MouseEvent) => {
-      if (ctxRef.current && !ctxRef.current.contains(e.target as Node)) {
-        setCtxMenu(null);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [ctxMenu]);
-
-  const filtered = useMemo(() => {
-    let list = articles;
-    if (search) {
-      const q = search.toLowerCase();
-      list = list.filter(
-        (a) =>
-          a.title.toLowerCase().includes(q) ||
-          (a.tags ?? []).some((tag: string) => tag.toLowerCase().includes(q))
-      );
-    }
-    if (tagFilter.length > 0) {
-      list = list.filter((a) =>
-        tagFilter.every((tf) => (a.tags ?? []).includes(tf))
-      );
-    }
-    return list;
-  }, [articles, search, tagFilter]);
-
-  if (filtered.length === 0) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted">
-        <FileText size={32} />
-        <span className="text-sm">{t.no_articles_yet}</span>
-      </div>
-    );
+function readStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
   }
+}
 
-  return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="border-b border-[var(--color-border-header)]">
-          <th className="text-left px-4 py-2.5 text-xs text-muted">
-            {t.name}
-          </th>
-          <th className="text-left px-4 py-2.5 text-xs text-muted">
-            {t.tags}
-          </th>
-          <th className="text-left px-4 py-2.5 text-xs text-muted">
-            {t.project}
-          </th>
-          <th className="text-left px-4 py-2.5 text-xs text-muted">
-            {t.updated}
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {filtered.map((article) => (
-          <tr
-            key={article.id}
-            onClick={() => onSelectArticle(article.id)}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setCtxMenu({ id: article.id, x: e.clientX, y: e.clientY });
-            }}
-            className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] cursor-pointer"
-          >
-            <td className="px-4 py-2.5 font-medium">{article.title}</td>
-            <td className="px-4 py-2.5">
-              <div className="flex items-center gap-1 flex-wrap">
-                {(article.tags ?? []).map((tag: string) => {
-                  const color = getTagColor(tag, darkMode);
-                  return (
-                    <span
-                      key={tag}
-                      style={{ background: color.bg, color: color.text }}
-                      className="px-2 py-0.5 text-xs rounded-full font-medium"
-                    >
-                      {tag}
-                    </span>
-                  );
-                })}
-              </div>
-            </td>
-            <td className="px-4 py-2.5 text-muted">
-              {article.project_name ?? ""}
-            </td>
-            <td className="px-4 py-2.5 text-muted text-xs">
-              {article.updated_at
-                ? new Date(article.updated_at).toLocaleDateString()
-                : ""}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-      {ctxMenu && (
-        <div
-          ref={ctxRef}
-          className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[160px]"
-          style={{ top: ctxMenu.y, left: ctxMenu.x }}
-        >
-          <button
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-hover-row)]"
-            onClick={() => {
-              onDeleteArticle(ctxMenu.id);
-              setCtxMenu(null);
-            }}
-          >
-            <Trash2 size={14} />
-            {t.delete}
-          </button>
-        </div>
-      )}
-    </table>
-  );
+function writeStored(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Storage unavailable: the layout just won't be remembered.
+  }
 }
 
 // ─── Main WikiPage ────────────────────────────────────────────────
 export function WikiPage() {
   const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
-
-  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
-  const [selectedArticleId, setSelectedArticleId] = useState<number | null>(null);
-  const [search, setSearch] = useState("");
-  const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const tabsKey = useOrgStore((s) => s.orgKey("wikiTabs"));
 
   const { data: allArticles = [], isSuccess: articlesLoaded } = useWikiArticles();
-  const { data: allTags = [] } = useAllWikiTags();
+  const { data: folders = [] } = useWikiFolders();
+  const { data: projects = [] } = useProjects();
+  const docs = useProjectDocs(projects);
+  const docsByKey = useMemo(() => new Map(docs.map((d) => [d.key, d])), [docs]);
   const createArticle = useCreateWikiArticle();
+  const deleteArticle = useDeleteWikiArticle();
+  const updateArticle = useUpdateWikiArticle();
+
+  const [tabsState, setTabsState] = useState<TabsState>(() => readStored(tabsKey, EMPTY_TABS));
+  const [mode, setModeState] = useState<WikiMode>(() => readStored<WikiMode>("wikiMode", "reading"));
+  const [explorerOpen, setExplorerOpen] = useState(() => readStored("wikiExplorerOpen", true));
+  const [sideOpen, setSideOpen] = useState(() => readStored("wikiSidePanelOpen", true));
+
+  useEffect(() => writeStored(tabsKey, tabsState), [tabsKey, tabsState]);
+  const setMode = useCallback((m: WikiMode) => {
+    setModeState(m);
+    writeStored("wikiMode", m);
+  }, []);
+
+  const byId = useMemo(() => new Map(allArticles.map((a) => [a.id, a])), [allArticles]);
+  const index = useMemo(() => buildLinkIndex(allArticles), [allArticles]);
+  const colors = useMemo(
+    () => projectColors([...allArticles.map((a) => a.project_id), ...docs.map((d) => d.projectId)]),
+    [allArticles, docs]
+  );
+  const folderNames = useMemo(() => new Map(folders.map((f: WikiFolder) => [f.id, f.name])), [folders]);
+
+  useEffect(() => {
+    if (!articlesLoaded) return;
+    setTabsState((s) => pruneTabs(s, new Set(allArticles.map((a) => a.id))));
+  }, [articlesLoaded, allArticles]);
+
+  const activeTab = tabsState.tabs.find((tab) => tab.key === tabsState.active);
+  const activeId = tabArticleId(activeTab);
+  const activeArticle = activeId != null ? byId.get(activeId) : undefined;
+  const activeRef = tabRef(activeTab);
+  const activeFileKey = typeof activeRef === "string" ? activeRef : null;
+  const activeDoc = activeFileKey ? docsByKey.get(activeFileKey) : undefined;
+  // The graph's "current only" view centres on what you had open last.
+  const [lastRef, setLastRef] = useState<WikiRef | null>(null);
+  useEffect(() => {
+    if (activeRef != null) setLastRef(activeRef);
+  }, [activeRef]);
 
   const openArticle = useCallback(
-    (id: number) => {
-      if (allArticles.some((a: WikiArticleWithTags) => a.id === id)) {
-        setSelectedArticleId(id);
-      } else {
+    (id: number, newTab = false) => {
+      if (!byId.has(id)) {
         toast.error(t.wiki_article_not_found);
+        return;
       }
+      setTabsState((s) => openInTabs(s, id, newTab));
     },
-    [allArticles, t.wiki_article_not_found]
+    [byId, t.wiki_article_not_found]
   );
+
+  /** Opens an article (by id) or a project file (by key). */
+  const openRef = useCallback(
+    (ref: WikiRef, newTab = false) => {
+      if (typeof ref === "number") openArticle(ref, newTab);
+      else setTabsState((s) => openInTabs(s, ref, newTab));
+    },
+    [openArticle]
+  );
+
+  const openGraph = useCallback(() => {
+    setTabsState((s) =>
+      s.tabs.some((tab) => tab.kind === "graph")
+        ? { ...s, active: "graph" }
+        : { tabs: [...s.tabs, { key: "graph", kind: "graph" }], active: "graph" }
+    );
+  }, []);
+
+  const moveHistory = useCallback((step: number) => {
+    setTabsState((s) => ({
+      ...s,
+      tabs: s.tabs.map((tab) =>
+        tab.key === s.active && tab.kind === "article"
+          ? { ...tab, pos: Math.min(tab.history.length - 1, Math.max(0, tab.pos + step)) }
+          : tab
+      ),
+    }));
+  }, []);
 
   // Open the article named in the address (`/wiki?article=42`), e.g. from a
   // project page. The param is consumed so the open article stays driven by
@@ -1044,131 +1016,250 @@ export function WikiPage() {
       { replace: true }
     );
   }, [requestedArticle, articlesLoaded, openArticle, setSearchParams]);
-  const deleteArticle = useDeleteWikiArticle();
 
-  const handleDeleteArticle = useCallback(async (id: number) => {
-    const confirmed = await ask(t.delete + "?", { kind: "warning" });
-    if (confirmed) {
-      deleteArticle.mutate(id);
-    }
-  }, [deleteArticle, t.delete]);
+  const handleNewArticle = useCallback(
+    (projectId: number | null) => {
+      createArticle.mutate(
+        { title: t.untitled, folder_id: null, project_id: projectId },
+        {
+          onSuccess: (newId: number) => {
+            setMode("editing");
+            setTabsState((s) => openInTabs(s, newId, true));
+          },
+        }
+      );
+    },
+    [createArticle, t.untitled, setMode]
+  );
 
-  // Filter articles by selected folder
-  const visibleArticles = useMemo(() => {
-    if (selectedFolderId === null) return allArticles;
-    return allArticles.filter(
-      (a: WikiArticleWithTags) => a.folder_id === selectedFolderId
-    );
-  }, [allArticles, selectedFolderId]);
+  const handleDeleteArticle = useCallback(
+    async (id: number) => {
+      const confirmed = await ask(t.delete + "?", { kind: "warning" });
+      if (confirmed) deleteArticle.mutate(id);
+    },
+    [deleteArticle, t.delete]
+  );
 
-  const handleNewArticle = useCallback(() => {
-    createArticle.mutate(
-      { title: t.untitled, folder_id: selectedFolderId },
-      {
-        onSuccess: (newId: number) => {
-          setSelectedArticleId(newId);
-        },
+  const handleLinkIt = useCallback(
+    (sourceId: number) => {
+      const source = byId.get(sourceId);
+      if (!source || !activeArticle) return;
+      const html = linkFirstMention(source.content, activeArticle.title, activeArticle.id);
+      if (html) {
+        updateArticle.mutate(
+          { id: sourceId, data: { content: html } },
+          { onError: (e) => notifyError(getLabels().operation_failed, e) }
+        );
       }
-    );
-  }, [createArticle, selectedFolderId, t.untitled]);
+    },
+    [byId, activeArticle, updateArticle]
+  );
 
-  const toggleTagFilter = useCallback((tag: string) => {
-    setTagFilter((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+  const scrollToHeading = useCallback((headingIndex: number) => {
+    const headings = document.querySelectorAll(
+      ".tiptap-editor .ProseMirror h1, .tiptap-editor .ProseMirror h2, .tiptap-editor .ProseMirror h3"
     );
+    headings[headingIndex]?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
+  const toggleExplorer = () =>
+    setExplorerOpen((o: boolean) => {
+      writeStored("wikiExplorerOpen", !o);
+      return !o;
+    });
+  const toggleSide = () =>
+    setSideOpen((o: boolean) => {
+      writeStored("wikiSidePanelOpen", !o);
+      return !o;
+    });
+
   return (
-    <div className="flex h-full -m-8 page-transition">
-      {/* Folder sidebar */}
-      <FolderSidebar
-        selectedFolderId={selectedFolderId}
-        onSelectFolder={(id) => {
-          setSelectedFolderId(id);
-          setSelectedArticleId(null);
-          setSearch("");
-          setTagFilter([]);
-        }}
-        articles={allArticles}
-      />
+    <div className="flex flex-1 min-h-0 -m-8 page-transition">
+      {explorerOpen && (
+        <WikiExplorer
+          articles={allArticles}
+          docs={docs}
+          activeRef={activeRef}
+          colors={colors}
+          creating={createArticle.isPending}
+          onOpen={openRef}
+          onNewArticle={handleNewArticle}
+          onOpenGraph={openGraph}
+          onDeleteArticle={handleDeleteArticle}
+        />
+      )}
 
-      {/* Main area */}
-      <div className="flex-1 flex flex-col min-h-0">
-        {selectedArticleId ? (
-          // Keyed so moving between articles remounts the editor: the unmount
-          // flush then saves typing still inside the 2s autosave window.
-          <ArticleEditor
-            key={selectedArticleId}
-            articleId={selectedArticleId}
-            onBack={() => setSelectedArticleId(null)}
-            onOpenArticle={openArticle}
-          />
-        ) : (
-          <>
-            {/* Page header */}
-            <div className="px-8 pt-6">
-              <PageHeader title={t.wiki}>
-                <Button icon={<Plus size={16} />} onClick={handleNewArticle} disabled={createArticle.isPending}>
-                  {t.new_article}
-                </Button>
-              </PageHeader>
-            </div>
-
-            {/* Filter bar */}
-            <div className="flex items-center gap-3 px-8 pb-4">
-              <SearchBar
-                value={search}
-                onChange={setSearch}
-                placeholder={t.search_articles}
-              />
-              <div className="flex items-center gap-1.5 flex-wrap flex-1">
-                {allTags.map((tag: string) => {
-                  const color = getTagColor(tag, darkMode);
-                  const active = tagFilter.includes(tag);
-                  return (
-                    <button
-                      key={tag}
-                      onClick={() => toggleTagFilter(tag)}
-                      style={{
-                        background: active ? color.bg : "transparent",
-                        color: active ? color.text : "var(--color-muted)",
-                        borderColor: active ? color.text : "var(--color-border-divider)",
-                      }}
-                      className="px-2 py-0.5 text-xs rounded-full font-medium border transition-colors flex items-center gap-1"
-                    >
-                      {tag}
-                      {active && <X size={10} />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Article list */}
-            <div className="flex-1 overflow-y-auto">
-              {allArticles.length === 0 ? (
-                <EmptyState
-                  message={t.first_run_wiki}
-                  icon={<BookOpen size={32} />}
-                  action={
-                    <Button icon={<Plus size={16} />} onClick={handleNewArticle} disabled={createArticle.isPending}>
-                      {t.new_article}
-                    </Button>
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Tab bar: same tabs and icon buttons as the app's own tab bar */}
+        <div className={`${PANEL_TOP_BAR} border-[var(--color-border-divider)] bg-[var(--color-bg)]`}>
+          <button
+            type="button"
+            onClick={toggleExplorer}
+            className={`${navIconBtn} ml-1.5`}
+            aria-label={t.wiki_explorer}
+            aria-pressed={explorerOpen}
+            title={t.wiki_explorer}
+          >
+            <PanelLeft size={14} />
+          </button>
+          <div role="tablist" aria-label={t.wiki_open_tabs} className="flex items-center flex-1 min-w-0 overflow-x-auto scrollbar-hide">
+            {tabsState.tabs.map((tab) => {
+              const ref = tabRef(tab);
+              const label =
+                tab.kind === "graph"
+                  ? t.wiki_graph
+                  : typeof ref === "string"
+                    ? (docsByKey.get(ref)?.rel ?? ref.split(":").slice(2).join(":")).split("/").pop()!
+                    : byId.get(ref ?? -1)?.title ?? "…";
+              return (
+                <TabItem
+                  key={tab.key}
+                  role="tab"
+                  label={label}
+                  icon={
+                    tab.kind === "graph" ? (
+                      <Waypoints size={14} className="shrink-0" />
+                    ) : typeof ref === "string" ? (
+                      <File size={14} className="shrink-0" />
+                    ) : undefined
                   }
+                  active={tab.key === tabsState.active}
+                  onActivate={() => setTabsState((s) => ({ ...s, active: tab.key }))}
+                  onClose={() => setTabsState((s) => closeTab(s, tab.key))}
+                  closeLabel={t.wiki_close_tab}
                 />
-              ) : (
-                <ArticleList
-                  articles={visibleArticles}
-                  search={search}
-                  tagFilter={tagFilter}
-                  onSelectArticle={setSelectedArticleId}
-                  onDeleteArticle={handleDeleteArticle}
-                />
-              )}
+              );
+            })}
+          </div>
+          {(activeArticle || activeDoc) && (
+            <button
+              type="button"
+              onClick={toggleSide}
+              className={`${navIconBtn} mr-1.5`}
+              aria-label={t.wiki_side_panel}
+              aria-pressed={sideOpen}
+              title={t.wiki_side_panel}
+            >
+              <PanelRight size={14} />
+            </button>
+          )}
+        </div>
+
+        {activeTab?.kind === "graph" ? (
+          <WikiGraph
+            articles={allArticles}
+            folders={folders}
+            index={index}
+            colors={colors}
+            docs={docs}
+            activeRef={lastRef}
+            onOpen={openRef}
+          />
+        ) : activeTab?.kind === "article" && activeFileKey ? (
+          activeDoc ? (
+            <>
+              <DocView
+                key={activeDoc.key}
+                doc={activeDoc}
+                onOpenRef={openRef}
+                nav={{
+                  canBack: activeTab.pos > 0,
+                  canForward: activeTab.pos < activeTab.history.length - 1,
+                  onBack: () => moveHistory(-1),
+                  onForward: () => moveHistory(1),
+                }}
+              />
+              <BottomBar className="justify-end">
+                <span>
+                  {t.wiki_linked_from} {index.fileBacklinks.get(activeDoc.key)?.length ?? 0}
+                </span>
+                <span>{t.wiki_reading}</span>
+              </BottomBar>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <EmptyState message={t.wiki_file_unreadable} icon={<File size={32} />} />
             </div>
+          )
+        ) : activeTab?.kind === "article" && activeId != null && activeArticle ? (
+          <>
+            {/* Keyed so moving between articles remounts the editor: the unmount
+                flush then saves typing still inside the 2s autosave window. */}
+            <ArticleEditor
+              key={activeId}
+              articleId={activeId}
+              onBack={() => setTabsState((s) => closeTab(s, activeTab.key))}
+              onOpenArticle={openRef}
+              linkFiles={docs}
+              mode={mode}
+              onModeChange={setMode}
+              nav={{
+                canBack: activeTab.pos > 0,
+                canForward: activeTab.pos < activeTab.history.length - 1,
+                onBack: () => moveHistory(-1),
+                onForward: () => moveHistory(1),
+                // Articles without a project show the group they sit in (e.g. User Guide).
+                folderName:
+                  activeArticle.project_id == null && activeArticle.folder_id != null
+                    ? folderNames.get(activeArticle.folder_id)
+                    : undefined,
+              }}
+            />
+            <BottomBar className="justify-end">
+              <span>
+                {t.wiki_backlinks} {index.backlinks.get(activeId)?.length ?? 0}
+              </span>
+              <span>
+                {t.wiki_outgoing} {index.outgoing.get(activeId)?.size ?? 0}
+              </span>
+              <span>{t.wiki_words.replace("{n}", String(wordCount(activeArticle.content)))}</span>
+              <span>{mode === "reading" ? t.wiki_reading : t.wiki_editing}</span>
+            </BottomBar>
           </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <EmptyState
+              message={allArticles.length === 0 ? t.first_run_wiki : t.wiki_nothing_open}
+              icon={<BookOpen size={32} />}
+              action={
+                allArticles.length > 0 ? (
+                  <Button variant="secondary" icon={<Waypoints size={14} />} onClick={openGraph}>
+                    {t.wiki_open_graph}
+                  </Button>
+                ) : undefined
+              }
+            />
+          </div>
         )}
       </div>
+
+      {sideOpen && activeArticle && activeTab?.kind === "article" && (
+        <WikiSidePanel
+          article={activeArticle}
+          articles={allArticles}
+          index={index}
+          colors={colors}
+          onOpen={openArticle}
+          onOpenGraph={openGraph}
+          onLinkIt={handleLinkIt}
+          onOutline={scrollToHeading}
+          docs={docs}
+          onOpenFile={openRef}
+        />
+      )}
+      {sideOpen && activeDoc && (
+        <DocSidePanel
+          doc={activeDoc}
+          docs={docs}
+          articles={allArticles}
+          index={index}
+          colors={colors}
+          onOpen={openArticle}
+          onOpenFile={openRef}
+          onOpenGraph={openGraph}
+          onOutline={scrollToHeading}
+        />
+      )}
     </div>
   );
 }

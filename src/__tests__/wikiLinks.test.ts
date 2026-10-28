@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isAllowedWikiLink, parseWikiArticleId } from "../lib/wikiLinks";
+import { isAllowedWikiLink, parseWikiArticleId, parseWikiFileKey, wikiFileHref } from "../lib/wikiLinks";
 
 // Stored wiki content must never carry executable or local-file URLs.
 
@@ -33,5 +33,20 @@ describe("parseWikiArticleId", () => {
     expect(parseWikiArticleId("/wiki?article=abc")).toBeNull();
     expect(parseWikiArticleId("/wiki?article=0")).toBeNull();
     expect(parseWikiArticleId("/wiki?article=4x")).toBeNull();
+  });
+});
+
+describe("project file links", () => {
+  it("round-trips a file path through its link", () => {
+    const href = wikiFileHref(4, "docs/agent access.md");
+    expect(href).toBe("/wiki?file=4:docs/agent%20access.md");
+    expect(isAllowedWikiLink(href)).toBe(true);
+    expect(parseWikiFileKey(href)).toBe("file:4:docs/agent access.md");
+  });
+
+  it("refuses paths that climb out of the project folder", () => {
+    expect(parseWikiFileKey("/wiki?file=4:../secret.md")).toBeNull();
+    expect(parseWikiFileKey("/wiki?file=4:docs//x.md")).toBeNull();
+    expect(parseWikiFileKey("/wiki?article=4")).toBeNull();
   });
 });

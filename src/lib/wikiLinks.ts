@@ -17,3 +17,21 @@ export function parseWikiArticleId(href: string): number | null {
   const id = Number(match[1]);
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
+
+/** A link to a project's Markdown file: `/wiki?file=<projectId>:<path>`. */
+export function wikiFileHref(projectId: number, rel: string): string {
+  return `/wiki?file=${projectId}:${rel.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+/** The tab/link key (`file:<projectId>:<path>`) of a file link, or null. */
+export function parseWikiFileKey(href: string): string | null {
+  const match = /^\/wiki\?(?:.*&)?file=(\d+):([^&#]+)/.exec(href.trim());
+  if (!match) return null;
+  try {
+    const rel = decodeURIComponent(match[2]);
+    if (!rel || rel.split("/").some((part) => part === ".." || part === "")) return null;
+    return `file:${match[1]}:${rel}`;
+  } catch {
+    return null;
+  }
+}

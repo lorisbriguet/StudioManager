@@ -4,12 +4,29 @@ interface ArticleSeed {
   title: string;
   tags: string[];
   content: string;
+  /** Guide articles listed under "See also" at the end, by title, or
+   *  "all" for every other article (the entry point). */
+  related: string[] | "all";
+}
+
+/** Guide articles link to each other by title (`href="guide:Invoices"`) in
+ *  the seed, because their ids only exist once seeded. `seedUserGuide`
+ *  swaps each one for the article's real `/wiki?article=<id>` link. */
+const GUIDE_LINK_PREFIX = "guide:";
+
+function guideHref(title: string): string {
+  return GUIDE_LINK_PREFIX + encodeURIComponent(title);
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 const articles: ArticleSeed[] = [
   // ── 1. Getting Started ──────────────────────────────────────────
   {
     title: "Getting Started",
+    related: "all",
     tags: ["guide", "basics"],
     content: `<h2>Welcome to StudioManager</h2>
 <p>StudioManager is an all-in-one desktop application designed for freelance designers, illustrators, photographers, and creative professionals. It replaces scattered spreadsheets, Notion databases, and invoicing tools with a single, fast, offline-first workspace. All your data stays on your machine — no cloud dependency, no subscriptions.</p>
@@ -24,7 +41,7 @@ const articles: ArticleSeed[] = [
   <li><strong>Create a project</strong> — From the <strong>Projects</strong> page, create a project linked to your client and start adding tasks.</li>
   <li><strong>Send your first invoice</strong> — Go to <strong>Invoices</strong>, create one, add line items, and export the PDF with a Swiss QR-bill.</li>
 </ol>
-<p>Running more than one business? Each one can be its own <strong>organisation</strong> with separate clients, documents, bank details and finances. See the <strong>Organisations</strong> article.</p>
+<p>Running more than one business? Each one can be its own <strong>organisation</strong> with separate clients, documents, bank details and finances. See the <a href="guide:Organisations">Organisations</a> article.</p>
 
 <h2>Navigation</h2>
 <p>The <strong>sidebar</strong> on the left gives you access to every section of the app. Sections are grouped logically:</p>
@@ -58,6 +75,7 @@ const articles: ArticleSeed[] = [
   // ── Organisations ────────────────────────────────────────────────
   {
     title: "Organisations",
+    related: ["Getting Started", "Settings & Customization", "Finance & P&L"],
     tags: ["guide", "organisations"],
     content: `<h2>One app, several businesses</h2>
 <p>An <strong>organisation</strong> is a fully separate business inside StudioManager: its own clients, projects, tasks, invoices, quotes, expenses, income, wiki, resources, business profile and bank details. Nothing is shared between organisations, so a design studio and a side project can live in the same app without mixing numbers.</p>
@@ -95,6 +113,7 @@ const articles: ArticleSeed[] = [
   // ── 2. Clients & Contacts ────────────────────────────────────────
   {
     title: "Clients & Contacts",
+    related: ["Projects & Tasks", "Invoices", "Quotes", "Saved Filters", "Batch Operations"],
     tags: ["guide", "clients"],
     content: `<h2>Managing Clients</h2>
 <p>The <strong>Clients</strong> page is your client database. Each client has a name, address, language preference (French or English), and optional discount settings.</p>
@@ -135,6 +154,7 @@ const articles: ArticleSeed[] = [
   // ── 3. Projects & Tasks ──────────────────────────────────────────
   {
     title: "Projects & Tasks",
+    related: ["Clients & Contacts", "Calendar", "Resources & Wiki", "Dashboard & Widgets", "Keyboard Shortcuts"],
     tags: ["guide", "projects", "tasks"],
     content: `<h2>Projects Overview</h2>
 <p>The <strong>Projects</strong> page shows all your projects as cards in a grid. Each card displays the project name, client, progress bar, and priority indicator (a colored dot: red=high, yellow=medium, green=low). Filter by status using the pills at the top: All, Active, Completed, On Hold, Cancelled.</p>
@@ -183,6 +203,7 @@ const articles: ArticleSeed[] = [
   // ── 4. Invoices ──────────────────────────────────────────────────
   {
     title: "Invoices",
+    related: ["Quotes", "Clients & Contacts", "Finance & P&L", "Batch Operations", "Context Menus"],
     tags: ["guide", "invoices", "finance"],
     content: `<h2>Invoice Overview</h2>
 <p>The <strong>Invoices</strong> page lists all your invoices grouped by year. Each row shows the reference, client, date, status, and amount. Click the gear icon on any row to access actions like edit, preview, duplicate, mark as sent, or delete.</p>
@@ -241,6 +262,7 @@ const articles: ArticleSeed[] = [
   // ── 5. Quotes ────────────────────────────────────────────────────
   {
     title: "Quotes",
+    related: ["Invoices", "Clients & Contacts", "Context Menus"],
     tags: ["guide", "quotes", "finance"],
     content: `<h2>Quote Overview</h2>
 <p>Quotes work similarly to invoices but for proposals and estimates. The <strong>Quotes</strong> page lists all quotes with reference, client, date, status, and total amount.</p>
@@ -277,6 +299,7 @@ const articles: ArticleSeed[] = [
   // ── 6. Expenses & Income ─────────────────────────────────────────
   {
     title: "Expenses & Income",
+    related: ["Finance & P&L", "Settings & Customization", "Batch Operations", "Context Menus"],
     tags: ["guide", "expenses", "income", "finance"],
     content: `<h2>Expenses</h2>
 <p>The <strong>Expenses</strong> page tracks all your business expenses. Expenses are grouped by year with collapsible sections showing the yearly total.</p>
@@ -313,6 +336,7 @@ const articles: ArticleSeed[] = [
   // ── 7. Calendar ──────────────────────────────────────────────────
   {
     title: "Calendar",
+    related: ["Projects & Tasks", "Settings & Customization"],
     tags: ["guide", "calendar"],
     content: `<h2>Calendar Overview</h2>
 <p>The <strong>Calendar</strong> page shows all your tasks, deadlines, and financial events in a visual timeline. Switch between <strong>Month</strong> and <strong>Week</strong> views using the buttons in the top-right corner. Use the arrow buttons to navigate between periods.</p>
@@ -351,6 +375,7 @@ const articles: ArticleSeed[] = [
   // ── 8. Dashboard & Widgets ───────────────────────────────────────
   {
     title: "Dashboard & Widgets",
+    related: ["Finance & P&L", "Projects & Tasks"],
     tags: ["guide", "dashboard"],
     content: `<h2>Dashboard Overview</h2>
 <p>The <strong>Dashboard</strong> is your home screen — a customizable grid of widgets showing key metrics, charts, and quick actions. Widgets can be dragged, resized, added, and removed.</p>
@@ -410,6 +435,7 @@ const articles: ArticleSeed[] = [
   // ── 9. Resources & Wiki ──────────────────────────────────────────
   {
     title: "Resources & Wiki",
+    related: ["Projects & Tasks", "Keyboard Shortcuts"],
     tags: ["guide", "resources", "wiki"],
     content: `<h2>Resources</h2>
 <p>The <strong>Resources</strong> page is a bookmark manager for links, tools, and references you use in your work. Each resource has a name, URL, price (free/paid), and tags.</p>
@@ -426,12 +452,14 @@ const articles: ArticleSeed[] = [
 <h2>Wiki</h2>
 <p>The <strong>Wiki</strong> page is a built-in knowledge base for writing articles, documentation, processes, and notes. Articles are organized into folders and can be tagged and linked to projects.</p>
 
-<h2>Wiki Structure</h2>
+<h2>Wiki Layout</h2>
 <ul>
-  <li><strong>Folders</strong> — Create folders in the left sidebar to organize articles. Click "+" to create, double-click to rename, right-click to delete.</li>
-  <li><strong>All Articles</strong> — Click "All" at the top of the sidebar to see every article regardless of folder.</li>
-  <li><strong>Tags</strong> — Articles can have colored tags (same system as resources). Filter by tag using the pills in the header.</li>
-  <li><strong>Project Link</strong> — Optionally link an article to a project. Linked articles appear in the project's Wiki block.</li>
+  <li><strong>Explorer</strong> — The tree on the left lists folders, the projects inside them, then their articles. Click "+" icons to create an article or folder, double-click a folder to rename it, right-click for more. Search filters by title or tag.</li>
+  <li><strong>Tabs</strong> — Clicking an article opens it in the current tab; <strong>Cmd-click</strong> opens it in a new tab. Back and forward arrows move through a tab's history.</li>
+  <li><strong>Reading and editing</strong> — The pencil button switches an article to editing; the eye button switches back to reading. New articles open in editing.</li>
+  <li><strong>Side panel</strong> — Shows the article's local graph, its <strong>backlinks</strong> (articles that link here, with the sentence around each link), its outgoing links, and <strong>unlinked mentions</strong>: articles that name it without a link, with a <strong>Link it</strong> button. The second tab shows the article's outline.</li>
+  <li><strong>Graph view</strong> — The network icon opens every article as a dot, coloured by project, with lines for links. Hover a dot to light up its links, click it to open the article. Filter by project or text, and drag or scroll to move around.</li>
+  <li><strong>Tags and projects</strong> — Articles can have colored tags and be linked to a project. Linked articles appear in the project's Wiki block.</li>
 </ul>
 
 <h2>Writing Articles</h2>
@@ -441,8 +469,12 @@ const articles: ArticleSeed[] = [
   <li><strong>/list</strong> — Insert a bullet list</li>
   <li><strong>/divider</strong> — Insert a horizontal rule</li>
   <li><strong>/link</strong> — Insert a link. Type a URL for an external link, or search for a wiki article to create an internal link.</li>
+  <li><strong>[[</strong> — Type two square brackets to link an article by name. Articles from the same project come first; if none matches, create a new one from the list.</li>
 </ul>
 <p>You can also use keyboard shortcuts: <strong>Cmd+B</strong> for bold and <strong>Cmd+I</strong> for italic.</p>
+
+<h2>Following Links</h2>
+<p>While reading, click a link to follow it, or <strong>Cmd-click</strong> to open it in a new tab. While editing, a plain click places the cursor so you can edit the link text, and <strong>Cmd-click</strong> follows the link. Web links open in your browser. The articles of this guide link to each other the same way.</p>
 
 <h2>Auto-Save</h2>
 <p>Articles auto-save 2 seconds after your last edit. If you navigate away, any pending changes are saved immediately.</p>
@@ -454,6 +486,7 @@ const articles: ArticleSeed[] = [
   // ── 10. Finance & P&L ────────────────────────────────────────────
   {
     title: "Finance & P&L",
+    related: ["Expenses & Income", "Invoices", "Dashboard & Widgets", "Organisations"],
     tags: ["guide", "finance"],
     content: `<h2>Finance Overview</h2>
 <p>The <strong>Finances</strong> page gives you a real-time profit &amp; loss overview following the Swiss independent worker tax declaration structure.</p>
@@ -489,6 +522,7 @@ const articles: ArticleSeed[] = [
   // ── 11. Settings & Customization ─────────────────────────────────
   {
     title: "Settings & Customization",
+    related: ["Organisations", "Calendar", "Keyboard Shortcuts", "Getting Started"],
     tags: ["guide", "settings"],
     content: `<h2>Settings Overview</h2>
 <p>Access settings from the <strong>gear icon</strong> at the bottom of the sidebar. Settings are organized into sections.</p>
@@ -514,7 +548,7 @@ const articles: ArticleSeed[] = [
   <li><strong>Time overview</strong> — Show or hide the Time Overview page</li>
   <li><strong>Native notifications</strong> — Enable macOS notification banners for overdue invoices and backups</li>
 </ul>
-<p>Page visibility, calendar and backup settings are stored per organisation; see the <strong>Organisations</strong> article.</p>
+<p>Page visibility, calendar and backup settings are stored per organisation; see the <a href="guide:Organisations">Organisations</a> article.</p>
 
 <h2>Organisations</h2>
 <p>Rename, reorder or delete your organisations. Creating one happens from the organisation switcher at the top of the sidebar (<strong>Cmd+Shift+O</strong>).</p>
@@ -546,6 +580,7 @@ const articles: ArticleSeed[] = [
   // ── 12. Keyboard Shortcuts ───────────────────────────────────────
   {
     title: "Keyboard Shortcuts",
+    related: ["Context Menus", "Batch Operations", "Saved Filters"],
     tags: ["guide", "shortcuts"],
     content: `<h2>Global Shortcuts</h2>
 <table>
@@ -605,6 +640,7 @@ const articles: ArticleSeed[] = [
   // ── 13. Saved Filters ────────────────────────────────────────────
   {
     title: "Saved Filters",
+    related: ["Batch Operations", "Keyboard Shortcuts"],
     tags: ["guide", "filters"],
     content: `<h2>What Are Saved Filters?</h2>
 <p>Every list page (Invoices, Quotes, Expenses, Income, Clients, Tasks, Resources) supports <strong>saved filters</strong>. These let you create reusable filter configurations that you can apply with one click.</p>
@@ -648,6 +684,7 @@ const articles: ArticleSeed[] = [
   // ── 14. Batch Operations ─────────────────────────────────────────
   {
     title: "Batch Operations",
+    related: ["Context Menus", "Saved Filters", "Keyboard Shortcuts"],
     tags: ["guide", "batch"],
     content: `<h2>What Are Batch Operations?</h2>
 <p>All list pages support selecting multiple rows and performing actions on them at once.</p>
@@ -679,6 +716,7 @@ const articles: ArticleSeed[] = [
   // ── 15. Context Menus ────────────────────────────────────────────
   {
     title: "Context Menus",
+    related: ["Batch Operations", "Keyboard Shortcuts"],
     tags: ["guide", "ui"],
     content: `<h2>How Context Menus Work</h2>
 <p>Every list row in StudioManager has a context menu with relevant actions. There are two ways to access it:</p>
@@ -711,29 +749,57 @@ const articles: ArticleSeed[] = [
 
 /** Bump when a release changes the guide, so every organisation is offered the
  *  new content once. Paired with `guideUpdateNotified:<organisation id>` in
- *  localStorage by `useGuideUpdateCheck`. */
-export const USER_GUIDE_VERSION = 2;
+ *  localStorage by `useGuideUpdateCheck`. v3: articles link to each other. */
+export const USER_GUIDE_VERSION = 3;
 
 /** Titles this version ships, in order. The guide of an organisation created by
  *  an earlier release is missing the ones added since. */
 export const USER_GUIDE_TITLES: string[] = articles.map((a) => a.title);
 
-/** True when the organisation has a User Guide whose articles predate this
- *  version — i.e. resetting it from Settings would actually add something.
- *  False when there is no guide at all: a fresh organisation seeds the current
- *  one, and an owner who deleted the folder chose to live without it. */
+/** An article's seed HTML with its "See also" list, links still by title. */
+function articleHtml(a: ArticleSeed): string {
+  const titles =
+    a.related === "all" ? USER_GUIDE_TITLES.filter((t) => t !== a.title) : a.related;
+  if (titles.length === 0) return a.content;
+  const items = titles
+    .map((t) => `  <li><a href="${guideHref(t)}">${escapeHtml(t)}</a></li>`)
+    .join("\n");
+  return `${a.content}\n\n<h2>See also</h2>\n<ul>\n${items}\n</ul>`;
+}
+
+/** Swaps `guide:<title>` links for real article links. A link to a title
+ *  that has no id keeps its text and loses the link. */
+export function resolveGuideLinks(html: string, ids: Map<string, number>): string {
+  return html.replace(
+    /<a href="guide:([^"]*)">([\s\S]*?)<\/a>/g,
+    (_match, encoded: string, text: string) => {
+      const id = ids.get(decodeURIComponent(encoded));
+      return id === undefined ? text : `<a href="/wiki?article=${id}">${text}</a>`;
+    }
+  );
+}
+
+/** True when the organisation has a User Guide that predates this version —
+ *  i.e. resetting it from Settings would actually add something: an article
+ *  added since, or the links between articles (v3). False when there is no
+ *  guide at all: a fresh organisation seeds the current one, and an owner who
+ *  deleted the folder chose to live without it. */
 export async function isUserGuideOutdated(db: Database): Promise<boolean> {
   const folders = await db.select<{ id: number }[]>(
     "SELECT id FROM wiki_folders WHERE name = 'User Guide'"
   );
   if (folders.length === 0) return false;
   const placeholders = folders.map((_, i) => `$${i + 1}`).join(", ");
-  const rows = await db.select<{ title: string }[]>(
-    `SELECT title FROM wiki_articles WHERE folder_id IN (${placeholders})`,
+  const rows = await db.select<{ title: string; content: string | null }[]>(
+    `SELECT title, content FROM wiki_articles WHERE folder_id IN (${placeholders})`,
     folders.map((f) => f.id)
   );
   const present = new Set(rows.map((r) => r.title));
-  return USER_GUIDE_TITLES.some((title) => !present.has(title));
+  if (USER_GUIDE_TITLES.some((title) => !present.has(title))) return true;
+  // Every shipped article links to others, so one without any link is older.
+  return rows.some(
+    (r) => USER_GUIDE_TITLES.includes(r.title) && !(r.content ?? "").includes("/wiki?article=")
+  );
 }
 
 export async function seedUserGuide(db: Database): Promise<void> {
@@ -744,15 +810,20 @@ export async function seedUserGuide(db: Database): Promise<void> {
   );
   const folderId = folderResult.lastInsertId;
 
-  // Insert each article
+  // Insert each article; links between them are filled in once all have ids.
+  const ids = new Map<string, number>();
+  const pending: { id: number; html: string }[] = [];
   for (let i = 0; i < articles.length; i++) {
     const a = articles[i];
+    const html = articleHtml(a);
     const articleResult = await db.execute(
       `INSERT INTO wiki_articles (folder_id, title, content, sort_order)
        VALUES ($1, $2, $3, $4)`,
-      [folderId, a.title, a.content, i]
+      [folderId, a.title, html, i]
     );
-    const articleId = articleResult.lastInsertId;
+    const articleId = Number(articleResult.lastInsertId);
+    ids.set(a.title, articleId);
+    if (html.includes(GUIDE_LINK_PREFIX)) pending.push({ id: articleId, html });
 
     // Insert tags
     for (const tag of a.tags) {
@@ -761,6 +832,13 @@ export async function seedUserGuide(db: Database): Promise<void> {
         [articleId, tag]
       );
     }
+  }
+
+  for (const { id, html } of pending) {
+    await db.execute("UPDATE wiki_articles SET content = $1 WHERE id = $2", [
+      resolveGuideLinks(html, ids),
+      id,
+    ]);
   }
 }
 

@@ -30,6 +30,7 @@ import { useUnreadNotificationCount } from "../../db/hooks/useNotifications";
 import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
 import type { UIKey } from "../../i18n/ui";
+import { BOTTOM_BAR } from "../ui";
 
 type NavItem = { to: string; icon: typeof LayoutDashboard; labelKey: UIKey };
 type SidebarItem = NavItem | { divider: true };
@@ -263,7 +264,7 @@ export function Sidebar() {
         })}
       </nav>
       <TimerIndicator collapsed={collapsed} />
-      <div className="border-t border-sidebar-border p-2">
+      <div className={`${BOTTOM_BAR} border-sidebar-border px-2`}>
         <button
           onClick={toggleSidebar}
           aria-label={collapsed ? t.expand_sidebar : t.collapse_sidebar}

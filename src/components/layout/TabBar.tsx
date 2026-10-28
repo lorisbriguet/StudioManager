@@ -1,53 +1,10 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { X, Plus, Pin, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { TabItem } from "../ui/TabItem";
 import { useTabStore, predictNextActiveTab, type Tab } from "../../stores/tab-store";
 import { confirmIfDirty } from "../../lib/dirty-guard";
 import { useT } from "../../i18n/useT";
-
-function TabItem({ tab, isActive, onActivate, onClose, onMiddleClick }: {
-  tab: Tab;
-  isActive: boolean;
-  onActivate: () => void;
-  onClose: () => void;
-  onMiddleClick: () => void;
-}) {
-  const t = useT();
-  // Non-interactive flex container holding TWO sibling real <button>s
-  // (activate + close) — nesting a button in a button (or in a
-  // role="button") is invalid/flagged by axe's nested-interactive rule.
-  // Middle-click close stays here so it works from both buttons (bubbles).
-  return (
-    <div
-      onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); onMiddleClick(); } }}
-      className={`flex items-center gap-1.5 px-3.5 py-2 text-sm shrink-0 border-b-2 transition-colors group select-none ${
-        isActive
-          ? "border-accent text-[var(--color-text)] font-medium"
-          : "border-transparent text-muted hover:text-[var(--color-text-secondary)]"
-      }`}
-    >
-      <button
-        type="button"
-        onClick={onActivate}
-        aria-current={isActive ? "page" : undefined}
-        className="flex items-center gap-1.5 cursor-pointer"
-      >
-        {tab.pinned && <Pin size={10} className="text-muted shrink-0" />}
-        <span className="max-w-[120px] truncate">{tab.label}</span>
-      </button>
-      {!tab.pinned && (
-        <button
-          type="button"
-          aria-label={t.close_tab}
-          onClick={(e) => { e.stopPropagation(); onClose(); }}
-          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-[var(--color-danger-text)] shrink-0 ml-0.5"
-        >
-          <X size={12} />
-        </button>
-      )}
-    </div>
-  );
-}
 
 export function TabBar() {
   const t = useT();
@@ -149,11 +106,12 @@ export function TabBar() {
         {tabs.map((tab) => (
           <TabItem
             key={tab.id}
-            tab={tab}
-            isActive={tab.id === activeTabId}
+            label={tab.label}
+            pinned={tab.pinned}
+            active={tab.id === activeTabId}
             onActivate={() => handleActivate(tab)}
             onClose={() => handleClose(tab)}
-            onMiddleClick={() => handleClose(tab)}
+            closeLabel={t.close_tab}
           />
         ))}
       </div>

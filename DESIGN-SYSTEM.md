@@ -104,6 +104,20 @@ sizes — 9px/11px/13px were folded into this scale (2026-08, audit item 345).
 
 ---
 
+## Window Bars
+
+Columns of the window sit side by side (app sidebar, wiki explorer, editor, side panel), so a bar pinned to the top or bottom of one column must match the bars of its neighbours, or the lines between them step. Heights include the border (border-box). Use the shared pieces in `src/components/ui/Bars.tsx`, never a bar sized by padding.
+
+| Bar | Height | Use |
+|-----|--------|-----|
+| Bottom bar (footer, status bar) | `h-11` (44px), `border-t` | `<BottomBar>`, or the `BOTTOM_BAR` classes for a custom one (app sidebar footer) |
+| Panel top bar (tab row, panel toolbar) | `h-10` (40px), `border-b` | `PANEL_TOP_BAR` classes |
+| App sidebar header | `h-14` (56px), `border-b` | logo row only |
+
+Bottom bar text is `text-xs text-muted`. A column that has no footer simply ends; it never gets a shorter bar of its own. Dialog footers (`Modal`) are not window bars: they keep `px-5 py-3`.
+
+---
+
 ## Shadows
 
 | Element | Class |

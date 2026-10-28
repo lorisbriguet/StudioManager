@@ -33,3 +33,5 @@ tauri-plugin-window-state = "2.4.1"
 tauri-plugin-notification = "2"
 trash = "5"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# Renders a project's Markdown files for the wiki (same pin as the agent server).
+pulldown-cmark = { version = "0.13.5", default-features = false, features = ["html"] }

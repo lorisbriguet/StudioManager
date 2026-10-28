@@ -599,7 +599,37 @@ button, a, select, [role="button"] {
 .tiptap-editor .ProseMirror h3 { font-size: 1.1em; font-weight: 600; margin: 0.6em 0 0.3em; }
 .tiptap-editor .ProseMirror ul { list-style: disc; padding-left: 1.5em; margin: 0.5em 0; }
 .tiptap-editor .ProseMirror ol { list-style: decimal; padding-left: 1.5em; margin: 0.5em 0; }
-.tiptap-editor .ProseMirror a { color: var(--color-accent); text-decoration: underline; }
+.tiptap-editor .ProseMirror a {
+  color: var(--color-accent);
+  text-decoration: none;
+  border-bottom: 1px dotted color-mix(in srgb, var(--color-accent) 60%, transparent);
+}
+.tiptap-editor.is-reading .ProseMirror a { cursor: pointer; }
+.tiptap-editor.is-reading .ProseMirror a:hover { border-bottom-style: solid; }
+.tiptap-editor .ProseMirror code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-input-border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.tiptap-editor .ProseMirror pre {
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-input-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0.6em 0;
+  overflow-x: auto;
+}
+.tiptap-editor .ProseMirror pre code { border: 0; padding: 0; background: none; }
+/* Project files shown in the wiki (rendered Markdown, read-only) */
+.wiki-doc table { border-collapse: collapse; margin: 0.8em 0; font-size: 13px; width: 100%; }
+.wiki-doc th { text-align: left; font-weight: 600; border-bottom: 1px solid var(--color-border-header); padding: 6px 10px; }
+.wiki-doc td { border-bottom: 1px solid var(--color-border-divider); padding: 6px 10px; vertical-align: top; }
+.wiki-doc blockquote { border-left: 2px solid var(--color-border-header); padding-left: 12px; color: var(--color-text-secondary); margin: 0.6em 0; }
+.wiki-doc li > input[type="checkbox"] { margin-right: 6px; vertical-align: -1px; }
+.wiki-doc p { margin: 0.5em 0; }
 .tiptap-editor .ProseMirror hr { border: none; border-top: 1px solid var(--color-border-divider); margin: 1em 0; }
 .tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);

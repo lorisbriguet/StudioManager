@@ -37,6 +37,7 @@ vi.mock("@tiptap/react", () => ({
     return {
       getHTML: () => "",
       commands: { focus: () => {} },
+      setEditable: () => {},
     };
   },
   EditorContent: () => null,

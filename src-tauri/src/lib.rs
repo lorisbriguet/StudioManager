@@ -2,6 +2,7 @@ mod agent_access;
 mod apple;
 mod dbfiles;
 mod migrate;
+mod project_docs;
 pub mod orgs;
 mod seed;
 pub mod upgrade;
@@ -577,6 +578,8 @@ pub fn run() {
             set_organisation_prefs,
             apple::share_pdf_via_mail,
             open_in_finder,
+            project_docs::list_project_docs,
+            project_docs::read_project_doc,
             apple::extract_pdf_text,
             apple::ocr_image_text,
             apple::calendar_list_writable,

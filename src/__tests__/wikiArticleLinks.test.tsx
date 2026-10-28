@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { WikiPage } from "../pages/WikiPage";
@@ -42,6 +42,7 @@ function renderAt(path: string) {
 }
 
 beforeEach(async () => {
+  localStorage.clear();
   await getDb();
   useAppStore.setState({ language: "EN" });
   setSelectHandler((sql, params) => {
@@ -71,7 +72,8 @@ describe("wiki article links", () => {
     expect(screen.queryByDisplayValue(/Article/)).not.toBeInTheDocument();
   });
 
-  it("follows an internal link on Cmd-click", async () => {
+  it("follows an internal link on Cmd-click while editing", async () => {
+    localStorage.setItem("wikiMode", JSON.stringify("editing"));
     renderAt("/wiki?article=1");
     await screen.findByDisplayValue("Article One");
     const link = await screen.findByText("Article Two", { selector: "a" });
@@ -81,5 +83,32 @@ describe("wiki article links", () => {
 
     fireEvent.click(link, { metaKey: true });
     expect(await screen.findByDisplayValue("Article Two")).toBeInTheDocument();
+  });
+
+  it("follows a link on a plain click while reading, and Back returns", async () => {
+    renderAt("/wiki?article=1");
+    await screen.findByDisplayValue("Article One");
+    fireEvent.click(await screen.findByText("Article Two", { selector: "a" }));
+    expect(await screen.findByDisplayValue("Article Two")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^back$/i }));
+    expect(await screen.findByDisplayValue("Article One")).toBeInTheDocument();
+  });
+
+  it("opens a link in a new tab on Cmd-click while reading", async () => {
+    renderAt("/wiki?article=1");
+    await screen.findByDisplayValue("Article One");
+    fireEvent.click(await screen.findByText("Article Two", { selector: "a" }), { metaKey: true });
+    expect(await screen.findByDisplayValue("Article Two")).toBeInTheDocument();
+    const bar = screen.getByRole("tablist", { name: /^open articles$/i });
+    expect(within(bar).getAllByRole("tab")).toHaveLength(2);
+  });
+
+  it("shows backlinks for the open article", async () => {
+    renderAt("/wiki?article=2");
+    await screen.findByDisplayValue("Article Two");
+    const panel = screen.getByRole("region", { name: /^backlinks$/i });
+    expect(panel).toHaveTextContent("Backlinks · 1");
+    expect(panel).toHaveTextContent("Article One");
   });
 });

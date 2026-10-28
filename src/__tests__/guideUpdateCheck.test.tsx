@@ -29,12 +29,18 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 }
 
-/** Answers the hook's two queries: the User Guide folder, then its article titles. */
-function guideWith(titles: string[] | null) {
+/** Answers the hook's two queries: the User Guide folder, then its articles.
+ *  Articles link to each other unless `linked` is false (a pre-v3 guide). */
+function guideWith(titles: string[] | null, linked = true) {
   select.mockImplementation((sql: string) => {
     if (titles === null) return [];
     if (/FROM wiki_folders/i.test(sql)) return [{ id: 1 }];
-    if (/FROM wiki_articles/i.test(sql)) return titles.map((title) => ({ title }));
+    if (/FROM wiki_articles/i.test(sql)) {
+      return titles.map((title) => ({
+        title,
+        content: linked ? '<p><a href="/wiki?article=1">Getting Started</a></p>' : "<p>Text</p>",
+      }));
+    }
     return [];
   });
 }
@@ -72,6 +78,14 @@ describe("useGuideUpdateCheck", () => {
 
     await waitFor(() => expect(localStorage.getItem(notifiedKey())).toBe(String(USER_GUIDE_VERSION)));
     expect(createNotification).not.toHaveBeenCalled();
+  });
+
+  it("notifies when the guide has every article but predates the links between them", async () => {
+    guideWith([...USER_GUIDE_TITLES], false);
+
+    renderHook(() => useGuideUpdateCheck(), { wrapper });
+
+    await waitFor(() => expect(createNotification).toHaveBeenCalledTimes(1));
   });
 
   it("stays quiet when the organisation has no User Guide folder", async () => {
