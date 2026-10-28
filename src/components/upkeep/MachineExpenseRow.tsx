@@ -1,32 +1,19 @@
-import { lazy, Suspense, useState } from "react";
+import { useState } from "react";
 import { Link2, Receipt, Unlink } from "lucide-react";
-import { Button, Modal, Select } from "../ui";
+import { Button, Select } from "../ui";
+import { PrefilledExpenseModal } from "./PrefilledExpenseModal";
 import { useT } from "../../i18n/useT";
 import { useUpdateMachine } from "../../db/hooks/useUpkeep";
-import {
-  useCreateExpense,
-  useDistinctSuppliers,
-  useExpenseCategories,
-  useExpenses,
-} from "../../db/hooks/useExpenses";
-import { getNextExpenseReference } from "../../db/queries/expenses";
+import { useExpenses } from "../../db/hooks/useExpenses";
 import { formatDisplayDate } from "../../utils/formatDate";
 import { todayLocalISO } from "../../utils/localDate";
 import type { Machine } from "../../types/upkeep";
-
-// The expense form is the Expenses page's own; load it only when asked for.
-const NewExpenseForm = lazy(() =>
-  import("../../pages/ExpensesPage").then((m) => ({ default: m.NewExpenseForm }))
-);
 
 /** Price of the machine, with a link to an existing expense or a new prefilled one. */
 export function MachineExpenseRow({ machine }: { machine: Machine }) {
   const t = useT();
   const update = useUpdateMachine();
   const { data: expenses = [] } = useExpenses();
-  const { data: categories = [] } = useExpenseCategories();
-  const { data: suppliers = [] } = useDistinctSuppliers();
-  const createExpense = useCreateExpense();
   const [picking, setPicking] = useState(false);
   const [creating, setCreating] = useState(false);
 
@@ -81,28 +68,17 @@ export function MachineExpenseRow({ machine }: { machine: Machine }) {
         </div>
       )}
       {creating && (
-        <Modal open onClose={() => setCreating(false)} title={t.upkeep_create_expense} size="lg">
-          <Suspense fallback={null}>
-            <NewExpenseForm
-              categories={categories}
-              pastSuppliers={suppliers}
-              prefill={{
-                supplier: machine.supplier ?? undefined,
-                amount: machine.price ?? undefined,
-                invoice_date: machine.purchase_date ?? todayLocalISO(),
-              }}
-              onCancel={() => setCreating(false)}
-              onSave={async (data) => {
-                const reference = await getNextExpenseReference(
-                  Number((data.invoice_date || todayLocalISO()).slice(0, 4))
-                );
-                const id = await createExpense.mutateAsync({ ...data, reference });
-                update.mutate({ id: machine.id, data: { expense_id: id } });
-                setCreating(false);
-              }}
-            />
-          </Suspense>
-        </Modal>
+        <PrefilledExpenseModal
+          title={t.upkeep_create_expense}
+          supplier={machine.supplier ?? undefined}
+          amount={machine.price ?? undefined}
+          date={machine.purchase_date ?? todayLocalISO()}
+          onCancel={() => setCreating(false)}
+          onSaved={(id) => {
+            update.mutate({ id: machine.id, data: { expense_id: id } });
+            setCreating(false);
+          }}
+        />
       )}
       {linked && <div className="text-xs text-muted">{formatDisplayDate(linked.invoice_date)}</div>}
     </div>

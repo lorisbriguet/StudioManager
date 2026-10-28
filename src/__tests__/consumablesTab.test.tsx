@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { Consumable } from "../types/upkeep";
@@ -52,6 +52,9 @@ function renderTab() {
 }
 
 describe("ConsumablesTab", () => {
+  // Load the lazily imported Expenses page once, so no test pays for it.
+  beforeAll(async () => { await import("../pages/ExpensesPage"); }, 30000);
+
   beforeEach(() => {
     openExternal.mockReset();
     logUsage.mockReset();
@@ -107,7 +110,7 @@ describe("ConsumablesTab", () => {
     fireEvent.click(screen.getByRole("button", { name: t.save }));
     await waitFor(() => expect(restock).toHaveBeenCalledWith({ id: 1, amount: 2 }));
     fireEvent.click(await screen.findByRole("button", { name: t.upkeep_restock_expense_yes }));
-    expect(await screen.findByDisplayValue("Prusa", {}, { timeout: 8000 })).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Prusa")).toBeInTheDocument();
     expect(screen.getByDisplayValue("50")).toBeInTheDocument();
   });
 });

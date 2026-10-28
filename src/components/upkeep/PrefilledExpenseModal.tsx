@@ -1,5 +1,7 @@
 import { lazy, Suspense } from "react";
 import { Modal } from "../ui";
+import { useT } from "../../i18n/useT";
+import { notifyError } from "../../lib/notifyError";
 import { useCreateExpense, useDistinctSuppliers, useExpenseCategories } from "../../db/hooks/useExpenses";
 import { getNextExpenseReference } from "../../db/queries/expenses";
 import { todayLocalISO } from "../../utils/localDate";
@@ -25,6 +27,7 @@ export function PrefilledExpenseModal({ title, supplier, amount, date, onCancel,
   const { data: categories = [] } = useExpenseCategories();
   const { data: suppliers = [] } = useDistinctSuppliers();
   const createExpense = useCreateExpense();
+  const t = useT();
 
   return (
     <Modal open onClose={onCancel} title={title} size="lg">
@@ -39,7 +42,13 @@ export function PrefilledExpenseModal({ title, supplier, amount, date, onCancel,
               Number((data.invoice_date || todayLocalISO()).slice(0, 4))
             );
             const id = await createExpense.mutateAsync({ ...data, reference });
-            await onSaved(id);
+            try {
+              await onSaved(id);
+            } catch (e) {
+              // The expense exists; close so a second save cannot duplicate it.
+              notifyError(t.upkeep_expense_link_failed, e);
+              onCancel();
+            }
           }}
         />
       </Suspense>

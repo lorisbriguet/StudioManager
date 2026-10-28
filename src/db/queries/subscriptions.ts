@@ -48,10 +48,14 @@ export async function createSubscription(data: SubscriptionInput): Promise<numbe
 
 export async function updateSubscription(id: number, inputData: Partial<SubscriptionInput>): Promise<void> {
   // A new renewal date moves the day-of-month the subscription rolls on.
-  const data: Partial<SubscriptionInput> =
-    inputData.renews_on && inputData.anchor_day === undefined
-      ? { ...inputData, anchor_day: Number(inputData.renews_on.slice(8, 10)) }
-      : inputData;
+  // Only when the date actually changed: a rolled "...-02-28" must not reset a 31st anchor on an unrelated edit.
+  let data: Partial<SubscriptionInput> = inputData;
+  if (inputData.renews_on && inputData.anchor_day === undefined) {
+    const current = await getSubscription(id);
+    if (!current || current.renews_on !== inputData.renews_on) {
+      data = { ...inputData, anchor_day: Number(inputData.renews_on.slice(8, 10)) };
+    }
+  }
   const fields = Object.keys(data).filter(
     (k) => (SUBSCRIPTION_COLUMNS as readonly string[]).includes(k) && data[k as keyof SubscriptionInput] !== undefined
   );

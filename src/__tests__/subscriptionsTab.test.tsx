@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { Subscription } from "../types/upkeep";
@@ -58,39 +58,42 @@ function renderTab() {
 }
 
 describe("SubscriptionsTab", () => {
+  // Load the lazily imported Expenses page once, so no test pays for it.
+  beforeAll(async () => { await import("../pages/ExpensesPage"); }, 30000);
+
   beforeEach(() => {
     decide.mockReset();
     subs = [sub()];
     pending = [renewal()];
-  }, 15000);
+  });
 
   it("shows pending renewals with the amount question", () => {
     renderTab();
     expect(screen.getByText(/Creative Cloud renewed · add CHF 840\.00 to expenses\?/)).toBeInTheDocument();
-  }, 15000);
+  });
 
   it("Add opens the expense form prefilled with vendor, amount and date", async () => {
     renderTab();
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_renewal_add }));
-    expect(await screen.findByDisplayValue("Adobe", {}, { timeout: 8000 })).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Adobe")).toBeInTheDocument();
     expect(screen.getByDisplayValue("840")).toBeInTheDocument();
     expect(screen.getByDisplayValue("2026-10-01")).toBeInTheDocument();
-  }, 15000);
+  });
 
   it("cancelling the expense form leaves the renewal pending", async () => {
     renderTab();
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_renewal_add }));
-    await screen.findByDisplayValue("Adobe", {}, { timeout: 8000 });
+    await screen.findByDisplayValue("Adobe");
     fireEvent.click(screen.getByRole("button", { name: t.cancel }));
     expect(decide).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: t.upkeep_renewal_add })).toBeInTheDocument();
-  }, 15000);
+  });
 
   it("Skip marks the renewal skipped", () => {
     renderTab();
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_renewal_skip }));
     expect(decide).toHaveBeenCalledWith({ id: 9, decision: "skipped" });
-  }, 15000);
+  });
 
   it("shows one yearly total line per currency", () => {
     subs = [
@@ -102,5 +105,5 @@ describe("SubscriptionsTab", () => {
     renderTab();
     expect(screen.getByText("CHF 840.00 / year")).toBeInTheDocument();
     expect(screen.getByText("EUR 120.00 / year")).toBeInTheDocument();
-  }, 15000);
+  });
 });

@@ -106,6 +106,14 @@ describe("upkeep queries", () => {
     expect(upd!.params).toContain(17);
   });
 
+  it("edit without changing the date keeps the anchor", async () => {
+    setSelectHandler(() => [{ id: 4, renews_on: "2027-02-28", anchor_day: 31 }]);
+    await updateSubscription(4, { name: "Renamed", renews_on: "2027-02-28" });
+    const upd = executedStatements.find((x) => x.sql.includes("UPDATE subscriptions"));
+    expect(upd!.sql).not.toContain("anchor_day");
+    expect(upd!.params).not.toContain(28);
+  });
+
   it("updateSubscription keeps an explicit anchor_day", async () => {
     await updateSubscription(4, { renews_on: "2026-12-31", anchor_day: 30 });
     const upd = executedStatements.find((x) => x.sql.includes("UPDATE subscriptions"));

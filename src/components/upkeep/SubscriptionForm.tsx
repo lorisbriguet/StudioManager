@@ -53,14 +53,14 @@ export function SubscriptionForm({ onClose, subscription: s }: Props) {
       plan: f.plan.trim() || null,
       vendor: f.vendor.trim() || null,
       url: f.url.trim() || null,
-      renews_on: f.renewsOn,
       period: f.period,
       cost: Math.max(0, Number(f.cost) || 0),
       currency: f.currency.trim() || null,
       in_calendar: f.inCalendar ? 1 : 0,
     };
-    if (s) update.mutate({ id: s.id, data });
-    else create.mutate(data);
+    // Send the date only when it changed, so an unrelated edit never touches the anchor day.
+    if (s) update.mutate({ id: s.id, data: f.renewsOn !== s.renews_on ? { ...data, renews_on: f.renewsOn } : data });
+    else create.mutate({ ...data, renews_on: f.renewsOn });
     onClose();
   };
 
