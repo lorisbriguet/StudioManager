@@ -71,10 +71,6 @@ drive health and printer hours fill themselves in, and he stops being surprised 
 
 The mockups show the layout; the rules below win where they differ.
 
-Two rules for every upkeep screen (Loris, 2026-10-28):
-- Every section and card is collapsible (chevron header, the app's existing collapse pattern, state kept).
-- Indicator dots come in one size only (`dot`, 8px).
-
 **Overview tab.** "Due soon" (overdue first, then the next 14 days *[call]*) with mark-done and snooze;
 low-stock card; warranty & renewals card (ending within 60 days *[call]*); "Replacements coming" card
 (machines whose replace-around year is this year or next, with the sum of their purchase prices as a rough
