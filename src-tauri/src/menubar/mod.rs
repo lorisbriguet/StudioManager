@@ -80,8 +80,20 @@ fn icon(needs_you: bool) -> Option<Image<'static>> {
 }
 
 /// Show the menu bar icon (and prepare its panel) or remove both. The settings guard keeps the
-/// check-then-build atomic against a second toggle.
+/// changes in the order they were made: the work is queued on the main thread while it is held.
+///
+/// macOS only lets the main thread add or remove a status item (removing one from another
+/// thread stops the app), and the tray handle may only be touched there. The work is queued
+/// without waiting for it, so the settings lock is never held while waiting on the main thread.
 pub fn sync_tray(app: &AppHandle, enabled: bool, _held: &SettingsGuard) {
+    let handle = app.clone();
+    if let Err(e) = app.run_on_main_thread(move || apply_tray(&handle, enabled)) {
+        eprintln!("[menubar] could not update the menu bar icon: {e}");
+    }
+}
+
+/// Runs on the main thread (see `sync_tray`).
+fn apply_tray(app: &AppHandle, enabled: bool) {
     if !enabled {
         let _ = app.remove_tray_by_id(TRAY_ID);
         if let Some(w) = app.get_webview_window(PANEL_LABEL) {
@@ -127,9 +139,13 @@ pub fn set_attention(app: &AppHandle, needs_you: bool) {
     if ATTENTION.swap(needs_you, Ordering::Relaxed) == needs_you {
         return;
     }
-    if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        let _ = tray.set_icon_with_as_template(icon(needs_you), !needs_you);
-    }
+    // The tray handle may only be touched on the main thread (see `sync_tray`).
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(tray) = handle.tray_by_id(TRAY_ID) {
+            let _ = tray.set_icon_with_as_template(icon(needs_you), !needs_you);
+        }
+    });
 }
 
 fn ensure_panel(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
