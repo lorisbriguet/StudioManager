@@ -558,10 +558,10 @@ export function SettingsPage() {
           )}
 
           {activeCategory === "agents" && (
-            <>
+            <div className="space-y-4">
               <AgentsCard />
               <AgentAccessCard />
-            </>
+            </div>
           )}
 
           {activeCategory === "calendar" && (
