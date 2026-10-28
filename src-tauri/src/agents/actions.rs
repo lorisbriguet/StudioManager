@@ -20,6 +20,37 @@ const OFF: &str = "Agents are switched off";
 pub struct AgentsStateFile {
     pub dismissed: Vec<String>,
     pub links: BTreeMap<String, String>,
+    /// Copies started by a model switch, by their short id: the session they continue
+    /// and the model chosen. A copy has no transcript until it gets its first message.
+    pub copies: BTreeMap<String, CopyOf>,
+}
+
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyOf {
+    pub session_id: String,
+    pub model: String,
+}
+
+/// The session whose transcript shows for `session_id`: itself, or for a model-switch copy
+/// with no transcript yet, the session it was copied from (following copies of copies).
+pub fn transcript_session(
+    session_id: &str,
+    copies: &BTreeMap<String, CopyOf>,
+    has_transcript: &dyn Fn(&str) -> bool,
+) -> String {
+    let mut current = session_id.to_string();
+    for _ in 0..8 {
+        if has_transcript(&current) {
+            break;
+        }
+        let short: String = current.chars().take(8).collect();
+        match copies.get(&short) {
+            Some(c) => current = c.session_id.clone(),
+            None => break,
+        }
+    }
+    current
 }
 
 pub fn read_state(dir: &Path) -> AgentsStateFile {
@@ -202,6 +233,10 @@ pub fn switch_model(
     // Best effort: the copy already runs, so a bookkeeping failure is not a failed switch.
     let _ = update_state(state_dir, |st| {
         st.links.insert(agent.session_id.clone(), new_id.clone());
+        st.copies.insert(
+            new_id.clone(),
+            CopyOf { session_id: agent.session_id.clone(), model: model.to_string() },
+        );
     });
     Ok(new_id)
 }
@@ -450,6 +485,20 @@ mod tests {
     }
 
     #[test]
+    fn copies_show_the_conversation_they_continue() {
+        let mut copies = BTreeMap::new();
+        copies.insert("bbbbbbbb".to_string(), CopyOf { session_id: "aaaaaaaa-1".into(), model: "opus".into() });
+        copies.insert("cccccccc".to_string(), CopyOf { session_id: "bbbbbbbb-2".into(), model: "haiku".into() });
+        let has = |s: &str| s == "aaaaaaaa-1";
+        // A copy of a copy, neither with a transcript yet: the original's.
+        assert_eq!(transcript_session("cccccccc-3", &copies, &has), "aaaaaaaa-1");
+        // A copy that has its own transcript keeps it.
+        assert_eq!(transcript_session("cccccccc-3", &copies, &|s| s == "cccccccc-3"), "cccccccc-3");
+        // Not a copy: itself, even without a transcript.
+        assert_eq!(transcript_session("dddddddd-4", &copies, &has), "dddddddd-4");
+    }
+
+    #[test]
     fn switch_model_records_link() {
         let dir = tmp("link");
         let home = Path::new("/home/x");
@@ -467,6 +516,10 @@ mod tests {
             )
         );
         assert_eq!(read_state(&dir).links.get(SID).map(String::as_str), Some("99999999"));
+        assert_eq!(
+            read_state(&dir).copies.get("99999999"),
+            Some(&CopyOf { session_id: SID.into(), model: "haiku".into() })
+        );
     }
 
     #[test]

@@ -7,6 +7,8 @@ export const GROUPS: Group[] = ["needs-you", "working", "idle", "done"];
 export function groupAgents(agents: Agent[]): Record<Group, Agent[]> {
   const out: Record<Group, Agent[]> = { "needs-you": [], working: [], idle: [], done: [] };
   for (const a of agents) out[a.group].push(a);
+  // Done reads as history: latest first.
+  out.done.sort((a, b) => b.startedAt - a.startedAt);
   return out;
 }
 

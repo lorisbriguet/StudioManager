@@ -2,7 +2,7 @@
 //! emits `agents:changed` and raises a Mac notification when an agent starts
 //! waiting for you.
 
-use super::actions::{fetch_agents, home_dir, retain_dismissed};
+use super::actions::{fetch_agents, home_dir, read_state, retain_dismissed, CopyOf};
 use super::cli::read_settings;
 use super::model::{apply_quiet, Agent, Group};
 use super::projects::{load_index, FolderIndex};
@@ -112,6 +112,28 @@ pub fn fill_models(
     cache.retain(|id, _| agents.iter().any(|a| &a.session_id == id));
 }
 
+/// A model-switch copy that hasn't had its first message has no transcript, and the CLI
+/// reports it as blocked. It is ready, not waiting on a decision: show it as idle (no
+/// notification) with the model it was started on.
+pub fn settle_copies(
+    agents: &mut [Agent],
+    copies: &std::collections::BTreeMap<String, CopyOf>,
+    has_transcript: &dyn Fn(&Agent) -> bool,
+) {
+    for a in agents.iter_mut() {
+        let Some(copy) = a.short_id.as_ref().and_then(|s| copies.get(s)) else { continue };
+        if has_transcript(a) {
+            continue;
+        }
+        if a.model.is_none() {
+            a.model = Some(copy.model.clone());
+        }
+        if a.group == Group::NeedsYou && a.status != "waiting" {
+            a.group = Group::Idle;
+        }
+    }
+}
+
 fn label_and_quiet(
     agents: &mut [Agent],
     index: &FolderIndex,
@@ -125,6 +147,8 @@ fn label_and_quiet(
     let mtime = |a: &Agent| locate(&claude_dir, &a.session_id).and_then(|p| last_change_ms(&p));
     let read = |a: &Agent| locate(&claude_dir, &a.session_id).and_then(|p| last_model(&p));
     fill_models(agents, models, &mtime, &read);
+    let copies = read_state(app_dir).copies;
+    settle_copies(agents, &copies, &|a| locate(&claude_dir, &a.session_id).is_some());
     let last = |a: &Agent| locate(&claude_dir, &a.session_id).and_then(|p| last_change_ms(&p));
     quiet_pass(agents, app_dir, now_ms(), &last);
 }
@@ -183,6 +207,9 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
         // No lock is held from here on.
         let _ = app.emit(CHANGED_EVENT, &emit);
         for a in &notify {
+            // Logged so a missing banner can be told apart from one never sent
+            // (macOS may drop notifications from an unbundled dev build).
+            log::info!("[agents] notifying: {} — {}", a.name, notification_body(a));
             let shown = app
                 .notification()
                 .builder()
@@ -216,6 +243,29 @@ mod tests {
             kind: Kind::Background, status: "busy".into(), state: None, waiting_for: None,
             started_at: 0, group: g, quiet: None, project: None, model: None, model_label: None,
         }
+    }
+
+    #[test]
+    fn a_fresh_copy_is_idle_with_its_model_until_its_first_message() {
+        let mut copies = std::collections::BTreeMap::new();
+        copies.insert("2ae20df5".to_string(), CopyOf { session_id: "old".into(), model: "sonnet".into() });
+        let fresh = || Agent {
+            short_id: Some("2ae20df5".into()),
+            status: "idle".into(),
+            state: Some("blocked".into()),
+            ..ag("2ae20df5-x", Group::NeedsYou)
+        };
+        let mut v = vec![fresh()];
+        settle_copies(&mut v, &copies, &|_| false);
+        assert_eq!((v[0].group, v[0].model.as_deref()), (Group::Idle, Some("sonnet")));
+        // Once it has a transcript, the CLI's view stands.
+        let mut v = vec![fresh()];
+        settle_copies(&mut v, &copies, &|_| true);
+        assert_eq!((v[0].group, v[0].model.as_deref()), (Group::NeedsYou, None));
+        // A copy showing a real prompt still needs you.
+        let mut v = vec![Agent { status: "waiting".into(), ..fresh() }];
+        settle_copies(&mut v, &copies, &|_| false);
+        assert_eq!(v[0].group, Group::NeedsYou);
     }
 
     #[test]

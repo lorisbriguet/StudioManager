@@ -190,9 +190,13 @@ pub async fn agents_conversation(
 ) -> Result<Vec<Item>, String> {
     let login = ready(&state)?;
     let claude_dir = home_dir().join(".claude");
+    let app_dir = state.app_dir.clone();
     super::pty::blocking(move || {
         cli(&login)?;
-        Ok(locate(&claude_dir, &session_id).map(|p| read_tail(&p, LIMIT)).unwrap_or_default())
+        // A model-switch copy shows the conversation it continues until it has its own.
+        let copies = super::actions::read_state(&app_dir).copies;
+        let shown = super::actions::transcript_session(&session_id, &copies, &|s| locate(&claude_dir, s).is_some());
+        Ok(locate(&claude_dir, &shown).map(|p| read_tail(&p, LIMIT)).unwrap_or_default())
     })
     .await
 }

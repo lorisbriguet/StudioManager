@@ -82,7 +82,7 @@ describe("TerminalPanel", () => {
     });
     unmount();
     await waitFor(() => expect(invokedCommands).toContainEqual({ cmd: "agents_term_close", args: { termId: 7 } }));
-    expect(created[0].dispose).toHaveBeenCalled();
+    await waitFor(() => expect(created[0].dispose).toHaveBeenCalled());
   });
 
   it("writes decoded data for its termId only, including early chunks", async () => {

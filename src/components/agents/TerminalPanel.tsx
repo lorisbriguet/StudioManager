@@ -158,7 +158,13 @@ export function TerminalPanel({ shortId, onClose }: TerminalPanelProps) {
       unlisten.forEach((u) => u());
       onData.dispose();
       if (termId !== null && !exited) termClose(termId).catch(() => {});
-      term.dispose();
+      // xterm schedules its scroll-area refresh on the next animation frame; disposing
+      // before it runs makes that refresh throw ("_renderer.value.dimensions").
+      if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(() => requestAnimationFrame(() => term.dispose()));
+      } else {
+        term.dispose();
+      }
     };
   }, [shortId]);
 

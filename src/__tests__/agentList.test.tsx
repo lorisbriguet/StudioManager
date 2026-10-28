@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { AgentList } from "../components/agents/AgentList";
+import { groupAgents } from "../components/agents/useAgents";
 import type { Agent, Group } from "../lib/agents";
 
 function agent(group: Group, name: string): Agent {
@@ -58,6 +59,13 @@ describe("AgentList", () => {
     render(<AgentList byGroup={byGroup()} selectedId={null} onSelect={() => {}} />);
     expect(screen.queryByText("busy-one")).toBeNull();
     expect(screen.getByRole("button", { name: /Working/ })).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("orders Done latest first", () => {
+    const old = { ...agent("done", "old"), startedAt: 1 };
+    const recent = { ...agent("done", "recent"), startedAt: 3 };
+    const middle = { ...agent("done", "middle"), startedAt: 2 };
+    expect(groupAgents([old, recent, middle]).done.map((a) => a.name)).toEqual(["recent", "middle", "old"]);
   });
 
   it("keeps the selected done agent visible while folded", () => {
