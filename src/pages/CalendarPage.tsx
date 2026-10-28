@@ -1,6 +1,5 @@
 import { useMemo, useCallback, useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { createPortal } from "react-dom";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -8,7 +7,7 @@ import interactionPlugin from "@fullcalendar/interaction";
 import type { EventInput, EventContentArg, EventDropArg } from "@fullcalendar/core";
 import type { DateClickArg, EventResizeDoneArg } from "@fullcalendar/interaction";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
-import { Button, Select } from "../components/ui";
+import { Button, Select, Popover } from "../components/ui";
 import { useT } from "../i18n/useT";
 import { useTasksWithDueDate, useUpdateTask, useUpdateSubtask, useCreateTask, useCreateSubtask, useTasksByProject } from "../db/hooks/useTasks";
 import { useProjects, useUpdateProject } from "../db/hooks/useProjects";
@@ -564,7 +563,6 @@ export function QuickCreatePopup({
   const [projectId, setProjectId] = useState<number | "">(projects.length > 0 ? projects[0].id : "");
   const [selectedTask, setSelectedTask] = useState<{ id: number; title: string } | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const popoverRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const subtaskRef = useRef<HTMLInputElement>(null);
 
@@ -575,30 +573,8 @@ export function QuickCreatePopup({
   ) ?? [];
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
     if (selectedTask) subtaskRef.current?.focus();
   }, [selectedTask]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onClose]);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onClose]);
 
   const handleSubmit = () => {
     if (!projectId) return;
@@ -625,24 +601,16 @@ export function QuickCreatePopup({
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
-  // Position: clamp to viewport
-  let top = pos.top + 8;
-  const popoverH = selectedTask ? 220 : 180;
-  if (top + popoverH > window.innerHeight) {
-    top = pos.top - popoverH - 8;
-  }
-  let left = pos.left - 130;
-  if (left < 8) left = 8;
-  if (left + 260 > window.innerWidth) left = window.innerWidth - 268;
-
   const timeLabel = startTime ?? t.all_day;
   const canSubmit = selectedTask ? !!subtaskTitle.trim() && !!projectId : !!title.trim() && !!projectId;
 
-  return createPortal(
-    <div
-      ref={popoverRef}
-      className="fixed z-[9999] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu p-3 w-[260px]"
-      style={{ top, left }}
+  return (
+    <Popover
+      // Centred under the clicked point; Popover flips and clamps to the window.
+      at={{ x: pos.left - 130, y: pos.top + 6 }}
+      onClose={() => onClose()}
+      padding="content"
+      className="w-[260px]"
     >
       <div className="text-xs text-muted mb-2">
         {date} · {timeLabel}
@@ -679,6 +647,7 @@ export function QuickCreatePopup({
         ) : (
           <input
             ref={inputRef}
+            data-autofocus
             value={title}
             onChange={(e) => {
               setTitle(e.target.value);
@@ -738,7 +707,6 @@ export function QuickCreatePopup({
           {t.add}
         </Button>
       </div>
-    </div>,
-    document.body
+    </Popover>
   );
 }

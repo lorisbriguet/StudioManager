@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { ChevronDown, ChevronRight, GripVertical, Plus, X, Columns2, Maximize2 } from "lucide-react";
 import {
   DndContext,
@@ -17,6 +17,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useUpdateProject } from "../db/hooks/useProjects";
 import { useT } from "../i18n/useT";
+import { Dropdown } from "./ui";
 import type { LayoutConfig, LayoutBlock, BlockType, Project } from "../types/project";
 import { STANDARD_LAYOUT } from "../types/project";
 
@@ -145,8 +146,6 @@ export function ProjectBlockLayout({ project, projectId, renderBlock }: Props) {
     return STANDARD_LAYOUT;
   }, [project.layout_config]);
 
-  const [showAddMenu, setShowAddMenu] = useState(false);
-
   const saveLayout = (newLayout: LayoutConfig) => {
     updateProject.mutate({ id: projectId, data: { layout_config: JSON.stringify(newLayout) } });
   };
@@ -166,7 +165,6 @@ export function ProjectBlockLayout({ project, projectId, renderBlock }: Props) {
   const addBlock = (type: BlockType) => {
     const newLayout = [...layout, { type }];
     saveLayout(newLayout);
-    setShowAddMenu(false);
   };
 
   const toggleWidth = (type: BlockType) => {
@@ -231,27 +229,17 @@ export function ProjectBlockLayout({ project, projectId, renderBlock }: Props) {
       </DndContext>
 
       {availableBlocks.length > 0 && (
-        <div className="relative">
-          <button
-            onClick={() => setShowAddMenu(!showAddMenu)}
-            className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-accent transition-colors w-full justify-center py-2 rounded-xl border border-dashed border-[var(--color-input-border)]"
-          >
-            <Plus size={14} /> {t.add_block}
-          </button>
-          {showAddMenu && (
-            <div className="absolute z-20 bottom-full mb-1 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-menu py-1 min-w-[160px]">
-              {availableBlocks.map((type) => (
-                <button
-                  key={type}
-                  onClick={() => addBlock(type)}
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-hover-row)]"
-                >
-                  {BLOCK_LABELS[type]}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <Dropdown
+          className="w-full"
+          trigger={
+            <button
+              className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-accent transition-colors w-full justify-center py-2 rounded-xl border border-dashed border-[var(--color-input-border)]"
+            >
+              <Plus size={14} /> {t.add_block}
+            </button>
+          }
+          items={availableBlocks.map((type) => ({ label: BLOCK_LABELS[type], onSelect: () => addBlock(type) }))}
+        />
       )}
     </div>
   );

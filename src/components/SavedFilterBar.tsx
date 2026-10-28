@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Bookmark, Plus, X, Pencil, Trash2, Filter } from "lucide-react";
 import { toast } from "sonner";
-import { createPortal } from "react-dom";
 import { Button, Select } from "./ui";
+import { ContextMenu } from "./ContextMenu";
 import {
   useSavedFilters,
   useCreateSavedFilter,
@@ -146,13 +146,6 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
   useEffect(() => {
     if (editingId != null) editInputRef.current?.focus();
   }, [editingId]);
-
-  useEffect(() => {
-    if (!ctxMenu) return;
-    const close = () => setCtxMenu(null);
-    window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
-  }, [ctxMenu]);
 
   // Sync internal conditions state when parent filters change (e.g. saved filter loaded)
   useEffect(() => {
@@ -491,43 +484,37 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
           </button>
         )}
 
-        {ctxMenu && createPortal(
-          <div
-            className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-lg py-1 min-w-[140px] animate-in"
-            style={{ left: ctxMenu.x, top: ctxMenu.y }}
-          >
-            <button
-              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-left hover:bg-[var(--color-hover-row)]"
-              onClick={() => {
-                setEditingId(ctxMenu.filter.id);
-                setEditName(ctxMenu.filter.name);
-                setCtxMenu(null);
-              }}
-            >
-              <Pencil size={12} /> {t.rename}
-            </button>
-            {fields && fields.length > 0 && (
-              <button
-                className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-left hover:bg-[var(--color-hover-row)]"
-                onClick={() => {
-                  handleStartEditConditions(ctxMenu.filter);
-                  setCtxMenu(null);
-                }}
-              >
-                <Filter size={12} /> {t.edit_conditions}
-              </button>
-            )}
-            <button
-              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-left text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)]"
-              onClick={() => {
-                handleDelete(ctxMenu.filter.id);
-                setCtxMenu(null);
-              }}
-            >
-              <Trash2 size={12} /> {t.delete}
-            </button>
-          </div>,
-          document.body
+        {ctxMenu && (
+          <ContextMenu
+            x={ctxMenu.x}
+            y={ctxMenu.y}
+            onClose={() => setCtxMenu(null)}
+            items={[
+              {
+                label: t.rename,
+                icon: <Pencil size={12} />,
+                onClick: () => {
+                  setEditingId(ctxMenu.filter.id);
+                  setEditName(ctxMenu.filter.name);
+                },
+              },
+              ...(fields && fields.length > 0
+                ? [
+                    {
+                      label: t.edit_conditions,
+                      icon: <Filter size={12} />,
+                      onClick: () => handleStartEditConditions(ctxMenu.filter),
+                    },
+                  ]
+                : []),
+              {
+                label: t.delete,
+                icon: <Trash2 size={12} />,
+                danger: true,
+                onClick: () => handleDelete(ctxMenu.filter.id),
+              },
+            ]}
+          />
         )}
       </div>
       {conditionsUI}

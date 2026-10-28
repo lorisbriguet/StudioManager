@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
 import { X } from "lucide-react";
 import type { SelectOption } from "../../types/workload";
 import { getStoredTagColor, TAG_COLOR_NAMES } from "../../lib/tagColors";
 import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
+import { Popover } from "../ui/Popover";
 
 interface Props {
   options: SelectOption[];
@@ -13,7 +13,7 @@ interface Props {
   onChange: (value: string[]) => void;
   onOptionsChange?: (options: SelectOption[]) => void;
   onClose: () => void;
-  anchorRef?: React.RefObject<HTMLElement | null>;
+  anchorRef: React.RefObject<HTMLElement | null>;
 }
 
 export function SelectTagPicker({
@@ -27,31 +27,7 @@ export function SelectTagPicker({
 }: Props) {
   const t = useT();
   const [search, setSearch] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const darkMode = useAppStore((s) => s.darkMode);
-
-  useEffect(() => {
-    if (anchorRef?.current) {
-      const rect = anchorRef.current.getBoundingClientRect();
-      setPos({ top: rect.bottom + 4, left: rect.left });
-    }
-  }, [anchorRef]);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    function onPointerDown(e: PointerEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
-    }
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [onClose]);
 
   const filtered = options.filter((o) =>
     o.value.toLowerCase().includes(search.toLowerCase())
@@ -79,22 +55,17 @@ export function SelectTagPicker({
     setSearch("");
   };
 
-  const dropdown = (
-    <div
-      ref={ref}
-      className={`${anchorRef ? "fixed" : "absolute mt-1"} z-50 w-52 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-lg overflow-hidden`}
-      style={pos ? { top: pos.top, left: pos.left } : undefined}
-    >
+  return (
+    <Popover anchor={anchorRef} onClose={onClose} padding="none" className="w-52 overflow-hidden">
       <div className="p-1.5">
         <input
-          ref={inputRef}
+          data-autofocus
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && search.trim() && filtered.length === 0) {
               createOption();
             }
-            if (e.key === "Escape") onClose();
           }}
           placeholder={t.search_or_create}
           className="w-full text-sm px-2 py-1 border border-[var(--color-border-divider)] rounded-lg"
@@ -133,11 +104,6 @@ export function SelectTagPicker({
           </button>
         )}
       </div>
-    </div>
+    </Popover>
   );
-
-  if (anchorRef) {
-    return createPortal(dropdown, document.body);
-  }
-  return dropdown;
 }

@@ -8,7 +8,8 @@ import { useDashboardStore, WIDGET_CATALOG, type WidgetType, type DashboardWidge
 import type { LayoutItem } from "react-grid-layout";
 import { renderWidget } from "../components/dashboard/widgets";
 import { DashboardYearContext } from "../components/dashboard/DashboardYearContext";
-import { PageHeader, Button, EmptyState, Select } from "../components/ui";
+import { PageHeader, Button, EmptyState, Select, Popover } from "../components/ui";
+import { MENU_ITEM, MENU_DIVIDER } from "../components/ui/Dropdown";
 import { useT } from "../i18n/useT";
 import { toast } from "sonner";
 import { useDashboardPresets, useCreateDashboardPreset, useUpdateDashboardPreset, useDeleteDashboardPreset } from "../db/hooks/useDashboardPresets";
@@ -37,18 +38,11 @@ function PresetDropdown() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setSaving(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  const closeMenu = (returnFocus: boolean) => {
+    setOpen(false);
+    setSaving(false);
+    if (returnFocus) dropdownRef.current?.querySelector("button")?.focus({ preventScroll: true });
+  };
 
   // Focus input when saving
   useEffect(() => {
@@ -101,7 +95,9 @@ function PresetDropdown() {
       <Button
         variant="secondary"
         size="sm"
-        onClick={() => setOpen(!open)}
+        onClick={() => (open ? closeMenu(false) : setOpen(true))}
+        aria-haspopup="dialog"
+        aria-expanded={open}
       >
         <span className="flex items-center gap-1.5">
           <span className="text-muted text-xs">{t.presets}:</span>
@@ -111,16 +107,16 @@ function PresetDropdown() {
       </Button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu py-1 min-w-[220px]">
+        <Popover anchor={dropdownRef} align="end" onClose={closeMenu} padding="none" className="p-1 min-w-[220px]">
           {/* Built-in presets */}
           {builtinPresets.map((preset) => (
             <button
               key={preset.id}
               type="button"
               onClick={() => handleLoadPreset(preset)}
-              className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors ${
+              className={`${MENU_ITEM} ${
                 activePresetId === preset.id
-                  ? "text-accent bg-accent/5"
+                  ? "text-accent font-medium bg-accent-tint"
                   : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
               }`}
             >
@@ -130,24 +126,24 @@ function PresetDropdown() {
           ))}
 
           {/* Divider if user presets exist or for save option */}
-          <div className="my-1 border-t border-[var(--color-border-divider)]" />
+          <div className={MENU_DIVIDER} />
 
           {/* User presets */}
           {userPresets.map((preset) => (
             <div
               key={preset.id}
-              className={`flex items-center group/item transition-colors ${
+              className={`flex items-center rounded-md group/item transition-colors ${
                 activePresetId === preset.id
-                  ? "bg-accent/5"
+                  ? "bg-accent-tint"
                   : "hover:bg-[var(--color-hover-row)]"
               }`}
             >
               <button
                 type="button"
                 onClick={() => handleLoadPreset(preset)}
-                className={`flex-1 flex items-center gap-2 px-3 py-1.5 text-sm text-left ${
+                className={`${MENU_ITEM} flex-1 min-w-0 ${
                   activePresetId === preset.id
-                    ? "text-accent"
+                    ? "text-accent font-medium"
                     : "text-[var(--color-text-secondary)]"
                 }`}
               >
@@ -156,7 +152,7 @@ function PresetDropdown() {
               <button
                 type="button"
                 onClick={(e) => handleDelete(e, preset.id)}
-                className="opacity-0 group-hover/item:opacity-100 transition-opacity text-muted hover:text-[var(--color-danger-text)] px-2 py-1.5"
+                className="opacity-0 group-hover/item:opacity-100 transition-opacity text-muted hover:text-[var(--color-danger-text)] px-2 py-1"
                 title={t.delete_preset}
                 aria-label={t.delete_preset}
               >
@@ -166,7 +162,7 @@ function PresetDropdown() {
           ))}
 
           {userPresets.length > 0 && (
-            <div className="my-1 border-t border-[var(--color-border-divider)]" />
+            <div className={MENU_DIVIDER} />
           )}
 
           {/* Update active user preset */}
@@ -174,7 +170,7 @@ function PresetDropdown() {
             <button
               type="button"
               onClick={handleUpdate}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
+              className={`${MENU_ITEM} text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]`}
             >
               <Save size={14} className="text-accent" />
               {t.update_preset}
@@ -183,7 +179,7 @@ function PresetDropdown() {
 
           {/* Save current layout */}
           {saving ? (
-            <div className="px-3 py-2 flex items-center gap-2">
+            <div className="px-2 py-1 flex items-center gap-2">
               <input
                 ref={inputRef}
                 type="text"
@@ -191,7 +187,8 @@ function PresetDropdown() {
                 onChange={(e) => setSaveName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleSave();
-                  if (e.key === "Escape") { setSaving(false); setSaveName(""); }
+                  // preventDefault: Esc cancels the name field, not the whole menu
+                  if (e.key === "Escape") { e.preventDefault(); setSaving(false); setSaveName(""); }
                 }}
                 placeholder={t.preset_name}
                 className="flex-1 border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-sm bg-[var(--color-input-bg)] outline-none focus:border-accent"
@@ -210,13 +207,13 @@ function PresetDropdown() {
             <button
               type="button"
               onClick={() => setSaving(true)}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
+              className={`${MENU_ITEM} text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]`}
             >
               <Save size={14} className="text-muted" />
               {t.save_layout}
             </button>
           )}
-        </div>
+        </Popover>
       )}
     </div>
   );

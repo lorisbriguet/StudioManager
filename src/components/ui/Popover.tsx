@@ -46,6 +46,15 @@ const PADDING = {
   none: "",
 };
 
+/**
+ * Open panels, oldest first. A panel opened from inside another one (a Select
+ * in a date picker) is portalled separately, so for the outer panel a click in
+ * it would look "outside". Clicks in any panel opened later are ignored.
+ */
+const openPanels = new Map<HTMLElement, number>();
+/** Render order: a parent renders before the panels opened inside it. */
+let openSeq = 0;
+
 const FOCUSABLE =
   'input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
 
@@ -97,6 +106,7 @@ export function Popover({
   ...aria
 }: PopoverProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const [seq] = useState(() => ++openSeq);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -154,12 +164,23 @@ export function Popover({
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;
-      if (panelRef.current?.contains(t) || anchor?.current?.contains(t)) return;
+      const self = panelRef.current;
+      if (self?.contains(t) || anchor?.current?.contains(t)) return;
+      for (const [panel, n] of openPanels) if (n > seq && panel.contains(t)) return;
       onCloseRef.current(false);
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
-  }, [anchor]);
+  }, [anchor, seq]);
+
+  useLayoutEffect(() => {
+    const p = panelRef.current;
+    if (!p) return;
+    openPanels.set(p, seq);
+    return () => {
+      openPanels.delete(p);
+    };
+  }, [seq]);
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -192,7 +213,15 @@ export function Popover({
       onMouseDown={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.stopPropagation()}
       className={`fixed z-[60] ${POPOVER_SURFACE} ${PADDING[padding]} animate-in fade-in duration-100 ${className}`}
-      style={{ ...style, top: pos?.top ?? 0, left: pos?.left ?? 0, visibility: pos ? "visible" : "hidden" }}
+      // Until placed: transparent, not visibility:hidden. A hidden element
+      // cannot take focus, and focus moves in before the placement re-render.
+      style={{
+        ...style,
+        top: pos?.top ?? 0,
+        left: pos?.left ?? 0,
+        opacity: pos ? undefined : 0,
+        pointerEvents: pos ? undefined : "none",
+      }}
     >
       {children}
     </div>,

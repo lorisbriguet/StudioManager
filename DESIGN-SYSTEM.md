@@ -223,15 +223,36 @@ Sizes: `sm`, `md`, `lg`
 
 ### Button Icon Rules
 - **Icon + text**: always use `<Button icon={<Icon size={14} />}>Label</Button>` — never raw `<button>` with icon and text side by side
-- **Icon-only**: use `<button className="text-muted hover:text-[var(--color-text-secondary)] transition-colors"><Icon size={14} /></button>` — never use the shared `Button` component for icon-only actions (it adds borders/padding that are too heavy)
+- **Icon-only**: use `<IconButton icon={Pencil} label={t.edit} />` (see Icon Buttons below). Never use the shared `Button` for icon-only actions, and never a raw `<button>` with only an icon in it.
 - Never put a lucide icon inside a `<button>` alongside text without using the shared Button component
+
+### Icon Buttons
+
+`src/components/ui/IconButton.tsx`, for every button that is only an icon.
+
+```tsx
+<IconButton icon={Pencil} label={t.edit} onClick={edit} />
+<IconButton icon={Trash2} label={t.delete} tone="danger" reveal onClick={remove} />
+<IconButton icon={X} label={t.close} size="xs" onClick={onClose} />
+<IconButton icon={MoreHorizontal} label={t.more} {...pop.triggerProps} />
+```
+
+| Prop | Values | |
+|------|--------|--|
+| `icon` | a lucide icon component | `Pencil`, not `<Pencil />` |
+| `label` | string (required) | aria-label and hover title, from `useT()` |
+| `size` | `xs` · `sm` (default) · `md` | `p-0.5` icon 12 · `p-1` icon 14 · `p-1.5` icon 16 |
+| `tone` | `default` · `danger` · `accent` | Hover colour and tint: text + hover-row, danger-text + danger-bg, accent + hover-row |
+| `reveal` | boolean | Hidden until its `group` row is hovered or the button has keyboard focus |
+| `active` | boolean | Pressed/open look |
+
+At rest an IconButton is `text-muted`. Disabled is `opacity-30`, with clicks turned off.
 
 ### Sanctioned Raw-Button Exceptions
 
 These patterns keep raw `<button>` elements — do not convert them to the shared Button:
 
-- **Dropdown / context menu items** — see the Dropdown / Context Menu Pattern below
-- **Icon-only actions** — per the icon-only rule above
+- **Dropdown / context menu items** — see Dropdown below
 - **Banner action chips** — inverse-colored chips on mode banners (`MainLayout` test/presentation banners)
 - **Settings status chips** — the amber test-mode chip and the danger-outline restore/snapshot chips in `SettingsPage`. If a **third** danger-outline chip appears, promote the pattern to a proper Button variant (e.g. `danger-outline`) instead of adding a fourth exception.
 - **Dashed dropzones** — full-width dashed add-affordances (`ProjectBlockLayout` add-block)
@@ -371,6 +392,44 @@ import { invoiceStatusVariant, quoteStatusVariant, taskStatusVariant, projectSta
 
 ---
 
+## Popover
+
+Every floating panel uses `src/components/ui/Popover.tsx`, including Dropdown's menus. Never build a floating panel by hand: no `absolute`/`fixed` panel, no `createPortal`, no click-outside listener and no z-index of your own.
+
+```tsx
+const pop = usePopover();
+<Button variant="secondary" size="sm" {...pop.triggerProps}>{t.columns}</Button>
+{pop.open && (
+  <Popover anchor={pop.anchorRef} onClose={pop.close} padding="content" align="end">
+    …
+  </Popover>
+)}
+
+// right-click, at the cursor
+<Popover at={{ x, y }} onClose={close}>…</Popover>
+
+// autocomplete under an input: typing stays in the input
+<Popover anchor={inputRef} autoFocus={false} matchWidth onClose={close}>…</Popover>
+```
+
+| Prop | Default | |
+|------|---------|--|
+| `anchor` / `at` | | Element ref, or a window point |
+| `padding` | `"menu"` | `menu` = `p-1 min-w-[160px]`, `content` = `p-3`, `none` |
+| `align` / `side` | `start` / `bottom` | Flips when there is no room |
+| `matchWidth` | `false` | At least as wide as the anchor |
+| `autoFocus` | `true` | Focuses `[data-autofocus]`, else the first focusable element, else the panel |
+
+**What it handles for you:**
+- It renders on `<body>`, at `z-[60]`, with the `POPOVER_SURFACE` look: surface, `border-header`, `rounded-xl`, `shadow-menu`. Tables and modals never clip it.
+- It follows its anchor when the page scrolls or the window resizes.
+- A click outside calls `onClose(false)`. Esc calls `onClose(true)`, and a surrounding Modal stays open.
+- Clicks and keys inside it don't reach the anchor's ancestors, such as table rows and forms.
+
+Use `Dropdown` or `ContextMenu` when the content is a plain list of commands. Use `Popover` with the `MENU_*` row classes when rows need extra controls.
+
+---
+
 ## Dropdown
 
 Every menu and select in the app uses `src/components/ui/Dropdown.tsx`. Never use a native `<select>`: it opens the system menu, which doesn't match the app. Spec and live preview: [StudioManager Dropdown](https://claude.ai/artifact/ByQ9fZTPqMmURLyBVYN5o2).
@@ -494,3 +553,5 @@ Before merging any new UI work, verify:
 - [ ] Status colors come from `statusColors.ts`
 - [ ] Shared components used where available (Button, Badge, Input, Select / DropdownSelect / Dropdown, Modal, Card, Toggle)
 - [ ] No native `<select>`
+- [ ] Icon-only buttons use `IconButton`
+- [ ] No hand-made floating panel (use `Popover`, `Dropdown` or `ContextMenu`)

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Plus, Paperclip, Eye, ChevronRight, Upload, Trash2, CheckCircle, CalendarCheck, Receipt, Settings2, XCircle, Pencil } from "lucide-react";
-import { Button, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState, Card, Modal } from "../components/ui";
+import { Button, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState, Card, Modal, Popover } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
 import { SavedFilterBar } from "../components/SavedFilterBar";
@@ -25,6 +25,7 @@ import {
   useDuplicateCheck,
 } from "../db/hooks/useExpenses";
 import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
+import { MENU_ITEM } from "../components/ui/Dropdown";
 import { BulkActionBar } from "../components/BulkActionBar";
 import { useReceiptDrop } from "../hooks/useReceiptDrop";
 import { useListNavigation } from "../hooks/useListNavigation";
@@ -584,6 +585,7 @@ export function NewExpenseForm({
   // Set on suggestion mousedown (which fires before the input's blur) so the
   // blur handler does not validate the stale pre-selection supplier value.
   const pickingSuggestionRef = useRef(false);
+  const supplierInputRef = useRef<HTMLInputElement>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<{ supplier: string; amount: number; date: string } | null>(null);
   const duplicateCheck = useDuplicateCheck();
 
@@ -644,6 +646,7 @@ export function NewExpenseForm({
             badge={detectedBadge("supplier", () => setForm((f) => ({ ...f, supplier: "" })))}
           >
             <Input
+              ref={supplierInputRef}
               value={form.supplier}
               onChange={(e) => {
                 setForm({ ...form, supplier: e.target.value });
@@ -662,7 +665,14 @@ export function NewExpenseForm({
             />
           </FormField>
           {showSuggestions && suggestions.length > 0 && (
-            <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-[var(--color-surface)] border border-[var(--color-input-border)] rounded-xl shadow-lg max-h-48 overflow-y-auto">
+            <Popover
+              anchor={supplierInputRef}
+              onClose={() => setShowSuggestions(false)}
+              autoFocus={false}
+              matchWidth
+              padding="menu"
+              className="max-h-48 overflow-y-auto"
+            >
               {suggestions.map((s) => (
                 <button
                   key={s.supplier}
@@ -671,7 +681,7 @@ export function NewExpenseForm({
                     pickingSuggestionRef.current = true;
                     selectSupplier(s);
                   }}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-hover-row)] flex items-center justify-between"
+                  className={`${MENU_ITEM} justify-between cursor-pointer hover:bg-[var(--color-hover-row)]`}
                 >
                   <span>{s.supplier}</span>
                   <span className="text-xs text-muted">
@@ -679,7 +689,7 @@ export function NewExpenseForm({
                   </span>
                 </button>
               ))}
-            </div>
+            </Popover>
           )}
         </div>
         <FormField label={t.category}>

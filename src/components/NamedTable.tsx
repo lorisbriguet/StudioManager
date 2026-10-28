@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { createPortal } from "react-dom";
 import { Plus, Trash2, GripVertical, ChevronDown, ChevronRight, Pencil } from "lucide-react";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { Button } from "./ui";
+import { Button, Dropdown } from "./ui";
 import { TableCell } from "./named-table/TableCell";
 import { ColumnEditorPopover } from "./named-table/ColumnEditorPopover";
 import {
@@ -39,8 +38,6 @@ export function NamedTable({ table, projectId }: Props) {
   const [tableName, setTableName] = useState(table.name);
   const [editingCell, setEditingCell] = useState<{ rowId: number; colId: string } | null>(null);
   const [editValue, setEditValue] = useState("");
-  const [showColPicker, setShowColPicker] = useState(false);
-  const [colPickerPos, setColPickerPos] = useState<{ top: number; left: number } | null>(null);
   const [editingCol, setEditingCol] = useState<string | null>(null);
   const [colEditorPos, setColEditorPos] = useState<{ top: number; left: number } | null>(null);
   const [colName, setColName] = useState("");
@@ -51,7 +48,6 @@ export function NamedTable({ table, projectId }: Props) {
   const [showSaveAsListInput, setShowSaveAsListInput] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const cellInputRef = useRef<HTMLInputElement>(null);
-  const colPickerRef = useRef<HTMLDivElement>(null);
 
   const cols = table.column_config;
 
@@ -92,18 +88,6 @@ export function NamedTable({ table, projectId }: Props) {
     updateRow.mutate({ id: row.id, data: newData });
     setEditingCell(null);
   };
-
-  // Close column picker on outside click
-  useEffect(() => {
-    if (!showColPicker) return;
-    const handler = (e: MouseEvent) => {
-      if (colPickerRef.current && !colPickerRef.current.contains(e.target as Node)) {
-        setShowColPicker(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showColPicker]);
 
   // When import list items arrive, apply them
   useEffect(() => {
@@ -179,7 +163,6 @@ export function NamedTable({ table, projectId }: Props) {
     const newCol: TableColumnDef = { id, name, type };
     if (type === "select" || type === "tags") newCol.options = [t.default_option_1, t.default_option_2];
     updateTable.mutate({ id: table.id, data: { column_config: [...table.column_config, newCol] } });
-    setShowColPicker(false);
   };
 
   return (
@@ -274,37 +257,23 @@ export function NamedTable({ table, projectId }: Props) {
                     )}
                   </th>
                 ))}
-                <th className="w-10 relative">
-                  <button
-                    onClick={(e) => {
-                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                      setColPickerPos({ top: rect.bottom + 4, left: rect.right - 140 });
-                      setShowColPicker((v) => !v);
-                    }}
-                    className="text-muted hover:text-accent transition-colors p-0.5 rounded-md hover:bg-[var(--color-hover-row)]"
-                    title={t.add_column}
-                    aria-label={t.add_column}
-                  >
-                    <Plus size={14} />
-                  </button>
-                  {showColPicker && colPickerPos && createPortal(
-                    <div
-                      ref={colPickerRef}
-                      className="fixed z-[9999] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu py-1 min-w-[140px]"
-                      style={{ top: colPickerPos.top, left: colPickerPos.left }}
-                    >
-                      {(["text", "number", "checkbox", "select", "tags", "date"] as const).map((type) => (
-                        <button
-                          key={type}
-                          onClick={() => addColumn(type)}
-                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-hover-row)] capitalize"
-                        >
-                          {type}
-                        </button>
-                      ))}
-                    </div>,
-                    document.body
-                  )}
+                <th className="w-10">
+                  <Dropdown
+                    align="end"
+                    trigger={
+                      <button
+                        className="text-muted hover:text-accent transition-colors p-0.5 rounded-md hover:bg-[var(--color-hover-row)]"
+                        title={t.add_column}
+                        aria-label={t.add_column}
+                      >
+                        <Plus size={14} />
+                      </button>
+                    }
+                    items={(["text", "number", "checkbox", "select", "tags", "date"] as const).map((type) => ({
+                      label: type.charAt(0).toUpperCase() + type.slice(1),
+                      onSelect: () => addColumn(type),
+                    }))}
+                  />
                 </th>
                 <th className="w-8" />
               </tr>

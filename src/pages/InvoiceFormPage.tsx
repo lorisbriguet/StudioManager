@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { ListTodo, Trash2, ArrowLeft, AlertTriangle, Eye } from "lucide-react";
 import { isUntranslatedActivity } from "../lib/activityNudge";
-import { Button, Input, Select, FormField } from "../components/ui";
+import { Button, Input, Select, FormField, Popover } from "../components/ui";
+import { MENU_ITEM } from "../components/ui/Dropdown";
 import * as v from "../lib/validate";
 import { toast } from "sonner";
 import { addDays, format } from "date-fns";
@@ -857,23 +858,16 @@ function DesignationInput({
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  const ref = useRef<HTMLInputElement>(null);
 
   const filtered = tasks.filter(
     (tk) => tk.title.toLowerCase().includes(value.toLowerCase()) && tk.title !== value
   );
 
   return (
-    <div ref={ref} className="relative">
+    <div>
       <input
+        ref={ref}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => setOpen(true)}
@@ -881,7 +875,14 @@ function DesignationInput({
         placeholder={t.description}
       />
       {open && filtered.length > 0 && (
-        <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-lg shadow-lg max-h-40 overflow-y-auto">
+        <Popover
+          anchor={ref}
+          onClose={() => setOpen(false)}
+          autoFocus={false}
+          matchWidth
+          padding="menu"
+          className="max-h-40 overflow-y-auto"
+        >
           {filtered.map((tk, idx) => (
             <button
               key={`${tk.title}-${idx}`}
@@ -890,12 +891,12 @@ function DesignationInput({
                 onChange(tk.title);
                 setOpen(false);
               }}
-              className="w-full text-left px-2 py-1.5 text-sm hover:bg-[var(--color-hover-row)]"
+              className={`${MENU_ITEM} cursor-pointer hover:bg-[var(--color-hover-row)]`}
             >
               {tk.title}
             </button>
           ))}
-        </div>
+        </Popover>
       )}
     </div>
   );

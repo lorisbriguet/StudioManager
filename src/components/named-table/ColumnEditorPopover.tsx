@@ -1,7 +1,6 @@
-import { useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
 import { Plus, Trash2, Link, Unlink } from "lucide-react";
 import { Button } from "../ui";
+import { Popover } from "../ui/Popover";
 import type { TableColumnDef } from "../../types/project-table";
 import type { CustomList } from "../../db/queries/customLists";
 
@@ -55,25 +54,15 @@ export function ColumnEditorPopover({
   onDelete,
   onCommit,
 }: Props) {
-  const colEditorRef = useRef<HTMLDivElement>(null);
-
-  // Close on outside click — commits with whatever is currently in the
+  // Closing (outside click or Esc) commits with whatever is currently in the
   // (parent-owned) editor state, same as the original NamedTable listener.
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (colEditorRef.current && !colEditorRef.current.contains(e.target as Node)) {
-        onCommit();
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onCommit]);
-
-  return createPortal(
-    <div
-      ref={colEditorRef}
-      className="fixed z-[9999] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu p-3 min-w-[200px]"
-      style={{ top: pos.top, left: pos.left }}
+  return (
+    <Popover
+      at={{ x: pos.left, y: pos.top }}
+      onClose={onCommit}
+      padding="content"
+      autoFocus={false}
+      className="min-w-[200px]"
     >
       <label className="block text-[10px] text-muted mb-1">{t.rename}</label>
       <input
@@ -178,7 +167,7 @@ export function ColumnEditorPopover({
                     <input
                       value={saveAsListName}
                       onChange={(e) => setSaveAsListName(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") onSaveAsList(); if (e.key === "Escape") setShowSaveAsListInput(false); }}
+                      onKeyDown={(e) => { if (e.key === "Enter") onSaveAsList(); if (e.key === "Escape") { e.preventDefault(); setShowSaveAsListInput(false); } }}
                       placeholder={t.list_name}
                       className="flex-1 border border-[var(--color-input-border)] rounded-lg px-2 py-0.5 text-[10px]"
                       autoFocus
@@ -218,7 +207,6 @@ export function ColumnEditorPopover({
           {t.save}
         </button>
       </div>
-    </div>,
-    document.body
+    </Popover>
   );
 }

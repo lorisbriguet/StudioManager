@@ -1,5 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect } from "react";
-import { createPortal } from "react-dom";
+import { useState, useEffect } from "react";
 import {
   format,
   isToday,
@@ -22,6 +21,7 @@ import {
 } from "lucide-react";
 import { formatDisplayDate } from "../utils/formatDate";
 import { Button, Select } from "./ui";
+import { Popover, usePopover } from "./ui/Popover";
 import { useT } from "../i18n/useT";
 
 /** Parse a date string safely — handles both "yyyy-MM-dd" and full ISO timestamps */
@@ -70,50 +70,15 @@ export function TaskDatePicker({
   compact,
 }: TaskDatePickerProps) {
   const t = useT();
-  const [open, setOpen] = useState(false);
+  const pop = usePopover();
   const [month, setMonth] = useState(() =>
     dueDate ? parseLocalDate(dueDate) : new Date()
   );
   const [showEndDate, setShowEndDate] = useState(!!endDate);
   const [showTime, setShowTime] = useState(!!(startTime || endTime));
-  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const selectedDate = dueDate ? parseLocalDate(dueDate) : undefined;
   const selectedEndDate = endDate ? parseLocalDate(endDate) : undefined;
-
-  // Position popover relative to trigger
-  useLayoutEffect(() => {
-    if (!open || !triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    const popoverW = 300;
-    let left = rect.right - popoverW;
-    if (left < 8) left = 8;
-    let top = rect.bottom + 4;
-    // If popover would go below viewport, show above
-    if (top + 420 > window.innerHeight) {
-      top = Math.max(8, rect.top - 420 - 4);
-    }
-    setPopoverPos({ top, left });
-  }, [open]);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (
-        popoverRef.current &&
-        !popoverRef.current.contains(e.target as Node) &&
-        triggerRef.current &&
-        !triggerRef.current.contains(e.target as Node)
-      ) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
 
   // Sync month when date changes externally
   useEffect(() => {
@@ -150,7 +115,7 @@ export function TaskDatePicker({
     });
     setShowEndDate(false);
     setShowTime(false);
-    setOpen(false);
+    pop.close();
   };
 
   const handleToday = () => {
@@ -181,9 +146,8 @@ export function TaskDatePicker({
   return (
     <>
       <button
-        ref={triggerRef}
+        {...pop.triggerProps}
         type="button"
-        onClick={() => setOpen(!open)}
         className={`flex items-center gap-1.5 text-xs rounded-md px-2 py-1 border transition-colors ${
           dueDate
             ? "border-[var(--color-input-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
@@ -195,12 +159,8 @@ export function TaskDatePicker({
         {dueDate && <span className={compact ? "text-xs" : ""}>{displayLabel}</span>}
       </button>
 
-      {open && popoverPos && createPortal(
-        <div
-          ref={popoverRef}
-          className="fixed z-[9999] bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-lg p-3 w-[300px]"
-          style={{ top: popoverPos.top, left: popoverPos.left }}
-        >
+      {pop.open && (
+        <Popover anchor={pop.anchorRef} onClose={pop.close} align="end" padding="content" className="w-[300px]">
           {/* Quick shortcuts */}
           <div className="flex gap-1.5 mb-2">
             <button
@@ -322,8 +282,7 @@ export function TaskDatePicker({
               {t.clear_date}
             </Button>
           </div>
-        </div>,
-        document.body
+        </Popover>
       )}
     </>
   );

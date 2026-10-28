@@ -1,6 +1,7 @@
-import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect, type RefObject } from "react";
 import { Plus, Trash2, GripVertical, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Settings2, X, Copy, Download, Sigma, Pin, Play, Square } from "lucide-react";
-import { Button, Select } from "../ui";
+import { Button, Select, Popover } from "../ui";
+import { MENU_ITEM, MENU_DIVIDER } from "../ui/Dropdown";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
@@ -86,7 +87,9 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
   // Collapse is now handled by ProjectBlockLayout
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveTemplateName, setSaveTemplateName] = useState("");
-  const [headerMenu, setHeaderMenu] = useState<{ ci: number; pos: { top: number; left: number }; isSystem?: boolean } | null>(null);
+  const [headerMenu, setHeaderMenu] = useState<{ ci: number; isSystem?: boolean } | null>(null);
+  // The header cell the open column menu hangs from.
+  const headerMenuAnchorRef = useRef<HTMLElement | null>(null);
   const [sectionMenu, setSectionMenu] = useState<{ x: number; y: number } | null>(null);
   const [stickyFirstCol, setStickyFirstCol] = useState(() => {
     try { return localStorage.getItem(`workload_sticky_${projectId}`) === "1"; } catch { return false; }
@@ -466,9 +469,9 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                   className={`relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-[var(--color-text-secondary)] select-none ${stickyFirstCol ? "sticky left-8 z-10 bg-[var(--color-surface)]" : ""}`}
                   style={{ width: taskColWidth, minWidth: 80 }}
                   onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
+                    headerMenuAnchorRef.current = e.currentTarget;
                     setHeaderMenu((prev) =>
-                      prev?.ci === -1 && prev?.isSystem ? null : { ci: -1, pos: { top: rect.bottom + 2, left: rect.left }, isSystem: true }
+                      prev?.ci === -1 && prev?.isSystem ? null : { ci: -1, isSystem: true }
                     );
                   }}
                 >
@@ -487,9 +490,9 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                   className="relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-[var(--color-text-secondary)] select-none"
                   style={{ width: 90, minWidth: 60 }}
                   onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
+                    headerMenuAnchorRef.current = e.currentTarget;
                     setHeaderMenu((prev) =>
-                      prev?.ci === -2 && prev?.isSystem ? null : { ci: -2, pos: { top: rect.bottom + 2, left: rect.left }, isSystem: true }
+                      prev?.ci === -2 && prev?.isSystem ? null : { ci: -2, isSystem: true }
                     );
                   }}
                 >
@@ -503,9 +506,9 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                   className="relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-[var(--color-text-secondary)] select-none"
                   style={{ width: 90, minWidth: 60 }}
                   onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
+                    headerMenuAnchorRef.current = e.currentTarget;
                     setHeaderMenu((prev) =>
-                      prev?.ci === -3 && prev?.isSystem ? null : { ci: -3, pos: { top: rect.bottom + 2, left: rect.left }, isSystem: true }
+                      prev?.ci === -3 && prev?.isSystem ? null : { ci: -3, isSystem: true }
                     );
                   }}
                 >
@@ -523,9 +526,9 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                       className="relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-[var(--color-text-secondary)] select-none"
                       style={{ width: w, minWidth: 24 }}
                       onClick={(e) => {
-                        const rect = e.currentTarget.getBoundingClientRect();
+                        headerMenuAnchorRef.current = e.currentTarget;
                         setHeaderMenu((prev) =>
-                          prev?.ci === ci && !prev?.isSystem ? null : { ci, pos: { top: rect.bottom + 2, left: rect.left } }
+                          prev?.ci === ci && !prev?.isSystem ? null : { ci }
                         );
                       }}
                     >
@@ -633,9 +636,9 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
         if (!sysKey) return null;
         const isAsc = sortKey === sysKey && sortDir === "asc";
         const isDesc = sortKey === sysKey && sortDir === "desc";
-        return createPortal(
+        return (
           <SystemHeaderMenu
-            pos={headerMenu.pos}
+            anchor={headerMenuAnchorRef}
             isAsc={isAsc}
             isDesc={isDesc}
             onSort={(dir) => {
@@ -649,8 +652,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
             }}
             onClose={() => setHeaderMenu(null)}
             t={t}
-          />,
-          document.body
+          />
         );
       })()}
 
@@ -658,9 +660,9 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
       {headerMenu && !headerMenu.isSystem && (() => {
         const col = columns[headerMenu.ci];
         if (!col) return null;
-        return createPortal(
+        return (
           <ColumnHeaderMenu
-            pos={headerMenu.pos}
+            anchor={headerMenuAnchorRef}
             col={col}
             colIndex={headerMenu.ci}
             colCount={columns.length}
@@ -681,8 +683,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
             onToggleSum={() => { handleToggleSum(headerMenu.ci); setHeaderMenu(null); }}
             onClose={() => setHeaderMenu(null)}
             t={t}
-          />,
-          document.body
+          />
         );
       })()}
 
@@ -726,7 +727,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
       )}
 
       {/* Section context menu (right-click on "Workload" header) */}
-      {sectionMenu && createPortal(
+      {sectionMenu && (
         <SectionContextMenu
           x={sectionMenu.x}
           y={sectionMenu.y}
@@ -741,8 +742,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
           onExportCsv={() => { handleExportCsv(); setSectionMenu(null); }}
           onClose={() => setSectionMenu(null)}
           t={t}
-        />,
-        document.body
+        />
       )}
     </div>
   );
@@ -769,25 +769,11 @@ function SectionContextMenu({
   onClose: () => void;
   t: Record<string, string>;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onPointerDown(e: PointerEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    }
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [onClose]);
-
   return (
-    <div
-      ref={ref}
-      className="fixed z-50 w-48 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-lg overflow-hidden py-1"
-      style={{ top: y, left: x }}
-    >
+    <Popover at={{ x, y }} onClose={onClose} className="w-48">
       <button
         onClick={onTogglePin}
-        className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)] ${stickyFirstCol ? "text-accent" : ""}`}
+        className={`${MENU_ITEM} ${stickyFirstCol ? "text-accent font-medium bg-accent-tint" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"}`}
       >
         <Pin size={14} />
         {t.pin_first_column}
@@ -795,13 +781,13 @@ function SectionContextMenu({
       {hasRows && (
         <button
           onClick={onExportCsv}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)]"
+          className={`${MENU_ITEM} text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]`}
         >
           <Download size={14} />
           {t.export_csv}
         </button>
       )}
-    </div>
+    </Popover>
   );
 }
 
@@ -1064,60 +1050,44 @@ function InlineDuration({
 // ── Column Header Menu ──────────────────────────────────────
 
 function SystemHeaderMenu({
-  pos,
+  anchor,
   isAsc,
   isDesc,
   onSort,
   onClose,
   t,
 }: {
-  pos: { top: number; left: number };
+  anchor: RefObject<HTMLElement | null>;
   isAsc: boolean;
   isDesc: boolean;
   onSort: (dir: "asc" | "desc") => void;
   onClose: () => void;
   t: Record<string, string>;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onPointerDown(e: PointerEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
-    }
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [onClose]);
-
   return (
-    <div
-      ref={ref}
-      className="fixed z-50 w-48 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-lg overflow-hidden py-1"
-      style={{ top: pos.top, left: pos.left }}
-    >
+    <Popover anchor={anchor} onClose={onClose} className="w-48">
       <button
         onClick={() => onSort("asc")}
-        className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)] ${isAsc ? "text-accent" : ""}`}
+        className={`${MENU_ITEM} ${isAsc ? "text-accent font-medium bg-accent-tint" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"}`}
       >
         <ArrowUp size={14} />
         {t.sort_ascending}
       </button>
       <button
         onClick={() => onSort("desc")}
-        className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)] ${isDesc ? "text-accent" : ""}`}
+        className={`${MENU_ITEM} ${isDesc ? "text-accent font-medium bg-accent-tint" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"}`}
       >
         <ArrowDown size={14} />
         {t.sort_descending}
       </button>
-    </div>
+    </Popover>
   );
 }
 
 // ── Column Header Menu (custom columns) ─────────────────────
 
 function ColumnHeaderMenu({
-  pos,
+  anchor,
   col,
   colIndex,
   colCount,
@@ -1131,7 +1101,7 @@ function ColumnHeaderMenu({
   onClose,
   t,
 }: {
-  pos: { top: number; left: number };
+  anchor: RefObject<HTMLElement | null>;
   col: WorkloadColumn;
   colIndex: number;
   colCount: number;
@@ -1145,52 +1115,36 @@ function ColumnHeaderMenu({
   onClose: () => void;
   t: Record<string, string>;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onPointerDown(e: PointerEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
-    }
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [onClose]);
-
   const isAsc = sortKey === col.key && sortDir === "asc";
   const isDesc = sortKey === col.key && sortDir === "desc";
   const isSummable = col.type === "number" || col.type === "formula";
   const sumVisible = col.showSum !== false;
 
   return (
-    <div
-      ref={ref}
-      className="fixed z-50 w-48 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-lg overflow-hidden py-1"
-      style={{ top: pos.top, left: pos.left }}
-    >
+    <Popover anchor={anchor} onClose={onClose} className="w-48">
       {col.type !== "formula" && (
         <>
           <button
             onClick={() => onSort(col.key, "asc")}
-            className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)] ${isAsc ? "text-accent" : ""}`}
+            className={`${MENU_ITEM} ${isAsc ? "text-accent font-medium bg-accent-tint" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"}`}
           >
             <ArrowUp size={14} />
             {t.sort_ascending}
           </button>
           <button
             onClick={() => onSort(col.key, "desc")}
-            className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)] ${isDesc ? "text-accent" : ""}`}
+            className={`${MENU_ITEM} ${isDesc ? "text-accent font-medium bg-accent-tint" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"}`}
           >
             <ArrowDown size={14} />
             {t.sort_descending}
           </button>
-          <div className="border-t border-[var(--color-border-divider)] my-1" />
+          <div className={MENU_DIVIDER} />
         </>
       )}
       {colIndex > 0 && (
         <button
           onClick={onMoveLeft}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)]"
+          className={`${MENU_ITEM} text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]`}
         >
           <ArrowLeft size={14} />
           {t.move_left}
@@ -1199,7 +1153,7 @@ function ColumnHeaderMenu({
       {colIndex < colCount - 1 && (
         <button
           onClick={onMoveRight}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)]"
+          className={`${MENU_ITEM} text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]`}
         >
           <ArrowRight size={14} />
           {t.move_right}
@@ -1207,24 +1161,24 @@ function ColumnHeaderMenu({
       )}
       {isSummable && (
         <>
-          <div className="border-t border-[var(--color-border-divider)] my-1" />
+          <div className={MENU_DIVIDER} />
           <button
             onClick={onToggleSum}
-            className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)] ${sumVisible ? "" : "text-muted"}`}
+            className={`${MENU_ITEM} hover:bg-[var(--color-hover-row)] ${sumVisible ? "text-[var(--color-text-secondary)]" : "text-muted"}`}
           >
             <Sigma size={14} />
             {sumVisible ? t.hide_sum : t.show_sum}
           </button>
         </>
       )}
-      <div className="border-t border-[var(--color-border-divider)] my-1" />
+      <div className={MENU_DIVIDER} />
       <button
         onClick={onEdit}
-        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)]"
+        className={`${MENU_ITEM} text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]`}
       >
         <Settings2 size={14} />
         {t.edit_column}
       </button>
-    </div>
+    </Popover>
   );
 }

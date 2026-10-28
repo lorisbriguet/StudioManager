@@ -33,7 +33,8 @@ import { useT } from "../i18n/useT";
 import { useAppStore } from "../stores/app-store";
 import { getTagColor } from "../lib/tagColors";
 import { notifyError, getLabels } from "../lib/notifyError";
-import { Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem } from "../components/ui";
+import { Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem, Popover } from "../components/ui";
+import { MENU_ITEM } from "../components/ui/Dropdown";
 import { Select } from "../components/ui/Select";
 import {
   useWikiFolders,
@@ -143,22 +144,7 @@ function LinkInsertPopup({
   const [query, setQuery] = useState(initialQuery ?? "");
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const popupRef = useRef<HTMLDivElement>(null);
   const bracket = initialQuery !== undefined;
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onClose]);
 
   const isUrl = /^https?:\/\//.test(query.trim());
   const q = query.trim().toLowerCase();
@@ -217,14 +203,17 @@ function LinkInsertPopup({
     } hover:bg-[var(--color-hover-row)]`;
 
   return (
-    <div
-      ref={popupRef}
-      className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu w-80 overflow-hidden"
-      style={{ top: position.top, left: position.left }}
+    <Popover
+      // Under the caret: `position.top` is the caret's bottom + 4.
+      at={{ x: position.left, y: position.top - 4 }}
+      onClose={() => onClose()}
+      padding="none"
+      className="w-80 overflow-hidden"
     >
       <div className="px-3 pt-3 pb-2">
         <input
           ref={inputRef}
+          data-autofocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -290,7 +279,7 @@ function LinkInsertPopup({
           <span className="text-xs text-muted">{t.link_hint ?? "Type a URL (http...) or search wiki articles"}</span>
         </div>
       )}
-    </div>
+    </Popover>
   );
 }
 
@@ -307,7 +296,6 @@ function SlashCommandMenu({
 }) {
   const t = useT();
   const [selectedIdx, setSelectedIdx] = useState(0);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   const allCommands = useMemo(() => getSlashCommands(t), [t]);
 
@@ -345,19 +333,23 @@ function SlashCommandMenu({
   if (filtered.length === 0) return null;
 
   return (
-    <div
-      ref={menuRef}
-      className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu py-1 min-w-[180px]"
-      style={{ top: position.top, left: position.left }}
+    <Popover
+      // Under the caret: `position.top` is the caret's bottom + 4.
+      at={{ x: position.left, y: position.top - 4 }}
+      onClose={() => onClose()}
+      autoFocus={false}
+      style={{ minWidth: 180 }}
     >
       {filtered.map((cmd, i) => {
         const Icon = cmd.icon;
         return (
           <button
             key={cmd.label}
-            className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] ${
-              i === selectedIdx ? "bg-[var(--color-hover-row)]" : ""
-            } hover:bg-[var(--color-hover-row)]`}
+            className={`${MENU_ITEM} cursor-pointer ${
+              i === selectedIdx
+                ? "bg-[var(--color-hover-row)] text-[var(--color-text)]"
+                : "text-[var(--color-text-secondary)]"
+            }`}
             onMouseEnter={() => setSelectedIdx(i)}
             onMouseDown={(e) => {
               e.preventDefault();
@@ -369,7 +361,7 @@ function SlashCommandMenu({
           </button>
         );
       })}
-    </div>
+    </Popover>
   );
 }
 

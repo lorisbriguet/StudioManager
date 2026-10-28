@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -19,6 +19,7 @@ import type { WikiArticleWithTags } from "../../types/wiki";
 import type { ProjectDoc } from "../../db/hooks/useProjectDocs";
 import type { WikiRef } from "../../lib/wikiTabs";
 import { colorFor } from "./wikiColors";
+import { ContextMenu } from "../ContextMenu";
 
 interface Group {
   key: string;
@@ -101,7 +102,6 @@ export function WikiExplorer({
   const storageKey = useOrgStore((s) => s.orgKey("wikiTreeOpen"));
   const [search, setSearch] = useState("");
   const [menu, setMenu] = useState<{ id: number; x: number; y: number } | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   const folderNames = useMemo(() => new Map(folders.map((f) => [f.id, f.name])), [folders]);
   const groups = useMemo(
@@ -130,15 +130,6 @@ export function WikiExplorer({
     setOpen((prev) => (keys.every((k) => prev.has(k)) ? prev : new Set([...prev, ...keys])));
   }, [activeRef, groups]);
 
-  useEffect(() => {
-    if (!menu) return;
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(null);
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [menu]);
-
   const toggle = useCallback((key: string) => {
     setOpen((prev) => {
       const next = new Set(prev);
@@ -165,8 +156,6 @@ export function WikiExplorer({
 
   const iconBtn =
     "p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none transition-colors";
-  const menuItem =
-    "w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]";
 
   return (
     <aside
@@ -299,35 +288,16 @@ export function WikiExplorer({
       </BottomBar>
 
       {menu && (
-        <div
-          ref={menuRef}
-          className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu py-1 min-w-[180px]"
-          style={{ top: menu.y, left: menu.x }}
-        >
-          <button
-            type="button"
-            className={menuItem}
-            onClick={() => {
-              onOpen(menu.id, true);
-              setMenu(null);
-            }}
-          >
-            <ArrowUpRight size={14} />
-            {t.wiki_open_new_tab}
-          </button>
-          <div className="my-1 border-t border-[var(--color-border-divider)]" />
-          <button
-            type="button"
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-hover-row)]"
-            onClick={() => {
-              onDeleteArticle(menu.id);
-              setMenu(null);
-            }}
-          >
-            <Trash2 size={14} />
-            {t.delete}
-          </button>
-        </div>
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          items={[
+            { label: t.wiki_open_new_tab, icon: <ArrowUpRight size={14} />, onClick: () => onOpen(menu.id, true) },
+            { label: "", onClick: () => {}, divider: true },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => onDeleteArticle(menu.id) },
+          ]}
+        />
       )}
     </aside>
   );

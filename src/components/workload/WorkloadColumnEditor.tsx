@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X, Plus, Trash2, Calendar, Link, Unlink } from "lucide-react";
-import { Button, Select } from "../ui";
+import { Button, Select, Popover } from "../ui";
+import { MENU_ITEM } from "../ui/Dropdown";
 import { toast } from "sonner";
 import type { WorkloadColumn, WorkloadColumnType, SelectOption } from "../../types/workload";
 import { getStoredTagColor, normalizeTagColorName, TAG_COLOR_NAMES } from "../../lib/tagColors";
@@ -48,6 +49,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
   const [saveAsListName, setSaveAsListName] = useState("");
   const [showSaveAsListInput, setShowSaveAsListInput] = useState(false);
   const [importListId, setImportListId] = useState<number | null>(null);
+  const importListAnchorRef = useRef<HTMLDivElement>(null);
 
   const { data: customLists } = useCustomLists();
   const { data: importListItems } = useCustomListItems(importListId);
@@ -273,33 +275,42 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                     </Button>
                   </div>
                 ) : (
-                  <div className="relative">
+                  <div ref={importListAnchorRef}>
                     <Button
                       type="button"
                       variant="link"
                       size="sm"
                       icon={<Link size={12} />}
                       onClick={() => setShowImportListDropdown((v) => !v)}
+                      aria-haspopup="dialog"
+                      aria-expanded={showImportListDropdown}
                     >
                       {t.import_from_list}
                     </Button>
                     {showImportListDropdown && (
-                      <div className="absolute right-0 top-full mt-1 z-[10000] bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-lg shadow-lg py-1 min-w-[150px]">
+                      <Popover
+                        anchor={importListAnchorRef}
+                        align="end"
+                        onClose={(returnFocus) => {
+                          setShowImportListDropdown(false);
+                          if (returnFocus) importListAnchorRef.current?.querySelector("button")?.focus({ preventScroll: true });
+                        }}
+                      >
                         {(customLists ?? []).length === 0 ? (
-                          <p className="text-xs text-muted px-3 py-1.5">{t.no_lists}</p>
+                          <p className="text-xs text-muted px-2 py-1">{t.no_lists}</p>
                         ) : (
                           (customLists ?? []).map((list) => (
                             <button
                               key={list.id}
                               type="button"
                               onClick={() => setImportListId(list.id)}
-                              className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-hover-row)]"
+                              className={`${MENU_ITEM} text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]`}
                             >
                               {list.name}
                             </button>
                           ))
                         )}
-                      </div>
+                      </Popover>
                     )}
                   </div>
                 )}
