@@ -33,7 +33,7 @@ import { getMachines } from "../db/queries/machines";
 import { getConsumables } from "../db/queries/consumables";
 import { getSubscriptions, getPendingRenewals, applyRenewals } from "../db/queries/subscriptions";
 import { syncSubscriptionCalendar } from "../lib/upkeep/calendar";
-import { getDb } from "../db/index";
+import { getDb, TransactionBatch } from "../db/index";
 import { invokedCommands, clearInvokedCommands, setInvokeHandler } from "../__mocks__/tauri-api";
 import { useAppStore } from "../stores/app-store";
 import { useOrgStore } from "../stores/org-store";
@@ -57,7 +57,7 @@ beforeEach(() => {
   clearInvokedCommands();
   setInvokeHandler(null);
   useAppStore.setState({ testMode: false, presentationMode: false, warrantyWindowDays: 60, renewalWindowDays: 14 });
-  useOrgStore.setState({ activeId: "org-a" });
+  useOrgStore.setState({ activeId: "org-a", switching: false });
   diskRows = [];
   connRows = [];
   vi.mocked(getActiveUpkeepItems).mockResolvedValue([overdueItem] as never);
@@ -81,13 +81,15 @@ describe("runUpkeepCheck", () => {
     const qc = qcStub();
     const n = await runUpkeepCheck(qc, TODAY);
     expect(n).toBe(1);
-    expect(createNotification).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(createNotification).mock.calls[0][0]).toMatchObject({
-      type: "warning", read: 0, link: "/upkeep/machines/3",
-    });
     expect(sendNativeNotification).toHaveBeenCalledTimes(1);
     expect(batchCalls()).toHaveLength(1);
+    // Notice and marker in the same atomic batch, bound to the expected org.
+    expect(batchCalls()[0].args.expectedOrg).toBe("org-a");
     expect(stmtsOf(0)).toEqual([
+      expect.objectContaining({
+        sql: expect.stringContaining("INSERT INTO notifications"),
+        params: ["warning", expect.any(String), expect.any(String), "/upkeep/machines/3"],
+      }),
       expect.objectContaining({ sql: expect.stringContaining("overdue_notified_for"), params: ["2026-10-20", 7] }),
     ]);
     const keys = vi.mocked(qc.invalidateQueries).mock.calls.map((c) => (c[0] as { queryKey: string[] }).queryKey[0]);
@@ -117,7 +119,8 @@ describe("runUpkeepCheck", () => {
     diskRows = [{ id: 4, machine_id: 3, slot: "Drive 1", health: "failing", notified_health: null }];
     connRows = [{ id: 1, label: "NAS", failing_since: "2026-10-20", failing_notified: 0 }];
     expect(await runUpkeepCheck(qcStub(), TODAY)).toBe(2);
-    const sql = stmtsOf(0).map((s) => s.sql).join("\n");
+    expect(batchCalls()).toHaveLength(2);
+    const sql = [...stmtsOf(0), ...stmtsOf(1)].map((s) => s.sql).join("\n");
     expect(sql).toContain("notified_health");
     expect(sql).toContain("failing_notified");
   });
@@ -131,6 +134,71 @@ describe("runUpkeepCheck", () => {
     expect(createNotification).not.toHaveBeenCalled();
     expect(applyRenewals).not.toHaveBeenCalled();
     expect(batchCalls()).toHaveLength(0);
+  });
+
+  it("stops while an organisation switch is in progress, before any DB call", async () => {
+    useOrgStore.setState({ switching: true });
+    expect(await runUpkeepCheck(qcStub(), TODAY)).toBe(0);
+    useOrgStore.setState({ switching: false });
+    expect(getSubscriptions).not.toHaveBeenCalled();
+    expect(getDb).not.toHaveBeenCalled();
+    expect(batchCalls()).toHaveLength(0);
+  });
+
+  it("no further writes once the switch flag flips during the notice loop", async () => {
+    vi.mocked(getActiveUpkeepItems).mockResolvedValue([
+      overdueItem, { ...overdueItem, id: 8, title: "Oil rails" },
+    ] as never);
+    const real = TransactionBatch.prototype.commit;
+    const spy = vi.spyOn(TransactionBatch.prototype, "commit").mockImplementation(async function (this: TransactionBatch) {
+      const r = await real.call(this);
+      useOrgStore.setState({ switching: true });
+      return r;
+    });
+    try {
+      expect(await runUpkeepCheck(qcStub(), TODAY)).toBe(1);
+    } finally {
+      spy.mockRestore();
+      useOrgStore.setState({ switching: false });
+    }
+    expect(batchCalls()).toHaveLength(1);
+  });
+
+  it("a failing batch writes neither notice nor marker; the next run plans it exactly once", async () => {
+    const spy = vi.spyOn(TransactionBatch.prototype, "commit").mockRejectedValueOnce(new Error("disk full"));
+    try {
+      expect(await runUpkeepCheck(qcStub(), TODAY)).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(batchCalls()).toHaveLength(0);
+    expect(sendNativeNotification).not.toHaveBeenCalled();
+    expect(await runUpkeepCheck(qcStub(), TODAY)).toBe(1);
+    expect(batchCalls()).toHaveLength(1);
+    expect(stmtsOf(0)).toHaveLength(2);
+  });
+
+  it("a failing subscription does not block the other reminders", async () => {
+    vi.mocked(getSubscriptions).mockResolvedValue([
+      { id: 5, status: "active", renews_on: "2026-10-01" },
+      { id: 6, status: "active", renews_on: "2026-10-01" },
+    ] as never);
+    vi.mocked(applyRenewals).mockRejectedValueOnce(new Error("boom")).mockResolvedValueOnce(1);
+    expect(await runUpkeepCheck(qcStub(), TODAY)).toBe(1);
+    expect(applyRenewals).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(applyRenewals).mock.calls[0][2]).toBe("org-a");
+    expect(syncSubscriptionCalendar).toHaveBeenCalledWith(6);
+    expect(batchCalls()).toHaveLength(1);
+  });
+
+  it("sends one summary native notification when more than 3 notices are created", async () => {
+    vi.mocked(getActiveUpkeepItems).mockResolvedValue(
+      [1, 2, 3, 4].map((i) => ({ ...overdueItem, id: i })) as never
+    );
+    expect(await runUpkeepCheck(qcStub(), TODAY)).toBe(4);
+    expect(batchCalls()).toHaveLength(4);
+    expect(sendNativeNotification).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sendNativeNotification).mock.calls[0][1]).toContain("4");
   });
 
   it("no notices in test mode", async () => {

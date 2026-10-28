@@ -25,6 +25,21 @@ function deps(overrides: Partial<SwitchDeps> = {}) {
   return { d, calls };
 }
 
+describe("switchOrganisation switching flag", () => {
+  it("is true from before closeDb until the new db is open, false after, even on failure", async () => {
+    useAppStore.setState({ testMode: false, presentationMode: false, activeTimer: null });
+    const seen: boolean[] = [];
+    const flag = () => seen.push(useOrgStore.getState().switching);
+    const { d } = deps({
+      closeDb: vi.fn(async () => { flag(); }),
+      openDb: vi.fn(async () => { flag(); throw new Error("open failed"); }),
+    });
+    await expect(switchOrganisation("o2", d)).rejects.toThrow("open failed");
+    expect(seen).toEqual([true, true]);
+    expect(useOrgStore.getState().switching).toBe(false);
+  });
+});
+
 describe("switchOrganisation", () => {
   it("runs the steps in order with no mode and no timer", async () => {
     useAppStore.setState({ testMode: false, presentationMode: false, activeTimer: null });

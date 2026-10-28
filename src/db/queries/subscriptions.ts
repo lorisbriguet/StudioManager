@@ -85,10 +85,14 @@ export async function setSubscriptionCalendarEvent(id: number, eventId: string |
  * is written to Expenses. Idempotent: INSERT OR IGNORE plus the advanced
  * renews_on means a second call finds nothing due. Returns the renewals recorded.
  */
-export async function applyRenewals(sub: Subscription, todayISO: string): Promise<number> {
+export async function applyRenewals(
+  sub: Subscription,
+  todayISO: string,
+  expectedOrg?: string
+): Promise<number> {
   const { renewedOn, nextRenewsOn } = rollRenewals(sub, todayISO);
   if (renewedOn.length === 0) return 0;
-  const batch = new TransactionBatch();
+  const batch = new TransactionBatch(expectedOrg);
   for (const on of renewedOn) {
     batch.add(
       `INSERT OR IGNORE INTO subscription_renewals (subscription_id, renewed_on, amount, currency)

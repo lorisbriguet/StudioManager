@@ -5,7 +5,6 @@ import { getMachines } from "../../db/queries/machines";
 import { getConsumables, isLow } from "../../db/queries/consumables";
 import { applyRenewals, getPendingRenewals, getSubscriptions } from "../../db/queries/subscriptions";
 import type { PendingRenewal } from "../../db/queries/subscriptions";
-import { createNotification } from "../../db/queries/notifications";
 import { sendNativeNotification } from "../nativeNotification";
 import { getLabels } from "../notifyError";
 import { logWarn } from "../log";
@@ -45,6 +44,9 @@ export interface PlanInput {
 
 /** Days of failure before the connection notice (spec §7). */
 const CONNECTION_FAILING_DAYS = 3;
+
+/** More notices than this in one run: one summary banner instead of one each. */
+const MAX_NATIVE_NOTICES = 3;
 
 const HEALTH_RANK: Record<string, number> = { healthy: 0, warning: 1, failing: 2 };
 
@@ -191,16 +193,22 @@ export function markerStatement(n: PlannedNotice): { sql: string; params: unknow
 }
 
 /**
- * Roll due subscription renewals, plan the notices that are owed and write them
- * with their markers. Returns the number of notices created. Does nothing in
- * test and presentation modes, and writes nothing if the organisation changed
- * while it ran.
+ * Roll due subscription renewals, plan the notices that are owed and write them.
+ * Returns the number of notices created. Does nothing in test and presentation
+ * modes. Every DB call is preceded by an organisation check (which also fails
+ * while a switch is in progress), and every write carries the expected
+ * organisation so Rust refuses it if the active one changed in between.
+ * Each notice and its marker go in one batch: both land or neither does.
  */
 export async function runUpkeepCheck(qc: QueryClient, todayISO: string): Promise<number> {
   const app = useAppStore.getState();
   if (app.testMode || app.presentationMode) return 0;
   const org = useOrgStore.getState().activeId;
-  const sameOrg = () => useOrgStore.getState().activeId === org;
+  const sameOrg = () => {
+    const s = useOrgStore.getState();
+    return !s.switching && s.activeId === org;
+  };
+  if (!sameOrg()) return 0;
 
   // Renewals first: a rolled subscription can owe a "renewal happened" notice.
   const allSubs = await getSubscriptions();
@@ -208,32 +216,39 @@ export async function runUpkeepCheck(qc: QueryClient, todayISO: string): Promise
   for (const sub of allSubs) {
     if (sub.status !== "active") continue;
     if (!sameOrg()) return 0;
-    const n = await applyRenewals(sub, todayISO);
-    if (n > 0) {
-      rolled = true;
-      try {
+    try {
+      const n = await applyRenewals(sub, todayISO, org);
+      if (n > 0) {
+        rolled = true;
+        if (!sameOrg()) return 0;
         await syncSubscriptionCalendar(sub.id);
-      } catch (e) {
-        logWarn("Calendar sync after renewal failed:", e);
       }
+    } catch (e) {
+      // One bad subscription must not block every other reminder.
+      logWarn(`Upkeep check: subscription ${sub.id} skipped:`, e);
     }
   }
 
+  if (!sameOrg()) return 0;
+  const subs = rolled ? await getSubscriptions() : allSubs;
+  if (!sameOrg()) return 0;
+  const items = await getActiveUpkeepItems();
+  if (!sameOrg()) return 0;
+  const machines = await getMachines();
+  if (!sameOrg()) return 0;
+  const consumables = await getConsumables();
+  if (!sameOrg()) return 0;
+  const pendingRenewals = await getPendingRenewals();
+  if (!sameOrg()) return 0;
   const db = await getDb();
-  const [items, machines, consumables, subs, pendingRenewals, disks, connections] = await Promise.all([
-    getActiveUpkeepItems(),
-    getMachines(),
-    getConsumables(),
-    rolled ? getSubscriptions() : Promise.resolve(allSubs),
-    getPendingRenewals(),
-    db.select<MachineDisk[]>(
-      `SELECT d.* FROM machine_disks d JOIN machines m ON m.id = d.machine_id
-       WHERE m.status != 'retired'`
-    ),
-    db.select<Connection[]>(
-      "SELECT * FROM connections WHERE failing_since IS NOT NULL AND failing_notified = 0"
-    ),
-  ]);
+  const disks = await db.select<MachineDisk[]>(
+    `SELECT d.* FROM machine_disks d JOIN machines m ON m.id = d.machine_id
+     WHERE m.status != 'retired'`
+  );
+  if (!sameOrg()) return 0;
+  const connections = await db.select<Connection[]>(
+    "SELECT * FROM connections WHERE failing_since IS NOT NULL AND failing_notified = 0"
+  );
   if (!sameOrg()) return 0;
 
   const notices = planNotifications({
@@ -244,20 +259,20 @@ export async function runUpkeepCheck(qc: QueryClient, todayISO: string): Promise
   const written: PlannedNotice[] = [];
   for (const n of notices) {
     if (!sameOrg()) break;
-    await createNotification({
-      type: n.cause === "disk" || n.cause === "connection" ? "error" : "warning",
-      title: n.title, message: n.message, read: 0, link: n.link,
-    });
-    written.push(n);
-  }
-
-  if (written.length > 0 && sameOrg()) {
-    const batch = new TransactionBatch();
-    for (const n of written) {
-      const s = markerStatement(n);
-      batch.add(s.sql, s.params);
+    const batch = new TransactionBatch(org);
+    batch.add(
+      "INSERT INTO notifications (type, title, message, read, link) VALUES ($1, $2, $3, 0, $4)",
+      [n.cause === "disk" || n.cause === "connection" ? "error" : "warning", n.title, n.message, n.link]
+    );
+    const s = markerStatement(n);
+    batch.add(s.sql, s.params);
+    try {
+      await batch.commit();
+      written.push(n);
+    } catch (e) {
+      // Neither the notice nor its marker was written: the next run plans it again.
+      logWarn(`Upkeep check: ${n.cause} notice ${n.refId} not written:`, e);
     }
-    await batch.commit();
   }
 
   if (rolled || written.length > 0) {
@@ -267,6 +282,14 @@ export async function runUpkeepCheck(qc: QueryClient, todayISO: string): Promise
     qc.invalidateQueries({ queryKey: ["machines"] });
     qc.invalidateQueries({ queryKey: ["consumables"] });
   }
-  for (const n of written) sendNativeNotification(n.title, n.message);
+  if (written.length > MAX_NATIVE_NOTICES) {
+    const t = getLabels();
+    sendNativeNotification(
+      t.notice_summary_title,
+      fill(t.notice_summary_msg, { count: written.length })
+    );
+  } else {
+    for (const n of written) sendNativeNotification(n.title, n.message);
+  }
   return written.length;
 }

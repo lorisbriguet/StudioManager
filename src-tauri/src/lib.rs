@@ -69,10 +69,22 @@ struct SqlStatement {
 /// or abuse, not a real workload.
 const MAX_BATCH_STATEMENTS: usize = 10_000;
 
+/// Refuse a write meant for another organisation. `expected` absent means no
+/// check (existing callers).
+fn check_expected_org(expected: Option<&str>, active_id: &str) -> Result<(), String> {
+    match expected {
+        Some(e) if e != active_id => Err(format!(
+            "organisation changed: batch was for {e}, active is {active_id}"
+        )),
+        _ => Ok(()),
+    }
+}
+
 #[tauri::command]
 fn execute_batch(
     app: tauri::AppHandle,
     statements: Vec<SqlStatement>,
+    expected_org: Option<String>,
 ) -> Result<serde_json::Value, String> {
     if statements.len() > MAX_BATCH_STATEMENTS {
         return Err(format!(
@@ -80,7 +92,9 @@ fn execute_batch(
             statements.len()
         ));
     }
-    let db_path = active_org(&app)?.db_path();
+    let org = active_org(&app)?;
+    check_expected_org(expected_org.as_deref(), &org.id)?;
+    let db_path = org.db_path();
 
     let conn =
         rusqlite::Connection::open(&db_path).map_err(|e| format!("Failed to open DB: {e}"))?;
@@ -720,6 +734,14 @@ mod tests {
         assert_eq!(org.dir, good.dir);
         assert_eq!(err, None);
         std::fs::remove_dir_all(&app).unwrap();
+    }
+
+    #[test]
+    fn execute_batch_refuses_a_batch_for_another_org() {
+        assert!(check_expected_org(None, "abc123").is_ok());
+        assert!(check_expected_org(Some("abc123"), "abc123").is_ok());
+        let err = check_expected_org(Some("old111"), "abc123").unwrap_err();
+        assert!(err.contains("old111") && err.contains("abc123"));
     }
 
     #[test]
