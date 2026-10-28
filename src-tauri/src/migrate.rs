@@ -17,13 +17,14 @@ pub const MIGRATIONS: &[SqlMigration] = &[
     SqlMigration { version: 4, sql: include_str!("../migrations/004_subtasks.sql") },
     SqlMigration { version: 5, sql: include_str!("../migrations/005_consolidate_schema.sql") },
     SqlMigration { version: 6, sql: include_str!("../migrations/006_activities.sql") },
+    SqlMigration { version: 7, sql: include_str!("../migrations/007_upkeep.sql") },
 ];
 
 // Only referenced from this module's own tests (as the expected "fully
 // migrated" version); nothing in the production path needs it, since
 // `migrate_db` derives what to apply from `MIGRATIONS` itself.
 #[allow(dead_code)]
-pub const LATEST_VERSION: i64 = 6;
+pub const LATEST_VERSION: i64 = 7;
 
 fn table_exists(conn: &rusqlite::Connection, name: &str) -> Result<bool, String> {
     conn.query_row(
@@ -123,6 +124,22 @@ mod tests {
     }
 
     #[test]
+    fn migrates_to_007_creates_upkeep_tables() {
+        let db = temp_db("upkeep");
+        migrate_db(&db).unwrap();
+        for t in [
+            "connections", "machines", "machine_files", "machine_projects", "upkeep_items",
+            "service_log", "consumables", "consumable_usage", "subscriptions",
+            "subscription_renewals", "machine_readings", "machine_disks",
+        ] {
+            assert!(table_exists(&db, t), "{t}");
+        }
+        let conn = Connection::open(&db).unwrap();
+        let max: i64 = conn.query_row("SELECT MAX(version) FROM schema_migrations", [], |r| r.get(0)).unwrap();
+        assert_eq!(max, 7);
+    }
+
+    #[test]
     fn plugin_migrated_file_is_recognised_and_not_re_run() {
         let db = temp_db("plugin");
         // Simulate a database the tauri-plugin-sql migrated fully.
@@ -131,7 +148,7 @@ mod tests {
         conn.execute_batch(
             "DROP TABLE schema_migrations;
              CREATE TABLE _sqlx_migrations (version BIGINT PRIMARY KEY, description TEXT NOT NULL, installed_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, success BOOLEAN NOT NULL, checksum BLOB NOT NULL, execution_time BIGINT NOT NULL);
-             INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) VALUES (1,'a',1,x'00',0),(2,'b',1,x'00',0),(3,'c',1,x'00',0),(4,'d',1,x'00',0),(5,'e',1,x'00',0),(6,'f',1,x'00',0);",
+             INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) VALUES (1,'a',1,x'00',0),(2,'b',1,x'00',0),(3,'c',1,x'00',0),(4,'d',1,x'00',0),(5,'e',1,x'00',0),(6,'f',1,x'00',0),(7,'g',1,x'00',0);",
         )
         .unwrap();
         drop(conn);
