@@ -35,6 +35,11 @@ trash = "5"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # Renders a project's Markdown files for the wiki (same pin as the agent server).
 pulldown-cmark = { version = "0.13.5", default-features = false, features = ["html"] }
+# Agents page: attached `claude attach` terminals. vt100 0.17 is the newest
+# release whose rust-version (1.70) fits ours; 0.18 needs 1.85.
+portable-pty = "0.9.0"
+vt100 = "0.17.0"
+base64 = "0.22.1"
 # Upkeep connections: HTTPS for the Synology and Bambu connectors (Tasks 13–14).
 # reqwest 0.13's rustls backend without a bundled crypto provider (as the
 # updater uses it), so aws-lc-sys is not compiled; the ring provider already in

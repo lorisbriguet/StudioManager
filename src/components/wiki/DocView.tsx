@@ -7,11 +7,8 @@ import { logError } from "../../lib/log";
 import { parseWikiArticleId, parseWikiFileKey } from "../../lib/wikiLinks";
 import { useProjectDoc, type ProjectDoc } from "../../db/hooks/useProjectDocs";
 import type { WikiRef } from "../../lib/wikiTabs";
-import { EmptyState, PANEL_TOP_BAR } from "../ui";
+import { BAR_ICON_BUTTON, EmptyState, PANEL_TOP_BAR } from "../ui";
 import { Skeleton } from "../ui/Skeleton";
-
-const navIconBtn =
-  "shrink-0 p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none transition-colors";
 
 /**
  * A project's Markdown file, read-only, straight from disk. The HTML comes
@@ -51,11 +48,11 @@ export function DocView({
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className={`${PANEL_TOP_BAR} gap-1 px-3 border-[var(--color-border-divider)]`}>
-        <button type="button" onClick={nav.onBack} disabled={!nav.canBack} className={navIconBtn} aria-label={t.wiki_back} title={t.wiki_back}>
+      <div className={`${PANEL_TOP_BAR} gap-1 px-3 border-[var(--color-border-header)]`}>
+        <button type="button" onClick={nav.onBack} disabled={!nav.canBack} className={BAR_ICON_BUTTON} aria-label={t.wiki_back} title={t.wiki_back}>
           <ChevronLeft size={14} />
         </button>
-        <button type="button" onClick={nav.onForward} disabled={!nav.canForward} className={navIconBtn} aria-label={t.wiki_forward} title={t.wiki_forward}>
+        <button type="button" onClick={nav.onForward} disabled={!nav.canForward} className={BAR_ICON_BUTTON} aria-label={t.wiki_forward} title={t.wiki_forward}>
           <ChevronRight size={14} />
         </button>
         <div className="flex-1 min-w-0 text-center text-xs text-muted truncate">
@@ -69,7 +66,7 @@ export function DocView({
               toast.error(t.failed_open_folder);
             })
           }
-          className={navIconBtn}
+          className={BAR_ICON_BUTTON}
           aria-label={t.wiki_show_in_finder}
           title={t.wiki_show_in_finder}
         >

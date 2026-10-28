@@ -41,9 +41,13 @@ function renderGraph(activeRef: number | null = null, withDocs = false) {
   );
 }
 
-const dots = () => within(screen.getByRole("img")).getAllByRole("button").map((b) => b.getAttribute("aria-label"));
+const dots = () => within(screen.getByRole("group")).getAllByRole("button").map((b) => b.getAttribute("aria-label"));
 
-beforeEach(() => useAppStore.setState({ language: "EN" }));
+beforeEach(() => {
+  // Graph settings are remembered: start each test from the defaults.
+  localStorage.clear();
+  useAppStore.setState({ language: "EN" });
+});
 afterEach(cleanup);
 
 describe("WikiGraph settings", () => {

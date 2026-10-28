@@ -2,6 +2,7 @@ import { variantClasses, type BadgeVariant } from "../components/ui/Badge";
 import type { InvoiceStatus } from "../types/invoice";
 import type { QuoteStatus } from "../types/quote";
 import type { TaskStatus } from "../types/task";
+import type { Group as AgentGroup } from "./agents";
 import type { DiskHealth, MachineStatus } from "../types/upkeep";
 
 const MACHINE_VARIANT: Record<MachineStatus, BadgeVariant> = {
@@ -75,6 +76,18 @@ export function quoteStatusVariant(s: QuoteStatus): BadgeVariant {
 
 export function taskStatusVariant(s: TaskStatus): BadgeVariant {
   return TASK_VARIANT[s];
+}
+
+const AGENT_GROUP_VARIANT: Record<AgentGroup, BadgeVariant> = {
+  "needs-you": "warning",
+  working: "info",
+  idle: "neutral",
+  done: "success",
+};
+
+/** Agents page: the colour of an agent's group (needs you, working, idle, done). */
+export function agentGroupVariant(g: AgentGroup): BadgeVariant {
+  return AGENT_GROUP_VARIANT[g];
 }
 
 /**

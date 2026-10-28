@@ -12,6 +12,7 @@ import {
   TrendingUp,
   BarChart3,
   BookOpen,
+  Bot,
   Database,
   Wrench,
   Square,
@@ -45,6 +46,7 @@ const navItems: SidebarItem[] = [
   { to: "/calendar", icon: CalendarDays, labelKey: "calendar" },
   { divider: true },
   { to: "/wiki", icon: BookOpen, labelKey: "wiki" },
+  { to: "/agents", icon: Bot, labelKey: "agents" },
   { to: "/resources", icon: Database, labelKey: "resources" },
   { to: "/upkeep", icon: Wrench, labelKey: "upkeep" },
   { divider: true },
@@ -64,6 +66,7 @@ export function Sidebar() {
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const showTasksPage = useAppStore((s) => s.showTasksPage);
   const showIncome = useAppStore((s) => s.showIncome);
+  const agentsEnabled = useAppStore((s) => s.agentsEnabled);
   const { data: unreadCount = 0 } = useUnreadNotificationCount();
   const { overdueCount } = useUpkeepOverview();
   const openTab = useTabStore((s) => s.openTab);
@@ -77,9 +80,10 @@ export function Sidebar() {
       if ("divider" in item) return false;
       if (item.labelKey === "tasks" && !showTasksPage) return false;
       if (item.labelKey === "income" && !showIncome) return false;
+      if (item.labelKey === "agents" && !agentsEnabled) return false;
       return true;
     });
-  }, [showTasksPage, showIncome]);
+  }, [showTasksPage, showIncome, agentsEnabled]);
 
   // Track keyboard focus index (-1 = no keyboard focus)
   const [focusIdx, setFocusIdx] = useState(-1);
@@ -187,9 +191,10 @@ export function Sidebar() {
       if ("divider" in item) return true;
       if (item.labelKey === "tasks" && !showTasksPage) return false;
       if (item.labelKey === "income" && !showIncome) return false;
+      if (item.labelKey === "agents" && !agentsEnabled) return false;
       return true;
     });
-  }, [showTasksPage, showIncome]);
+  }, [showTasksPage, showIncome, agentsEnabled]);
 
   // Map from allVisible index to visibleLinks index (for focus matching)
   const linkIndexMap = useMemo(() => {

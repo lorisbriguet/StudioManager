@@ -182,6 +182,9 @@ export interface AppState {
   lastAutoBackup: number; // timestamp
   projectOpenMode: ProjectOpenMode;
   showTasksPage: boolean;
+  /** Mirror of agents.json's switch, loaded at startup. */
+  agentsEnabled: boolean;
+  setAgentsEnabled: (enabled: boolean) => void;
   showIncome: boolean;
   showTimeOverview: boolean;
   language: AppLanguage;
@@ -298,6 +301,8 @@ export const useAppStore = create<AppState>((set) => ({
   // on applyRegistry (org-store.ts), so no plain "lastAutoBackup" key here.
   lastAutoBackup: 0,
   projectOpenMode: (localStorage.getItem("projectOpenMode") as ProjectOpenMode) ?? "peek",
+  agentsEnabled: false,
+  setAgentsEnabled: (enabled) => set({ agentsEnabled: enabled }),
   showTasksPage: localStorage.getItem("showTasksPage") !== "false",
   showIncome: localStorage.getItem("showIncome") === "true",
   showTimeOverview: localStorage.getItem("showTimeOverview") === "true",

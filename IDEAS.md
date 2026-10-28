@@ -85,6 +85,11 @@ All 12 checklist items pass after three fixes found by the pass:
 - [x] Test Mode and Presentation Mode are demo-build tools now: their Settings category is hidden in the real app (banners and exit paths stay for anyone mid-mode at update time); the Snapshot card moved under Backup
 - [x] Docs: guide, [README](README.md) and landing page no longer point testers at Presentation Mode
 
+## Next — Agents window (design: [specs/2026-10-28-agents-window-design.md](docs/superpowers/specs/2026-10-28-agents-window-design.md))
+
+- [x] Settings switch + Agents page: list agents by needs you / working / idle / done, labelled by project; start, read, send, switch model, stop, delete; terminal attached to an agent; Mac notification when one waits ([docs](docs/agents.md))
+- [ ] Then: bring the agent bar into StudioManager (separate brainstorm)
+
 ## V2.3.0 — Done (wiki vault)
 
 - [x] Wiki as a vault: explorer grouped by project (folders no longer shown), tabs with history, reading/editing modes, `[[` link picker that can create the target
@@ -96,7 +101,7 @@ All 12 checklist items pass after three fixes found by the pass:
 - [x] UI rules: shared TabItem, BottomBar / panel top bar heights (DESIGN-SYSTEM.md, Window Bars)
 
 Follow-ups:
-- [ ] Dev only: a full Vite reload can call getDb() before the active organisation is known, creating an empty `studiomanager.db` at the data-folder root (harmless, `organisations.json` blocks the legacy upgrade) — make getDb wait for the org
+- [x] Dev only: a full Vite reload can call getDb() before the active organisation is known, creating an empty `studiomanager.db` at the data-folder root (harmless, `organisations.json` blocks the legacy upgrade) — make getDb wait for the org
 - [ ] Project files are read-only; an "Open in editor" action next to Show in Finder
 - [ ] MCP still creates a wiki folder per project on put_wiki_article; folders are no longer shown, so stop creating them
 - [ ] Art Basel design-system toolkit and client folders: their Markdown files are not cross-linked yet

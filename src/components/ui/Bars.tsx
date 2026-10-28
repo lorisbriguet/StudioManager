@@ -23,3 +23,10 @@ export function BottomBar({ className = "", ...rest }: HTMLAttributes<HTMLElemen
     />
   );
 }
+
+/**
+ * Icon-only button inside a window bar (back/forward, panel toggles, small
+ * toolbar actions): the app tab bar's style. 14px icons.
+ */
+export const BAR_ICON_BUTTON =
+  "shrink-0 p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none transition-colors";

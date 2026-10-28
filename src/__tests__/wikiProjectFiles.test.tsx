@@ -75,9 +75,9 @@ describe("project files in the wiki", () => {
   it("lists a project's files and opens one read-only, with the articles linking to it", async () => {
     renderWiki();
     const explorer = await screen.findByRole("complementary", { name: /wiki explorer/i });
-    fireEvent.click(await within(explorer).findByRole("button", { name: /^studio manager\s*\d+$/i }));
-    fireEvent.click(await within(explorer).findByRole("button", { name: /^files/i }));
-    fireEvent.click(within(explorer).getByRole("button", { name: "DESIGN-SYSTEM.md" }));
+    fireEvent.click(await within(explorer).findByRole("treeitem", { name: /^studio manager\s*\d+$/i }));
+    fireEvent.click(await within(explorer).findByRole("treeitem", { name: /^files/i }));
+    fireEvent.click(within(explorer).getByRole("treeitem", { name: "DESIGN-SYSTEM.md" }));
 
     expect(await screen.findByRole("heading", { name: "StudioManager Design System" })).toBeInTheDocument();
     expect(screen.getByText(/read-only here/i)).toBeInTheDocument();

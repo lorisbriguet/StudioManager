@@ -10,6 +10,7 @@ export { EmptyState } from "./EmptyState";
 export { FormField } from "./FormField";
 export { PageSpinner } from "./Spinner";
 export { TableSkeleton } from "./TableSkeleton";
-export { BottomBar, BOTTOM_BAR, PANEL_TOP_BAR } from "./Bars";
+export { BottomBar, BOTTOM_BAR, PANEL_TOP_BAR, BAR_ICON_BUTTON } from "./Bars";
+export { SectionLabel } from "./SectionLabel";
 export { TabItem } from "./TabItem";
 export { MeterBar } from "./MeterBar";

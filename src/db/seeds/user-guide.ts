@@ -1,5 +1,9 @@
 import type Database from "@tauri-apps/plugin-sql";
 
+/** The seeded guide's folder. The name is stored data (the same in every
+ *  language), so the wiki can recognise the guide by it. */
+export const USER_GUIDE_FOLDER = "User Guide";
+
 interface ArticleSeed {
   title: string;
   tags: string[];
@@ -786,7 +790,7 @@ export function resolveGuideLinks(html: string, ids: Map<string, number>): strin
  *  deleted the folder chose to live without it. */
 export async function isUserGuideOutdated(db: Database): Promise<boolean> {
   const folders = await db.select<{ id: number }[]>(
-    "SELECT id FROM wiki_folders WHERE name = 'User Guide'"
+    "SELECT id FROM wiki_folders WHERE name = $1", [USER_GUIDE_FOLDER]
   );
   if (folders.length === 0) return false;
   const placeholders = folders.map((_, i) => `$${i + 1}`).join(", ");
@@ -806,7 +810,7 @@ export async function seedUserGuide(db: Database): Promise<void> {
   // Create the "User Guide" folder
   const folderResult = await db.execute(
     "INSERT INTO wiki_folders (name, sort_order) VALUES ($1, 0)",
-    ["User Guide"]
+    [USER_GUIDE_FOLDER]
   );
   const folderId = folderResult.lastInsertId;
 
@@ -846,7 +850,7 @@ export async function seedUserGuide(db: Database): Promise<void> {
 export async function resetUserGuide(db: Database): Promise<void> {
   // Find existing User Guide folder(s)
   const folders = await db.select<{ id: number }[]>(
-    "SELECT id FROM wiki_folders WHERE name = 'User Guide'"
+    "SELECT id FROM wiki_folders WHERE name = $1", [USER_GUIDE_FOLDER]
   );
   for (const f of folders) {
     // Delete articles in this folder (tags cascade via ON DELETE CASCADE)

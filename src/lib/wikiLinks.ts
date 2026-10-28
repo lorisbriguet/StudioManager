@@ -35,3 +35,14 @@ export function parseWikiFileKey(href: string): string | null {
     return null;
   }
 }
+
+/**
+ * The slash-command search typed before the caret, or null when no menu
+ * should open: the "/" must start the line or follow a space, so "km/h",
+ * "and/or" or a URL never open it. `textInLine` is the line up to the
+ * caret, with "\0" standing for non-text nodes.
+ */
+export function slashCommandQuery(textInLine: string): string | null {
+  const match = /(?:^|[\s\0])\/(\w*)$/.exec(textInLine);
+  return match ? match[1] : null;
+}
