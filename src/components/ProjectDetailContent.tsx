@@ -30,6 +30,7 @@ import { ProjectResources } from "./project/ProjectResources";
 import { ProjectWikiBlock } from "./project/ProjectWikiBlock";
 import { ProjectTasksSection } from "./project/ProjectTasksSection";
 import { ProjectNamedTables } from "./project/ProjectNamedTables";
+import { EquipmentBlock } from "./upkeep/EquipmentBlock";
 
 interface Props {
   projectId: number;
@@ -255,6 +256,8 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
         );
       case "wiki":
         return <ProjectWikiBlock projectId={projectId} />;
+      case "equipment":
+        return <EquipmentBlock projectId={projectId} />;
       default:
         return null;
     }

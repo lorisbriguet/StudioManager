@@ -10,6 +10,11 @@ vi.mock("../db/hooks/useNotifications", () => ({
   useUnreadNotificationCount: () => ({ data: 3 }),
 }));
 
+let overdueCount = 0;
+vi.mock("../db/hooks/useUpkeep", () => ({
+  useUpkeepOverview: () => ({ overdueCount }),
+}));
+
 function renderSidebar() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -68,6 +73,18 @@ describe("Sidebar", () => {
     // The badge shows "3" (from our mock)
     const badges = screen.getAllByText("3");
     expect(badges.length).toBeGreaterThan(0);
+  });
+
+  it("shows the overdue upkeep count on the Upkeep link and hides it at 0", () => {
+    overdueCount = 2;
+    const { unmount } = renderSidebar();
+    const link = screen.getByRole("link", { name: /Upkeep/ });
+    expect(link).toHaveAttribute("href", "/upkeep");
+    expect(link).toHaveTextContent("2");
+    unmount();
+    overdueCount = 0;
+    renderSidebar();
+    expect(screen.getByRole("link", { name: /Upkeep/ })).not.toHaveTextContent(/\d/);
   });
 
   it("shows the compact brand mark instead of the wordmark when collapsed", () => {

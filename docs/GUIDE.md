@@ -42,7 +42,8 @@ Do this with your own data, in this order. Each step builds on the previous one.
 6. **Add an expense from a receipt.** Drop a PDF or image of any receipt onto the Expenses page. The supplier, amount and date are read from the document and prefilled. Pick a category and save.
 7. **Check the finances.** Finances shows revenue, expenses by category and the net result in the Swiss tax declaration layout. Switch the year with the selector at the top.
 8. **Try the palette.** Press Cmd+K to search anything, and Cmd+N on any list page to create a new item of that kind.
-9. **Look at the Wiki.** It ships with a user guide covering every feature in more depth than this page.
+9. **Add a machine and its upkeep.** Upkeep → Add machine, pick a template (NAS, 3D printer, monitor, camera...) and save. Its upkeep items appear with due dates: mark one done, snooze another, and see them in the calendar. Add a consumable with a reorder level and a subscription with its renewal date. Connections to a Synology NAS or the Bambu cloud are optional (the Connections card on the Upkeep page). Details in [the Studio upkeep spec](superpowers/specs/2026-10-28-studio-upkeep-design.md).
+10. **Look at the Wiki.** It ships with a user guide covering every feature in more depth than this page.
 
 ## 5. Keyboard shortcuts worth knowing
 

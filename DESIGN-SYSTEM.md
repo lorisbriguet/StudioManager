@@ -304,6 +304,14 @@ import { Skeleton } from "../components/ui/Skeleton";
 ```
 Use while data is loading. Match the shape of what will appear. `inline` renders a span, for a placeholder inside text or a button (a tab label still loading). Never show an empty state ("nothing here yet") before the data has loaded.
 
+### MeterBar
+```tsx
+import { MeterBar } from "../components/ui";
+<MeterBar pct={62} color="var(--color-accent)" />
+<MeterBar className="w-[120px]" pct={pct} color="var(--color-success-text)" label="2 years" />
+```
+The one thin bar (`h-1.5`, `--color-input-bg` track, rounded fill) for progress, shares, stock levels and drive age. `pct` is clamped to 0–100; `className` sets the width (default `w-full`); `label` exposes it as a `meter` to screen readers. Never rebuild the track and fill by hand.
+
 ### SearchBar
 ```tsx
 import { SearchBar } from "../components/ui";

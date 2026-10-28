@@ -706,6 +706,14 @@ impl Server {
         .await
     }
 
+    #[tool(
+        description = "List the studio's machines and equipment with status, location and next upkeep (title and due date). No readings, no connection details."
+    )]
+    async fn list_machines(&self, Parameters(p): Parameters<OrgOnly>) -> CallToolResult {
+        self.run(move |d| read_in(d, p.org.as_deref(), read::list_machines))
+            .await
+    }
+
     #[tool(description = "Get a client with contacts and projects.")]
     async fn get_client(&self, Parameters(p): Parameters<ClientInput>) -> CallToolResult {
         self.run(move |d| read_in(d, p.org.as_deref(), |c| read::get_client(c, &p.client)))
@@ -784,7 +792,7 @@ Titles that match nothing come back in unresolved_links and stay as text: write 
     }
 
     #[tool(
-        description = "Late or upcoming tasks, subtasks and project deadlines. Without org, covers every allowed organisation."
+        description = "Late or upcoming tasks, subtasks, project deadlines and machine upkeep. Without org, covers every allowed organisation."
     )]
     async fn whats_due(&self, Parameters(p): Parameters<WhatsDueInput>) -> CallToolResult {
         self.run(move |d| whats_due(d, p.org.as_deref(), p.days))
@@ -880,13 +888,13 @@ mod tests {
         let dir = crate::test_support::ready_dir("org-a", "Studio A");
         assert_eq!(
             Server::new(Ok(dir.clone())).tool_router.list_all().len(),
-            21
+            22
         );
         crate::test_support::write_access(&dir, r#"{"enabled": true, "allowMoney": true}"#);
-        assert_eq!(Server::new(Ok(dir)).tool_router.list_all().len(), 26);
+        assert_eq!(Server::new(Ok(dir)).tool_router.list_all().len(), 27);
         assert_eq!(
             Server::new(Err("x".into())).tool_router.list_all().len(),
-            21
+            22
         );
     }
 

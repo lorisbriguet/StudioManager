@@ -18,8 +18,33 @@ pub struct OrgPrefs {
     pub show_time_overview: bool,
     pub calendar_sync: bool,
     pub calendar_name: String,
+    /// Absent in registries written before upkeep.
+    #[serde(default = "default_upkeep_alert")]
+    pub upkeep_alert_default: String,
+    #[serde(default = "default_upkeep_soon_days")]
+    pub upkeep_soon_days: u32,
+    #[serde(default = "default_warranty_window_days")]
+    pub warranty_window_days: u32,
+    #[serde(default = "default_renewal_window_days")]
+    pub renewal_window_days: u32,
     pub backup_path: String,
     pub export_language: String,
+}
+
+fn default_upkeep_alert() -> String {
+    "day_9am".to_string()
+}
+
+fn default_upkeep_soon_days() -> u32 {
+    14
+}
+
+fn default_warranty_window_days() -> u32 {
+    60
+}
+
+fn default_renewal_window_days() -> u32 {
+    14
 }
 
 impl Default for OrgPrefs {
@@ -30,6 +55,10 @@ impl Default for OrgPrefs {
             show_time_overview: true,
             calendar_sync: false,
             calendar_name: "StudioManager".to_string(),
+            upkeep_alert_default: default_upkeep_alert(),
+            upkeep_soon_days: default_upkeep_soon_days(),
+            warranty_window_days: default_warranty_window_days(),
+            renewal_window_days: default_renewal_window_days(),
             backup_path: String::new(),
             export_language: "FR".to_string(),
         }
@@ -282,6 +311,21 @@ mod tests {
         assert_eq!(reg.organisations[0].id, b);
         assert!(reg.reorder(std::slice::from_ref(&a)).is_err());
         assert!(reg.reorder(&[a, b, "zzzzzz".into()]).is_err());
+    }
+
+    #[test]
+    fn prefs_without_upkeep_alert_default_read_as_day_9am() {
+        let json = r#"{"showIncome":true,"showTasksPage":true,"showTimeOverview":true,"calendarSync":false,"calendarName":"Cal","backupPath":"","exportLanguage":"FR"}"#;
+        let prefs: OrgPrefs = serde_json::from_str(json).unwrap();
+        assert_eq!(prefs.upkeep_alert_default, "day_9am");
+        assert_eq!(prefs.upkeep_soon_days, 14);
+        assert_eq!(prefs.warranty_window_days, 60);
+        assert_eq!(prefs.renewal_window_days, 14);
+        let round: OrgPrefs = serde_json::from_str(&serde_json::to_string(&OrgPrefs {
+            upkeep_alert_default: "week_before".into(),
+            ..OrgPrefs::default()
+        }).unwrap()).unwrap();
+        assert_eq!(round.upkeep_alert_default, "week_before");
     }
 
     #[test]

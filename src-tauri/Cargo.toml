@@ -40,3 +40,20 @@ pulldown-cmark = { version = "0.13.5", default-features = false, features = ["ht
 portable-pty = "0.9.0"
 vt100 = "0.17.0"
 base64 = "0.22.1"
+# Upkeep connections: HTTPS for the Synology and Bambu connectors (Tasks 13–14).
+# reqwest 0.13's rustls backend without a bundled crypto provider (as the
+# updater uses it), so aws-lc-sys is not compiled; the ring provider already in
+# the tree is installed by `connectors::http_client`.
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "json", "blocking"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+# Connection secrets live only in the macOS Keychain.
+keyring = { version = "3", features = ["apple-native"] }
+# Synology: trust the system's certificate store, or exactly the one
+# certificate the user confirmed (SHA-256 pin), never "accept anything".
+# Same versions as already in the tree (reqwest, tauri).
+rustls-platform-verifier = "0.7"
+sha2 = "0.10"
+
+[dev-dependencies]
+# Self-signed certificates for the pinning verifier's tests (no network).
+rcgen = "0.13"

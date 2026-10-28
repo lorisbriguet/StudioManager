@@ -116,7 +116,7 @@ pub struct Article {
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct DueItem {
-    /// "task", "subtask" or "deadline".
+    /// "task", "subtask", "deadline" or "upkeep".
     pub kind: String,
     pub date: String,
     /// Negative when late.
@@ -124,6 +124,23 @@ pub struct DueItem {
     pub title: String,
     pub project: String,
     pub client: String,
+}
+
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct NextUpkeep {
+    pub title: String,
+    pub due: String,
+}
+
+/// A machine, without serial, files, readings, connection or notes.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct MachineRef {
+    pub id: i64,
+    pub name: String,
+    pub kind: String,
+    pub status: String,
+    pub location: String,
+    pub next_upkeep: Option<NextUpkeep>,
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -831,6 +848,55 @@ fn parse_date(s: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(s.get(..10)?, "%Y-%m-%d").ok()
 }
 
+/// Active upkeep items of machines still in service, with their effective due
+/// date (a later snooze wins over next_due_on; no date, no entry).
+/// Returns `((item title, machine id, machine name), date)`.
+fn upkeep_dues(conn: &Connection) -> R<Vec<((String, i64, String), String)>> {
+    let mut stmt = db(conn.prepare(
+        "SELECT i.title, m.id, m.name, \
+                CASE WHEN i.snooze_until IS NOT NULL AND (i.next_due_on IS NULL OR i.snooze_until > i.next_due_on) \
+                     THEN i.snooze_until ELSE i.next_due_on END \
+         FROM upkeep_items i JOIN machines m ON m.id = i.machine_id \
+         WHERE i.archived = 0 AND m.status != 'retired'",
+    ))?;
+    let rows: Vec<(String, i64, String, Option<String>)> = db(stmt
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+        .and_then(|rows| rows.collect()))?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|(t, id, m, d)| d.map(|d| ((t, id, m), d)))
+        .collect())
+}
+
+/// Every machine with its next upkeep (earliest effective due date). Nothing
+/// else: no serial, notes, files, readings or connection.
+pub fn list_machines(conn: &Connection) -> R<Vec<MachineRef>> {
+    let mut stmt = db(conn.prepare(
+        "SELECT id, name, kind, status, COALESCE(location, '') FROM machines ORDER BY name COLLATE NOCASE",
+    ))?;
+    let mut machines: Vec<MachineRef> = db(stmt
+        .query_map([], |r| {
+            Ok(MachineRef {
+                id: r.get(0)?,
+                name: r.get(1)?,
+                kind: r.get(2)?,
+                status: r.get(3)?,
+                location: r.get(4)?,
+                next_upkeep: None,
+            })
+        })
+        .and_then(|rows| rows.collect()))?;
+    for ((title, id, _), due) in upkeep_dues(conn)? {
+        if let Some(m) = machines.iter_mut().find(|m| m.id == id) {
+            let better = m.next_upkeep.as_ref().map_or(true, |n| due < n.due);
+            if better {
+                m.next_upkeep = Some(NextUpkeep { title, due: due[..10.min(due.len())].to_string() });
+            }
+        }
+    }
+    Ok(machines)
+}
+
 /// Late or due within `days` of `today`, not done. Deadlines: active projects.
 /// Tasks and subtasks: active or on-hold projects.
 pub fn whats_due(conn: &Connection, days: i64, today: NaiveDate) -> R<Vec<DueItem>> {
@@ -880,6 +946,9 @@ pub fn whats_due(conn: &Connection, days: i64, today: NaiveDate) -> R<Vec<DueIte
         for (date, title, project, client) in rows {
             push(kind, Some(date), title, project, client);
         }
+    }
+    for ((title, _, machine), due) in upkeep_dues(conn)? {
+        push("upkeep", Some(due), format!("{title} · {machine}"), String::new(), String::new());
     }
     items.sort_by(|a, b| {
         a.date
@@ -1212,5 +1281,68 @@ mod tests {
             titles,
             ["Wireframes", "Monochrome", "Alpha", "Logo variants"]
         );
+    }
+
+    #[test]
+    fn whats_due_includes_upkeep_items() {
+        let c = fixture();
+        c.execute_batch(
+            "INSERT INTO machines (id, name, status) VALUES (1, 'NAS', 'working');
+             INSERT INTO upkeep_items (machine_id, title, schedule, next_due_on, snooze_until) VALUES
+               (1, 'Scrub volume', 'interval', '2026-10-26', NULL),
+               (1, 'Clean fans', 'interval', '2026-10-27', '2026-10-29'),
+               (1, 'Far away', 'interval', '2027-05-01', NULL),
+               (1, 'Usage only', 'usage', NULL, NULL),
+               (1, 'Old', 'interval', '2026-10-26', NULL);
+             UPDATE upkeep_items SET archived = 1 WHERE title = 'Old';",
+        )
+        .unwrap();
+        let due = whats_due(&c, 7, d("2026-10-27")).unwrap();
+        let up: Vec<_> = due.iter().filter(|i| i.kind == "upkeep").collect();
+        let titles: Vec<_> = up.iter().map(|i| i.title.as_str()).collect();
+        assert_eq!(titles, ["Scrub volume · NAS", "Clean fans · NAS"]);
+        assert_eq!(up[0].days_left, -1);
+        assert_eq!(up[1].date, "2026-10-29");
+        assert_eq!(up[0].project, "");
+        assert_eq!(up[0].client, "");
+    }
+
+    #[test]
+    fn retired_machine_items_not_due() {
+        let c = fixture();
+        c.execute_batch(
+            "INSERT INTO machines (id, name, status) VALUES (1, 'Old printer', 'retired');
+             INSERT INTO upkeep_items (machine_id, title, schedule, next_due_on) VALUES
+               (1, 'Oil rails', 'interval', '2026-10-20');",
+        )
+        .unwrap();
+        let due = whats_due(&c, 7, d("2026-10-27")).unwrap();
+        assert!(due.iter().all(|i| i.kind != "upkeep"));
+    }
+
+    #[test]
+    fn list_machines_has_next_upkeep() {
+        let c = fixture();
+        c.execute_batch(
+            "INSERT INTO machines (id, name, kind, status, location, serial, lent_to, notes) VALUES
+               (1, 'NAS', 'nas', 'working', 'Rack', 'SN-SECRET', 'x', 'private'),
+               (2, 'Camera', 'camera', 'lent', NULL, NULL, NULL, NULL);
+             INSERT INTO upkeep_items (machine_id, title, schedule, next_due_on, snooze_until) VALUES
+               (1, 'Later', 'interval', '2026-12-01', NULL),
+               (1, 'Soon', 'interval', '2026-11-03', NULL),
+               (1, 'Snoozed', 'interval', '2026-10-01', '2026-11-20');",
+        )
+        .unwrap();
+        let ms = list_machines(&c).unwrap();
+        assert_eq!(ms.len(), 2);
+        let nas = ms.iter().find(|m| m.name == "NAS").unwrap();
+        assert_eq!(nas.location, "Rack");
+        let n = nas.next_upkeep.as_ref().unwrap();
+        assert_eq!((n.title.as_str(), n.due.as_str()), ("Soon", "2026-11-03"));
+        let cam = ms.iter().find(|m| m.name == "Camera").unwrap();
+        assert_eq!(cam.status, "lent");
+        assert!(cam.next_upkeep.is_none());
+        let json = serde_json::to_string(&ms).unwrap();
+        assert!(!json.contains("SN-SECRET") && !json.contains("private"));
     }
 }
