@@ -8,7 +8,7 @@
 
 **Tech Stack:** Tauri v2 (Rust migration registration), SQLite, React 19 + TypeScript, TanStack Query, vitest.
 
-**Spec:** `docs/superpowers/specs/2026-08-12-activities-i18n-design.md`
+**Spec:** [docs/superpowers/specs/2026-08-12-activities-i18n-design.md](../specs/2026-08-12-activities-i18n-design.md)
 
 ## Global Constraints
 

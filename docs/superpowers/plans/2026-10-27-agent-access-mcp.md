@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2021 (rusqlite 0.32 bundled, serde, chrono, rmcp + tokio, pulldown-cmark), Tauri 2, React 19 + TanStack Query, vitest.
 
-**Spec:** `docs/superpowers/specs/2026-10-27-agent-access-mcp-design.md`
+**Spec:** [docs/superpowers/specs/2026-10-27-agent-access-mcp-design.md](../specs/2026-10-27-agent-access-mcp-design.md)
 
 ## Global Constraints
 
@@ -149,7 +149,7 @@
 
 **Behaviour:**
 - Hook: `listen("db-changed", () => queryClient.invalidateQueries())`, unlisten on unmount.
-- Card (copy EN; FR equivalents without accents): title "Agent access"; switch "Allow AI agents to use StudioManager" (off); per-organisation checkboxes (shown when on); switch "Let agents read invoices, quotes and expenses" (off); "Connect" rows: Claude Desktop "Add…" (shows the preview JSON in a confirm strip, then installs; hidden when not installed), Claude Code "Copy command", Other apps "Copy config"; "Recent agent changes" list (time, organisation, summary; "No changes yet."); help link to `docs/agent-access.md` on GitHub.
+- Card (copy EN; FR equivalents without accents): title "Agent access"; switch "Allow AI agents to use StudioManager" (off); per-organisation checkboxes (shown when on); switch "Let agents read invoices, quotes and expenses" (off); "Connect" rows: Claude Desktop "Add…" (shows the preview JSON in a confirm strip, then installs; hidden when not installed), Claude Code "Copy command", Other apps "Copy config"; "Recent agent changes" list (time, organisation, summary; "No changes yet."); help link to [docs/agent-access.md](../../agent-access.md) on GitHub.
 - Copy feedback "Copied", install feedback "Added to Claude Desktop. Restart it to load StudioManager." Errors shown inline.
 
 - [ ] **Step 1: Failing vitest** with the Tauri `invoke` mocked: renders off by default; turning on calls `set_agent_access`; Claude Desktop add shows preview then calls `install_claude_desktop` only after confirm; copy buttons put the exact strings on the clipboard; parity test still passes.
@@ -158,7 +158,7 @@
 
 ### Task 8: Bundling, release steps and docs
 
-**Files:** Create `scripts/build-mcp.sh` (builds `src-tauri/mcp` in release for the host triple, copies to `src-tauri/binaries/studiomanager-mcp-<triple>`), modify `src-tauri/tauri.conf.json` (`bundle.externalBin: ["binaries/studiomanager-mcp"]`, `build.beforeBuildCommand` runs the script before the frontend build), `.gitignore` (`src-tauri/binaries/`), `RELEASING.md` (gates: MCP `cargo test`/clippy; build note), create `docs/agent-access.md` (what it is, how to connect each client, tool list, safety rules, where backups and the log live).
+**Files:** Create `scripts/build-mcp.sh` (builds `src-tauri/mcp` in release for the host triple, copies to `src-tauri/binaries/studiomanager-mcp-<triple>`), modify `src-tauri/tauri.conf.json` (`bundle.externalBin: ["binaries/studiomanager-mcp"]`, `build.beforeBuildCommand` runs the script before the frontend build), `.gitignore` (`src-tauri/binaries/`), [RELEASING.md](../../../RELEASING.md) (gates: MCP `cargo test`/clippy; build note), create [docs/agent-access.md](../../agent-access.md) (what it is, how to connect each client, tool list, safety rules, where backups and the log live).
 
 - [ ] **Step 1:** `scripts/build-mcp.sh` produces the binary; `CARGO_TARGET_DIR=~/cargo-target-studiomanager npm run tauri build -- --bundles app` produces `StudioManager.app/Contents/MacOS/studiomanager-mcp`; check `identifier_from_bundle` resolves `ch.studiomanager.app` by running the bundled binary with `--print-data-dir` (add this flag in this task; it prints `env::data_dir()` and exits).
 - [ ] **Step 2:** Demo: `npm run build:demo -- --bundles app` (or the closest variant) and `--print-data-dir` prints the `ch.studiomanager.demo` folder.

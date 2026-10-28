@@ -4,7 +4,7 @@
 
 **Goal:** Close every design-system violation, i18n straggler, and deferred UX/accessibility finding from the 2026-07-20 audit, plus the four user-approved UX upgrades (list-page skeletons, full inline form validation, line-item keyboard reorder, empty-state CTAs).
 
-**Architecture:** Surgical fixes and small shared components. NO architecture refactors (DataTable, invoice/quote dedup, queryKeys, ensureSchema are recorded as future backlog — do not touch). All work follows `DESIGN-SYSTEM.md` at the project root — read it before any UI task.
+**Architecture:** Surgical fixes and small shared components. NO architecture refactors (DataTable, invoice/quote dedup, queryKeys, ensureSchema are recorded as future backlog — do not touch). All work follows [DESIGN-SYSTEM.md](../DESIGN-SYSTEM.md) at the project root — read it before any UI task.
 
 **Tech Stack:** React 19 + TS strict, Tailwind v4 with CSS tokens, lucide-react, zustand, TanStack Query, vitest. ESLint now active (`npm run lint`).
 
@@ -21,7 +21,7 @@
 - Always Read files before editing. Line refs below are from the audit and may have drifted.
 - Every new user-visible string: BOTH EN and FR sections of `src/i18n/ui.ts` (FR is deliberately accent-free — match).
 - The phase-1 fixes (backup, deletion guards, dirty-guard, undo store, timer, notifyError, local dates) are LANDED and must not be disturbed. When editing a page, preserve its confirmIfDirty/undoableFromStore/notifyError wiring.
-- DESIGN-SYSTEM.md rules apply to every line you write: tokens not gray classes, no `dark:` for tokenized colors, radius scale, canonical lucide icons at standard sizes, shared components, `useT()`.
+- [DESIGN-SYSTEM.md](../DESIGN-SYSTEM.md) rules apply to every line you write: tokens not gray classes, no `dark:` for tokenized colors, radius scale, canonical lucide icons at standard sizes, shared components, `useT()`.
 
 ---
 
@@ -44,7 +44,7 @@ Problem: a parallel 9-color map of raw Tailwind classes (`bg-gray-200`, `bg-ambe
 **Files:** `src/components/ui/Button.tsx` (~:25 lg size), then sites: `src/components/QuickTimerModal.tsx` (~:159), `src/pages/ClientDetailPage.tsx` (~:93 + radius at :112), `src/components/workload/WorkloadTemplateManager.tsx` (~:96), `src/components/ProjectDetailContent.tsx` (~:490, :588, :921), `src/components/shared/LineItemsTable.tsx` (~:67), `src/components/SavedFilterBar.tsx` (~:293, :355), `src/components/NamedTable.tsx` (~:293), `src/components/workload/WorkloadTable.tsx` (~:937).
 
 - [ ] Button.tsx: `lg` currently `px-5 py-2.5 text-sm` (same text as md — March audit item). Change to `text-base`. Grep `size="lg"` usages and eyeball none break.
-- [ ] Replace each hand-rolled icon+text button with `<Button variant=... icon={<Icon size={14|16} />}>` per DESIGN-SYSTEM.md (primary for the primary actions, `link` variant for the link-style ones — judge per site by reading current styling intent). Icon-only buttons stay raw per the design system's explicit icon-only rule — do not convert those.
+- [ ] Replace each hand-rolled icon+text button with `<Button variant=... icon={<Icon size={14|16} />}>` per [DESIGN-SYSTEM.md](../DESIGN-SYSTEM.md) (primary for the primary actions, `link` variant for the link-style ones — judge per site by reading current styling intent). Icon-only buttons stay raw per the design system's explicit icon-only rule — do not convert those.
 - [ ] SWEEP: the audit counted ~13 real violations but enumerated 11 sites — grep src/ for raw `<button>` elements containing both a lucide icon and text (the structural pattern the audit used), excluding the sanctioned dropdown-menu-item and icon-only patterns; convert any additional genuine violations found and enumerate them (acceptance criterion 2 is verified by re-running this sweep in G1).
 - [ ] ClientDetailPage :93/:112: also fix `rounded-md` → correct radius via Button md.
 - [ ] Verify no visual-behavior regression by matching current padding/size choices to the closest Button size. `npx tsc --noEmit`.
@@ -53,7 +53,7 @@ Problem: a parallel 9-color map of raw Tailwind classes (`bg-gray-200`, `bg-ambe
 
 **Files:** `src/pages/CalendarPage.tsx` (quick-create popover ~:643, :680, :684, :709), `src/pages/ResourcesPage.tsx` (~:586), `src/pages/ProfilePage.tsx` (~:337).
 
-- [ ] CalendarPage: import `Input`, `Select` from components/ui for the quick-create popover fields (or apply the sanctioned inline-editing raw pattern with correct `rounded-lg` + input tokens if the shared components genuinely don't fit the popover density — judge and justify); suggestions dropdown → `rounded-xl` + dropdown pattern (surface bg, border-header, shadow per DESIGN-SYSTEM.md).
+- [ ] CalendarPage: import `Input`, `Select` from components/ui for the quick-create popover fields (or apply the sanctioned inline-editing raw pattern with correct `rounded-lg` + input tokens if the shared components genuinely don't fit the popover density — judge and justify); suggestions dropdown → `rounded-xl` + dropdown pattern (surface bg, border-header, shadow per [DESIGN-SYSTEM.md](../DESIGN-SYSTEM.md)).
 - [ ] ResourcesPage:586 select `rounded` → `rounded-lg` + input tokens; ProfilePage:337 input `rounded` → `rounded-lg` + tokens (use shared components if the context allows).
 - [ ] Grep `className="[^"]*\brounded\b` (bare rounded, 4px) across src/ — fix any other bare-rounded on inputs/selects/buttons found (enumerate). `npx tsc --noEmit`.
 
@@ -62,7 +62,7 @@ Problem: a parallel 9-color map of raw Tailwind classes (`bg-gray-200`, `bg-ambe
 **Files:** `src/lib/statusColors.ts`, `src/pages/ClientsPage.tsx` (~:178), `src/components/TaskDatePicker.tsx` (~:278).
 
 - [ ] Add `clientStatusVariant(status)` to statusColors.ts (active → success, else neutral — read the client status model first); use it in ClientsPage.
-- [ ] TaskDatePicker:278: standalone `→` span → lucide `MoveRight` or `ArrowRight` size 12 (pick per DESIGN-SYSTEM icon table; the `" → "` inside display LABEL strings (~:171,175) is typographic text — leave).
+- [ ] TaskDatePicker:278: standalone `→` span → lucide `MoveRight` or `ArrowRight` size 12 (pick per [DESIGN-SYSTEM](../DESIGN-SYSTEM.md) icon table; the `" → "` inside display LABEL strings (~:171,175) is typographic text — leave).
 - [ ] `npx tsc --noEmit`.
 
 ## Group B — i18n stragglers
@@ -186,8 +186,8 @@ Known stragglers from the audit (verify each still exists, fix, and GREP for mor
 ### Task G1: Full sweep + design-system compliance re-audit + test-plan update
 
 - [ ] `npx tsc --noEmit` (0), `npx vitest run` (all pass; count vs 173 baseline), `npm run lint` (exit 0).
-- [ ] Design-system grep audit (the DESIGN-SYSTEM.md checklist, mechanized): zero `bg-gray-|text-gray-|border-gray-|divide-gray-` in src/; zero `dark:` color prefixes (except sanctioned semantic); zero bare `rounded"` on interactive elements; zero unicode icons in JSX; EN/FR key parity (count both sections); re-run A2's structural sweep for raw `<button>` with icon+text children (must find zero genuine violations — acceptance criterion 2).
-- [ ] Append a "Phase 2 — UI/UX" section to `SNAFU/AUDIT-FIXES-TEST-PLAN.md`: manual checks for dark-mode workload tags, keyboard-only session (tab through a list page, open context menu, reorder a line item, close a tab, work a modal), skeleton appearance, empty-state CTAs, inline validation on each form (EN + FR), busy states, ProjectsPage bulk/filters, AND a dedicated WorkloadTable interaction pass (edit cells of each column type, reorder rows, apply a template, tag colors in both themes) — F1's exhaustive-deps fixes there are the phase's highest behavioral-regression risk and tests barely cover it.
+- [ ] Design-system grep audit (the [DESIGN-SYSTEM.md](../DESIGN-SYSTEM.md) checklist, mechanized): zero `bg-gray-|text-gray-|border-gray-|divide-gray-` in src/; zero `dark:` color prefixes (except sanctioned semantic); zero bare `rounded"` on interactive elements; zero unicode icons in JSX; EN/FR key parity (count both sections); re-run A2's structural sweep for raw `<button>` with icon+text children (must find zero genuine violations — acceptance criterion 2).
+- [ ] Append a "Phase 2 — UI/UX" section to [SNAFU/AUDIT-FIXES-TEST-PLAN.md](AUDIT-FIXES-TEST-PLAN.md): manual checks for dark-mode workload tags, keyboard-only session (tab through a list page, open context menu, reorder a line item, close a tab, work a modal), skeleton appearance, empty-state CTAs, inline validation on each form (EN + FR), busy states, ProjectsPage bulk/filters, AND a dedicated WorkloadTable interaction pass (edit cells of each column type, reorder rows, apply a template, tag colors in both themes) — F1's exhaustive-deps fixes there are the phase's highest behavioral-regression risk and tests barely cover it.
 - [ ] Report completion with the compliance-grep results.
 
 ## Acceptance criteria

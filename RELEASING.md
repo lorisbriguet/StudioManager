@@ -29,7 +29,7 @@ Run `bash scripts/build-mcp.sh` once on a fresh clone before any `cargo` command
 
 ## 2. Design-system compliance audit (required)
 
-Grep gates from `DESIGN-SYSTEM.md` — all must return **0**:
+Grep gates from [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md) — all must return **0**:
 
 ```bash
 grep -rnE 'bg-gray-|text-gray-|border-gray-|divide-gray-' src --include='*.tsx' | wc -l
@@ -46,7 +46,7 @@ Decide the bump from the actual changes: MAJOR = breaking, MINOR = features, PAT
 1. `package.json` → `"version"`
 2. `src-tauri/tauri.conf.json` → `"version"`
 3. `src-tauri/Cargo.toml` → `version` (then run a build/`cargo check` so `Cargo.lock` updates)
-4. `README.md` → the version badge
+4. [README.md](README.md) → the version badge
 
 ## 4. Build (signing is load-bearing)
 
@@ -56,7 +56,7 @@ export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
 CARGO_TARGET_DIR=~/cargo-target-studiomanager npm run tauri build
 ```
 
-`scripts/build-mcp.sh` runs automatically as part of `beforeBuildCommand` (and `beforeDevCommand`), before the frontend build. It builds the `studiomanager-mcp` server in release mode into `~/cargo-target-studiomanager-mcp` and copies it to `src-tauri/binaries/studiomanager-mcp-<target-triple>` (git-ignored), which Tauri bundles as `Contents/MacOS/studiomanager-mcp`. Check it is there after the build, and that `StudioManager.app/Contents/MacOS/studiomanager-mcp --print-data-dir` ends in `ch.studiomanager.app`. A `universal-apple-darwin` target builds both architectures and joins them with `lipo`; it needs both rustup targets installed (`rustup target add aarch64-apple-darwin x86_64-apple-darwin`). See `docs/agent-access.md` for the feature itself.
+`scripts/build-mcp.sh` runs automatically as part of `beforeBuildCommand` (and `beforeDevCommand`), before the frontend build. It builds the `studiomanager-mcp` server in release mode into `~/cargo-target-studiomanager-mcp` and copies it to `src-tauri/binaries/studiomanager-mcp-<target-triple>` (git-ignored), which Tauri bundles as `Contents/MacOS/studiomanager-mcp`. Check it is there after the build, and that `StudioManager.app/Contents/MacOS/studiomanager-mcp --print-data-dir` ends in `ch.studiomanager.app`. A `universal-apple-darwin` target builds both architectures and joins them with `lipo`; it needs both rustup targets installed (`rustup target add aarch64-apple-darwin x86_64-apple-darwin`). See [docs/agent-access.md](docs/agent-access.md) for the feature itself.
 
 **Without the signing env vars the build still succeeds but produces an invalid update signature** — users' updaters download to 100% then fail with "Update check failed". Never skip them.
 
@@ -69,8 +69,8 @@ Smoke-test the built .dmg app (launch, open a few pages, create+delete a draft i
 ## 5. Changelog + docs
 
 - Write the changelog from real commits/changes, grouped: Features / Fixes / Refactors / Breaking. Concise, user-facing wording; no noise.
-- Update `README.md`: version badge, feature list if features shipped, remove anything now inaccurate.
-- Keep `IDEAS.md` in sync (move shipped items to the Done section).
+- Update [README.md](README.md): version badge, feature list if features shipped, remove anything now inaccurate.
+- Keep [IDEAS.md](IDEAS.md) in sync (move shipped items to the Done section).
 
 ## 6. latest.json (the auto-updater manifest)
 
@@ -116,10 +116,10 @@ gh release create vX.Y.Z \
 
 ## 8. Post-release validation
 
-- `git status` clean; tag, `package.json`, `tauri.conf.json`, `Cargo.toml`, README badge all agree.
+- `git status` clean; tag, `package.json`, `tauri.conf.json`, `Cargo.toml`, [README](README.md) badge all agree.
 - `curl -sL https://github.com/lorisbriguet/StudioManager/releases/latest/download/latest.json` returns the new version with a non-empty signature.
 - On an installed previous version: Settings → check for updates → the update downloads AND installs (this is the real signature test).
-- Note follow-ups/risks in `IDEAS.md`.
+- Note follow-ups/risks in [IDEAS.md](IDEAS.md).
 
 ## Demo build (never published)
 

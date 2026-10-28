@@ -265,6 +265,8 @@ npm run build:demo
 
 The production build outputs a `.dmg` file in `src-tauri/target/release/bundle/dmg/`.
 
+Docs: [RELEASING.md](RELEASING.md) · [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md) · [IDEAS.md](IDEAS.md) · [Tester Guide](docs/GUIDE.md) · [Agent access](docs/agent-access.md)
+
 ---
 
 ## Project Structure

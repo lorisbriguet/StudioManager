@@ -8,7 +8,7 @@
 
 **Tech Stack:** Tauri v2 (Rust: rusqlite 0.32, serde, `trash`, `chrono`), React 19 + TypeScript, zustand, TanStack Query, vitest + Testing Library, `cargo test`.
 
-**Spec:** `docs/superpowers/specs/2026-09-22-organisations-design.md`
+**Spec:** [docs/superpowers/specs/2026-09-22-organisations-design.md](../specs/2026-09-22-organisations-design.md)
 
 ## Global Constraints
 
@@ -2659,7 +2659,7 @@ In `SettingsPage.tsx`: add `"organisations"` to the `SettingsCategory` union; ad
 
 **Files:**
 - Create: `scripts/rehearse-org-upgrade.sh`
-- Modify: `README.md` (Data Location section), `docs/GUIDE.md` (section 6), `IDEAS.md` (New Features done entry), `RELEASING.md` (add a pre-release step for layout upgrades)
+- Modify: [README.md](../../../README.md) (Data Location section), [docs/GUIDE.md](../../GUIDE.md) (section 6), [IDEAS.md](../../../IDEAS.md) (New Features done entry), [RELEASING.md](../../../RELEASING.md) (add a pre-release step for layout upgrades)
 
 - [ ] **Step 1: Write the rehearsal script**
 
@@ -2705,7 +2705,7 @@ This needs `pub mod upgrade;` and `pub mod orgs;` in `lib.rs` (make those two mo
 
 - [ ] **Step 2: Run the rehearsal** — `chmod +x scripts/rehearse-org-upgrade.sh && scripts/rehearse-org-upgrade.sh`. Expected: "row counts identical", "file checksums identical", no unresolved paths. Then `npm run tauri dev` is NOT pointed at the rehearsal folder (the app always uses the real folder); instead open the rehearsal database with `sqlite3` and spot-check three invoice `pdf_path` values exist on disk with `test -f`.
 
-- [ ] **Step 3: Update docs** — README "Data Location": the folder now contains `organisations.json` and `orgs/<id>/` per organisation, each with its database, `invoices/` and `receipts/`. GUIDE section 6: same, plus one line that each organisation backs up separately. IDEAS.md: move the organisation subtask line into a "V1.18.0 — Done" section. RELEASING.md step 1: "If the release changes the data layout, run `scripts/rehearse-org-upgrade.sh` against the real folder first and recommend Backup Now in the release notes."
+- [ ] **Step 3: Update docs** — [README](../../../README.md) "Data Location": the folder now contains `organisations.json` and `orgs/<id>/` per organisation, each with its database, `invoices/` and `receipts/`. [GUIDE](../../GUIDE.md) section 6: same, plus one line that each organisation backs up separately. [IDEAS.md](../../../IDEAS.md): move the organisation subtask line into a "V1.18.0 — Done" section. [RELEASING.md](../../../RELEASING.md) step 1: "If the release changes the data layout, run `scripts/rehearse-org-upgrade.sh` against the real folder first and recommend Backup Now in the release notes."
 
 - [ ] **Step 4: Verify** — `npx vitest run && npx tsc --noEmit && npm run lint && (cd src-tauri && cargo test && cargo clippy --all-targets -- -D warnings)`.
 - [ ] **Step 5: Commit** — `git add -A scripts src-tauri/src/bin src-tauri/src/lib.rs README.md docs/GUIDE.md IDEAS.md RELEASING.md && git commit -m "chore(orgs): upgrade rehearsal script and docs"`
@@ -2729,4 +2729,4 @@ No code. Run `npm run tauri dev` with the installed app closed (both share the r
 - [ ] Delete "Label" while in Studio: folder appears in the Trash; the registry no longer lists it.
 - [ ] Quit and relaunch: last active organisation reopens; the upgrade snapshot file is gone.
 
-Record findings in IDEAS.md under the V1.18.0 section, then hand over to the release procedure (`RELEASING.md`) with release notes that lead with "Back up before updating: this version moves your data into a per-organisation folder."
+Record findings in [IDEAS.md](../../../IDEAS.md) under the V1.18.0 section, then hand over to the release procedure ([RELEASING.md](../../../RELEASING.md)) with release notes that lead with "Back up before updating: this version moves your data into a per-organisation folder."

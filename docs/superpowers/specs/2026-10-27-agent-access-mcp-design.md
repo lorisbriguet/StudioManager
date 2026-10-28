@@ -2,6 +2,8 @@
 
 Date: 2026-10-27 · Status: draft for Loris's review
 
+Plan: [2026-10-27-agent-access-mcp.md](../plans/2026-10-27-agent-access-mcp.md)
+
 Loris asked for this to be written without the question round. Decisions marked *[call]* were made by the
 designer from what the conversation and the code show; Loris can overturn any.
 
@@ -143,7 +145,7 @@ A new `AgentAccessCard.tsx` next to Calendar sync, EN/FR strings in `i18n/ui.ts`
   - **Other apps — Copy config:** copies the generic `mcpServers` JSON snippet.
 - **Recent agent changes:** the last 20 writes (time, organisation, tool, what changed), read from a small log
   the server appends to in the app data folder *[call]*.
-- A link to a short help page (`docs/agent-access.md`) listing the tools and the rules.
+- A link to a short help page ([docs/agent-access.md](../../agent-access.md)) listing the tools and the rules.
 
 ### 5.7 Loris's own setup (after v1 ships)
 
@@ -156,7 +158,7 @@ of this build.
 - Tauri 2, Rust; frontend React 19 + TanStack Query. No new network listener; CSP unchanged.
 - Repo is public: no personal data, org ids or client references in code, tests or docs.
 - Release: the binary is part of the existing release (`.dmg`, `.app.tar.gz`, updater). Ad-hoc signing
-  ("-"), like the app. Version numbers stay in sync in the four places `RELEASING.md` lists.
+  ("-"), like the app. Version numbers stay in sync in the four places [RELEASING.md](../../../RELEASING.md) lists.
 - EN/FR key parity is a release gate for the new strings.
 - Tests: Rust integration tests against temporary databases created with `migrate.rs` (never the real data
   folder); a protocol test that starts the binary and calls tools over stdio; vitest for the card.

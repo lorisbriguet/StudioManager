@@ -2,6 +2,7 @@
 
 **Date:** 2026-08-12
 **Status:** Approved
+**Plan:** [2026-08-12-activities-i18n.md](../plans/2026-08-12-activities-i18n.md)
 
 ## Problem
 

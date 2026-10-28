@@ -28,7 +28,7 @@
 - [x] Local-date correctness (overdue/recurring/aging), calendar month-end fix, recurring multi-period catch-up with anchor days
 - [x] Design-system compliance: dark-mode workload tags, shared Button adoption, radius/i18n/aria sweeps (810 EN/FR keys, 113+ aria-labels)
 - [x] UX: skeletons on list pages, busy states, empty-state CTAs, ProjectsPage bulk+filters, line-item keyboard reorder, full inline form validation
-- [x] ESLint (zero findings), 219 tests, RELEASING.md guidelines
+- [x] ESLint (zero findings), 219 tests, [RELEASING.md](RELEASING.md) guidelines
 
 ## V1.12.0 — Done (expense receipt parsing)
 
@@ -59,7 +59,7 @@
 ## V1.17.0 — Done (presentation mode rebuild + tester docs, 2026-09-15)
 - [x] Presentation seed rebuilt for the current schema: relative dates, per-year reference renumbering, activity entities, correct expense categories, VAT-exempt totals, time entries / named table / project wiki / layouts / income, personal data cleared, user guide restored; guarded by `src/__tests__/presentationSeed.test.ts`
 - [x] Seed statement splitter made comment- and quote-aware (`src/db/seeds/splitSql.ts`)
-- [x] Tester guide `docs/GUIDE.md`, README corrections, landing page rebuilt and published via GitHub Pages
+- [x] Tester guide [docs/GUIDE.md](docs/GUIDE.md), [README](README.md) corrections, landing page rebuilt and published via GitHub Pages
 - [ ] Retake the four screenshots in `docs/screenshots/` with the new seed (current ones show the old Jan–Mar data and the real business profile on the invoice)
 
 ## V2.0.0 — Done (organisations)
@@ -83,7 +83,7 @@ All 12 checklist items pass after three fixes found by the pass:
 
 - [x] Dependency audit green again: Tiptap 3.31.3 (prototype-pollution and ReDoS advisories), Vitest 4.1.11 (mocker path traversal, dev-only), rustls 0.23.45 (RUSTSEC-2026-0285); lockfile regenerated with npm 11 (npm 10.9 crashes on Vitest's peer set)
 - [x] Test Mode and Presentation Mode are demo-build tools now: their Settings category is hidden in the real app (banners and exit paths stay for anyone mid-mode at update time); the Snapshot card moved under Backup
-- [x] Docs: guide, README and landing page no longer point testers at Presentation Mode
+- [x] Docs: guide, [README](README.md) and landing page no longer point testers at Presentation Mode
 
 ## V2.2.0 — Done (agent access)
 
@@ -105,7 +105,7 @@ All 12 checklist items pass after three fixes found by the pass:
 - [x] One-time notification per organisation when its wiki guide predates the shipped one, linking to Settings › General › Reset guide (`useGuideUpdateCheck`)
 - [ ] Follow-up: a demo persona for a two-person studio, if a presentation ever needs it
 
-### Quality pass (spec + plan: `docs/superpowers/{specs,plans}/2026-09-28-v2.1.0-quality-pass.md`)
+### Quality pass (spec + plan: [specs/2026-09-28-v2.1.0-quality-pass.md](docs/superpowers/specs/2026-09-28-v2.1.0-quality-pass.md), [plans/2026-09-28-v2.1.0-quality-pass.md](docs/superpowers/plans/2026-09-28-v2.1.0-quality-pass.md))
 
 - [x] Arrow-key row navigation on **Clients**, **Projects** and **Tasks**, bringing them level with the finance pages; on Tasks the cycle skips collapsed projects
 - [x] Double submits blocked on client, task and wiki creation, including the window before the client id was fetched
@@ -124,7 +124,7 @@ All 12 checklist items pass after three fixes found by the pass:
 
 ## Audit — round 5, full application (2026-09-28)
 
-Four independent reading passes (correctness/data, security/platform, UI/a11y/perf, tests/tooling) over 51k lines of TypeScript and 2.5k of Rust, plus deterministic tooling. Full report: `docs/audits/2026-09-28-full-audit.md`. Clean bill on the organisations layer, the data upgrade, SQL parameterisation, capabilities and CSP, the updater chain, and design-system compliance.
+Four independent reading passes (correctness/data, security/platform, UI/a11y/perf, tests/tooling) over 51k lines of TypeScript and 2.5k of Rust, plus deterministic tooling. Full report: [docs/audits/2026-09-28-full-audit.md](docs/audits/2026-09-28-full-audit.md). Clean bill on the organisations layer, the data upgrade, SQL parameterisation, capabilities and CSP, the updater chain, and design-system compliance.
 
 ### P1
 - [x] `docs/screenshots/*.png` on the public site showed the owner's real address, phone, bank details and a scannable QR slip — all four retaken in the StudioManager Demo build (fictional profile), and a real street address dropped from an expense-parser fixture
@@ -151,7 +151,7 @@ Four independent reading passes (correctness/data, security/platform, UI/a11y/pe
 Three-lens audit (correctness/data, security/platform, UI/a11y/perf/tests) after v1.15.0. Clean bill: SQL parameterization, osascript runner, wiki allowlist, updater chain, capabilities scope, date/money handling, design-system compliance (0 violations), modal/menu focus management.
 
 ### Fixed (2026-08-31)
-- [x] PII (IBAN, IDE, phone, address) hardcoded in `scripts/migrate-data.mjs` on a PUBLIC repo — dead one-time script deleted; RELEASING.md rule updated. NOTE: still in git history; purge with `git filter-repo` if desired (destructive, needs force-push).
+- [x] PII (IBAN, IDE, phone, address) hardcoded in `scripts/migrate-data.mjs` on a PUBLIC repo — dead one-time script deleted; [RELEASING.md](RELEASING.md) rule updated. NOTE: still in git history; purge with `git filter-repo` if desired (destructive, needs force-push).
 - [x] Undo redo fragility — income/contact/address delete redos matched by reference/name instead of the restored id (wrong row deleted if duplicates); now capture `lastInsertId` like invoices (tests: undoRedoCapture.test.tsx; tauri-sql mock now returns the real execute() result shape)
 - [x] Recurring-template create/delete undo pushes had no `redo` — Cmd+Shift+Z was a silent no-op
 - [x] `execute_batch` unbounded — MAX_BATCH_STATEMENTS=10k guard
@@ -239,7 +239,7 @@ Full-coverage pass: deterministic tooling (npm/cargo audit, knip, jscpd, clippy,
 ## Security hardening (2026-08-12)
 
 - [x] Retire arbitrary osascript execution (2026-08-14) — Calendar sync + PDF/HEIC extraction moved to Rust commands in `src-tauri/src/apple.rs` with fixed scripts; user data passed via argv only (`on run argv` / JXA `function run(argv)`), HEIC runs `sips` directly with no shell; `shell:allow-execute` dropped from capabilities (`shell:allow-open` kept for browser URLs). Mail sharing was already a Rust command
-- ~~Notarize the app~~ — dropped: requires the paid Apple Developer Program, which we're not getting. Unsigned builds rely on the Gatekeeper bypass: right-click-open on macOS 12–14, System Settings → Privacy & Security → Open Anyway on macOS 15+ (documented in docs/GUIDE.md and the README)
+- ~~Notarize the app~~ — dropped: requires the paid Apple Developer Program, which we're not getting. Unsigned builds rely on the Gatekeeper bypass: right-click-open on macOS 12–14, System Settings → Privacy & Security → Open Anyway on macOS 15+ (documented in [docs/GUIDE.md](docs/GUIDE.md) and the [README](README.md))
 - [x] Automate dependency auditing (2026-08-14) — weekly GitHub Action runs `npm audit` + `cargo audit`; two unfixable sqlx-transitive advisories ignored with reasons in `src-tauri/.cargo/audit.toml`
 - [x] Smoke-test the osascript migration (2026-08-14): Calendar sync (timed + all-day + deletion), PDF receipt parsing, HEIC Vision OCR, Mail sharing, export dialogs, dashboard year switcher, supplier merge — all verified in the running app
 
@@ -299,7 +299,7 @@ Code-level review by three design lenses (visual language, layout consistency, i
 ### Typography & tokens
 - [x] Fold ad-hoc font sizes (text-[13px]/[11px]/[9px]) into the documented scale
 - [x] Slightly darken --color-muted (borderline WCAG AA ~4.4:1 at the 10-11px sizes it dominates)
-- [x] Document spacing rhythm + type scale in DESIGN-SYSTEM.md (py-[7px]-style one-offs exist)
+- [x] Document spacing rhythm + type scale in [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md) (py-[7px]-style one-offs exist)
 
 ### Information architecture & guidance
 - [x] SettingsPage: card-based sectioning per topic (currently one undifferentiated 1,679-line column)

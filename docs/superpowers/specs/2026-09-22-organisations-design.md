@@ -2,6 +2,7 @@
 
 **Date:** 2026-09-22
 **Status:** Approved (design sections reviewed in conversation)
+**Plan:** [2026-09-22-organisations.md](../plans/2026-09-22-organisations.md)
 
 ## Problem
 

@@ -1,5 +1,7 @@
 # V1.6.2 — UI Rework + Modular Projects + Named Tables
 
+Plan: [2026-03-27-v162-ui-rework.md](../plans/2026-03-27-v162-ui-rework.md)
+
 ## Overview
 
 Complete visual overhaul following a Notion-clean design language: minimal borders, whitespace-driven separation, refined typography, and polished interactive components. Every visible surface in the app is touched.

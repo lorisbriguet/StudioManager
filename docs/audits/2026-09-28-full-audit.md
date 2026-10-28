@@ -12,7 +12,7 @@
 
 ### 1. The published invoice screenshot shows the owner's real contact and banking details
 
-`docs/screenshots/invoice.png`, linked from `docs/index.html:249` and the README, is live on the public documentation site. It was captured in presentation mode, so the *client* is fictional, but presentation mode deliberately preserves the owner's own business profile. The image therefore shows a home address, mobile number, email, Swiss business identification and affiliate numbers, bank name, full IBAN and BIC, and a scannable QR payment slip encoding the same details.
+`docs/screenshots/invoice.png`, linked from `docs/index.html:249` and the [README](../../README.md), is live on the public documentation site. It was captured in presentation mode, so the *client* is fictional, but presentation mode deliberately preserves the owner's own business profile. The image therefore shows a home address, mobile number, email, Swiss business identification and affiliate numbers, bank name, full IBAN and BIC, and a scannable QR payment slip encoding the same details.
 
 Published since 14 September. The exposure is moderate rather than catastrophic — an IBAN and address appear on every invoice sent to a client — but a public website is a different audience, and it invites direct-debit attempts, address harvesting and spam.
 
@@ -47,7 +47,7 @@ Two aggravating factors, both verified by reading the block:
 
 ### 4. Nothing runs the tests except a human
 
-`.github/workflows/` contains one workflow, the weekly dependency audit. No workflow runs vitest, `tsc` or eslint on push or pull request. The 652 tests protect the codebase only for as long as whoever is releasing remembers to run them, and `RELEASING.md` is the only thing that says they must.
+`.github/workflows/` contains one workflow, the weekly dependency audit. No workflow runs vitest, `tsc` or eslint on push or pull request. The 652 tests protect the codebase only for as long as whoever is releasing remembers to run them, and [RELEASING.md](../../RELEASING.md) is the only thing that says they must.
 
 **Fix:** one workflow running the three gates on push to `main`. It is roughly fifteen lines.
 

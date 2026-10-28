@@ -2,7 +2,8 @@
 
 **Date:** 2026-09-23
 **Status:** approved in conversation, pending written review
-**Builds on:** `2026-09-22-organisations-design.md` (v2.0.0)
+**Builds on:** [2026-09-22-organisations-design.md](2026-09-22-organisations-design.md) (v2.0.0)
+**Plan:** [2026-09-23-demo-app.md](../plans/2026-09-23-demo-app.md)
 
 ## 1. Goal
 
@@ -142,10 +143,10 @@ i18n keys (EN/FR, FR accent-free): `demo_data`, `demo_data_desc`, `demo_data_loa
 
 ## 7. Documentation
 
-- `RELEASING.md`: a short "Demo build" section (how to build, that it is never published, where its data lives).
-- `README.md` development section: one line for `npm run build:demo`.
-- `IDEAS.md`: a V2.1.0 entry.
-- `docs/GUIDE.md`: unchanged (the demo app is the owner's tool).
+- [RELEASING.md](../../../RELEASING.md): a short "Demo build" section (how to build, that it is never published, where its data lives).
+- [README.md](../../../README.md) development section: one line for `npm run build:demo`.
+- [IDEAS.md](../../../IDEAS.md): a V2.1.0 entry.
+- [docs/GUIDE.md](../../GUIDE.md): unchanged (the demo app is the owner's tool).
 
 ## 8. Testing
 
@@ -159,6 +160,6 @@ i18n keys (EN/FR, FR accent-free): `demo_data`, `demo_data_desc`, `demo_data_loa
 
 ## 9. Risks
 
-- Someone builds the demo config by mistake for a release: the identifier and product name differ, the updater artefacts are absent, and RELEASING.md names the real command. Low.
+- Someone builds the demo config by mistake for a release: the identifier and product name differ, the updater artefacts are absent, and [RELEASING.md](../../../RELEASING.md) names the real command. Low.
 - A persona seed drifts from the schema: caught by the table-driven seed test, which already guards the designer seed.
 - The demo app's first-launch organisation is named "Studio" from the empty profile; the routine renames it. Cosmetic.

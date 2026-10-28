@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, vitest (already configured), Tauri v2 + React 19 app.
 
-**Spec:** `docs/superpowers/specs/2026-08-12-expense-parser-design.md`
+**Spec:** [docs/superpowers/specs/2026-08-12-expense-parser-design.md](../specs/2026-08-12-expense-parser-design.md)
 
 ## Global Constraints
 

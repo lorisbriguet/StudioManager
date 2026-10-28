@@ -20,7 +20,7 @@
 - Run targeted tests only (`npx vitest run src/__tests__/<file>.test.ts`), never the full suite mid-task. Full suite + `npx tsc --noEmit` run once in the final task.
 - Do not run `npm run tauri dev` or any build; the human runs the app at the end.
 - **Always Read a file before editing it.** Line numbers below come from the audit and may drift as tasks land — treat them as pointers, not gospel.
-- All new user-visible strings must be added to BOTH the EN and FR sections of `src/i18n/ui.ts` and used via `useT()` (see `DESIGN-SYSTEM.md`).
+- All new user-visible strings must be added to BOTH the EN and FR sections of `src/i18n/ui.ts` and used via `useT()` (see [DESIGN-SYSTEM.md](../DESIGN-SYSTEM.md)).
 
 ---
 
@@ -308,7 +308,7 @@ Problems: (a) edit-load triggers the `[currency]` effect which overwrites the st
 - [ ] **Step 2:** `npx vitest run` — full suite green (old + new tests).
 - [ ] **Step 3:** `npm run lint` — zero errors in touched files.
 - [ ] **Step 4:** `cd src-tauri && cargo check` — clean (if not already done in Task 11).
-- [ ] **Step 5:** Write `SNAFU/AUDIT-FIXES-TEST-PLAN.md`: a step-by-step manual verification checklist for the user covering every fix (see plan-level acceptance criteria below), then report completion.
+- [ ] **Step 5:** Write [SNAFU/AUDIT-FIXES-TEST-PLAN.md](AUDIT-FIXES-TEST-PLAN.md): a step-by-step manual verification checklist for the user covering every fix (see plan-level acceptance criteria below), then report completion.
 
 ---
 
