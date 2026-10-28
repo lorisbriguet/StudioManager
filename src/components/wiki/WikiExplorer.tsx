@@ -1,9 +1,8 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   ChevronDown,
   ChevronRight,
   ChevronsDownUp,
-  FilePlus,
   FileText,
   File,
   Plus,
@@ -14,7 +13,8 @@ import {
 import { useT } from "../../i18n/useT";
 import { useOrgStore } from "../../stores/org-store";
 import { useWikiFolders } from "../../db/hooks/useWiki";
-import { BottomBar, SearchBar } from "../ui";
+import { BAR_ICON_BUTTON, BottomBar, PageHeader, SearchBar } from "../ui";
+import { ContextMenu, type ContextMenuItem } from "../ContextMenu";
 import type { WikiArticleWithTags } from "../../types/wiki";
 import type { ProjectDoc } from "../../db/hooks/useProjectDocs";
 import type { WikiRef } from "../../lib/wikiTabs";
@@ -100,8 +100,7 @@ export function WikiExplorer({
   const { data: folders = [] } = useWikiFolders();
   const storageKey = useOrgStore((s) => s.orgKey("wikiTreeOpen"));
   const [search, setSearch] = useState("");
-  const [menu, setMenu] = useState<{ id: number; x: number; y: number } | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [menu, setMenu] = useState<{ ref: WikiRef; x: number; y: number } | null>(null);
 
   const folderNames = useMemo(() => new Map(folders.map((f) => [f.id, f.name])), [folders]);
   const groups = useMemo(
@@ -130,15 +129,6 @@ export function WikiExplorer({
     setOpen((prev) => (keys.every((k) => prev.has(k)) ? prev : new Set([...prev, ...keys])));
   }, [activeRef, groups]);
 
-  useEffect(() => {
-    if (!menu) return;
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(null);
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [menu]);
-
   const toggle = useCallback((key: string) => {
     setOpen((prev) => {
       const next = new Set(prev);
@@ -159,14 +149,53 @@ export function WikiExplorer({
     [query]
   );
   const rowClass = (active: boolean) =>
-    `w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-xs text-left transition-colors ${
-      active ? "bg-accent-light text-accent font-medium" : "text-muted hover:bg-[var(--color-hover-row)]"
+    `w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-left transition-colors ${
+      active
+        ? "bg-accent-light text-accent font-medium"
+        : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
     }`;
+  const openMenu = (ref: WikiRef) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    setMenu({ ref, x: e.clientX, y: e.clientY });
+  };
 
-  const iconBtn =
-    "p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none transition-colors";
-  const menuItem =
-    "w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]";
+  // Arrow keys move through the visible rows; Right opens a group, Left
+  // closes it or goes up to it.
+  const onTreeKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+    const current = e.target as HTMLElement;
+    if (!current.matches("[data-tree-item]")) return;
+    const items = [...e.currentTarget.querySelectorAll<HTMLElement>("[data-tree-item]")];
+    const i = items.indexOf(current);
+    const expanded = current.getAttribute("aria-expanded");
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      items[e.key === "ArrowDown" ? Math.min(i + 1, items.length - 1) : Math.max(i - 1, 0)]?.focus();
+    } else if (e.key === "Home" || e.key === "End") {
+      e.preventDefault();
+      items[e.key === "Home" ? 0 : items.length - 1]?.focus();
+    } else if (e.key === "ArrowRight" && expanded === "false") {
+      e.preventDefault();
+      current.click();
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      if (expanded === "true") current.click();
+      else current.closest("[data-tree-branch]")?.querySelector<HTMLElement>("[data-tree-item]")?.focus();
+    }
+  };
+
+  const visibleGroups = groups
+    .map((g) => ({ g, list: g.articles.filter(matches), files: g.docs.filter(docMatches) }))
+    .filter(({ list, files }) => !query || list.length > 0 || files.length > 0);
+
+  const menuItems = (ref: WikiRef): ContextMenuItem[] => [
+    { label: t.wiki_open_new_tab, icon: <ArrowUpRight size={14} />, onClick: () => onOpen(ref, true) },
+    ...(typeof ref === "number"
+      ? [
+          { label: "", onClick: () => {}, divider: true },
+          { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => onDeleteArticle(ref) },
+        ]
+      : []),
+  ];
 
   return (
     <aside
@@ -174,37 +203,45 @@ export function WikiExplorer({
       className="w-60 shrink-0 flex flex-col min-h-0 border-r border-[var(--color-border-divider)]"
     >
       <div className="px-3 pt-5 pb-2 space-y-3">
-        <h1 className="text-sm font-semibold px-2 text-muted uppercase tracking-wider">{t.wiki}</h1>
+        <PageHeader title={t.wiki} className="px-2" />
         <SearchBar value={search} onChange={setSearch} placeholder={t.search_articles} className="w-full" />
         <div className="flex items-center gap-1 px-1">
-          <button onClick={() => onNewArticle(null)} disabled={creating} className={iconBtn} aria-label={t.new_article} title={t.new_article}>
-            <FilePlus size={14} />
+          <button onClick={() => onNewArticle(null)} disabled={creating} className={BAR_ICON_BUTTON} aria-label={t.new_article} title={t.new_article}>
+            <Plus size={14} />
           </button>
-          <button onClick={() => setOpen(new Set())} className={iconBtn} aria-label={t.wiki_collapse_all} title={t.wiki_collapse_all}>
+          <button onClick={() => setOpen(new Set())} className={BAR_ICON_BUTTON} aria-label={t.wiki_collapse_all} title={t.wiki_collapse_all}>
             <ChevronsDownUp size={14} />
           </button>
-          <button onClick={onOpenGraph} className={`${iconBtn} ml-auto`} aria-label={t.wiki_open_graph} title={t.wiki_open_graph}>
+          <button onClick={onOpenGraph} className={`${BAR_ICON_BUTTON} ml-auto`} aria-label={t.wiki_open_graph} title={t.wiki_open_graph}>
             <Waypoints size={14} />
           </button>
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-1.5 pb-3 space-y-px">
-        {groups.map((g) => {
-          const list = g.articles.filter(matches);
-          const files = g.docs.filter(docMatches);
-          if (query && list.length === 0 && files.length === 0) return null;
+      <nav
+        role="tree"
+        aria-label={t.wiki_explorer}
+        onKeyDown={onTreeKeyDown}
+        className="flex-1 overflow-y-auto px-1.5 pb-3 space-y-px"
+      >
+        {query && visibleGroups.length === 0 && (
+          <p className="px-3 py-2 text-xs text-muted">{t.wiki_explorer_no_results}</p>
+        )}
+        {visibleGroups.map(({ g, list, files }) => {
           const isOpen = !!query || open.has(g.key);
           const filesKey = `${g.key}:files`;
           const filesOpen = !!query || open.has(filesKey);
           return (
-            <div key={g.key}>
+            <div key={g.key} data-tree-branch>
               <div className="group flex items-center rounded-md hover:bg-[var(--color-hover-row)]">
                 <button
                   type="button"
+                  data-tree-item
+                  role="treeitem"
+                  aria-level={1}
                   onClick={() => toggle(g.key)}
                   aria-expanded={isOpen}
-                  className="flex-1 min-w-0 flex items-center gap-2 py-1.5 pl-3 pr-1 text-xs font-medium text-left text-[var(--color-text-secondary)]"
+                  className="flex-1 min-w-0 flex items-center gap-2 py-1.5 pl-3 pr-1 text-sm font-medium text-left text-[var(--color-text)]"
                 >
                   {isOpen ? (
                     <ChevronDown size={14} className="shrink-0 text-muted" />
@@ -213,7 +250,7 @@ export function WikiExplorer({
                   )}
                   <span aria-hidden="true" className="dot shrink-0" style={{ background: colorFor(colors, g.projectId) }} />
                   <span className="flex-1 truncate">{g.name}</span>
-                  <span className="text-xs text-muted">{list.length + files.length}</span>
+                  <span className="text-xs font-normal text-muted">{list.length + files.length}</span>
                 </button>
                 {g.projectId != null && (
                   <button
@@ -229,56 +266,63 @@ export function WikiExplorer({
                 )}
               </div>
               {isOpen && (
-                <div className="ml-4.5 pl-1 border-l border-[var(--color-border-divider)] space-y-px">
+                <div role="group" className="ml-4.5 pl-1 border-l border-[var(--color-border-divider)] space-y-px">
                   {list.map((a) => {
                     const active = a.id === activeRef;
                     return (
                       <button
                         key={a.id}
+                        data-tree-item
+                        role="treeitem"
+                        aria-level={2}
                         onClick={(e) => onOpen(a.id, e.metaKey || e.ctrlKey)}
                         onAuxClick={(e) => {
                           if (e.button === 1) onOpen(a.id, true);
                         }}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          setMenu({ id: a.id, x: e.clientX, y: e.clientY });
-                        }}
+                        onContextMenu={openMenu(a.id)}
                         aria-current={active ? "page" : undefined}
                         type="button"
                         className={rowClass(active)}
                       >
-                        <FileText size={14} className="shrink-0" />
+                        <FileText size={14} className={`shrink-0 ${active ? "" : "text-muted"}`} />
                         <span className="flex-1 truncate">{a.title}</span>
                       </button>
                     );
                   })}
                   {files.length > 0 && (
-                    <div>
+                    <div data-tree-branch>
                       <button
                         type="button"
+                        data-tree-item
+                        role="treeitem"
+                        aria-level={2}
                         onClick={() => toggle(filesKey)}
                         aria-expanded={filesOpen}
-                        className="w-full flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-md text-xs text-left text-muted hover:bg-[var(--color-hover-row)]"
+                        className="w-full flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-md text-sm text-left text-muted hover:bg-[var(--color-hover-row)]"
                       >
                         {filesOpen ? <ChevronDown size={14} className="shrink-0" /> : <ChevronRight size={14} className="shrink-0" />}
                         <span className="flex-1">{t.wiki_files}</span>
-                        <span>{files.length}</span>
+                        <span className="text-xs">{files.length}</span>
                       </button>
                       {filesOpen && (
-                        <div className="ml-4.5 pl-1 border-l border-[var(--color-border-divider)] space-y-px">
+                        <div role="group" className="ml-4.5 pl-1 border-l border-[var(--color-border-divider)] space-y-px">
                           {files.map((d) => (
                             <button
                               key={d.key}
                               type="button"
+                              data-tree-item
+                              role="treeitem"
+                              aria-level={3}
                               title={d.title !== d.rel ? `${d.rel} — ${d.title}` : d.rel}
                               onClick={(e) => onOpen(d.key, e.metaKey || e.ctrlKey)}
                               onAuxClick={(e) => {
                                 if (e.button === 1) onOpen(d.key, true);
                               }}
+                              onContextMenu={openMenu(d.key)}
                               aria-current={d.key === activeRef ? "page" : undefined}
                               className={rowClass(d.key === activeRef)}
                             >
-                              <File size={14} className="shrink-0" />
+                              <File size={14} className={`shrink-0 ${d.key === activeRef ? "" : "text-muted"}`} />
                               <span className="flex-1 truncate">{d.rel}</span>
                             </button>
                           ))}
@@ -293,42 +337,13 @@ export function WikiExplorer({
         })}
       </nav>
 
-      <BottomBar className="justify-between">
-        <span>{t.all_articles}</span>
-        <span>{articles.length}</span>
+      <BottomBar>
+        <span>
+          {t.wiki_footer_counts.replace("{articles}", String(articles.length)).replace("{files}", String(docs.length))}
+        </span>
       </BottomBar>
 
-      {menu && (
-        <div
-          ref={menuRef}
-          className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[180px]"
-          style={{ top: menu.y, left: menu.x }}
-        >
-          <button
-            type="button"
-            className={menuItem}
-            onClick={() => {
-              onOpen(menu.id, true);
-              setMenu(null);
-            }}
-          >
-            <ArrowUpRight size={14} />
-            {t.wiki_open_new_tab}
-          </button>
-          <div className="my-1 border-t border-[var(--color-border-divider)]" />
-          <button
-            type="button"
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-hover-row)]"
-            onClick={() => {
-              onDeleteArticle(menu.id);
-              setMenu(null);
-            }}
-          >
-            <Trash2 size={14} />
-            {t.delete}
-          </button>
-        </div>
-      )}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.ref)} onClose={() => setMenu(null)} />}
     </aside>
   );
 }
