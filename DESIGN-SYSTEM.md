@@ -10,6 +10,17 @@ Reference guide for all UI patterns, tokens, and conventions. Every new componen
 
 ---
 
+## Reuse First
+
+Anything new is built from what already exists. Before writing a component, a style or a variable, look for it in this order: the shared UI components (`src/components/ui`), the app's other components (`src/components`, for example `ContextMenu`, `EmptyState`, `PageHeader`), the hooks (`src/hooks`), the CSS tokens and classes in `src/index.css`, and the patterns in this file.
+
+- **Reuse as is** when something fits: the component, the token, the class (`dot`, `PANEL_TOP_BAR`…), the pattern.
+- **Extend rather than copy.** If a shared component almost fits, add a prop or variant to it. Never copy its classes onto a raw element.
+- **Say what it derives from.** When something new is built on an existing component (wraps it, extends it, follows its pattern), name that component in the change description and tell Loris.
+- **Flag anything new.** When nothing fits and a new component, variable, token or class has to be created, say so explicitly to Loris before or when it lands: what was created, why nothing existing fitted, and where it lives. New tokens go in `src/index.css` (light and dark) and in the [CSS Tokens](#css-tokens) table; new shared components go in `src/components/ui` and in [Shared Components](#shared-components).
+
+---
+
 ## CSS Tokens
 
 All colors are defined as CSS custom properties in `src/index.css`. **Never use hardcoded Tailwind gray classes** (`bg-gray-100`, `border-gray-200`, `text-gray-500`, etc.). Always use the tokens below.
@@ -458,3 +469,4 @@ Before merging any new UI work, verify:
 - [ ] All user-visible text uses `useT()` i18n keys
 - [ ] Status colors come from `statusColors.ts`
 - [ ] Shared components used where available (Button, Badge, Input, Select, Modal, Card, Toggle)
+- [ ] [Reuse First](#reuse-first): existing components, tokens and classes reused; anything derived or newly created named to Loris

@@ -6,7 +6,8 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { dismissAgent, deleteAgent, saveImage, sendMessage, stopAgent, switchModel, type Agent } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
 import { Badge, Button, PANEL_TOP_BAR } from "../ui";
-import { agentLabel, GROUP_LABEL_KEYS, GROUP_STYLE, GROUP_VARIANT } from "./AgentList";
+import { agentLabel, GROUP_LABEL_KEYS, GROUP_STYLE } from "./AgentList";
+import { agentGroupVariant } from "../../lib/statusColors";
 import { Conversation } from "./Conversation";
 import { PromptAnswer } from "./PromptAnswer";
 import { MODELS, ModelMenu } from "./ModelMenu";
@@ -195,7 +196,7 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
     <div className="flex flex-col h-full min-h-0">
       <div className={`${PANEL_TOP_BAR} gap-2 px-4 border-[var(--color-border-divider)]`}>
         <h2 className="text-sm font-semibold tracking-tight truncate">{agent.name}</h2>
-        <Badge variant={GROUP_VARIANT[agent.group]} className="shrink-0 gap-1.5">
+        <Badge variant={agentGroupVariant(agent.group)} className="shrink-0 gap-1.5">
           <span className={`dot-sm ${GROUP_STYLE[agent.group].dot}`} aria-hidden />
           {t[GROUP_LABEL_KEYS[agent.group]]}
         </Badge>

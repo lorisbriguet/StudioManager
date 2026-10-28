@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import type { Agent, Group } from "../../lib/agents";
+import { agentGroupVariant } from "../../lib/statusColors";
+import { Badge } from "../ui";
 import { useT } from "../../i18n/useT";
 import type { UIKey } from "../../i18n/ui";
-import { Badge, type BadgeVariant } from "../ui/Badge";
 import { GROUPS } from "./useAgents";
 
 const GROUP_KEYS: Record<Group, UIKey> = {
@@ -35,14 +36,6 @@ export const GROUP_STYLE: Record<Group, { dot: string; text: string; row: string
     text: "text-[var(--color-success-text)]",
     row: "",
   },
-};
-
-/** Badge variant per group (count pill, detail status). */
-export const GROUP_VARIANT: Record<Group, BadgeVariant> = {
-  "needs-you": "warning",
-  working: "info",
-  idle: "neutral",
-  done: "success",
 };
 
 export const GROUP_LABEL_KEYS = GROUP_KEYS;
@@ -96,7 +89,7 @@ export function AgentList({ byGroup, selectedId, onSelect }: AgentListProps) {
           <>
             <span className={`dot ${GROUP_STYLE[g].dot}`} aria-hidden />
             <h2 className={`text-[10px] font-medium uppercase tracking-widest ${GROUP_STYLE[g].text}`}>{t[GROUP_KEYS[g]]}</h2>
-            <Badge variant={GROUP_VARIANT[g]} className="ml-auto">{byGroup[g].length}</Badge>
+            <Badge variant={agentGroupVariant(g)} className="ml-auto">{byGroup[g].length}</Badge>
           </>
         );
         return (
