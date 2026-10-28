@@ -4712,6 +4712,7 @@ version = "2.3.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
+ "libc",
  "log",
  "portable-pty",
  "pulldown-cmark",

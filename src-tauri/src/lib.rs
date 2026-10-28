@@ -632,6 +632,10 @@ pub fn run() {
             agents::prompt::agents_answer,
             agents::poller::agents_list,
             agents::uploads::agents_save_image,
+            agents::routines::routines_get,
+            agents::routines::routines_save,
+            agents::routines::routines_run,
+            agents::routines::routines_runs,
             menubar::menubar_open_main,
         ])
         .setup(|app| {

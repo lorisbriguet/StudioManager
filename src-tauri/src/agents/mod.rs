@@ -5,6 +5,7 @@ pub mod poller;
 pub mod projects;
 pub mod prompt;
 pub mod pty;
+pub mod routines;
 pub mod statusline;
 pub mod transcript;
 pub mod uploads;
