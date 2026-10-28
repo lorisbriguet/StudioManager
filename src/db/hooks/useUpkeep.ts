@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import * as m from "../queries/machines";
 import * as u from "../queries/upkeepItems";
 import * as c from "../queries/consumables";
+import * as s from "../queries/subscriptions";
 import { useUndoStore } from "../../stores/undo-store";
 import { getLabels } from "../../lib/notifyError";
 import type {
@@ -11,6 +12,7 @@ import type {
   MachineInput,
   MachineTemplateItemInput,
   ServiceLogEntry,
+  Subscription,
   UpkeepItem,
   UpkeepItemInput,
 } from "../../types/upkeep";
@@ -467,6 +469,154 @@ export function useRestockConsumable() {
   const invalidate = useInvalidateConsumables();
   return useMutation({
     mutationFn: ({ id, amount }: { id: number; amount: number }) => c.restockConsumable(id, amount),
+    onSuccess: invalidate,
+    onError: (e) => { toast.error(String(e)); },
+  });
+}
+
+// ── Subscriptions ───────────────────────────────────────────
+
+export function useSubscriptions() {
+  return useQuery({ queryKey: ["subscriptions"], queryFn: s.getSubscriptions });
+}
+
+export function usePendingRenewals() {
+  return useQuery({ queryKey: ["subscription-renewals"], queryFn: s.getPendingRenewals });
+}
+
+function useInvalidateSubscriptions() {
+  const qc = useQueryClient();
+  return () => {
+    qc.invalidateQueries({ queryKey: ["subscriptions"] });
+    qc.invalidateQueries({ queryKey: ["subscription-renewals"] });
+  };
+}
+
+export function useCreateSubscription() {
+  const invalidate = useInvalidateSubscriptions();
+  return useMutation({
+    mutationFn: async (data: s.SubscriptionInput) => {
+      let id = await s.createSubscription(data);
+      useUndoStore.getState().push({
+        label: `${getLabels().undo_create_subscription} "${data.name}"`,
+        execute: async () => {
+          await s.deleteSubscription(id);
+          invalidate();
+        },
+        redo: async () => {
+          id = await s.createSubscription(data);
+          invalidate();
+        },
+      });
+      return id;
+    },
+    onSuccess: invalidate,
+    onError: (e) => { toast.error(String(e)); },
+  });
+}
+
+export function useUpdateSubscription() {
+  const invalidate = useInvalidateSubscriptions();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<s.SubscriptionInput> }) => {
+      const prev = await s.getSubscription(id);
+      await s.updateSubscription(id, data);
+      if (prev) {
+        const prevData: Record<string, unknown> = {};
+        for (const key of Object.keys(data)) {
+          prevData[key] = (prev as unknown as Record<string, unknown>)[key];
+        }
+        useUndoStore.getState().push({
+          label: `${getLabels().undo_update_subscription} "${prev.name}"`,
+          execute: async () => {
+            await s.updateSubscription(id, prevData as Partial<s.SubscriptionInput>);
+            invalidate();
+          },
+          redo: async () => {
+            await s.updateSubscription(id, data);
+            invalidate();
+          },
+        });
+      }
+    },
+    onSuccess: invalidate,
+    onError: (e) => { toast.error(String(e)); },
+  });
+}
+
+export function useCancelSubscription() {
+  const invalidate = useInvalidateSubscriptions();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const prev = await s.getSubscription(id);
+      await s.cancelSubscription(id);
+      if (prev) {
+        useUndoStore.getState().push({
+          label: `${getLabels().undo_update_subscription} "${prev.name}"`,
+          execute: async () => {
+            await s.updateSubscription(id, { status: prev.status });
+            invalidate();
+          },
+          redo: async () => {
+            await s.cancelSubscription(id);
+            invalidate();
+          },
+        });
+      }
+    },
+    onSuccess: invalidate,
+    onError: (e) => { toast.error(String(e)); },
+  });
+}
+
+export function useDeleteSubscription() {
+  const invalidate = useInvalidateSubscriptions();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const prev = await s.getSubscription(id);
+      await s.deleteSubscription(id);
+      if (prev) {
+        let restoredId: number | null = null;
+        useUndoStore.getState().push({
+          label: `${getLabels().undo_delete_subscription} "${prev.name}"`,
+          execute: async () => {
+            restoredId = await s.createSubscription({
+              name: prev.name, plan: prev.plan, vendor: prev.vendor, url: prev.url,
+              renews_on: prev.renews_on, anchor_day: prev.anchor_day, period: prev.period,
+              cost: prev.cost, currency: prev.currency, status: prev.status,
+              in_calendar: prev.in_calendar, alert: prev.alert, notes: prev.notes,
+            });
+            invalidate();
+          },
+          redo: async () => {
+            if (restoredId !== null) {
+              await s.deleteSubscription(restoredId);
+              invalidate();
+            }
+          },
+        });
+      }
+    },
+    onSuccess: invalidate,
+    onError: (e) => { toast.error(String(e)); },
+  });
+}
+
+export function useApplyRenewals() {
+  const invalidate = useInvalidateSubscriptions();
+  return useMutation({
+    mutationFn: ({ sub, todayISO }: { sub: Subscription; todayISO: string }) =>
+      s.applyRenewals(sub, todayISO),
+    onSuccess: invalidate,
+    onError: (e) => { toast.error(String(e)); },
+  });
+}
+
+export function useDecideRenewal() {
+  const invalidate = useInvalidateSubscriptions();
+  return useMutation({
+    mutationFn: ({ id, decision, expenseId }: { id: number; decision: "added" | "skipped"; expenseId?: number }) =>
+      s.decideRenewal(id, decision, expenseId),
     onSuccess: invalidate,
     onError: (e) => { toast.error(String(e)); },
   });
