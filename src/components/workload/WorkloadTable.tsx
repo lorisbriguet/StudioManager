@@ -1,8 +1,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect, type RefObject } from "react";
-import { Plus, Trash2, GripVertical, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Settings2, X, Copy, Download, Sigma, Pin, Play, Square } from "lucide-react";
-import { Button, Select, Popover, Input } from "../ui";
+import { Plus, Trash2, GripVertical, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Settings2, Copy, Download, Sigma, Pin, Play, Square } from "lucide-react";
+import { Button, Select, Popover, Input, Modal } from "../ui";
 import { MENU_ITEM, MENU_DIVIDER } from "../ui/Dropdown";
-import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -681,24 +680,14 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
         );
       })()}
 
-      {/* Save as template modal — portalled so it escapes side-peek overflow */}
-      {showSaveModal && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-[var(--color-surface)] rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-divider)]">
-              <h3 className="text-sm font-medium">{t.save_as_template}</h3>
-              <IconButton icon={X} label={t.close} size="md" onClick={() => setShowSaveModal(false)} />
-            </div>
-            <div className="p-4">
-              <label className="text-xs text-muted block mb-1">{t.template_name_prompt}</label>
-              <Input
-                value={saveTemplateName}
-                onChange={(e) => setSaveTemplateName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && confirmSaveTemplate()}
-                autoFocus
-              />
-            </div>
-            <div className="flex justify-end gap-2 px-4 py-3 border-t border-[var(--color-border-divider)]">
+      {/* Save as template modal (Modal renders on <body> itself) */}
+      {showSaveModal && (
+        <Modal
+          open
+          onClose={() => setShowSaveModal(false)}
+          title={t.save_as_template}
+          footer={
+            <>
               <Button
                 variant="secondary"
                 onClick={() => setShowSaveModal(false)}
@@ -711,10 +700,17 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
               >
                 {t.save}
               </Button>
-            </div>
-          </div>
-        </div>,
-        document.body
+            </>
+          }
+        >
+          <label className="text-xs text-muted block mb-1">{t.template_name_prompt}</label>
+          <Input
+            value={saveTemplateName}
+            onChange={(e) => setSaveTemplateName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && confirmSaveTemplate()}
+            autoFocus
+          />
+        </Modal>
       )}
 
       {/* Section context menu (right-click on "Workload" header) */}
@@ -854,18 +850,15 @@ function SortableRow({
       {/* System: Task title + timer button */}
       <td className={`px-4 py-2 ${stickyFirstCol ? "sticky left-8 z-10 bg-inherit" : ""}`} style={{ width: taskColWidth }}>
         <div className="flex items-center gap-1">
-          <button
+          <IconButton
+            icon={isTimerActive ? Square : Play}
+            label={isTimerActive ? t.stop_timer : t.start_timer}
+            size="xs"
+            color={isTimerActive ? "danger" : undefined}
+            tone={isTimerActive ? "danger" : "accent"}
+            className={isTimerActive ? "" : "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"}
             onClick={() => toggleTimer(row.id, projectId)}
-            className={`shrink-0 p-0.5 rounded-md ${
-              isTimerActive
-                ? "text-[var(--color-danger-text)] hover:text-[var(--color-danger-text)]"
-                : "text-muted opacity-0 group-hover/row:opacity-100 hover:text-accent"
-            }`}
-            title={isTimerActive ? t.stop_timer : t.start_timer}
-            aria-label={isTimerActive ? t.stop_timer : t.start_timer}
-          >
-            {isTimerActive ? <Square size={12} /> : <Play size={12} />}
-          </button>
+          />
           <InlineTitle
             value={row.title}
             onChange={(v) => handleSystemChange(row, "title", v)}

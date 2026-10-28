@@ -646,9 +646,9 @@ export function SettingsPage() {
                 {testMode ? (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-[var(--color-warning-text)] font-medium flex items-center gap-1"><FlaskConical size={12} /> {t.test_mode_active}</span>
-                    <button type="button" onClick={handleExitTestMode} disabled={togglingTestMode} className="px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
+                    <Button variant="danger-outline" size="sm" onClick={handleExitTestMode} disabled={togglingTestMode}>
                       {t.exit_test_mode}
-                    </button>
+                    </Button>
                   </div>
                 ) : (
                   <button type="button" onClick={handleEnterTestMode} disabled={togglingTestMode} className="flex items-center gap-1 px-2.5 py-1 bg-[var(--color-warning-text)] text-white text-xs rounded-md hover:opacity-90 disabled:opacity-50">
@@ -664,9 +664,9 @@ export function SettingsPage() {
                 {presentationMode ? (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-[var(--color-indigo-text)] font-medium">{t.presentation_active}</span>
-                    <button type="button" onClick={handleExitPresentation} disabled={togglingPresentation} className="px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
+                    <Button variant="danger-outline" size="sm" onClick={handleExitPresentation} disabled={togglingPresentation}>
                       {t.exit_presentation_mode}
-                    </button>
+                    </Button>
                   </div>
                 ) : (
                   <button type="button" onClick={handleEnterPresentation} disabled={togglingPresentation || testMode} className="flex items-center gap-1 px-2.5 py-1 bg-[var(--color-indigo-text)] text-white text-xs rounded-md hover:opacity-90 disabled:opacity-50">
@@ -759,9 +759,9 @@ export function SettingsPage() {
                       <option key={name} value={name}>{name.replace("backup-", "")}</option>
                     ))}
                   </Select>
-                  <button type="button" onClick={runRestore} disabled={restoring || !selectedBackup || !backupPath} className="flex items-center gap-1 px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
-                    <RotateCcw size={12} /> {restoring ? t.restoring : t.restore}
-                  </button>
+                  <Button variant="danger-outline" size="sm" icon={<RotateCcw size={12} />} onClick={runRestore} disabled={restoring || !selectedBackup || !backupPath}>
+                    {restoring ? t.restoring : t.restore}
+                  </Button>
                 </div>
               </SettingRow>
               </SettingsCard>
@@ -772,9 +772,9 @@ export function SettingsPage() {
                   <Button type="button" size="sm" icon={<Camera size={12} />} onClick={handleCreateSnapshot} disabled={snapshotting || testMode}>
                     {snapshotting ? t.loading : t.create_snapshot}
                   </Button>
-                  <button type="button" onClick={handleRestoreSnapshot} disabled={restoringSnapshot || !hasSnapshotFile || testMode} className="flex items-center gap-1 px-2.5 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
-                    <RotateCcw size={12} /> {restoringSnapshot ? t.loading : t.restore_snapshot}
-                  </button>
+                  <Button variant="danger-outline" size="sm" icon={<RotateCcw size={12} />} onClick={handleRestoreSnapshot} disabled={restoringSnapshot || !hasSnapshotFile || testMode}>
+                    {restoringSnapshot ? t.loading : t.restore_snapshot}
+                  </Button>
                   {!hasSnapshotFile && <span className="text-xs text-muted">{t.no_snapshot_available}</span>}
                 </div>
               </SettingRow>

@@ -1,6 +1,8 @@
+import { useRef } from "react";
 import { Plus, Trash2, Link, Unlink } from "lucide-react";
 import { Button, Input } from "../ui";
 import { Popover } from "../ui/Popover";
+import { MENU_ITEM } from "../ui/Dropdown";
 import type { TableColumnDef } from "../../types/project-table";
 import type { CustomList } from "../../db/queries/customLists";
 import { IconButton } from "../ui/IconButton";
@@ -55,6 +57,7 @@ export function ColumnEditorPopover({
   onDelete,
   onCommit,
 }: Props) {
+  const importListAnchorRef = useRef<HTMLDivElement>(null);
   // Closing (outside click or Esc) commits with whatever is currently in the
   // (parent-owned) editor state, same as the original NamedTable listener.
   return (
@@ -95,33 +98,43 @@ export function ColumnEditorPopover({
                 </Button>
               </div>
             ) : (
-              <div className="relative">
+              <div ref={importListAnchorRef}>
                 <Button
                   type="button"
                   variant="link"
                   size="sm"
                   icon={<Link size={12} />}
                   onClick={() => setShowImportListDropdown((v) => !v)}
+                  aria-haspopup="dialog"
+                  aria-expanded={showImportListDropdown}
                 >
                   {t.import_from_list}
                 </Button>
                 {showImportListDropdown && (
-                  <div className="absolute right-0 top-full mt-1 z-[10000] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-lg shadow-lg py-1 min-w-[140px]">
+                  // Nested panel: a pick here does not close (and commit) the column editor.
+                  <Popover
+                    anchor={importListAnchorRef}
+                    align="end"
+                    onClose={(returnFocus) => {
+                      setShowImportListDropdown(false);
+                      if (returnFocus) importListAnchorRef.current?.querySelector("button")?.focus({ preventScroll: true });
+                    }}
+                  >
                     {(customLists ?? []).length === 0 ? (
-                      <p className="text-[10px] text-muted px-3 py-1">{t.no_lists}</p>
+                      <p className="text-xs text-muted px-2 py-1">{t.no_lists}</p>
                     ) : (
                       (customLists ?? []).map((list) => (
                         <button
                           key={list.id}
                           type="button"
                           onClick={() => onImportFromList(list.id)}
-                          className="w-full text-left px-3 py-1 text-xs hover:bg-[var(--color-hover-row)]"
+                          className={`${MENU_ITEM} cursor-pointer text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text)]`}
                         >
                           {list.name}
                         </button>
                       ))
                     )}
-                  </div>
+                  </Popover>
                 )}
               </div>
             )}

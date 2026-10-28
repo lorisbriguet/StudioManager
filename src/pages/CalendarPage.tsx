@@ -24,6 +24,7 @@ import { getTagColor } from "../lib/tagColors";
 import type { WorkloadColumn } from "../types/workload";
 import { DEFAULT_WORKLOAD_COLUMNS } from "../types/workload";
 import { SegmentedControl } from "../components/ui/SegmentedControl";
+import { MENU_ITEM } from "../components/ui/Dropdown";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 function toDateStr(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
@@ -652,18 +653,33 @@ export function QuickCreatePopup({
           />
         )}
         {!selectedTask && showSuggestions && suggestions.length > 0 && (
-          <div className="absolute z-10 top-full left-0 right-0 mt-0.5 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu py-1 max-h-32 overflow-y-auto">
-            {suggestions.map((task) => (
+          // Nested panel: typing stays in the input, a pick does not close the quick-create popup.
+          <Popover
+            anchor={inputRef}
+            autoFocus={false}
+            matchWidth
+            onClose={() => setShowSuggestions(false)}
+            role="listbox"
+            className="max-h-40 overflow-y-auto"
+          >
+            {suggestions.map((task, i) => (
               <button
                 key={task.id}
                 type="button"
+                role="option"
+                aria-selected={i === 0}
+                tabIndex={-1}
+                // Keep focus (and the caret) in the input.
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => handleSelectTask(task)}
-                className="w-full text-left px-2 py-1.5 text-xs hover:bg-[var(--color-hover-row)] truncate"
+                className={`${MENU_ITEM} cursor-pointer text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text)] ${
+                  i === 0 ? "bg-[var(--color-hover-row)] text-[var(--color-text)]" : ""
+                }`}
               >
-                {task.title}
+                <span className="truncate">{task.title}</span>
               </button>
             ))}
-          </div>
+          </Popover>
         )}
       </div>
 

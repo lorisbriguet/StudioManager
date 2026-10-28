@@ -19,6 +19,7 @@ import {
 import { useAppStore } from "../stores/app-store";
 import { confirmIfDirty } from "../lib/dirty-guard";
 import { useT } from "../i18n/useT";
+import { Modal, Kbd } from "./ui";
 import { useClients } from "../db/hooks/useClients";
 import { useProjects } from "../db/hooks/useProjects";
 import { useInvoices } from "../db/hooks/useInvoices";
@@ -47,20 +48,6 @@ export function CommandPalette() {
     return () => document.removeEventListener("keydown", handler);
   }, [toggle]);
 
-  // Escape closes the palette (same close path as the backdrop click).
-  // Listener only exists while open, so Escape is never swallowed otherwise.
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        close();
-      }
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [open, close]);
-
   const go = async (path: string) => {
     // Close first so the unsaved-changes dialog isn't shown under the palette
     close();
@@ -68,121 +55,114 @@ export function CommandPalette() {
     if (await confirmIfDirty(path)) navigate(path);
   };
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50">
-      <div className="fixed inset-0 bg-black/40" onClick={close} />
-      <div className="fixed top-[20%] left-1/2 -translate-x-1/2 w-full max-w-lg">
-        <Command
-          className="rounded-xl bg-[var(--color-surface)] border border-[var(--color-border-header)] shadow-[0_16px_48px_rgba(0,0,0,0.5)] overflow-hidden"
-          shouldFilter={true}
-        >
-          <div className="flex items-center gap-2 px-4 border-b border-[var(--color-border-divider)]">
-            <Search size={16} className="text-muted shrink-0" />
-            <Command.Input
-              value={search}
-              onValueChange={setSearch}
-              placeholder={t.search_or_jump}
-              className="w-full py-3 text-base outline-none bg-transparent border-none"
-              autoFocus
-            />
-            <kbd className="text-[10px] text-muted bg-[var(--color-input-bg)] border border-[var(--color-border-divider)] px-1.5 py-0.5 rounded shrink-0">
-              ESC
-            </kbd>
-          </div>
+    <Modal open={open} onClose={close} position="top" size="lg" padding={false} aria-label={t.search_or_jump}>
+      <Command
+        className="overflow-hidden"
+        shouldFilter={true}
+      >
+        <div className="flex items-center gap-2 px-4 border-b border-[var(--color-border-divider)]">
+          <Search size={16} className="text-muted shrink-0" />
+          <Command.Input
+            value={search}
+            onValueChange={setSearch}
+            placeholder={t.search_or_jump}
+            className="w-full py-3 text-base outline-none bg-transparent border-none"
+            autoFocus
+          />
+          <Kbd>Esc</Kbd>
+        </div>
 
-          <Command.List className="max-h-80 overflow-y-auto p-2">
-            <Command.Empty className="py-6 text-center text-sm text-muted">
-              {t.no_results}
-            </Command.Empty>
+        <Command.List className="max-h-80 overflow-y-auto p-2">
+          <Command.Empty className="py-6 text-center text-sm text-muted">
+            {t.no_results}
+          </Command.Empty>
 
-            {/* Quick actions */}
-            <Command.Group heading={t.quick_actions} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
-              <PaletteItem icon={Plus} label={t.new_client} onSelect={() => go("/clients")} />
-              <PaletteItem icon={Plus} label={t.new_project} onSelect={() => go("/projects")} />
-              <PaletteItem icon={Plus} label={t.new_invoice} onSelect={() => go("/invoices/new")} />
-              <PaletteItem icon={Plus} label={t.new_expense} onSelect={() => go("/expenses")} />
+          {/* Quick actions */}
+          <Command.Group heading={t.quick_actions} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
+            <PaletteItem icon={Plus} label={t.new_client} onSelect={() => go("/clients")} />
+            <PaletteItem icon={Plus} label={t.new_project} onSelect={() => go("/projects")} />
+            <PaletteItem icon={Plus} label={t.new_invoice} onSelect={() => go("/invoices/new")} />
+            <PaletteItem icon={Plus} label={t.new_expense} onSelect={() => go("/expenses")} />
+          </Command.Group>
+
+          {/* Navigation */}
+          <Command.Group heading={t.navigate} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
+            <PaletteItem icon={LayoutDashboard} label={t.dashboard} onSelect={() => go("/")} />
+            <PaletteItem icon={Users} label={t.clients} onSelect={() => go("/clients")} />
+            <PaletteItem icon={FolderKanban} label={t.projects} onSelect={() => go("/projects")} />
+            <PaletteItem icon={CheckSquare} label={t.tasks} onSelect={() => go("/tasks")} />
+            <PaletteItem icon={CalendarDays} label={t.calendar} onSelect={() => go("/calendar")} />
+            <PaletteItem icon={FileText} label={t.invoices} onSelect={() => go("/invoices")} />
+            <PaletteItem icon={FilePlus2} label={t.quotes} onSelect={() => go("/quotes")} />
+            <PaletteItem icon={Receipt} label={t.expenses} onSelect={() => go("/expenses")} />
+            <PaletteItem icon={BarChart3} label={t.finances} onSelect={() => go("/finances")} />
+            <PaletteItem icon={UserCircle} label={t.profile} onSelect={() => go("/profile")} />
+            <PaletteItem icon={Settings} label={t.settings} onSelect={() => go("/settings")} />
+          </Command.Group>
+
+          {/* Clients search */}
+          {clients && clients.length > 0 && (
+            <Command.Group heading={t.clients} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
+              {clients.map((c) => (
+                <PaletteItem
+                  key={c.id}
+                  icon={Users}
+                  label={c.name}
+                  subtitle={c.id}
+                  onSelect={() => go(`/clients/${c.id}`)}
+                />
+              ))}
             </Command.Group>
+          )}
 
-            {/* Navigation */}
-            <Command.Group heading={t.navigate} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
-              <PaletteItem icon={LayoutDashboard} label={t.dashboard} onSelect={() => go("/")} />
-              <PaletteItem icon={Users} label={t.clients} onSelect={() => go("/clients")} />
-              <PaletteItem icon={FolderKanban} label={t.projects} onSelect={() => go("/projects")} />
-              <PaletteItem icon={CheckSquare} label={t.tasks} onSelect={() => go("/tasks")} />
-              <PaletteItem icon={CalendarDays} label={t.calendar} onSelect={() => go("/calendar")} />
-              <PaletteItem icon={FileText} label={t.invoices} onSelect={() => go("/invoices")} />
-              <PaletteItem icon={FilePlus2} label={t.quotes} onSelect={() => go("/quotes")} />
-              <PaletteItem icon={Receipt} label={t.expenses} onSelect={() => go("/expenses")} />
-              <PaletteItem icon={BarChart3} label={t.finances} onSelect={() => go("/finances")} />
-              <PaletteItem icon={UserCircle} label={t.profile} onSelect={() => go("/profile")} />
-              <PaletteItem icon={Settings} label={t.settings} onSelect={() => go("/settings")} />
+          {/* Projects search */}
+          {projects && projects.length > 0 && (
+            <Command.Group heading={t.projects} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
+              {projects.map((p) => (
+                <PaletteItem
+                  key={p.id}
+                  icon={FolderKanban}
+                  label={p.name}
+                  subtitle={p.status}
+                  onSelect={() => go(`/projects/${p.id}`)}
+                />
+              ))}
             </Command.Group>
+          )}
 
-            {/* Clients search */}
-            {clients && clients.length > 0 && (
-              <Command.Group heading={t.clients} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
-                {clients.map((c) => (
-                  <PaletteItem
-                    key={c.id}
-                    icon={Users}
-                    label={c.name}
-                    subtitle={c.id}
-                    onSelect={() => go(`/clients/${c.id}`)}
-                  />
-                ))}
-              </Command.Group>
-            )}
+          {/* Invoices search */}
+          {invoices && invoices.length > 0 && (
+            <Command.Group heading={t.invoices} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
+              {invoices.map((inv) => (
+                <PaletteItem
+                  key={inv.id}
+                  icon={FileText}
+                  label={inv.reference}
+                  subtitle={`CHF ${inv.total.toFixed(2)}`}
+                  onSelect={() => go(`/invoices/${inv.id}/edit`)}
+                />
+              ))}
+            </Command.Group>
+          )}
+        </Command.List>
 
-            {/* Projects search */}
-            {projects && projects.length > 0 && (
-              <Command.Group heading={t.projects} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
-                {projects.map((p) => (
-                  <PaletteItem
-                    key={p.id}
-                    icon={FolderKanban}
-                    label={p.name}
-                    subtitle={p.status}
-                    onSelect={() => go(`/projects/${p.id}`)}
-                  />
-                ))}
-              </Command.Group>
-            )}
-
-            {/* Invoices search */}
-            {invoices && invoices.length > 0 && (
-              <Command.Group heading={t.invoices} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
-                {invoices.map((inv) => (
-                  <PaletteItem
-                    key={inv.id}
-                    icon={FileText}
-                    label={inv.reference}
-                    subtitle={`CHF ${inv.total.toFixed(2)}`}
-                    onSelect={() => go(`/invoices/${inv.id}/edit`)}
-                  />
-                ))}
-              </Command.Group>
-            )}
-          </Command.List>
-
-          <div className="flex items-center gap-4 px-4 py-2 border-t border-[var(--color-border-divider)] text-[10px] text-muted">
-            <span className="flex items-center gap-1">
-              <kbd className="bg-[var(--color-input-bg)] border border-[var(--color-border-divider)] px-1 py-0.5 rounded text-[10px]">&uarr;&darr;</kbd>
-              navigate
-            </span>
-            <span className="flex items-center gap-1">
-              <kbd className="bg-[var(--color-input-bg)] border border-[var(--color-border-divider)] px-1 py-0.5 rounded text-[10px]">&crarr;</kbd>
-              select
-            </span>
-            <span className="flex items-center gap-1">
-              <kbd className="bg-[var(--color-input-bg)] border border-[var(--color-border-divider)] px-1 py-0.5 rounded text-[10px]">esc</kbd>
-              close
-            </span>
-          </div>
-        </Command>
-      </div>
-    </div>
+        <div className="flex items-center gap-4 px-4 py-2 border-t border-[var(--color-border-divider)] text-[10px] text-muted">
+          <span className="flex items-center gap-1">
+            <Kbd>&uarr;&darr;</Kbd>
+            navigate
+          </span>
+          <span className="flex items-center gap-1">
+            <Kbd>&crarr;</Kbd>
+            select
+          </span>
+          <span className="flex items-center gap-1">
+            <Kbd>Esc</Kbd>
+            close
+          </span>
+        </div>
+      </Command>
+    </Modal>
   );
 }
 

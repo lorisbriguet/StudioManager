@@ -232,7 +232,7 @@ import { Card } from "../components/ui";
 import { Button } from "../components/ui";
 <Button variant="primary" size="md" icon={<Plus size={16} />}>Label</Button>
 ```
-Variants: `primary`, `secondary`, `ghost`, `danger`, `success`, `link`
+Variants: `primary`, `secondary`, `ghost`, `danger`, `danger-outline` (destructive actions in settings: exit test mode, restore), `success`, `link`
 Sizes: `sm`, `md`, `lg`
 
 ### Button Icon Rules
@@ -259,11 +259,13 @@ Sizes: `sm`, `md`, `lg`
 | `tone` | `default` · `danger` · `accent` | Hover colour and tint: text + hover-row, danger-text + danger-bg, accent + hover-row |
 | `reveal` | boolean | Hidden until its `group` row is hovered or the button has keyboard focus |
 | `active` | boolean | Pressed/open look |
+| `color` | `danger` · `accent` | Coloured at rest, not only on hover: a running timer, a confirm check |
+| `filled` | boolean | Solid accent fill, white icon: a primary confirm next to a field |
 | `iconSize` / `iconClassName` | number / string | Rare overrides, e.g. a rotating expand chevron |
 
 At rest an IconButton is `text-muted`. Disabled is `opacity-30`, with clicks turned off.
 
-When the row uses a named group (`group/task`), `reveal` can't reach it. Pass `className="opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100"` instead. These stay raw `<button>`: buttons that are always coloured (a running timer, a confirm check), and the × inside a tag or badge chip.
+When the row uses a named group (`group/task`), `reveal` can't reach it. Pass `className="opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100"` instead. Always-coloured buttons use `color`/`filled`. The × in a tag is `Tag onRemove`, and in a badge it's an `IconButton size="xs"`.
 
 ### Sanctioned Raw-Button Exceptions
 
@@ -271,7 +273,7 @@ These patterns keep raw `<button>` elements — do not convert them to the share
 
 - **Dropdown / context menu items** — see Dropdown below
 - **Banner action chips** — inverse-colored chips on mode banners (`MainLayout` test/presentation banners)
-- **Settings status chips** — the amber test-mode chip and the danger-outline restore/snapshot chips in `SettingsPage`. If a **third** danger-outline chip appears, promote the pattern to a proper Button variant (e.g. `danger-outline`) instead of adding a fourth exception.
+- **Settings status chips** — the amber test-mode chip in `SettingsPage`. (The danger-outline chips are now `Button variant="danger-outline"`.)
 - **Dashed dropzones** — full-width dashed add-affordances (`ProjectBlockLayout` add-block)
 
 ### Link Button Conventions
@@ -342,11 +344,25 @@ Every date field uses `DatePicker` from `src/components/ui/DatePicker.tsx`. Neve
 
 ### Modal
 ```tsx
-import { Modal } from "../components/ui";
+import { Modal, Kbd } from "../components/ui";
 <Modal open={open} onClose={close} title="Title" footer={<Button>Save</Button>}>
   Content
 </Modal>
+
+// palette-style: top of the window, content laid out edge to edge
+<Modal open={open} onClose={close} position="top" size="lg" padding={false} aria-label={t.quick_timer}>
+  … <Kbd>Esc</Kbd>
+</Modal>
 ```
+
+- **Size:** `size` is `sm` (the default) · `md` · `lg` · `xl` · `2xl` · `full` (viewers: 80% × 85% of the window).
+- **Rendering:** it renders on `<body>`, so a transformed panel (the side peek) can't trap it. Tests should query `document` or `screen`, not the render container.
+- **Position:** `position="top"` places the dialog 20% from the top.
+- **Padding:** `padding={false}` drops the body padding.
+- **No title:** give it an `aria-label`.
+- **Built in:** backdrop click and Esc close the dialog, focus is trapped while open, and focus returns to where it was on close.
+- **Never build your own overlay** (`fixed inset-0 bg-black/…`).
+- **`Kbd`:** draws a key hint.
 
 ### Toggle
 ```tsx
@@ -697,6 +713,7 @@ Before merging any new UI work, verify:
 - [ ] Uppercase labels use `SectionLabel`
 - [ ] Settings sections use `SettingsCard` / `SettingRow`
 - [ ] Navigation rows use `NavItem` / `navItemClass`
+- [ ] Dialogs use `Modal` (no hand-built overlay), key hints use `Kbd`
 - [ ] 2–4 way choices use `SegmentedControl`
 - [ ] Tag pills use `Tag`, filter pills use `FilterChip`, number pills use `CountBadge`
 - [ ] No hand-made floating panel (use `Popover`, `Dropdown` or `ContextMenu`)

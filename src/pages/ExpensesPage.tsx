@@ -398,8 +398,6 @@ export function ExpensesPage() {
           path={preview.path}
           reference={preview.reference}
           onClose={() => setPreview(null)}
-          bgClassName="bg-[var(--color-surface)]"
-          roundedClassName="rounded-xl"
         />
       )}
       {ctxMenu && (

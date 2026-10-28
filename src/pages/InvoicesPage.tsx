@@ -33,7 +33,7 @@ import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Card, Modal, FormField, DatePicker, Select, IconButton, CountBadge, SectionLabel } from "../components/ui";
+import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Card, Modal, FormField, DatePicker, Select, IconButton, CountBadge, SectionLabel, Toggle } from "../components/ui";
 import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
 import { isDraftReference } from "../types/invoice";
 import type { Invoice, InvoiceStatus } from "../types/invoice";
@@ -537,17 +537,12 @@ export function InvoicesPage() {
                     </td>
                     <td className="py-2 pr-2 text-muted">{formatDisplayDate(tmpl.next_due)}</td>
                     <td className="py-2 pr-2">
-                      <button
-                        type="button"
-                        onClick={() => updateTemplate.mutate({ id: tmpl.id, data: { active: tmpl.active ? 0 : 1 } })}
-                        className={`text-xs px-2 py-0.5 rounded-full ${
-                          tmpl.active
-                            ? "bg-[var(--color-success-bg)] text-[var(--color-success-text)]"
-                            : "bg-[var(--color-input-bg)] text-[var(--color-muted)]"
-                        }`}
-                      >
-                        {tmpl.active ? t.active : t.inactive}
-                      </button>
+                      <Toggle
+                        size="sm"
+                        checked={!!tmpl.active}
+                        onChange={(on) => updateTemplate.mutate({ id: tmpl.id, data: { active: on ? 1 : 0 } })}
+                        ariaLabel={t.active}
+                      />
                     </td>
                     <td className="py-2 text-right">
                       <IconButton

@@ -6,7 +6,7 @@ import { useExpenseCategories, useCreateExpenseCategory, useUpdateExpenseCategor
 import { isCategoryInUse } from "../../db/queries/expenses";
 import type { ExpenseCategory } from "../../types/expense";
 import { getNamedTagColor } from "../../lib/tagColors";
-import { Input, Select } from "../ui";
+import { Button, Input, Select } from "../ui";
 import { ColorSwatchPicker } from "./ColorSwatchPicker";
 
 export function ExpenseCategoryManager() {
@@ -167,9 +167,9 @@ export function ExpenseCategoryManager() {
                     ) : categoryUsage[cat.code] ? (
                       <span className="px-2 py-1 text-xs text-muted">{t.category_in_use}</span>
                     ) : (
-                      <button type="button" onClick={() => handleDelete(cat.code)} className="px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)]">
+                      <Button variant="danger-outline" size="sm" onClick={() => handleDelete(cat.code)}>
                         {t.delete}
-                      </button>
+                      </Button>
                     )}
                   </td>
                 </>

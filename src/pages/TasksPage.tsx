@@ -427,18 +427,20 @@ export function TasksPage() {
                         onChange={(vals) => updateTask.mutate({ id: tk.id, data: vals })}
                         compact
                       />
-                      <button
+                      <IconButton
+                        icon={activeTimer?.taskId === tk.id ? Square : Play}
+                        label={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
+                        size="xs"
+                        iconSize={14}
+                        tone="accent"
+                        color={activeTimer?.taskId === tk.id ? "danger" : undefined}
                         onClick={() => handleTimerToggle(tk.id, tk.project_id)}
-                        className={`p-0.5 transition-opacity ${
+                        className={
                           activeTimer?.taskId === tk.id
-                            ? "text-[var(--color-danger-text)]"
-                            : "opacity-0 group-hover/task:opacity-100 text-muted hover:text-accent"
-                        }`}
-                        title={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
-                        aria-label={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
-                      >
-                        {activeTimer?.taskId === tk.id ? <Square size={14} /> : <Play size={14} />}
-                      </button>
+                            ? ""
+                            : "opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100"
+                        }
+                      />
                       <IconButton
                         onClick={() => deleteTask.mutate(tk.id, {
                           onSuccess: () => undoableFromStore(t.toast_task_deleted),

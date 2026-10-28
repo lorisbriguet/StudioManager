@@ -132,9 +132,7 @@ export function CustomListsManager() {
               className="flex-1"
               autoFocus
             />
-            <button type="button" onClick={handleCreateList} aria-label={t.create} className="px-2 py-1 bg-accent text-white text-xs rounded-md hover:bg-accent-hover">
-              <Check size={12} />
-            </button>
+            <IconButton icon={Check} label={t.create} iconSize={12} filled onClick={handleCreateList} />
           </div>
         ) : (
           <Button

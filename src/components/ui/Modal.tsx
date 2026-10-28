@@ -1,4 +1,5 @@
 import { useEffect, useRef, useId, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { IconButton } from "./IconButton";
@@ -9,7 +10,7 @@ interface ModalProps {
   title?: string;
   children: ReactNode;
   footer?: ReactNode;
-  size?: "sm" | "md" | "lg" | "xl" | "2xl";
+  size?: "sm" | "md" | "lg" | "xl" | "2xl" | "full";
   /** top: palette-style dialogs (command palette, quick timer) sit at 20% from the top. */
   position?: "center" | "top";
   /** false: the content lays itself out edge to edge (no body padding). */
@@ -24,6 +25,8 @@ const sizeClasses = {
   lg: "max-w-lg",
   xl: "max-w-xl",
   "2xl": "max-w-2xl",
+  /** viewers (receipts, PDFs): 80% × 85% of the window, content fills it */
+  full: "w-[80vw]! max-w-none h-[85vh] flex flex-col",
 };
 
 const FOCUSABLE_SELECTOR =
@@ -112,7 +115,9 @@ export function Modal({ open, onClose, title, children, footer, size = "sm", pos
 
   if (!open) return null;
 
-  return (
+  // On <body>: a dialog opened inside a transformed panel (the side peek keeps
+  // a transform from its enter animation) would otherwise be trapped and clipped.
+  return createPortal(
     <div
       className={`fixed inset-0 z-50 flex justify-center bg-black/40 animate-in fade-in ${
         position === "top" ? "items-start pt-[20vh]" : "items-center"
@@ -143,6 +148,7 @@ export function Modal({ open, onClose, title, children, footer, size = "sm", pos
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

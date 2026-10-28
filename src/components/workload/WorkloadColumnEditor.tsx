@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Plus, Trash2, Calendar, Link, Unlink } from "lucide-react";
-import { Button, Select, Popover, Tag, Input } from "../ui";
+import { Button, Select, Popover, Tag, Input, Modal } from "../ui";
 import { MENU_ITEM } from "../ui/Dropdown";
 import { toast } from "sonner";
 import type { WorkloadColumn, WorkloadColumnType, SelectOption } from "../../types/workload";
@@ -135,231 +135,222 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-[var(--color-surface)] rounded-xl shadow-2xl w-full max-w-md border border-[var(--color-border-divider)] overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-divider)]">
-          <h3 className="text-sm font-medium">
-            {isNew ? t.add_column : t.edit_column}
-          </h3>
-          <IconButton icon={X} label={t.close} size="md" onClick={onClose} />
+    <Modal
+      open
+      onClose={onClose}
+      title={isNew ? t.add_column : t.edit_column}
+      size="md"
+      footer={
+        <>
+          {!isNew && onDelete && (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                onDelete();
+                onClose();
+              }}
+              className="mr-auto text-[var(--color-danger-text)] hover:text-red-700"
+            >
+              {t.delete_column}
+            </Button>
+          )}
+          <Button
+            variant="secondary"
+            onClick={onClose}
+          >
+            {t.cancel}
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={!name.trim() || (type === "formula" && !!formulaError && !!formula.trim())}
+          >
+            {t.save}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        {/* Name */}
+        <div>
+          <label className="text-xs text-muted block mb-1">{t.name}</label>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
+            autoFocus
+          />
         </div>
 
-        <div className="p-4 space-y-3">
-          {/* Name */}
-          <div>
-            <label className="text-xs text-muted block mb-1">{t.name}</label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
-              autoFocus
-            />
-          </div>
+        {/* Type */}
+        <div>
+          <label className="text-xs text-muted block mb-1">{t.type}</label>
+          <Select
+            value={type}
+            onChange={(e) => setType(e.target.value as WorkloadColumnType)}
+          >
+            {COLUMN_TYPES.map((ct) => (
+              <option key={ct.value} value={ct.value}>
+                {ct.label}
+              </option>
+            ))}
+          </Select>
+        </div>
 
-          {/* Type */}
-          <div>
-            <label className="text-xs text-muted block mb-1">{t.type}</label>
-            <Select
-              value={type}
-              onChange={(e) => setType(e.target.value as WorkloadColumnType)}
-            >
-              {COLUMN_TYPES.map((ct) => (
-                <option key={ct.value} value={ct.value}>
-                  {ct.label}
-                </option>
-              ))}
-            </Select>
-          </div>
-
-          {/* Icon */}
-          <div>
-            <label className="text-xs text-muted block mb-1">{t.icon}</label>
-            <div className="flex items-center gap-3">
-              <div className="flex-1 border border-[var(--color-border-divider)] rounded-md overflow-hidden">
-                <div className="flex flex-wrap gap-0.5 p-1.5 max-h-24 overflow-y-auto">
-                  <button
-                    onClick={() => { setIcon(""); setIconOnly(false); }}
-                    className={`p-1 rounded-md ${!icon ? "bg-accent text-white" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
-                    title={t.none}
-                    aria-label={t.none}
-                  >
-                    <X size={14} />
-                  </button>
-                  {COLUMN_ICON_NAMES.map((name) => {
-                    const Icon = COLUMN_ICONS[name];
-                    return (
-                      <button
-                        key={name}
-                        onClick={() => setIcon(name)}
-                        className={`p-1 rounded-md ${icon === name ? "bg-accent text-white" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
-                        title={name}
-                        aria-label={name}
-                      >
-                        <Icon size={14} />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-            {icon && (
-              <label className="flex items-center gap-2 mt-2 text-xs text-muted cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={iconOnly}
-                  onChange={(e) => setIconOnly(e.target.checked)}
-                  className="rounded"
-                />
-                {t.icon_only}
-              </label>
-            )}
-          </div>
-
-          {/* Calendar color toggle (select/multi_select only) */}
-          {(type === "select" || type === "multi_select") && (
-            <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
-              <input
-                type="checkbox"
-                checked={calendarColor}
-                onChange={(e) => setCalendarColor(e.target.checked)}
-                className="rounded"
-              />
-              <Calendar size={14} className="shrink-0" />
-              {t.calendar_color_column}
-            </label>
-          )}
-
-          {/* Formula */}
-          {type === "formula" && (
-            <div>
-              <label className="text-xs text-muted block mb-1">{t.formula}</label>
-              <Input
-                value={formula}
-                onChange={(e) => handleFormulaChange(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
-                placeholder="e.g. og_scope ? hours : 0"
-                aria-invalid={formulaError ? true : undefined}
-                className="font-mono aria-[invalid=true]:border-danger-text"
-              />
-              {formulaError ? (
-                <p className="text-[10px] text-[var(--color-danger-text)] mt-1">{formulaError}</p>
-              ) : (
-                <p className="text-[10px] text-muted mt-1">{t.formula_help}</p>
-              )}
-            </div>
-          )}
-
-          {/* Select options */}
-          {(type === "select" || type === "multi_select") && (
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-muted">{t.options}</label>
-                {linkedListId ? (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-accent flex items-center gap-0.5">
-                      <Link size={11} />
-                      {(customLists ?? []).find((l) => l.id === linkedListId)?.name ?? ""}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="link"
-                      size="sm"
-                      icon={<Unlink size={12} />}
-                      onClick={() => setLinkedListId(undefined)}
-                      className="text-muted hover:text-[var(--color-danger-text)]"
-                    >
-                      {t.unlink_list}
-                    </Button>
-                  </div>
-                ) : (
-                  <div ref={importListAnchorRef}>
-                    <Button
-                      type="button"
-                      variant="link"
-                      size="sm"
-                      icon={<Link size={12} />}
-                      onClick={() => setShowImportListDropdown((v) => !v)}
-                      aria-haspopup="dialog"
-                      aria-expanded={showImportListDropdown}
-                    >
-                      {t.import_from_list}
-                    </Button>
-                    {showImportListDropdown && (
-                      <Popover
-                        anchor={importListAnchorRef}
-                        align="end"
-                        onClose={(returnFocus) => {
-                          setShowImportListDropdown(false);
-                          if (returnFocus) importListAnchorRef.current?.querySelector("button")?.focus({ preventScroll: true });
-                        }}
-                      >
-                        {(customLists ?? []).length === 0 ? (
-                          <p className="text-xs text-muted px-2 py-1">{t.no_lists}</p>
-                        ) : (
-                          (customLists ?? []).map((list) => (
-                            <button
-                              key={list.id}
-                              type="button"
-                              onClick={() => setImportListId(list.id)}
-                              className={`${MENU_ITEM} text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]`}
-                            >
-                              {list.name}
-                            </button>
-                          ))
-                        )}
-                      </Popover>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="space-y-1.5 mb-2">
-                {options.map((opt, i) => {
+        {/* Icon */}
+        <div>
+          <label className="text-xs text-muted block mb-1">{t.icon}</label>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 border border-[var(--color-border-divider)] rounded-md overflow-hidden">
+              <div className="flex flex-wrap gap-0.5 p-1.5 max-h-24 overflow-y-auto">
+                <button
+                  onClick={() => { setIcon(""); setIconOnly(false); }}
+                  className={`p-1 rounded-md ${!icon ? "bg-accent text-white" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
+                  title={t.none}
+                  aria-label={t.none}
+                >
+                  <X size={14} />
+                </button>
+                {COLUMN_ICON_NAMES.map((name) => {
+                  const Icon = COLUMN_ICONS[name];
                   return (
-                    <div key={i} className="flex items-center gap-2">
-                      <Tag name={opt.value} color={opt.color} />
-                      <Select
-                        value={normalizeTagColorName(opt.color)}
-                        onChange={(e) => {
-                          if (linkedListId) return;
-                          const next = [...options];
-                          next[i] = { ...next[i], color: e.target.value };
-                          setOptions(next);
-                        }}
-                        disabled={!!linkedListId}
-                        fullWidth={false}
-                      >
-                        {TAG_COLOR_NAMES.map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </Select>
-                      {!linkedListId && (
-                        <IconButton
-                          icon={Trash2}
-                          label={t.delete}
-                          tone="danger"
-                          className="ml-auto"
-                          onClick={() => setOptions(options.filter((_, j) => j !== i))}
-                        />
-                      )}
-                    </div>
+                    <button
+                      key={name}
+                      onClick={() => setIcon(name)}
+                      className={`p-1 rounded-md ${icon === name ? "bg-accent text-white" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
+                      title={name}
+                      aria-label={name}
+                    >
+                      <Icon size={14} />
+                    </button>
                   );
                 })}
               </div>
-              {!linkedListId && (
-                <>
-                  <div className="flex gap-2 mb-2">
-                    <Input size="sm" fullWidth={false}
-                      value={newOptValue}
-                      onChange={(e) => setNewOptValue(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && addOption()}
-                      placeholder={t.new_option}
-                      className="flex-1"
-                    />
+            </div>
+          </div>
+          {icon && (
+            <label className="flex items-center gap-2 mt-2 text-xs text-muted cursor-pointer">
+              <input
+                type="checkbox"
+                checked={iconOnly}
+                onChange={(e) => setIconOnly(e.target.checked)}
+                className="rounded"
+              />
+              {t.icon_only}
+            </label>
+          )}
+        </div>
+
+        {/* Calendar color toggle (select/multi_select only) */}
+        {(type === "select" || type === "multi_select") && (
+          <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
+            <input
+              type="checkbox"
+              checked={calendarColor}
+              onChange={(e) => setCalendarColor(e.target.checked)}
+              className="rounded"
+            />
+            <Calendar size={14} className="shrink-0" />
+            {t.calendar_color_column}
+          </label>
+        )}
+
+        {/* Formula */}
+        {type === "formula" && (
+          <div>
+            <label className="text-xs text-muted block mb-1">{t.formula}</label>
+            <Input
+              value={formula}
+              onChange={(e) => handleFormulaChange(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
+              placeholder="e.g. og_scope ? hours : 0"
+              aria-invalid={formulaError ? true : undefined}
+              className="font-mono aria-[invalid=true]:border-danger-text"
+            />
+            {formulaError ? (
+              <p className="text-[10px] text-[var(--color-danger-text)] mt-1">{formulaError}</p>
+            ) : (
+              <p className="text-[10px] text-muted mt-1">{t.formula_help}</p>
+            )}
+          </div>
+        )}
+
+        {/* Select options */}
+        {(type === "select" || type === "multi_select") && (
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-muted">{t.options}</label>
+              {linkedListId ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-accent flex items-center gap-0.5">
+                    <Link size={11} />
+                    {(customLists ?? []).find((l) => l.id === linkedListId)?.name ?? ""}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    icon={<Unlink size={12} />}
+                    onClick={() => setLinkedListId(undefined)}
+                    className="text-muted hover:text-[var(--color-danger-text)]"
+                  >
+                    {t.unlink_list}
+                  </Button>
+                </div>
+              ) : (
+                <div ref={importListAnchorRef}>
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    icon={<Link size={12} />}
+                    onClick={() => setShowImportListDropdown((v) => !v)}
+                    aria-haspopup="dialog"
+                    aria-expanded={showImportListDropdown}
+                  >
+                    {t.import_from_list}
+                  </Button>
+                  {showImportListDropdown && (
+                    <Popover
+                      anchor={importListAnchorRef}
+                      align="end"
+                      onClose={(returnFocus) => {
+                        setShowImportListDropdown(false);
+                        if (returnFocus) importListAnchorRef.current?.querySelector("button")?.focus({ preventScroll: true });
+                      }}
+                    >
+                      {(customLists ?? []).length === 0 ? (
+                        <p className="text-xs text-muted px-2 py-1">{t.no_lists}</p>
+                      ) : (
+                        (customLists ?? []).map((list) => (
+                          <button
+                            key={list.id}
+                            type="button"
+                            onClick={() => setImportListId(list.id)}
+                            className={`${MENU_ITEM} text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]`}
+                          >
+                            {list.name}
+                          </button>
+                        ))
+                      )}
+                    </Popover>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="space-y-1.5 mb-2">
+              {options.map((opt, i) => {
+                return (
+                  <div key={i} className="flex items-center gap-2">
+                    <Tag name={opt.value} color={opt.color} />
                     <Select
-                      value={newOptColor}
-                      onChange={(e) => setNewOptColor(e.target.value)}
+                      value={normalizeTagColorName(opt.color)}
+                      onChange={(e) => {
+                        if (linkedListId) return;
+                        const next = [...options];
+                        next[i] = { ...next[i], color: e.target.value };
+                        setOptions(next);
+                      }}
+                      disabled={!!linkedListId}
                       fullWidth={false}
                     >
                       {TAG_COLOR_NAMES.map((c) => (
@@ -368,72 +359,78 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                         </option>
                       ))}
                     </Select>
-                    <IconButton icon={Plus} label={t.new_option} size="md" tone="accent" onClick={addOption} />
-                  </div>
-                  <div className="border-t border-[var(--color-border-divider)] pt-2">
-                    {showSaveAsListInput ? (
-                      <div className="flex gap-2">
-                        <Input size="sm" fullWidth={false}
-                          value={saveAsListName}
-                          onChange={(e) => setSaveAsListName(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === "Enter") handleSaveAsList(); if (e.key === "Escape") setShowSaveAsListInput(false); }}
-                          placeholder={t.list_name}
-                          className="flex-1"
-                          autoFocus
-                        />
-                        <button type="button" onClick={handleSaveAsList} className="px-3 text-sm text-accent hover:underline">{t.save}</button>
-                        <IconButton icon={X} label={t.cancel} className="mx-1" onClick={() => setShowSaveAsListInput(false)} />
-                      </div>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="link"
-                        size="sm"
-                        icon={<Link size={12} />}
-                        onClick={() => setShowSaveAsListInput(true)}
-                        className="text-muted hover:text-accent"
-                      >
-                        {t.save_as_list}
-                      </Button>
+                    {!linkedListId && (
+                      <IconButton
+                        icon={Trash2}
+                        label={t.delete}
+                        tone="danger"
+                        className="ml-auto"
+                        onClick={() => setOptions(options.filter((_, j) => j !== i))}
+                      />
                     )}
                   </div>
-                </>
-              )}
+                );
+              })}
             </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--color-border-divider)]">
-          <div>
-            {!isNew && onDelete && (
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  onDelete();
-                  onClose();
-                }}
-                className="text-[var(--color-danger-text)] hover:text-red-700"
-              >
-                {t.delete_column}
-              </Button>
+            {!linkedListId && (
+              <>
+                <div className="flex gap-2 mb-2">
+                  <Input size="sm" fullWidth={false}
+                    value={newOptValue}
+                    onChange={(e) => setNewOptValue(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addOption()}
+                    placeholder={t.new_option}
+                    className="flex-1"
+                  />
+                  <Select
+                    value={newOptColor}
+                    onChange={(e) => setNewOptColor(e.target.value)}
+                    fullWidth={false}
+                  >
+                    {TAG_COLOR_NAMES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </Select>
+                  <IconButton icon={Plus} label={t.new_option} size="md" tone="accent" onClick={addOption} />
+                </div>
+                <div className="border-t border-[var(--color-border-divider)] pt-2">
+                  {showSaveAsListInput ? (
+                    <div className="flex gap-2">
+                      <Input size="sm" fullWidth={false}
+                        value={saveAsListName}
+                        onChange={(e) => setSaveAsListName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSaveAsList();
+                          // Esc closes only the inline input, not the whole dialog.
+                          if (e.key === "Escape") { e.stopPropagation(); setShowSaveAsListInput(false); }
+                        }}
+                        placeholder={t.list_name}
+                        className="flex-1"
+                        autoFocus
+                      />
+                      <button type="button" onClick={handleSaveAsList} className="px-3 text-sm text-accent hover:underline">{t.save}</button>
+                      <IconButton icon={X} label={t.cancel} className="mx-1" onClick={() => setShowSaveAsListInput(false)} />
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      icon={<Link size={12} />}
+                      onClick={() => setShowSaveAsListInput(true)}
+                      className="text-muted hover:text-accent"
+                    >
+                      {t.save_as_list}
+                    </Button>
+                  )}
+                </div>
+              </>
             )}
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              onClick={onClose}
-            >
-              {t.cancel}
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={!name.trim() || (type === "formula" && !!formulaError && !!formula.trim())}
-            >
-              {t.save}
-            </Button>
-          </div>
-        </div>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -30,7 +30,7 @@ import { useUnreadNotificationCount } from "../../db/hooks/useNotifications";
 import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
 import type { UIKey } from "../../i18n/ui";
-import { BOTTOM_BAR, CountBadge } from "../ui";
+import { BOTTOM_BAR, CountBadge, IconButton } from "../ui";
 import { navItemClass } from "../ui/NavItem";
 
 type NavItem = { to: string; icon: typeof LayoutDashboard; labelKey: UIKey };
@@ -241,9 +241,7 @@ export function Sidebar() {
               <span className="relative">
                 <Icon size={18} strokeWidth={1.5} />
                 {isNotifications && unreadCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 bg-[var(--color-danger)] text-white text-[10px] font-bold min-w-[14px] h-[14px] flex items-center justify-center rounded-full leading-none">
-                    {unreadCount > 9 ? "9+" : unreadCount}
-                  </span>
+                  <CountBadge value={unreadCount} tone="danger" max={9} className="absolute -top-1.5 -right-1.5" />
                 )}
               </span>
               {!collapsed && (
@@ -309,14 +307,13 @@ function TimerIndicator({ collapsed }: { collapsed: boolean }) {
                 <span className="text-muted truncate">{activeTimer.projectName}</span>
               )}
             </div>
-            <button
+            <IconButton
+              icon={Square}
+              label={t.stop_timer}
+              iconSize={12}
+              color="danger"
               onClick={() => stopAndSave()}
-              className="shrink-0 p-1 rounded-md hover:bg-[var(--color-hover-row)] text-[var(--color-danger-text)] hover:text-[var(--color-danger-text)]"
-              title={t.stop_timer}
-              aria-label={t.stop_timer}
-            >
-              <Square size={12} />
-            </button>
+            />
           </>
         )}
       </div>

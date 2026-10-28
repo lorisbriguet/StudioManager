@@ -69,12 +69,13 @@ afterEach(() => {
 
 describe("Edit paid date modal", () => {
   it("saves on Enter in the date input and closes the modal", async () => {
-    const { container } = renderPage();
+    renderPage();
     const row = (await screen.findByText("ACME")).closest("tr")!;
     fireEvent.contextMenu(row);
     fireEvent.click(await screen.findByRole("menuitem", { name: /edit paid date/i }));
 
-    const input = container.querySelector<HTMLInputElement>('input[inputmode="numeric"]')!;
+    // The dialog renders on <body> (Modal portals itself), outside the page container.
+    const input = document.querySelector<HTMLInputElement>('input[inputmode="numeric"]')!;
     expect(input).not.toBeNull();
     fireEvent.change(input, { target: { value: `${YEAR}-02-01` } });
     fireEvent.keyDown(input, { key: "Enter" });

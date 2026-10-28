@@ -1,28 +1,21 @@
 import { useState, useEffect } from "react";
-import { X } from "lucide-react";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useT } from "../i18n/useT";
 import { notifyError } from "../lib/notifyError";
-import { IconButton } from "./ui";
+import { Modal } from "./ui";
 
 /**
- * Full-screen preview of an attached receipt (image or PDF), shared by the
- * Expenses and Income pages. The two pages use different surface tokens for
- * the modal — `bgClassName`/`roundedClassName` keep that difference a caller
- * choice instead of picking one page's look for both.
+ * Large preview of an attached receipt (image or PDF), shared by the
+ * Expenses and Income pages. A full-size Modal: Esc, backdrop click, focus.
  */
 export function ReceiptPreview({
   path,
   reference,
   onClose,
-  bgClassName,
-  roundedClassName,
 }: {
   path: string;
   reference: string;
   onClose: () => void;
-  bgClassName: string;
-  roundedClassName: string;
 }) {
   const t = useT();
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
@@ -50,19 +43,8 @@ export function ReceiptPreview({
   }, [path, ext, isImage, t.receipt_load_failed]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
-    >
-      <div
-        className={`${bgClassName} ${roundedClassName} shadow-xl w-[80vw] h-[85vh] flex flex-col overflow-hidden`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-input-border)]">
-          <h2 className="text-sm font-semibold">{reference}</h2>
-          <IconButton icon={X} label={t.close} size="md" onClick={onClose} />
-        </div>
-        <div className={`flex-1 overflow-auto ${bgClassName} flex items-center justify-center`}>
+    <Modal open onClose={onClose} title={reference} size="full" padding={false}>
+        <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center">
           {!blobUrl ? (
             <span className="text-sm text-muted">{t.loading}</span>
           ) : isImage ? (
@@ -79,7 +61,6 @@ export function ReceiptPreview({
             />
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

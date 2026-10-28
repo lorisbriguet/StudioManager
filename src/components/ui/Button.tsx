@@ -16,7 +16,7 @@ const variantClasses: Record<ButtonVariant, string> = {
   secondary: "bg-[var(--color-input-bg)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] disabled:opacity-50",
   ghost: "border border-[var(--color-input-border)] text-[var(--color-muted)] hover:border-[var(--color-border)] hover:text-[var(--color-text)] disabled:opacity-50",
   danger: "bg-[var(--color-danger-bg)] text-[var(--color-danger-text)] hover:opacity-80 disabled:opacity-50",
-  "danger-outline": "border border-[var(--color-danger-text)] text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)] disabled:opacity-50",
+  "danger-outline": "border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)] disabled:opacity-50",
   success: "bg-[var(--color-success-bg)] text-[var(--color-success-text)] hover:opacity-80 disabled:opacity-50",
   link: "text-accent hover:underline bg-transparent p-0 disabled:opacity-50",
 };

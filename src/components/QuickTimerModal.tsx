@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Timer } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Input, SECTION_LABEL } from "./ui";
+import { Button, Input, Kbd, Modal, SECTION_LABEL } from "./ui";
 import { useAppStore } from "../stores/app-store";
 import { useProjects } from "../db/hooks/useProjects";
 import { useTasksByProject } from "../db/hooks/useTasks";
@@ -29,16 +29,6 @@ export function QuickTimerModal() {
       setSelectedTaskId(null);
     }
   }, [open]);
-
-  // Close on ESC
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [open, close]);
 
   const filteredProjects = useMemo(() => {
     if (!projects) return [];
@@ -70,112 +60,103 @@ export function QuickTimerModal() {
     close();
   };
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50">
-      <div className="fixed inset-0 bg-black/40" onClick={close} />
-      <div className="fixed top-[20%] left-1/2 -translate-x-1/2 w-full max-w-[400px] px-4">
-        <div className="bg-[var(--color-surface)] rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.5)] border border-[var(--color-border)] overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[var(--color-border)]">
-            <Timer size={16} className="text-[var(--color-accent)] shrink-0" />
-            <span className="text-sm font-medium">{t.quick_timer}</span>
-            <kbd className="ml-auto text-[10px] text-muted bg-[var(--color-input-bg,var(--color-surface))] border border-[var(--color-border)] px-1.5 py-0.5 rounded shrink-0">
-              ESC
-            </kbd>
-          </div>
+    <Modal open={open} onClose={close} position="top" size="sm" padding={false} aria-label={t.quick_timer}>
+      {/* Header */}
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[var(--color-border)]">
+        <Timer size={16} className="text-[var(--color-accent)] shrink-0" />
+        <span className="text-sm font-medium">{t.quick_timer}</span>
+        <Kbd className="ml-auto">Esc</Kbd>
+      </div>
 
-          {/* Body */}
-          <div className="p-4 flex flex-col gap-3">
-            {/* Project picker */}
-            <div className="flex flex-col gap-1.5">
-              <label className={SECTION_LABEL}>
-                {t.select_project}
-              </label>
-              <Input
-                type="text"
-                placeholder={t.select_project}
-                value={selectedProject ? selectedProject.name : projectSearch}
-                onChange={(e) => {
-                  setProjectSearch(e.target.value);
-                  setSelectedProjectId(null);
-                  setSelectedTaskId(null);
-                }}
-                onFocus={() => {
-                  if (selectedProject) {
-                    setProjectSearch(selectedProject.name);
-                    setSelectedProjectId(null);
+      {/* Body */}
+      <div className="p-4 flex flex-col gap-3">
+        {/* Project picker */}
+        <div className="flex flex-col gap-1.5">
+          <label className={SECTION_LABEL}>
+            {t.select_project}
+          </label>
+          <Input
+            type="text"
+            placeholder={t.select_project}
+            value={selectedProject ? selectedProject.name : projectSearch}
+            onChange={(e) => {
+              setProjectSearch(e.target.value);
+              setSelectedProjectId(null);
+              setSelectedTaskId(null);
+            }}
+            onFocus={() => {
+              if (selectedProject) {
+                setProjectSearch(selectedProject.name);
+                setSelectedProjectId(null);
+                setSelectedTaskId(null);
+              }
+            }}
+            autoFocus
+          />
+          {!selectedProjectId && projectSearch && filteredProjects.length > 0 && (
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden max-h-44 overflow-y-auto shadow-md">
+              {filteredProjects.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-accent-light)] transition-colors"
+                  onClick={() => {
+                    setSelectedProjectId(p.id);
                     setSelectedTaskId(null);
-                  }
-                }}
-                autoFocus
-              />
-              {!selectedProjectId && projectSearch && filteredProjects.length > 0 && (
-                <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden max-h-44 overflow-y-auto shadow-md">
-                  {filteredProjects.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-accent-light)] transition-colors"
-                      onClick={() => {
-                        setSelectedProjectId(p.id);
-                        setSelectedTaskId(null);
-                        setProjectSearch("");
-                      }}
-                    >
-                      {p.name}
-                    </button>
-                  ))}
-                </div>
-              )}
+                    setProjectSearch("");
+                  }}
+                >
+                  {p.name}
+                </button>
+              ))}
             </div>
+          )}
+        </div>
 
-            {/* Task picker */}
-            {selectedProjectId && (
-              <div className="flex flex-col gap-1.5">
-                <label className={SECTION_LABEL}>
-                  {t.select_task}
-                </label>
-                {todoTasks.length === 0 ? (
-                  <p className="text-sm text-muted px-1">{t.no_results}</p>
-                ) : (
-                  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden max-h-44 overflow-y-auto">
-                    {todoTasks.map((task) => (
-                      <button
-                        key={task.id}
-                        type="button"
-                        className={[
-                          "w-full text-left px-3 py-2 text-sm transition-colors",
-                          selectedTaskId === task.id
-                            ? "bg-[var(--color-accent-light)] font-medium"
-                            : "hover:bg-[var(--color-accent-light)]",
-                        ].join(" ")}
-                        onClick={() => setSelectedTaskId(task.id)}
-                      >
-                        {task.title}
-                      </button>
-                    ))}
-                  </div>
-                )}
+        {/* Task picker */}
+        {selectedProjectId && (
+          <div className="flex flex-col gap-1.5">
+            <label className={SECTION_LABEL}>
+              {t.select_task}
+            </label>
+            {todoTasks.length === 0 ? (
+              <p className="text-sm text-muted px-1">{t.no_results}</p>
+            ) : (
+              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden max-h-44 overflow-y-auto">
+                {todoTasks.map((task) => (
+                  <button
+                    key={task.id}
+                    type="button"
+                    className={[
+                      "w-full text-left px-3 py-2 text-sm transition-colors",
+                      selectedTaskId === task.id
+                        ? "bg-[var(--color-accent-light)] font-medium"
+                        : "hover:bg-[var(--color-accent-light)]",
+                    ].join(" ")}
+                    onClick={() => setSelectedTaskId(task.id)}
+                  >
+                    {task.title}
+                  </button>
+                ))}
               </div>
             )}
-
-            {/* Start button */}
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              icon={<Timer size={14} />}
-              disabled={!selectedProjectId || !selectedTaskId}
-              onClick={handleStart}
-              className="mt-1 w-full justify-center disabled:cursor-not-allowed"
-            >
-              {t.start_timer_for}
-            </Button>
           </div>
-        </div>
+        )}
+
+        {/* Start button */}
+        <Button
+          type="button"
+          variant="primary"
+          size="md"
+          icon={<Timer size={14} />}
+          disabled={!selectedProjectId || !selectedTaskId}
+          onClick={handleStart}
+          className="mt-1 w-full justify-center disabled:cursor-not-allowed"
+        >
+          {t.start_timer_for}
+        </Button>
       </div>
-    </div>
+    </Modal>
   );
 }

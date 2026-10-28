@@ -389,8 +389,6 @@ export function IncomePage() {
           path={preview.path}
           reference={preview.reference}
           onClose={() => setPreview(null)}
-          bgClassName="bg-[var(--color-input-bg)]"
-          roundedClassName="rounded-lg"
         />
       )}
       {ctxMenu && (

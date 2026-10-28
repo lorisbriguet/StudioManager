@@ -192,15 +192,13 @@ function PresetDropdown() {
                 placeholder={t.preset_name}
                 size="sm" fullWidth={false} className="flex-1"
               />
-              <button
-                type="button"
+              <IconButton
+                icon={Save}
+                label={t.save}
+                color="accent"
                 onClick={handleSave}
                 disabled={!saveName.trim()}
-                className="text-accent hover:text-accent/80 transition-colors disabled:opacity-40"
-                aria-label={t.save}
-              >
-                <Save size={14} />
-              </button>
+              />
             </div>
           ) : (
             <button
