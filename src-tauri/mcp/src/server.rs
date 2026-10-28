@@ -30,7 +30,8 @@ Name the organisation in what you tell the user (every result carries it).
 Nothing can be deleted through these tools.
 Ask the user before creating a client or a project.
 When a name matches more than one record, the candidates come back: use the id.
-Dates are YYYY-MM-DD.";
+Dates are YYYY-MM-DD.
+Wiki articles link to each other: write [[Title]] or [[Project/Title]] for every related article (see put_wiki_article).";
 
 pub const MONEY_TOOLS: [&str; 5] = [
     "list_invoices",
@@ -738,7 +739,12 @@ impl Server {
     }
 
     #[tool(
-        description = "Write a project's wiki article. Content is Markdown and replaces the article with that title (created if missing)."
+        description = "Write a project's wiki article. Content is Markdown and replaces the article with that title (created if missing). \
+Link related articles: [[Title]] (this project first, then a title unique in the organisation), [[Project/Title]], or [[Title|other text]]. \
+Link the project's own Markdown files the same way ([[DESIGN-SYSTEM.md]], [[docs/usage.md]], [[Project/RELEASING.md]]): the wiki shows the file itself, so never copy a file's content into an article. \
+Overview lists every other article of the project; each other article opens with \"Back to [[Overview]].\" and links where a topic is covered elsewhere \
+(commands: Run, build & release; folders: Structure; why: Decisions; unfinished: Open items), plus related projects. \
+Titles that match nothing come back in unresolved_links and stay as text: write those articles, then this one again."
     )]
     async fn put_wiki_article(&self, Parameters(p): Parameters<PutArticleInput>) -> CallToolResult {
         self.run(move |d| {

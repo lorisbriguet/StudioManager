@@ -39,6 +39,10 @@ Clients: `list_clients`, `get_client`, `create_client`.
 
 Wiki and tools: `list_wiki`, `get_wiki_article`, `put_wiki_article`, `add_decision`, `link_tool`.
 
+Agents link wiki articles to each other by title: `[[Decisions]]`, `[[Panopus/Overview]]` or `[[Title|other text]]` in the Markdown they write become real links (this project's article first, then a title unique in the organisation). Titles that match nothing stay as text and are listed back to the agent in `unresolved_links`. The server's instructions ask agents to link every related article: Overview lists the others, and each article links back to it and to where a topic is covered.
+
+A project's own Markdown files (README, design system, release notes, docs) show in the wiki read-only, straight from the project's folder. Agents link them the same way, `[[DESIGN-SYSTEM.md]]` or `[[Panopus/RELEASING.md]]`, instead of copying their content into an article.
+
 Money (hidden unless allowed in Settings): `list_invoices`, `get_invoice`, `list_quotes`, `list_expenses`, `pnl_summary`.
 
 That is 26 tools, 5 of them money tools. Names given to the tools (projects, clients, articles) match regardless of accents and case; if several match, the server returns the candidates instead of picking one. Agents are asked to check with you before creating projects or clients.

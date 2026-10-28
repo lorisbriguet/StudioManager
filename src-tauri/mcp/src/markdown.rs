@@ -1,13 +1,20 @@
 //! Markdown to the HTML the app's wiki editor stores. Raw HTML in the
 //! Markdown is never passed through: it is shown as text.
 
-use pulldown_cmark::{html, Event, Options, Parser};
+use pulldown_cmark::{html, Event, Options, Parser, Tag, TagEnd};
 
 /// Render CommonMark (plus strikethrough, which the editor supports) to
 /// HTML. Raw HTML blocks and inline tags become escaped text.
+///
+/// Only `~~double~~` tildes strike through. With strikethrough alone,
+/// pulldown-cmark also treats `~single~` pairs as strikethrough, so a line
+/// with two `~/` paths came out struck through. The subscript option claims
+/// single tildes instead, and they are put back as plain text here.
 pub fn to_html(md: &str) -> String {
-    let parser = Parser::new_ext(md, Options::ENABLE_STRIKETHROUGH).map(|ev| match ev {
+    let options = Options::ENABLE_STRIKETHROUGH | Options::ENABLE_SUBSCRIPT;
+    let parser = Parser::new_ext(md, options).map(|ev| match ev {
         Event::Html(raw) | Event::InlineHtml(raw) => Event::Text(raw),
+        Event::Start(Tag::Subscript) | Event::End(TagEnd::Subscript) => Event::Text("~".into()),
         other => other,
     });
     let mut out = String::new();
@@ -35,6 +42,12 @@ mod tests {
         assert!(!html.contains("<div"), "{html}");
         assert!(html.contains("&lt;script&gt;"), "{html}");
         assert!(html.contains("&lt;div onclick="), "{html}");
+    }
+
+    #[test]
+    fn single_tildes_stay_text() {
+        let html = to_html("Copy ~/a.key to ~/b and ~~drop~~ it");
+        assert_eq!(html, "<p>Copy ~/a.key to ~/b and <del>drop</del> it</p>\n");
     }
 
     #[test]

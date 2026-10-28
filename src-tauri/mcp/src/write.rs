@@ -62,6 +62,9 @@ pub struct ArticleResult {
     pub id: i64,
     pub title: String,
     pub created: bool,
+    /// `[[...]]` links that matched no article: left as text.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub unresolved_links: Vec<String>,
 }
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
@@ -679,6 +682,147 @@ fn insert_article(
     Ok(id)
 }
 
+/// What a `[[...]]` link points at: `Title` (this project first, then a
+/// title unique in the organisation), or `Project/Title`.
+fn find_link_target(articles: &[(i64, String, Option<i64>, String)], pid: i64, target: &str) -> Option<i64> {
+    let target = target.trim();
+    if let Some((project, title)) = target.rsplit_once('/') {
+        let (fp, ft) = (fold(project.trim()), fold(title.trim()));
+        let hits: Vec<i64> = articles
+            .iter()
+            .filter(|(_, t, _, p)| fold(t) == ft && fold(p) == fp)
+            .map(|a| a.0)
+            .collect();
+        if hits.len() == 1 {
+            return Some(hits[0]);
+        }
+    }
+    let ft = fold(target);
+    if let Some(a) = articles.iter().find(|(_, t, p, _)| *p == Some(pid) && fold(t) == ft) {
+        return Some(a.0);
+    }
+    let hits: Vec<i64> = articles.iter().filter(|(_, t, _, _)| fold(t) == ft).map(|a| a.0).collect();
+    (hits.len() == 1).then(|| hits[0])
+}
+
+/// A Markdown file of a project's folder: `[[docs/guide.md]]` in this
+/// project, or `[[Project/docs/guide.md]]`. Only files that exist count.
+fn find_file_target(folders: &[(i64, String, String)], pid: i64, target: &str) -> Option<(i64, String)> {
+    let target = target.trim().trim_start_matches("./");
+    if !target.to_ascii_lowercase().ends_with(".md") || target.split('/').any(|p| p == ".." || p.is_empty()) {
+        return None;
+    }
+    let exists = |folder: &str, rel: &str| Path::new(folder).join(rel).is_file();
+    if let Some((_, _, folder)) = folders.iter().find(|(id, _, _)| *id == pid) {
+        if exists(folder, target) {
+            return Some((pid, target.to_string()));
+        }
+    }
+    let (project, rel) = target.split_once('/')?;
+    folders
+        .iter()
+        .find(|(_, name, folder)| fold(name) == fold(project) && exists(folder, rel))
+        .map(|(id, _, _)| (*id, rel.to_string()))
+}
+
+/// Replaces `[[Target]]` and `[[Target|text]]` with Markdown links to the
+/// article (`/wiki?article=<id>`), outside code. Targets that match nothing
+/// stay as written and are reported in `unresolved`.
+pub(crate) fn resolve_wiki_links(tx: &Connection, pid: i64, md: &str, unresolved: &mut Vec<String>) -> R<String> {
+    if !md.contains("[[") {
+        return Ok(md.to_string());
+    }
+    let mut stmt = db(tx.prepare(
+        "SELECT a.id, a.title, a.project_id, COALESCE(p.name, '') FROM wiki_articles a \
+         LEFT JOIN projects p ON p.id = a.project_id",
+    ))?;
+    let articles: Vec<(i64, String, Option<i64>, String)> = db(stmt
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+        .and_then(|rows| rows.collect()))?;
+    let mut stmt = db(tx.prepare("SELECT id, name, folder_path FROM projects WHERE folder_path IS NOT NULL"))?;
+    let folders: Vec<(i64, String, String)> = db(stmt
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .and_then(|rows| rows.collect()))?;
+
+    let link = |inner: &str, unresolved: &mut Vec<String>| -> String {
+        let (target, text) = match inner.split_once('|') {
+            Some((t, x)) => (t, x.trim().to_string()),
+            None => (inner, inner.rsplit_once('/').map_or(inner, |(_, t)| t).trim().to_string()),
+        };
+        if let Some((fpid, rel)) = find_file_target(&folders, pid, target) {
+            let file_text = match inner.split_once('|') {
+                Some((_, x)) => x.trim().to_string(),
+                None => rel.rsplit('/').next().unwrap_or(&rel).to_string(),
+            };
+            if !file_text.contains(']') {
+                return format!("[{file_text}](/wiki?file={fpid}:{})", rel.replace(' ', "%20"));
+            }
+        }
+        match find_link_target(&articles, pid, target) {
+            Some(id) if !text.contains(']') => format!("[{text}](/wiki?article={id})"),
+            _ => {
+                unresolved.push(target.trim().to_string());
+                format!("[[{inner}]]")
+            }
+        }
+    };
+    let links_in = |text: &str, unresolved: &mut Vec<String>| -> String {
+        let mut out = String::new();
+        let mut rest = text;
+        while let Some(start) = rest.find("[[") {
+            let after = &rest[start + 2..];
+            match after.find("]]") {
+                Some(end) if !after[..end].contains(['[', '\n']) && !after[..end].trim().is_empty() => {
+                    out.push_str(&rest[..start]);
+                    out.push_str(&link(&after[..end], unresolved));
+                    rest = &after[end + 2..];
+                }
+                _ => {
+                    out.push_str(&rest[..start + 2]);
+                    rest = after;
+                }
+            }
+        }
+        out.push_str(rest);
+        out
+    };
+
+    // Walk line by line, leaving fenced blocks and `code spans` untouched.
+    let mut out = String::with_capacity(md.len());
+    let mut in_fence = false;
+    for line in md.split_inclusive('\n') {
+        let t = line.trim_start();
+        if t.starts_with("```") || t.starts_with("~~~") {
+            in_fence = !in_fence;
+            out.push_str(line);
+            continue;
+        }
+        if in_fence {
+            out.push_str(line);
+            continue;
+        }
+        let mut rest = line;
+        while let Some(tick) = rest.find('`') {
+            out.push_str(&links_in(&rest[..tick], unresolved));
+            let run = rest[tick..].chars().take_while(|&c| c == '`').count();
+            let fence = &rest[tick..tick + run];
+            match rest[tick + run..].find(fence) {
+                Some(close) => {
+                    let end = tick + run + close + run;
+                    out.push_str(&rest[tick..end]);
+                    rest = &rest[end..];
+                }
+                None => {
+                    out.push_str(&rest[tick..]);
+                    rest = "";
+                }
+            }
+        }
+        out.push_str(&links_in(rest, unresolved));
+    }
+    Ok(out)
+}
+
 pub fn put_wiki_article(
     dir: &Path,
     org: &Org,
@@ -687,10 +831,11 @@ pub fn put_wiki_article(
     markdown: &str,
 ) -> R<ArticleResult> {
     let title = required(title, "Title")?;
-    let html = markdown::to_html(markdown);
     write(dir, org, "put_wiki_article", |tx| {
         let pid = read::resolve_project(tx, project)?;
         let pname = project_name(tx, pid)?;
+        let mut unresolved = Vec::new();
+        let html = markdown::to_html(&resolve_wiki_links(tx, pid, markdown, &mut unresolved)?);
         let (id, stored_title, created) = match find_article(tx, pid, &title)? {
             Some((id, t, _)) => {
                 update_row(
@@ -719,6 +864,7 @@ pub fn put_wiki_article(
                 id,
                 title: stored_title,
                 created,
+                unresolved_links: unresolved,
             },
             Some(summary),
         ))
@@ -1414,6 +1560,68 @@ mod tests {
             &format!("SELECT sort_order FROM wiki_articles WHERE id = {}", b.id),
         );
         assert_eq!(so, 8);
+    }
+
+    #[test]
+    fn put_wiki_article_resolves_title_links() {
+        let (dir, org, conn) = fixture();
+        let dec = put_wiki_article(&dir, &org, "1", "Decisions", "- one").unwrap();
+        let other = put_wiki_article(&dir, &org, "2", "Decisions", "- two").unwrap();
+        let notes = put_wiki_article(&dir, &org, "2", "Launch notes", "x").unwrap();
+        let r = put_wiki_article(
+            &dir,
+            &org,
+            "1",
+            "Overview",
+            "See [[Decisions]], [[Site Web/Decisions|the site's]] and [[launch notes]].\n\n\
+             Not `[[Decisions]]` in code, nor [[Missing page]].\n\n```\n[[Decisions]]\n```\n",
+        )
+        .unwrap();
+        assert_eq!(r.unresolved_links, vec!["Missing page".to_string()]);
+        let html: String = one(&conn, &format!("SELECT content FROM wiki_articles WHERE id = {}", r.id));
+        // Same project first, then Project/Title, then a title unique in the organisation.
+        assert!(html.contains(&format!("<a href=\"/wiki?article={}\">Decisions</a>", dec.id)), "{html}");
+        assert!(html.contains(&format!("<a href=\"/wiki?article={}\">the site's</a>", other.id)), "{html}");
+        assert!(html.contains(&format!("<a href=\"/wiki?article={}\">launch notes</a>", notes.id)), "{html}");
+        assert!(html.contains("<code>[[Decisions]]</code>"), "{html}");
+        assert!(html.contains("[[Missing page]]"), "{html}");
+        assert!(html.contains("<pre><code>[[Decisions]]"), "{html}");
+    }
+
+    #[test]
+    fn put_wiki_article_links_project_files() {
+        let (dir, org, conn) = fixture();
+        let folder = dir.join("site-folder");
+        std::fs::create_dir_all(folder.join("docs")).unwrap();
+        std::fs::write(folder.join("RELEASING.md"), "# Releasing").unwrap();
+        std::fs::write(folder.join("docs/guide.md"), "# Guide").unwrap();
+        conn.execute("UPDATE projects SET folder_path = ?1 WHERE id = 2", [folder.to_string_lossy()]).unwrap();
+        let r = put_wiki_article(
+            &dir,
+            &org,
+            "2",
+            "Run",
+            "See [[RELEASING.md]], [[docs/guide.md|the guide]] and [[Site Web/docs/guide.md]]; [[missing.md]].",
+        )
+        .unwrap();
+        let html: String = one(&conn, &format!("SELECT content FROM wiki_articles WHERE id = {}", r.id));
+        assert!(html.contains(r#"<a href="/wiki?file=2:RELEASING.md">RELEASING.md</a>"#), "{html}");
+        assert!(html.contains(r#"<a href="/wiki?file=2:docs/guide.md">the guide</a>"#), "{html}");
+        assert!(html.contains(r#"<a href="/wiki?file=2:docs/guide.md">guide.md</a>"#), "{html}");
+        assert_eq!(r.unresolved_links, vec!["missing.md".to_string()]);
+        // From another project, a file needs its project's name.
+        let r = put_wiki_article(&dir, &org, "1", "Notes", "[[Site Web/RELEASING.md]] [[RELEASING.md]]").unwrap();
+        assert_eq!(r.unresolved_links, vec!["RELEASING.md".to_string()]);
+    }
+
+    #[test]
+    fn put_wiki_article_leaves_ambiguous_titles_unresolved() {
+        let (dir, org, _conn) = fixture();
+        put_wiki_article(&dir, &org, "1", "Brief", "a").unwrap();
+        put_wiki_article(&dir, &org, "2", "Brief", "b").unwrap();
+        // From project 3, "Brief" exists twice elsewhere: name the project.
+        let r = put_wiki_article(&dir, &org, "3", "Overview", "[[Brief]] and [[Site Web/Brief]]").unwrap();
+        assert_eq!(r.unresolved_links, vec!["Brief".to_string()]);
     }
 
     #[test]
