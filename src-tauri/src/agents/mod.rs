@@ -4,6 +4,7 @@ pub mod actions;
 pub mod cli;
 pub mod model;
 pub mod projects;
+pub mod prompt;
 pub mod pty;
 pub mod transcript;
 pub mod validate;

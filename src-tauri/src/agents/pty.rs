@@ -176,6 +176,10 @@ impl TerminalHub {
         lock(&self.inner.terms).live.remove(&term_id)
     }
 
+    pub fn clock(&self) -> Arc<dyn Clock> {
+        self.inner.clock.clone()
+    }
+
     /// Number of live terminals.
     pub fn len(&self) -> usize {
         lock(&self.inner.terms).live.len()
@@ -376,7 +380,7 @@ struct TermExit {
     term_id: u32,
 }
 
-async fn blocking<T: Send + 'static>(
+pub(super) async fn blocking<T: Send + 'static>(
     f: impl FnOnce() -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
     tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())?
@@ -459,7 +463,7 @@ pub async fn agents_send(
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
     use crate::agents::model::{parse_agents, Agent};
     use std::io::Read;
@@ -563,9 +567,9 @@ mod tests {
 
     /// Virtual time: sleeping advances it at once and records the duration.
     #[derive(Default)]
-    struct FakeClock {
-        now: AtomicI64,
-        sleeps: Mutex<Vec<u64>>,
+    pub(in crate::agents) struct FakeClock {
+        pub(in crate::agents) now: AtomicI64,
+        pub(in crate::agents) sleeps: Mutex<Vec<u64>>,
     }
 
     impl Clock for FakeClock {
@@ -591,7 +595,7 @@ mod tests {
     }
 
     /// Polls `f` for up to two real seconds.
-    fn eventually(f: impl Fn() -> bool) -> bool {
+    pub(in crate::agents) fn eventually(f: impl Fn() -> bool) -> bool {
         let start = Instant::now();
         while start.elapsed() < Duration::from_secs(2) {
             if f() {

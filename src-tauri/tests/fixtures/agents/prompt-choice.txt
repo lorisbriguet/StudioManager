@@ -1,0 +1,30 @@
+ ▐▛███▛█   Claude Code v2.1.312
+▝▜██████▀  Haiku 5.5 · Claude Max
+ ▝▝   ▝▝   /tmp/demo · /rc
+
+
+❯ Do exactly two things, in order. (a) Use the Write tool to create the file                        
+  /tmp/sm-agents-fixture/x.txt containing the word hello. If that is refused, do not retry; go on.  
+  (b) Use the AskUserQuestion tool to ask me: 'Which colour should the demo use?' with exactly      
+  three options: Red, Green, Blue. Then stop and do nothing else.                                   
+
+⏺ Write(/tmp/sm-agents-fixture/x.txt)
+  ⎿  Wrote 1 line to /tmp/sm-agents-fixture/x.txt
+      1 hello
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ ☐ Colour 
+
+Which colour should the demo use?
+
+❯ 1. Red
+     Use red for the demo.
+  2. Green
+     Use green for the demo.
+  3. Blue
+     Use blue for the demo.
+  4. Type something.
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel
+─────────────────────────────────────────────────────────────────────────────── sm-fixture-capture ─

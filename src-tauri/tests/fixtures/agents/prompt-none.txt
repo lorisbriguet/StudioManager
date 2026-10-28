@@ -1,0 +1,30 @@
+❯ Do exactly two things, in order. (a) Use the Write tool to create the file                        
+  /tmp/sm-agents-fixture/x.txt containing the word hello. If that is refused, do not retry; go on.  
+  (b) Use the AskUserQuestion tool to ask me: 'Which colour should the demo use?' with exactly      
+  three options: Red, Green, Blue. Then stop and do nothing else.                                   
+
+⏺ Write(/tmp/sm-agents-fixture/x.txt)
+  ⎿  Wrote 1 line to /tmp/sm-agents-fixture/x.txt
+      1 hello
+
+⏺ User declined to answer questions
+  ⎿  · Which colour should the demo use? (Red / Green / Blue)
+
+✻ Baked for 6s · done 13:49
+
+❯ Now run this exact Bash command once and nothing else: touch /tmp/sm-agents-fixture/y.txt         
+
+  Ran 1 shell command 
+
+⏺ I ran touch /tmp/sm-agents-fixture/y.txt once and it completed with no output.
+
+  Earlier, the Write of /tmp/sm-agents-fixture/x.txt (containing hello) succeeded. The colour
+  question was rejected when it came up, so I didn't get an answer. I haven't asked it again.
+
+✻ Crunched for 8s · done 13:51
+
+─────────────────────────────────────────────────────────────────────────────── sm-fixture-capture ─
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  ⏸ manual mode on · ← 1 done

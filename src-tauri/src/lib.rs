@@ -605,6 +605,8 @@ pub fn run() {
             agents::pty::agents_term_resize,
             agents::pty::agents_term_close,
             agents::pty::agents_send,
+            agents::prompt::agents_prompt,
+            agents::prompt::agents_answer,
         ])
         .setup(|app| {
             let handle = app.handle();

@@ -81,3 +81,24 @@ export function termClose(termId: number): Promise<void> {
 export function sendMessage(sessionId: string, text: string): Promise<void> {
   return invoke<void>("agents_send", { sessionId, text });
 }
+
+export interface PromptOption {
+  number: number;
+  label: string;
+  selected: boolean;
+}
+
+/** The prompt a background agent waits on, as read from its terminal. */
+export interface Prompt {
+  question: string;
+  options: PromptOption[];
+}
+
+export function getPrompt(shortId: string): Promise<Prompt | null> {
+  return invoke<Prompt | null>("agents_prompt", { shortId });
+}
+
+/** Refused, and nothing typed, when option `number` no longer reads `label`. */
+export function answerPrompt(shortId: string, number: number, label: string): Promise<void> {
+  return invoke<void>("agents_answer", { shortId, number, label });
+}
