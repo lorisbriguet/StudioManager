@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react";
 import { SettingRow, SettingsCard } from "./SettingsPrimitives";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { Button, FormField, IconButton, Input, Select } from "../ui";
+import { BAR_ICON_BUTTON, Button, FormField, Input, Select } from "../ui";
 import { ModelMenu } from "../agents/ModelMenu";
 import { slugifyName } from "../agents/StartAgentForm";
 import { useT } from "../../i18n/useT";
@@ -110,9 +110,9 @@ function SectionForm({
               value={l.target}
               onChange={(e) => setLink(i, { target: e.target.value })}
             />
-            <IconButton label={t.delete} onClick={() => setLinks(links.filter((_, j) => j !== i))}>
+            <button type="button" className={BAR_ICON_BUTTON} aria-label={t.delete} onClick={() => setLinks(links.filter((_, j) => j !== i))}>
               <Trash2 size={14} />
-            </IconButton>
+            </button>
           </div>
         ))}
         <Button type="button" size="sm" variant="ghost" onClick={() => setLinks([...links, { label: "", target: "" }])}>
@@ -484,50 +484,50 @@ export function RoutinesCard() {
             <div className="flex items-center justify-between pt-2">
               <div className="text-[10px] font-medium uppercase tracking-widest text-muted">{s.name}</div>
               <div className="flex items-center">
-                <IconButton
-                  label={`${t.routines_move_up}: ${s.name}`}
+                <button
+                  type="button" className={BAR_ICON_BUTTON} aria-label={`${t.routines_move_up}: ${s.name}`}
                   disabled={si === 0}
                   onClick={() => void save({ ...data, sections: moved(data.sections, si, si - 1) })}
                 >
                   <ArrowUp size={14} />
-                </IconButton>
-                <IconButton
-                  label={`${t.routines_move_down}: ${s.name}`}
+                </button>
+                <button
+                  type="button" className={BAR_ICON_BUTTON} aria-label={`${t.routines_move_down}: ${s.name}`}
                   disabled={si === data.sections.length - 1}
                   onClick={() => void save({ ...data, sections: moved(data.sections, si, si + 1) })}
                 >
                   <ArrowDown size={14} />
-                </IconButton>
-                <IconButton label={`${t.edit} ${s.name}`} onClick={() => setEditing({ type: "section", id: s.id })}>
+                </button>
+                <button type="button" className={BAR_ICON_BUTTON} aria-label={`${t.edit} ${s.name}`} onClick={() => setEditing({ type: "section", id: s.id })}>
                   <Pencil size={14} />
-                </IconButton>
-                <IconButton label={`${t.delete} ${s.name}`} onClick={() => void deleteSection(s)}>
+                </button>
+                <button type="button" className={BAR_ICON_BUTTON} aria-label={`${t.delete} ${s.name}`} onClick={() => void deleteSection(s)}>
                   <Trash2 size={14} />
-                </IconButton>
+                </button>
               </div>
             </div>
             {rows.map((r, ri) => (
               <SettingRow key={r.id} label={r.title} desc={summary(r)}>
                 <div className="flex items-center">
-                  <IconButton label={`${t.routines_move_up}: ${r.title}`} disabled={ri === 0} onClick={() => moveRoutine(r, -1)}>
+                  <button type="button" className={BAR_ICON_BUTTON} aria-label={`${t.routines_move_up}: ${r.title}`} disabled={ri === 0} onClick={() => moveRoutine(r, -1)}>
                     <ArrowUp size={14} />
-                  </IconButton>
-                  <IconButton
-                    label={`${t.routines_move_down}: ${r.title}`}
+                  </button>
+                  <button
+                    type="button" className={BAR_ICON_BUTTON} aria-label={`${t.routines_move_down}: ${r.title}`}
                     disabled={ri === rows.length - 1}
                     onClick={() => moveRoutine(r, 1)}
                   >
                     <ArrowDown size={14} />
-                  </IconButton>
-                  <IconButton label={`${t.edit} ${r.title}`} onClick={() => setEditing({ type: "routine", id: r.id, sectionId: s.id })}>
+                  </button>
+                  <button type="button" className={BAR_ICON_BUTTON} aria-label={`${t.edit} ${r.title}`} onClick={() => setEditing({ type: "routine", id: r.id, sectionId: s.id })}>
                     <Pencil size={14} />
-                  </IconButton>
-                  <IconButton
-                    label={`${t.delete} ${r.title}`}
+                  </button>
+                  <button
+                    type="button" className={BAR_ICON_BUTTON} aria-label={`${t.delete} ${r.title}`}
                     onClick={() => void deleteRoutine(r)}
                   >
                     <Trash2 size={14} />
-                  </IconButton>
+                  </button>
                 </div>
               </SettingRow>
             ))}

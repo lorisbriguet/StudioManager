@@ -14,4 +14,3 @@ export { BottomBar, BOTTOM_BAR, PANEL_TOP_BAR, BAR_ICON_BUTTON } from "./Bars";
 export { SectionLabel } from "./SectionLabel";
 export { TabItem } from "./TabItem";
 export { ProgressBar } from "./ProgressBar";
-export { IconButton } from "./IconButton";

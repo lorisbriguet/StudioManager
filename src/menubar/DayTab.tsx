@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { MoreHorizontal } from "lucide-react";
-import { Button, EmptyState, IconButton, SectionLabel } from "../components/ui";
+import { Button, EmptyState, BAR_ICON_BUTTON, SectionLabel } from "../components/ui";
 import { ContextMenu, type ContextMenuItem } from "../components/ContextMenu";
 import { useAgents } from "../components/agents/useAgents";
 import { useT } from "../i18n/useT";
@@ -126,16 +126,18 @@ function RoutineRow({ routine, run, sessionId }: { routine: Routine; run: Run | 
       <Button size="sm" variant="secondary" onClick={main.onClick} disabled={main.disabled}>
         {main.label}
       </Button>
-      <IconButton
-        label={`${t.routines_more}: ${routine.title}`}
-        hasMenu
+      <button
+        type="button"
+        className={BAR_ICON_BUTTON}
+        aria-label={`${t.routines_more}: ${routine.title}`}
+        aria-haspopup="menu"
         onClick={(e) => {
           const r = e.currentTarget.getBoundingClientRect();
           setMenuAt({ x: r.right - 160, y: r.bottom + 4 });
         }}
       >
-        <MoreHorizontal size={16} />
-      </IconButton>
+        <MoreHorizontal size={14} />
+      </button>
       {menuAt && <ContextMenu x={menuAt.x} y={menuAt.y} items={items} onClose={() => setMenuAt(null)} />}
     </div>
   );
