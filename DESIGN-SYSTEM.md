@@ -321,18 +321,24 @@ import { Input, Textarea } from "../components/ui";
 
 ### Dates
 
-`src/components/ui/DatePicker.tsx`:
+Every date field uses `DatePicker` from `src/components/ui/DatePicker.tsx`. Never use a native `<input type="date">`.
 
 ```tsx
-<DatePicker value={due} onChange={setDue} />   // "yyyy-MM-dd" | null; Today / Tomorrow / Clear
+<DatePicker value={due} onChange={setDue} />                        // "yyyy-MM-dd" | null
+<DatePicker size="sm" variant="bare" value={d} onChange={…} />      // table cells, inline metadata
 <Calendar selected={d} selectedEnd={end} onSelect={pick} month={m} onMonthChange={setM} />
-<DateShortcuts onPick={pick} />
 ```
 
-- **`DatePicker`:** a field-styled trigger (sizes `sm`/`md`, like Input) that opens a Popover with the shortcuts and a calendar.
-- **`Calendar`:** the month grid. Weeks start on Monday, and the month and weekday names follow the app language. A range is tinted when `selectedEnd` is set.
+- **Typing:**
+  - It reads the app's date format (31.10.2026), loose forms (1.2.26) and ISO.
+  - `onChange` fires as soon as the text is a complete valid date, so an Enter-to-save handler sees the new value.
+  - Emptying the field reports `null`.
+- **Invalid input:** a date that doesn't exist (31.02) stays in the field and is flagged with `aria-invalid`. Esc undoes the typing, and a second Esc reaches the dialog.
+- **Calendar:**
+  - The calendar button (or Alt+↓) opens the calendar with Today/Tomorrow shortcuts.
+  - Weeks start on Monday, and the month and weekday names follow the app language.
+- **Sizes and looks:** `size` `sm`/`md` and `variant` `default`/`bare`, as for Input. `className` goes on the wrapper (layout). `inputClassName` goes on the field (border highlights).
 - **`TaskDatePicker`** (end date, times, reminder) is built on `Calendar`, `DateShortcuts` and `Toggle size="sm"`.
-- **Native date fields:** forms where people type a date and press Enter (expenses, invoices, table date cells) still use `<Input type="date">`.
 
 ### Modal
 ```tsx
@@ -680,7 +686,7 @@ Before merging any new UI work, verify:
 - [ ] No `dark:` prefixes for colors covered by tokens
 - [ ] All badges use `rounded-full`
 - [ ] All cards use `rounded-xl` with `bg-[var(--color-surface)]`
-- [ ] Text fields use `Input` / `Textarea` (no raw `<input>`/`<textarea>` for text)
+- [ ] Text fields use `Input` / `Textarea`, date fields use `DatePicker` (no raw `<input>`/`<textarea>`)
 - [ ] Icons use lucide-react with correct canonical icon and standard size
 - [ ] No unicode characters as icons
 - [ ] All user-visible text uses `useT()` i18n keys

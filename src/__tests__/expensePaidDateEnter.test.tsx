@@ -74,7 +74,7 @@ describe("Edit paid date modal", () => {
     fireEvent.contextMenu(row);
     fireEvent.click(await screen.findByRole("menuitem", { name: /edit paid date/i }));
 
-    const input = container.querySelector<HTMLInputElement>('input[type="date"]')!;
+    const input = container.querySelector<HTMLInputElement>('input[inputmode="numeric"]')!;
     expect(input).not.toBeNull();
     fireEvent.change(input, { target: { value: `${YEAR}-02-01` } });
     fireEvent.keyDown(input, { key: "Enter" });

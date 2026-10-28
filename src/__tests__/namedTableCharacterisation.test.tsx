@@ -218,16 +218,16 @@ describe("NamedTable select cell", () => {
 });
 
 describe("NamedTable date cell", () => {
-  it("renders a native date input bound to the row value", () => {
+  it("renders a date field bound to the row value, in the app format", () => {
     renderTable(makeTable(), [makeRow({ col_date: "2026-03-15" })]);
-    const input = screen.getByDisplayValue("2026-03-15") as HTMLInputElement;
-    expect(input.type).toBe("date");
+    const input = screen.getByRole("textbox", { name: "Due" }) as HTMLInputElement;
+    expect(input.value).toBe("15.03.2026");
   });
 
   it("changing it commits immediately via updateRow.mutate (no edit/commit step)", () => {
     renderTable(makeTable(), [makeRow({ col_date: "2026-03-15" })]);
-    const input = screen.getByDisplayValue("2026-03-15");
-    fireEvent.change(input, { target: { value: "2026-04-01" } });
+    const input = screen.getByRole("textbox", { name: "Due" });
+    fireEvent.change(input, { target: { value: "01.04.2026" } });
 
     expect(updateRowMutate).toHaveBeenCalledWith({ id: 1, data: { col_date: "2026-04-01" } });
   });

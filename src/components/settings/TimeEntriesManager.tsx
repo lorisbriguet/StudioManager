@@ -3,7 +3,7 @@ import { X, Pencil, Trash2, Check } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useTimeEntriesWithDetails, useUpdateTimeEntry, useDeleteTimeEntry } from "../../db/hooks/useTimeEntries";
 import { useProjects } from "../../db/hooks/useProjects";
-import { Button, Select, IconButton, Input } from "../ui";
+import { Button, DatePicker, Select, IconButton, Input } from "../ui";
 import { SectionHeader } from "../ui/Settings";
 
 function formatDuration(minutes: number): string {
@@ -71,18 +71,18 @@ export function TimeEntriesManager() {
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div className="flex flex-col gap-1">
           <label className="text-xs text-muted">{t.start}</label>
-          <Input size="sm" fullWidth={false}
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+          <DatePicker size="sm" fullWidth={false}
+            value={startDate || null}
+            onChange={(v) => setStartDate(v ?? "")}
+            aria-label={t.start}
           />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs text-muted">{t.end_date}</label>
-          <Input size="sm" fullWidth={false}
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+          <DatePicker size="sm" fullWidth={false}
+            value={endDate || null}
+            onChange={(v) => setEndDate(v ?? "")}
+            aria-label={t.end_date}
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -136,10 +136,9 @@ export function TimeEntriesManager() {
                   {editingId === entry.id ? (
                     <>
                       <td className="px-3 py-1.5">
-                        <Input size="sm"
-                          type="date"
-                          value={editForm.date}
-                          onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                        <DatePicker size="sm"
+                          value={editForm.date || null}
+                          onChange={(v) => setEditForm({ ...editForm, date: v ?? "" })}
                           className="min-w-[110px]"
                         />
                       </td>

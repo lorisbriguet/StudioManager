@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Eye } from "lucide-react";
-import { Button, Input, Select, FormField, Textarea } from "../components/ui";
+import { Button, DatePicker, Input, Select, FormField, Textarea } from "../components/ui";
 import * as v from "../lib/validate";
 import { toast } from "sonner";
 import { addDays, format } from "date-fns";
@@ -385,12 +385,10 @@ export function QuoteFormPage() {
             </Select>
           </FormField>
           <FormField label={t.date} required error={errors.quote_date}>
-            <Input
-              type="date"
-              value={quoteDate}
-              onChange={(e) => { setQuoteDate(e.target.value); clearError("quote_date"); }}
+            <DatePicker
+              value={quoteDate || null}
+              onChange={(v) => { setQuoteDate(v ?? ""); clearError("quote_date"); }}
               onBlur={() => setFieldError("quote_date", v.validateField(quoteDate, quoteSchema.quote_date))}
-              className="py-2"
             />
           </FormField>
           <FormField label={t.activity}>

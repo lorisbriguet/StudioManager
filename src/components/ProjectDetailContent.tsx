@@ -20,7 +20,7 @@ import type { ProjectStatus } from "../types/project";
 import { ContextMenu, type ContextMenuState } from "./ui/ContextMenu";
 import { useInvoices, useInvoicesByProject, useUpdateInvoice } from "../db/hooks/useInvoices";
 import { useQuotes, useQuotesByProject, useUpdateQuote } from "../db/hooks/useQuotes";
-import { Badge, Button, PageSpinner, Select, Textarea } from "./ui";
+import { Badge, Button, DatePicker, PageSpinner, Select, Textarea } from "./ui";
 import { invoiceStatusVariant, quoteStatusVariant } from "../lib/statusColors";
 import { useTabStore } from "../stores/tab-store";
 import { open as openDirectory } from "@tauri-apps/plugin-dialog";
@@ -293,30 +293,34 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
         <div className="flex items-center gap-4 mb-4 text-xs">
           <div className="flex items-center gap-2">
             <span className="text-muted">{t.start}</span>
-            <input
-              type="date"
-              value={project.start_date ?? ""}
-              onChange={(e) =>
+            <DatePicker
+              variant="bare"
+              size="sm"
+              fullWidth={false}
+              value={project.start_date || null}
+              onChange={(v) =>
                 updateProject.mutate({
                   id: projectId,
-                  data: { start_date: e.target.value || null },
+                  data: { start_date: v },
                 })
               }
-              className="bg-transparent border-none text-xs text-muted cursor-pointer hover:text-[var(--color-text-secondary)]"
+              aria-label={t.start}
             />
           </div>
           <div className="flex items-center gap-2">
             <span className="text-muted">{t.deadline}</span>
-            <input
-              type="date"
-              value={project.deadline ?? ""}
-              onChange={(e) =>
+            <DatePicker
+              variant="bare"
+              size="sm"
+              fullWidth={false}
+              value={project.deadline || null}
+              onChange={(v) =>
                 updateProject.mutate({
                   id: projectId,
-                  data: { deadline: e.target.value || null },
+                  data: { deadline: v },
                 })
               }
-              className="bg-transparent border-none text-xs text-muted cursor-pointer hover:text-[var(--color-text-secondary)]"
+              aria-label={t.deadline}
             />
           </div>
           {project.folder_path ? (

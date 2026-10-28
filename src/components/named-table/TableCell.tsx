@@ -3,7 +3,7 @@ import { Tag } from "../ui/Tag";
 import { Select } from "../ui/Select";
 import type { TableColumnDef, ProjectTableRow } from "../../types/project-table";
 
-import { Input } from "../ui";
+import { DatePicker, Input } from "../ui";
 interface Props {
   row: ProjectTableRow;
   col: TableColumnDef;
@@ -88,10 +88,10 @@ export function TableCell({
     }
     case "date":
       return (
-        <Input variant="bare" size="sm" fullWidth={false}
-          type="date"
-          value={(row.data[col.id] as string) ?? ""}
-          onChange={(e) => onChange({ ...row.data, [col.id]: e.target.value })}
+        <DatePicker variant="bare" size="sm" fullWidth={false}
+          value={(row.data[col.id] as string) || null}
+          onChange={(v) => onChange({ ...row.data, [col.id]: v ?? "" })}
+          aria-label={col.name}
         />
       );
     default:

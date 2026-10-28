@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Plus, Paperclip, Eye, ChevronRight, Trash2, Upload, Wallet, Pencil, Settings2 } from "lucide-react";
-import { PageHeader, SearchBar, Button, Card, EmptyState, FormField, Input, Select, TableSkeleton, IconButton, SectionLabel } from "../components/ui";
+import { PageHeader, SearchBar, Button, Card, DatePicker, EmptyState, FormField, Input, Select, TableSkeleton, IconButton, SectionLabel } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
 import { toast } from "sonner";
@@ -567,16 +567,15 @@ export function NewIncomeForm({
             setForm((f) => ({ ...f, date: format(new Date(), "yyyy-MM-dd") }))
           )}
         >
-          <Input
-            type="date"
-            value={form.date}
-            onChange={(e) => {
-              setForm({ ...form, date: e.target.value });
+          <DatePicker
+            value={form.date || null}
+            onChange={(v) => {
+              setForm({ ...form, date: v ?? "" });
               clearError("date");
               undetect("date");
             }}
             onBlur={() => validateOnBlur("date")}
-            className={detectedClass("date")}
+            inputClassName={detectedClass("date")}
           />
         </FormField>
         <FormField

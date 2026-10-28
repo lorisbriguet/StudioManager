@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Plus, Paperclip, Eye, ChevronRight, Upload, Trash2, CheckCircle, CalendarCheck, Receipt, Settings2, XCircle, Pencil } from "lucide-react";
-import { Button, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState, Card, Modal, Popover, IconButton, Tag, SectionLabel } from "../components/ui";
+import { Button, DatePicker, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState, Card, Modal, Popover, IconButton, Tag, SectionLabel } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
@@ -430,11 +430,10 @@ export function ExpensesPage() {
           </div>
         }
       >
-        <Input
-          type="date"
+        <DatePicker
           fullWidth
-          value={editDateValue}
-          onChange={(e) => setEditDateValue(e.target.value)}
+          value={editDateValue || null}
+          onChange={(v) => setEditDateValue(v ?? "")}
           onKeyDown={(e) => { if (e.key === "Enter") saveEditDate(); }}
           autoFocus
         />
@@ -699,16 +698,15 @@ export function NewExpenseForm({
             setForm((f) => ({ ...f, invoice_date: format(new Date(), "yyyy-MM-dd") }))
           )}
         >
-          <Input
-            type="date"
-            value={form.invoice_date}
-            onChange={(e) => {
-              setForm({ ...form, invoice_date: e.target.value });
+          <DatePicker
+            value={form.invoice_date || null}
+            onChange={(v) => {
+              setForm({ ...form, invoice_date: v ?? "" });
               clearError("invoice_date");
               undetect("invoice_date");
             }}
             onBlur={() => validateOnBlur("invoice_date")}
-            className={`py-2 ${detectedClass("invoice_date")}`}
+            inputClassName={detectedClass("invoice_date")}
           />
         </FormField>
         <FormField

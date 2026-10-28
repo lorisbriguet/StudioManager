@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { ListTodo, Trash2, ArrowLeft, AlertTriangle, Eye } from "lucide-react";
 import { isUntranslatedActivity } from "../lib/activityNudge";
-import { Button, Input, Select, FormField, Popover, Textarea } from "../components/ui";
+import { Button, DatePicker, Input, Select, FormField, Popover, Textarea } from "../components/ui";
 import { MENU_ITEM } from "../components/ui/Dropdown";
 import * as v from "../lib/validate";
 import { toast } from "sonner";
@@ -585,10 +585,9 @@ export function InvoiceFormPage() {
             </Select>
           </FormField>
           <FormField label={t.date} required error={errors.invoice_date}>
-            <Input
-              type="date"
-              value={invoiceDate}
-              onChange={(e) => { setInvoiceDate(e.target.value); clearError("invoice_date"); }}
+            <DatePicker
+              value={invoiceDate || null}
+              onChange={(v) => { setInvoiceDate(v ?? ""); clearError("invoice_date"); }}
               onBlur={() => setFieldError("invoice_date", v.validateField(invoiceDate, invoiceSchema.invoice_date))}
             />
           </FormField>

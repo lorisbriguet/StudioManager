@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { format, addMonths } from "date-fns";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
-import { Button, FormField, Input, Modal, Textarea } from "./ui";
+import { Button, DatePicker, FormField, Input, Modal, Textarea } from "./ui";
 import * as v from "../lib/validate";
 import { useT } from "../i18n/useT";
 import { useCreateProjectFromQuote } from "../db/hooks/useProjects";
@@ -183,10 +183,9 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
             />
           </FormField>
           <FormField label={t.project_deadline} required error={errors.deadline}>
-            <Input
-              type="date"
-              value={deadline}
-              onChange={(e) => { setDeadline(e.target.value); clearError("deadline"); }}
+            <DatePicker
+              value={deadline || null}
+              onChange={(v) => { setDeadline(v ?? ""); clearError("deadline"); }}
               onBlur={() => validateOnBlur("deadline")}
             />
           </FormField>

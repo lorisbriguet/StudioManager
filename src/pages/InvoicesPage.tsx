@@ -33,7 +33,7 @@ import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Card, Modal, FormField, Input, Select, IconButton, CountBadge, SectionLabel } from "../components/ui";
+import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Card, Modal, FormField, DatePicker, Select, IconButton, CountBadge, SectionLabel } from "../components/ui";
 import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
 import { isDraftReference } from "../types/invoice";
 import type { Invoice, InvoiceStatus } from "../types/invoice";
@@ -781,10 +781,9 @@ export function InvoicesPage() {
             </Select>
           </FormField>
           <FormField label={t.next_due}>
-            <Input
-              type="date"
-              value={recNextDue}
-              onChange={(e) => { setRecNextDue(e.target.value); setRecNextDueTouched(true); }}
+            <DatePicker
+              value={recNextDue || null}
+              onChange={(v) => { setRecNextDue(v ?? ""); setRecNextDueTouched(true); }}
             />
           </FormField>
         </div>

@@ -1,16 +1,16 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { addMonths, format, getDay, isSameDay, isToday, startOfMonth, subMonths, addDays } from "date-fns";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X } from "lucide-react";
-import { useAppStore } from "../../stores/app-store";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { addMonths, format, getDay, isSameDay, isToday, isValid, parse, startOfMonth, subMonths, addDays } from "date-fns";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { useAppStore, type DateFormatOption } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
-import { formatDisplayDate } from "../../utils/formatDate";
 import { IconButton } from "./IconButton";
-import { Popover, usePopover } from "./Popover";
+import { Popover } from "./Popover";
+import { Input, type FieldSize } from "./Input";
 
 /**
  * Calendar and DatePicker. See DESIGN-SYSTEM.md, "Dates".
  *
- *   <DatePicker value={due} onChange={setDue} />            "yyyy-MM-dd" | null
+ *   <DatePicker value={due} onChange={setDue} />            "yyyy-MM-dd" | null; type or pick
  *   <Calendar selected={d} onSelect={pick} />               month grid, for custom pickers
  *
  * Weeks start on Monday. Month and weekday names follow the app language.
@@ -140,93 +140,204 @@ export function DateShortcuts({ onPick, children }: { onPick: (d: Date) => void;
   );
 }
 
+/**
+ * Read a typed date. Tries the app's format (31.10.2026), its loose form
+ * (1.2.2026), then ISO (2026-10-31); with `shortYear`, also 1.2.26.
+ * Strict: the text must read back exactly, so 31.02.2026 and the half-typed
+ * 1.2.202 fail.
+ */
+export function parseTypedDate(text: string, fmt: DateFormatOption, { shortYear = true } = {}): Date | null {
+  const t = text.trim();
+  if (!t) return null;
+  const loose = fmt.replace("dd", "d").replace("MM", "M");
+  const candidates = [fmt, loose, "yyyy-MM-dd"];
+  if (shortYear) candidates.push(loose.replace("yyyy", "yy"));
+  for (const f of candidates) {
+    const d = parse(t, f, new Date(2000, 0, 1));
+    if (!isValid(d) || d.getFullYear() < 1900 || d.getFullYear() > 2200) continue;
+    // Loose forms accept 1 or 2 digits, so read back with the loose pattern
+    if (format(d, f) === t || format(d, f.replace("dd", "d").replace("MM", "M")) === t.replace(/\b0(\d)/g, "$1")) return d;
+  }
+  return null;
+}
+
 interface DatePickerProps {
   /** "yyyy-MM-dd", or null for no date. */
   value: string | null;
+  /**
+   * Fires as soon as the text is a complete valid date (or is emptied → null),
+   * and on a calendar pick. So an Enter handler on the form sees the new value,
+   * like a native date field.
+   */
   onChange: (value: string | null) => void;
   placeholder?: string;
-  /** Show the clear action. Default true. */
-  clearable?: boolean;
-  size?: "sm" | "md";
+  size?: FieldSize;
+  /** bare: table cells. */
+  variant?: "default" | "bare";
   fullWidth?: boolean;
   disabled?: boolean;
+  autoFocus?: boolean;
   id?: string;
+  name?: string;
+  /** On the wrapper (layout: width, margins). */
   className?: string;
+  /** On the text field itself (border highlights such as detected values). */
+  inputClassName?: string;
+  onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
+  onBlur?: () => void;
   "aria-label"?: string;
   "aria-invalid"?: boolean | "true" | "false";
   "aria-describedby"?: string;
+  "aria-required"?: boolean | "true" | "false";
+  "data-testid"?: string;
 }
-
-const TRIGGER = {
-  sm: "gap-1.5 rounded-md px-2.5 py-1 text-xs",
-  md: "gap-2 rounded-lg px-3 py-2 text-sm",
-};
 
 export function DatePicker({
   value,
   onChange,
   placeholder,
-  clearable = true,
   size = "md",
+  variant = "default",
   fullWidth = true,
   disabled,
+  autoFocus,
   id,
+  name,
   className = "",
+  inputClassName = "",
+  onKeyDown,
+  onBlur,
   ...aria
 }: DatePickerProps) {
   const t = useT();
-  const pop = usePopover();
+  const fmt = useAppStore((st) => st.dateFormat);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const shown = value ? format(parseLocalDate(value), fmt) : "";
+  const [text, setText] = useState(shown);
+  const [invalid, setInvalid] = useState(false);
   const selected = value ? parseLocalDate(value) : undefined;
   const [month, setMonth] = useState(() => selected ?? new Date());
+
+  // Follow outside changes (a pick, a reset) unless the text already means that date.
   useEffect(() => {
+    setText((cur) => {
+      const d = parseTypedDate(cur, fmt);
+      const same = (d ? toDateString(d) : null) === (value ?? null);
+      return same ? cur : shown;
+    });
     if (value) setMonth(parseLocalDate(value));
-  }, [value]);
+    setInvalid(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, fmt]);
+
+  const type = (next: string) => {
+    setText(next);
+    setInvalid(false);
+    if (!next.trim()) {
+      if (value !== null) onChange(null);
+      return;
+    }
+    // While typing, only a full-year date commits: "1.2.20" on the way to
+    // "1.2.2026" must not save 2020 (table cells save on every change).
+    const d = parseTypedDate(next, fmt, { shortYear: false });
+    if (d) {
+      const iso = toDateString(d);
+      if (iso !== value) onChange(iso);
+    }
+  };
+
+  /** Enter / blur: also accept a two-digit year, then show the date in full. */
+  const settle = () => {
+    if (!text.trim()) return true;
+    const d = parseTypedDate(text, fmt);
+    if (!d) return false;
+    const iso = toDateString(d);
+    if (iso !== value) onChange(iso);
+    setText(format(d, fmt));
+    return true;
+  };
 
   const pick = (d: Date) => {
     onChange(toDateString(d));
-    pop.close();
+    setText(format(d, fmt));
+    setInvalid(false);
+    setOpen(false);
+    inputRef.current?.focus({ preventScroll: true });
   };
 
   return (
-    <>
-      <button
-        {...pop.triggerProps}
+    <div ref={wrapRef} className={`relative ${fullWidth ? "w-full" : "inline-block"} ${className}`}>
+      <Input
+        ref={inputRef}
         id={id}
-        type="button"
+        name={name}
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        size={size}
+        variant={variant}
         disabled={disabled}
+        autoFocus={autoFocus}
+        value={text}
+        placeholder={placeholder ?? fmt.toLowerCase()}
+        onChange={(e) => type(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape" && text !== shown) {
+            // Undo the typing first; a second Esc reaches the dialog.
+            e.preventDefault();
+            e.stopPropagation();
+            setText(shown);
+            setInvalid(false);
+            return;
+          }
+          if (e.key === "ArrowDown" && e.altKey) {
+            e.preventDefault();
+            setOpen(true);
+            return;
+          }
+          if (e.key === "Enter" && !settle()) setInvalid(true);
+          onKeyDown?.(e);
+        }}
+        onBlur={() => {
+          if (!settle()) setInvalid(true);
+          onBlur?.();
+        }}
         aria-label={aria["aria-label"]}
-        aria-invalid={aria["aria-invalid"]}
+        aria-invalid={invalid || aria["aria-invalid"] === true || aria["aria-invalid"] === "true" ? true : undefined}
         aria-describedby={aria["aria-describedby"]}
-        className={`inline-flex items-center text-left border border-[var(--color-input-border)] bg-[var(--color-input-bg)] focus-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-          TRIGGER[size]
-        } ${fullWidth ? "w-full" : ""} ${className}`}
-      >
-        <CalendarIcon size={size === "sm" ? 12 : 14} className="shrink-0 text-muted" aria-hidden="true" />
-        <span className={`flex-1 truncate ${value ? "" : "text-muted"}`}>
-          {value ? formatDisplayDate(value) : (placeholder ?? t.no_date)}
-        </span>
-      </button>
-      {pop.open && (
-        <Popover anchor={pop.anchorRef} onClose={pop.close} padding="content" className="w-[280px]" role="dialog" aria-label={aria["aria-label"] ?? t.no_date}>
+        aria-required={aria["aria-required"]}
+        data-testid={aria["data-testid"]}
+        className={`pr-8 tabular-nums aria-[invalid=true]:border-danger-text ${inputClassName}`}
+      />
+      <IconButton
+        icon={CalendarIcon}
+        label={t.pick_date}
+        size={size === "sm" ? "xs" : "sm"}
+        iconSize={size === "sm" ? 12 : 14}
+        disabled={disabled}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={() => setOpen((o) => !o)}
+        className="absolute right-1 top-1/2 -translate-y-1/2"
+      />
+      {open && (
+        <Popover
+          anchor={wrapRef}
+          onClose={(returnFocus) => {
+            setOpen(false);
+            if (returnFocus) inputRef.current?.focus({ preventScroll: true });
+          }}
+          padding="content"
+          className="w-[280px]"
+          role="dialog"
+          aria-label={aria["aria-label"] ?? t.pick_date}
+        >
           <DateShortcuts onPick={pick} />
           <Calendar selected={selected} onSelect={pick} month={month} onMonthChange={setMonth} />
-          {clearable && value && (
-            <div className="border-t border-[var(--color-border-divider)] mt-2 pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  onChange(null);
-                  pop.close();
-                }}
-                className="w-full inline-flex items-center justify-center gap-1.5 py-1 text-xs text-[var(--color-danger-text)] hover:underline focus-accent rounded-md"
-              >
-                <X size={12} aria-hidden="true" />
-                {t.clear_date}
-              </button>
-            </div>
-          )}
         </Popover>
       )}
-    </>
+    </div>
   );
 }

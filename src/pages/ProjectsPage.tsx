@@ -22,7 +22,7 @@ import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Button, Badge, Card, PageHeader, SearchBar, TableSkeleton, Input, EmptyState, Select, IconButton, FilterChip } from "../components/ui";
+import { Button, Badge, Card, PageHeader, SearchBar, TableSkeleton, DatePicker, Input, EmptyState, Select, IconButton, FilterChip } from "../components/ui";
 import { undoable, undoableFromStore } from "../lib/undo";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
@@ -513,15 +513,13 @@ function NewProjectForm({
             </option>
           ))}
         </Select>
-        <Input
-          type="date"
-          value={form.start_date}
-          onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+        <DatePicker
+          value={form.start_date || null}
+          onChange={(v) => setForm({ ...form, start_date: v ?? "" })}
         />
-        <Input
-          type="date"
-          value={form.deadline}
-          onChange={(e) => setForm({ ...form, deadline: e.target.value })}
+        <DatePicker
+          value={form.deadline || null}
+          onChange={(v) => setForm({ ...form, deadline: v ?? "" })}
         />
       </div>
       <div className="flex gap-2">
