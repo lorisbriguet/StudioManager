@@ -6,6 +6,7 @@ import { useT } from "../../i18n/useT";
 import { IconButton } from "./IconButton";
 import { Popover } from "./Popover";
 import { Input, type FieldSize } from "./Input";
+import { Button } from "./Button";
 
 /**
  * Calendar and DatePicker. See DESIGN-SYSTEM.md, "Dates".
@@ -125,16 +126,14 @@ export function Calendar({ selected, selectedEnd, onSelect, month: monthProp, on
 /** Today / Tomorrow shortcut row used at the top of date popovers. */
 export function DateShortcuts({ onPick, children }: { onPick: (d: Date) => void; children?: ReactNode }) {
   const t = useT();
-  const chip =
-    "px-2 py-1 text-xs font-medium rounded-md bg-[var(--color-input-bg)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] focus-accent";
   return (
     <div className="flex gap-1.5 mb-2">
-      <button type="button" className={chip} onClick={() => onPick(new Date())}>
+      <Button variant="secondary" onClick={() => onPick(new Date())}>
         {t.today}
-      </button>
-      <button type="button" className={chip} onClick={() => onPick(addDays(new Date(), 1))}>
+      </Button>
+      <Button variant="secondary" onClick={() => onPick(addDays(new Date(), 1))}>
         {t.tomorrow}
-      </button>
+      </Button>
       {children}
     </div>
   );

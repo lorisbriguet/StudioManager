@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import { X } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { IconButton } from "./IconButton";
+import { Button } from "./Button";
 
 interface BulkAction {
   label: string;
@@ -27,18 +28,14 @@ export function BulkActionBar({ count, actions, onClear }: Props) {
       </span>
       <div className="w-px h-5 bg-[var(--color-border-divider)]" />
       {actions.map((action, i) => (
-        <button
+        <Button
           key={i}
+          variant={action.danger ? "danger" : "secondary"}
+          icon={action.icon}
           onClick={action.onClick}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors ${
-            action.danger
-              ? "text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)]"
-              : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
-          }`}
         >
-          {action.icon}
           {action.label}
-        </button>
+        </Button>
       ))}
       <IconButton icon={X} label={t.cancel} onClick={onClear} />
     </div>

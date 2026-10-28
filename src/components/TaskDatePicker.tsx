@@ -22,7 +22,6 @@ interface TaskDatePickerProps {
     end_time?: string | null;
     reminder?: ReminderOption | null;
   }) => void;
-  compact?: boolean;
 }
 
 import type { UIKey } from "../i18n/ui";
@@ -44,7 +43,6 @@ export function TaskDatePicker({
   endTime,
   reminder,
   onChange,
-  compact,
 }: TaskDatePickerProps) {
   const t = useT();
   const pop = usePopover();
@@ -110,19 +108,15 @@ export function TaskDatePicker({
 
   return (
     <>
-      <button
+      <Button
         {...pop.triggerProps}
-        type="button"
-        className={`flex items-center gap-1.5 text-xs rounded-md px-2 py-1 border transition-colors ${
-          dueDate
-            ? "border-[var(--color-input-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
-            : "border-dashed border-[var(--color-input-border)] text-muted hover:border-[var(--color-input-border)] hover:bg-[var(--color-hover-row)]"
-        } ${compact ? "px-1.5 py-0.5" : ""}`}
+        variant="outline"
+        icon={<CalendarIcon size={12} className="shrink-0" />}
         aria-label={dueDate ? undefined : t.no_date}
+        className={dueDate ? "" : "border-dashed text-muted"}
       >
-        <CalendarIcon size={compact ? 12 : 14} className="shrink-0" />
-        {dueDate && <span className={compact ? "text-xs" : ""}>{displayLabel}</span>}
-      </button>
+        {dueDate && displayLabel}
+      </Button>
 
       {pop.open && (
         <Popover anchor={pop.anchorRef} onClose={pop.close} align="end" padding="content" className="w-[300px]">

@@ -4,6 +4,7 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { useT } from "../i18n/useT";
 import { logError } from "../lib/log";
 import { isDemoBuild } from "../lib/demoBuild";
+import { Button } from "./ui/Button";
 
 export function UpdateChecker() {
   const t = useT();
@@ -109,12 +110,9 @@ export function UpdateChecker() {
     return (
       <div className="flex items-center gap-2 text-sm">
         <span>{t.update_available}: <strong>v{version}</strong></span>
-        <button
-          onClick={downloadAndInstall}
-          className="px-3 py-1 bg-accent text-white text-xs rounded-md hover:bg-accent-hover"
-        >
+        <Button variant="primary" onClick={downloadAndInstall}>
           {t.download_and_install}
-        </button>
+        </Button>
       </div>
     );
   }
@@ -131,12 +129,9 @@ export function UpdateChecker() {
     return (
       <div className="flex items-center gap-2 text-sm">
         <span>{t.update_ready}</span>
-        <button
-          onClick={doRelaunch}
-          className="px-3 py-1 bg-accent text-white text-xs rounded-md hover:bg-accent-hover"
-        >
+        <Button variant="primary" onClick={doRelaunch}>
           {t.restart_now}
-        </button>
+        </Button>
       </div>
     );
   }

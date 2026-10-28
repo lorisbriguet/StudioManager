@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { X, Pin } from "lucide-react";
+import { IconButton } from "./IconButton";
 
 /**
  * One tab, as in the app's tab bar: an accent underline on the active tab,
@@ -55,18 +56,18 @@ export function TabItem({
         <span className="max-w-[160px] truncate">{label}</span>
       </button>
       {onClose && !pinned && (
-        <button
-          type="button"
-          aria-label={closeLabel}
-          title={closeLabel}
+        <IconButton
+          icon={X}
+          label={closeLabel ?? ""}
+          size="xs"
+          tone="danger"
+          reveal
           onClick={(e) => {
             e.stopPropagation();
             onClose();
           }}
-          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-[var(--color-danger-text)] shrink-0 ml-0.5"
-        >
-          <X size={12} />
-        </button>
+          className="ml-0.5"
+        />
       )}
     </div>
   );

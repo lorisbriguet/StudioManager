@@ -437,9 +437,9 @@ export function CalendarPage() {
         <div className="flex items-center gap-3 mb-4">
           <IconButton icon={ChevronLeft} label={t.previous} iconSize={18} onClick={calPrev} />
           <IconButton icon={ChevronRight} label={t.next} iconSize={18} onClick={calNext} />
-          <button onClick={calToday} className="px-3 py-1 text-xs border border-[var(--color-input-border)] rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:border-[#444] transition-colors">
+          <Button variant="outline" onClick={calToday}>
             {t.today}
-          </button>
+          </Button>
           <h1 className="text-xl font-semibold tracking-tight">{calTitle}</h1>
           <SegmentedControl
             className="ml-auto"

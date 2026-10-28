@@ -422,7 +422,6 @@ export function TasksPage() {
                         endTime={tk.end_time}
                         reminder={tk.reminder}
                         onChange={(vals) => updateTask.mutate({ id: tk.id, data: vals })}
-                        compact
                       />
                       <IconButton
                         icon={activeTimer?.taskId === tk.id ? Square : Play}
@@ -506,7 +505,6 @@ export function TasksPage() {
                               endTime={s.end_time}
                               reminder={s.reminder}
                               onChange={(vals) => updateSubtask.mutate({ id: s.id, data: vals })}
-                              compact
                             />
                             <IconButton
                               onClick={() => deleteSubtask.mutate(s.id, {

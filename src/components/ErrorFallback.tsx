@@ -1,5 +1,6 @@
 import type { FallbackProps } from "react-error-boundary";
 import { useT } from "../i18n/useT";
+import { Button } from "./ui/Button";
 
 export function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
   const t = useT();
@@ -9,12 +10,9 @@ export function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
       <p className="text-xs text-muted mb-4 max-w-md">
         {(error as Error)?.message || t.page_error_description}
       </p>
-      <button
-        onClick={resetErrorBoundary}
-        className="px-4 py-2 text-sm bg-accent text-white rounded-md hover:bg-accent-hover"
-      >
+      <Button variant="primary" onClick={resetErrorBoundary}>
         {t.retry}
-      </button>
+      </Button>
     </div>
   );
 }

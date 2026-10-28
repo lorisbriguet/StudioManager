@@ -183,7 +183,6 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                   dueDate={tk.due_date} endDate={tk.end_date} startTime={tk.start_time}
                   endTime={tk.end_time} reminder={tk.reminder}
                   onChange={(vals) => updateTask.mutate({ id: tk.id, data: vals })}
-                  compact
                 />
                 <IconButton
                   icon={activeTimer?.taskId === tk.id ? Square : Play}
@@ -264,7 +263,6 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                         dueDate={s.due_date} endDate={s.end_date} startTime={s.start_time}
                         endTime={s.end_time} reminder={s.reminder}
                         onChange={(vals) => updateSubtask.mutate({ id: s.id, data: vals })}
-                        compact
                       />
                       <IconButton
                         icon={Trash2}

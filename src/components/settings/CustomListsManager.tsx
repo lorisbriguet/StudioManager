@@ -194,13 +194,9 @@ export function CustomListsManager() {
               <IconButton icon={Plus} label={t.new_list_item} size="md" tone="accent" onClick={addItem} />
             </div>
             {dirty && (
-              <button
-                type="button"
-                onClick={saveItems}
-                className="px-3 py-1.5 bg-accent text-white text-xs rounded-md hover:bg-accent-hover"
-              >
+              <Button variant="primary" onClick={saveItems}>
                 {t.save}
-              </button>
+              </Button>
             )}
           </div>
         )}

@@ -128,9 +128,9 @@ export function ExpenseCategoryManager() {
                     <ColorSwatchPicker value={form.color} onChange={(c) => setForm({ ...form, color: c })} />
                   </td>
                   <td className="py-2 flex gap-1">
-                    <button type="button" onClick={handleSaveEdit} className="px-2 py-1 bg-accent text-white text-xs rounded-md hover:bg-accent-hover">
+                    <Button variant="primary" onClick={handleSaveEdit}>
                       {t.save}
-                    </button>
+                    </Button>
                     <button type="button" onClick={() => setEditingCode(null)} className="px-2 py-1 border border-[var(--color-input-border)] text-xs rounded-md hover:bg-[var(--color-hover-row)]">
                       {t.cancel}
                     </button>
@@ -207,9 +207,9 @@ export function ExpenseCategoryManager() {
                 <ColorSwatchPicker value={form.color} onChange={(c) => setForm({ ...form, color: c })} />
               </td>
               <td className="py-2 flex gap-1">
-                <button type="button" onClick={handleSaveNew} className="px-2 py-1 bg-accent text-white text-xs rounded-md hover:bg-accent-hover">
+                <Button variant="primary" onClick={handleSaveNew}>
                   {t.save}
-                </button>
+                </Button>
                 <button type="button" onClick={() => setAdding(false)} className="px-2 py-1 border border-[var(--color-input-border)] text-xs rounded-md hover:bg-[var(--color-hover-row)]">
                   {t.cancel}
                 </button>
