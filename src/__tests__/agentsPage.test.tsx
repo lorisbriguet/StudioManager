@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { AgentsPage } from "../pages/AgentsPage";
 import { StartAgentForm, slugifyName } from "../components/agents/StartAgentForm";
 import { useAppStore } from "../stores/app-store";
+import { emit } from "../__mocks__/tauri-event";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 import type { Agent, Group } from "../lib/agents";
 
@@ -140,5 +141,34 @@ describe("StartAgentForm", () => {
     fireEvent.change(screen.getByLabelText("Task"), { target: { value: "Do it" } });
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     expect(await screen.findByText("Folder is not trusted")).toBeInTheDocument();
+  });
+});
+
+describe("AgentsPage selection of a new agent", () => {
+  beforeEach(() => {
+    clearInvokedCommands();
+    useAppStore.setState({ agentsEnabled: true });
+  });
+
+  it("selects the new agent once a model switch's short id shows up in the list", async () => {
+    const old = agent("idle", { sessionId: "sess-old", shortId: "11111111", name: "old-agent" });
+    const next = agent("working", { sessionId: "sess-new", shortId: "abcd1234", name: "new-agent" });
+    setInvokeHandler((cmd) => {
+      if (cmd === "agents_list") return [old];
+      if (cmd === "agents_switch_model") return "abcd1234";
+      if (cmd === "agents_conversation") return [];
+      return null;
+    });
+    render(
+      <MemoryRouter initialEntries={["/?agent=sess-old"]}>
+        <AgentsPage />
+      </MemoryRouter>,
+    );
+    fireEvent.change(await screen.findByLabelText("Model"), { target: { value: "opus" } });
+    await waitFor(() => expect(invokedCommands.some((c) => c.cmd === "agents_switch_model")).toBe(true));
+    await emit("agents:changed", [old, next]);
+    const row = await screen.findByRole("button", { name: /new-agent/ });
+    await waitFor(() => expect(row).toHaveAttribute("aria-current"));
+    expect(screen.getByRole("button", { name: /old-agent/ })).not.toHaveAttribute("aria-current");
   });
 });

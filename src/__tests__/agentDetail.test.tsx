@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { AgentDetail } from "../components/agents/AgentDetail";
 import { PromptAnswer } from "../components/agents/PromptAnswer";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
@@ -93,6 +93,14 @@ describe("AgentDetail", () => {
     );
   });
 
+  it("passes the new short id up after a model switch", async () => {
+    setInvokeHandler((cmd) => (cmd === "agents_switch_model" ? "abcd1234" : null));
+    let switched = "";
+    render(<AgentDetail agent={agent()} onOpenTerminal={() => {}} onSwitched={(id) => (switched = id)} />);
+    fireEvent.change(screen.getByLabelText("Model"), { target: { value: "opus" } });
+    await waitFor(() => expect(switched).toBe("abcd1234"));
+  });
+
   it("dismiss only appears in needs you", () => {
     const { rerender } = render(<AgentDetail agent={agent()} onOpenTerminal={() => {}} />);
     expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
@@ -166,5 +174,75 @@ describe("PromptAnswer", () => {
     expect(screen.getByRole("button", { name: /Yes/ })).toBeDisabled();
     release();
     await waitFor(() => expect(screen.getByRole("button", { name: /No/ })).not.toBeDisabled());
+  });
+});
+
+describe("polling", () => {
+  beforeEach(() => {
+    clearInvokedCommands();
+    vi.useFakeTimers();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const count = (cmd: string) => invokedCommands.filter((c) => c.cmd === cmd).length;
+
+  it("conversation skips a tick while a call is in flight", async () => {
+    setInvokeHandler((cmd) => (cmd === "agents_conversation" ? new Promise(() => {}) : null));
+    render(<AgentDetail agent={agent({ group: "working" })} onOpenTerminal={() => {}} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9000);
+    });
+    expect(count("agents_conversation")).toBe(1);
+  });
+
+  it("prompt poll skips a tick while a call is in flight", async () => {
+    setInvokeHandler((cmd) => (cmd === "agents_prompt" ? new Promise(() => {}) : null));
+    render(<PromptAnswer shortId="abcd1234" onOpenTerminal={() => {}} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000);
+    });
+    expect(count("agents_prompt")).toBe(1);
+  });
+
+  it("a conversation response arriving after the agent changed is not shown", async () => {
+    let resolveOld: (v: unknown) => void = () => {};
+    setInvokeHandler((cmd, args) => {
+      if (cmd !== "agents_conversation") return null;
+      if (args.sessionId === "sess-1") return new Promise((r) => (resolveOld = r));
+      return [{ kind: "assistant", text: "from two", at: null }];
+    });
+    const { rerender } = render(<AgentDetail agent={agent()} onOpenTerminal={() => {}} />);
+    rerender(<AgentDetail agent={agent({ sessionId: "sess-2" })} onOpenTerminal={() => {}} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    expect(screen.getByText("from two")).toBeInTheDocument();
+    await act(async () => {
+      resolveOld([{ kind: "assistant", text: "from one", at: null }]);
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    expect(screen.queryByText("from one")).toBeNull();
+    expect(screen.getByText("from two")).toBeInTheDocument();
+  });
+
+  it("a prompt response arriving after the agent changed is not shown", async () => {
+    let resolveOld: (v: unknown) => void = () => {};
+    setInvokeHandler((cmd, args) => {
+      if (cmd !== "agents_prompt") return null;
+      if (args.shortId === "aaaaaaaa") return new Promise((r) => (resolveOld = r));
+      return { ...prompt, question: "Second?" };
+    });
+    const { rerender } = render(<PromptAnswer shortId="aaaaaaaa" onOpenTerminal={() => {}} />);
+    rerender(<PromptAnswer shortId="bbbbbbbb" onOpenTerminal={() => {}} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    expect(screen.getByText("Second?")).toBeInTheDocument();
+    await act(async () => {
+      resolveOld({ ...prompt, question: "First?" });
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    expect(screen.queryByText("First?")).toBeNull();
+    expect(screen.getByText("Second?")).toBeInTheDocument();
   });
 });

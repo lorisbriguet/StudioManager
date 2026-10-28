@@ -20,12 +20,21 @@ export function Conversation({ sessionId, working }: ConversationProps) {
   }, [sessionId]);
 
   useEffect(() => {
+    // Per-effect token: a response for a previous session is ignored.
     let alive = true;
-    const load = () =>
+    // One call at a time: a slow call never piles up or resolves out of order.
+    let inflight = false;
+    const load = () => {
+      if (inflight) return;
+      inflight = true;
       conversation(sessionId)
         .then((list) => alive && setItems(list))
         // Keep what is shown; the next refresh may succeed.
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => {
+          inflight = false;
+        });
+    };
     void load();
     const timer = working ? setInterval(load, REFRESH_MS) : null;
     return () => {

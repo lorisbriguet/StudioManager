@@ -14,9 +14,11 @@ interface AgentDetailProps {
   onOpenTerminal: (shortId: string) => void;
   /** Called after the agent was deleted. */
   onDeleted?: () => void;
+  /** Called with the short id of the new agent after a model switch. */
+  onSwitched?: (shortId: string) => void;
 }
 
-export function AgentDetail({ agent, onOpenTerminal, onDeleted }: AgentDetailProps) {
+export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: AgentDetailProps) {
   const t = useT();
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -101,7 +103,10 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted }: AgentDetailPro
           <Select
             aria-label={t.agents_model}
             value={knownModel ? (agent.model as string) : ""}
-            onChange={(e) => void run(() => switchModel(agent.sessionId, e.target.value))}
+            onChange={(e) => void run(async () => {
+                const next = await switchModel(agent.sessionId, e.target.value);
+                onSwitched?.(next);
+              })}
           >
             {!knownModel && <option value="" disabled />}
             {MODELS.map((m) => (

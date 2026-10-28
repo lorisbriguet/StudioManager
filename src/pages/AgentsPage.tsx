@@ -76,6 +76,7 @@ export function AgentsPage() {
                   agent={selected}
                   onOpenTerminal={setTerminalFor}
                   onDeleted={() => setParams({})}
+                  onSwitched={setPendingShortId}
                 />
               </div>
               {terminalFor && selected.shortId === terminalFor && (

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { answerPrompt, getPrompt, type Prompt } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
 import { Button } from "../ui";
@@ -19,47 +19,62 @@ export function PromptAnswer({ shortId, onOpenTerminal }: PromptAnswerProps) {
   const [answering, setAnswering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const answeringRef = useRef(false);
-  const alive = useRef(true);
-
-  const poll = useCallback(async () => {
-    try {
-      const p = await getPrompt(shortId);
-      if (alive.current && !answeringRef.current) setPrompt(p);
-    } catch {
-      if (alive.current && !answeringRef.current) setPrompt(null);
-    }
-    if (alive.current) setLoaded(true);
-  }, [shortId]);
+  // gen: bumped when the agent changes. answers: bumped per answer, so a poll that
+  // started before an answer cannot overwrite what follows it.
+  const gen = useRef(0);
+  const answers = useRef(0);
+  const pollRef = useRef<() => void>(() => {});
 
   useEffect(() => {
-    alive.current = true;
+    const genCounter = gen; // the ref object itself never changes
+    const myGen = ++genCounter.current;
+    let inflight = false;
+    const current = () => gen.current === myGen;
     setPrompt(null);
     setLoaded(false);
-    void poll();
+    setError(null);
+    const poll = () => {
+      if (inflight || answeringRef.current) return;
+      inflight = true;
+      const startAnswers = answers.current;
+      getPrompt(shortId)
+        .catch(() => null)
+        .then((p) => {
+          if (current() && answers.current === startAnswers && !answeringRef.current) {
+            setPrompt(p);
+            setLoaded(true);
+          }
+        })
+        .finally(() => {
+          inflight = false;
+        });
+    };
+    pollRef.current = poll;
+    poll();
     // Polls only while mounted, and not while an answer is in flight.
-    const timer = setInterval(() => {
-      if (!answeringRef.current) void poll();
-    }, POLL_MS);
+    const timer = setInterval(poll, POLL_MS);
     return () => {
-      alive.current = false;
+      genCounter.current++;
       clearInterval(timer);
     };
-  }, [poll]);
+  }, [shortId]);
 
   const answer = async (number: number, label: string) => {
     if (!prompt || answeringRef.current) return;
     answeringRef.current = true;
+    const mine = gen.current;
+    answers.current++;
     setAnswering(true);
     setError(null);
     try {
       await answerPrompt(shortId, number, label, prompt.fingerprint);
     } catch (e) {
-      if (alive.current) setError(String(e));
+      if (gen.current === mine) setError(String(e));
     } finally {
       answeringRef.current = false;
-      if (alive.current) setAnswering(false);
+      if (gen.current === mine) setAnswering(false);
     }
-    void poll();
+    if (gen.current === mine) pollRef.current();
   };
 
   if (!loaded) return null;
