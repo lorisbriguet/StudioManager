@@ -348,6 +348,15 @@ Reviewer claims rejected: "radius hierarchy inverted" (frequency ≠ inversion),
 - Per-project P&L: invoiced amount vs. time cost (hours x rate) vs. expenses
 - Display in project detail or as a dashboard widget
 
+## Studio upkeep — later connectors
+
+Follow-ups to [the Studio upkeep spec](docs/superpowers/specs/2026-10-28-studio-upkeep-design.md) (v1 ships Synology DSM and Bambu Lab cloud):
+
+- [ ] Bambu Lab over the LAN only (MQTT, no cloud account), for people who keep the printer offline
+- [ ] Prusa printers (PrusaLink / Connect): print hours and job state
+- [ ] UniFi (network gear): firmware age and device health
+- [ ] Agent write access for upkeep (mark done, log a service) once the read tools have proven themselves
+
 ## Low Priority
 
 - [ ] Resizable side peek snap positions

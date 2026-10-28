@@ -1,6 +1,6 @@
 # Studio upkeep — design
 
-Date: 2026-10-28 · Status: draft for Loris's review
+Date: 2026-10-28 · Status: implemented (see [the plan](../plans/2026-10-28-studio-upkeep.md))
 
 Plan: [2026-10-28-studio-upkeep.md](../plans/2026-10-28-studio-upkeep.md)
 
