@@ -13,6 +13,7 @@ import {
 import { Check, ChevronDown, Plus, Search } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { Popover, POPOVER_SURFACE } from "./Popover";
+import { SECTION_LABEL } from "./SectionLabel";
 
 /**
  * Dropdown — the app's one menu component (see DESIGN-SYSTEM.md, "Dropdown").
@@ -32,7 +33,7 @@ export const MENU_PANEL = `${POPOVER_SURFACE} p-1 min-w-[160px]`;
 export const MENU_ITEM =
   "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm text-left select-none transition-colors outline-none";
 export const MENU_DIVIDER = "my-1 border-t border-[var(--color-border-divider)]";
-export const MENU_GROUP_LABEL = "px-2 pt-2 pb-1 text-[10px] font-medium uppercase tracking-widest text-muted";
+export const MENU_GROUP_LABEL = `px-2 pt-2 pb-1 ${SECTION_LABEL}`;
 
 const TONE = {
   base: "text-[var(--color-text-secondary)] cursor-pointer",

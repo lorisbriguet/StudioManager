@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { SectionLabel } from "../ui/SectionLabel";
 
 /** Compact inline row: label left, control right, separated by faint dividers */
 export function SettingRow({ label, desc, children }: { label: string; desc?: string; children: ReactNode }) {
@@ -27,7 +28,7 @@ export function SettingsCard({ title, desc, children }: { title: string; desc?: 
 export function SectionHeader({ title, desc }: { title: string; desc?: string }) {
   return (
     <div className="border-b border-[var(--color-border-divider)] pb-2 mb-3">
-      <h2 className="text-[10px] font-medium uppercase tracking-widest text-muted">{title}</h2>
+      <SectionLabel as="h2">{title}</SectionLabel>
       {desc && <p className="text-xs text-muted mt-1 normal-case tracking-normal">{desc}</p>}
     </div>
   );

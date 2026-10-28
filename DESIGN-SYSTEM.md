@@ -75,7 +75,7 @@ Tokens handle dark mode automatically. **Never use `dark:` prefix** for colors t
 | Element | Classes |
 |---------|---------|
 | Page title | `text-xl font-semibold tracking-tight` |
-| Section label (year groups, categories) | `text-[10px] font-medium uppercase tracking-widest text-muted` |
+| Section label (year groups, categories) | `<SectionLabel>` (`text-[10px] font-medium uppercase tracking-widest text-muted`) |
 | Card/block title | `text-sm font-semibold tracking-tight` |
 | Table column header | `text-xs text-muted` (lowercase, not uppercase) |
 | Body/row text | `text-sm` |
@@ -85,6 +85,20 @@ Tokens handle dark mode automatically. **Never use `dark:` prefix** for colors t
 **Scale rule:** the only permitted sizes are `text-xl`, `text-sm`, `text-xs`,
 and the 10px section label (`text-[10px]`). No other `text-[Npx]` arbitrary
 sizes — 9px/11px/13px were folded into this scale (2026-08, audit item 345).
+
+### Section labels
+
+Every small uppercase label uses `src/components/ui/SectionLabel.tsx`. There is one style only: never `text-xs uppercase`, never `tracking-wide`/`tracking-wider`, never `font-semibold` uppercase.
+
+```tsx
+<SectionLabel className="mb-2">2026</SectionLabel>
+<SectionLabel as="h2" action={<IconButton icon={Plus} label={t.add} size="xs" />}>{t.backlinks}</SectionLabel>
+```
+
+- **Heading tag:** use `as="h2"`/`"h3"` when the label names a section.
+- **Action:** `action` puts a count or button on the right of the same row.
+- **Spacing:** it sets no margin, so the caller adds it.
+- **Class string:** for a `<th>` or a third-party heading, use the `SECTION_LABEL` class string. `MENU_GROUP_LABEL` and `SectionHeader` in `settings/SettingsPrimitives` are built on it.
 
 ---
 
@@ -410,7 +424,7 @@ import { invoiceStatusVariant, quoteStatusVariant, taskStatusVariant, projectSta
 
 ### Year/Section Groups
 ```tsx
-<span className="text-[10px] font-medium uppercase tracking-widest text-muted">2026</span>
+<SectionLabel as="span">2026</SectionLabel>
 ```
 
 ---
@@ -577,5 +591,6 @@ Before merging any new UI work, verify:
 - [ ] Shared components used where available (Button, Badge, Input, Select / DropdownSelect / Dropdown, Modal, Card, Toggle)
 - [ ] No native `<select>`
 - [ ] Icon-only buttons use `IconButton`
+- [ ] Uppercase labels use `SectionLabel`
 - [ ] Tag pills use `Tag`, filter pills use `FilterChip`, number pills use `CountBadge`
 - [ ] No hand-made floating panel (use `Popover`, `Dropdown` or `ContextMenu`)
