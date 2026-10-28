@@ -106,6 +106,17 @@ pub struct Run {
     /// `YYYY-MM-DD` of the scheduled run this was; None for a run started by hand.
     #[serde(default)]
     pub scheduled_for: Option<String>,
+    /// The day of the routine's latest scheduled run, carried over when a run started by hand
+    /// replaces this one (only the last run is kept, but a manual run mustn't erase it).
+    #[serde(default)]
+    pub last_scheduled_for: Option<String>,
+}
+
+impl Run {
+    /// The day of the latest scheduled run up to and including this one.
+    pub fn scheduled_day(&self) -> Option<&str> {
+        self.scheduled_for.as_deref().or(self.last_scheduled_for.as_deref())
+    }
 }
 
 /// The task handed to the agent. A prompt file stays a short task, so the 8000-character
@@ -310,8 +321,14 @@ pub fn update_runs(dir: &Path, f: impl FnOnce(&mut Vec<Run>)) -> Result<(), Stri
 /// Records `run` as the last run of its routine.
 pub fn record_run(dir: &Path, run: &Run) -> Result<(), String> {
     update_runs(dir, |runs| {
+        let mut run = run.clone();
+        if run.scheduled_for.is_none() {
+            if let Some(old) = runs.iter().find(|r| r.routine_id == run.routine_id) {
+                run.last_scheduled_for = old.scheduled_day().map(String::from);
+            }
+        }
         runs.retain(|r| r.routine_id != run.routine_id);
-        runs.push(run.clone());
+        runs.push(run);
     })
 }
 
@@ -440,6 +457,7 @@ mod tests {
             message: None,
             agent_short_id: None,
             scheduled_for: None,
+            last_scheduled_for: None,
         };
         record_run(&dir, &run("a", 1)).unwrap();
         record_run(&dir, &run("b", 2)).unwrap();

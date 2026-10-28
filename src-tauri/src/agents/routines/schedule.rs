@@ -29,7 +29,7 @@ pub fn due(r: &Routine, last: Option<&Run>, now: NaiveDateTime) -> Option<String
         return None;
     }
     let today = now.date().to_string();
-    if last.is_some_and(|l| l.scheduled_for.as_deref() == Some(today.as_str())) {
+    if last.is_some_and(|l| l.scheduled_day() == Some(today.as_str())) {
         return None;
     }
     Some(today)
@@ -85,8 +85,12 @@ fn check(app: &AppHandle) {
         // An agent routine waits for the CLI: keep that off this thread.
         let (app, dir, login, id) = (app.clone(), dir.clone(), state.login_cache(), r.id.clone());
         std::thread::spawn(move || {
-            if let Err(e) = super::launch(&app, dir, login, &id, Some(date)) {
-                log::warn!("[routines] could not start {id}: {e}");
+            match super::launch(&app, dir, login, &id, Some(date)) {
+                Err(e) if e == super::run::ALREADY_RUNNING => {
+                    log::debug!("[routines] {id} is still running")
+                }
+                Err(e) => log::warn!("[routines] could not start {id}: {e}"),
+                Ok(_) => {}
             }
         });
     }
@@ -101,7 +105,9 @@ pub fn start(app: &AppHandle) {
         let mut since_check = CHECK_EVERY;
         loop {
             if since_check >= CHECK_EVERY {
-                check(&app);
+                if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| check(&app))).is_err() {
+                    log::error!("[routines] scheduler check panicked; continuing");
+                }
                 since_check = Duration::ZERO;
             }
             std::thread::sleep(SLICE);
@@ -154,6 +160,7 @@ mod tests {
             message: Some("boom".into()),
             agent_short_id: None,
             scheduled_for: scheduled_for.map(String::from),
+            last_scheduled_for: None,
         }
     }
 
@@ -188,6 +195,24 @@ mod tests {
         assert_eq!(due(&none, None, at(27, 8, 5)), None);
         none.schedule = Some(Schedule { time: "8am".into(), days: Days::Daily });
         assert_eq!(due(&none, None, at(27, 8, 5)), None);
+    }
+
+    #[test]
+    fn manual_run_does_not_erase_the_scheduled_one() {
+        let dir = std::env::temp_dir().join(format!("sm-sched-manual-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let r = routine(Days::Daily);
+        let last = || read_runs(&dir).into_iter().next();
+        // A manual run alone today: the scheduled one still runs.
+        store::record_run(&dir, &run(Status::Done, None)).unwrap();
+        assert_eq!(due(&r, last().as_ref(), at(27, 8, 30)), Some("2026-10-27".into()));
+        // The scheduled run, then a manual one replacing it: not due again.
+        store::record_run(&dir, &run(Status::Done, Some("2026-10-27"))).unwrap();
+        store::record_run(&dir, &run(Status::Done, None)).unwrap();
+        store::record_run(&dir, &run(Status::Failed, None)).unwrap();
+        assert_eq!(due(&r, last().as_ref(), at(27, 8, 40)), None);
+        // Tomorrow it is due again.
+        assert_eq!(due(&r, last().as_ref(), at(28, 8, 10)), Some("2026-10-28".into()));
     }
 
     #[test]

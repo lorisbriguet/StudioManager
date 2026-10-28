@@ -187,6 +187,7 @@ pub fn begin(routine_id: &str, scheduled_for: Option<String>) -> Run {
         message: None,
         agent_short_id: None,
         scheduled_for,
+        last_scheduled_for: None,
     }
 }
 
@@ -246,13 +247,16 @@ pub fn is_running(id: &str) -> bool {
     RUNNING.lock().unwrap_or_else(|e| e.into_inner()).as_ref().is_some_and(|s| s.contains(id))
 }
 
+/// The error of a launch while the routine is still running.
+pub const ALREADY_RUNNING: &str = "Already running";
+
 /// Marks a routine as running until the guard drops; "Already running" if it is.
 pub struct Claim(String);
 
 pub fn claim(id: &str) -> Result<Claim, String> {
     let mut set = RUNNING.lock().unwrap_or_else(|e| e.into_inner());
     if !set.get_or_insert_with(HashSet::new).insert(id.to_string()) {
-        return Err("Already running".into());
+        return Err(ALREADY_RUNNING.into());
     }
     Ok(Claim(id.to_string()))
 }
@@ -450,7 +454,7 @@ mod tests {
         // One run at a time per routine.
         let held = claim(&id).unwrap();
         assert!(is_running(&id));
-        assert_eq!(claim(&id).err().as_deref(), Some("Already running"));
+        assert_eq!(claim(&id).err().as_deref(), Some(ALREADY_RUNNING));
         drop(held);
         assert!(!is_running(&id));
         assert!(claim(&id).is_ok());
