@@ -72,7 +72,11 @@ export function TerminalPanel({ shortId, onClose }: TerminalPanelProps) {
     const earlyExits = new Set<number>();
     const unlisten: Array<() => void> = [];
 
-    const feed = (d: TermData) => term.write(decode(d.data));
+    // Output can still arrive while the panel closes (listeners unsubscribe asynchronously);
+    // writing to a disposed xterm throws later from its renderer.
+    const feed = (d: TermData) => {
+      if (!disposed) term.write(decode(d.data));
+    };
 
     // Shift+Enter adds a line in Claude's input instead of sending: Claude reads
     // Esc+Return as a newline (what its /terminal-setup binds). Plain Enter sends.
