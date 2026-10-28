@@ -12,7 +12,7 @@ import type { UpkeepItem } from "../../types/upkeep";
 
 type T = ReturnType<typeof useT>;
 
-function repeatsLabel(item: UpkeepItem, t: T): string {
+export function repeatsLabel(item: UpkeepItem, t: T): string {
   if (item.schedule === "usage") {
     return t.upkeep_repeats_usage.replace("{n}", String(item.usage_every ?? ""));
   }
