@@ -591,6 +591,8 @@ pub fn run() {
             agent_access::preview_claude_desktop,
             agent_access::install_claude_desktop,
             agent_access::recent_agent_changes,
+            agents::cli::agents_get_settings,
+            agents::cli::agents_set_enabled,
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -605,6 +607,7 @@ pub fn run() {
             handle.manage(ActiveOrgState(Mutex::new(active)));
             handle.manage(InitError(Mutex::new(init_error)));
             agent_access::start_poller(handle);
+            agents::init(handle);
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()

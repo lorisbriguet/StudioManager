@@ -49,6 +49,7 @@ import { useAppStore } from "./stores/app-store";
 import { useOrgStore } from "./stores/org-store";
 import { getLabels, notifyError } from "./lib/notifyError";
 import { requestNotificationPermission } from "./lib/nativeNotification";
+import { getAgentsSettings } from "./lib/agents";
 
 import { queryClient } from "./lib/queryClient";
 
@@ -62,6 +63,9 @@ function StartupChecks() {
 
   useEffect(() => {
     requestNotificationPermission();
+    getAgentsSettings()
+      .then((i) => useAppStore.getState().setAgentsEnabled(i?.enabled === true))
+      .catch(() => {});
   }, []);
 
   // Suppress native WebView context menu globally (Tauri renders its own).

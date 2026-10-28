@@ -1,0 +1,297 @@
+//! Agents settings file, locating `claude`, and running the CLI.
+
+use crate::agent_access::write_atomic;
+use serde::{Deserialize, Serialize};
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
+
+pub const SETTINGS_FILE: &str = "agents.json";
+const CLI_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// `agents.json`: the one app-wide switch. Missing or unreadable = off.
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AgentsSettings {
+    pub enabled: bool,
+}
+
+pub fn read_settings(dir: &Path) -> AgentsSettings {
+    std::fs::read_to_string(dir.join(SETTINGS_FILE))
+        .ok()
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_default()
+}
+
+pub fn write_settings(dir: &Path, s: &AgentsSettings) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("Failed to create {}: {e}", dir.display()))?;
+    let json = serde_json::to_string_pretty(s).map_err(|e| e.to_string())?;
+    write_atomic(&dir.join(SETTINGS_FILE), &format!("{json}\n"))
+}
+
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct LoginEnv {
+    pub claude: Option<PathBuf>,
+    pub path: String,
+}
+
+/// Parse the two lines printed by the lookup script: `command -v claude`,
+/// then `$PATH`. An empty first line means claude was not found.
+pub fn parse_login_output(out: &str) -> LoginEnv {
+    let mut lines = out.lines();
+    let claude = lines.next().map(str::trim).filter(|l| !l.is_empty());
+    let path = lines.next().map(str::trim).unwrap_or("");
+    LoginEnv { claude: claude.map(PathBuf::from), path: path.to_string() }
+}
+
+/// First existing well-known install location.
+pub fn fallback_claude(home: &Path, exists: &dyn Fn(&Path) -> bool) -> Option<PathBuf> {
+    [
+        home.join(".local/bin/claude"),
+        home.join(".claude/local/claude"),
+        PathBuf::from("/opt/homebrew/bin/claude"),
+        PathBuf::from("/usr/local/bin/claude"),
+    ]
+    .into_iter()
+    .find(|p| exists(p))
+}
+
+/// The shell used for the lookup: the user's own if zsh or bash, else zsh.
+fn lookup_shell(shell_var: Option<&str>) -> &'static str {
+    match shell_var {
+        Some("/bin/bash") => "/bin/bash",
+        _ => "/bin/zsh",
+    }
+}
+
+/// The one shell invocation of the feature: a fixed script in a login shell,
+/// so the app (started from Finder) sees the user's real `PATH`.
+pub fn resolve_login_env() -> LoginEnv {
+    let shell = lookup_shell(std::env::var("SHELL").ok().as_deref());
+    let output = run_with_timeout(
+        Command::new(shell)
+            .args(["-lic", r#"printf "%s\n%s\n" "$(command -v claude)" "$PATH""#])
+            .stdin(Stdio::null()),
+        CLI_TIMEOUT,
+    );
+    let mut env = match output {
+        Some(o) if o.code == 0 => parse_login_output(&o.stdout),
+        _ => LoginEnv::default(),
+    };
+    if env.path.is_empty() {
+        env.path = std::env::var("PATH").unwrap_or_default();
+    }
+    if env.claude.as_deref().map_or(true, |p| !p.is_file()) {
+        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+        env.claude = fallback_claude(&home, &|p| p.is_file());
+    }
+    env
+}
+
+/// `PATH` from the login shell, plus a minimal set of other variables.
+pub fn spawn_env(env: &LoginEnv) -> Vec<(String, String)> {
+    let var = |k: &str| std::env::var(k).unwrap_or_default();
+    vec![
+        ("PATH".into(), env.path.clone()),
+        ("HOME".into(), var("HOME")),
+        ("USER".into(), var("USER")),
+        ("LANG".into(), std::env::var("LANG").unwrap_or_else(|_| "en_US.UTF-8".into())),
+        ("TERM".into(), "xterm-256color".into()),
+    ]
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CliOutput {
+    pub code: i32,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+pub trait Cli: Send + Sync {
+    fn run(&self, args: &[String], cwd: &Path) -> CliOutput;
+}
+
+pub struct RealCli {
+    pub claude: PathBuf,
+    pub path_env: String,
+}
+
+impl Cli for RealCli {
+    fn run(&self, args: &[String], cwd: &Path) -> CliOutput {
+        let env = LoginEnv { claude: Some(self.claude.clone()), path: self.path_env.clone() };
+        let mut cmd = Command::new(&self.claude);
+        cmd.args(args)
+            .current_dir(cwd)
+            .env_clear()
+            .envs(spawn_env(&env))
+            .stdin(Stdio::null());
+        run_with_timeout(&mut cmd, CLI_TIMEOUT).unwrap_or_else(|| CliOutput {
+            code: -1,
+            stdout: String::new(),
+            stderr: "failed to start claude".into(),
+        })
+    }
+}
+
+/// Run to completion; kill the child after `timeout` (code -1). None when the
+/// process cannot be started.
+fn run_with_timeout(cmd: &mut Command, timeout: Duration) -> Option<CliOutput> {
+    let mut child = cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().ok()?;
+    let mut out = child.stdout.take()?;
+    let mut err = child.stderr.take()?;
+    let out_t = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = out.read_to_end(&mut buf);
+        String::from_utf8_lossy(&buf).into_owned()
+    });
+    let err_t = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = err.read_to_end(&mut buf);
+        String::from_utf8_lossy(&buf).into_owned()
+    });
+    let start = Instant::now();
+    let mut timed_out = false;
+    let code = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status.code().unwrap_or(-1),
+            Ok(None) if start.elapsed() >= timeout => {
+                timed_out = true;
+                let _ = child.kill();
+                let _ = child.wait();
+                break -1;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(20)),
+            Err(_) => break -1,
+        }
+    };
+    let stdout = out_t.join().unwrap_or_default();
+    let mut stderr = err_t.join().unwrap_or_default();
+    if timed_out {
+        stderr.push_str("timed out");
+    }
+    Some(CliOutput { code, stdout, stderr })
+}
+
+// ---------------------------------------------------------------- commands
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentsInfo {
+    pub enabled: bool,
+    pub claude_path: Option<String>,
+}
+
+fn info(state: &super::AgentsState) -> AgentsInfo {
+    AgentsInfo {
+        enabled: read_settings(&state.app_dir).enabled,
+        claude_path: state.login_env().claude.as_ref().map(|p| p.display().to_string()),
+    }
+}
+
+/// Async so the first (login-shell) lookup runs off the main thread. Exempt
+/// from the "switched off" guard, like `agents_set_enabled`.
+#[tauri::command]
+pub async fn agents_get_settings(
+    state: tauri::State<'_, super::AgentsState>,
+) -> Result<AgentsInfo, String> {
+    Ok(info(&state))
+}
+
+#[tauri::command]
+pub async fn agents_set_enabled(
+    state: tauri::State<'_, super::AgentsState>,
+    enabled: bool,
+) -> Result<AgentsInfo, String> {
+    if enabled && state.login_env().claude.is_none() {
+        return Err("claude not found".into());
+    }
+    write_settings(&state.app_dir, &AgentsSettings { enabled })?;
+    Ok(info(&state))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tmp(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("sm-agents-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn settings_missing_file_is_off() {
+        let d = tmp("missing");
+        assert!(!read_settings(&d).enabled);
+        std::fs::write(d.join(SETTINGS_FILE), "not json").unwrap();
+        assert!(!read_settings(&d).enabled);
+    }
+
+    #[test]
+    fn settings_round_trip() {
+        let d = tmp("round");
+        write_settings(&d, &AgentsSettings { enabled: true }).unwrap();
+        assert!(read_settings(&d).enabled);
+        write_settings(&d, &AgentsSettings { enabled: false }).unwrap();
+        assert!(!read_settings(&d).enabled);
+    }
+
+    #[test]
+    fn parse_login_output_two_lines() {
+        let e = parse_login_output("/opt/x/claude\n/usr/bin:/opt/x\n");
+        assert_eq!(e.claude, Some(PathBuf::from("/opt/x/claude")));
+        assert_eq!(e.path, "/usr/bin:/opt/x");
+    }
+
+    #[test]
+    fn parse_login_output_missing_claude() {
+        let e = parse_login_output("\n/usr/bin:/opt/x\n");
+        assert_eq!(e.claude, None);
+        assert_eq!(e.path, "/usr/bin:/opt/x");
+    }
+
+    #[test]
+    fn spawn_env_uses_login_path() {
+        let env = LoginEnv { claude: None, path: "/login/bin:/other".into() };
+        let vars = spawn_env(&env);
+        let get = |k: &str| vars.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone());
+        assert_eq!(get("PATH").as_deref(), Some("/login/bin:/other"));
+        assert_eq!(get("TERM").as_deref(), Some("xterm-256color"));
+        assert!(get("HOME").is_some() && get("USER").is_some() && get("LANG").is_some());
+    }
+
+    #[test]
+    fn fallback_picks_first_existing_candidate() {
+        let home = Path::new("/h");
+        assert_eq!(
+            fallback_claude(home, &|p: &Path| p == Path::new("/usr/local/bin/claude")),
+            Some(PathBuf::from("/usr/local/bin/claude"))
+        );
+        assert_eq!(
+            fallback_claude(home, &|p: &Path| p.starts_with("/h") || p.starts_with("/opt")),
+            Some(PathBuf::from("/h/.local/bin/claude"))
+        );
+        assert_eq!(fallback_claude(home, &|_| false), None);
+    }
+
+    #[test]
+    fn lookup_shell_is_zsh_or_bash_only() {
+        assert_eq!(lookup_shell(Some("/bin/bash")), "/bin/bash");
+        assert_eq!(lookup_shell(Some("/bin/zsh")), "/bin/zsh");
+        assert_eq!(lookup_shell(Some("/usr/bin/evil")), "/bin/zsh");
+        assert_eq!(lookup_shell(None), "/bin/zsh");
+    }
+
+    #[test]
+    fn run_times_out_and_kills() {
+        let mut c = Command::new("/bin/sleep");
+        c.arg("5");
+        let t = Instant::now();
+        let o = run_with_timeout(&mut c, Duration::from_millis(200)).unwrap();
+        assert_eq!(o.code, -1);
+        assert!(o.stderr.contains("timed out"));
+        assert!(t.elapsed() < Duration::from_secs(3));
+    }
+}

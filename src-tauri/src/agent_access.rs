@@ -60,7 +60,7 @@ pub struct LogEntry {
 
 /// Write through a sibling temp file and a rename, so readers never see a
 /// half-written file.
-fn write_atomic(path: &Path, contents: &str) -> Result<(), String> {
+pub(crate) fn write_atomic(path: &Path, contents: &str) -> Result<(), String> {
     let name = path
         .file_name()
         .map(|n| n.to_string_lossy().to_string())

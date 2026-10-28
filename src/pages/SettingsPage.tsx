@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
-import { FolderOpen, HardDrive, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield, X, Clock, Store, Building2, Database as DatabaseIcon, Bot } from "lucide-react";
+import { FolderOpen, HardDrive, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield, X, Clock, Store, Building2, Database as DatabaseIcon, Bot, Terminal } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { purgeAllCalendarEvents, syncAllExisting, listWritableCalendars } from "../lib/appleCalendar";
@@ -19,6 +19,7 @@ import { Input, Select, Button } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
 import { AgentAccessCard } from "../components/settings/AgentAccessCard";
+import { AgentsCard } from "../components/settings/AgentsCard";
 import { OrganisationsCard } from "../components/settings/OrganisationsCard";
 import { DemoDataCard } from "../components/settings/DemoDataCard";
 import { isDemoBuild } from "../lib/demoBuild";
@@ -29,9 +30,9 @@ import { ExpenseCategoryManager } from "../components/settings/ExpenseCategoryMa
 import { CustomListsManager } from "../components/settings/CustomListsManager";
 import { TimeEntriesManager } from "../components/settings/TimeEntriesManager";
 
-type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "agent_access" | "workload" | "organisations" | "categories" | "suppliers" | "lists" | "time_entries" | "updates" | "backup" | "sandbox" | "demo_data";
+type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "agent_access" | "agents" | "workload" | "organisations" | "categories" | "suppliers" | "lists" | "time_entries" | "updates" | "backup" | "sandbox" | "demo_data";
 
-const SETTINGS_CATEGORIES_BASE: SettingsCategory[] = ["general", "appearance", "behavior", "calendar", "agent_access", "workload", "organisations", "categories", "suppliers", "lists", "time_entries", "updates", "backup"];
+const SETTINGS_CATEGORIES_BASE: SettingsCategory[] = ["general", "appearance", "behavior", "calendar", "agent_access", "agents", "workload", "organisations", "categories", "suppliers", "lists", "time_entries", "updates", "backup"];
 
 export function SettingsPage() {
   const dateFormat = useAppStore((s) => s.dateFormat);
@@ -326,6 +327,7 @@ export function SettingsPage() {
         { key: "behavior", label: t.behavior, icon: <SlidersHorizontal size={14} /> },
         { key: "calendar", label: t.calendar_sync, icon: <CalendarDays size={14} /> },
         { key: "agent_access", label: t.agent_access, icon: <Bot size={14} /> },
+        { key: "agents", label: t.agents, icon: <Terminal size={14} /> },
         { key: "workload", label: t.workload_templates, icon: <LayoutList size={14} /> },
       ],
     },
@@ -556,6 +558,8 @@ export function SettingsPage() {
           )}
 
           {activeCategory === "agent_access" && <AgentAccessCard />}
+
+          {activeCategory === "agents" && <AgentsCard />}
 
           {activeCategory === "calendar" && (
             <SettingsCard title={t.calendar_sync} desc={t.calendar_permission_help}>
