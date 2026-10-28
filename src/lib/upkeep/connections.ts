@@ -8,6 +8,7 @@ import {
   recordSync,
   storeReadings,
   type DeviceInfo,
+  type DeviceReading,
   type SyncResult,
 } from "../../db/queries/connections";
 import { getMachines } from "../../db/queries/machines";
@@ -46,18 +47,25 @@ type ErrorLabels = {
   upkeep_err_otp: string;
   upkeep_err_bambu_code: string;
   upkeep_err_bambu_signin: string;
+  upkeep_err_bambu_password: string;
+  upkeep_err_bambu_tfa: string;
+  upkeep_err_bambu_history: string;
 };
 
 /**
  * A connector error as the user reads it: the codes that need the user
  * (`untrusted_cert:…`, `otp_required`, `otp_invalid`, Bambu's `code_required`,
- * `code_invalid`, `token_expired`) become a translated pointer to Reconnect;
+ * `code_invalid`, `token_expired`, `password_invalid`, `tfa_unsupported`,
+ * `history_too_long`) become a translated pointer to Reconnect;
  * other (already redacted) messages pass through.
  */
 export function connectionErrorText(e: unknown, t: ErrorLabels): string {
   const b = parseBambuError(e);
   if (b.kind === "code") return t.upkeep_err_bambu_code;
   if (b.kind === "signin") return t.upkeep_err_bambu_signin;
+  if (b.kind === "password") return t.upkeep_err_bambu_password;
+  if (b.kind === "tfa") return t.upkeep_err_bambu_tfa;
+  if (b.kind === "history") return t.upkeep_err_bambu_history;
   const r = parseSynologyError(e);
   if (r.kind === "cert") return t.upkeep_err_untrusted_cert;
   if (r.kind === "otp") return t.upkeep_err_otp;
@@ -235,6 +243,26 @@ export async function recordManualReading(
   await recomputeMachine(machine.id, todayISO, org, same);
 }
 
+/**
+ * A device's reading as one linked machine stores it. Bambu sends its finished
+ * prints rather than a total: the machine's `print_hours` is the sum of those
+ * that started at or after its `linked_at`, so prints already in the counter
+ * typed as baseline at linking are never counted twice. A machine linked
+ * before link times were kept counts every print Rust sent (since the
+ * connection was made). Other devices pass through.
+ */
+export function readingForMachine(device: DeviceReading, machine: Pick<Machine, "linked_at">): DeviceReading {
+  if (!device.print_tasks) return device;
+  const from = machine.linked_at ? Date.parse(machine.linked_at) : Number.NEGATIVE_INFINITY;
+  const hours = device.print_tasks
+    .filter(([start]) => Date.parse(start) >= from)
+    .reduce((sum, [, h]) => sum + h, 0);
+  return {
+    ...device,
+    metrics: [...device.metrics.filter(([m]) => m !== DEFAULT_METRIC), [DEFAULT_METRIC, hours]],
+  };
+}
+
 /** The sync pass in progress, if any. */
 let inFlight: Promise<void> | null = null;
 
@@ -318,7 +346,7 @@ async function syncPass(qc: QueryClient, opts: SyncOptions): Promise<void> {
         const device = result.devices.find((d) => d.device_id === m.device_id);
         if (!device) continue;
         if (!same()) return;
-        await storeReadings(m, device, readAt, org);
+        await storeReadings(m, readingForMachine(device, m), readAt, org);
         touched.add(m.id);
       }
       if (!same()) return;

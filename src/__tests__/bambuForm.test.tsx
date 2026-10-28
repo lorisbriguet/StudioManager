@@ -12,8 +12,9 @@ vi.mock("../db/hooks/useConnections", () => ({
   useUpdateConnection: () => ({ mutateAsync: update }),
   useDeleteConnection: () => ({ mutate: remove }),
 }));
+const getConnection = vi.fn();
 vi.mock("../db/queries/connections", () => ({
-  getConnection: (id: number) => Promise.resolve({ id, kind: "bambu_cloud" }),
+  getConnection: (id: number) => getConnection(id),
 }));
 vi.mock("../lib/upkeep/connections", () => ({
   testConnection: (c: unknown) => testConnection(c),
@@ -37,6 +38,7 @@ beforeEach(() => {
   create.mockResolvedValue(9);
   update.mockResolvedValue(undefined);
   saveConnectionSecret.mockResolvedValue(undefined);
+  getConnection.mockImplementation((id: number) => Promise.resolve({ id, kind: "bambu_cloud" }));
 });
 
 describe("BambuForm", () => {
@@ -88,16 +90,46 @@ describe("BambuForm", () => {
   });
 
   it("a retry sends the password again (it is never kept after a sign-in)", async () => {
-    testConnection.mockRejectedValueOnce("Bambu Lab refused the email or password").mockResolvedValueOnce([]);
+    testConnection.mockRejectedValueOnce("password_invalid").mockResolvedValueOnce([]);
     const onDone = vi.fn();
     render(<BambuForm onDone={onDone} onCancel={vi.fn()} />);
     fill("wrong");
-    expect(await screen.findByText("Bambu Lab refused the email or password")).toBeInTheDocument();
+    expect(await screen.findByText(t.upkeep_bambu_password_invalid)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: "right" } });
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_bambu_sign_in }));
     await waitFor(() => expect(onDone).toHaveBeenCalled());
     expect(create).toHaveBeenCalledTimes(1);
     expect(JSON.parse(update.mock.calls[0][0].secret)).toEqual({ password: "right" });
+  });
+
+  it("says plainly that authenticator-app accounts aren't supported", async () => {
+    testConnection.mockRejectedValueOnce("tfa_unsupported");
+    render(<BambuForm onDone={vi.fn()} onCancel={vi.fn()} />);
+    fill();
+    expect(await screen.findByText(t.upkeep_err_bambu_tfa)).toBeInTheDocument();
+  });
+
+  it("wipes the one-time password when no sign-in ran (the app refused the call)", async () => {
+    testConnection.mockRejectedValueOnce("organisation changed: call was for 6kun0b, active is other1");
+    render(<BambuForm onDone={vi.fn()} onCancel={vi.fn()} />);
+    fill();
+    await waitFor(() => expect(saveConnectionSecret).toHaveBeenCalledWith(9, "{}"));
+  });
+
+  it("wipes the one-time password when the saved connection is gone before the test", async () => {
+    getConnection.mockResolvedValue(undefined);
+    render(<BambuForm onDone={vi.fn()} onCancel={vi.fn()} />);
+    fill();
+    await waitFor(() => expect(saveConnectionSecret).toHaveBeenCalledWith(9, "{}"));
+    expect(testConnection).not.toHaveBeenCalled();
+  });
+
+  it("leaves the secret to Rust once a sign-in ran", async () => {
+    testConnection.mockRejectedValueOnce("password_invalid");
+    render(<BambuForm onDone={vi.fn()} onCancel={vi.fn()} />);
+    fill();
+    await screen.findByText(t.upkeep_bambu_password_invalid);
+    expect(saveConnectionSecret).not.toHaveBeenCalled();
   });
 
   it("removes the half-made connection when closed before it works", async () => {
@@ -130,6 +162,14 @@ describe("BambuForm", () => {
       expect(JSON.parse(update.mock.calls[0][0].secret)).toEqual({ password: "pw2" });
       unmount();
       expect(remove).not.toHaveBeenCalled();
+    });
+
+    it("a changed account email needs the password", () => {
+      render(<BambuForm connection={existing} onDone={vi.fn()} onCancel={vi.fn()} />);
+      fireEvent.change(screen.getByLabelText(/^Bambu account email/), { target: { value: "other@example.com" } });
+      fireEvent.click(screen.getByRole("button", { name: t.upkeep_bambu_sign_in }));
+      expect(screen.getByText(t.upkeep_bambu_required)).toBeInTheDocument();
+      expect(update).not.toHaveBeenCalled();
     });
 
     it("an expired sign-in without a password asks for it", async () => {

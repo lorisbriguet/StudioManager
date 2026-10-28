@@ -179,6 +179,8 @@ function LinkForm({ machine, needsBaseline }: { machine: Machine; needsBaseline:
               connection_id: conn?.id ?? null,
               device_id: deviceId,
               reading_baseline: baseline.trim() !== "" && Number.isFinite(Number(baseline)) ? Number(baseline) : null,
+              // Prints count from now: the baseline covers what came before.
+              linked_at: new Date().toISOString(),
             })}
           >
             {t.upkeep_link}
@@ -227,7 +229,7 @@ export function ReadingsSection({ machine, items }: { machine: Machine; items: U
             {t.upkeep_sync_now}
           </Button>
           <Button size="sm" variant="ghost"
-            onClick={() => link.mutate({ id: machine.id, connection_id: null, device_id: null, reading_baseline: machine.reading_baseline })}>
+            onClick={() => link.mutate({ id: machine.id, connection_id: null, device_id: null, reading_baseline: machine.reading_baseline, linked_at: null })}>
             {t.upkeep_unlink}
           </Button>
         </div>

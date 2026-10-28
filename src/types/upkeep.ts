@@ -48,6 +48,8 @@ export interface Machine {
   connection_id: number | null;
   device_id: string | null;
   reading_baseline: number | null;
+  /** When the machine was linked to its device (ISO UTC); Bambu hours count from it. */
+  linked_at: string | null;
   created_at: string;
   updated_at: string;
 }

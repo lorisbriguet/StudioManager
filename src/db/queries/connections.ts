@@ -28,6 +28,8 @@ export interface DeviceReading {
   model: string | null;
   metrics: [string, number][];
   disks: DiskReading[];
+  /** Bambu: finished prints since the connection was made, `[start ISO UTC, hours]`. */
+  print_tasks?: [string, number][] | null;
 }
 
 export interface SyncResult {

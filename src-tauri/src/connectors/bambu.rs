@@ -22,7 +22,15 @@
 //! Errors the setup form acts on, verbatim:
 //! - `code_required`: Bambu emailed a sign-in code; type it;
 //! - `code_invalid`: the code was wrong;
-//! - `token_expired`: the sign-in expired and couldn't be refreshed: Reconnect.
+//! - `token_expired`: the sign-in expired and couldn't be refreshed: Reconnect;
+//! - `password_invalid`: Bambu refused the email or password;
+//! - `tfa_unsupported`: the account signs in with an authenticator app;
+//! - `history_too_long`: the print history has more pages than the cap (never
+//!   a partial sum).
+//!
+//! Sync returns no summed metric: each printer's finished prints since the
+//! connection was made, as `(start ISO UTC, hours)` in `print_tasks`; the
+//! frontend sums those at or after each machine's link time.
 //!
 //! Secret (Keychain): JSON `{access_token, refresh_token?, expires_at?}`. The
 //! form puts `{password}` or `{code}` there for one sign-in; the connector then
@@ -64,6 +72,9 @@ const EXPIRY_MARGIN: i64 = 300;
 pub(crate) const CODE_REQUIRED: &str = "code_required";
 pub(crate) const CODE_INVALID: &str = "code_invalid";
 pub(crate) const TOKEN_EXPIRED: &str = "token_expired";
+pub(crate) const PASSWORD_INVALID: &str = "password_invalid";
+pub(crate) const TFA_UNSUPPORTED: &str = "tfa_unsupported";
+pub(crate) const HISTORY_TOO_LONG: &str = "history_too_long";
 
 const BAD_DEVICES: &str =
     "Bambu Lab sent its printer list in an unexpected format (its unofficial cloud API may have changed)";
@@ -134,11 +145,20 @@ fn task_seconds(t: &JsonValue, start: i64) -> Option<f64> {
     (end >= start).then(|| (end - start) as f64)
 }
 
-/// Print hours per printer serial: the durations of finished tasks that
-/// started at or after `since` (seconds since the epoch). Failed, cancelled
-/// and running tasks don't count.
-pub(crate) fn print_hours(tasks: &[JsonValue], since: i64) -> Result<HashMap<String, f64>, String> {
-    let mut hours: HashMap<String, f64> = HashMap::new();
+/// `YYYY-MM-DDTHH:MM:SSZ` of seconds since the epoch.
+fn iso_utc(secs: i64) -> Option<String> {
+    chrono::DateTime::from_timestamp(secs, 0).map(|d| d.format("%Y-%m-%dT%H:%M:%SZ").to_string())
+}
+
+/// Finished prints per printer serial, as `(start, hours)` with the start in
+/// ISO UTC: the finished tasks that started at or after `since` (seconds
+/// since the epoch, the connection's creation). Failed, cancelled and running
+/// tasks don't count. The frontend sums them from each machine's link time.
+pub(crate) fn finished_tasks(
+    tasks: &[JsonValue],
+    since: i64,
+) -> Result<HashMap<String, Vec<(String, f64)>>, String> {
+    let mut out: HashMap<String, Vec<(String, f64)>> = HashMap::new();
     for t in tasks {
         if !t.is_object() {
             return Err(BAD_TASKS.into());
@@ -152,9 +172,9 @@ pub(crate) fn print_hours(tasks: &[JsonValue], since: i64) -> Result<HashMap<Str
             continue;
         }
         let secs = task_seconds(t, start).ok_or(BAD_TASKS)?;
-        *hours.entry(device).or_default() += secs / 3600.0;
+        out.entry(device).or_default().push((iso_utc(start).ok_or(BAD_TASKS)?, secs / 3600.0));
     }
-    Ok(hours)
+    Ok(out)
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -197,6 +217,7 @@ pub(crate) struct Bambu {
     since: Option<i64>,
     now: i64,
     page_size: usize,
+    max_pages: usize,
     transport: Box<dyn Transport>,
     state: Mutex<State>,
 }
@@ -214,6 +235,7 @@ impl Bambu {
             since,
             now,
             page_size: PAGE_SIZE,
+            max_pages: MAX_PAGES,
             transport,
             state: Mutex::new(State { secret, changed: false }),
         }
@@ -222,6 +244,12 @@ impl Bambu {
     #[cfg(test)]
     pub(crate) fn with_page_size(mut self, n: usize) -> Self {
         self.page_size = n.max(1);
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_max_pages(mut self, n: usize) -> Self {
+        self.max_pages = n;
         self
     }
 
@@ -285,9 +313,8 @@ impl Bambu {
                         self.send_code()?;
                         Err(CODE_REQUIRED.into())
                     }
-                    Some("tfa") => Err("this Bambu account signs in with an authenticator app, which StudioManager \
-                                        can't do yet: type the print hours in by hand"
-                        .into()),
+                    // Authenticator-app sign-in isn't supported.
+                    Some("tfa") => Err(TFA_UNSUPPORTED.into()),
                     _ => Err(BAD_LOGIN.into()),
                 }
             }
@@ -299,7 +326,7 @@ impl Bambu {
                 }
                 Err(CODE_INVALID.into())
             }
-            400 | 401 => Err("Bambu Lab refused the email or password".into()),
+            400 | 401 => Err(PASSWORD_INVALID.into()),
             s => Err(format!("Bambu Lab sign-in failed (HTTP {s})")),
         }
     }
@@ -346,22 +373,20 @@ impl Bambu {
         Ok(reply.body)
     }
 
-    /// The whole task history, page by page. Tasks are deduplicated by id, so
-    /// a server that ignores `offset` isn't counted twice.
+    /// The whole task history, page by page. Every task must carry an id and
+    /// tasks are deduplicated by it, so a server that ignores `offset` is never
+    /// counted twice. Past `max_pages` it is an error, never a partial sum.
     fn tasks(&self) -> Result<Vec<JsonValue>, String> {
         let mut out = Vec::new();
         let mut seen: HashSet<String> = HashSet::new();
         let mut offset = 0usize;
-        for _ in 0..MAX_PAGES {
+        for _ in 0..self.max_pages {
             let body = self.get(&format!("{TASKS}?limit={}&offset={offset}", self.page_size))?;
             let hits = body.get("hits").and_then(JsonValue::as_array).ok_or(BAD_TASKS)?;
             let mut new = 0;
             for h in hits {
-                let fresh = match h.get("id") {
-                    Some(id) if !id.is_null() => seen.insert(id.to_string()),
-                    _ => true,
-                };
-                if fresh {
+                let id = h.get("id").filter(|id| id.is_number() || id.is_string()).ok_or(BAD_TASKS)?;
+                if seen.insert(id.to_string()) {
                     out.push(h.clone());
                     new += 1;
                 }
@@ -372,8 +397,7 @@ impl Bambu {
                 return Ok(out);
             }
         }
-        log::warn!("Bambu Lab: print history longer than {MAX_PAGES} pages, the rest is skipped");
-        Ok(out)
+        Err(HISTORY_TOO_LONG.into())
     }
 }
 
@@ -385,12 +409,15 @@ impl Connector for Bambu {
     fn sync(&self) -> Result<SyncResult, String> {
         let since = self.since.ok_or("the Bambu Lab connection has no start date")?;
         let printers = parse_devices(&self.get(BIND)?)?;
-        let hours = print_hours(&self.tasks()?, since)?;
+        let mut prints = finished_tasks(&self.tasks()?, since)?;
         Ok(SyncResult {
             devices: printers
                 .into_iter()
                 .map(|p| DeviceReading {
-                    metrics: vec![("print_hours".into(), hours.get(&p.device_id).copied().unwrap_or(0.0))],
+                    // No summed metric: the frontend sums `print_tasks` from
+                    // each machine's link time.
+                    metrics: vec![],
+                    print_tasks: Some(prints.remove(&p.device_id).unwrap_or_default()),
                     device_id: p.device_id,
                     model: p.model,
                     disks: vec![],
@@ -564,22 +591,34 @@ mod tests {
         serde_json::from_str(&c.updated_secret().expect("a secret to keep")).unwrap()
     }
 
-    fn hours(r: &SyncResult, id: &str) -> f64 {
+    /// The finished prints a sync returned for a printer; no metric is
+    /// summed in Rust (the frontend counts from each machine's link time).
+    fn prints(r: &SyncResult, id: &str) -> Vec<(String, f64)> {
         let d = r.devices.iter().find(|d| d.device_id == id).unwrap();
-        assert_eq!(d.metrics.len(), 1);
-        assert_eq!(d.metrics[0].0, "print_hours");
-        d.metrics[0].1
+        assert!(d.metrics.is_empty(), "{:?}", d.metrics);
+        d.print_tasks.clone().expect("Bambu devices carry their prints")
+    }
+
+    fn hours(r: &SyncResult, id: &str) -> f64 {
+        prints(r, id).iter().map(|(_, h)| h).sum()
+    }
+
+    fn sum(v: &[(String, f64)]) -> f64 {
+        v.iter().map(|(_, h)| h).sum()
     }
 
     #[test]
     fn sums_finished_task_durations() {
         let tasks = json(TASKS)["hits"].as_array().unwrap().clone();
         let since = parse_since(SINCE).unwrap();
-        let h = print_hours(&tasks, since).unwrap();
-        // P2S: 2 h (costTime) + 1.5 h (end − start, no costTime). The failed,
+        let t = finished_tasks(&tasks, since).unwrap();
+        // P2S: 1.5 h (end − start, no costTime) and 2 h (costTime). The failed,
         // cancelled and running tasks and the one before the connection are out.
-        assert!((h[P2S] - 3.5).abs() < 1e-9, "{h:?}");
-        assert!((h[A1] - 0.5).abs() < 1e-9, "{h:?}");
+        assert_eq!(
+            t[P2S],
+            vec![("2026-09-05T09:00:00Z".to_string(), 1.5), ("2026-09-02T10:00:00Z".to_string(), 2.0)]
+        );
+        assert!((sum(&t[A1]) - 0.5).abs() < 1e-9, "{t:?}");
         // The same through a sync, one reading per bound printer.
         let (c, _) = printer(tokens(), Box::new(cloud));
         let r = c.sync().unwrap();
@@ -587,10 +626,13 @@ mod tests {
         assert!((hours(&r, P2S) - 3.5).abs() < 1e-9);
         assert!((hours(&r, A1) - 0.5).abs() < 1e-9);
         assert_eq!(r.devices.iter().find(|d| d.device_id == P2S).unwrap().model.as_deref(), Some("P2S"));
-        // A later start date leaves only the A1 mini's print.
-        let h = print_hours(&tasks, parse_since("2026-09-08T00:00:00Z").unwrap()).unwrap();
-        assert_eq!(h.get(P2S).copied().unwrap_or(0.0), 0.0);
-        assert!((h[A1] - 0.5).abs() < 1e-9);
+        // A later lower bound leaves only the A1 mini's print.
+        let t = finished_tasks(&tasks, parse_since("2026-09-08T00:00:00Z").unwrap()).unwrap();
+        assert!(!t.contains_key(P2S));
+        assert!((sum(&t[A1]) - 0.5).abs() < 1e-9);
+        // Start times are plain UTC ISO strings: nothing else (no title, id, token).
+        let v = serde_json::to_value(&r).unwrap();
+        assert_eq!(v["devices"][1]["print_tasks"][0], serde_json::json!(["2026-09-10T14:00:00Z", 0.5]));
     }
 
     #[test]
@@ -604,7 +646,7 @@ mod tests {
         });
         let (c, _) = printer(tokens(), route);
         let r = c.sync().unwrap();
-        assert_eq!(hours(&r, P2S), 0.0);
+        assert_eq!(prints(&r, P2S), vec![]);
     }
 
     #[test]
@@ -648,7 +690,7 @@ mod tests {
             serde_json::json!({ "status": 2, "deviceId": P2S, "startTime": "2026-09-02T10:00:00Z",
                 "endTime": "2026-09-02T09:00:00Z" }),
         ] {
-            assert!(print_hours(&[task.clone()], since).is_err(), "{task}");
+            assert!(finished_tasks(&[task.clone()], since).is_err(), "{task}");
         }
         // Through a sync: a task list that isn't one, or a non-JSON answer.
         for tasks in [serde_json::json!({ "hits": 3 }), serde_json::json!({ "total": 1 }), JsonValue::Null] {
@@ -736,9 +778,15 @@ mod tests {
             body: serde_json::json!({ "code": 3, "error": "Incorrect password" }),
         });
         let (c, _) = printer(Secret { password: Some("pw-1234".into()), ..Default::default() }, route);
-        let e = c.test().unwrap_err();
-        assert!(e.contains("email or password") && !e.contains("pw-1234"), "{e}");
+        assert_eq!(c.test().unwrap_err(), "password_invalid");
         assert_eq!(kept(&c).password, None);
+    }
+
+    #[test]
+    fn authenticator_app_accounts_get_a_code() {
+        let route: Route = Box::new(|_, _, _, _| ok(serde_json::json!({ "accessToken": "", "loginType": "tfa", "tfaKey": "K" })));
+        let (c, _) = printer(Secret { password: Some("pw-1234".into()), ..Default::default() }, route);
+        assert_eq!(c.test().unwrap_err(), "tfa_unsupported");
     }
 
     #[test]
@@ -825,6 +873,44 @@ mod tests {
         let c = Bambu::new("me@example.com".into(), tokens(), parse_since(SINCE).ok(), NOW, Box::new(fake))
             .with_page_size(2);
         assert!((hours(&c.sync().unwrap(), P2S) - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn tasks_without_an_id_are_an_error_never_counted_twice() {
+        // A server that ignores `offset` and sends id-less tasks: they can't be
+        // told apart, so the sync fails instead of multiplying hours.
+        let route: Route = Box::new(|m, p, b, t| {
+            if p.starts_with("/v1/user-service/my/tasks") {
+                let task = serde_json::json!({ "status": 2, "deviceId": P2S,
+                    "startTime": "2026-09-20T10:00:00Z", "costTime": 3600 });
+                ok(serde_json::json!({ "total": 50, "hits": [task.clone(), task] }))
+            } else {
+                cloud(m, p, b, t)
+            }
+        });
+        let fake = Fake { route, calls: Arc::default() };
+        let c = Bambu::new("me@example.com".into(), tokens(), parse_since(SINCE).ok(), NOW, Box::new(fake))
+            .with_page_size(2);
+        assert!(c.sync().is_err());
+    }
+
+    #[test]
+    fn a_history_past_the_page_cap_is_an_error_not_a_partial_sum() {
+        let route: Route = Box::new(|m, p, b, t| {
+            if !p.starts_with("/v1/user-service/my/tasks") {
+                return cloud(m, p, b, t);
+            }
+            // Always a full page of new tasks.
+            let offset: i64 = p.split("offset=").nth(1).unwrap().parse().unwrap();
+            let task = |id: i64| serde_json::json!({ "id": id, "status": 2, "deviceId": P2S,
+                "startTime": "2026-09-20T10:00:00Z", "costTime": 3600 });
+            ok(serde_json::json!({ "total": 10_000, "hits": [task(offset), task(offset + 1)] }))
+        });
+        let fake = Fake { route, calls: Arc::default() };
+        let c = Bambu::new("me@example.com".into(), tokens(), parse_since(SINCE).ok(), NOW, Box::new(fake))
+            .with_page_size(2)
+            .with_max_pages(3);
+        assert_eq!(c.sync().unwrap_err(), "history_too_long");
     }
 
     #[test]

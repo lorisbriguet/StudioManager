@@ -11,6 +11,12 @@ describe("Bambu Lab setup helpers", () => {
     expect(parseBambuError("token_expired")).toEqual({ kind: "signin" });
   });
 
+  it("recognises a refused password, an authenticator-app account and a too-long history", () => {
+    expect(parseBambuError("password_invalid")).toEqual({ kind: "password" });
+    expect(parseBambuError("tfa_unsupported")).toEqual({ kind: "tfa" });
+    expect(parseBambuError("history_too_long")).toEqual({ kind: "history" });
+  });
+
   it("passes other errors through", () => {
     expect(parseBambuError("Bambu Lab refused the email or password")).toEqual({
       kind: "other", message: "Bambu Lab refused the email or password",

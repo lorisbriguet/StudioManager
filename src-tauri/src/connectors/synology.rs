@@ -372,7 +372,7 @@ impl Connector for Synology {
             let sys = self.system(s)?;
             let disks = self.disks(s)?;
             Ok(SyncResult {
-                devices: vec![DeviceReading { device_id: sys.serial, model: sys.model, metrics: vec![], disks }],
+                devices: vec![DeviceReading { device_id: sys.serial, model: sys.model, metrics: vec![], disks, print_tasks: None }],
             })
         })
     }

@@ -62,7 +62,7 @@ function machine(over: Partial<Machine> = {}): Machine {
     purchase_date: "2024-03-01", supplier: null, price: null, currency: null, expense_id: null,
     warranty_until: null, warranty_notified_for: null, lifespan_years: 5, photo_path: null,
     notes: null, template_key: null, connection_id: null, device_id: null,
-    reading_baseline: null, created_at: "", updated_at: "", ...over,
+    reading_baseline: null, linked_at: null, created_at: "", updated_at: "", ...over,
   };
 }
 

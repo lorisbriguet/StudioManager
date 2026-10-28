@@ -15,7 +15,7 @@ const MACHINE_COLUMNS = [
   "name", "kind", "maker", "model", "serial", "location", "status", "lent_to", "lent_until",
   "purchase_date", "supplier", "price", "currency", "expense_id", "warranty_until",
   "lifespan_years", "photo_path", "notes", "template_key", "connection_id", "device_id",
-  "reading_baseline",
+  "reading_baseline", "linked_at",
 ] as const;
 
 export async function getMachines(): Promise<Machine[]> {

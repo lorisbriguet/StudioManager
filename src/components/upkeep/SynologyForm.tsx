@@ -137,7 +137,7 @@ export function SynologyForm({ onDone, onCancel, connection }: ConnectionFormPro
           <FormField label={t.upkeep_syno_account} required>
             <Input value={f.account} autoComplete="off" onChange={(e) => set("account", e.target.value)} />
           </FormField>
-          <FormField label={t.upkeep_syno_password} required={!existing} error={error ?? undefined}>
+          <FormField label={t.upkeep_password} required={!existing} error={error ?? undefined}>
             <Input
               type="password"
               value={f.password}
@@ -176,7 +176,7 @@ export function SynologyForm({ onDone, onCancel, connection }: ConnectionFormPro
           </FormField>
           {/* Reconnect without a typed password: needed to store the code with it. */}
           {savedPassword == null && (
-            <FormField label={t.upkeep_syno_password} required>
+            <FormField label={t.upkeep_password} required>
               <Input
                 type="password"
                 value={f.password}

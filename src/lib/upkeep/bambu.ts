@@ -1,13 +1,17 @@
 /**
  * Setup helpers for the Bambu Lab cloud connection form. Rust
  * (`connectors/bambu.rs`) reports the steps the form handles with fixed codes:
- * `code_required` / `code_invalid` (the code Bambu emails) and `token_expired`
- * (sign in again).
+ * `code_required` / `code_invalid` (the code Bambu emails), `token_expired`
+ * (sign in again), `password_invalid`, `tfa_unsupported` (authenticator-app
+ * accounts) and `history_too_long` (more history than the connector reads).
  */
 
 export type BambuError =
   | { kind: "code"; invalid: boolean }
   | { kind: "signin" }
+  | { kind: "password" }
+  | { kind: "tfa" }
+  | { kind: "history" }
   | { kind: "other"; message: string };
 
 export const BAMBU_REGIONS = ["global", "china"] as const;
@@ -19,6 +23,9 @@ export function parseBambuError(e: unknown): BambuError {
   if (message === "code_required") return { kind: "code", invalid: false };
   if (message === "code_invalid") return { kind: "code", invalid: true };
   if (message === "token_expired") return { kind: "signin" };
+  if (message === "password_invalid") return { kind: "password" };
+  if (message === "tfa_unsupported") return { kind: "tfa" };
+  if (message === "history_too_long") return { kind: "history" };
   return { kind: "other", message };
 }
 

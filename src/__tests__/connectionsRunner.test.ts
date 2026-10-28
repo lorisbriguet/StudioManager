@@ -14,6 +14,7 @@ import {
   connectionConfig,
   connectionErrorText,
   connectionStatusText,
+  readingForMachine,
 } from "../lib/upkeep/connections";
 import { uiLabels } from "../i18n/ui";
 import { syncItemCalendar } from "../lib/upkeep/calendar";
@@ -41,7 +42,7 @@ const machine = (over: Partial<Machine> = {}): Machine => ({
   status: "working", lent_to: null, lent_until: null, purchase_date: null, supplier: null, price: null,
   currency: null, expense_id: null, warranty_until: null, warranty_notified_for: null, lifespan_years: null,
   photo_path: null, notes: null, template_key: null, connection_id: 2, device_id: "SN-P2S",
-  reading_baseline: 100, created_at: "", updated_at: "",
+  reading_baseline: 100, linked_at: null, created_at: "", updated_at: "",
   ...over,
 });
 
@@ -193,6 +194,28 @@ describe("connection queries", () => {
   });
 });
 
+describe("readingForMachine", () => {
+  const device = (print_tasks?: [string, number][]) => ({
+    device_id: "SN-P2S", model: "P2S", metrics: [] as [string, number][], disks: [], print_tasks,
+  });
+
+  it("sums the prints at or after the machine's link time", () => {
+    const d = device([["2026-09-02T10:00:00Z", 2], ["2026-09-04T00:00:00Z", 1], ["2026-09-05T09:00:00Z", 1.5]]);
+    expect(readingForMachine(d, machine({ linked_at: "2026-09-04T00:00:00.000Z" })).metrics)
+      .toEqual([["print_hours", 2.5]]);
+    // Linked before link times were kept: every print Rust sent (since the connection) counts.
+    expect(readingForMachine(d, machine({ linked_at: null })).metrics).toEqual([["print_hours", 4.5]]);
+    // No prints since the link: zero hours, still a reading.
+    expect(readingForMachine(device([]), machine({ linked_at: "2026-09-04T00:00:00Z" })).metrics)
+      .toEqual([["print_hours", 0]]);
+  });
+
+  it("leaves other connectors' readings as they are", () => {
+    const nas = { ...device(undefined), metrics: [["temp", 3]] as [string, number][] };
+    expect(readingForMachine(nas, machine({}))).toBe(nas);
+  });
+});
+
 describe("connection errors shown to the user", () => {
   const FP = "ab".repeat(32);
   for (const lang of ["EN", "FR"] as const) {
@@ -205,6 +228,9 @@ describe("connection errors shown to the user", () => {
       expect(connectionErrorText("code_required", t)).toBe(t.upkeep_err_bambu_code);
       expect(connectionErrorText("code_invalid", t)).toBe(t.upkeep_err_bambu_code);
       expect(connectionErrorText("token_expired", t)).toBe(t.upkeep_err_bambu_signin);
+      expect(connectionErrorText("password_invalid", t)).toBe(t.upkeep_err_bambu_password);
+      expect(connectionErrorText("tfa_unsupported", t)).toBe(t.upkeep_err_bambu_tfa);
+      expect(connectionErrorText("history_too_long", t)).toBe(t.upkeep_err_bambu_history);
     });
     it(`the status line of a failing connection is readable in ${lang}`, () => {
       const text = connectionStatusText(conn({ last_sync_at: null, last_error: `untrusted_cert:${FP}` }), t);
@@ -232,6 +258,31 @@ describe("runConnectionSyncs", () => {
     expect(due?.params).toEqual(["2026-12-17", 9]);
     expect(syncItemCalendar).toHaveBeenCalledWith(9);
     for (const b of batches()) expect(b.args.expectedOrg).toBe("6kun0b");
+  });
+
+  it("Bambu prints count from the machine's link time: earlier prints never, later ones once", async () => {
+    const linked = machine({ linked_at: "2026-09-04T00:00:00.000Z" });
+    routeSelects({ machines: [linked] });
+    const bambu = (tasks: [string, number][]) => ({
+      devices: [{ device_id: "SN-P2S", model: "P2S", metrics: [], disks: [], print_tasks: tasks }],
+    });
+    // A 2 h print before the link (already in the counter typed as baseline),
+    // a 1.5 h print after it.
+    const first: [string, number][] = [["2026-09-05T09:00:00Z", 1.5], ["2026-09-02T10:00:00Z", 2]];
+    setInvokeHandler((cmd) => (cmd === "connection_sync" ? bambu(first) : null));
+    await runConnectionSyncs(qcStub(), { todayISO: TODAY, force: true });
+    let readings = batchStmts().filter((s) => s.sql.includes("INSERT INTO machine_readings"));
+    expect(readings.map((r) => r.params.slice(0, 3))).toEqual([[3, "print_hours", 1.5]]);
+
+    // Next sync: one more print after the link. The stored reading is the
+    // total since linking, so nothing is counted twice.
+    clearExecutedStatements();
+    clearInvokedCommands();
+    setInvokeHandler((cmd) =>
+      cmd === "connection_sync" ? bambu([["2026-09-20T10:00:00Z", 3], ...first]) : null);
+    await runConnectionSyncs(qcStub(), { todayISO: TODAY, force: true });
+    readings = batchStmts().filter((s) => s.sql.includes("INSERT INTO machine_readings"));
+    expect(readings.map((r) => r.params.slice(0, 3))).toEqual([[3, "print_hours", 4.5]]);
   });
 
   it("records the failure (redacted by Rust) and keeps going", async () => {

@@ -43,6 +43,11 @@ pub struct DeviceReading {
     /// `(metric, value)`, e.g. `("print_hours", 812.5)`.
     pub metrics: Vec<(String, f64)>,
     pub disks: Vec<DiskReading>,
+    /// Bambu: the printer's finished prints as `(start, hours)`, start an ISO
+    /// UTC time. The frontend sums those at or after each machine's link time.
+    /// Nothing else about a print (no title, id or token) is passed on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub print_tasks: Option<Vec<(String, f64)>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -359,6 +364,7 @@ mod tests {
                     model: None,
                     metrics: vec![("print_hours".into(), 12.5)],
                     disks: vec![],
+                    print_tasks: None,
                 }],
             })
         }

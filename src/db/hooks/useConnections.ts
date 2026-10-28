@@ -86,12 +86,14 @@ export function useSyncNow() {
 export function useLinkMachine() {
   const invalidate = useInvalidateAll();
   return useMutation({
-    mutationFn: ({ id, connection_id, device_id, reading_baseline }: {
+    mutationFn: ({ id, connection_id, device_id, reading_baseline, linked_at }: {
       id: number;
       connection_id: number | null;
       device_id: string | null;
       reading_baseline: number | null;
-    }) => updateMachine(id, { connection_id, device_id, reading_baseline }),
+      /** ISO UTC time of the link; null when unlinking. */
+      linked_at: string | null;
+    }) => updateMachine(id, { connection_id, device_id, reading_baseline, linked_at }),
     onSuccess: invalidate,
     onError: (e) => { toast.error(String(e)); },
   });

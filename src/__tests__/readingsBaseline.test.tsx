@@ -39,7 +39,7 @@ const machine: Machine = {
   purchase_date: null, supplier: null, price: null, currency: null, expense_id: null,
   warranty_until: null, warranty_notified_for: null, lifespan_years: null, photo_path: null,
   notes: null, template_key: null, connection_id: null, device_id: null,
-  reading_baseline: null, created_at: "", updated_at: "",
+  reading_baseline: null, linked_at: null, created_at: "", updated_at: "",
 };
 
 async function findDevices(connId: number) {
@@ -62,7 +62,22 @@ describe("linking a machine to a device", () => {
     fireEvent.change(screen.getByLabelText(t.upkeep_reading_baseline), { target: { value: "412.5" } });
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_link }));
     expect(linkMutate).toHaveBeenCalledWith({
-      id: 1, connection_id: 2, device_id: "01P", reading_baseline: 412.5,
+      id: 1, connection_id: 2, device_id: "01P", reading_baseline: 412.5, linked_at: expect.any(String),
+    });
+    // Linked now, as an ISO UTC time: prints count from here.
+    const at = Date.parse(linkMutate.mock.calls[0][0].linked_at);
+    expect(Math.abs(Date.now() - at)).toBeLessThan(60_000);
+    expect(linkMutate.mock.calls[0][0].linked_at).toMatch(/Z$/);
+  });
+
+  it("unlinking clears the link time", () => {
+    connections = [conn({})];
+    render(<ReadingsSection
+      machine={{ ...machine, connection_id: 2, device_id: "01P", reading_baseline: 400, linked_at: "2026-09-04T00:00:00Z" }}
+      items={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: t.upkeep_unlink }));
+    expect(linkMutate).toHaveBeenCalledWith({
+      id: 1, connection_id: null, device_id: null, reading_baseline: 400, linked_at: null,
     });
   });
 
