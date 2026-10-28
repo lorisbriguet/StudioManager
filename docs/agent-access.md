@@ -2,7 +2,7 @@
 
 Agent access lets AI apps such as Claude read and edit your StudioManager data through a small local program, `studiomanager-mcp`, that ships inside the app. It speaks the Model Context Protocol (MCP) over standard input/output. Nothing leaves your Mac: the program reads and writes the same files the app uses.
 
-It is off until you turn it on.
+It is off until you turn it on. To watch and answer Claude Code agents running on your Mac, see [Agents](agents.md).
 
 ## Turning it on
 

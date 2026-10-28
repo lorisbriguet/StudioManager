@@ -87,7 +87,7 @@ All 12 checklist items pass after three fixes found by the pass:
 
 ## Next — Agents window (design: [specs/2026-10-28-agents-window-design.md](docs/superpowers/specs/2026-10-28-agents-window-design.md))
 
-- [ ] Settings switch + Agents page: list agents by needs you / working / idle / done, labelled by project; start, read, send, switch model, stop, delete; terminal attached to an agent; Mac notification when one waits
+- [x] Settings switch + Agents page: list agents by needs you / working / idle / done, labelled by project; start, read, send, switch model, stop, delete; terminal attached to an agent; Mac notification when one waits ([docs](docs/agents.md))
 - [ ] Then: bring the agent bar into StudioManager (separate brainstorm)
 
 ## V2.3.0 — Done (wiki vault)
