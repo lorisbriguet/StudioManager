@@ -74,7 +74,7 @@ export function UpkeepWidget() {
           <CollapsibleSection id="widget-ending" title={t.upkeep_warranty_renewals}>
             <ul className="space-y-1">
               {endingSoon.map((e) => (
-                <li key={`${e.kind}-${e.name}`} className="flex items-center justify-between gap-3 text-sm">
+                <li key={`${e.kind}-${e.name}-${e.date}`} className="flex items-center justify-between gap-3 text-sm">
                   <span className="truncate">{e.name}</span>
                   <span className="flex items-center gap-2 shrink-0">
                     <Badge variant={e.kind === "warranty" ? "warning" : "indigo"}>

@@ -1,4 +1,3 @@
-import { EquipmentBlock } from "./upkeep/EquipmentBlock";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
@@ -31,6 +30,7 @@ import { ProjectResources } from "./project/ProjectResources";
 import { ProjectWikiBlock } from "./project/ProjectWikiBlock";
 import { ProjectTasksSection } from "./project/ProjectTasksSection";
 import { ProjectNamedTables } from "./project/ProjectNamedTables";
+import { EquipmentBlock } from "./upkeep/EquipmentBlock";
 
 interface Props {
   projectId: number;

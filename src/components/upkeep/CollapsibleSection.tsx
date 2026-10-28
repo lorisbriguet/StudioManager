@@ -1,12 +1,13 @@
 import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useT } from "../../i18n/useT";
+import { useOrgStore } from "../../stores/org-store";
 
 const PREFIX = "upkeep-collapsed:";
 
-function readCollapsed(id: string): boolean {
+function readCollapsed(key: string): boolean {
   try {
-    return localStorage.getItem(PREFIX + id) === "1";
+    return localStorage.getItem(key) === "1";
   } catch {
     return false;
   }
@@ -28,13 +29,14 @@ export function CollapsibleSection({
   children: ReactNode;
 }) {
   const t = useT();
-  const [collapsed, setCollapsed] = useState(() => readCollapsed(id));
+  const storageKey = useOrgStore((s) => s.orgKey(PREFIX + id));
+  const [collapsed, setCollapsed] = useState(() => readCollapsed(storageKey));
 
   const toggle = () => {
     const next = !collapsed;
     setCollapsed(next);
     try {
-      localStorage.setItem(PREFIX + id, next ? "1" : "0");
+      localStorage.setItem(storageKey, next ? "1" : "0");
     } catch {
       /* storage unavailable: the section still toggles for this session */
     }

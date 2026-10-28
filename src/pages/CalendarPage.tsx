@@ -15,6 +15,7 @@ import { useProjects, useUpdateProject } from "../db/hooks/useProjects";
 import { useInvoices } from "../db/hooks/useInvoices";
 import { useQuotes } from "../db/hooks/useQuotes";
 import { useAppStore } from "../stores/app-store";
+import { useOrgStore } from "../stores/org-store";
 import { ProjectDetailContent } from "../components/ProjectDetailContent";
 import { getSubtasksWithDueDate } from "../db/queries/tasks";
 import { useQuery } from "@tanstack/react-query";
@@ -57,8 +58,8 @@ function extractEventData(event: EventDropArg["event"]) {
   return { due_date: date, end_date: endDate, start_time: startTime, end_time: endTime };
 }
 
-function readFlag(key: string): boolean {
-  try { return localStorage.getItem(key) !== "0"; } catch { return true; }
+function readFlag(base: string): boolean {
+  try { return localStorage.getItem(useOrgStore.getState().orgKey(base)) !== "0"; } catch { return true; }
 }
 
 interface QuickCreateState {
@@ -128,7 +129,7 @@ export function CalendarPage() {
   const [showRenewals, setShowRenewals] = useState(() => readFlag("calendarShowRenewals"));
   const toggleFlag = (key: string, value: boolean, set: (v: boolean) => void) => {
     set(value);
-    try { localStorage.setItem(key, value ? "1" : "0"); } catch { /* not persisted */ }
+    try { localStorage.setItem(useOrgStore.getState().orgKey(key), value ? "1" : "0"); } catch { /* not persisted */ }
   };
 
   const [quickCreate, setQuickCreate] = useState<QuickCreateState | null>(null);
@@ -290,7 +291,7 @@ export function CalendarPage() {
       }
     }
     if (showRenewals) {
-      const color = getNamedTagColor("purple", darkMode);
+      const color = { bg: "var(--color-indigo-bg)", text: "var(--color-indigo-text)" };
       for (const sub of upkeepSubs ?? []) {
         if (sub.status !== "active") continue;
         items.push({

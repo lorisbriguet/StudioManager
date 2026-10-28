@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { Input, Select } from "../ui";
 import { CollapsibleSection } from "../upkeep/CollapsibleSection";
 import { SettingRow } from "./SettingsPrimitives";
+import { logError } from "../../lib/log";
 import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
 import { syncAllUpkeepEvents } from "../../lib/upkeep/calendar";
@@ -10,17 +12,28 @@ type ConcreteAlert = Exclude<UpkeepAlert, "default">;
 const ALERTS: ConcreteAlert[] = ["none", "day_9am", "day_before", "week_before"];
 
 function DaysInput({ label, value, onCommit }: { label: string; value: number; onCommit: (n: number) => void }) {
+  // Local draft so the field can be cleared and retyped; the store only sees valid values.
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => { setDraft(String(value)); }, [value]);
+
+  const valid = (text: string): number | null => {
+    const n = Math.round(Number(text));
+    return text.trim() !== "" && Number.isFinite(n) && n >= 1 && n <= 365 ? n : null;
+  };
+
   return (
     <Input
       type="number"
       min={1}
       max={365}
       aria-label={label}
-      value={value}
+      value={draft}
       onChange={(e) => {
-        const n = Math.round(Number(e.target.value));
-        if (Number.isFinite(n) && n >= 1 && n <= 365) onCommit(n);
+        setDraft(e.target.value);
+        const n = valid(e.target.value);
+        if (n !== null) onCommit(n);
       }}
+      onBlur={() => setDraft(String(value))}
       fullWidth={false}
       className="w-24"
     />
@@ -49,7 +62,7 @@ export function UpkeepSettingsCard() {
   const onAlertChange = (alert: ConcreteAlert) => {
     setAlertDefault(alert);
     // Existing Calendar events carry the old alarm: rebuild them with the new default.
-    void syncAllUpkeepEvents();
+    syncAllUpkeepEvents().catch((e) => logError("Upkeep calendar re-sync failed:", e));
   };
 
   return (

@@ -128,6 +128,7 @@ const DEFAULT_WIDGETS: DashboardWidget[] = [
   { id: "w-recent-invoices", type: "recent-invoices" },
   { id: "w-today-tasks", type: "today-tasks" },
   { id: "w-overdue-tasks", type: "overdue-tasks" },
+  { id: "w-upkeep", type: "upkeep" },
 ];
 
 const DEFAULT_LAYOUT: LayoutItem[] = [
@@ -139,6 +140,7 @@ const DEFAULT_LAYOUT: LayoutItem[] = [
   { i: "w-recent-invoices", x: 8, y: 2, w: 4, h: 5, minW: 3, minH: 3 },
   { i: "w-today-tasks", x: 0, y: 7, w: 6, h: 4, minW: 3, minH: 3 },
   { i: "w-overdue-tasks", x: 6, y: 7, w: 6, h: 4, minW: 3, minH: 3 },
+  { i: "w-upkeep", x: 0, y: 11, w: 4, h: 4, minW: 3, minH: 3 },
 ];
 
 const STORAGE_KEY = "dashboard-layout";
