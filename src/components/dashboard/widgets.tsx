@@ -17,6 +17,7 @@ import {
 } from "recharts";
 import { useQuery } from "@tanstack/react-query";
 import { FileText, Receipt, ClipboardList, FolderPlus } from "lucide-react";
+import { UpkeepWidget } from "../upkeep/UpkeepWidget";
 import { useCountUp } from "../../hooks/useCountUp";
 import { useDashboardKPIs, useMonthlyData, useRevenueByActivity, useRevenueByClient } from "../../db/hooks/useFinance";
 import { useProjects } from "../../db/hooks/useProjects";
@@ -1508,6 +1509,7 @@ export function renderWidget(type: WidgetType) {
     case "recent-invoices": return <RecentInvoices />;
     case "today-tasks": return <TodayTasks />;
     case "overdue-tasks": return <OverdueTasks />;
+    case "upkeep": return <UpkeepWidget />;
     case "project-progress": return <ProjectProgress />;
     case "upcoming-deadlines": return <UpcomingDeadlines />;
     case "revenue-by-activity": return <RevenueByActivity />;

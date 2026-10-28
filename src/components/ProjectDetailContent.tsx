@@ -1,3 +1,4 @@
+import { EquipmentBlock } from "./upkeep/EquipmentBlock";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
@@ -255,6 +256,8 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
         );
       case "wiki":
         return <ProjectWikiBlock projectId={projectId} />;
+      case "equipment":
+        return <EquipmentBlock projectId={projectId} />;
       default:
         return null;
     }

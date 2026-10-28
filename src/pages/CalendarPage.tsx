@@ -20,7 +20,9 @@ import { getSubtasksWithDueDate } from "../db/queries/tasks";
 import { useQuery } from "@tanstack/react-query";
 import { effectivePriority } from "../types/task";
 import { useAllProjectWorkloadConfigs } from "../db/hooks/useWorkload";
-import { getTagColor } from "../lib/tagColors";
+import { getTagColor, getNamedTagColor } from "../lib/tagColors";
+import { useActiveUpkeepItems, useMachines, useSubscriptions } from "../db/hooks/useUpkeep";
+import { effectiveDue } from "../lib/upkeep/schedule";
 import type { WorkloadColumn } from "../types/workload";
 import { DEFAULT_WORKLOAD_COLUMNS } from "../types/workload";
 
@@ -53,6 +55,10 @@ function extractEventData(event: EventDropArg["event"]) {
     endDate = endStr !== date ? endStr : null;
   }
   return { due_date: date, end_date: endDate, start_time: startTime, end_time: endTime };
+}
+
+function readFlag(key: string): boolean {
+  try { return localStorage.getItem(key) !== "0"; } catch { return true; }
 }
 
 interface QuickCreateState {
@@ -114,6 +120,16 @@ export function CalendarPage() {
   const projectOpenMode = useAppStore((s) => s.projectOpenMode);
   const darkMode = useAppStore((s) => s.darkMode);
   const { data: wlConfigs } = useAllProjectWorkloadConfigs();
+  const { data: upkeepItems } = useActiveUpkeepItems();
+  const { data: upkeepMachines } = useMachines();
+  const { data: upkeepSubs } = useSubscriptions();
+  // Filter chips, remembered across launches like the view and peek width.
+  const [showUpkeep, setShowUpkeep] = useState(() => readFlag("calendarShowUpkeep"));
+  const [showRenewals, setShowRenewals] = useState(() => readFlag("calendarShowRenewals"));
+  const toggleFlag = (key: string, value: boolean, set: (v: boolean) => void) => {
+    set(value);
+    try { localStorage.setItem(key, value ? "1" : "0"); } catch { /* not persisted */ }
+  };
 
   const [quickCreate, setQuickCreate] = useState<QuickCreateState | null>(null);
   const [peekId, setPeekId] = useState<number | null>(null);
@@ -253,8 +269,45 @@ export function CalendarPage() {
       });
     }
 
+    // Studio upkeep: next due dates of active items, and subscription renewals
+    if (showUpkeep) {
+      const color = getNamedTagColor("teal", darkMode);
+      const byId = new Map((upkeepMachines ?? []).map((m) => [m.id, m]));
+      for (const it of upkeepItems ?? []) {
+        const machine = byId.get(it.machine_id);
+        const due = effectiveDue(it);
+        if (!machine || machine.status === "retired" || it.archived || !due) continue;
+        items.push({
+          id: `up-${it.id}`,
+          title: `${machine.name}: ${it.title}`,
+          start: due,
+          allDay: true,
+          editable: false,
+          backgroundColor: color.bg,
+          textColor: color.text,
+          extendedProps: { type: "upkeep", itemId: machine.id },
+        });
+      }
+    }
+    if (showRenewals) {
+      const color = getNamedTagColor("purple", darkMode);
+      for (const sub of upkeepSubs ?? []) {
+        if (sub.status !== "active") continue;
+        items.push({
+          id: `ren-${sub.id}`,
+          title: t.upkeep_renewal_event_title.replace("{name}", sub.name),
+          start: sub.renews_on,
+          allDay: true,
+          editable: false,
+          backgroundColor: color.bg,
+          textColor: color.text,
+          extendedProps: { type: "renewal", itemId: sub.id },
+        });
+      }
+    }
+
     return items;
-  }, [tasks, subtasks, projects, invoices, quotes, t, wlConfigs, darkMode]);
+  }, [tasks, subtasks, projects, invoices, quotes, t, wlConfigs, darkMode, showUpkeep, showRenewals, upkeepItems, upkeepMachines, upkeepSubs]);
 
   const handleEventChange = useCallback((event: EventDropArg["event"], revert?: () => void) => {
     const { type, itemId } = event.extendedProps;
@@ -287,6 +340,14 @@ export function CalendarPage() {
     }
     if (type === "quote") {
       navigate(`/quotes/${itemId}/preview`);
+      return;
+    }
+    if (type === "upkeep") {
+      navigate(`/upkeep/machines/${itemId}`);
+      return;
+    }
+    if (type === "renewal") {
+      navigate("/upkeep?tab=subscriptions");
       return;
     }
     if (!projectId) return;
@@ -443,7 +504,24 @@ export function CalendarPage() {
             {t.today}
           </button>
           <h1 className="text-xl font-semibold tracking-tight">{calTitle}</h1>
-          <div className="ml-auto flex gap-1">
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              type="button"
+              aria-pressed={showUpkeep}
+              onClick={() => toggleFlag("calendarShowUpkeep", !showUpkeep, setShowUpkeep)}
+              className={`px-3 py-1 text-xs rounded-md transition-colors ${showUpkeep ? "bg-accent-light text-accent font-medium" : "border border-[var(--color-input-border)] text-muted hover:text-[var(--color-text-secondary)]"}`}
+            >
+              {t.upkeep_cal_filter_upkeep}
+            </button>
+            <button
+              type="button"
+              aria-pressed={showRenewals}
+              onClick={() => toggleFlag("calendarShowRenewals", !showRenewals, setShowRenewals)}
+              className={`px-3 py-1 text-xs rounded-md transition-colors ${showRenewals ? "bg-accent-light text-accent font-medium" : "border border-[var(--color-input-border)] text-muted hover:text-[var(--color-text-secondary)]"}`}
+            >
+              {t.upkeep_cal_filter_renewals}
+            </button>
+            <span className="w-px h-4 bg-[var(--color-border-divider)] mx-1" />
             <button
               onClick={() => calSetView("dayGridMonth")}
               className={`px-3 py-1 text-xs rounded-md transition-colors ${calView === "dayGridMonth" ? "bg-accent-light text-accent font-medium" : "border border-[var(--color-input-border)] text-muted hover:text-[var(--color-text-secondary)]"}`}
