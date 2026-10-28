@@ -6,7 +6,7 @@ import { Badge, Button, FormField, Modal, Select } from "../ui";
 import { SettingRow, SettingsCard } from "../settings/SettingsPrimitives";
 import { useT } from "../../i18n/useT";
 import { useConnections, useDeleteConnection, useSyncNow } from "../../db/hooks/useConnections";
-import { connectionStatusText, testConnection } from "../../lib/upkeep/connections";
+import { connectionErrorText, connectionStatusText, testConnection } from "../../lib/upkeep/connections";
 import { connectionVariant } from "../../lib/statusColors";
 import { CONNECTION_FORMS, CONNECTION_KINDS } from "./connectionForms";
 import type { Connection, ConnectionKind } from "../../types/upkeep";
@@ -47,6 +47,8 @@ function ConnectionRow({ c }: { c: Connection }) {
   const syncNow = useSyncNow();
   const remove = useDeleteConnection();
   const [testing, setTesting] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const Form = CONNECTION_FORMS[c.kind];
 
   const test = async () => {
     setTesting(true);
@@ -54,7 +56,7 @@ function ConnectionRow({ c }: { c: Connection }) {
       const devices = await testConnection(c);
       toast.success(t.upkeep_connection_test_ok.replace("{count}", String(devices.length)));
     } catch (e) {
-      toast.error(String(e));
+      toast.error(connectionErrorText(e, t));
     } finally {
       setTesting(false);
     }
@@ -82,9 +84,24 @@ function ConnectionRow({ c }: { c: Connection }) {
         <Button size="sm" variant="secondary" loading={syncNow.isPending} onClick={() => syncNow.mutate(c.id)}>
           {t.upkeep_sync_now}
         </Button>
+        {Form && (
+          <Button size="sm" variant="secondary" onClick={() => setReconnecting(true)}>
+            {t.upkeep_connection_reconnect}
+          </Button>
+        )}
         <Button size="sm" variant="ghost" icon={<Trash2 size={14} />} aria-label={t.remove} title={t.remove}
           onClick={() => void onRemove()} />
       </div>
+      {Form && reconnecting && (
+        <Modal open onClose={() => setReconnecting(false)} title={t.upkeep_connection_reconnect}>
+          <Form
+            connection={c}
+            onCancel={() => setReconnecting(false)}
+            // Sync at once so the row's error clears and readings come in.
+            onDone={() => { setReconnecting(false); syncNow.mutate(c.id); }}
+          />
+        </Modal>
+      )}
     </SettingRow>
   );
 }

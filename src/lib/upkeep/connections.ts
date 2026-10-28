@@ -19,6 +19,7 @@ import { logWarn } from "../log";
 import { formatDisplayDateTime } from "../../utils/formatDate";
 import { syncItemCalendar } from "./calendar";
 import { dailyUse, forecastUsageDue, usageLeft } from "./schedule";
+import { parseSynologyError } from "./synology";
 import type { Connection, Machine, UpkeepItem } from "../../types/upkeep";
 
 /** Sync on start, then every 6 hours while the app is open (spec §8). */
@@ -37,15 +38,29 @@ export function connectionConfig(c: Connection): Record<string, unknown> {
   };
 }
 
+type ErrorLabels = { upkeep_err_untrusted_cert: string; upkeep_err_otp: string };
+
+/**
+ * A connector error as the user reads it: the codes that need the user
+ * (`untrusted_cert:…`, `otp_required`, `otp_invalid`) become a translated
+ * pointer to Reconnect; other (already redacted) messages pass through.
+ */
+export function connectionErrorText(e: unknown, t: ErrorLabels): string {
+  const r = parseSynologyError(e);
+  if (r.kind === "cert") return t.upkeep_err_untrusted_cert;
+  if (r.kind === "otp") return t.upkeep_err_otp;
+  return r.message;
+}
+
 /** "Last sync <date>", plus the (already redacted) error of a failing connection. */
 export function connectionStatusText(
   c: Pick<Connection, "last_sync_at" | "last_error">,
-  t: { upkeep_last_sync: string; upkeep_never_synced: string }
+  t: { upkeep_last_sync: string; upkeep_never_synced: string } & ErrorLabels
 ): string {
   const sync = c.last_sync_at
     ? t.upkeep_last_sync.replace("{date}", formatDisplayDateTime(c.last_sync_at))
     : t.upkeep_never_synced;
-  return c.last_error ? `${sync} · ${c.last_error}` : sync;
+  return c.last_error ? `${sync} · ${connectionErrorText(c.last_error, t)}` : sync;
 }
 
 /** Store a connection's secret in the Keychain (`<org>:<id>`). */

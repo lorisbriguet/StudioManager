@@ -12,7 +12,10 @@ import {
   recordManualReading,
   syncItemWithForecast,
   connectionConfig,
+  connectionErrorText,
+  connectionStatusText,
 } from "../lib/upkeep/connections";
+import { uiLabels } from "../i18n/ui";
 import { syncItemCalendar } from "../lib/upkeep/calendar";
 import { executedStatements, clearExecutedStatements, setSelectHandler } from "../__mocks__/tauri-sql";
 import { invokedCommands, clearInvokedCommands, setInvokeHandler, setBatchFailure } from "../__mocks__/tauri-api";
@@ -183,6 +186,24 @@ describe("connection queries", () => {
     const c = connectionConfig(conn({ host: "nas.local", port: 5001 }));
     expect(Object.keys(c).sort()).toEqual(["account", "cert_fingerprint", "host", "port", "region"]);
   });
+});
+
+describe("connection errors shown to the user", () => {
+  const FP = "ab".repeat(32);
+  for (const lang of ["EN", "FR"] as const) {
+    const t = uiLabels[lang];
+    it(`turns connector codes into readable ${lang} text`, () => {
+      expect(connectionErrorText(`untrusted_cert:${FP}`, t)).toBe(t.upkeep_err_untrusted_cert);
+      expect(connectionErrorText("otp_required", t)).toBe(t.upkeep_err_otp);
+      expect(connectionErrorText(new Error("otp_invalid"), t)).toBe(t.upkeep_err_otp);
+      expect(connectionErrorText("DSM error 117 on SYNO.Core.System", t)).toBe("DSM error 117 on SYNO.Core.System");
+    });
+    it(`the status line of a failing connection is readable in ${lang}`, () => {
+      const text = connectionStatusText(conn({ last_sync_at: null, last_error: `untrusted_cert:${FP}` }), t);
+      expect(text).toContain(t.upkeep_err_untrusted_cert);
+      expect(text).not.toContain("untrusted_cert");
+    });
+  }
 });
 
 describe("runConnectionSyncs", () => {

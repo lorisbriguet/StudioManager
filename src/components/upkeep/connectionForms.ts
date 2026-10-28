@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import type { ConnectionKind } from "../../types/upkeep";
+import type { Connection, ConnectionKind } from "../../types/upkeep";
 import { SynologyForm } from "./SynologyForm";
 
 /**
@@ -10,6 +10,12 @@ import { SynologyForm } from "./SynologyForm";
 export interface ConnectionFormProps {
   onDone: () => void;
   onCancel: () => void;
+  /**
+   * Reconnect this existing connection (same id, so machine links keep
+   * working) instead of creating one: re-trust a changed certificate, type a
+   * new 2-step code or password. Closing never removes it.
+   */
+  connection?: Connection;
 }
 
 /** Setup form per kind. Task 14 registers the Bambu Lab form here. */

@@ -46,4 +46,16 @@ describe("ConnectionsCard", () => {
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_sync_now }));
     expect(syncNow).toHaveBeenCalledWith(4);
   });
+
+  it("shows a readable error and offers Reconnect on the same connection", () => {
+    connections = [{
+      id: 5, kind: "synology", label: "Office NAS", host: "nas.local", port: 5001, account: "studio",
+      last_sync_at: "2026-10-28T08:00:00.000Z", last_error: "otp_required", failing_since: "2026-10-28",
+    }];
+    render(<ConnectionsCard />);
+    expect(screen.getByText(new RegExp(t.upkeep_err_otp.slice(0, 20)))).toBeInTheDocument();
+    expect(screen.queryByText(/otp_required/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: t.upkeep_connection_reconnect }));
+    expect(screen.getByDisplayValue("nas.local")).toBeInTheDocument();
+  });
 });

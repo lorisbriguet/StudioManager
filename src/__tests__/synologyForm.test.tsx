@@ -34,7 +34,7 @@ function fill() {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   create.mockResolvedValue(7);
   update.mockResolvedValue(undefined);
   saveConnectionSecret.mockResolvedValue(undefined);
@@ -82,6 +82,66 @@ describe("SynologyForm", () => {
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_syno_connect }));
     await waitFor(() => expect(onDone).toHaveBeenCalled());
     expect(saveConnectionSecret).toHaveBeenCalledWith(7, JSON.stringify({ password: "pw", otp_code: "123456" }));
+  });
+
+  it("a retry keeps the stored secret (and its device token) when the password didn't change", async () => {
+    testConnection.mockRejectedValueOnce("the NAS answered HTTP 502").mockResolvedValueOnce([]);
+    const onDone = vi.fn();
+    render(<SynologyForm onDone={onDone} onCancel={vi.fn()} />);
+    fill();
+    expect(await screen.findByText("the NAS answered HTTP 502")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: t.upkeep_syno_connect }));
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(update.mock.calls[0][0].secret).toBeUndefined();
+  });
+
+  it("the certificate step says to use the name the certificate was issued for", async () => {
+    testConnection.mockRejectedValueOnce(`untrusted_cert:${FP}`);
+    render(<SynologyForm onDone={vi.fn()} onCancel={vi.fn()} />);
+    fill();
+    expect(await screen.findByText(t.upkeep_syno_cert_host_hint)).toBeInTheDocument();
+  });
+
+  describe("Reconnect (existing connection)", () => {
+    const existing = {
+      id: 4, kind: "synology" as const, label: "Office NAS", host: "nas.local", port: 5001, region: null,
+      account: "studio", cert_fingerprint: "cd".repeat(32), last_sync_at: null, last_ok_at: null,
+      last_error: "otp_required", failing_since: null, failing_notified: 0, created_at: "", updated_at: "",
+    };
+
+    it("re-pins a changed certificate on the same connection, keeping the stored password", async () => {
+      testConnection.mockRejectedValueOnce(`untrusted_cert:${FP}`).mockResolvedValueOnce([]);
+      const onDone = vi.fn();
+      const { unmount } = render(<SynologyForm connection={existing} onDone={onDone} onCancel={vi.fn()} />);
+      expect(screen.getByDisplayValue("nas.local")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: t.upkeep_syno_connect }));
+      fireEvent.click(await screen.findByRole("button", { name: t.upkeep_syno_cert_trust }));
+      await waitFor(() => expect(onDone).toHaveBeenCalled());
+      expect(create).not.toHaveBeenCalled();
+      expect(update.mock.calls[0][0]).toMatchObject({ id: 4, secret: undefined });
+      expect(update).toHaveBeenCalledWith({ id: 4, data: { cert_fingerprint: FP } });
+      unmount();
+      expect(remove).not.toHaveBeenCalled();
+    });
+
+    it("asks for the code, and the password when none was typed", async () => {
+      testConnection.mockRejectedValueOnce("otp_required").mockResolvedValueOnce([]);
+      const onDone = vi.fn();
+      render(<SynologyForm connection={existing} onDone={onDone} onCancel={vi.fn()} />);
+      fireEvent.click(screen.getByRole("button", { name: t.upkeep_syno_connect }));
+      fireEvent.change(await screen.findByLabelText(/^2-step verification code/), { target: { value: "222333" } });
+      fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: "pw2" } });
+      fireEvent.click(screen.getByRole("button", { name: t.upkeep_syno_connect }));
+      await waitFor(() => expect(onDone).toHaveBeenCalled());
+      expect(saveConnectionSecret).toHaveBeenCalledWith(4, JSON.stringify({ password: "pw2", otp_code: "222333" }));
+    });
+
+    it("closing it never removes the connection", () => {
+      const { unmount } = render(<SynologyForm connection={existing} onDone={vi.fn()} onCancel={vi.fn()} />);
+      unmount();
+      expect(remove).not.toHaveBeenCalled();
+    });
   });
 
   it("removes the half-made connection when closed before it works", async () => {

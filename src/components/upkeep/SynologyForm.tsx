@@ -18,36 +18,45 @@ type Step = "account" | "cert" | "otp";
  * created on the first "Connect", then tested: an unknown certificate is shown
  * for the user to trust, a 2-step account asks for its code. Leaving before it
  * works removes the half-made connection and its secret.
+ *
+ * With `connection` it reconnects that connection instead (same id, machine
+ * links kept): the password may stay empty to keep the stored one, and
+ * closing never removes anything.
  */
-export function SynologyForm({ onDone, onCancel }: ConnectionFormProps) {
+export function SynologyForm({ onDone, onCancel, connection }: ConnectionFormProps) {
   const t = useT();
   const create = useCreateConnection();
   const update = useUpdateConnection();
   const remove = useDeleteConnection();
-  const [f, setF] = useState({
-    label: t.upkeep_connection_kind_synology,
-    host: "",
-    port: "5001",
-    account: "",
+  const existing = connection != null;
+  const [initial] = useState(() => ({
+    label: connection?.label ?? t.upkeep_connection_kind_synology,
+    host: connection?.host ?? "",
+    port: String(connection?.port ?? 5001),
+    account: connection?.account ?? "",
     password: "",
-  });
+  }));
+  const [f, setF] = useState(initial);
   const [step, setStep] = useState<Step>("account");
   const [otp, setOtp] = useState("");
   const [fingerprint, setFingerprint] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const idRef = useRef<number | null>(null);
+  const idRef = useRef<number | null>(connection?.id ?? null);
   const doneRef = useRef(false);
+  /** The password last written to the Keychain by this form (null: none yet). */
+  const [savedPassword, setSavedPassword] = useState<string | null>(null);
 
-  const dirty = !!(f.host || f.account || f.password);
+  const dirty = (Object.keys(initial) as (keyof typeof initial)[]).some((k) => f[k] !== initial[k]);
   useUnsavedChangesWarning(dirty);
 
-  // Closed before it worked (Cancel, Escape, the dialog's close button): no orphan.
+  // A new connection closed before it worked (Cancel, Escape, the dialog's
+  // close button, another kind picked): no orphan. Never on Reconnect.
   const removeRef = useRef(remove.mutate);
   removeRef.current = remove.mutate;
   useEffect(() => () => {
-    if (idRef.current != null && !doneRef.current) removeRef.current(idRef.current);
-  }, []);
+    if (!existing && idRef.current != null && !doneRef.current) removeRef.current(idRef.current);
+  }, [existing]);
 
   const set = <K extends keyof typeof f>(k: K, v: string) => {
     setF((p) => ({ ...p, [k]: v }));
@@ -93,7 +102,8 @@ export function SynologyForm({ onDone, onCancel }: ConnectionFormProps) {
   const connect = () => {
     const host = normalizeHost(f.host);
     const port = Number(f.port) || 5001;
-    if (!host || !f.account.trim() || !f.password) { setError(t.upkeep_syno_required); return; }
+    // On Reconnect an empty password keeps the stored one.
+    if (!host || !f.account.trim() || (!existing && !f.password)) { setError(t.upkeep_syno_required); return; }
     const data = {
       kind: "synology" as const,
       label: f.label.trim() || t.upkeep_connection_kind_synology,
@@ -101,13 +111,17 @@ export function SynologyForm({ onDone, onCancel }: ConnectionFormProps) {
       port,
       account: f.account.trim(),
     };
-    const secret = synologySecret(f.password);
+    // Rewrite the Keychain secret only for a new password, so a device token
+    // DSM gave earlier isn't thrown away by a retry.
+    const password = f.password;
+    const secret = password && password !== savedPassword ? synologySecret(password) : undefined;
     void busyWhile(async () => {
       if (idRef.current == null) {
         idRef.current = await create.mutateAsync({ data, secret });
       } else {
         await update.mutateAsync({ id: idRef.current, data, secret });
       }
+      if (secret) setSavedPassword(password);
       await runTest(idRef.current);
     });
   };
@@ -124,8 +138,12 @@ export function SynologyForm({ onDone, onCancel }: ConnectionFormProps) {
   const sendCode = () => {
     const id = idRef.current;
     if (id == null || !otp.trim()) return;
+    // The code goes into the Keychain blob with the password, so on
+    // Reconnect without a typed password the form asks for it here.
+    if (!f.password) { setError(t.upkeep_syno_required); return; }
     void busyWhile(async () => {
       await saveConnectionSecret(id, synologySecret(f.password, otp));
+      setSavedPassword(f.password);
       await runTest(id);
     });
   };
@@ -159,11 +177,12 @@ export function SynologyForm({ onDone, onCancel }: ConnectionFormProps) {
           <FormField label={t.upkeep_syno_account} required>
             <Input value={f.account} autoComplete="off" onChange={(e) => set("account", e.target.value)} />
           </FormField>
-          <FormField label={t.upkeep_syno_password} required error={error ?? undefined}>
+          <FormField label={t.upkeep_syno_password} required={!existing} error={error ?? undefined}>
             <Input
               type="password"
               value={f.password}
               autoComplete="off"
+              placeholder={existing ? t.upkeep_syno_password_keep : undefined}
               onChange={(e) => set("password", e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") connect(); }}
             />
@@ -176,6 +195,7 @@ export function SynologyForm({ onDone, onCancel }: ConnectionFormProps) {
         <div className="space-y-2">
           <div className="text-sm font-medium">{t.upkeep_syno_cert_title}</div>
           <p className="text-sm text-muted">{t.upkeep_syno_cert_desc}</p>
+          <p className="text-sm text-muted">{t.upkeep_syno_cert_host_hint}</p>
           <div className="text-xs text-muted">{t.upkeep_syno_cert_fingerprint}</div>
           <p className="text-xs font-mono break-all">{formatFingerprint(fingerprint)}</p>
         </div>
@@ -194,6 +214,18 @@ export function SynologyForm({ onDone, onCancel }: ConnectionFormProps) {
               onKeyDown={(e) => { if (e.key === "Enter") sendCode(); }}
             />
           </FormField>
+          {/* Reconnect without a typed password: needed to store the code with it. */}
+          {savedPassword == null && (
+            <FormField label={t.upkeep_syno_password} required>
+              <Input
+                type="password"
+                value={f.password}
+                autoComplete="off"
+                onChange={(e) => set("password", e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") sendCode(); }}
+              />
+            </FormField>
+          )}
         </>
       )}
 

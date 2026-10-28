@@ -10,7 +10,7 @@ import {
   useRecordManualReading,
   useSyncNow,
 } from "../../db/hooks/useConnections";
-import { connectionStatusText, testConnection } from "../../lib/upkeep/connections";
+import { connectionErrorText, connectionStatusText, testConnection } from "../../lib/upkeep/connections";
 import { connectionVariant, diskHealthVariant } from "../../lib/statusColors";
 import type { DeviceInfo } from "../../db/queries/connections";
 import type { Machine, MachineDisk, UpkeepItem } from "../../types/upkeep";
@@ -127,7 +127,7 @@ function LinkForm({ machine, needsBaseline }: { machine: Machine; needsBaseline:
       setDevices(list);
       setDeviceId(list[0]?.device_id ?? "");
     } catch (e) {
-      toast.error(String(e));
+      toast.error(connectionErrorText(e, t));
     } finally {
       setFinding(false);
     }

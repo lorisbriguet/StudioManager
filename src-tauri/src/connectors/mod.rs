@@ -181,7 +181,14 @@ fn with_connector<T>(
     let updated = connector.updated_secret();
     let scrub = |e: String| redact(&redact(&e, secret.as_deref()), updated.as_deref());
     if let Some(new) = updated.as_deref() {
-        if let Err(e) = store.set(&account, new) {
+        // Only renew a secret that still exists: a connection removed while
+        // the call was in flight must not leave an orphan Keychain entry.
+        let saved = match store.get(&account) {
+            Ok(Some(_)) => store.set(&account, new),
+            Ok(None) => Ok(()),
+            Err(e) => Err(e),
+        };
+        if let Err(e) = saved {
             log::warn!("connection {id}: the renewed secret could not be saved: {}", scrub(e));
         }
     }
@@ -428,6 +435,21 @@ mod tests {
         let store = store_with(r#"{"password":"pw","otp_code":"000000"}"#);
         assert_eq!(run_test(&store, "6kun0b", 3, "fake", &JsonValue::Null, &factory).unwrap_err(), "otp_invalid");
         assert!(!store.get("6kun0b:3").unwrap().unwrap().contains("otp_code"));
+    }
+
+    #[test]
+    fn updated_secret_is_not_written_once_the_connection_is_gone() {
+        let factory = |_: &str, _: &JsonValue, _: Option<String>| -> Result<Box<dyn Connector>, String> {
+            Ok(Box::new(Renews))
+        };
+        let store = store_with(r#"{"password":"pw","otp_code":"123456"}"#);
+        // The connection (and its secret) is removed while the call is in flight.
+        with_connector(&store, "6kun0b", 3, "fake", &JsonValue::Null, &factory, |c| {
+            store.delete("6kun0b:3").unwrap();
+            c.sync()
+        })
+        .unwrap();
+        assert_eq!(store.get("6kun0b:3").unwrap(), None, "no orphan Keychain entry");
     }
 
     #[test]
