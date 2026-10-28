@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { BottomBar, Button, PANEL_TOP_BAR, TabItem } from "../components/ui";
+import { AgentsTab } from "./AgentsTab";
 import { useT } from "../i18n/useT";
 import { openMainWindow } from "../lib/agents";
 
@@ -47,8 +48,15 @@ export function MenuBarApp() {
           <TabItem key={id} role="tab" label={labels[id]} active={tab === id} onActivate={() => choose(id)} />
         ))}
       </div>
-      <div role="tabpanel" aria-label={labels[tab]} className="flex-1 min-h-0 overflow-y-auto" />
-      <BottomBar className="justify-end">
+      <div role="tabpanel" aria-label={labels[tab]} className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+        {tab === "agents" && <AgentsTab />}
+      </div>
+      <BottomBar className={tab === "agents" ? "justify-between" : "justify-end"}>
+        {tab === "agents" && (
+          <Button size="sm" variant="ghost" onClick={() => void openMainWindow({ newAgent: true })}>
+            {t.agents_new}
+          </Button>
+        )}
         <Button size="sm" variant="ghost" onClick={() => void openMainWindow()}>
           {t.menubar_open_app}
         </Button>

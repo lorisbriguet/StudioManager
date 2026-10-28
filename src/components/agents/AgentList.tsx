@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import type { Agent, Group } from "../../lib/agents";
 import { agentGroupVariant } from "../../lib/statusColors";
@@ -54,6 +54,10 @@ interface AgentListProps {
   byGroup: Record<Group, Agent[]>;
   selectedId: string | null;
   onSelect: (sessionId: string) => void;
+  /** Smaller rows for the menu bar panel: no project line for idle and done agents. */
+  compact?: boolean;
+  /** Content under a row, outside its button (the panel's inline prompt answer). */
+  renderExtra?: (agent: Agent) => ReactNode;
 }
 
 const FOLDED_KEY = "agents.foldedGroups";
@@ -69,7 +73,7 @@ function readFolded(): Set<Group> {
   return new Set<Group>(["done"]);
 }
 
-export function AgentList({ byGroup, selectedId, onSelect }: AgentListProps) {
+export function AgentList({ byGroup, selectedId, onSelect, compact, renderExtra }: AgentListProps) {
   const t = useT();
   const [folded, setFolded] = useState<Set<Group>>(readFolded);
   const toggle = (g: Group) =>
@@ -86,7 +90,7 @@ export function AgentList({ byGroup, selectedId, onSelect }: AgentListProps) {
     });
 
   return (
-    <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-3">
+    <nav className={`flex-1 overflow-y-auto px-2 space-y-3 ${compact ? "py-2" : "py-3"}`}>
       {GROUPS.filter((g) => byGroup[g].length > 0).map((g) => {
         const open = !folded.has(g);
         // The selected agent stays visible even when its group is folded.
@@ -116,7 +120,7 @@ export function AgentList({ byGroup, selectedId, onSelect }: AgentListProps) {
                       type="button"
                       onClick={() => onSelect(a.sessionId)}
                       aria-current={a.sessionId === selectedId || undefined}
-                      className={`w-full text-left px-3 py-2 rounded-md transition-colors focus-accent ${
+                      className={`w-full text-left px-3 ${compact ? "py-1.5" : "py-2"} rounded-md transition-colors focus-accent ${
                         a.sessionId === selectedId
                           ? "bg-accent-light"
                           : `${GROUP_STYLE[g].row} hover:bg-[var(--color-hover-row)]`
@@ -131,11 +135,14 @@ export function AgentList({ byGroup, selectedId, onSelect }: AgentListProps) {
                         {a.quiet && <Badge variant="neutral">{t.agents_quiet}</Badge>}
                       </div>
                       {/* Indented past the dot (8px) and its gap (8px). */}
-                      <div className="pl-4 text-xs text-muted truncate">{agentLabel(a)}</div>
+                      {!(compact && (g === "idle" || g === "done")) && (
+                        <div className="pl-4 text-xs text-muted truncate">{agentLabel(a)}</div>
+                      )}
                       {a.waitingFor && (
                         <div className={`pl-4 text-xs font-medium truncate ${GROUP_STYLE[g].text}`}>{a.waitingFor}</div>
                       )}
                     </button>
+                    {renderExtra?.(a)}
                   </li>
                 ))}
               </ul>
