@@ -66,6 +66,16 @@ describe("AgentsPage", () => {
     expect(screen.getByText("quiet")).toBeInTheDocument();
   });
 
+  it("opens the start form for ?new=1 (from the menu bar panel)", async () => {
+    setInvokeHandler((cmd) => (cmd === "agents_list" ? [] : cmd === "agents_start_folders" ? [] : null));
+    render(
+      <MemoryRouter initialEntries={["/agents?new=1"]}>
+        <AgentsPage />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByLabelText("Task")).toBeInTheDocument();
+  });
+
   it("says agents are off when the switch is off", () => {
     useAppStore.setState({ agentsEnabled: false });
     setInvokeHandler(() => {

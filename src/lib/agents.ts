@@ -30,6 +30,15 @@ export function setAgentsLimitAlerts(on: boolean): Promise<AgentsInfo> {
   return invoke<AgentsInfo>("agents_set_limit_alerts", { on });
 }
 
+/** From the menu bar panel: bring the main window forward, on an agent (session id) or the
+ *  start form when asked. Rust emits `menubar:navigate` to the main window. */
+export function openMainWindow(opts: { agent?: string | null; newAgent?: boolean } = {}): Promise<void> {
+  return invoke<void>("menubar_open_main", { agent: opts.agent ?? null, newAgent: opts.newAgent ?? false });
+}
+
+/** Sent to the main window by `menubar_open_main`. */
+export const MENUBAR_NAVIGATE = "menubar:navigate";
+
 export function startAgent(
   folder: string,
   task: string,

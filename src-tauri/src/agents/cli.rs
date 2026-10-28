@@ -288,10 +288,12 @@ pub async fn agents_set_enabled(
         if !enabled {
             // The menu bar is part of Agents: it goes off with it, and so does start at login.
             s.menu_bar = false;
-            crate::menubar::set_autostart(&app, false);
+            // Disabling never fails (best effort).
+            let _ = crate::menubar::set_autostart(&app, false);
         }
         write_settings(&app_dir, &s)?;
         if !enabled {
+            crate::menubar::sync_tray(&app, false);
             // Each panel still gets `agents:term-exit` from its reader thread.
             hub.close_all();
         }
@@ -314,9 +316,11 @@ pub async fn agents_set_menu_bar(
         if on && !can_enable_menu_bar(&s) {
             return Err("Turn the Agents page on first".into());
         }
+        // Start at login first: if macOS refuses it, nothing changes and the card says why.
+        crate::menubar::set_autostart(&app, on)?;
         s.menu_bar = on;
         write_settings(&app_dir, &s)?;
-        crate::menubar::set_autostart(&app, on);
+        crate::menubar::sync_tray(&app, on);
         Ok(info(&app_dir, &login))
     })
     .await

@@ -53,6 +53,11 @@ pub fn poll_once(
     (agents, notify)
 }
 
+/// Whether any agent is waiting for you (the menu bar icon turns amber).
+pub fn needs_attention(agents: &[Agent]) -> bool {
+    agents.iter().any(|a| a.group == Group::NeedsYou)
+}
+
 /// `Organisation › Client › Project`, or the folder's last segment.
 fn place(a: &Agent) -> String {
     match &a.project {
@@ -184,6 +189,7 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
                 if let Ok(mut c) = state.last.lock() {
                     c.clear();
                 }
+                crate::menubar::set_attention(&app, false);
             }
             continue;
         }
@@ -206,6 +212,7 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
         }
         // No lock is held from here on.
         let _ = app.emit(CHANGED_EVENT, &emit);
+        crate::menubar::set_attention(&app, needs_attention(&emit));
         for a in &notify {
             // Logged so a missing banner can be told apart from one never sent
             // (macOS may drop notifications from an unbundled dev build).
@@ -303,6 +310,17 @@ mod tests {
         fill_models(&mut v, &mut cache, &mtime_of, &read);
         assert_eq!((reads.get(), v[0].model.as_deref()), (2, Some("haiku")));
         assert!(cache.is_empty());
+    }
+
+    #[test]
+    fn attention_follows_needs_you() {
+        assert!(!needs_attention(&[]));
+        assert!(!needs_attention(&[ag("a", Group::Working), ag("b", Group::Idle), ag("c", Group::Done)]));
+        assert!(needs_attention(&[ag("a", Group::Working), ag("b", Group::NeedsYou)]));
+        // A dismissed or stale prompt has already been moved to idle: no attention.
+        let mut quiet = ag("a", Group::Idle);
+        quiet.quiet = Some(Quiet::Dismissed);
+        assert!(!needs_attention(&[quiet]));
     }
 
     #[test]

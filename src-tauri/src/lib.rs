@@ -558,7 +558,17 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_window_state::Builder::new().build())
+        // The main window starts hidden (tauri.conf.json) and `setup` decides whether to show
+        // it, so the plugin must not restore visibility. The menu bar panel places itself.
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        - tauri_plugin_window_state::StateFlags::VISIBLE,
+                )
+                .with_denylist(&[menubar::PANEL_LABEL])
+                .build(),
+        )
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -617,6 +627,7 @@ pub fn run() {
             agents::prompt::agents_answer,
             agents::poller::agents_list,
             agents::uploads::agents_save_image,
+            menubar::menubar_open_main,
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -632,12 +643,13 @@ pub fn run() {
             handle.manage(InitError(Mutex::new(init_error)));
             agent_access::start_poller(handle);
             agents::init(handle);
-            // Started at login: stay in the menu bar, window hidden.
-            if menubar::started_hidden() && menubar::keep_running(handle) {
-                if let Some(w) = handle.get_webview_window("main") {
-                    let _ = w.hide();
-                }
+            // The main window is created hidden (no flash at login). Started at login with
+            // the menu bar on: it stays hidden; otherwise show it.
+            let keep_running = menubar::keep_running(handle);
+            if !(menubar::started_hidden() && keep_running) {
+                menubar::show_main(handle);
             }
+            menubar::sync_tray(handle, keep_running);
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
