@@ -39,8 +39,11 @@ export interface StatusLinePreview {
   next: string;
   /** A status line exists and it is not StudioManager's. */
   replacesOther: boolean;
+  /** The status line is StudioManager's, from this app's path. */
   installed: boolean;
-  /** The settings file after removal (previous status line restored); only when installed. */
+  /** The status line is StudioManager's from any path (a stale one included). */
+  present: boolean;
+  /** The settings file after removal (previous status line restored); only when present. */
   removeNext: string | null;
 }
 

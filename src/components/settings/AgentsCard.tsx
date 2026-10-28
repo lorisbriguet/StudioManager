@@ -39,12 +39,12 @@ export function AgentsCard() {
   }, [setStoreEnabled]);
 
   const enabled = info?.enabled ?? false;
+  // Read even while Agents is off: a StudioManager status line left behind can still be removed.
   useEffect(() => {
-    if (!enabled) return;
     let cancelled = false;
     statusLinePreview()
       .then((p) => { if (!cancelled) setLine(p); })
-      .catch((e) => { if (!cancelled) setLineError(msg(e)); });
+      .catch((e) => { if (!cancelled && enabled) setLineError(msg(e)); });
     return () => { cancelled = true; };
   }, [enabled]);
 
@@ -56,7 +56,10 @@ export function AgentsCard() {
       setStoreEnabled(next.enabled);
     } catch (e) {
       setError(msg(e));
+      return;
     }
+    // Agents off turns the menu bar off too: same question as the menu bar switch.
+    if (!enabled) await offerRemoval();
   };
 
   const run = async (call: () => Promise<AgentsInfo>) => {
@@ -102,8 +105,9 @@ export function AgentsCard() {
     await writeLine(mode, expected);
   };
 
-  const toggleMenuBar = async (on: boolean) => {
-    if (!(await run(() => setAgentsMenuBar(on))) || on || !line?.installed) return;
+  /** The menu bar went off: offer to remove StudioManager's status line, when there is one. */
+  const offerRemoval = async () => {
+    if (!line?.present) return;
     if (!(await ask(t.agents_status_line_remove_ask, { kind: "warning" }))) return;
     setLineNote(null);
     setLineError(null);
@@ -116,8 +120,16 @@ export function AgentsCard() {
     }
   };
 
+  const toggleMenuBar = async (on: boolean) => {
+    if (!(await run(() => setAgentsMenuBar(on))) || on) return;
+    await offerRemoval();
+  };
+
   const missing = info !== null && !info.claudePath;
-  const showLine = enabled && (info?.menuBar || line?.installed);
+  // Shown whenever a StudioManager status line is in place (any path, Agents on or off) so it
+  // can always be removed; setting one up needs the menu bar.
+  const showLine = line?.present || (enabled && info?.menuBar);
+  const canSetUp = enabled && !line?.installed;
   const shown = lineMode === "install" ? line?.next : lineMode === "remove" ? line?.removeNext : null;
 
   return (
@@ -148,11 +160,14 @@ export function AgentsCard() {
       </SettingRow>
       {showLine && (
         <SettingRow label={t.agents_status_line} desc={t.agents_status_line_desc}>
-          {line?.installed ? (
-            <Button size="sm" variant="secondary" onClick={() => void startLine("remove")}>{t.agents_status_line_remove}</Button>
-          ) : (
-            <Button size="sm" variant="secondary" onClick={() => void startLine("install")}>{t.agents_status_line_setup}</Button>
-          )}
+          <div className="flex gap-2">
+            {canSetUp && (
+              <Button size="sm" variant="secondary" onClick={() => void startLine("install")}>{t.agents_status_line_setup}</Button>
+            )}
+            {line?.present && (
+              <Button size="sm" variant="secondary" onClick={() => void startLine("remove")}>{t.agents_status_line_remove}</Button>
+            )}
+          </div>
         </SettingRow>
       )}
       {shown != null && (

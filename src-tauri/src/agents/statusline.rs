@@ -26,10 +26,13 @@ pub struct StatusLinePreview {
     pub next: String,
     /// A status line exists and it is not StudioManager's.
     pub replaces_other: bool,
-    /// The current status line is StudioManager's.
+    /// The current status line is StudioManager's, from this app's path.
     pub installed: bool,
+    /// The current status line is StudioManager's from any path (a stale one included), so it
+    /// can be removed.
+    pub present: bool,
     /// The settings file after removing it (the previous status line restored); only when
-    /// installed.
+    /// present.
     pub remove_next: Option<String>,
 }
 
@@ -135,15 +138,17 @@ pub fn preview_at(
         None => l.to_string(),
     });
     let (next, _) = merge_status_line(existing.as_deref(), command)?;
-    let remove_next = match (&existing, installed) {
+    let present = is_studiomanager(line);
+    let remove_next = match (&existing, present) {
         (Some(text), true) => Some(unmerge_status_line(text, previous)?),
         _ => None,
     };
     Ok(StatusLinePreview {
         current,
         next,
-        replaces_other: line.is_some() && !is_studiomanager(line),
+        replaces_other: line.is_some() && !present,
         installed,
+        present,
         remove_next,
     })
 }
@@ -179,12 +184,12 @@ pub fn install_at(
 }
 
 /// Write `expected` (the approved preview's `removeNext`): the saved `statusLine` restored, or
-/// the key removed. Refused when the status line isn't ours or the file changed since the
-/// preview. Backs up first; forgets the saved line once restored.
+/// the key removed. Refused when the status line isn't StudioManager's (from any path, so a
+/// stale one can go too) or the file changed since the preview. Backs up first; forgets the
+/// saved line once restored.
 pub fn remove_at(
     settings: &Path,
     app_dir: &Path,
-    command: &str,
     expected: &str,
     stamp: &str,
 ) -> Result<Option<PathBuf>, String> {
@@ -195,7 +200,7 @@ pub fn remove_at(
         &|existing| {
             let root = parse_root(existing)?;
             match existing {
-                Some(text) if is_ours(root.get(KEY), command) => {
+                Some(text) if is_studiomanager(root.get(KEY)) => {
                     unmerge_status_line(text, saved.as_ref())
                 }
                 _ => Err(NOT_INSTALLED.to_string()),
@@ -276,7 +281,7 @@ pub async fn agents_status_line_remove(
 ) -> Result<String, String> {
     let app_dir = state.app_dir.clone();
     super::pty::blocking(move || {
-        remove_at(&settings_path(), &app_dir, &our_command(), &expected, &stamp()).map(path_text)
+        remove_at(&settings_path(), &app_dir, &expected, &stamp()).map(path_text)
     })
     .await
 }
@@ -469,6 +474,7 @@ mod tests {
         let saved = read_settings(&app).previous_status_line;
         let p = preview_at(&settings, &b, saved.as_ref()).unwrap();
         assert!(!p.installed, "a stale path still needs setup");
+        assert!(p.present, "a stale path is still StudioManager's");
         assert!(!p.replaces_other, "no warning for StudioManager's own line");
         install_at(&settings, &app, &b, &p.next, "2").unwrap();
         assert_eq!(read_settings(&app).previous_status_line, Some(original.clone()));
@@ -476,7 +482,7 @@ mod tests {
         let saved = read_settings(&app).previous_status_line;
         let p = preview_at(&settings, &b, saved.as_ref()).unwrap();
         assert!(p.installed);
-        remove_at(&settings, &app, &b, &p.remove_next.unwrap(), "3").unwrap();
+        remove_at(&settings, &app, &p.remove_next.unwrap(), "3").unwrap();
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
         assert_eq!(v, json!({ "model": "opus", "statusLine": original }));
 
@@ -485,6 +491,29 @@ mod tests {
         assert!(!is_studiomanager(Some(&other("~/bin/studiomanager-mcp-wrapper --statusline"))));
         assert!(!is_studiomanager(Some(&other("'/x/studiomanager-mcp'"))));
         assert!(is_studiomanager(Some(&other("/x/studiomanager-mcp --statusline"))));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_stale_line_can_be_removed() {
+        let dir = tmp("stale");
+        let app = dir.join("app");
+        let settings = dir.join("settings.json");
+        let original = json!({ "type": "command", "command": "~/x.sh" });
+        std::fs::write(&settings, json!({ "statusLine": original }).to_string()).unwrap();
+        let old = status_line_command("/Old/StudioManager.app/Contents/MacOS/studiomanager-mcp");
+        let p = preview_at(&settings, &old, None).unwrap();
+        install_at(&settings, &app, &old, &p.next, "1").unwrap();
+        // The app moved: the line in settings.json points at the old path.
+        let saved = read_settings(&app).previous_status_line;
+        let p = preview_at(&settings, CMD, saved.as_ref()).unwrap();
+        assert!(p.present && !p.installed);
+        remove_at(&settings, &app, &p.remove_next.unwrap(), "2").unwrap();
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
+        assert_eq!(v, json!({ "statusLine": original }));
+        // Someone else's line: nothing to remove.
+        let p = preview_at(&settings, CMD, None).unwrap();
+        assert!(!p.present && p.remove_next.is_none());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -520,7 +549,7 @@ mod tests {
         assert_eq!(merge_status_line(Some("{ not json"), CMD).unwrap_err(), INVALID);
         let expected = merge_status_line(None, CMD).unwrap().0;
         assert_eq!(install_at(&settings, &app, CMD, &expected, "1").unwrap_err(), INVALID);
-        assert_eq!(remove_at(&settings, &app, CMD, "{}\n", "1").unwrap_err(), INVALID);
+        assert_eq!(remove_at(&settings, &app, "{}\n", "1").unwrap_err(), INVALID);
         assert_eq!(std::fs::read_to_string(&settings).unwrap(), "{ not json");
         assert_eq!(names(&claude), ["settings.json"], "no backup or temp file left behind");
         std::fs::remove_dir_all(&dir).unwrap();
@@ -542,7 +571,7 @@ mod tests {
         let p = preview_at(&settings, CMD, saved.as_ref()).unwrap();
         let installed_text = std::fs::read_to_string(&settings).unwrap();
         let expected = p.remove_next.expect("installed");
-        let backup = remove_at(&settings, &app, CMD, &expected, "2").unwrap().unwrap();
+        let backup = remove_at(&settings, &app, &expected, "2").unwrap().unwrap();
         assert_eq!(std::fs::read_to_string(&backup).unwrap(), installed_text);
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
         assert_eq!(v, json!({ "model": "opus", "statusLine": { "type": "command", "command": "~/x.sh" } }));
@@ -550,7 +579,7 @@ mod tests {
 
         // Not ours any more: refused, nothing written.
         let before = std::fs::read_to_string(&settings).unwrap();
-        assert_eq!(remove_at(&settings, &app, CMD, &before, "3").unwrap_err(), NOT_INSTALLED);
+        assert_eq!(remove_at(&settings, &app, &before, "3").unwrap_err(), NOT_INSTALLED);
         assert_eq!(std::fs::read_to_string(&settings).unwrap(), before);
         std::fs::remove_dir_all(&dir).unwrap();
     }
@@ -567,7 +596,7 @@ mod tests {
         // Another key changes after the preview.
         let (changed, _) = merge_status_line(Some(r#"{"model":"opus"}"#), CMD).unwrap();
         std::fs::write(&settings, &changed).unwrap();
-        assert_eq!(remove_at(&settings, &app, CMD, &expected, "2").unwrap_err(), CHANGED);
+        assert_eq!(remove_at(&settings, &app, &expected, "2").unwrap_err(), CHANGED);
         assert_eq!(std::fs::read_to_string(&settings).unwrap(), changed);
         std::fs::remove_dir_all(&dir).unwrap();
     }
