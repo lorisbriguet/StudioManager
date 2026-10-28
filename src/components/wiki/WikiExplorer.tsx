@@ -19,7 +19,7 @@ import type { WikiArticleWithTags } from "../../types/wiki";
 import type { ProjectDoc } from "../../db/hooks/useProjectDocs";
 import type { WikiRef } from "../../lib/wikiTabs";
 import { colorFor } from "./wikiColors";
-import { ContextMenu } from "../ContextMenu";
+import { ContextMenu } from "../ui/ContextMenu";
 import { navItemClass } from "../ui/NavItem";
 
 interface Group {

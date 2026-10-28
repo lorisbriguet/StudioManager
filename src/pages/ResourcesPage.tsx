@@ -3,7 +3,7 @@ import { Plus, Search, ExternalLink, Trash2, X } from "lucide-react";
 import { PageHeader, Button, EmptyState, FormField, Select, IconButton, Tag, FilterChip, Input } from "../components/ui";
 import * as v from "../lib/validate";
 import { Skeleton } from "../components/ui/Skeleton";
-import { SavedFilterBar } from "../components/SavedFilterBar";
+import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { toast } from "sonner";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
@@ -15,9 +15,9 @@ import {
   useDeleteResource,
 } from "../db/hooks/useResources";
 import { getResourceTags } from "../db/queries/resources";
-import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
-import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
-import { BulkActionBar } from "../components/BulkActionBar";
+import { SortHeader, sortRows, type SortState } from "../components/ui/SortHeader";
+import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu";
+import { BulkActionBar } from "../components/ui/BulkActionBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useT } from "../i18n/useT";
 import { logError } from "../lib/log";

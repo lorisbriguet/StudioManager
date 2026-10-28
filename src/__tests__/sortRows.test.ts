@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sortRows } from "../components/SortHeader";
+import { sortRows } from "../components/ui/SortHeader";
 
 describe("sortRows", () => {
   const rows = [

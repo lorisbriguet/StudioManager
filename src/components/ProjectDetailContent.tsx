@@ -17,7 +17,7 @@ import {
 import type { WorkloadColumn } from "../types/workload";
 import { DEFAULT_WORKLOAD_COLUMNS } from "../types/workload";
 import type { ProjectStatus } from "../types/project";
-import { ContextMenu, type ContextMenuState } from "./ContextMenu";
+import { ContextMenu, type ContextMenuState } from "./ui/ContextMenu";
 import { useInvoices, useInvoicesByProject, useUpdateInvoice } from "../db/hooks/useInvoices";
 import { useQuotes, useQuotesByProject, useUpdateQuote } from "../db/hooks/useQuotes";
 import { Badge, Button, PageSpinner, Select, Textarea } from "./ui";

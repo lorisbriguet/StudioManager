@@ -1,6 +1,16 @@
 import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { MENU_DIVIDER, MENU_ITEM, MENU_PANEL } from "./ui/Dropdown";
+import { MENU_DIVIDER, MENU_ITEM } from "./Dropdown";
+import { Popover } from "./Popover";
 
+/**
+ * ContextMenu — the right-click menu, at the cursor. See DESIGN-SYSTEM.md, "Dropdown".
+ *
+ *   {menu && <ContextMenu x={menu.x} y={menu.y} items={[…]} onClose={() => setMenu(null)} />}
+ *
+ * Built on Popover (`at`), so it stays in the window, closes on a click
+ * outside and on Esc, and Esc never closes a surrounding Modal. Focus moves
+ * to the first enabled item and back to where it was on close.
+ */
 export interface ContextMenuItem {
   label: string;
   icon?: React.ReactNode;
@@ -37,39 +47,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     previouslyFocusedRef.current = active instanceof HTMLElement ? active : null;
   }
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    const keyHandler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("keydown", keyHandler);
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("keydown", keyHandler);
-    };
-  }, [onClose]);
-
-  // Keep menu within viewport
-  useEffect(() => {
-    if (!ref.current) return;
-    const rect = ref.current.getBoundingClientRect();
-    const el = ref.current;
-    if (rect.right > window.innerWidth) {
-      el.style.left = `${x - rect.width}px`;
-    }
-    if (rect.bottom > window.innerHeight) {
-      el.style.top = `${y - rect.height}px`;
-    }
-  }, [x, y]);
-
   // Move focus into the menu on open; restore it on close/unmount.
-  // preventScroll: the menu is positioned at the cursor, focusing it must not
-  // scroll the page.
   useEffect(() => {
     const menu = ref.current;
     if (menu) {
@@ -153,50 +131,40 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
         onClose();
         break;
       }
-      // Escape is handled by the document-level listener above.
+      // Escape: Popover closes the menu and stops it at the menu.
     }
   };
 
   return (
-    <div
-      ref={ref}
-      role="menu"
-      tabIndex={-1}
-      onKeyDown={handleKeyDown}
-      className={`fixed z-50 ${MENU_PANEL} animate-in fade-in duration-100`}
-      style={{ left: x, top: y }}
-    >
-      {items.map((item, i) => {
-        if (item.divider) {
+    <Popover at={{ x, y }} onClose={onClose} onKeyDown={handleKeyDown} autoFocus={false}>
+      <div ref={ref} role="menu" tabIndex={-1} className="flex flex-col outline-none">
+        {items.map((item, i) => {
+          if (item.divider) {
+            return <div key={i} role="separator" className={MENU_DIVIDER} />;
+          }
           return (
-            <div
+            <button
               key={i}
-              role="separator"
-              className={MENU_DIVIDER}
-            />
+              type="button"
+              role="menuitem"
+              tabIndex={-1}
+              onClick={() => activate(item)}
+              disabled={item.disabled}
+              className={`${MENU_ITEM} ${
+                item.disabled
+                  ? "text-muted opacity-50 cursor-not-allowed"
+                  : item.danger
+                    ? "text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)] focus-visible:bg-[var(--color-danger-bg)] focus:bg-[var(--color-danger-bg)]"
+                    : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] focus-visible:bg-[var(--color-hover-row)] focus:bg-[var(--color-hover-row)]"
+              }`}
+            >
+              {item.icon && <span className="w-4 h-4 flex items-center justify-center">{item.icon}</span>}
+              {item.label}
+            </button>
           );
-        }
-        return (
-          <button
-            key={i}
-            role="menuitem"
-            tabIndex={-1}
-            onClick={() => activate(item)}
-            disabled={item.disabled}
-            className={`${MENU_ITEM} ${
-              item.disabled
-                ? "text-muted opacity-50 cursor-not-allowed"
-                : item.danger
-                  ? "text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)] focus-visible:bg-[var(--color-danger-bg)]"
-                  : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] focus-visible:bg-[var(--color-hover-row)]"
-            }`}
-          >
-            {item.icon && <span className="w-4 h-4 flex items-center justify-center">{item.icon}</span>}
-            {item.label}
-          </button>
-        );
-      })}
-    </div>
+        })}
+      </div>
+    </Popover>
   );
 }
 

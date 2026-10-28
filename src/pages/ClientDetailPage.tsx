@@ -23,7 +23,7 @@ import { useInvoicesByClient } from "../db/hooks/useInvoices";
 import { useT } from "../i18n/useT";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { ClientTimeline } from "../components/ClientTimeline";
-import { ContextMenu } from "../components/ContextMenu";
+import { ContextMenu } from "../components/ui/ContextMenu";
 import { undoableFromStore } from "../lib/undo";
 import type { Client, ClientContact, ClientAddress } from "../types/client";
 

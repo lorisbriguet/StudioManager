@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { X } from "lucide-react";
-import { useT } from "../i18n/useT";
-import { IconButton } from "./ui";
+import { useT } from "../../i18n/useT";
+import { IconButton } from "./IconButton";
 
 interface BulkAction {
   label: string;

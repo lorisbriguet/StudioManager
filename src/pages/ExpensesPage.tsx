@@ -3,7 +3,7 @@ import { Plus, Paperclip, Eye, ChevronRight, Upload, Trash2, CheckCircle, Calend
 import { Button, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState, Card, Modal, Popover, IconButton, Tag, SectionLabel } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
-import { SavedFilterBar } from "../components/SavedFilterBar";
+import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { formatDisplayDate } from "../utils/formatDate";
@@ -22,16 +22,16 @@ import {
   useDeleteExpense,
   useDuplicateCheck,
 } from "../db/hooks/useExpenses";
-import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
+import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu";
 import { MENU_ITEM } from "../components/ui/Dropdown";
-import { BulkActionBar } from "../components/BulkActionBar";
+import { BulkActionBar } from "../components/ui/BulkActionBar";
 import { useReceiptDrop } from "../hooks/useReceiptDrop";
 import { useListNavigation } from "../hooks/useListNavigation";
 import { useDetectedFields } from "../hooks/useDetectedFields";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import type { Expense } from "../types/expense";
 import { getNextExpenseReference } from "../db/queries/expenses";
-import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
+import { SortHeader, sortRows, type SortState } from "../components/ui/SortHeader";
 import { useT } from "../i18n/useT";
 import { type ExtractedExpenseData } from "../lib/expenseParse";
 import { logError } from "../lib/log";

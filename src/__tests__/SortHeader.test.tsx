@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { SortHeader } from "../components/SortHeader";
+import { SortHeader } from "../components/ui/SortHeader";
 
 function renderInTable(ui: React.ReactElement) {
   return render(<table><thead><tr>{ui}</tr></thead></table>);

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, ChevronsUpDown, Plus, Settings2 } from "lucide-react";
 import { toast } from "sonner";
-import { ContextMenu, type ContextMenuItem } from "../ContextMenu";
+import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { useOrgStore } from "../../stores/org-store";
 import { useTimerActions } from "../../hooks/useTimerActions";
 import { switchOrganisation, defaultSwitchDeps } from "../../lib/switchOrganisation";

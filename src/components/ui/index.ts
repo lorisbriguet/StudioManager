@@ -23,3 +23,8 @@ export { TabItem } from "./TabItem";
 export { NavItem, navItemClass } from "./NavItem";
 export { SegmentedControl } from "./SegmentedControl";
 export type { SegmentedOption } from "./SegmentedControl";
+export { ContextMenu } from "./ContextMenu";
+export type { ContextMenuItem, ContextMenuState } from "./ContextMenu";
+export { SortHeader, sortRows } from "./SortHeader";
+export type { SortDir, SortState } from "./SortHeader";
+export { BulkActionBar } from "./BulkActionBar";

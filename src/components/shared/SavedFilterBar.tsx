@@ -1,18 +1,18 @@
 import { useState, useRef, useEffect } from "react";
 import { Bookmark, Plus, X, Pencil, Trash2, Filter } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Select, FilterChip, Input } from "./ui";
-import { ContextMenu } from "./ContextMenu";
+import { Button, Select, FilterChip, Input } from "../ui";
+import { ContextMenu } from "../ui/ContextMenu";
 import {
   useSavedFilters,
   useCreateSavedFilter,
   useRenameSavedFilter,
   useUpdateSavedFilter,
   useDeleteSavedFilter,
-} from "../db/hooks/useSavedFilters";
-import { useT } from "../i18n/useT";
-import type { SavedFilter, SavedFilterData, FilterCondition, FilterableField, FilterOperator, ConditionLogic } from "../types/saved-filter";
-import { IconButton } from "./ui/IconButton";
+} from "../../db/hooks/useSavedFilters";
+import { useT } from "../../i18n/useT";
+import type { SavedFilter, SavedFilterData, FilterCondition, FilterableField, FilterOperator, ConditionLogic } from "../../types/saved-filter";
+import { IconButton } from "../ui/IconButton";
 
 const STRING_OPERATORS: FilterOperator[] = ["eq", "neq", "contains"];
 const NUMBER_OPERATORS: FilterOperator[] = ["eq", "neq", "gt", "lt", "gte", "lte"];

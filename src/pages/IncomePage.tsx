@@ -18,9 +18,9 @@ import {
   useDeleteIncome,
 } from "../db/hooks/useIncome";
 import { getNextIncomeReference } from "../db/queries/income";
-import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
-import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
-import { BulkActionBar } from "../components/BulkActionBar";
+import { SortHeader, sortRows, type SortState } from "../components/ui/SortHeader";
+import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu";
+import { BulkActionBar } from "../components/ui/BulkActionBar";
 import { useReceiptDrop } from "../hooks/useReceiptDrop";
 import { useDetectedFields } from "../hooks/useDetectedFields";
 import { useBulkSelect } from "../hooks/useBulkSelect";
@@ -29,7 +29,7 @@ import type { Income } from "../types/income";
 import { logError } from "../lib/log";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { SavedFilterBar } from "../components/SavedFilterBar";
+import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 

@@ -559,7 +559,7 @@ Every menu and select in the app uses `src/components/ui/Dropdown.tsx`. Never us
 | Options with icons, descriptions, groups, search, "Create …" | `<DropdownSelect options={[...]} value onChange>` |
 | Pick several values | `<DropdownSelect multiple value={string[]} onChange>` |
 | Commands behind a button (edit, duplicate, delete) | `<Dropdown trigger={<Button …/>} items={[...]}>` |
-| Commands at the cursor (right-click) | `<ContextMenu>` (same panel and rows) |
+| Commands at the cursor (right-click) | `<ContextMenu>` from `ui/` (same panel and rows, built on Popover) |
 
 ```tsx
 <Select value={currency} onChange={(e) => setCurrency(e.target.value)}>
@@ -645,7 +645,7 @@ Keys are defined in `src/i18n/ui.ts` (EN section, then FR section). Always add b
 |-----------|----------|
 | `src/components/ui/` | Shared design system components (Card, Button, Badge, etc.) |
 | `src/components/layout/` | Layout shell (Sidebar, TabBar, MainLayout) |
-| `src/components/shared/` | Shared feature components (LineItemsTable) |
+| `src/components/shared/` | Shared feature components that read or write data (LineItemsTable, SavedFilterBar) |
 | `src/components/` | Feature components (NamedTable, CommandPalette, etc.) |
 | `src/pages/` | One file per route |
 | `src/lib/` | Utilities (tagColors, statusColors, lineItems, etc.) |
