@@ -313,7 +313,7 @@ export function ProfilePage() {
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addNewActivity(); } }}
                       placeholder={t.activity_name_en}
                     />
-                    <IconButton icon={Plus} label={t.add_activity} size="md" tone="accent" onClick={addNewActivity} />
+                    <IconButton icon={Plus} label={t.add_activity} tone="accent" onClick={addNewActivity} />
                   </div>
                 </div>
 

@@ -112,7 +112,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
           onKeyDown={(e) => { if (e.key === "Enter") addTask(); }}
           className="flex-1"
         />
-        <IconButton icon={Plus} label={t.new_task} size="md" tone="accent" onClick={addTask} />
+        <IconButton icon={Plus} label={t.new_task} tone="accent" onClick={addTask} />
       </div>
 
       <div className="space-y-0.5">
@@ -133,7 +133,6 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                     setExpandedTasks(next);
                   }}
                   size="xs"
-                  iconSize={14}
                   label={isExpanded ? t.collapse : t.expand}
                   icon={ChevronRight}
                   iconClassName={`transition-transform ${isExpanded ? "rotate-90" : ""}`}
@@ -188,7 +187,6 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                   icon={activeTimer?.taskId === tk.id ? Square : Play}
                   label={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
                   size="xs"
-                  iconSize={14}
                   tone="accent"
                   color={activeTimer?.taskId === tk.id ? "danger" : undefined}
                   onClick={() => handleTimerToggle(tk.id)}
@@ -203,7 +201,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                   label={t.delete}
                   tone="danger"
                   onClick={() => deleteTask.mutate(tk.id, { onSuccess: () => toast.success(t.toast_task_deleted) })}
-                  className="opacity-0 pointer-events-none group-hover/task:opacity-100 group-hover/task:pointer-events-auto"
+                  reveal="task" className="pointer-events-none group-hover/task:pointer-events-auto"
                 />
               </div>
               {isExpanded && (
@@ -269,7 +267,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                         label={t.delete}
                         tone="danger"
                         onClick={() => deleteSubtask.mutate(s.id, { onSuccess: () => toast.success(t.toast_subtask_deleted) })}
-                        className="opacity-0 pointer-events-none group-hover/sub:opacity-100 group-hover/sub:pointer-events-auto"
+                        reveal="sub" className="pointer-events-none group-hover/sub:pointer-events-auto"
                       />
                     </SortableSubtaskRow>
                   ))}

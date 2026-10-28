@@ -256,7 +256,7 @@ export function NamedTable({ table, projectId }: Props) {
                   <Dropdown
                     align="end"
                     trigger={
-                      <IconButton icon={Plus} label={t.add_column} size="xs" iconSize={14} tone="accent" />
+                      <IconButton icon={Plus} label={t.add_column} size="xs" tone="accent" />
                     }
                     items={(["text", "number", "checkbox", "select", "tags", "date"] as const).map((type) => ({
                       label: type.charAt(0).toUpperCase() + type.slice(1),

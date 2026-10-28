@@ -142,14 +142,13 @@ export function WorkloadTemplateManager() {
                 icon={Pencil}
                 label={t.rename}
                 tone="accent"
-                iconSize={12}
                 onClick={() => {
                   setRenamingId(tpl.id);
                   setRenameValue(tpl.name);
                 }}
               />
-              <IconButton icon={Copy} label={t.duplicate} tone="accent" iconSize={12} onClick={() => handleDuplicate(tpl)} />
-              <IconButton icon={Trash2} label={t.delete} tone="danger" iconSize={12} onClick={() => handleDelete(tpl.id)} />
+              <IconButton icon={Copy} label={t.duplicate} tone="accent" onClick={() => handleDuplicate(tpl)} />
+              <IconButton icon={Trash2} label={t.delete} tone="danger" onClick={() => handleDelete(tpl.id)} />
             </div>
 
             {/* Expanded column list */}

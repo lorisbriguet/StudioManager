@@ -14,7 +14,7 @@ export function DetectedBadge({ onClear }: { onClear: () => void }) {
     <Badge variant="accent" size="xs" className="pr-0.5">
       <ScanLine size={10} aria-hidden="true" />
       {t.from_receipt}
-      <IconButton icon={X} label={t.clear_detected_value} size="xs" iconSize={10} tone="danger" onClick={onClear} className="p-0! rounded-full" />
+      <IconButton icon={X} label={t.clear_detected_value} size="xs" tone="danger" onClick={onClear} className="p-0! rounded-full" />
     </Badge>
   );
 }

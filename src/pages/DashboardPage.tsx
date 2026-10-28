@@ -154,7 +154,7 @@ function PresetDropdown() {
                 size="xs"
                 tone="danger"
                 onClick={(e) => handleDelete(e, preset.id)}
-                className="mx-1.5 opacity-0 group-hover/item:opacity-100 focus-visible:opacity-100"
+                reveal="item" className="mx-1.5"
               />
             </div>
           ))}

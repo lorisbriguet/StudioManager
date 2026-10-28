@@ -388,7 +388,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                       </option>
                     ))}
                   </Select>
-                  <IconButton icon={Plus} label={t.new_option} size="md" tone="accent" onClick={addOption} />
+                  <IconButton icon={Plus} label={t.new_option} tone="accent" onClick={addOption} />
                 </div>
                 <div className="border-t border-[var(--color-border-divider)] pt-2">
                   {showSaveAsListInput ? (

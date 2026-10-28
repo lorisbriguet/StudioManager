@@ -155,7 +155,6 @@ export function ColumnEditorPopover({
                   icon={Trash2}
                   label={t.delete}
                   size="xs"
-                  iconSize={10}
                   tone="danger"
                   onClick={() => setColOptions(colOptions.filter((_, j) => j !== i))}
                 />

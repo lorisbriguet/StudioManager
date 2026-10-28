@@ -179,12 +179,11 @@ export function TimeEntriesManager() {
                           <IconButton
                             icon={Check}
                             label={t.save}
-                            iconSize={13}
                             color="accent"
                             onClick={saveEdit}
                             disabled={updateEntry.isPending}
                           />
-                          <IconButton icon={X} label={t.cancel} iconSize={13} onClick={() => setEditingId(null)} />
+                          <IconButton icon={X} label={t.cancel} onClick={() => setEditingId(null)} />
                         </div>
                       </td>
                     </>

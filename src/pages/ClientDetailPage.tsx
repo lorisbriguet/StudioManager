@@ -90,7 +90,7 @@ export function ClientDetailPage() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <IconButton icon={ArrowLeft} label={t.back} size="md" iconSize={18} onClick={() => navigate(-1)} />
+        <IconButton icon={ArrowLeft} label={t.back} onClick={() => navigate(-1)} />
         <h1 className="text-xl font-semibold">{client.name}</h1>
         <div className="ml-auto flex items-center gap-2">
           {dirty && (

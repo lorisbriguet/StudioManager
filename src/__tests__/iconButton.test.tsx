@@ -26,13 +26,20 @@ describe("IconButton", () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  it("sizes the icon from size", () => {
-    const { rerender } = render(<IconButton icon={Pencil} label="Edit" size="xs" />);
-    expect(screen.getByRole("button").querySelector("svg")).toHaveAttribute("width", "12");
-    rerender(<IconButton icon={Pencil} label="Edit" size="md" />);
-    expect(screen.getByRole("button").querySelector("svg")).toHaveAttribute("width", "16");
-    rerender(<IconButton icon={Pencil} label="Edit" iconSize={18} />);
-    expect(screen.getByRole("button").querySelector("svg")).toHaveAttribute("width", "18");
+  it("has two fixed sizes: sm 26px box + 14px icon, xs 20px box + 12px icon", () => {
+    const { rerender } = render(<IconButton icon={Pencil} label="Edit" />);
+    let btn = screen.getByRole("button");
+    expect(btn.className).toContain("w-6.5 h-6.5");
+    expect(btn.querySelector("svg")).toHaveAttribute("width", "14");
+    rerender(<IconButton icon={Pencil} label="Edit" size="xs" />);
+    btn = screen.getByRole("button");
+    expect(btn.className).toContain("w-5 h-5");
+    expect(btn.querySelector("svg")).toHaveAttribute("width", "12");
+  });
+
+  it("reveal can target a named group", () => {
+    render(<IconButton icon={Pencil} label="Edit" reveal="task" />);
+    expect(screen.getByRole("button").className).toContain("group-hover/task:opacity-100");
   });
 
   it("applies tone, reveal and active classes", () => {

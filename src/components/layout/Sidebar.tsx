@@ -311,7 +311,6 @@ function TimerIndicator({ collapsed }: { collapsed: boolean }) {
             <IconButton
               icon={Square}
               label={t.stop_timer}
-              iconSize={12}
               color="danger"
               onClick={() => stopAndSave()}
             />

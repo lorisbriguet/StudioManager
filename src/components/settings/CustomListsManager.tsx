@@ -118,7 +118,7 @@ export function CustomListsManager() {
                   {list.name}
                 </span>
               )}
-              <IconButton icon={Trash2} label={t.delete} size="xs" iconSize={11} tone="danger" reveal onClick={() => handleDeleteList(list.id)} />
+              <IconButton icon={Trash2} label={t.delete} size="xs" tone="danger" reveal onClick={() => handleDeleteList(list.id)} />
             </div>
           ))}
         </div>
@@ -132,7 +132,7 @@ export function CustomListsManager() {
               className="flex-1"
               autoFocus
             />
-            <IconButton icon={Check} label={t.create} iconSize={12} filled onClick={handleCreateList} />
+            <IconButton icon={Check} label={t.create} filled onClick={handleCreateList} />
           </div>
         ) : (
           <Button
@@ -191,7 +191,7 @@ export function CustomListsManager() {
                   <option key={c} value={c}>{c}</option>
                 ))}
               </Select>
-              <IconButton icon={Plus} label={t.new_list_item} size="md" tone="accent" onClick={addItem} />
+              <IconButton icon={Plus} label={t.new_list_item} tone="accent" onClick={addItem} />
             </div>
             {dirty && (
               <Button variant="primary" onClick={saveItems}>

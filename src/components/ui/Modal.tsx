@@ -138,7 +138,7 @@ export function Modal({ open, onClose, title, children, footer, size = "sm", pos
         {title && (
           <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--color-border-divider)]">
             <h3 id={titleId} className="text-sm font-medium">{title}</h3>
-            <IconButton icon={X} label={t.close} size="sm" iconSize={16} onClick={onClose} />
+            <IconButton icon={X} label={t.close} size="sm" onClick={onClose} />
           </div>
         )}
         {padding ? <div className={title ? "p-5" : "p-6"}>{children}</div> : children}

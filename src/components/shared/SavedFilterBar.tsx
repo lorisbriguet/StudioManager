@@ -328,7 +328,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
                   className="w-36"
                 />
                 {fields && fields.length > 0 && (
-                  <IconButton icon={Filter} label={t.add_condition} iconSize={12} tone="accent" active={showConditions} onClick={() => { setShowConditions(!showConditions); if (!showConditions && conditions.length === 0) addCondition(); }} />
+                  <IconButton icon={Filter} label={t.add_condition} tone="accent" active={showConditions} onClick={() => { setShowConditions(!showConditions); if (!showConditions && conditions.length === 0) addCondition(); }} />
                 )}
                 <button onClick={handleSave} className="text-xs text-accent hover:text-accent-hover px-1">{t.save}</button>
                 <IconButton icon={X} label={t.cancel} size="xs" onClick={() => { setNaming(false); setNameInput(""); setConditions([]); setShowConditions(false); }} />
@@ -421,7 +421,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
                 className="w-28"
               />
               {fields && fields.length > 0 && (
-                <IconButton icon={Filter} label={t.add_condition} iconSize={12} tone="accent" active={showConditions} onClick={() => { setShowConditions(!showConditions); if (!showConditions && conditions.length === 0) addCondition(); }} />
+                <IconButton icon={Filter} label={t.add_condition} tone="accent" active={showConditions} onClick={() => { setShowConditions(!showConditions); if (!showConditions && conditions.length === 0) addCondition(); }} />
               )}
               <button onClick={handleSave} className="text-xs text-accent hover:text-accent-hover px-1">{t.save}</button>
               <IconButton icon={X} label={t.cancel} size="xs" onClick={() => { setNaming(false); setNameInput(""); setConditions([]); setShowConditions(false); }} />

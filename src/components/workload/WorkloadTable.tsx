@@ -445,7 +445,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
           )}
         </Select>
         <div className="flex-1" />
-        <IconButton icon={Plus} label={t.add_column} tone="accent" iconSize={16} onClick={() => onEditColumn?.(null, columns.length)} />
+        <IconButton icon={Plus} label={t.add_column} tone="accent" onClick={() => onEditColumn?.(null, columns.length)} />
       </div>
 
       {/* Table */}
@@ -904,8 +904,8 @@ function SortableRow({
       {/* Row actions */}
       <td className="px-2 text-center">
         <div className="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100">
-          <IconButton icon={Copy} label={t.duplicate_row} size="xs" iconSize={14} tone="accent" onClick={() => handleDuplicateRow(row)} />
-          <IconButton icon={Trash2} label={t.delete} size="xs" iconSize={14} tone="danger" onClick={() => deleteRow.mutate(row.id)} />
+          <IconButton icon={Copy} label={t.duplicate_row} size="xs" tone="accent" onClick={() => handleDuplicateRow(row)} />
+          <IconButton icon={Trash2} label={t.delete} size="xs" tone="danger" onClick={() => deleteRow.mutate(row.id)} />
         </div>
       </td>
     </tr>

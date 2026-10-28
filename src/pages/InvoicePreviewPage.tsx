@@ -196,7 +196,7 @@ export function InvoicePreviewPage() {
   return (
     <div className="flex flex-col -m-8 h-screen">
       <div className="flex items-center gap-3 px-6 py-3 border-b border-[var(--color-border-divider)] bg-[var(--color-surface)]">
-        <IconButton icon={ArrowLeft} label={t.back} size="md" iconSize={18} onClick={() => navigate(-1)} />
+        <IconButton icon={ArrowLeft} label={t.back} onClick={() => navigate(-1)} />
         <h1 className="text-sm font-semibold flex-1">
           {invoice.reference} — {client.name}
         </h1>

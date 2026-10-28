@@ -343,7 +343,6 @@ export function TasksPage() {
                       <IconButton
                         onClick={() => toggleTaskExpanded(tk.id)}
                         size="xs"
-                        iconSize={14}
                         label={isExpanded ? t.collapse : t.expand}
                         icon={ChevronRight}
                         iconClassName={`transition-transform ${isExpanded ? "rotate-90" : ""}`}
@@ -427,7 +426,6 @@ export function TasksPage() {
                         icon={activeTimer?.taskId === tk.id ? Square : Play}
                         label={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
                         size="xs"
-                        iconSize={14}
                         tone="accent"
                         color={activeTimer?.taskId === tk.id ? "danger" : undefined}
                         onClick={() => handleTimerToggle(tk.id, tk.project_id)}
@@ -444,7 +442,7 @@ export function TasksPage() {
                         icon={Trash2}
                         label={t.delete}
                         tone="danger"
-                        className="opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100"
+                        reveal="task"
                       />
                     </div>
                     {isExpanded && (
@@ -513,7 +511,7 @@ export function TasksPage() {
                               icon={Trash2}
                               label={t.delete}
                               tone="danger"
-                              className="opacity-0 group-hover/sub:opacity-100 focus-visible:opacity-100"
+                              reveal="sub"
                             />
                           </div>
                         ))}
@@ -655,7 +653,6 @@ export function TasksPage() {
                 }}
                 icon={Plus}
                 label={t.new_task}
-                size="md"
                 tone="accent"
               />
             </div>}

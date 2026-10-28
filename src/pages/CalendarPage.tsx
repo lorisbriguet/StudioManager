@@ -435,8 +435,8 @@ export function CalendarPage() {
       <div className="min-w-0 flex-1 p-8">
         {/* Custom toolbar */}
         <div className="flex items-center gap-3 mb-4">
-          <IconButton icon={ChevronLeft} label={t.previous} iconSize={18} onClick={calPrev} />
-          <IconButton icon={ChevronRight} label={t.next} iconSize={18} onClick={calNext} />
+          <IconButton icon={ChevronLeft} label={t.previous} onClick={calPrev} />
+          <IconButton icon={ChevronRight} label={t.next} onClick={calNext} />
           <Button variant="outline" onClick={calToday}>
             {t.today}
           </Button>
@@ -520,7 +520,7 @@ export function CalendarPage() {
             >
               {t.open_full_page}
             </Link>
-            <IconButton icon={X} label={t.close} size="md" onClick={handleClosePeek} />
+            <IconButton icon={X} label={t.close} onClick={handleClosePeek} />
           </div>
           <ProjectDetailContent projectId={peekId} compact />
           </div>

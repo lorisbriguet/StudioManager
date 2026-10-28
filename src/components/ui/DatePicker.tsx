@@ -73,11 +73,11 @@ export function Calendar({ selected, selectedEnd, onSelect, month: monthProp, on
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <IconButton icon={ChevronLeft} label={t.previous} size="md" onClick={() => setMonth(subMonths(month, 1))} />
+        <IconButton icon={ChevronLeft} label={t.previous} onClick={() => setMonth(subMonths(month, 1))} />
         <span className="text-xs font-medium first-letter:uppercase" aria-live="polite">
           {title}
         </span>
-        <IconButton icon={ChevronRight} label={t.next} size="md" onClick={() => setMonth(addMonths(month, 1))} />
+        <IconButton icon={ChevronRight} label={t.next} onClick={() => setMonth(addMonths(month, 1))} />
       </div>
       <div className="grid grid-cols-7 mb-1" aria-hidden="true">
         {weekdayNames(locale).map((d) => (
@@ -313,8 +313,7 @@ export function DatePicker({
       <IconButton
         icon={CalendarIcon}
         label={t.pick_date}
-        size={size === "sm" ? "xs" : "sm"}
-        iconSize={size === "sm" ? 12 : 14}
+        size="xs"
         disabled={disabled}
         aria-expanded={open}
         aria-haspopup="dialog"
