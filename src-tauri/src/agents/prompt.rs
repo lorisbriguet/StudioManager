@@ -31,6 +31,8 @@ const TEMP_ROWS: u16 = 40;
 const MAX_GAP_LINES: usize = 3;
 /// How far above the options to look for the rule that opens the prompt block.
 const MAX_BLOCK_LINES: usize = 20;
+/// Non-blank lines allowed below the last option: a footer, a rule with the agent's name.
+const MAX_TRAILING_LINES: usize = 3;
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -102,9 +104,22 @@ fn finish(run: &mut Option<Run>, found: &mut Option<Run>) {
     }
 }
 
+/// Whether the run ending at line `last` sits at the bottom of the screen: no solid rule, no
+/// pointer line (Claude's input box shows `❯` when no prompt is open) and at most
+/// `MAX_TRAILING_LINES` non-blank lines (a footer such as `Esc to cancel`) below it. A numbered
+/// message higher up in the conversation is followed by the input box, so it never qualifies.
+fn at_bottom(lines: &[&str], last: usize) -> bool {
+    let below: Vec<&str> =
+        lines[last + 1..].iter().copied().filter(|l| !l.trim().is_empty()).collect();
+    below.len() <= MAX_TRAILING_LINES
+        && !below.iter().any(|l| is_block_top(l) || strip(l).starts_with('❯'))
+}
+
 /// The prompt at the bottom of the screen: the last run of 2-9 options numbered 1, 2, 3...,
 /// exactly one of them carrying the pointer. Up to three non-blank lines (an option's
-/// description, a rule) may sit between two options.
+/// description, a rule) may sit between two options. The run must be the last thing on screen
+/// (see `at_bottom`) and the rule opening its block must be within `MAX_BLOCK_LINES` above it;
+/// otherwise there is no prompt to answer here, and the terminal is the place to look.
 pub fn parse_prompt(screen: &str) -> Option<Prompt> {
     let lines: Vec<&str> = screen.lines().collect();
     let mut found: Option<Run> = None;
@@ -135,11 +150,12 @@ pub fn parse_prompt(screen: &str) -> Option<Prompt> {
     finish(&mut run, &mut found);
 
     let Run { first, last, options } = found?;
-    if options.iter().filter(|o| o.selected).count() != 1 {
+    if options.iter().filter(|o| o.selected).count() != 1 || !at_bottom(&lines, last) {
         return None;
     }
+    // A block whose top is out of reach would be shown and fingerprinted only in part.
     let floor = first.saturating_sub(MAX_BLOCK_LINES);
-    let top = (floor..first).rev().find(|&i| is_block_top(lines[i])).map_or(floor, |i| i + 1);
+    let top = (floor..first).rev().find(|&i| is_block_top(lines[i]))? + 1;
     let question_at = (top..first).rev().find(|&i| !strip(lines[i]).is_empty());
     let question = question_at.map_or("", |i| strip(lines[i])).to_string();
     let detail = lines[top..question_at.unwrap_or(top)]
@@ -413,6 +429,47 @@ mod tests {
         assert_eq!(parse_prompt(""), None);
         // A numbered list in the agent's reply has no pointer.
         assert_eq!(parse_prompt("Steps:\n1. Build\n2. Test\n"), None);
+    }
+
+    /// A past user message that is a numbered list, as Claude Code draws it: `❯` on its first line.
+    const NUMBERED_MESSAGE: &str = "❯ 1. Build the demo\n  2. Run the tests\n";
+
+    #[test]
+    fn numbered_message_above_real_prompt_is_ignored() {
+        let screen = format!("{NUMBERED_MESSAGE}\n⏺ On it.\n\n{PERMISSION}");
+        assert_eq!(parse_prompt(&screen), parse_prompt(PERMISSION));
+        assert_eq!(parse_prompt(&screen).unwrap().options[0], opt(1, "Yes", true));
+    }
+
+    #[test]
+    fn numbered_message_without_prompt_is_not_a_prompt() {
+        // In the conversation history...
+        let screen = NONE.replacen(
+            "❯ Now run this exact Bash command once and nothing else: touch /tmp/sm-agents-fixture/y.txt",
+            NUMBERED_MESSAGE.trim_end(),
+            1,
+        );
+        assert!(screen.contains("❯ 1. Build the demo"));
+        assert_eq!(parse_prompt(&screen), None);
+        // ...or the last thing above the input box, under a rule as a prompt would be.
+        let rule = "─".repeat(40);
+        let screen = format!(
+            "{rule}\n{NUMBERED_MESSAGE}\n✻ Thinking…\n\n{rule}\n❯ \n{rule}\n  ⏸ manual mode on\n"
+        );
+        assert_eq!(parse_prompt(&screen), None);
+    }
+
+    #[test]
+    fn none_when_block_top_out_of_reach() {
+        let rule = "─".repeat(40);
+        let body: String = (0..25).map(|i| format!(" echo line {i}\n")).collect();
+        let tall = format!("{rule}\n Bash command\n{body} Do you want to proceed?\n ❯ 1. Yes\n   2. No\n");
+        assert_eq!(parse_prompt(&tall), None);
+        // The same prompt with a short command is read.
+        let short = format!("{rule}\n Bash command\n echo hi\n Do you want to proceed?\n ❯ 1. Yes\n   2. No\n");
+        assert_eq!(parse_prompt(&short).unwrap().detail, "Bash command\necho hi");
+        // No rule at all: nothing to anchor the block on.
+        assert_eq!(parse_prompt("Do you want to proceed?\n❯ 1. Yes\n  2. No\n"), None);
     }
 
     #[test]

@@ -797,7 +797,7 @@ pub(super) mod tests {
         // The CLI still says idle, but the panel shows a prompt.
         let (hub, spawner, _) = hub();
         let id = open(&hub, "0a1b2c3d").unwrap();
-        hub.write(id, "Do you want to proceed?\r\n❯ 1. Yes\r\n  2. No\r\n".as_bytes()).unwrap();
+        hub.write(id, "──────────\r\nDo you want to proceed?\r\n❯ 1. Yes\r\n  2. No\r\n".as_bytes()).unwrap();
         assert!(eventually(|| hub.screen(id).is_some_and(|s| s.contains("2. No"))));
         spawner.handles()[0].writes.lock().unwrap().clear();
         let err = send_message(&hub, &agent("bg", "idle"), "1").unwrap_err();
