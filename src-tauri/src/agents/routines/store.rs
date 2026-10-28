@@ -120,13 +120,15 @@ pub fn task_text(p: &Prompt) -> String {
 /// An absolute path without `..`.
 fn absolute(p: &str) -> bool {
     p.starts_with('/')
-        && !p.contains('\0')
+        && !p.chars().any(char::is_control)
         && !Path::new(p).components().any(|c| c == std::path::Component::ParentDir)
 }
 
 /// What a link may open: an absolute path or an http(s) URL.
 fn link_target(t: &str) -> bool {
-    absolute(t) || t.starts_with("https://") || t.starts_with("http://")
+    absolute(t)
+        || ((t.starts_with("https://") || t.starts_with("http://"))
+            && !t.chars().any(char::is_control))
 }
 
 /// `HH:MM`, 00:00-23:59.
@@ -172,7 +174,7 @@ pub fn validate(r: &Routine) -> Result<(), String> {
                 Prompt::Text(t) if t.trim().is_empty() || !valid_task(t) => {
                     Err("Prompt must be 1-8000 characters and not start with \"-\"".into())
                 }
-                Prompt::File(f) if !absolute(f) => {
+                Prompt::File(f) if !absolute(f) || !valid_task(&task_text(prompt)) => {
                     Err("Prompt file must be an absolute path".into())
                 }
                 _ => Ok(()),
@@ -291,6 +293,9 @@ pub fn read_runs(dir: &Path) -> Vec<Run> {
         .unwrap_or_default()
 }
 
+/// Serialises saving `routines.json` together with the pruning of the runs of deleted routines.
+pub static SAVE_LOCK: Mutex<()> = Mutex::new(());
+
 /// Serialises every read-modify-write of `routine-runs.json`.
 static RUNS_LOCK: Mutex<()> = Mutex::new(());
 
@@ -383,6 +388,14 @@ mod tests {
         assert!(validate(&agent("opus", "-x", Prompt::Text("go".into()))).is_err());
         assert!(validate(&agent("opus", "brief", Prompt::Text("-go".into()))).is_err());
         assert!(validate(&agent("opus", "brief", Prompt::File("rel.md".into()))).is_err());
+        // Control characters never get into a path, link or task.
+        assert!(validate(&agent("opus", "brief", Prompt::File("/w/a\nb.md".into()))).is_err());
+        assert!(validate(&agent("opus", "brief", Prompt::File("/w/ok.md".into()))).is_ok());
+        let mut c = command("/bin/echo", "/tmp");
+        c.result_link = Some("https://example.com/a\nb".into());
+        assert!(validate(&c).is_err());
+        c.result_link = Some("/tmp/a\tb".into());
+        assert!(validate(&c).is_err());
         let mut r = command("/bin/echo", "/tmp");
         r.result_link = Some("javascript:alert(1)".into());
         assert!(validate(&r).is_err());
@@ -406,6 +419,11 @@ mod tests {
             ..section()
         };
         assert!(save_routines(&dir, Routines { sections: vec![bad_link], routines: vec![] }).is_err());
+        let ctrl_link = Section {
+            links: vec![Link { label: "x".into(), target: "https://a.example/\r\nx".into() }],
+            ..section()
+        };
+        assert!(save_routines(&dir, Routines { sections: vec![ctrl_link], routines: vec![] }).is_err());
         let new = Section { id: String::new(), ..section() };
         let saved = save_routines(&dir, Routines { sections: vec![new], routines: vec![] }).unwrap();
         assert!(!saved.sections[0].id.is_empty());

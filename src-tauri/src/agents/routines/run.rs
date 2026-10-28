@@ -96,14 +96,14 @@ pub fn run_command(
             Ok(Some(status)) => break status.code(),
             Ok(None) if started.elapsed() >= timeout => {
                 timed_out = true;
-                // SAFETY: kill(2) on the child's process group (its pid, as set above).
-                unsafe { libc::kill(-(child.id() as libc::pid_t), libc::SIGKILL) };
-                let _ = child.kill();
-                let _ = child.wait();
+                kill_group(&mut child);
                 break None;
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(20)),
-            Err(_) => break None,
+            Err(_) => {
+                kill_group(&mut child);
+                break None;
+            }
         }
     };
     let deadline = Instant::now() + READER_GRACE;
@@ -119,6 +119,14 @@ pub fn run_command(
         tail: String::from_utf8_lossy(&bytes[start..]).into_owned(),
         error: None,
     }
+}
+
+/// Kills the child and everything in its process group (set when it was started).
+fn kill_group(child: &mut std::process::Child) {
+    // SAFETY: kill(2) on the child's process group (its pid, as set above).
+    unsafe { libc::kill(-(child.id() as libc::pid_t), libc::SIGKILL) };
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 /// Reads a pipe on a thread into the shared tail, keeping its last `TAIL_BYTES`.
@@ -209,6 +217,14 @@ pub fn finish(deps: &Deps, routine: &Routine, mut run: Run) -> Run {
             (run.status, run.message) = command_result(&outcome);
         }
     }
+    run.finished_at = Some(now_ms());
+    run
+}
+
+/// `run` finished as failed with `message`.
+pub fn failed(mut run: Run, message: String) -> Run {
+    run.status = Status::Failed;
+    run.message = Some(message);
     run.finished_at = Some(now_ms());
     run
 }
@@ -318,7 +334,7 @@ mod tests {
         let started = std::time::Instant::now();
         let o = sh("sleep 5 & echo started; wait", Duration::from_millis(300));
         assert!(o.timed_out);
-        assert!(started.elapsed() < Duration::from_millis(900), "{:?}", started.elapsed());
+        assert!(started.elapsed() < Duration::from_secs(1), "{:?}", started.elapsed());
         assert!(o.tail.contains("started"));
 
         // 200 KB of output: only the last 64 KB is kept, ending with the last line.

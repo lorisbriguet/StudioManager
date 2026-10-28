@@ -2,6 +2,7 @@
 //! webview only ever names a routine by its id; what runs comes from `routines.json`.
 
 pub mod run;
+pub mod schedule;
 pub mod store;
 
 use super::actions::{home_dir, ready, switched_on};
@@ -32,10 +33,18 @@ pub fn launch(
 ) -> Result<Run, String> {
     let all = store::read_routines(&app_dir);
     let routine = store::find(&all, id)?;
-    store::validate(routine)?;
+    let title = routine.title.clone();
     let is_agent = matches!(routine.kind, RoutineKind::Agent { .. });
     let claim = run::claim(id)?;
     let started = run::begin(id, scheduled_for);
+    if let Err(e) = store::validate(routine) {
+        // E.g. the program was deleted since: the Day tab shows it and a scheduled run notifies.
+        let done = run::failed(started, e);
+        schedule::record_final(&app_dir, &title, &done, &|m| schedule::notify(app, &m));
+        drop(claim);
+        changed(app);
+        return Ok(done);
+    }
     store::record_run(&app_dir, &started)?;
     changed(app);
     let app = app.clone();
@@ -60,7 +69,7 @@ pub fn launch(
             finished_at: Some(run::now_ms()),
             ..started
         });
-        let _ = store::record_run(&app_dir, &done);
+        schedule::record_final(&app_dir, &title, &done, &|m| schedule::notify(&app, &m));
         drop(claim);
         changed(&app);
         done
@@ -90,6 +99,7 @@ pub async fn routines_save(
     switched_on(&state)?;
     let dir = state.app_dir.clone();
     let saved = blocking(move || {
+        let _held = store::SAVE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let saved = store::save_routines(&dir, routines)?;
         let _ = store::update_runs(&dir, |runs| {
             runs.retain(|r| saved.routines.iter().any(|x| x.id == r.routine_id))
