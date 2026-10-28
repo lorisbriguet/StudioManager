@@ -134,4 +134,32 @@ describe("TerminalPanel", () => {
     await act(async () => ctl.resolve(9));
     expect(invokedCommands).toContainEqual({ cmd: "agents_term_close", args: { termId: 9 } });
   });
+
+  it("keeps only the newest early chunks while open is pending", async () => {
+    const ctl = pendingOpen();
+    render(<TerminalPanel shortId="abcd1234" onClose={() => {}} />);
+    await waitFor(() => expect(opened()).toBe(true));
+    await act(async () => {
+      for (let i = 0; i < 300; i++) await emit(AGENTS_TERM, { termId: 3, data: b64(String(i)) });
+    });
+    await act(async () => ctl.resolve(3));
+    const calls = created[0].write.mock.calls;
+    expect(calls).toHaveLength(256);
+    expect(new TextDecoder().decode(calls[0][0] as Uint8Array)).toBe("44");
+    expect(new TextDecoder().decode(calls[255][0] as Uint8Array)).toBe("299");
+  });
+
+  it("ignores terminal events after an open error", async () => {
+    setInvokeHandler(async (cmd) => {
+      if (cmd === "agents_term_open") throw "Too many terminals";
+    });
+    render(<TerminalPanel shortId="abcd1234" onClose={() => {}} />);
+    await screen.findByText(/Too many terminals/);
+    await act(async () => {
+      await emit(AGENTS_TERM, { termId: 1, data: b64("x") });
+      await emit(AGENTS_TERM_EXIT, { termId: 1 });
+    });
+    expect(created[0].write).not.toHaveBeenCalled();
+    expect(screen.queryByText("Terminal closed")).toBeNull();
+  });
 });

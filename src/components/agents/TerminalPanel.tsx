@@ -28,6 +28,10 @@ function decode(b64: string): Uint8Array {
   return out;
 }
 
+// Chunks kept while termOpen is pending: the first redraw is small, so only
+// the newest few are needed; this bounds memory if the open hangs.
+const MAX_BUFFERED = 256;
+
 function cssVar(name: string, fallback: string): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return v || fallback;
@@ -91,11 +95,16 @@ export function TerminalPanel({ shortId, onClose }: TerminalPanelProps) {
       // Subscribe first: the backend emits the first redraw before termOpen resolves.
       const subs = await Promise.all([
         listen<TermData>(AGENTS_TERM, (e) => {
-          if (termId === null) buffered.push(e.payload);
+          if (termId === null) {
+            buffered.push(e.payload);
+            if (buffered.length > MAX_BUFFERED) buffered.shift();
+          }
           else if (e.payload.termId === termId) feed(e.payload);
         }),
         listen<TermExit>(AGENTS_TERM_EXIT, (e) => {
-          if (termId === null) earlyExits.add(e.payload.termId);
+          if (termId === null) {
+            if (earlyExits.size < MAX_BUFFERED) earlyExits.add(e.payload.termId);
+          }
           else if (e.payload.termId === termId) {
             exited = true;
             setEnded(true);
@@ -122,6 +131,10 @@ export function TerminalPanel({ shortId, onClose }: TerminalPanelProps) {
           setEnded(true);
         }
       } catch (err) {
+        // Open failed: nothing will ever be matched, so stop listening and drop buffers.
+        buffered = [];
+        earlyExits.clear();
+        unlisten.splice(0).forEach((u) => u());
         if (!disposed) setError(String(err));
       }
     })();
