@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useT } from "../i18n/useT";
 import { notifyError } from "../lib/notifyError";
+import { IconButton } from "./ui";
 
 /**
  * Full-screen preview of an attached receipt (image or PDF), shared by the
@@ -59,9 +60,7 @@ export function ReceiptPreview({
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-input-border)]">
           <h2 className="text-sm font-semibold">{reference}</h2>
-          <button onClick={onClose} aria-label={t.close} className="text-muted hover:text-[var(--color-text)]">
-            <X size={16} />
-          </button>
+          <IconButton icon={X} label={t.close} size="md" onClick={onClose} />
         </div>
         <div className={`flex-1 overflow-auto ${bgClassName} flex items-center justify-center`}>
           {!blobUrl ? (

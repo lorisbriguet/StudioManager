@@ -10,7 +10,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Button, Select } from "../ui";
+import { Button, Select, IconButton } from "../ui";
 import type { LineItem } from "../../lib/lineItems";
 import { useT } from "../../i18n/useT";
 
@@ -111,24 +111,8 @@ export function LineItemsTable({
                     <div className="flex items-center">
                       <SortableLineItemHandle id={item._id} />
                       <div className="flex flex-col">
-                        <button
-                          type="button"
-                          onClick={() => moveRow(i, i - 1)}
-                          disabled={i === 0}
-                          aria-label={t.move_up}
-                          className="text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none"
-                        >
-                          <ChevronUp size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveRow(i, i + 1)}
-                          disabled={i === items.length - 1}
-                          aria-label={t.move_down}
-                          className="text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none"
-                        >
-                          <ChevronDown size={14} />
-                        </button>
+                        <IconButton icon={ChevronUp} label={t.move_up} onClick={() => moveRow(i, i - 1)} disabled={i === 0} />
+                        <IconButton icon={ChevronDown} label={t.move_down} onClick={() => moveRow(i, i + 1)} disabled={i === items.length - 1} />
                       </div>
                     </div>
                   </td>
@@ -187,9 +171,7 @@ export function LineItemsTable({
                   </td>
                   <td className="pl-1 py-1">
                     {items.length > 1 && (
-                      <button onClick={() => onRemove(i)} aria-label={t.delete} className="text-muted hover:text-danger">
-                        <Trash2 size={14} />
-                      </button>
+                      <IconButton icon={Trash2} label={t.delete} tone="danger" onClick={() => onRemove(i)} />
                     )}
                   </td>
                 </SortableLineItemRow>

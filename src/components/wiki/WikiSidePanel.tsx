@@ -12,7 +12,7 @@ import {
 } from "../../lib/wikiGraph";
 import { GraphView } from "./GraphView";
 import { colorFor } from "./wikiColors";
-import { PANEL_TOP_BAR, TabItem } from "../ui";
+import { PANEL_TOP_BAR, TabItem, IconButton } from "../ui";
 import { useProjectDoc, type ProjectDoc } from "../../db/hooks/useProjectDocs";
 
 function SnippetText({ s }: { s: Snippet }) {
@@ -114,9 +114,7 @@ export function WikiSidePanel({
           <section aria-label={t.wiki_local_graph}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{t.wiki_local_graph}</span>
-              <button type="button" onClick={onOpenGraph} className="text-muted hover:text-[var(--color-text-secondary)] transition-colors" aria-label={t.wiki_open_graph} title={t.wiki_open_graph}>
-                <Maximize2 size={14} />
-              </button>
+              <IconButton icon={Maximize2} label={t.wiki_open_graph} onClick={onOpenGraph} />
             </div>
             <div className="h-44 rounded-xl border border-[var(--color-border-divider)] bg-[var(--color-bg)]">
               <GraphView
@@ -306,9 +304,7 @@ export function DocSidePanel({
             <section aria-label={t.wiki_local_graph}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{t.wiki_local_graph}</span>
-                <button type="button" onClick={onOpenGraph} className="text-muted hover:text-[var(--color-text-secondary)] transition-colors" aria-label={t.wiki_open_graph} title={t.wiki_open_graph}>
-                  <Maximize2 size={14} />
-                </button>
+                <IconButton icon={Maximize2} label={t.wiki_open_graph} onClick={onOpenGraph} />
               </div>
               <div className="h-44 rounded-xl border border-[var(--color-border-divider)] bg-[var(--color-bg)]">
                 <GraphView

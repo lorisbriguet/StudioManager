@@ -10,6 +10,7 @@ import { COLUMN_ICONS, COLUMN_ICON_NAMES } from "./columnIcons";
 import { evaluateFormula } from "../../lib/formulaEval";
 import { useT } from "../../i18n/useT";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useSetCustomListItems } from "../../db/hooks/useCustomLists";
+import { IconButton } from "../ui/IconButton";
 
 interface Props {
   column: WorkloadColumn | null; // null = creating new
@@ -142,9 +143,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
           <h3 className="text-sm font-medium">
             {isNew ? t.add_column : t.edit_column}
           </h3>
-          <button onClick={onClose} aria-label={t.close} className="text-muted hover:text-[var(--color-text-secondary)]">
-            <X size={16} />
-          </button>
+          <IconButton icon={X} label={t.close} size="md" onClick={onClose} />
         </div>
 
         <div className="p-4 space-y-3">
@@ -344,13 +343,13 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                         ))}
                       </Select>
                       {!linkedListId && (
-                        <button
+                        <IconButton
+                          icon={Trash2}
+                          label={t.delete}
+                          tone="danger"
+                          className="ml-auto"
                           onClick={() => setOptions(options.filter((_, j) => j !== i))}
-                          className="text-muted hover:text-[var(--color-danger-text)] ml-auto"
-                          aria-label={t.delete}
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        />
                       )}
                     </div>
                   );
@@ -377,13 +376,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                         </option>
                       ))}
                     </Select>
-                    <button
-                      onClick={addOption}
-                      className="p-1.5 text-muted hover:text-accent"
-                      aria-label={t.new_option}
-                    >
-                      <Plus size={16} />
-                    </button>
+                    <IconButton icon={Plus} label={t.new_option} size="md" tone="accent" onClick={addOption} />
                   </div>
                   <div className="border-t border-[var(--color-border-divider)] pt-2">
                     {showSaveAsListInput ? (
@@ -397,7 +390,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                           autoFocus
                         />
                         <button type="button" onClick={handleSaveAsList} className="px-3 text-sm text-accent hover:underline">{t.save}</button>
-                        <button type="button" onClick={() => setShowSaveAsListInput(false)} aria-label={t.cancel} className="px-2 text-muted hover:text-[var(--color-text-secondary)]"><X size={14} /></button>
+                        <IconButton icon={X} label={t.cancel} className="mx-1" onClick={() => setShowSaveAsListInput(false)} />
                       </div>
                     ) : (
                       <Button

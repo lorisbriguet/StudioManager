@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Plus, Paperclip, Eye, ChevronRight, Trash2, Upload, Wallet, Pencil, Settings2 } from "lucide-react";
-import { PageHeader, SearchBar, Button, Card, EmptyState, FormField, Input, Select, TableSkeleton } from "../components/ui";
+import { PageHeader, SearchBar, Button, Card, EmptyState, FormField, Input, Select, TableSkeleton, IconButton } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
 import { toast } from "sonner";
@@ -355,16 +355,14 @@ export function IncomePage() {
                           )}
                         </td>
                         <td className="px-4 py-2.5">
-                          <button
+                          <IconButton
+                            icon={Settings2}
+                            label={t.more_actions}
                             onClick={(e) => {
                               e.stopPropagation();
                               setCtxMenu({ x: e.clientX, y: e.clientY, item: inc });
                             }}
-                            className="opacity-60 hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
-                            aria-label={t.more_actions}
-                          >
-                            <Settings2 size={14} />
-                          </button>
+                          />
                         </td>
                       </tr>
                     ))}

@@ -15,7 +15,7 @@ import { useT } from "../i18n/useT";
 import type { AppLanguage } from "../i18n/ui";
 import { UpdateChecker } from "../components/UpdateChecker";
 import { WorkloadTemplateManager } from "../components/workload/WorkloadTemplateManager";
-import { Input, Select, Button } from "../components/ui";
+import { Input, Select, Button, IconButton } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
 import { AgentAccessCard } from "../components/settings/AgentAccessCard";
@@ -703,7 +703,7 @@ export function SettingsPage() {
                     {t.browse}
                   </Button>
                   {backupPath2 && (
-                    <button type="button" onClick={() => setBackupPath2("")} aria-label={t.remove} className="text-muted hover:text-[var(--color-text)]"><X size={12} /></button>
+                    <IconButton icon={X} label={t.remove} size="xs" onClick={() => setBackupPath2("")} />
                   )}
                 </div>
               </SettingRow>

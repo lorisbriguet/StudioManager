@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Download, FolderPlus } from "lucide-react";
-import { Button, PageSpinner, Modal } from "../components/ui";
+import { Button, PageSpinner, Modal, IconButton } from "../components/ui";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { useQuote, useUpdateQuote } from "../db/hooks/useQuotes";
 import { getQuote } from "../db/queries/quotes";
@@ -115,13 +115,7 @@ export function QuotePreviewPage() {
   return (
     <div className="flex flex-col -m-8 h-screen">
       <div className="flex items-center gap-3 px-6 py-3 border-b border-[var(--color-border-divider)] bg-[var(--color-surface)]">
-        <button
-          onClick={() => navigate(-1)}
-          className="text-muted hover:text-[var(--color-text)]"
-          aria-label={t.back}
-        >
-          <ArrowLeft size={18} />
-        </button>
+        <IconButton icon={ArrowLeft} label={t.back} size="md" iconSize={18} onClick={() => navigate(-1)} />
         <h1 className="text-sm font-semibold flex-1">
           {quote.reference.startsWith("DRAFT") ? t.draft : quote.reference} — {client.name}
         </h1>

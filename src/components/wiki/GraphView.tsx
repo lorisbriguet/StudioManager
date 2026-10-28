@@ -3,6 +3,7 @@ import { Maximize2, ZoomIn, ZoomOut } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { createSim, layoutGraph, placeLabels, type Point, type Sim, type SimNode } from "../../lib/wikiGraph";
 import { colorFor } from "./wikiColors";
+import { IconButton } from "../ui";
 
 export interface GraphNodeInput {
   id: number;
@@ -264,8 +265,6 @@ export function GraphView({
     })
   );
 
-  const iconBtn = "p-1.5 rounded-md text-muted hover:bg-[var(--color-hover-row)]";
-
   return (
     <div className="relative w-full h-full">
       <svg
@@ -379,15 +378,9 @@ export function GraphView({
 
       {!compact && (
         <div className="absolute left-4 bottom-4 flex gap-0.5 p-0.5 rounded-lg border border-[var(--color-border-header)] bg-[var(--color-surface)]">
-          <button onClick={() => zoomAt(0.8)} className={iconBtn} aria-label={t.wiki_graph_zoom_in} title={t.wiki_graph_zoom_in}>
-            <ZoomIn size={16} />
-          </button>
-          <button onClick={() => zoomAt(1.25)} className={iconBtn} aria-label={t.wiki_graph_zoom_out} title={t.wiki_graph_zoom_out}>
-            <ZoomOut size={16} />
-          </button>
-          <button onClick={() => setView(null)} className={iconBtn} aria-label={t.wiki_graph_fit} title={t.wiki_graph_fit}>
-            <Maximize2 size={16} />
-          </button>
+          <IconButton icon={ZoomIn} label={t.wiki_graph_zoom_in} size="md" onClick={() => zoomAt(0.8)} />
+          <IconButton icon={ZoomOut} label={t.wiki_graph_zoom_out} size="md" onClick={() => zoomAt(1.25)} />
+          <IconButton icon={Maximize2} label={t.wiki_graph_fit} size="md" onClick={() => setView(null)} />
         </div>
       )}
     </div>

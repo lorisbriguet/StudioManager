@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { PDFViewer } from "@react-pdf/renderer";
 import { ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Input, Select } from "../ui";
+import { Button, Input, Select, IconButton } from "../ui";
 import { InvoicePDF } from "./InvoicePDF";
 import { useT } from "../../i18n/useT";
 import {
@@ -389,12 +389,8 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
             {columnOrder.map((col, idx) => (
               <div key={col} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--color-border-divider)] bg-[var(--color-bg)] text-sm">
                 <span className="flex-1">{columnLabels[col]}</span>
-                <button type="button" onClick={() => moveColumn(idx, -1)} disabled={idx === 0} className="text-muted hover:text-[var(--color-text)] disabled:opacity-30" aria-label={t.move_up}>
-                  <ChevronUp size={14} />
-                </button>
-                <button type="button" onClick={() => moveColumn(idx, 1)} disabled={idx === columnOrder.length - 1} className="text-muted hover:text-[var(--color-text)] disabled:opacity-30" aria-label={t.move_down}>
-                  <ChevronDown size={14} />
-                </button>
+                <IconButton icon={ChevronUp} label={t.move_up} onClick={() => moveColumn(idx, -1)} disabled={idx === 0} />
+                <IconButton icon={ChevronDown} label={t.move_down} onClick={() => moveColumn(idx, 1)} disabled={idx === columnOrder.length - 1} />
               </div>
             ))}
           </div>

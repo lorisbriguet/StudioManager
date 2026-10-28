@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { IconButton } from "../components/ui/IconButton";
 import { useForm } from "react-hook-form";
 import { Plus, X, Palette, Trash2, Building2, Landmark, FileText, AlertTriangle } from "lucide-react";
 import { isUntranslatedActivity } from "../lib/activityNudge";
@@ -207,19 +208,17 @@ export function ProfilePage() {
                           <span className="ml-2 text-xs text-muted">(default)</span>
                         )}
                       </button>
-                      <button
-                        type="button"
+                      <IconButton
+                        icon={Trash2}
+                        label={t.delete_template}
+                        tone="danger"
                         disabled={!!tmpl.is_default}
                         onClick={() => {
                           deleteTemplate.mutate(tmpl.id, {
                             onError: (e) => toast.error(String(e)),
                           });
                         }}
-                        className="text-muted hover:text-[var(--color-danger-text)] disabled:opacity-30"
-                        aria-label={t.delete_template}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      />
                     </div>
                   ))
                 ) : (
@@ -318,14 +317,7 @@ export function ProfilePage() {
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addNewActivity(); } }}
                       placeholder={t.activity_name_en}
                     />
-                    <button
-                      type="button"
-                      onClick={addNewActivity}
-                      className="p-2 text-muted hover:text-accent"
-                      aria-label={t.add_activity}
-                    >
-                      <Plus size={16} />
-                    </button>
+                    <IconButton icon={Plus} label={t.add_activity} size="md" tone="accent" onClick={addNewActivity} />
                   </div>
                 </div>
 
@@ -402,14 +394,7 @@ export function ActivityRow({
             <AlertTriangle size={13} />
           </span>
         )}
-        <button
-          type="button"
-          onClick={onDelete}
-          className="text-muted hover:text-[var(--color-danger-text)]"
-          aria-label={removeLabel}
-        >
-          <X size={14} />
-        </button>
+        <IconButton icon={X} label={removeLabel} tone="danger" onClick={onDelete} />
       </div>
     </div>
   );

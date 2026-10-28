@@ -33,7 +33,7 @@ import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Card, Modal, FormField, Input, Select } from "../components/ui";
+import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Card, Modal, FormField, Input, Select, IconButton } from "../components/ui";
 import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
 import { isDraftReference } from "../types/invoice";
 import type { Invoice, InvoiceStatus } from "../types/invoice";
@@ -491,9 +491,7 @@ export function InvoicesPage() {
               >
                 {t.generate_now}
               </Button>
-              <button type="button" onClick={() => setShowRecurring(false)} aria-label={t.close} className="text-muted hover:text-[var(--color-text)]">
-                <X size={14} />
-              </button>
+              <IconButton icon={X} label={t.close} onClick={() => setShowRecurring(false)} />
             </div>
           </div>
           {(!templates || templates.length === 0) ? (
@@ -554,19 +552,17 @@ export function InvoicesPage() {
                       </button>
                     </td>
                     <td className="py-2 text-right">
-                      <button
-                        type="button"
+                      <IconButton
+                        icon={Trash2}
+                        label={t.delete_template}
+                        tone="danger"
                         onClick={async () => {
                           if (!(await ask(t.confirm_delete_template, { kind: "warning" }))) return;
                           deleteTemplate.mutate(tmpl.id, {
                             onSuccess: () => undoableFromStore(t.template_deleted),
                           });
                         }}
-                        className="text-muted hover:text-[var(--color-danger-text)]"
-                        aria-label={t.delete_template}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      />
                     </td>
                   </tr>
                   );
@@ -650,16 +646,14 @@ export function InvoicesPage() {
                           />
                         </td>
                         <td className="w-8 px-1">
-                          <button
+                          <IconButton
+                            icon={Settings2}
+                            label={t.more_actions}
                             onClick={(e) => {
                               e.stopPropagation();
                               setCtxMenu({ x: e.clientX, y: e.clientY, item: inv });
                             }}
-                            className="opacity-60 hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
-                            aria-label={t.more_actions}
-                          >
-                            <Settings2 size={14} />
-                          </button>
+                          />
                         </td>
                         <td className="px-4 py-2.5">
                           <span>{inv.reference.startsWith("DRAFT") ? t.draft : inv.reference}</span>

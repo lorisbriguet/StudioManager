@@ -3,6 +3,7 @@ import { Button } from "../ui";
 import { Popover } from "../ui/Popover";
 import type { TableColumnDef } from "../../types/project-table";
 import type { CustomList } from "../../db/queries/customLists";
+import { IconButton } from "../ui/IconButton";
 
 interface Props {
   col: TableColumnDef;
@@ -139,14 +140,14 @@ export function ColumnEditorPopover({
                 className={`flex-1 border border-[var(--color-input-border)] rounded-lg px-2 py-0.5 text-xs ${colLinkedListId ? "opacity-60 cursor-not-allowed" : ""}`}
               />
               {!colLinkedListId && (
-                <button
-                  type="button"
+                <IconButton
+                  icon={Trash2}
+                  label={t.delete}
+                  size="xs"
+                  iconSize={10}
+                  tone="danger"
                   onClick={() => setColOptions(colOptions.filter((_, j) => j !== i))}
-                  className="text-muted hover:text-[var(--color-danger-text)]"
-                  aria-label={t.delete}
-                >
-                  <Trash2 size={10} />
-                </button>
+                />
               )}
             </div>
           ))}

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Plus, Paperclip, Eye, ChevronRight, Upload, Trash2, CheckCircle, CalendarCheck, Receipt, Settings2, XCircle, Pencil } from "lucide-react";
-import { Button, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState, Card, Modal, Popover } from "../components/ui";
+import { Button, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState, Card, Modal, Popover, IconButton } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
 import { SavedFilterBar } from "../components/SavedFilterBar";
@@ -334,16 +334,14 @@ export function ExpensesPage() {
                           />
                         </td>
                         <td className="w-8 px-1">
-                          <button
+                          <IconButton
+                            icon={Settings2}
+                            label={t.more_actions}
                             onClick={(e) => {
                               e.stopPropagation();
                               setCtxMenu({ x: e.clientX, y: e.clientY, item: exp });
                             }}
-                            className="opacity-60 hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
-                            aria-label={t.more_actions}
-                          >
-                            <Settings2 size={14} />
-                          </button>
+                          />
                         </td>
                         <td className="px-4 py-2.5 font-medium">{exp.reference}</td>
                         <td className="px-4 py-2.5">{exp.supplier}</td>

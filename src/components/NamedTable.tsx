@@ -17,6 +17,7 @@ import { useT } from "../i18n/useT";
 import { useAppStore } from "../stores/app-store";
 import { toast } from "sonner";
 import type { ProjectTable, TableColumnDef, ProjectTableRow } from "../types/project-table";
+import { IconButton } from "./ui/IconButton";
 
 interface Props {
   table: ProjectTable;
@@ -169,9 +170,11 @@ export function NamedTable({ table, projectId }: Props) {
     <div className="rounded-xl bg-[var(--color-surface)] overflow-visible">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2 bg-[var(--color-surface)]">
-        <button onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? t.expand : t.collapse} className="text-muted hover:text-[var(--color-text-secondary)]">
-          {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-        </button>
+        <IconButton
+          icon={collapsed ? ChevronRight : ChevronDown}
+          label={collapsed ? t.expand : t.collapse}
+          onClick={() => setCollapsed(!collapsed)}
+        />
         {editingName ? (
           <input
             ref={nameInputRef}
@@ -194,22 +197,14 @@ export function NamedTable({ table, projectId }: Props) {
         )}
         <span className="text-xs text-muted ml-1">({rows?.length ?? 0})</span>
         <div className="flex-1" />
-        <button
-          onClick={() => setEditingName(true)}
-          className="text-muted hover:text-accent opacity-0 group-hover:opacity-100"
-          title={t.rename}
-          aria-label={t.rename}
-        >
-          <Pencil size={12} />
-        </button>
-        <button
+        <IconButton icon={Pencil} label={t.rename} size="xs" tone="accent" reveal onClick={() => setEditingName(true)} />
+        <IconButton
+          icon={Trash2}
+          label={t.delete}
+          size="xs"
+          tone="danger"
           onClick={async () => { if (await ask(t.confirm_delete_table, { kind: "warning" })) deleteTable.mutate(table.id); }}
-          className="text-muted hover:text-[var(--color-danger-text)]"
-          title={t.delete}
-          aria-label={t.delete}
-        >
-          <Trash2 size={12} />
-        </button>
+        />
       </div>
 
       {!collapsed && (
@@ -261,13 +256,7 @@ export function NamedTable({ table, projectId }: Props) {
                   <Dropdown
                     align="end"
                     trigger={
-                      <button
-                        className="text-muted hover:text-accent transition-colors p-0.5 rounded-md hover:bg-[var(--color-hover-row)]"
-                        title={t.add_column}
-                        aria-label={t.add_column}
-                      >
-                        <Plus size={14} />
-                      </button>
+                      <IconButton icon={Plus} label={t.add_column} size="xs" iconSize={14} tone="accent" />
                     }
                     items={(["text", "number", "checkbox", "select", "tags", "date"] as const).map((type) => ({
                       label: type.charAt(0).toUpperCase() + type.slice(1),
@@ -304,13 +293,7 @@ export function NamedTable({ table, projectId }: Props) {
                   ))}
                   <td className="w-10" />
                   <td className="w-8 text-right pr-2">
-                    <button
-                      onClick={() => deleteRow.mutate(row.id)}
-                      className="opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-danger-text)] transition-opacity"
-                      aria-label={t.delete}
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                    <IconButton icon={Trash2} label={t.delete} size="xs" tone="danger" reveal onClick={() => deleteRow.mutate(row.id)} />
                   </td>
                 </tr>
               ))}

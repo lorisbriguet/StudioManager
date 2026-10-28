@@ -8,6 +8,8 @@ import type { LucideIcon } from "lucide-react";
  *   <IconButton icon={Pencil} label={t.edit} onClick={edit} />
  *   <IconButton icon={Trash2} label={t.delete} tone="danger" reveal onClick={remove} />
  *   <IconButton icon={X} label={t.close} size="xs" onClick={onClose} />
+ *   <IconButton icon={ChevronRight} label={t.expand} size="xs" iconSize={14}
+ *     iconClassName={`transition-transform ${open ? "rotate-90" : ""}`} />
  *
  * `label` is required: it becomes the aria-label and the hover title.
  * The icon size follows `size` (12 / 14 / 16), per the icon size table.
@@ -29,6 +31,8 @@ interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
   active?: boolean;
   /** Override the icon size from `size` (rare). */
   iconSize?: number;
+  /** Classes on the icon itself, e.g. a rotating expand chevron. */
+  iconClassName?: string;
   ref?: Ref<HTMLButtonElement>;
 }
 
@@ -52,6 +56,7 @@ export function IconButton({
   reveal = false,
   active = false,
   iconSize,
+  iconClassName,
   className = "",
   type = "button",
   title,
@@ -69,7 +74,7 @@ export function IconButton({
       } ${className}`}
       {...props}
     >
-      <Icon size={iconSize ?? SIZE[size].icon} aria-hidden="true" />
+      <Icon size={iconSize ?? SIZE[size].icon} className={iconClassName} aria-hidden="true" />
     </button>
   );
 }

@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import { IconButton } from "../components/ui/IconButton";
 import { Link } from "react-router-dom";
 import { ChevronRight, Plus, GripVertical, Trash2, ExternalLink, Play, Square, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -344,16 +345,14 @@ export function TasksPage() {
                         onClick={(e) => e.stopPropagation()}
                         className="accent-[var(--accent)] shrink-0"
                       />
-                      <button
+                      <IconButton
                         onClick={() => toggleTaskExpanded(tk.id)}
-                        className="text-muted hover:text-[var(--color-text-secondary)] p-0.5"
-                        aria-label={isExpanded ? t.collapse : t.expand}
-                      >
-                        <ChevronRight
-                          size={14}
-                          className={`transition-transform ${isExpanded ? "rotate-90" : ""}`}
-                        />
-                      </button>
+                        size="xs"
+                        iconSize={14}
+                        label={isExpanded ? t.collapse : t.expand}
+                        icon={ChevronRight}
+                        iconClassName={`transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                      />
                       <input
                         type="checkbox"
                         checked={tk.status === "done"}
@@ -444,16 +443,15 @@ export function TasksPage() {
                       >
                         {activeTimer?.taskId === tk.id ? <Square size={14} /> : <Play size={14} />}
                       </button>
-                      <button
+                      <IconButton
                         onClick={() => deleteTask.mutate(tk.id, {
                           onSuccess: () => undoableFromStore(t.toast_task_deleted),
                         })}
-                        className="opacity-0 group-hover/task:opacity-100 text-muted hover:text-[var(--color-danger-text)] transition-opacity p-0.5"
-                        title={t.delete}
-                        aria-label={t.delete}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                        icon={Trash2}
+                        label={t.delete}
+                        tone="danger"
+                        className="opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100"
+                      />
                     </div>
                     {isExpanded && (
                       <div className="ml-12 mr-4 border-l border-[var(--color-border-divider)] pl-3 pb-2 mb-1">
@@ -517,16 +515,15 @@ export function TasksPage() {
                               onChange={(vals) => updateSubtask.mutate({ id: s.id, data: vals })}
                               compact
                             />
-                            <button
+                            <IconButton
                               onClick={() => deleteSubtask.mutate(s.id, {
                                 onSuccess: () => undoableFromStore(t.toast_subtask_deleted),
                               })}
-                              className="opacity-0 group-hover/sub:opacity-100 text-muted hover:text-[var(--color-danger-text)] transition-opacity p-0.5"
-                              title={t.delete}
-                              aria-label={t.delete}
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                              icon={Trash2}
+                              label={t.delete}
+                              tone="danger"
+                              className="opacity-0 group-hover/sub:opacity-100 focus-visible:opacity-100"
+                            />
                           </div>
                         ))}
                         <div className="flex gap-1.5 mt-1">
@@ -563,7 +560,7 @@ export function TasksPage() {
                             }}
                             className="flex-1 border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-xs"
                           />
-                          <button
+                          <IconButton
                             onClick={() => {
                               const text = (newSubtaskText[tk.id] ?? "").trim();
                               if (!text) return;
@@ -587,11 +584,10 @@ export function TasksPage() {
                                 }
                               );
                             }}
-                            className="p-1 text-muted hover:text-accent"
-                            aria-label={t.new_subtask}
-                          >
-                            <Plus size={14} />
-                          </button>
+                            icon={Plus}
+                            label={t.new_subtask}
+                            tone="accent"
+                          />
                         </div>
                       </div>
                     )}
@@ -638,7 +634,7 @@ export function TasksPage() {
                 }}
                 className="flex-1 border border-[var(--color-input-border)] rounded-lg px-3 py-1.5 text-sm"
               />
-              <button
+              <IconButton
                 onClick={() => {
                   const text = (newTaskText[g.projectId] ?? "").trim();
                   if (!text) return;
@@ -666,11 +662,11 @@ export function TasksPage() {
                     }
                   );
                 }}
-                className="p-1.5 text-muted hover:text-accent"
-                aria-label={t.new_task}
-              >
-                <Plus size={16} />
-              </button>
+                icon={Plus}
+                label={t.new_task}
+                size="md"
+                tone="accent"
+              />
             </div>}
             </>)}
           </SortableProjectGroup>

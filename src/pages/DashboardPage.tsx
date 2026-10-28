@@ -8,7 +8,7 @@ import { useDashboardStore, WIDGET_CATALOG, type WidgetType, type DashboardWidge
 import type { LayoutItem } from "react-grid-layout";
 import { renderWidget } from "../components/dashboard/widgets";
 import { DashboardYearContext } from "../components/dashboard/DashboardYearContext";
-import { PageHeader, Button, EmptyState, Select, Popover } from "../components/ui";
+import { PageHeader, Button, EmptyState, Select, Popover, IconButton } from "../components/ui";
 import { MENU_ITEM, MENU_DIVIDER } from "../components/ui/Dropdown";
 import { useT } from "../i18n/useT";
 import { toast } from "sonner";
@@ -149,15 +149,14 @@ function PresetDropdown() {
               >
                 <span className="truncate">{preset.name}</span>
               </button>
-              <button
-                type="button"
+              <IconButton
+                icon={Trash2}
+                label={t.delete_preset}
+                size="xs"
+                tone="danger"
                 onClick={(e) => handleDelete(e, preset.id)}
-                className="opacity-0 group-hover/item:opacity-100 transition-opacity text-muted hover:text-[var(--color-danger-text)] px-2 py-1"
-                title={t.delete_preset}
-                aria-label={t.delete_preset}
-              >
-                <Trash2 size={12} />
-              </button>
+                className="mx-1.5 opacity-0 group-hover/item:opacity-100 focus-visible:opacity-100"
+              />
             </div>
           ))}
 
@@ -288,9 +287,7 @@ export function DashboardPage() {
           <div className="mb-4 bg-[var(--color-surface)] rounded-xl p-4 max-h-[60vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-medium">{t.add}</h2>
-              <button type="button" onClick={() => setShowWidgetPanel(false)} aria-label={t.close} className="text-muted hover:text-[var(--color-text)]">
-                <X size={14} />
-              </button>
+              <IconButton icon={X} label={t.close} onClick={() => setShowWidgetPanel(false)} />
             </div>
             {categories.map((cat) => (
               <div key={cat} className="mb-3">
@@ -356,14 +353,15 @@ export function DashboardPage() {
           {sortedWidgets.map((widget, idx) => (
             <div key={widget.id} className="stagger-in bg-[var(--color-surface)] rounded-xl overflow-hidden relative group cursor-grab active:cursor-grabbing" style={{ animationDelay: `${idx * 50}ms` }}>
               {/* Remove button */}
-              <button
-                type="button"
+              <IconButton
+                icon={X}
+                label={t.remove}
+                size="xs"
+                tone="danger"
+                reveal
                 onClick={() => removeWidget(widget.id)}
-                className="absolute top-1 right-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-muted hover:text-[var(--color-danger-text)] p-0.5"
-                aria-label={t.remove}
-              >
-                <X size={12} />
-              </button>
+                className="absolute top-1 right-1 z-10"
+              />
               {renderWidget(widget.type)}
             </div>
           ))}

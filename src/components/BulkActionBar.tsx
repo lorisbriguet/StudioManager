@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 import { X } from "lucide-react";
 import { useT } from "../i18n/useT";
+import { IconButton } from "./ui";
 
 interface BulkAction {
   label: string;
@@ -39,14 +40,7 @@ export function BulkActionBar({ count, actions, onClear }: Props) {
           {action.label}
         </button>
       ))}
-      <button
-        onClick={onClear}
-        className="p-1 text-muted hover:text-[var(--color-text-secondary)]"
-        title={t.cancel}
-        aria-label={t.cancel}
-      >
-        <X size={14} />
-      </button>
+      <IconButton icon={X} label={t.cancel} onClick={onClear} />
     </div>
   );
 }

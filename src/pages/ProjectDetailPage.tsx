@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Trash2 } from "lucide-react";
-import { Button } from "../components/ui";
+import { Button, IconButton } from "../components/ui";
 import { toast } from "sonner";
 import { ProjectDetailContent } from "../components/ProjectDetailContent";
 import { useProject, useDeleteProject } from "../db/hooks/useProjects";
@@ -28,9 +28,7 @@ export function ProjectDetailPage() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(-1)} aria-label={t.back} className="text-[var(--color-muted)] hover:text-[var(--color-text-secondary)]">
-          <ArrowLeft size={18} />
-        </button>
+        <IconButton icon={ArrowLeft} label={t.back} size="md" iconSize={18} onClick={() => navigate(-1)} />
         <div className="ml-auto flex items-center gap-2">
           {confirmDelete ? (
             <div className="flex items-center gap-2 text-sm">

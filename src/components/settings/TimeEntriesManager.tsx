@@ -3,7 +3,7 @@ import { X, Pencil, Trash2, Check } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useTimeEntriesWithDetails, useUpdateTimeEntry, useDeleteTimeEntry } from "../../db/hooks/useTimeEntries";
 import { useProjects } from "../../db/hooks/useProjects";
-import { Button, Select } from "../ui";
+import { Button, Select, IconButton } from "../ui";
 import { SectionHeader } from "./SettingsPrimitives";
 
 function formatDuration(minutes: number): string {
@@ -190,15 +190,7 @@ export function TimeEntriesManager() {
                           >
                             <Check size={13} />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingId(null)}
-                            className="p-1 text-muted hover:bg-[var(--color-hover-row)] rounded-md"
-                            title={t.cancel}
-                            aria-label={t.cancel}
-                          >
-                            <X size={13} />
-                          </button>
+                          <IconButton icon={X} label={t.cancel} iconSize={13} onClick={() => setEditingId(null)} />
                         </div>
                       </td>
                     </>
@@ -211,15 +203,7 @@ export function TimeEntriesManager() {
                       <td className="px-3 py-2 text-muted max-w-[320px] truncate" title={entry.description}>{entry.description || "—"}</td>
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => startEdit(entry)}
-                            className="p-1 text-muted hover:text-[var(--color-text)] hover:bg-[var(--color-hover-row)] rounded-md"
-                            title={t.edit_entry}
-                            aria-label={t.edit_entry}
-                          >
-                            <Pencil size={12} />
-                          </button>
+                          <IconButton icon={Pencil} label={t.edit_entry} size="xs" onClick={() => startEdit(entry)} />
                           {confirmDeleteId === entry.id ? (
                             <div className="flex items-center gap-1">
                               <button
@@ -230,25 +214,10 @@ export function TimeEntriesManager() {
                               >
                                 {t.delete}
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmDeleteId(null)}
-                                className="p-1 text-muted hover:bg-[var(--color-hover-row)] rounded-md"
-                                aria-label={t.cancel}
-                              >
-                                <X size={12} />
-                              </button>
+                              <IconButton icon={X} label={t.cancel} size="xs" onClick={() => setConfirmDeleteId(null)} />
                             </div>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteId(entry.id)}
-                              className="p-1 text-muted hover:text-[var(--color-danger-text)] hover:bg-[var(--color-hover-row)] rounded-md"
-                              title={t.delete}
-                              aria-label={t.delete}
-                            >
-                              <Trash2 size={12} />
-                            </button>
+                            <IconButton icon={Trash2} label={t.delete} size="xs" tone="danger" onClick={() => setConfirmDeleteId(entry.id)} />
                           )}
                         </div>
                       </td>

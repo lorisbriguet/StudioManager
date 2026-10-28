@@ -27,7 +27,7 @@ import { SavedFilterBar } from "../components/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { QuoteToProjectWizard } from "../components/QuoteToProjectWizard";
 import { useTabStore } from "../stores/tab-store";
-import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Select } from "../components/ui";
+import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Select, IconButton } from "../components/ui";
 import { quoteStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Quote, QuoteStatus, QuoteLineItem } from "../types/quote";
 import type { Client } from "../types/client";
@@ -334,16 +334,14 @@ export function QuotesPage() {
                   />
                 </td>
                 <td className="w-8 px-1">
-                  <button
+                  <IconButton
+                    icon={Settings2}
+                    label={t.more_actions}
                     onClick={(e) => {
                       e.stopPropagation();
                       setCtxMenu({ x: e.clientX, y: e.clientY, item: q });
                     }}
-                    className="opacity-60 hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
-                    aria-label={t.more_actions}
-                  >
-                    <Settings2 size={14} />
-                  </button>
+                  />
                 </td>
                 <td className="px-4 py-2.5">
                   <span className="font-medium">{q.reference.startsWith("DRAFT") ? t.draft : q.reference}</span>

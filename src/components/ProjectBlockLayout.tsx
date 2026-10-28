@@ -17,7 +17,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useUpdateProject } from "../db/hooks/useProjects";
 import { useT } from "../i18n/useT";
-import { Dropdown } from "./ui";
+import { Dropdown, IconButton } from "./ui";
 import type { LayoutConfig, LayoutBlock, BlockType, Project } from "../types/project";
 import { STANDARD_LAYOUT } from "../types/project";
 
@@ -72,29 +72,13 @@ function SortableBlock({ block, renderBlock, onToggleCollapse, onRemove, onToggl
         >
           <GripVertical size={14} />
         </div>
-        <button onClick={() => onToggleCollapse(block.type)} aria-label={isCollapsed ? t.expand : t.collapse} className="text-[var(--color-muted)] hover:text-[var(--color-text-secondary)]">
-          {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-        </button>
+        <IconButton icon={isCollapsed ? ChevronRight : ChevronDown} label={isCollapsed ? t.expand : t.collapse} onClick={() => onToggleCollapse(block.type)} />
         <h3 className="text-xs font-semibold tracking-tight">
           {t[block.type] ?? BLOCK_LABELS[block.type]}
         </h3>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
-          <button
-            onClick={() => onToggleWidth(block.type)}
-            className="text-[var(--color-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
-            title={t.width}
-            aria-label={t.width}
-          >
-            {isHalf ? <Maximize2 size={12} /> : <Columns2 size={12} />}
-          </button>
-          <button
-            onClick={() => onRemove(block.type)}
-            className="text-[var(--color-muted)] hover:text-[var(--color-danger-text)] transition-colors"
-            title={t.delete}
-            aria-label={t.delete}
-          >
-            <X size={12} />
-          </button>
+          <IconButton icon={isHalf ? Maximize2 : Columns2} label={t.width} size="xs" onClick={() => onToggleWidth(block.type)} />
+          <IconButton icon={X} label={t.delete} size="xs" tone="danger" onClick={() => onRemove(block.type)} />
         </div>
       </div>
       {!isCollapsed && renderBlock(block.type)}

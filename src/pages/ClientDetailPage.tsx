@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { IconButton } from "../components/ui/IconButton";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Save, Plus, Trash2, Eye, Pencil } from "lucide-react";
 import { toast } from "sonner";
@@ -90,9 +91,7 @@ export function ClientDetailPage() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(-1)} aria-label={t.back} className="text-muted hover:text-[var(--color-text)]">
-          <ArrowLeft size={18} />
-        </button>
+        <IconButton icon={ArrowLeft} label={t.back} size="md" iconSize={18} onClick={() => navigate(-1)} />
         <h1 className="text-xl font-semibold">{client.name}</h1>
         <div className="ml-auto flex items-center gap-2">
           {dirty && (
@@ -122,14 +121,7 @@ export function ClientDetailPage() {
               </Button>
             </div>
           ) : (
-            <button
-              onClick={() => setConfirmDelete(true)}
-              className="p-1.5 text-muted hover:text-[var(--color-danger-text)]"
-              title={t.delete}
-              aria-label={t.delete}
-            >
-              <Trash2 size={16} />
-            </button>
+            <IconButton icon={Trash2} label={t.delete} size="md" tone="danger" onClick={() => setConfirmDelete(true)} />
           )}
         </div>
       </div>
@@ -462,13 +454,12 @@ function ContactsSection({
                   {c.phone && <span className="text-xs text-muted">{c.phone}</span>}
                 </div>
               )}
-              <button
+              <IconButton
+                icon={Pencil}
+                label={t.edit}
                 onClick={() => startEditing(c)}
-                className="absolute top-2.5 right-2.5 opacity-60 hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
-                aria-label={t.edit}
-              >
-                <Pencil size={14} />
-              </button>
+                className="absolute top-2.5 right-2.5 opacity-60 hover:opacity-100"
+              />
             </div>
           )
         ))}
@@ -660,13 +651,7 @@ function AddressCard({
             {a.postal_city && <div className="text-muted">{a.postal_city}</div>}
           </div>
         </div>
-        <button
-          onClick={() => setEditing(true)}
-          className="opacity-60 hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
-          aria-label={t.edit}
-        >
-          <Pencil size={14} />
-        </button>
+        <IconButton icon={Pencil} label={t.edit} onClick={() => setEditing(true)} className="opacity-60 hover:opacity-100" />
       </div>
       {ctxMenu && (
         <ContextMenu

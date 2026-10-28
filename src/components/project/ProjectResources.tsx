@@ -7,7 +7,7 @@ import {
   useUnlinkResourceFromProject,
 } from "../../db/hooks/useResources";
 import { getResources } from "../../db/queries/resources";
-import { Button } from "../ui";
+import { Button, IconButton } from "../ui";
 import { useT } from "../../i18n/useT";
 
 export function ProjectResources({ projectId }: { projectId: number }) {
@@ -50,13 +50,7 @@ export function ProjectResources({ projectId }: { projectId: number }) {
           <span className="text-xs text-muted truncate max-w-[200px]">
             {r.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
           </span>
-          <button
-            onClick={() => unlinkResource.mutate({ resourceId: r.id, projectId })}
-            className="text-danger opacity-0 group-hover:opacity-100"
-            aria-label={t.remove}
-          >
-            <X size={12} />
-          </button>
+          <IconButton icon={X} label={t.remove} size="xs" tone="danger" reveal onClick={() => unlinkResource.mutate({ resourceId: r.id, projectId })} />
         </div>
       ))}
       {showPicker ? (

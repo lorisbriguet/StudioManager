@@ -6,7 +6,7 @@ import { useT } from "../../i18n/useT";
 import { useAppStore } from "../../stores/app-store";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useUpdateCustomList, useDeleteCustomList, useSetCustomListItems } from "../../db/hooks/useCustomLists";
 import { getStoredTagColor, normalizeTagColorName, TAG_COLOR_NAMES } from "../../lib/tagColors";
-import { Button, Select } from "../ui";
+import { Button, Select, IconButton } from "../ui";
 
 export function CustomListsManager() {
   const t = useT();
@@ -119,14 +119,7 @@ export function CustomListsManager() {
                   {list.name}
                 </span>
               )}
-              <button
-                type="button"
-                onClick={() => handleDeleteList(list.id)}
-                className="opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-danger-text)] shrink-0"
-                aria-label={t.delete}
-              >
-                <Trash2 size={11} />
-              </button>
+              <IconButton icon={Trash2} label={t.delete} size="xs" iconSize={11} tone="danger" reveal onClick={() => handleDeleteList(list.id)} />
             </div>
           ))}
         </div>
@@ -186,9 +179,7 @@ export function CustomListsManager() {
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </Select>
-                  <button type="button" onClick={() => removeItem(i)} aria-label={t.delete} className="text-muted hover:text-[var(--color-danger-text)]">
-                    <Trash2 size={12} />
-                  </button>
+                  <IconButton icon={Trash2} label={t.delete} size="xs" tone="danger" onClick={() => removeItem(i)} />
                 </div>
                 );
               })}
@@ -210,9 +201,7 @@ export function CustomListsManager() {
                   <option key={c} value={c}>{c}</option>
                 ))}
               </Select>
-              <button type="button" onClick={addItem} aria-label={t.new_list_item} className="p-1.5 text-muted hover:text-accent">
-                <Plus size={16} />
-              </button>
+              <IconButton icon={Plus} label={t.new_list_item} size="md" tone="accent" onClick={addItem} />
             </div>
             {dirty && (
               <button

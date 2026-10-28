@@ -20,7 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { formatDisplayDate } from "../utils/formatDate";
-import { Button, Select } from "./ui";
+import { Button, Select, IconButton } from "./ui";
 import { Popover, usePopover } from "./ui/Popover";
 import { useT } from "../i18n/useT";
 
@@ -181,23 +181,9 @@ export function TaskDatePicker({
 
           {/* Calendar header */}
           <div className="flex items-center justify-between mb-1">
-            <button
-              type="button"
-              onClick={() => setMonth(subMonths(month, 1))}
-              className="p-1 text-muted hover:text-[var(--color-text)]"
-              aria-label={t.previous}
-            >
-              <ChevronLeft size={16} />
-            </button>
+            <IconButton icon={ChevronLeft} label={t.previous} size="md" onClick={() => setMonth(subMonths(month, 1))} />
             <span className="text-xs font-medium">{format(month, "MMMM yyyy")}</span>
-            <button
-              type="button"
-              onClick={() => setMonth(addMonths(month, 1))}
-              className="p-1 text-muted hover:text-[var(--color-text)]"
-              aria-label={t.next}
-            >
-              <ChevronRight size={16} />
-            </button>
+            <IconButton icon={ChevronRight} label={t.next} size="md" onClick={() => setMonth(addMonths(month, 1))} />
           </div>
 
           {/* Calendar grid */}

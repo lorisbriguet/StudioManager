@@ -33,7 +33,7 @@ import { useT } from "../i18n/useT";
 import { useAppStore } from "../stores/app-store";
 import { getTagColor } from "../lib/tagColors";
 import { notifyError, getLabels } from "../lib/notifyError";
-import { Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem, Popover } from "../components/ui";
+import { Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem, Popover, IconButton } from "../components/ui";
 import { MENU_ITEM } from "../components/ui/Dropdown";
 import { Select } from "../components/ui/Select";
 import {
@@ -58,10 +58,6 @@ import { projectColors } from "../components/wiki/wikiColors";
 import { closeTab, EMPTY_TABS, openInTabs, pruneTabs, tabArticleId, tabRef, type TabsState, type WikiRef } from "../lib/wikiTabs";
 import { useProjectDocs, type ProjectDoc } from "../db/hooks/useProjectDocs";
 import { DocView } from "../components/wiki/DocView";
-
-/** Icon-only buttons in the wiki's bars: the app tab bar's back/forward style. */
-const navIconBtn =
-  "shrink-0 p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none transition-colors";
 
 // ─── Slash Command Menu ───────────────────────────────────────────
 interface SlashMenuItem {
@@ -719,12 +715,8 @@ export function ArticleEditor({
       <div className={`${PANEL_TOP_BAR} gap-1 px-3 border-[var(--color-border-divider)]`}>
         {nav && (
           <>
-            <button onClick={nav.onBack} disabled={!nav.canBack} className={navIconBtn} aria-label={t.wiki_back} title={t.wiki_back}>
-              <ChevronLeft size={14} />
-            </button>
-            <button onClick={nav.onForward} disabled={!nav.canForward} className={navIconBtn} aria-label={t.wiki_forward} title={t.wiki_forward}>
-              <ChevronRight size={14} />
-            </button>
+            <IconButton icon={ChevronLeft} label={t.wiki_back} onClick={nav.onBack} disabled={!nav.canBack} />
+            <IconButton icon={ChevronRight} label={t.wiki_forward} onClick={nav.onForward} disabled={!nav.canForward} />
           </>
         )}
         <div className="flex-1 min-w-0 text-center text-xs text-muted truncate">
@@ -736,24 +728,15 @@ export function ArticleEditor({
           <span className="text-[var(--color-text)]">{article.title}</span>
         </div>
         {onModeChange && (
-          <button
-            onClick={() => onModeChange(reading ? "editing" : "reading")}
-            className={`${navIconBtn} ${reading ? "" : "text-accent hover:text-accent"}`}
-            aria-label={reading ? t.wiki_switch_to_editing : t.wiki_switch_to_reading}
+          <IconButton
+            icon={reading ? Pencil : Eye}
+            label={reading ? t.wiki_switch_to_editing : t.wiki_switch_to_reading}
+            active={!reading}
             aria-pressed={!reading}
-            title={reading ? t.wiki_switch_to_editing : t.wiki_switch_to_reading}
-          >
-            {reading ? <Pencil size={14} /> : <Eye size={14} />}
-          </button>
+            onClick={() => onModeChange(reading ? "editing" : "reading")}
+          />
         )}
-        <button
-          onClick={handleDeleteArticle}
-          className="p-1 rounded-md text-muted hover:text-[var(--color-danger-text)] transition-colors"
-          title={t.delete}
-          aria-label={t.delete}
-        >
-          <Trash2 size={14} />
-        </button>
+        <IconButton icon={Trash2} label={t.delete} tone="danger" onClick={handleDeleteArticle} />
       </div>
 
       <div className="flex-1 overflow-y-auto px-8 py-8">
@@ -1084,16 +1067,13 @@ export function WikiPage() {
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Tab bar: same tabs and icon buttons as the app's own tab bar */}
         <div className={`${PANEL_TOP_BAR} border-[var(--color-border-divider)] bg-[var(--color-bg)]`}>
-          <button
-            type="button"
-            onClick={toggleExplorer}
-            className={`${navIconBtn} ml-1.5`}
-            aria-label={t.wiki_explorer}
+          <IconButton
+            icon={PanelLeft}
+            label={t.wiki_explorer}
             aria-pressed={explorerOpen}
-            title={t.wiki_explorer}
-          >
-            <PanelLeft size={14} />
-          </button>
+            onClick={toggleExplorer}
+            className="ml-1.5"
+          />
           <div role="tablist" aria-label={t.wiki_open_tabs} className="flex items-center flex-1 min-w-0 overflow-x-auto scrollbar-hide">
             {tabsState.tabs.map((tab) => {
               const ref = tabRef(tab);
@@ -1124,16 +1104,13 @@ export function WikiPage() {
             })}
           </div>
           {(activeArticle || activeDoc) && (
-            <button
-              type="button"
-              onClick={toggleSide}
-              className={`${navIconBtn} mr-1.5`}
-              aria-label={t.wiki_side_panel}
+            <IconButton
+              icon={PanelRight}
+              label={t.wiki_side_panel}
               aria-pressed={sideOpen}
-              title={t.wiki_side_panel}
-            >
-              <PanelRight size={14} />
-            </button>
+              onClick={toggleSide}
+              className="mr-1.5"
+            />
           )}
         </div>
 

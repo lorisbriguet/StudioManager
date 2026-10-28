@@ -38,6 +38,7 @@ import { COLUMN_ICONS } from "./columnIcons";
 import { evaluateFormula } from "../../lib/formulaEval";
 import { useT } from "../../i18n/useT";
 import { useTimerActions } from "../../hooks/useTimerActions";
+import { IconButton } from "../ui/IconButton";
 
 interface Props {
   projectId: number;
@@ -445,14 +446,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
           )}
         </Select>
         <div className="flex-1" />
-        <button
-          onClick={() => onEditColumn?.(null, columns.length)}
-          className="p-1 text-muted hover:text-accent"
-          title={t.add_column}
-          aria-label={t.add_column}
-        >
-          <Plus size={16} />
-        </button>
+        <IconButton icon={Plus} label={t.add_column} tone="accent" iconSize={16} onClick={() => onEditColumn?.(null, columns.length)} />
       </div>
 
       {/* Table */}
@@ -693,9 +687,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
           <div className="bg-[var(--color-surface)] rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-divider)]">
               <h3 className="text-sm font-medium">{t.save_as_template}</h3>
-              <button onClick={() => setShowSaveModal(false)} aria-label={t.close} className="text-muted hover:text-[var(--color-text-secondary)]">
-                <X size={16} />
-              </button>
+              <IconButton icon={X} label={t.close} size="md" onClick={() => setShowSaveModal(false)} />
             </div>
             <div className="p-4">
               <label className="text-xs text-muted block mb-1">{t.template_name_prompt}</label>
@@ -924,22 +916,8 @@ function SortableRow({
       {/* Row actions */}
       <td className="px-2 text-center">
         <div className="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100">
-          <button
-            onClick={() => handleDuplicateRow(row)}
-            className="p-0.5 text-muted hover:text-accent"
-            title={t.duplicate_row}
-            aria-label={t.duplicate_row}
-          >
-            <Copy size={14} />
-          </button>
-          <button
-            onClick={() => deleteRow.mutate(row.id)}
-            className="p-0.5 text-muted hover:text-[var(--color-danger-text)]"
-            title={t.delete}
-            aria-label={t.delete}
-          >
-            <Trash2 size={14} />
-          </button>
+          <IconButton icon={Copy} label={t.duplicate_row} size="xs" iconSize={14} tone="accent" onClick={() => handleDuplicateRow(row)} />
+          <IconButton icon={Trash2} label={t.delete} size="xs" iconSize={14} tone="danger" onClick={() => deleteRow.mutate(row.id)} />
         </div>
       </td>
     </tr>

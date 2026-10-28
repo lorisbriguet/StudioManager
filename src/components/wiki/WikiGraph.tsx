@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { SearchBar } from "../ui";
+import { SearchBar, IconButton } from "../ui";
 import { Toggle } from "../ui/Toggle";
 import { useT } from "../../i18n/useT";
 import type { WikiArticleWithTags, WikiFolder } from "../../types/wiki";
@@ -123,15 +123,12 @@ export function WikiGraph({
       >
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold tracking-tight">{t.wiki_graph_settings}</span>
-          <button
-            type="button"
-            onClick={() => setSettingsOpen((o) => !o)}
-            className="text-muted hover:text-[var(--color-text-secondary)] transition-colors"
-            aria-label={t.wiki_graph_settings}
+          <IconButton
+            icon={settingsOpen ? ChevronUp : ChevronDown}
+            label={t.wiki_graph_settings}
             aria-expanded={settingsOpen}
-          >
-            {settingsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
+            onClick={() => setSettingsOpen((o) => !o)}
+          />
         </div>
 
         {settingsOpen && (

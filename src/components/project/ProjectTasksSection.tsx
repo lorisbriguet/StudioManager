@@ -30,6 +30,7 @@ import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
 import { PriorityBadge } from "./PriorityBadge";
 import { SortableSubtaskRow } from "./SortableSubtaskRow";
+import { IconButton } from "../ui";
 
 export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
   projectId: number;
@@ -118,9 +119,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
           onKeyDown={(e) => { if (e.key === "Enter") addTask(); }}
           className="flex-1 border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-3 py-1.5 text-sm"
         />
-        <button onClick={addTask} aria-label={t.new_task} className="p-1.5 text-muted hover:text-accent">
-          <Plus size={16} />
-        </button>
+        <IconButton icon={Plus} label={t.new_task} size="md" tone="accent" onClick={addTask} />
       </div>
 
       <div className="space-y-0.5">
@@ -133,18 +132,19 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
           return (
             <div key={tk.id}>
               <div className="flex items-center gap-2 py-1.5 group/task">
-                <button
+                <IconButton
                   onClick={() => {
                     const next = new Set(expandedTasks);
                     if (next.has(tk.id)) next.delete(tk.id);
                     else next.add(tk.id);
                     setExpandedTasks(next);
                   }}
-                  className="text-muted hover:text-[var(--color-text-secondary)] p-0.5"
-                  aria-label={isExpanded ? t.collapse : t.expand}
-                >
-                  <ChevronRight size={14} className={`transition-transform ${isExpanded ? "rotate-90" : ""}`} />
-                </button>
+                  size="xs"
+                  iconSize={14}
+                  label={isExpanded ? t.collapse : t.expand}
+                  icon={ChevronRight}
+                  iconClassName={`transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                />
                 <input
                   type="checkbox"
                   checked={tk.status === "done"}
@@ -204,14 +204,13 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                 >
                   {activeTimer?.taskId === tk.id ? <Square size={14} /> : <Play size={14} />}
                 </button>
-                <button
+                <IconButton
+                  icon={Trash2}
+                  label={t.delete}
+                  tone="danger"
                   onClick={() => deleteTask.mutate(tk.id, { onSuccess: () => toast.success(t.toast_task_deleted) })}
-                  className="shrink-0 opacity-0 pointer-events-none group-hover/task:opacity-100 group-hover/task:pointer-events-auto text-muted hover:text-[var(--color-danger-text)] transition-opacity p-0.5"
-                  title={t.delete}
-                  aria-label={t.delete}
-                >
-                  <Trash2 size={14} />
-                </button>
+                  className="opacity-0 pointer-events-none group-hover/task:opacity-100 group-hover/task:pointer-events-auto"
+                />
               </div>
               {isExpanded && (
                 <div className="ml-9 border-l border-[var(--color-border-divider)] pl-3 pb-1">
@@ -272,14 +271,13 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                         onChange={(vals) => updateSubtask.mutate({ id: s.id, data: vals })}
                         compact
                       />
-                      <button
+                      <IconButton
+                        icon={Trash2}
+                        label={t.delete}
+                        tone="danger"
                         onClick={() => deleteSubtask.mutate(s.id, { onSuccess: () => toast.success(t.toast_subtask_deleted) })}
-                        className="shrink-0 opacity-0 pointer-events-none group-hover/sub:opacity-100 group-hover/sub:pointer-events-auto text-muted hover:text-[var(--color-danger-text)] transition-opacity p-0.5"
-                        title={t.delete}
-                        aria-label={t.delete}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                        className="opacity-0 pointer-events-none group-hover/sub:opacity-100 group-hover/sub:pointer-events-auto"
+                      />
                     </SortableSubtaskRow>
                   ))}
                   </SortableContext>
@@ -301,7 +299,10 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                       }}
                       className="flex-1 border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-2 py-1 text-xs"
                     />
-                    <button
+                    <IconButton
+                      icon={Plus}
+                      label={t.new_subtask}
+                      tone="accent"
                       onClick={() => {
                         const text = (newSubtaskText[tk.id] ?? "").trim();
                         if (!text) return;
@@ -310,11 +311,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                           { onSuccess: () => setNewSubtaskText({ ...newSubtaskText, [tk.id]: "" }), onError: (err) => toast.error(t.subtask_create_failed.replace("{error}", String(err))) }
                         );
                       }}
-                      className="p-1 text-muted hover:text-accent"
-                      aria-label={t.new_subtask}
-                    >
-                      <Plus size={14} />
-                    </button>
+                    />
                   </div>
                 </div>
               )}

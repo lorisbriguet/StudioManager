@@ -14,7 +14,7 @@ import {
 import { useT } from "../../i18n/useT";
 import { useOrgStore } from "../../stores/org-store";
 import { useWikiFolders } from "../../db/hooks/useWiki";
-import { BottomBar, SearchBar } from "../ui";
+import { BottomBar, SearchBar, IconButton } from "../ui";
 import type { WikiArticleWithTags } from "../../types/wiki";
 import type { ProjectDoc } from "../../db/hooks/useProjectDocs";
 import type { WikiRef } from "../../lib/wikiTabs";
@@ -154,9 +154,6 @@ export function WikiExplorer({
       active ? "bg-accent-light text-accent font-medium" : "text-muted hover:bg-[var(--color-hover-row)]"
     }`;
 
-  const iconBtn =
-    "p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none transition-colors";
-
   return (
     <aside
       aria-label={t.wiki_explorer}
@@ -166,15 +163,9 @@ export function WikiExplorer({
         <h1 className="text-sm font-semibold px-2 text-muted uppercase tracking-wider">{t.wiki}</h1>
         <SearchBar value={search} onChange={setSearch} placeholder={t.search_articles} className="w-full" />
         <div className="flex items-center gap-1 px-1">
-          <button onClick={() => onNewArticle(null)} disabled={creating} className={iconBtn} aria-label={t.new_article} title={t.new_article}>
-            <FilePlus size={14} />
-          </button>
-          <button onClick={() => setOpen(new Set())} className={iconBtn} aria-label={t.wiki_collapse_all} title={t.wiki_collapse_all}>
-            <ChevronsDownUp size={14} />
-          </button>
-          <button onClick={onOpenGraph} className={`${iconBtn} ml-auto`} aria-label={t.wiki_open_graph} title={t.wiki_open_graph}>
-            <Waypoints size={14} />
-          </button>
+          <IconButton icon={FilePlus} label={t.new_article} onClick={() => onNewArticle(null)} disabled={creating} />
+          <IconButton icon={ChevronsDownUp} label={t.wiki_collapse_all} onClick={() => setOpen(new Set())} />
+          <IconButton icon={Waypoints} label={t.wiki_open_graph} onClick={onOpenGraph} className="ml-auto" />
         </div>
       </div>
 
@@ -205,16 +196,15 @@ export function WikiExplorer({
                   <span className="text-xs text-muted">{list.length + files.length}</span>
                 </button>
                 {g.projectId != null && (
-                  <button
+                  <IconButton
+                    icon={Plus}
+                    label={`${t.new_article}: ${g.name}`}
+                    title={t.new_article}
+                    reveal
                     onClick={() => onNewArticle(g.projectId)}
                     disabled={creating}
-                    type="button"
-                    className="mr-2 text-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-[var(--color-text-secondary)] transition-colors"
-                    aria-label={`${t.new_article}: ${g.name}`}
-                    title={t.new_article}
-                  >
-                    <Plus size={14} />
-                  </button>
+                    className="mr-2"
+                  />
                 )}
               </div>
               {isOpen && (

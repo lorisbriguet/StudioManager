@@ -245,8 +245,11 @@ Sizes: `sm`, `md`, `lg`
 | `tone` | `default` · `danger` · `accent` | Hover colour and tint: text + hover-row, danger-text + danger-bg, accent + hover-row |
 | `reveal` | boolean | Hidden until its `group` row is hovered or the button has keyboard focus |
 | `active` | boolean | Pressed/open look |
+| `iconSize` / `iconClassName` | number / string | Rare overrides, e.g. a rotating expand chevron |
 
 At rest an IconButton is `text-muted`. Disabled is `opacity-30`, with clicks turned off.
+
+When the row uses a named group (`group/task`), `reveal` can't reach it. Pass `className="opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100"` instead. These stay raw `<button>`: buttons that are always coloured (a running timer, a confirm check), and the × inside a tag or badge chip.
 
 ### Sanctioned Raw-Button Exceptions
 

@@ -14,6 +14,7 @@ import type { WorkloadColumn } from "../../types/workload";
 import { getStoredTagColor } from "../../lib/tagColors";
 import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
+import { IconButton } from "../ui/IconButton";
 
 export function WorkloadTemplateManager() {
   const t = useT();
@@ -140,33 +141,18 @@ export function WorkloadTemplateManager() {
                   </span>
                 </button>
               )}
-              <button
+              <IconButton
+                icon={Pencil}
+                label={t.rename}
+                tone="accent"
+                iconSize={12}
                 onClick={() => {
                   setRenamingId(tpl.id);
                   setRenameValue(tpl.name);
                 }}
-                className="p-1 text-muted hover:text-accent"
-                title={t.rename}
-                aria-label={t.rename}
-              >
-                <Pencil size={12} />
-              </button>
-              <button
-                onClick={() => handleDuplicate(tpl)}
-                className="p-1 text-muted hover:text-accent"
-                title={t.duplicate}
-                aria-label={t.duplicate}
-              >
-                <Copy size={12} />
-              </button>
-              <button
-                onClick={() => handleDelete(tpl.id)}
-                className="p-1 text-muted hover:text-[var(--color-danger-text)]"
-                title={t.delete}
-                aria-label={t.delete}
-              >
-                <Trash2 size={12} />
-              </button>
+              />
+              <IconButton icon={Copy} label={t.duplicate} tone="accent" iconSize={12} onClick={() => handleDuplicate(tpl)} />
+              <IconButton icon={Trash2} label={t.delete} tone="danger" iconSize={12} onClick={() => handleDelete(tpl.id)} />
             </div>
 
             {/* Expanded column list */}

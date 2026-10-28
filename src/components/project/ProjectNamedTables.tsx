@@ -2,6 +2,7 @@ import { Plus } from "lucide-react";
 import { NamedTable } from "../NamedTable";
 import { useProjectTables, useCreateProjectTable } from "../../db/hooks/useProjectTables";
 import { useT } from "../../i18n/useT";
+import { IconButton } from "../ui";
 
 export function ProjectNamedTables({ projectId }: { projectId: number }) {
   const t = useT();
@@ -11,14 +12,7 @@ export function ProjectNamedTables({ projectId }: { projectId: number }) {
   return (
     <div>
       <div className="flex items-center gap-2 mb-2">
-        <button
-          onClick={() => createTable.mutate({ name: t.untitled })}
-          className="text-muted hover:text-accent"
-          title={t.add_table}
-          aria-label={t.add_table}
-        >
-          <Plus size={14} />
-        </button>
+        <IconButton icon={Plus} label={t.add_table} tone="accent" onClick={() => createTable.mutate({ name: t.untitled })} />
       </div>
       <div className="space-y-3">
         {(!tables || tables.length === 0) && (

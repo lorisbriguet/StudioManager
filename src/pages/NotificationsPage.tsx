@@ -1,5 +1,5 @@
 import { Bell, Check, CheckCheck, Trash2, AlertTriangle, Info, AlertCircle, Copy } from "lucide-react";
-import { PageHeader, Button, EmptyState } from "../components/ui";
+import { PageHeader, Button, EmptyState, IconButton } from "../components/ui";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
@@ -110,42 +110,34 @@ export function NotificationsPage() {
                   </p>
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    className="p-1 text-muted hover:text-[var(--color-text-secondary)] transition-colors"
+                  <IconButton
+                    icon={Copy}
+                    label={t.copy}
                     onClick={(e) => {
                       e.stopPropagation();
                       const text = `${n.title}${n.message ? ` — ${n.message}` : ""}`;
                       navigator.clipboard.writeText(text).then(() => toast.success(t.copied));
                     }}
-                    title={t.copy}
-                    aria-label={t.copy}
-                  >
-                    <Copy size={14} />
-                  </button>
+                  />
                   {!n.read && (
-                    <button
-                      className="p-1 text-muted hover:text-[var(--color-text-secondary)] transition-colors"
+                    <IconButton
+                      icon={Check}
+                      label={t.mark_read}
                       onClick={(e) => {
                         e.stopPropagation();
                         markRead.mutate(n.id);
                       }}
-                      title={t.mark_read}
-                      aria-label={t.mark_read}
-                    >
-                      <Check size={14} />
-                    </button>
+                    />
                   )}
-                  <button
-                    className="p-1 text-muted hover:text-[var(--color-danger-text)] transition-colors"
+                  <IconButton
+                    icon={Trash2}
+                    label={t.delete}
+                    tone="danger"
                     onClick={(e) => {
                       e.stopPropagation();
                       deleteNotif.mutate(n.id);
                     }}
-                    title={t.delete}
-                    aria-label={t.delete}
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  />
                 </div>
               </div>
             );

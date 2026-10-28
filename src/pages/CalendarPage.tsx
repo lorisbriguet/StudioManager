@@ -1,4 +1,5 @@
 import { useMemo, useCallback, useState, useRef, useEffect } from "react";
+import { IconButton } from "../components/ui/IconButton";
 import { Link, useNavigate } from "react-router-dom";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -432,12 +433,8 @@ export function CalendarPage() {
       <div className="min-w-0 flex-1 p-8">
         {/* Custom toolbar */}
         <div className="flex items-center gap-3 mb-4">
-          <button onClick={calPrev} aria-label={t.previous} className="p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors">
-            <ChevronLeft size={18} />
-          </button>
-          <button onClick={calNext} aria-label={t.next} className="p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors">
-            <ChevronRight size={18} />
-          </button>
+          <IconButton icon={ChevronLeft} label={t.previous} iconSize={18} onClick={calPrev} />
+          <IconButton icon={ChevronRight} label={t.next} iconSize={18} onClick={calNext} />
           <button onClick={calToday} className="px-3 py-1 text-xs border border-[var(--color-input-border)] rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:border-[#444] transition-colors">
             {t.today}
           </button>
@@ -525,13 +522,7 @@ export function CalendarPage() {
             >
               {t.open_full_page}
             </Link>
-            <button
-              onClick={handleClosePeek}
-              className="text-muted hover:text-[var(--color-text-secondary)]"
-              aria-label={t.close}
-            >
-              <X size={16} />
-            </button>
+            <IconButton icon={X} label={t.close} size="md" onClick={handleClosePeek} />
           </div>
           <ProjectDetailContent projectId={peekId} compact />
           </div>
@@ -636,13 +627,7 @@ export function QuickCreatePopup({
         {selectedTask ? (
           <div className="flex items-center gap-1 border border-accent/30 bg-accent-light rounded-lg px-2 py-1.5">
             <span className="text-xs flex-1 truncate">{selectedTask.title}</span>
-            <button
-              onClick={handleClearTask}
-              className="text-muted hover:text-[var(--color-text)] shrink-0"
-              aria-label={t.remove}
-            >
-              <X size={12} />
-            </button>
+            <IconButton icon={X} label={t.remove} size="xs" onClick={handleClearTask} />
           </div>
         ) : (
           <input

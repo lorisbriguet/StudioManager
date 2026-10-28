@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Plus, Search, ExternalLink, Trash2, X } from "lucide-react";
-import { PageHeader, Button, EmptyState, FormField, Select } from "../components/ui";
+import { PageHeader, Button, EmptyState, FormField, Select, IconButton } from "../components/ui";
 import * as v from "../lib/validate";
 import { Skeleton } from "../components/ui/Skeleton";
 import { SavedFilterBar } from "../components/SavedFilterBar";
@@ -709,13 +709,13 @@ function ResourceTableRow({
         )}
       </td>
       <td className="px-3 py-2">
-        <button
+        <IconButton
+          icon={Trash2}
+          label={t.delete}
+          tone="danger"
+          reveal
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="text-danger opacity-0 group-hover:opacity-100 transition-opacity"
-          aria-label={t.delete}
-        >
-          <Trash2 size={14} />
-        </button>
+        />
       </td>
     </tr>
   );

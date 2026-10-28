@@ -22,7 +22,7 @@ import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Button, Badge, Card, PageHeader, SearchBar, TableSkeleton, Input, EmptyState, Select } from "../components/ui";
+import { Button, Badge, Card, PageHeader, SearchBar, TableSkeleton, Input, EmptyState, Select, IconButton } from "../components/ui";
 import { undoable, undoableFromStore } from "../lib/undo";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
@@ -437,13 +437,7 @@ export function ProjectsPage() {
           onAnimationEnd={() => { if (closingPeek) { setPeekId(null); setClosingPeek(false); } }}
         >
           <div className="flex items-center gap-1 p-2 border-b border-[var(--color-border-header)]">
-            <button
-              onClick={handleClosePeek}
-              className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
-              aria-label={t.close}
-            >
-              <X size={14} />
-            </button>
+            <IconButton icon={X} label={t.close} onClick={handleClosePeek} />
             <div className="flex-1" />
             <Link
               to={`/projects/${peekId}`}
