@@ -3,6 +3,7 @@ import { FileText, Link2, Paperclip, Plus, X } from "lucide-react";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { openMachineAttachment } from "../../lib/upkeep/openAttachment";
 import { Button, Input } from "../ui";
+import { SectionTitle } from "./SectionTitle";
 import { useT } from "../../i18n/useT";
 import {
   useAddMachineFile,
@@ -14,27 +15,6 @@ import {
 import { notifyError } from "../../lib/notifyError";
 import { formatDisplayDate } from "../../utils/formatDate";
 import { todayLocalISO } from "../../utils/localDate";
-
-export function SectionTitle({
-  children,
-  aside,
-  variant = "title",
-}: {
-  children: string;
-  aside?: React.ReactNode;
-  variant?: "title" | "label";
-}) {
-  return (
-    <div className="flex items-center justify-between mb-3">
-      {variant === "label" ? (
-        <h3 className="text-[10px] font-medium uppercase tracking-widest text-muted">{children}</h3>
-      ) : (
-        <h2 className="text-sm font-semibold tracking-tight">{children}</h2>
-      )}
-      {aside}
-    </div>
-  );
-}
 
 const iconBtn =
   "p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors";

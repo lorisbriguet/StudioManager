@@ -3,7 +3,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { Badge, Button, FormField, Modal, Select } from "../ui";
-import { SectionHeader, SettingRow } from "../settings/SettingsPrimitives";
+import { SettingRow, SettingsCard } from "../settings/SettingsPrimitives";
 import { useT } from "../../i18n/useT";
 import { useConnections, useDeleteConnection, useSyncNow } from "../../db/hooks/useConnections";
 import { connectionStatusText, testConnection } from "../../lib/upkeep/connections";
@@ -95,8 +95,7 @@ export function ConnectionsCard() {
   const { data: connections = [] } = useConnections();
   const [adding, setAdding] = useState(false);
   return (
-    <section>
-      <SectionHeader title={t.upkeep_connections} desc={t.upkeep_connections_desc} />
+    <SettingsCard title={t.upkeep_connections} desc={t.upkeep_connections_desc}>
       {connections.length === 0 ? (
         <p className="text-sm text-muted py-2">{t.upkeep_connections_empty}</p>
       ) : (
@@ -108,6 +107,6 @@ export function ConnectionsCard() {
         </Button>
       </div>
       {adding && <AddConnectionDialog onClose={() => setAdding(false)} />}
-    </section>
+    </SettingsCard>
   );
 }

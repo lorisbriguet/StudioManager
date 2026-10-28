@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import { Badge } from "../ui";
 import { DueList } from "./DueList";
-import { SectionTitle } from "./MachineLogSections";
 import { usePendingRenewals, useUpkeepOverview } from "../../db/hooks/useUpkeep";
 import { useT } from "../../i18n/useT";
 import { formatMoney } from "../../lib/upkeep/money";
@@ -23,14 +22,14 @@ export function UpkeepWidget() {
 
         {due.length > 0 && (
           <section>
-            <SectionTitle variant="label">{t.upkeep_due_soon}</SectionTitle>
+            <h3 className="mb-1 text-[10px] font-medium uppercase tracking-widest text-muted">{t.upkeep_due_soon}</h3>
             <DueList rows={due} compact />
           </section>
         )}
 
         {pending.length > 0 && (
           <section>
-            <SectionTitle variant="label">{t.upkeep_widget_pending}</SectionTitle>
+            <h3 className="mb-1 text-[10px] font-medium uppercase tracking-widest text-muted">{t.upkeep_widget_pending}</h3>
             <ul className="space-y-1">
               {pending.map((r) => (
                 <li key={r.id}>
@@ -51,11 +50,12 @@ export function UpkeepWidget() {
 
         {lowStock.length > 0 && (
           <section>
-            <SectionTitle variant="label" aside={
+            <div className="flex items-center justify-between mb-1">
+  <h3 className="text-[10px] font-medium uppercase tracking-widest text-muted">{t.upkeep_low_stock}</h3>
               <Link to="/upkeep?tab=consumables" className="text-xs text-accent hover:underline">
                 {t.upkeep_all_consumables}
               </Link>
-            }>{t.upkeep_low_stock}</SectionTitle>
+            </div>
             <ul className="space-y-1">
               {lowStock.map((c) => (
                 <li key={c.id} className="flex items-center justify-between text-sm">
@@ -71,7 +71,7 @@ export function UpkeepWidget() {
 
         {endingSoon.length > 0 && (
           <section>
-            <SectionTitle variant="label">{t.upkeep_warranty_renewals}</SectionTitle>
+            <h3 className="mb-1 text-[10px] font-medium uppercase tracking-widest text-muted">{t.upkeep_warranty_renewals}</h3>
             <ul className="space-y-1">
               {endingSoon.map((e) => (
                 <li key={`${e.kind}-${e.name}-${e.date}`} className="flex items-center justify-between gap-3 text-sm">

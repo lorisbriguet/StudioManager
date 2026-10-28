@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { Input, Select } from "../ui";
 import { ConnectionsCard } from "../upkeep/ConnectionsCard";
-import { SectionTitle } from "../upkeep/MachineLogSections";
-import { SettingRow } from "./SettingsPrimitives";
+import { SettingRow, SettingsCard } from "./SettingsPrimitives";
 import { logError } from "../../lib/log";
 import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
@@ -68,8 +67,7 @@ export function UpkeepSettingsCard() {
 
   return (
     <div className="space-y-6">
-      <section>
-        <SectionTitle>{t.upkeep_settings_reminders}</SectionTitle>
+      <SettingsCard title={t.upkeep_settings_reminders}>
         <SettingRow label={t.upkeep_settings_alert} desc={t.upkeep_settings_alert_desc}>
           <Select
             aria-label={t.upkeep_settings_alert}
@@ -82,10 +80,9 @@ export function UpkeepSettingsCard() {
             ))}
           </Select>
         </SettingRow>
-      </section>
+      </SettingsCard>
 
-      <section>
-        <SectionTitle>{t.upkeep_settings_windows}</SectionTitle>
+      <SettingsCard title={t.upkeep_settings_windows}>
         <SettingRow label={t.upkeep_settings_soon_days}>
           <DaysInput label={t.upkeep_settings_soon_days} value={soonDays} onCommit={setSoonDays} />
         </SettingRow>
@@ -95,7 +92,7 @@ export function UpkeepSettingsCard() {
         <SettingRow label={t.upkeep_settings_renewal_days}>
           <DaysInput label={t.upkeep_settings_renewal_days} value={renewalDays} onCommit={setRenewalDays} />
         </SettingRow>
-      </section>
+      </SettingsCard>
 
       <ConnectionsCard />
     </div>

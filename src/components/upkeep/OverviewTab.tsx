@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { Wrench } from "lucide-react";
 import { Badge, Card, MeterBar } from "../ui";
 import { DueList } from "./DueList";
-import { SectionTitle } from "./MachineLogSections";
+import { SectionTitle } from "./SectionTitle";
 import { useMachines, useUpkeepOverview } from "../../db/hooks/useUpkeep";
 import { useT } from "../../i18n/useT";
 import { machineStatusVariant } from "../../lib/statusColors";
