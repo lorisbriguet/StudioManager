@@ -1,6 +1,7 @@
 import { useEffect, useRef, useId, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { X } from "lucide-react";
 import { useT } from "../../i18n/useT";
+import { IconButton } from "./IconButton";
 
 interface ModalProps {
   open: boolean;
@@ -8,19 +9,27 @@ interface ModalProps {
   title?: string;
   children: ReactNode;
   footer?: ReactNode;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl" | "2xl";
+  /** top: palette-style dialogs (command palette, quick timer) sit at 20% from the top. */
+  position?: "center" | "top";
+  /** false: the content lays itself out edge to edge (no body padding). */
+  padding?: boolean;
+  /** Accessible name when there is no visible title. */
+  "aria-label"?: string;
 }
 
 const sizeClasses = {
   sm: "max-w-sm",
   md: "max-w-md",
   lg: "max-w-lg",
+  xl: "max-w-xl",
+  "2xl": "max-w-2xl",
 };
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function Modal({ open, onClose, title, children, footer, size = "sm" }: ModalProps) {
+export function Modal({ open, onClose, title, children, footer, size = "sm", position = "center", padding = true, ...aria }: ModalProps) {
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -105,7 +114,9 @@ export function Modal({ open, onClose, title, children, footer, size = "sm" }: M
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-in fade-in"
+      className={`fixed inset-0 z-50 flex justify-center bg-black/40 animate-in fade-in ${
+        position === "top" ? "items-start pt-[20vh]" : "items-center"
+      }`}
       onClick={onClose}
     >
       <div
@@ -113,22 +124,19 @@ export function Modal({ open, onClose, title, children, footer, size = "sm" }: M
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
+        aria-label={title ? undefined : aria["aria-label"]}
         tabIndex={-1}
-        className={`bg-[var(--color-surface)] rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.5)] w-full ${sizeClasses[size]} mx-4 overflow-hidden modal-animate outline-none`}
+        className={`bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.5)] w-full ${sizeClasses[size]} mx-4 overflow-hidden modal-animate outline-none`}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleTrapKeyDown}
       >
         {title && (
           <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--color-border-divider)]">
             <h3 id={titleId} className="text-sm font-medium">{title}</h3>
-            <button onClick={onClose} className="text-muted hover:text-[var(--color-text-secondary)]" aria-label={t.close}>
-              <X size={16} />
-            </button>
+            <IconButton icon={X} label={t.close} size="sm" iconSize={16} onClick={onClose} />
           </div>
         )}
-        <div className={title ? "p-5" : "p-6"}>
-          {children}
-        </div>
+        {padding ? <div className={title ? "p-5" : "p-6"}>{children}</div> : children}
         {footer && (
           <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-[var(--color-border-divider)]">
             {footer}

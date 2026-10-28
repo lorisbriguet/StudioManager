@@ -30,3 +30,4 @@ export type { SortDir, SortState } from "./SortHeader";
 export { BulkActionBar } from "./BulkActionBar";
 export { DatePicker, Calendar, DateShortcuts, parseLocalDate, parseTypedDate, toDateString } from "./DatePicker";
 export { Toggle } from "./Toggle";
+export { Kbd } from "./Kbd";
