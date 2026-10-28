@@ -662,3 +662,23 @@ body.grid-interacting textarea,
 body.grid-interacting input {
   user-select: text !important;
 }
+
+/* Agents page: assistant replies rendered like the Claude desktop chat. */
+.agent-markdown > * + * { margin-top: 0.75em; }
+.agent-markdown h1, .agent-markdown h2, .agent-markdown h3, .agent-markdown h4 { font-weight: 600; margin-top: 1.25em; }
+.agent-markdown h1 { font-size: 1.15em; }
+.agent-markdown h2 { font-size: 1.08em; }
+.agent-markdown h3, .agent-markdown h4 { font-size: 1em; }
+.agent-markdown ul { list-style: disc; padding-left: 1.4em; }
+.agent-markdown ol { list-style: decimal; padding-left: 1.4em; }
+.agent-markdown li + li { margin-top: 0.25em; }
+.agent-markdown a { color: var(--color-accent); text-decoration: underline; }
+.agent-markdown strong { font-weight: 600; }
+.agent-markdown blockquote { border-left: 2px solid var(--color-border); padding-left: 0.9em; color: var(--color-text-secondary); }
+.agent-markdown code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88em; background: var(--color-input-bg); border-radius: 4px; padding: 0.1em 0.35em; }
+.agent-markdown pre { background: var(--color-input-bg); border: 1px solid var(--color-border); border-radius: 10px; padding: 0.75em 1em; overflow-x: auto; }
+.agent-markdown pre code { background: none; padding: 0; font-size: 0.85em; }
+.agent-markdown table { border-collapse: collapse; font-size: 0.95em; display: block; overflow-x: auto; }
+.agent-markdown th, .agent-markdown td { border: 1px solid var(--color-border); padding: 0.3em 0.6em; text-align: left; }
+.agent-markdown th { font-weight: 600; background: var(--color-input-bg); }
+.agent-markdown hr { border: 0; border-top: 1px solid var(--color-border); }

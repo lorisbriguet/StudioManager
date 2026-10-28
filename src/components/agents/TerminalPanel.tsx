@@ -74,6 +74,15 @@ export function TerminalPanel({ shortId, onClose }: TerminalPanelProps) {
 
     const feed = (d: TermData) => term.write(decode(d.data));
 
+    // Shift+Enter adds a line in Claude's input instead of sending: Claude reads
+    // Esc+Return as a newline (what its /terminal-setup binds). Plain Enter sends.
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.key === "Enter" && e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        if (e.type === "keydown" && termId !== null && !exited) termWrite(termId, "\x1b\r").catch(() => {});
+        return false;
+      }
+      return true;
+    });
     const onData = term.onData((data) => {
       if (termId !== null && !exited) termWrite(termId, data).catch(() => {});
     });

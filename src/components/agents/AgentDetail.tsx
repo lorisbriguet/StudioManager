@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ArrowUp, Loader2 } from "lucide-react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { dismissAgent, deleteAgent, sendMessage, stopAgent, switchModel, type Agent } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
@@ -132,22 +133,40 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
         <Conversation sessionId={agent.sessionId} working={agent.group === "working"} />
       </div>
 
-      <div className="space-y-1">
-        <div className="flex gap-2">
+      <div className="max-w-3xl w-full mx-auto space-y-1.5">
+        <div
+          className={`flex items-end gap-2 rounded-2xl border border-[var(--color-input-border)] bg-[var(--color-surface)] pl-4 pr-2 py-2 shadow-sm focus-within:border-[var(--color-accent)] ${
+            canSend ? "" : "opacity-60"
+          }`}
+        >
           <textarea
             value={text}
-            rows={2}
+            rows={1}
             maxLength={20000}
             disabled={!canSend}
             placeholder={t.agents_message_placeholder}
             onChange={(e) => setText(e.target.value)}
-            className="flex-1 bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-lg px-3 py-2 text-sm focus-accent disabled:opacity-50"
+            onKeyDown={(e) => {
+              // Enter sends, Shift+Enter adds a line (IME composition left alone).
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                void send();
+              }
+            }}
+            style={{ fieldSizing: "content" } as React.CSSProperties}
+            className="flex-1 resize-none bg-transparent py-1.5 text-sm leading-relaxed outline-none min-h-[2rem] max-h-48 overflow-y-auto"
           />
-          <Button disabled={!canSend || text.trim() === ""} loading={sending} onClick={() => void send()}>
-            {t.agents_send}
-          </Button>
+          <button
+            type="button"
+            aria-label={t.agents_send}
+            disabled={!canSend || sending || text.trim() === ""}
+            onClick={() => void send()}
+            className="shrink-0 grid place-items-center size-8 rounded-full bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-40"
+          >
+            {sending ? <Loader2 size={15} className="animate-spin" /> : <ArrowUp size={16} />}
+          </button>
         </div>
-        {disabledReason && <p className="text-xs text-muted">{disabledReason}</p>}
+        {disabledReason && <p className="text-xs text-muted text-center">{disabledReason}</p>}
       </div>
     </div>
   );

@@ -75,6 +75,18 @@ describe("AgentDetail", () => {
     );
   });
 
+  it("Enter sends, Shift+Enter does not", async () => {
+    render(<AgentDetail agent={agent()} onOpenTerminal={() => {}} />);
+    const box = screen.getByPlaceholderText("Message to the agent");
+    fireEvent.change(box, { target: { value: "line one" } });
+    fireEvent.keyDown(box, { key: "Enter", shiftKey: true });
+    expect(invokedCommands.some((c) => c.cmd === "agents_send")).toBe(false);
+    fireEvent.keyDown(box, { key: "Enter" });
+    await waitFor(() =>
+      expect(invokedCommands.find((c) => c.cmd === "agents_send")?.args).toEqual({ sessionId: "sess-1", text: "line one" }),
+    );
+  });
+
   it("no switch-model for interactive", async () => {
     const { rerender } = render(<AgentDetail agent={agent()} onOpenTerminal={() => {}} />);
     expect(screen.getByLabelText("Model")).toBeInTheDocument();

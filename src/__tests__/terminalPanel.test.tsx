@@ -9,6 +9,7 @@ type FakeTerm = {
   write: ReturnType<typeof vi.fn>;
   dispose: ReturnType<typeof vi.fn>;
   onDataCb: ((d: string) => void) | null;
+  keyHandler: ((e: KeyboardEvent) => boolean) | null;
 };
 const created: FakeTerm[] = [];
 
@@ -24,6 +25,10 @@ vi.mock("@xterm/xterm", () => ({
     }
     open() {}
     loadAddon() {}
+    keyHandler: ((e: KeyboardEvent) => boolean) | null = null;
+    attachCustomKeyEventHandler(h: (e: KeyboardEvent) => boolean) {
+      this.keyHandler = h;
+    }
     onData(cb: (d: string) => void) {
       this.onDataCb = cb;
       return { dispose() {} };
@@ -102,6 +107,25 @@ describe("TerminalPanel", () => {
     expect(Array.from(term.write.mock.calls[1][0] as Uint8Array)).toEqual([104, 105]);
     act(() => term.onDataCb?.("ls\r"));
     expect(invokedCommands).toContainEqual({ cmd: "agents_term_write", args: { termId: 3, data: "ls\r" } });
+  });
+
+  it("Shift+Enter adds a line, plain Enter is left to xterm", async () => {
+    setInvokeHandler((cmd) => Promise.resolve(cmd === "agents_term_open" ? 4 : undefined));
+    render(<TerminalPanel shortId="abcd1234" onClose={() => {}} />);
+    await waitFor(() => expect(opened()).toBe(true));
+    const term = created[0];
+    await waitFor(() => expect(term.keyHandler).not.toBeNull());
+    const key = (type: string, shiftKey: boolean) =>
+      new KeyboardEvent(type, { key: "Enter", shiftKey });
+    await waitFor(() => {
+      clearInvokedCommands();
+      expect(term.keyHandler?.(key("keydown", true))).toBe(false);
+      expect(invokedCommands).toContainEqual({ cmd: "agents_term_write", args: { termId: 4, data: "\x1b\r" } });
+    });
+    clearInvokedCommands();
+    expect(term.keyHandler?.(key("keyup", true))).toBe(false);
+    expect(term.keyHandler?.(key("keydown", false))).toBe(true);
+    expect(invokedCommands.some((c) => c.cmd === "agents_term_write")).toBe(false);
   });
 
   it("shows open error", async () => {
