@@ -4,6 +4,7 @@ import { SelectTagPicker } from "./SelectTagPicker";
 import { evaluateFormula } from "../../lib/formulaEval";
 import { Tag } from "../ui/Tag";
 
+import { Input } from "../ui";
 interface Props {
   column: WorkloadColumn;
   value: unknown;
@@ -89,7 +90,7 @@ function TextCell({
 
   if (editing) {
     return (
-      <input
+      <Input size="sm"
         ref={inputRef}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
@@ -98,7 +99,6 @@ function TextCell({
           if (e.key === "Enter") commit();
           if (e.key === "Escape") setEditing(false);
         }}
-        className="w-full text-sm border border-[var(--color-border-divider)] rounded-lg px-2 py-0.5 outline-none"
       />
     );
   }
@@ -143,7 +143,7 @@ function NumberCell({
 
   if (editing) {
     return (
-      <input
+      <Input size="sm"
         ref={inputRef}
         type="number"
         step="any"
@@ -154,7 +154,7 @@ function NumberCell({
           if (e.key === "Enter") commit();
           if (e.key === "Escape") setEditing(false);
         }}
-        className="w-full text-sm border border-[var(--color-border-divider)] rounded-lg px-2 py-0.5 outline-none text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+        className="text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
       />
     );
   }

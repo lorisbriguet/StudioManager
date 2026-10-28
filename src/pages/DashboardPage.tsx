@@ -8,7 +8,7 @@ import { useDashboardStore, WIDGET_CATALOG, type WidgetType, type DashboardWidge
 import type { LayoutItem } from "react-grid-layout";
 import { renderWidget } from "../components/dashboard/widgets";
 import { DashboardYearContext } from "../components/dashboard/DashboardYearContext";
-import { PageHeader, Button, EmptyState, Select, Popover, IconButton, SectionLabel } from "../components/ui";
+import { PageHeader, Button, EmptyState, Select, Popover, IconButton, SectionLabel, Input } from "../components/ui";
 import { MENU_ITEM, MENU_DIVIDER } from "../components/ui/Dropdown";
 import { useT } from "../i18n/useT";
 import { toast } from "sonner";
@@ -179,7 +179,7 @@ function PresetDropdown() {
           {/* Save current layout */}
           {saving ? (
             <div className="px-2 py-1 flex items-center gap-2">
-              <input
+              <Input
                 ref={inputRef}
                 type="text"
                 value={saveName}
@@ -190,7 +190,7 @@ function PresetDropdown() {
                   if (e.key === "Escape") { e.preventDefault(); setSaving(false); setSaveName(""); }
                 }}
                 placeholder={t.preset_name}
-                className="flex-1 border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-sm bg-[var(--color-input-bg)] outline-none focus:border-accent"
+                size="sm" fullWidth={false} className="flex-1"
               />
               <button
                 type="button"

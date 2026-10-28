@@ -19,6 +19,7 @@ import { useQuery } from "@tanstack/react-query";
 import { FileText, Receipt, ClipboardList, FolderPlus } from "lucide-react";
 import { useCountUp } from "../../hooks/useCountUp";
 import { SectionLabel } from "../ui/SectionLabel";
+import { Textarea } from "../ui/Input";
 import { useDashboardKPIs, useMonthlyData, useRevenueByActivity, useRevenueByClient } from "../../db/hooks/useFinance";
 import { useProjects } from "../../db/hooks/useProjects";
 // V1.11 C1: task-list widgets (today, overdue, deadlines, this-week, stale,
@@ -1206,8 +1207,8 @@ function PinnedNotes() {
   return (
     <div className="h-full flex flex-col p-4">
       <h2 className="text-sm font-medium mb-2">{t.pinned_notes}</h2>
-      <textarea
-        className="flex-1 w-full resize-none text-sm bg-[var(--color-input-bg)] rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-accent cursor-text"
+      <Textarea
+        className="flex-1 resize-none! cursor-text"
         value={local}
         onChange={(e) => handleChange(e.target.value)}
         onMouseDown={(e) => e.stopPropagation()}

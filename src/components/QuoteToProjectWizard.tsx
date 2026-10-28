@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { format, addMonths } from "date-fns";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
-import { Button, FormField, Modal } from "./ui";
+import { Button, FormField, Input, Modal, Textarea } from "./ui";
 import * as v from "../lib/validate";
 import { useT } from "../i18n/useT";
 import { useCreateProjectFromQuote } from "../db/hooks/useProjects";
@@ -148,13 +148,14 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
                 onChange={(e) => updateTask(i, { included: e.target.checked })}
                 className="accent-[var(--accent)]"
               />
-              <input
+              <Input
+                size="sm"
                 type="text"
                 value={task.title}
                 onChange={(e) => updateTask(i, { title: e.target.value })}
-                className="text-sm border border-[var(--color-input-border)] rounded-lg px-2 py-1"
               />
-              <input
+              <Input
+                size="sm"
                 type="number"
                 value={task.plannedMinutes ?? ""}
                 onChange={(e) =>
@@ -163,7 +164,7 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
                   })
                 }
                 placeholder={t.minutes_short}
-                className="text-sm border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-right"
+                className="text-right"
               />
             </div>
           ))}
@@ -174,29 +175,26 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
       {step === 1 && (
         <div className="space-y-3">
           <FormField label={t.project_name} required error={errors.name}>
-            <input
+            <Input
               type="text"
               value={projectName}
               onChange={(e) => { setProjectName(e.target.value); clearError("name"); }}
               onBlur={() => validateOnBlur("name")}
-              className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-2 text-sm"
             />
           </FormField>
           <FormField label={t.project_deadline} required error={errors.deadline}>
-            <input
+            <Input
               type="date"
               value={deadline}
               onChange={(e) => { setDeadline(e.target.value); clearError("deadline"); }}
               onBlur={() => validateOnBlur("deadline")}
-              className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-2 text-sm"
             />
           </FormField>
           <FormField label={t.notes}>
-            <textarea
+            <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-2 text-sm"
             />
           </FormField>
         </div>

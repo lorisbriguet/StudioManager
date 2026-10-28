@@ -10,7 +10,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Button, Select, IconButton } from "../ui";
+import { Button, Select, IconButton, Input } from "../ui";
 import type { LineItem } from "../../lib/lineItems";
 import { useT } from "../../i18n/useT";
 
@@ -120,21 +120,20 @@ export function LineItemsTable({
                     {renderDesignation ? (
                       renderDesignation(item, i)
                     ) : (
-                      <input
+                      <Input size="sm"
                         value={item.designation}
                         onChange={(e) => onUpdate(i, "designation", e.target.value)}
-                        className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm"
                         placeholder={t.description}
                       />
                     )}
                   </td>
                   {!hideRate && (
                     <td className="px-1 py-1">
-                      <input
+                      <Input size="sm"
                         type="number"
                         value={item.rate ?? ""}
                         onChange={(e) => onUpdate(i, "rate", e.target.value ? Number(e.target.value) : null)}
-                        className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm text-right"
+                        className="text-right"
                         placeholder="0"
                       />
                     </td>
@@ -154,19 +153,19 @@ export function LineItemsTable({
                     </td>
                   )}
                   <td className="px-1 py-1">
-                    <input
+                    <Input size="sm"
                       type="number"
                       value={item.quantity}
                       onChange={(e) => onUpdate(i, "quantity", Number(e.target.value))}
-                      className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm text-right"
+                      className="text-right"
                     />
                   </td>
                   <td className="px-1 py-1">
-                    <input
+                    <Input size="sm"
                       type="number"
                       value={item.amount}
                       onChange={(e) => onUpdate(i, "amount", Number(e.target.value))}
-                      className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm text-right"
+                      className="text-right"
                     />
                   </td>
                   <td className="pl-1 py-1">

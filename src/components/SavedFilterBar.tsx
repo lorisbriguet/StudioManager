@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Bookmark, Plus, X, Pencil, Trash2, Filter } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Select, FilterChip } from "./ui";
+import { Button, Select, FilterChip, Input } from "./ui";
 import { ContextMenu } from "./ContextMenu";
 import {
   useSavedFilters,
@@ -107,11 +107,11 @@ function ConditionRow({
           ))}
         </Select>
       ) : (
-        <input
+        <Input size="sm" fullWidth={false}
           value={condition.value}
           onChange={(e) => onChange({ ...condition, value: e.target.value })}
           placeholder={t.value}
-          className="text-xs px-1.5 py-1 border border-[var(--color-border-divider)] rounded-lg bg-transparent w-24"
+          className="w-24"
         />
       )}
       <IconButton icon={X} label={t.remove} size="xs" tone="danger" onClick={onRemove} />
@@ -317,7 +317,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
           {naming ? (
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-1.5">
-                <input
+                <Input size="sm" fullWidth={false}
                   ref={inputRef}
                   value={nameInput}
                   onChange={(e) => setNameInput(e.target.value)}
@@ -326,7 +326,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
                     if (e.key === "Escape") { setNaming(false); setNameInput(""); setConditions([]); setShowConditions(false); }
                   }}
                   placeholder={t.filter_name}
-                  className="text-xs px-2 py-1 border border-[var(--color-border-divider)] rounded-lg w-36 bg-transparent"
+                  className="w-36"
                 />
                 {fields && fields.length > 0 && (
                   <IconButton icon={Filter} label={t.add_condition} iconSize={12} tone="accent" active={showConditions} onClick={() => { setShowConditions(!showConditions); if (!showConditions && conditions.length === 0) addCondition(); }} />
@@ -388,7 +388,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
               }}
             >
               {editingId === f.id ? (
-                <input
+                <Input variant="inline" fullWidth={false}
                   ref={editInputRef}
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
@@ -399,7 +399,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
                   }}
                   onBlur={handleRename}
                   onClick={(e) => e.stopPropagation()}
-                  className="text-xs bg-transparent border-b border-accent w-20 outline-none"
+                  className="w-20"
                 />
               ) : (
                 f.name
@@ -411,7 +411,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
         {naming ? (
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-1.5">
-              <input
+              <Input size="sm" fullWidth={false}
                 ref={inputRef}
                 value={nameInput}
                 onChange={(e) => setNameInput(e.target.value)}
@@ -420,7 +420,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
                   if (e.key === "Escape") { setNaming(false); setNameInput(""); setConditions([]); setShowConditions(false); }
                 }}
                 placeholder={t.filter_name}
-                className="text-xs px-2 py-1 border border-[var(--color-border-divider)] rounded-lg w-28 bg-transparent"
+                className="w-28"
               />
               {fields && fields.length > 0 && (
                 <IconButton icon={Filter} label={t.add_condition} iconSize={12} tone="accent" active={showConditions} onClick={() => { setShowConditions(!showConditions); if (!showConditions && conditions.length === 0) addCondition(); }} />

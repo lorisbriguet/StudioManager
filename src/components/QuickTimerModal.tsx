@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Timer } from "lucide-react";
 import { toast } from "sonner";
-import { Button, SECTION_LABEL } from "./ui";
+import { Button, Input, SECTION_LABEL } from "./ui";
 import { useAppStore } from "../stores/app-store";
 import { useProjects } from "../db/hooks/useProjects";
 import { useTasksByProject } from "../db/hooks/useTasks";
@@ -93,9 +93,8 @@ export function QuickTimerModal() {
               <label className={SECTION_LABEL}>
                 {t.select_project}
               </label>
-              <input
+              <Input
                 type="text"
-                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--color-input-bg,var(--color-surface))] border border-[var(--color-border)] outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-0 placeholder:text-muted"
                 placeholder={t.select_project}
                 value={selectedProject ? selectedProject.name : projectSearch}
                 onChange={(e) => {

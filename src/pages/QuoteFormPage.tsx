@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Eye } from "lucide-react";
-import { Button, Input, Select, FormField } from "../components/ui";
+import { Button, Input, Select, FormField, Textarea } from "../components/ui";
 import * as v from "../lib/validate";
 import { toast } from "sonner";
 import { addDays, format } from "date-fns";
@@ -491,11 +491,10 @@ export function QuoteFormPage() {
         )}
 
         <FormField label={t.notes}>
-          <textarea
+          <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
-            className="w-full border border-[var(--color-border-divider)] rounded-lg px-3 py-2 text-sm bg-[var(--color-surface)]"
           />
         </FormField>
 

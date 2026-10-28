@@ -3,7 +3,7 @@ import { X, Pencil, Trash2, Check } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useTimeEntriesWithDetails, useUpdateTimeEntry, useDeleteTimeEntry } from "../../db/hooks/useTimeEntries";
 import { useProjects } from "../../db/hooks/useProjects";
-import { Button, Select, IconButton } from "../ui";
+import { Button, Select, IconButton, Input } from "../ui";
 import { SectionHeader } from "../ui/Settings";
 
 function formatDuration(minutes: number): string {
@@ -71,20 +71,18 @@ export function TimeEntriesManager() {
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div className="flex flex-col gap-1">
           <label className="text-xs text-muted">{t.start}</label>
-          <input
+          <Input size="sm" fullWidth={false}
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1 text-xs text-[var(--color-text)]"
           />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs text-muted">{t.end_date}</label>
-          <input
+          <Input size="sm" fullWidth={false}
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1 text-xs text-[var(--color-text)]"
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -138,43 +136,43 @@ export function TimeEntriesManager() {
                   {editingId === entry.id ? (
                     <>
                       <td className="px-3 py-1.5">
-                        <input
+                        <Input size="sm"
                           type="date"
                           value={editForm.date}
                           onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
-                          className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-full min-w-[110px]"
+                          className="min-w-[110px]"
                         />
                       </td>
                       <td className="px-3 py-1.5 text-muted">{entry.project_name}</td>
                       <td className="px-3 py-1.5 text-muted">{entry.task_title ?? "—"}</td>
                       <td className="px-3 py-1.5">
                         <div className="flex items-center gap-1">
-                          <input
+                          <Input size="sm" fullWidth={false}
                             type="number"
                             min={0}
                             max={23}
                             value={editForm.hours}
                             onChange={(e) => setEditForm({ ...editForm, hours: Math.max(0, Number(e.target.value)) })}
-                            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-14"
+                            className="w-14"
                           />
                           <span className="text-muted">h</span>
-                          <input
+                          <Input size="sm" fullWidth={false}
                             type="number"
                             min={0}
                             max={59}
                             value={editForm.minutes}
                             onChange={(e) => setEditForm({ ...editForm, minutes: Math.max(0, Math.min(59, Number(e.target.value))) })}
-                            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-14"
+                            className="w-14"
                           />
                           <span className="text-muted">m</span>
                         </div>
                       </td>
                       <td className="px-3 py-1.5">
-                        <input
+                        <Input size="sm"
                           type="text"
                           value={editForm.description}
                           onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                          className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-full min-w-[200px]"
+                          className="min-w-[200px]"
                           placeholder={t.description}
                         />
                       </td>

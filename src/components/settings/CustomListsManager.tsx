@@ -5,7 +5,7 @@ import { Trash2, Check, Plus } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useUpdateCustomList, useDeleteCustomList, useSetCustomListItems } from "../../db/hooks/useCustomLists";
 import { normalizeTagColorName, TAG_COLOR_NAMES } from "../../lib/tagColors";
-import { Button, Select, IconButton, Tag } from "../ui";
+import { Button, Select, IconButton, Tag, Input } from "../ui";
 import { navItemClass } from "../ui/NavItem";
 
 export function CustomListsManager() {
@@ -101,12 +101,12 @@ export function CustomListsManager() {
           {allLists.map((list) => (
             <div key={list.id} className={`${navItemClass({ active: selectedId === list.id })} group cursor-pointer`}>
               {renamingId === list.id ? (
-                <input
+                <Input variant="inline" fullWidth={false}
                   value={renameValue}
                   onChange={(e) => setRenameValue(e.target.value)}
                   onBlur={commitRename}
                   onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenamingId(null); }}
-                  className="flex-1 text-xs bg-transparent border-b border-accent outline-none"
+                  className="flex-1"
                   autoFocus
                 />
               ) : (
@@ -124,12 +124,12 @@ export function CustomListsManager() {
         </div>
         {addingList ? (
           <div className="mt-2 flex gap-1">
-            <input
+            <Input size="sm" fullWidth={false}
               value={newListName}
               onChange={(e) => setNewListName(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleCreateList(); if (e.key === "Escape") setAddingList(false); }}
               placeholder={t.list_name}
-              className="flex-1 border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-xs"
+              className="flex-1"
               autoFocus
             />
             <button type="button" onClick={handleCreateList} aria-label={t.create} className="px-2 py-1 bg-accent text-white text-xs rounded-md hover:bg-accent-hover">
@@ -178,12 +178,12 @@ export function CustomListsManager() {
               })}
             </div>
             <div className="flex gap-2 mb-3">
-              <input
+              <Input size="sm" fullWidth={false}
                 value={newItemValue}
                 onChange={(e) => setNewItemValue(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addItem()}
                 placeholder={t.new_list_item}
-                className="flex-1 border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm"
+                className="flex-1"
               />
               <Select
                 value={newItemColor}

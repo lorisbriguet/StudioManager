@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Plus, Trash2, Calendar, Link, Unlink } from "lucide-react";
-import { Button, Select, Popover, Tag } from "../ui";
+import { Button, Select, Popover, Tag, Input } from "../ui";
 import { MENU_ITEM } from "../ui/Dropdown";
 import { toast } from "sonner";
 import type { WorkloadColumn, WorkloadColumnType, SelectOption } from "../../types/workload";
@@ -148,11 +148,10 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
           {/* Name */}
           <div>
             <label className="text-xs text-muted block mb-1">{t.name}</label>
-            <input
+            <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
-              className="w-full border border-[var(--color-border-divider)] rounded-md px-3 py-2 text-sm"
               autoFocus
             />
           </div>
@@ -234,12 +233,13 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
           {type === "formula" && (
             <div>
               <label className="text-xs text-muted block mb-1">{t.formula}</label>
-              <input
+              <Input
                 value={formula}
                 onChange={(e) => handleFormulaChange(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
                 placeholder="e.g. og_scope ? hours : 0"
-                className={`w-full border rounded-md px-3 py-2 text-sm font-mono ${formulaError ? "border-[var(--color-danger-text)]" : "border-[var(--color-border-divider)]"}`}
+                aria-invalid={formulaError ? true : undefined}
+                className="font-mono aria-[invalid=true]:border-danger-text"
               />
               {formulaError ? (
                 <p className="text-[10px] text-[var(--color-danger-text)] mt-1">{formulaError}</p>
@@ -350,12 +350,12 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
               {!linkedListId && (
                 <>
                   <div className="flex gap-2 mb-2">
-                    <input
+                    <Input size="sm" fullWidth={false}
                       value={newOptValue}
                       onChange={(e) => setNewOptValue(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && addOption()}
                       placeholder={t.new_option}
-                      className="flex-1 border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm"
+                      className="flex-1"
                     />
                     <Select
                       value={newOptColor}
@@ -373,12 +373,12 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                   <div className="border-t border-[var(--color-border-divider)] pt-2">
                     {showSaveAsListInput ? (
                       <div className="flex gap-2">
-                        <input
+                        <Input size="sm" fullWidth={false}
                           value={saveAsListName}
                           onChange={(e) => setSaveAsListName(e.target.value)}
                           onKeyDown={(e) => { if (e.key === "Enter") handleSaveAsList(); if (e.key === "Escape") setShowSaveAsListInput(false); }}
                           placeholder={t.list_name}
-                          className="flex-1 border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm"
+                          className="flex-1"
                           autoFocus
                         />
                         <button type="button" onClick={handleSaveAsList} className="px-3 text-sm text-accent hover:underline">{t.save}</button>

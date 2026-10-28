@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Plus, Search, ExternalLink, Trash2, X } from "lucide-react";
-import { PageHeader, Button, EmptyState, FormField, Select, IconButton, Tag, FilterChip } from "../components/ui";
+import { PageHeader, Button, EmptyState, FormField, Select, IconButton, Tag, FilterChip, Input } from "../components/ui";
 import * as v from "../lib/validate";
 import { Skeleton } from "../components/ui/Skeleton";
 import { SavedFilterBar } from "../components/SavedFilterBar";
@@ -178,12 +178,12 @@ export function ResourcesPage() {
       <div className="flex items-center gap-3 mb-4">
         <div className="relative flex-1 max-w-xs">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
-          <input
+          <Input
             type="text"
             placeholder={t.search_resources}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setActiveFilterId(null); }}
-            className="w-full pl-8 pr-3 py-1.5 border border-[var(--color-input-border)] rounded-lg text-sm"
+            size="sm" className="pl-8"
           />
         </div>
         {(allTags ?? []).length > 0 && (
@@ -371,22 +371,20 @@ function NewResourceForm({
     <div className="rounded-xl p-4 mb-4 bg-[var(--color-surface)]">
       <div className="grid grid-cols-4 gap-3">
         <FormField label={t.name} required error={errors.name}>
-          <input
+          <Input
             type="text"
             value={name}
             onChange={(e) => { setName(e.target.value); clearError("name"); }}
             onBlur={() => validateOnBlur("name")}
-            className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-1.5 text-sm"
             autoFocus
           />
         </FormField>
         <FormField label={t.url_label} required error={errors.url}>
-          <input
+          <Input
             type="text"
             value={url}
             onChange={(e) => { setUrl(e.target.value); clearError("url"); }}
             onBlur={() => validateOnBlur("url")}
-            className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-1.5 text-sm"
           />
         </FormField>
         <FormField label={t.price_label}>
@@ -402,7 +400,7 @@ function NewResourceForm({
         <div className="flex gap-2">
           <div className="relative flex-1">
             <FormField label={t.tags}>
-              <input
+              <Input
                 type="text"
                 placeholder={t.add_tag}
                 value={tagInput}
@@ -414,7 +412,6 @@ function NewResourceForm({
                   }
                 }}
                 list="tag-suggestions"
-                className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-1.5 text-sm"
               />
             </FormField>
             <datalist id="tag-suggestions">
@@ -562,10 +559,10 @@ function ResourceTableRow({
           />
         </td>
         <td className="px-3 py-2">
-          <input
+          <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-sm w-full"
+            size="sm"
             autoFocus
           />
         </td>
@@ -605,10 +602,10 @@ function ResourceTableRow({
           </Select>
         </td>
         <td className="px-3 py-2">
-          <input
+          <Input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            className="border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-sm w-full"
+            size="sm"
           />
         </td>
         <td className="px-3 py-2">

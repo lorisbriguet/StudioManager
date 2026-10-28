@@ -30,7 +30,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { useT } from "../i18n/useT";
 import { notifyError, getLabels } from "../lib/notifyError";
-import { Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem, Popover, IconButton, Tag, SectionLabel } from "../components/ui";
+import { Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem, Popover, IconButton, Tag, SectionLabel, Input } from "../components/ui";
 import { MENU_ITEM } from "../components/ui/Dropdown";
 import { Select } from "../components/ui/Select";
 import {
@@ -204,7 +204,7 @@ function LinkInsertPopup({
       className="w-80 overflow-hidden"
     >
       <div className="px-3 pt-3 pb-2">
-        <input
+        <Input
           ref={inputRef}
           data-autofocus
           value={query}
@@ -212,7 +212,6 @@ function LinkInsertPopup({
           onKeyDown={handleKeyDown}
           placeholder={t.link_url_or_article ?? "URL or article name..."}
           aria-label={t.wiki_link_to_article}
-          className="w-full border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-3 py-1.5 text-sm placeholder:text-muted outline-none"
         />
       </div>
       {isUrl && (

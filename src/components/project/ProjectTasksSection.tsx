@@ -30,7 +30,7 @@ import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
 import { PriorityBadge } from "./PriorityBadge";
 import { SortableSubtaskRow } from "./SortableSubtaskRow";
-import { IconButton, FilterChip } from "../ui";
+import { IconButton, FilterChip, Input } from "../ui";
 
 export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
   projectId: number;
@@ -104,12 +104,13 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
       </div>
 
       <div className="flex gap-2 mb-3">
-        <input
+        <Input
+          fullWidth={false}
           placeholder={t.new_task}
           value={newTask}
           onChange={(e) => setNewTask(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") addTask(); }}
-          className="flex-1 border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-3 py-1.5 text-sm"
+          className="flex-1"
         />
         <IconButton icon={Plus} label={t.new_task} size="md" tone="accent" onClick={addTask} />
       </div>
@@ -148,7 +149,9 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                   className="rounded"
                 />
                 {editingTask === tk.id ? (
-                  <input
+                  <Input
+                    variant="inline"
+                    fullWidth={false}
                     autoFocus
                     defaultValue={tk.title}
                     onBlur={(e) => {
@@ -160,7 +163,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                       if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                       if (e.key === "Escape") setEditingTask(null);
                     }}
-                    className="flex-1 text-sm border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-1 py-0.5"
+                    className="flex-1"
                   />
                 ) : (
                   <span
@@ -235,7 +238,9 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                         className="rounded"
                       />
                       {editingSubtask === s.id ? (
-                        <input
+                        <Input
+                          variant="inline"
+                          fullWidth={false}
                           autoFocus
                           defaultValue={s.title}
                           onBlur={(e) => {
@@ -247,7 +252,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                             if (e.key === "Escape") setEditingSubtask(null);
                           }}
-                          className="flex-1 text-xs border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-1 py-0.5"
+                          className="flex-1"
                         />
                       ) : (
                         <span
@@ -275,7 +280,9 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                   </SortableContext>
                   </DndContext>
                   <div className="flex gap-1.5 mt-1">
-                    <input
+                    <Input
+                      size="sm"
+                      fullWidth={false}
                       placeholder={t.new_subtask}
                       value={newSubtaskText[tk.id] ?? ""}
                       onChange={(e) => setNewSubtaskText({ ...newSubtaskText, [tk.id]: e.target.value })}
@@ -289,7 +296,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                           );
                         }
                       }}
-                      className="flex-1 border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-2 py-1 text-xs"
+                      className="flex-1"
                     />
                     <IconButton
                       icon={Plus}

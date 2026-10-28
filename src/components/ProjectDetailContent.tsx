@@ -20,7 +20,7 @@ import type { ProjectStatus } from "../types/project";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu";
 import { useInvoices, useInvoicesByProject, useUpdateInvoice } from "../db/hooks/useInvoices";
 import { useQuotes, useQuotesByProject, useUpdateQuote } from "../db/hooks/useQuotes";
-import { Badge, Button, PageSpinner, Select } from "./ui";
+import { Badge, Button, PageSpinner, Select, Textarea } from "./ui";
 import { invoiceStatusVariant, quoteStatusVariant } from "../lib/statusColors";
 import { useTabStore } from "../stores/tab-store";
 import { open as openDirectory } from "@tauri-apps/plugin-dialog";
@@ -132,7 +132,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
       case "notes":
         return (
           <div>
-            <textarea
+            <Textarea
               placeholder={t.notes}
               defaultValue={project.notes ?? ""}
               onBlur={(e) => {
@@ -141,7 +141,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                   updateProject.mutate({ id: projectId, data: { notes: val } });
                 }
               }}
-              className="w-full border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-3 py-2 text-sm resize-vertical min-h-[60px] max-h-[60vh] placeholder:text-muted"
+              className="min-h-[60px] max-h-[60vh]"
               style={{ fieldSizing: "content" } as React.CSSProperties}
             />
           </div>

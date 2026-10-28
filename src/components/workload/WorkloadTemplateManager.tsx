@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Plus, Trash2, Copy, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Tag } from "../ui";
+import { Button, Tag, Input } from "../ui";
 import {
   useWorkloadTemplates,
   useCreateWorkloadTemplate,
@@ -114,7 +114,7 @@ export function WorkloadTemplateManager() {
             {/* Template header */}
             <div className="flex items-center gap-2 px-3 py-2 bg-[var(--color-surface)]">
               {renamingId === tpl.id ? (
-                <input
+                <Input size="sm" fullWidth={false}
                   autoFocus
                   value={renameValue}
                   onChange={(e) => setRenameValue(e.target.value)}
@@ -123,7 +123,7 @@ export function WorkloadTemplateManager() {
                     if (e.key === "Enter") handleRenameCommit(tpl.id);
                     if (e.key === "Escape") setRenamingId(null);
                   }}
-                  className="flex-1 text-sm border border-[var(--color-border-divider)] rounded-lg px-2 py-0.5 bg-transparent"
+                  className="flex-1"
                 />
               ) : (
                 <button

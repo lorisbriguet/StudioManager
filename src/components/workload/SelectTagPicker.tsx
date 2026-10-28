@@ -6,6 +6,7 @@ import { useT } from "../../i18n/useT";
 import { Popover } from "../ui/Popover";
 import { Tag } from "../ui/Tag";
 
+import { Input } from "../ui";
 interface Props {
   options: SelectOption[];
   value: string[];
@@ -57,7 +58,7 @@ export function SelectTagPicker({
   return (
     <Popover anchor={anchorRef} onClose={onClose} padding="none" className="w-52 overflow-hidden">
       <div className="p-1.5">
-        <input
+        <Input size="sm"
           data-autofocus
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -67,7 +68,6 @@ export function SelectTagPicker({
             }
           }}
           placeholder={t.search_or_create}
-          className="w-full text-sm px-2 py-1 border border-[var(--color-border-divider)] rounded-lg"
         />
       </div>
       <div className="max-h-48 overflow-y-auto">

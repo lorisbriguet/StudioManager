@@ -3,7 +3,7 @@ import { IconButton } from "../components/ui/IconButton";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Save, Plus, Trash2, Eye, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Input, PageSpinner, Card, Select, SectionLabel } from "../components/ui";
+import { Button, Input, PageSpinner, Card, Select, SectionLabel, Textarea } from "../components/ui";
 import { useTabStore } from "../stores/tab-store";
 import {
   useClient,
@@ -183,12 +183,11 @@ export function ClientDetailPage() {
           <AddressesSection clientId={id!} addresses={addresses ?? []} client={client} />
 
           <Section title={t.notes}>
-            <textarea
+            <Textarea
               value={form.notes ?? ""}
               onChange={(e) => update("notes", e.target.value)}
               onBlur={(e) => saveField("notes", e.target.value)}
               rows={3}
-              className="w-full border border-[var(--color-border-divider)] rounded-lg px-3 py-2 text-sm bg-[var(--color-surface)]"
             />
           </Section>
         </div>

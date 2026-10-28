@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect, type RefObject } from "react";
 import { Plus, Trash2, GripVertical, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Settings2, X, Copy, Download, Sigma, Pin, Play, Square } from "lucide-react";
-import { Button, Select, Popover } from "../ui";
+import { Button, Select, Popover, Input } from "../ui";
 import { MENU_ITEM, MENU_DIVIDER } from "../ui/Dropdown";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
@@ -691,11 +691,10 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
             </div>
             <div className="p-4">
               <label className="text-xs text-muted block mb-1">{t.template_name_prompt}</label>
-              <input
+              <Input
                 value={saveTemplateName}
                 onChange={(e) => setSaveTemplateName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && confirmSaveTemplate()}
-                className="w-full border border-[var(--color-border-divider)] rounded-lg px-3 py-2 text-sm"
                 autoFocus
               />
             </div>
@@ -942,8 +941,8 @@ function InlineTitle({ value, onChange }: { value: string; onChange: (v: string)
   }
 
   return (
-    <input
-      className="text-sm w-full bg-transparent border-none outline-none flex-1 min-w-0"
+    <Input variant="bare" size="sm"
+      className="flex-1 min-w-0"
       value={draft}
       autoFocus
       onChange={(e) => setDraft(e.target.value)}
@@ -993,8 +992,8 @@ function InlineDuration({
 
   if (editing) {
     return (
-      <input
-        className="text-sm w-full bg-transparent border-none outline-none text-right"
+      <Input variant="bare" size="sm"
+        className="text-right"
         value={draft}
         autoFocus
         onChange={(e) => setDraft(e.target.value)}

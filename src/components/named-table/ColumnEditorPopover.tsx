@@ -1,5 +1,5 @@
 import { Plus, Trash2, Link, Unlink } from "lucide-react";
-import { Button } from "../ui";
+import { Button, Input } from "../ui";
 import { Popover } from "../ui/Popover";
 import type { TableColumnDef } from "../../types/project-table";
 import type { CustomList } from "../../db/queries/customLists";
@@ -66,11 +66,11 @@ export function ColumnEditorPopover({
       className="min-w-[200px]"
     >
       <label className="block text-[10px] text-muted mb-1">{t.rename}</label>
-      <input
+      <Input size="sm"
         value={colName}
         onChange={(e) => setColName(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter") onCommit(); }}
-        className="w-full border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-xs mb-2"
+        className="mb-2"
         autoFocus
       />
       {(col.type === "select" || col.type === "tags") && (
@@ -128,7 +128,7 @@ export function ColumnEditorPopover({
           </div>
           {colOptions.map((opt, i) => (
             <div key={i} className="flex items-center gap-1 mb-1">
-              <input
+              <Input size="sm" fullWidth={false}
                 value={opt}
                 onChange={(e) => {
                   if (colLinkedListId) return; // read-only when linked
@@ -137,7 +137,7 @@ export function ColumnEditorPopover({
                   setColOptions(next);
                 }}
                 readOnly={!!colLinkedListId}
-                className={`flex-1 border border-[var(--color-input-border)] rounded-lg px-2 py-0.5 text-xs ${colLinkedListId ? "opacity-60 cursor-not-allowed" : ""}`}
+                className={`flex-1 ${colLinkedListId ? "opacity-60 cursor-not-allowed" : ""}`}
               />
               {!colLinkedListId && (
                 <IconButton
@@ -165,12 +165,12 @@ export function ColumnEditorPopover({
               <div className="border-t border-[var(--color-border-divider)] mt-2 pt-2">
                 {showSaveAsListInput ? (
                   <div className="flex gap-1">
-                    <input
+                    <Input size="sm" fullWidth={false}
                       value={saveAsListName}
                       onChange={(e) => setSaveAsListName(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") onSaveAsList(); if (e.key === "Escape") { e.preventDefault(); setShowSaveAsListInput(false); } }}
                       placeholder={t.list_name}
-                      className="flex-1 border border-[var(--color-input-border)] rounded-lg px-2 py-0.5 text-[10px]"
+                      className="flex-1"
                       autoFocus
                     />
                     <button type="button" onClick={onSaveAsList} className="text-[10px] text-accent hover:underline">{t.save}</button>

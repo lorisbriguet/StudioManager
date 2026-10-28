@@ -8,7 +8,7 @@ import interactionPlugin from "@fullcalendar/interaction";
 import type { EventInput, EventContentArg, EventDropArg } from "@fullcalendar/core";
 import type { DateClickArg, EventResizeDoneArg } from "@fullcalendar/interaction";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
-import { Button, Select, Popover } from "../components/ui";
+import { Button, Select, Popover, Input } from "../components/ui";
 import { useT } from "../i18n/useT";
 import { useTasksWithDueDate, useUpdateTask, useUpdateSubtask, useCreateTask, useCreateSubtask, useTasksByProject } from "../db/hooks/useTasks";
 import { useProjects, useUpdateProject } from "../db/hooks/useProjects";
@@ -627,7 +627,7 @@ export function QuickCreatePopup({
             <IconButton icon={X} label={t.remove} size="xs" onClick={handleClearTask} />
           </div>
         ) : (
-          <input
+          <Input
             ref={inputRef}
             data-autofocus
             value={title}
@@ -648,7 +648,7 @@ export function QuickCreatePopup({
               }
             }}
             placeholder={t.new_task}
-            className="w-full bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-lg px-2 py-1.5 text-xs focus-accent"
+            size="sm"
           />
         )}
         {!selectedTask && showSuggestions && suggestions.length > 0 && (
@@ -669,7 +669,7 @@ export function QuickCreatePopup({
 
       {/* Subtask name when existing task selected */}
       {selectedTask && (
-        <input
+        <Input
           ref={subtaskRef}
           value={subtaskTitle}
           onChange={(e) => setSubtaskTitle(e.target.value)}
@@ -677,7 +677,7 @@ export function QuickCreatePopup({
             if (e.key === "Enter") handleSubmit();
           }}
           placeholder={t.new_subtask}
-          className="w-full bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-lg px-2 py-1.5 text-xs focus-accent mb-2"
+          size="sm" className="mb-2"
         />
       )}
 

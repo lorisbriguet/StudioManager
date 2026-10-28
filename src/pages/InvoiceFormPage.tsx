@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { ListTodo, Trash2, ArrowLeft, AlertTriangle, Eye } from "lucide-react";
 import { isUntranslatedActivity } from "../lib/activityNudge";
-import { Button, Input, Select, FormField, Popover } from "../components/ui";
+import { Button, Input, Select, FormField, Popover, Textarea } from "../components/ui";
 import { MENU_ITEM } from "../components/ui/Dropdown";
 import * as v from "../lib/validate";
 import { toast } from "sonner";
@@ -769,11 +769,10 @@ export function InvoiceFormPage() {
         )}
 
         <FormField label={t.notes}>
-          <textarea
+          <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
-            className="w-full border border-[var(--color-border-divider)] rounded-lg px-3 py-2 text-sm bg-[var(--color-surface)]"
           />
         </FormField>
 
@@ -866,12 +865,12 @@ function DesignationInput({
 
   return (
     <div>
-      <input
+      <Input
         ref={ref}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => setOpen(true)}
-        className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm"
+        size="sm"
         placeholder={t.description}
       />
       {open && filtered.length > 0 && (

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Plus, Trash2, GripVertical, ChevronDown, ChevronRight, Pencil } from "lucide-react";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { Button, Dropdown } from "./ui";
+import { Button, Dropdown, Input } from "./ui";
 import { TableCell } from "./named-table/TableCell";
 import { ColumnEditorPopover } from "./named-table/ColumnEditorPopover";
 import {
@@ -174,7 +174,9 @@ export function NamedTable({ table, projectId }: Props) {
           onClick={() => setCollapsed(!collapsed)}
         />
         {editingName ? (
-          <input
+          <Input
+            variant="inline"
+            fullWidth={false}
             ref={nameInputRef}
             value={tableName}
             onChange={(e) => setTableName(e.target.value)}
@@ -183,7 +185,7 @@ export function NamedTable({ table, projectId }: Props) {
               if (e.key === "Enter") commitName();
               if (e.key === "Escape") { setTableName(table.name); setEditingName(false); }
             }}
-            className="text-sm font-medium bg-transparent border-b border-accent outline-none"
+            className="text-sm font-medium"
           />
         ) : (
           <span

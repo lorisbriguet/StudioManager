@@ -36,7 +36,7 @@ import { useTabStore } from "../stores/tab-store";
 import { useOrgStore } from "../stores/org-store";
 import { useTimerActions } from "../hooks/useTimerActions";
 import { useT } from "../i18n/useT";
-import { PageHeader, SearchBar, TableSkeleton, EmptyState, Select, FilterChip } from "../components/ui";
+import { PageHeader, SearchBar, TableSkeleton, EmptyState, Select, FilterChip, Input } from "../components/ui";
 import { taskStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Task, Subtask, TaskStatus } from "../types/task";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
@@ -372,7 +372,7 @@ export function TasksPage() {
                         className="rounded"
                       />
                       {editingTask === tk.id ? (
-                        <input
+                        <Input
                           autoFocus
                           defaultValue={tk.title}
                           onBlur={(e) => {
@@ -386,7 +386,7 @@ export function TasksPage() {
                             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                             if (e.key === "Escape") setEditingTask(null);
                           }}
-                          className="flex-1 text-sm border border-[var(--color-input-border)] rounded-lg px-1 py-0.5"
+                          variant="inline" fullWidth={false} className="flex-1"
                         />
                       ) : (
                         <span
@@ -476,7 +476,7 @@ export function TasksPage() {
                               className="rounded"
                             />
                             {editingSubtask === s.id ? (
-                              <input
+                              <Input
                                 autoFocus
                                 defaultValue={s.title}
                                 onBlur={(e) => {
@@ -490,7 +490,7 @@ export function TasksPage() {
                                   if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                                   if (e.key === "Escape") setEditingSubtask(null);
                                 }}
-                                className="flex-1 text-xs border border-[var(--color-input-border)] rounded-lg px-1 py-0.5"
+                                variant="inline" fullWidth={false} className="flex-1"
                               />
                             ) : (
                               <span
@@ -523,7 +523,7 @@ export function TasksPage() {
                           </div>
                         ))}
                         <div className="flex gap-1.5 mt-1">
-                          <input
+                          <Input
                             placeholder={t.new_subtask}
                             value={newSubtaskText[tk.id] ?? ""}
                             onChange={(e) =>
@@ -554,7 +554,7 @@ export function TasksPage() {
                                 );
                               }
                             }}
-                            className="flex-1 border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-xs"
+                            size="sm" fullWidth={false} className="flex-1"
                           />
                           <IconButton
                             onClick={() => {
@@ -592,7 +592,7 @@ export function TasksPage() {
               })}
             </div>}
             {!collapsedProjects.has(g.projectId) && <div className="flex gap-2 px-4 py-2 border-t border-[var(--color-border-divider)]">
-              <input
+              <Input
                 placeholder={t.new_task}
                 value={newTaskText[g.projectId] ?? ""}
                 onChange={(e) =>
@@ -628,7 +628,7 @@ export function TasksPage() {
                     );
                   }
                 }}
-                className="flex-1 border border-[var(--color-input-border)] rounded-lg px-3 py-1.5 text-sm"
+                size="sm" fullWidth={false} className="flex-1"
               />
               <IconButton
                 onClick={() => {

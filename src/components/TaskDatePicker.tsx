@@ -20,7 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { formatDisplayDate } from "../utils/formatDate";
-import { Button, Select, IconButton } from "./ui";
+import { Button, Input, Select, IconButton } from "./ui";
 import { Popover, usePopover } from "./ui/Popover";
 import { useT } from "../i18n/useT";
 
@@ -310,12 +310,14 @@ function TimeInput({ value, onCommit }: { value: string; onCommit: (v: string) =
   const [local, setLocal] = useState(value);
   useEffect(() => { setLocal(value); }, [value]);
   return (
-    <input
+    <Input
+      size="sm"
+      fullWidth={false}
       type="time"
       value={local}
       onChange={(e) => setLocal(e.target.value)}
       onBlur={() => { if (local !== value) onCommit(local); }}
-      className="border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-xs w-24"
+      className="w-24"
     />
   );
 }

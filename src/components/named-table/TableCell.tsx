@@ -3,6 +3,7 @@ import { Tag } from "../ui/Tag";
 import { Select } from "../ui/Select";
 import type { TableColumnDef, ProjectTableRow } from "../../types/project-table";
 
+import { Input } from "../ui";
 interface Props {
   row: ProjectTableRow;
   col: TableColumnDef;
@@ -87,17 +88,16 @@ export function TableCell({
     }
     case "date":
       return (
-        <input
+        <Input variant="bare" size="sm" fullWidth={false}
           type="date"
           value={(row.data[col.id] as string) ?? ""}
           onChange={(e) => onChange({ ...row.data, [col.id]: e.target.value })}
-          className="text-xs bg-transparent border-0 outline-none"
         />
       );
     default:
       if (isEditing) {
         return (
-          <input
+          <Input variant="inline"
             ref={cellInputRef}
             type={col.type === "number" ? "number" : "text"}
             value={editValue}
@@ -107,7 +107,6 @@ export function TableCell({
               if (e.key === "Enter") onCommitEdit();
               if (e.key === "Escape") onCancelEdit();
             }}
-            className="w-full bg-transparent border-b border-accent outline-none text-sm"
           />
         );
       }
