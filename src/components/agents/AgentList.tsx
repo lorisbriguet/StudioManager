@@ -103,13 +103,13 @@ export function AgentList({ byGroup, selectedId, onSelect }: AgentListProps) {
               type="button"
               aria-expanded={!doneCollapsed}
               onClick={toggleDone}
-              className="w-full px-3 mb-1.5 flex items-center gap-2 rounded-md hover:bg-[var(--color-hover-row)]"
+              className="w-full px-3 py-1.5 mb-0.5 flex items-center gap-2 rounded-md transition-colors hover:bg-[var(--color-hover-row)]"
             >
               <ChevronRight size={12} className={`-ml-1 text-muted transition-transform ${doneCollapsed ? "" : "rotate-90"}`} />
               {heading}
             </button>
           ) : (
-            <div className="px-3 mb-1.5 flex items-center gap-2">{heading}</div>
+            <div className="px-3 py-1.5 mb-0.5 flex items-center gap-2">{heading}</div>
           )}
           <ul className="space-y-px">
             {shown.map((a) => (
