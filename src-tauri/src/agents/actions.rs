@@ -8,6 +8,7 @@ use crate::agent_access::write_atomic;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 pub const STATE_FILE: &str = "agents-state.json";
 const OFF: &str = "Agents are switched off";
@@ -31,6 +32,35 @@ fn write_state(dir: &Path, s: &AgentsStateFile) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("Failed to create {}: {e}", dir.display()))?;
     let json = serde_json::to_string_pretty(s).map_err(|e| e.to_string())?;
     write_atomic(&dir.join(STATE_FILE), &format!("{json}\n"))
+}
+
+/// Serialises every read-modify-write of `agents-state.json` (dismiss, the poller's pruning,
+/// a model switch's link), so none of them loses another's update.
+static STATE_LOCK: Mutex<()> = Mutex::new(());
+
+/// Reads the state file, applies `f`, and writes it back if `f` changed it.
+fn update_state<T>(dir: &Path, f: impl FnOnce(&mut AgentsStateFile) -> T) -> Result<T, String> {
+    let _held = STATE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let before = read_state(dir);
+    let mut st = before.clone();
+    let out = f(&mut st);
+    if st != before {
+        write_state(dir, &st)?;
+    }
+    Ok(out)
+}
+
+/// Keeps the dismissals for which `keep` holds and returns them. A dismissal covers one wait:
+/// the poller drops it once the agent is no longer waiting. If the file cannot be written the
+/// kept list is still returned.
+pub fn retain_dismissed(dir: &Path, keep: impl Fn(&str) -> bool) -> Vec<String> {
+    let kept = |st: &mut AgentsStateFile| {
+        st.dismissed.retain(|id| keep(id));
+        st.dismissed.clone()
+    };
+    update_state(dir, kept).unwrap_or_else(|_| {
+        read_state(dir).dismissed.into_iter().filter(|id| keep(id)).collect()
+    })
 }
 
 /// A session id as the CLI reports it: a uuid (hex digits and hyphens).
@@ -169,9 +199,9 @@ pub fn switch_model(
     }
     .map_err(|e| format!("Stopped the old agent; starting the copy failed: {e}"))?;
     // Best effort: the copy already runs, so a bookkeeping failure is not a failed switch.
-    let mut st = read_state(state_dir);
-    st.links.insert(agent.session_id.clone(), new_id.clone());
-    let _ = write_state(state_dir, &st);
+    let _ = update_state(state_dir, |st| {
+        st.links.insert(agent.session_id.clone(), new_id.clone());
+    });
     Ok(new_id)
 }
 
@@ -179,12 +209,11 @@ pub fn dismiss(state_dir: &Path, session_id: &str) -> Result<(), String> {
     if !valid_session_id(session_id) {
         return Err("Invalid session id".into());
     }
-    let mut st = read_state(state_dir);
-    if !st.dismissed.iter().any(|s| s == session_id) {
-        st.dismissed.push(session_id.to_string());
-        write_state(state_dir, &st)?;
-    }
-    Ok(())
+    update_state(state_dir, |st| {
+        if !st.dismissed.iter().any(|s| s == session_id) {
+            st.dismissed.push(session_id.to_string());
+        }
+    })
 }
 
 pub fn fetch_agents(cli: &dyn Cli) -> Result<Vec<Agent>, String> {
@@ -293,7 +322,6 @@ pub async fn agents_dismiss(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
 
     struct FakeCli {
         calls: Mutex<Vec<(Vec<String>, PathBuf)>>,

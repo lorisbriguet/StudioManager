@@ -2,12 +2,12 @@
 //! emits `agents:changed` and raises a Mac notification when an agent starts
 //! waiting for you.
 
-use super::actions::{fetch_agents, home_dir, read_state};
+use super::actions::{fetch_agents, home_dir, retain_dismissed};
 use super::cli::read_settings;
 use super::model::{apply_quiet, Agent, Group};
 use super::projects::{load_index, FolderIndex};
 use super::transcript::{last_change_ms, locate};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -72,14 +72,26 @@ fn now_ms() -> i64 {
         .unwrap_or(0)
 }
 
+/// Drops the dismissals of agents no longer waiting (so a dismissal covers only the wait it was
+/// made in), then moves dismissed and stale needs-you agents to idle.
+pub fn quiet_pass(
+    agents: &mut [Agent],
+    app_dir: &std::path::Path,
+    now_ms: i64,
+    last_change_ms: &dyn Fn(&Agent) -> Option<i64>,
+) {
+    let waiting = |id: &str| agents.iter().any(|a| a.session_id == id && a.group == Group::NeedsYou);
+    let dismissed: HashSet<String> = retain_dismissed(app_dir, waiting).into_iter().collect();
+    apply_quiet(agents, now_ms, last_change_ms, &dismissed);
+}
+
 fn label_and_quiet(agents: &mut [Agent], index: &FolderIndex, app_dir: &std::path::Path) {
     for a in agents.iter_mut() {
         a.project = index.label_for(&a.cwd);
     }
-    let dismissed = read_state(app_dir).dismissed.into_iter().collect();
     let claude_dir = home_dir().join(".claude");
     let last = |a: &Agent| locate(&claude_dir, &a.session_id).and_then(|p| last_change_ms(&p));
-    apply_quiet(agents, now_ms(), &last, &dismissed);
+    quiet_pass(agents, app_dir, now_ms(), &last);
 }
 
 /// Start the poller thread; called from `init` once `AgentsState` is managed.
@@ -220,6 +232,46 @@ mod tests {
         assert!(n.is_empty());
         let (_, n) = poll_once(&mut s, Ok(vec![ag("a", Group::NeedsYou)]));
         assert!(n.is_empty());
+    }
+
+    #[test]
+    fn dismissal_covers_only_the_current_wait() {
+        use crate::agents::actions::{dismiss, read_state};
+        let dir = std::env::temp_dir().join(format!("sm-poller-dismiss-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let sid = "00000000-1111-2222-3333-444444444444";
+        let no_change = |_: &Agent| None;
+        let mut s = PollState::default();
+        let mut pass = |group: Group| {
+            let mut v = vec![ag(sid, group)];
+            quiet_pass(&mut v, &dir, 0, &no_change);
+            let (emit, notify) = poll_once(&mut s, Ok(v));
+            (emit[0].group, emit[0].quiet, notify.len())
+        };
+        assert_eq!(pass(Group::Working), (Group::Working, None, 0));
+        assert_eq!(pass(Group::NeedsYou), (Group::NeedsYou, None, 1));
+        dismiss(&dir, sid).unwrap();
+        // While the agent still waits on the prompt that was dismissed, it stays quiet.
+        assert_eq!(pass(Group::NeedsYou), (Group::Idle, Some(Quiet::Dismissed), 0));
+        assert_eq!(pass(Group::NeedsYou), (Group::Idle, Some(Quiet::Dismissed), 0));
+        assert_eq!(read_state(&dir).dismissed, vec![sid.to_string()]);
+        // It moves on: the dismissal is dropped...
+        assert_eq!(pass(Group::Working), (Group::Working, None, 0));
+        assert!(read_state(&dir).dismissed.is_empty());
+        // ...so its next wait shows under Needs you and notifies again.
+        assert_eq!(pass(Group::NeedsYou), (Group::NeedsYou, None, 1));
+    }
+
+    #[test]
+    fn dismissal_of_a_gone_agent_is_dropped() {
+        use crate::agents::actions::{dismiss, read_state};
+        let dir = std::env::temp_dir().join(format!("sm-poller-gone-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        dismiss(&dir, "00000000-1111-2222-3333-444444444444").unwrap();
+        let mut v = vec![ag("other", Group::NeedsYou)];
+        quiet_pass(&mut v, &dir, 0, &|_| None);
+        assert!(read_state(&dir).dismissed.is_empty());
+        assert_eq!(v[0].group, Group::NeedsYou);
     }
 
     #[test]
