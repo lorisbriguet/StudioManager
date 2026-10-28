@@ -18,6 +18,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { FileText, Receipt, ClipboardList, FolderPlus } from "lucide-react";
 import { UpkeepWidget } from "../upkeep/UpkeepWidget";
+import { MeterBar } from "../ui";
 import { useCountUp } from "../../hooks/useCountUp";
 import { useDashboardKPIs, useMonthlyData, useRevenueByActivity, useRevenueByClient } from "../../db/hooks/useFinance";
 import { useProjects } from "../../db/hooks/useProjects";
@@ -370,12 +371,7 @@ function ProjectProgress() {
               <span className="truncate">{p.name}</span>
               <span className="text-xs text-muted shrink-0 ml-2">{p.done}/{p.total}</span>
             </div>
-            <div className="w-full bg-[var(--color-input-bg)] rounded-full h-1.5">
-              <div
-                className="bg-accent rounded-full h-1.5 transition-all"
-                style={{ width: `${p.pct}%` }}
-              />
-            </div>
+            <MeterBar pct={p.pct} color="var(--color-accent)" />
           </Link>
         ))}
         {activeProjects.length === 0 && (
@@ -462,10 +458,8 @@ function RevenueByActivity() {
                 <span className="truncate">{r.label}</span>
                 <span className="text-xs text-muted shrink-0 ml-2">{formatCHF(r.total)} ({pct}%)</span>
               </div>
-              <div className="w-full bg-[var(--color-input-bg)] rounded-full h-1.5">
-                {/* Hash the stable key, not the sorted index: an activity keeps its color when rankings shift */}
-                <div className="rounded-full h-1.5 transition-all" style={{ width: `${pct}%`, backgroundColor: COLORS[tagHash(r.key) % COLORS.length] }} />
-              </div>
+              {/* Hash the stable key, not the sorted index: an activity keeps its color when rankings shift */}
+              <MeterBar pct={pct} color={COLORS[tagHash(r.key) % COLORS.length]} />
             </div>
           );
         })}
@@ -496,10 +490,8 @@ function RevenueByClient() {
                 <span className="truncate">{r.label}</span>
                 <span className="text-xs text-muted shrink-0 ml-2">{formatCHF(r.total)} ({pct}%)</span>
               </div>
-              <div className="w-full bg-[var(--color-input-bg)] rounded-full h-1.5">
-                {/* Hash the client name so colors survive ranking changes */}
-                <div className="rounded-full h-1.5 transition-all" style={{ width: `${pct}%`, backgroundColor: COLORS[tagHash(r.label) % COLORS.length] }} />
-              </div>
+              {/* Hash the client name so colors survive ranking changes */}
+              <MeterBar pct={pct} color={COLORS[tagHash(r.label) % COLORS.length]} />
             </div>
           );
         })}

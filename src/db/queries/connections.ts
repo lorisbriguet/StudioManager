@@ -91,15 +91,21 @@ export async function updateConnection(id: number, data: Partial<ConnectionInput
 }
 
 /**
- * Remove a connection and its Keychain secret. Linked machines keep their
- * readings; `ON DELETE SET NULL` unlinks them. Ids are AUTOINCREMENT, so a
- * secret left behind by a failed Keychain delete is never reused.
+ * Remove a connection's Keychain secret, then the connection. Secret first: if
+ * the Keychain refuses, the row stays (and can be removed again) instead of
+ * leaving an orphaned secret nothing points to. Linked machines keep their
+ * readings; `ON DELETE SET NULL` unlinks them.
  */
 export async function deleteConnection(id: number): Promise<void> {
   const org = useOrgStore.getState().activeId;
+  await invoke("connection_delete_secret", { org, id });
+  await deleteConnectionRow(id);
+}
+
+/** The row only: for a connection whose secret was never stored. */
+export async function deleteConnectionRow(id: number): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM connections WHERE id = $1", [id]);
-  await invoke("connection_delete_secret", { org, id });
 }
 
 /**

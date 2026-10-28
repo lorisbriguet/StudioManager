@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Badge, Button, FormField, Input, Select } from "../ui";
-import { MeterBar } from "./MeterBar";
+import { Badge, Button, FormField, Input, MeterBar, Select } from "../ui";
 import { useT } from "../../i18n/useT";
 import {
   useConnections,
@@ -33,6 +32,12 @@ function ageColor(years: number): string {
   return "var(--color-success-text)";
 }
 
+/** Name and unit of a usage metric; unknown metrics show their key. */
+function metricLabel(metric: string, t: ReturnType<typeof useT>): { name: string; unit: string } {
+  if (metric === "print_hours") return { name: t.upkeep_print_hours, unit: t.upkeep_hours_short };
+  return { name: metric, unit: "" };
+}
+
 const fmt = (n: number) => String(Math.round(n * 10) / 10);
 
 function Disks({ machineId }: { machineId: number }) {
@@ -55,7 +60,7 @@ function Disks({ machineId }: { machineId: number }) {
                 </td>
                 <td className="px-2 py-2">
                   <div className="flex items-center gap-2.5">
-                    <MeterBar pct={(years / DRIVE_LIFE_YEARS) * 100} color={ageColor(years)} label={t.upkeep_disk_age_years.replace("{n}", fmt(years))} />
+                    <MeterBar className="w-[120px]" pct={(years / DRIVE_LIFE_YEARS) * 100} color={ageColor(years)} label={t.upkeep_disk_age_years.replace("{n}", fmt(years))} />
                     <span className="text-xs text-muted tabular-nums whitespace-nowrap">
                       {t.upkeep_disk_age_years.replace("{n}", fmt(years))}
                     </span>
@@ -194,6 +199,7 @@ export function ReadingsSection({ machine, items }: { machine: Machine; items: U
   const { data: connections = [] } = useConnections();
   const usage = items.find((i) => i.schedule === "usage" && !i.archived);
   const metric = usage?.usage_metric ?? "print_hours";
+  const label = metricLabel(metric, t);
   const { data: reading = null } = useCurrentReading(machine.id, metric);
   const syncNow = useSyncNow();
   const link = useLinkMachine();
@@ -228,8 +234,10 @@ export function ReadingsSection({ machine, items }: { machine: Machine; items: U
 
       {(usage || reading != null) && (
         <div className="text-sm">
-          <span className="text-muted">{t.upkeep_print_hours}: </span>
-          <span className="tabular-nums">{reading != null ? `${fmt(reading)} ${t.upkeep_hours_short}` : "—"}</span>
+          <span className="text-muted">{label.name}: </span>
+          <span className="tabular-nums">
+            {reading != null ? `${fmt(reading)}${label.unit ? ` ${label.unit}` : ""}` : "—"}
+          </span>
         </div>
       )}
 

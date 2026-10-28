@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Wrench } from "lucide-react";
-import { Badge, Card } from "../ui";
+import { Badge, Card, MeterBar } from "../ui";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { DueList } from "./DueList";
 import { useMachines, useUpkeepOverview } from "../../db/hooks/useUpkeep";
@@ -81,12 +81,7 @@ export function OverviewTab() {
                     <span>{c.name}</span>
                     <span className="text-xs text-muted tabular-nums">{c.stock} / {c.reorder_level} {c.unit}</span>
                   </div>
-                  <div className="mt-1 h-1.5 rounded-full bg-[var(--color-input-bg)] overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-[var(--color-danger)]"
-                      style={{ width: `${Math.min(100, Math.max(0, (c.stock / c.reorder_level) * 100))}%` }}
-                    />
-                  </div>
+                  <MeterBar className="mt-1 w-full" pct={(c.stock / c.reorder_level) * 100} color="var(--color-danger)" />
                 </li>
               ))}
             </ul>

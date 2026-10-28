@@ -208,7 +208,8 @@ export async function recordManualReading(
   await recomputeMachine(machine.id, todayISO, org, same);
 }
 
-let running = false;
+/** The sync pass in progress, if any. */
+let inFlight: Promise<void> | null = null;
 
 export interface SyncOptions {
   /** Sync even when the last sync is under 6 hours old ("Sync now"). */
@@ -228,71 +229,87 @@ export interface SyncOptions {
 export async function runConnectionSyncs(qc: QueryClient, opts: SyncOptions = {}): Promise<void> {
   const app = useAppStore.getState();
   if (app.testMode || app.presentationMode) return;
-  if (running) return;
+  // One pass at a time. A background pass that finds one running just skips;
+  // "Sync now" (forced) waits for it, then runs its own forced pass.
+  while (inFlight) {
+    if (!opts.force) return;
+    await inFlight.catch(() => {});
+  }
+  const pass = syncPass(qc, opts);
+  inFlight = pass;
+  try {
+    await pass;
+  } finally {
+    if (inFlight === pass) inFlight = null;
+  }
+}
+
+async function syncPass(qc: QueryClient, opts: SyncOptions): Promise<void> {
   const { org, same } = orgGuard();
   if (!same()) return;
-  running = true;
-  try {
-    const todayISO = opts.todayISO ?? todayLocalISO();
-    const now = Date.now();
-    const due = (await getConnections()).filter((c) => {
-      if (opts.connectionId != null && c.id !== opts.connectionId) return false;
-      if (opts.force || !c.last_sync_at) return true;
-      const last = Date.parse(c.last_sync_at);
-      return !Number.isFinite(last) || now - last >= SYNC_INTERVAL_MS;
-    });
-    if (due.length === 0) return;
+  const todayISO = opts.todayISO ?? todayLocalISO();
+  const now = Date.now();
+  const due = (await getConnections()).filter((c) => {
+    if (opts.connectionId != null && c.id !== opts.connectionId) return false;
+    if (opts.force || !c.last_sync_at) return true;
+    const last = Date.parse(c.last_sync_at);
+    return !Number.isFinite(last) || now - last >= SYNC_INTERVAL_MS;
+  });
+  if (due.length === 0) return;
+  if (!same()) return;
+  const machines = await getMachines();
+  const touched = new Set<number>();
+  let wrote = false;
+
+  /** Record a failure so it shows on the connection (errors from Rust are already redacted). */
+  const fail = async (id: number, e: unknown) => {
     if (!same()) return;
-    const machines = await getMachines();
-    const touched = new Set<number>();
-    let wrote = false;
+    try {
+      await recordSync(id, false, String(e), org);
+      wrote = true;
+    } catch (w) {
+      logWarn(`Connection ${id}: failure not recorded:`, w);
+    }
+  };
 
-    for (const c of due) {
-      if (!same()) return;
-      let result: SyncResult;
-      try {
-        result = await invoke<SyncResult>("connection_sync", {
-          org, id: c.id, kind: c.kind, config: connectionConfig(c),
-        });
-      } catch (e) {
+  for (const c of due) {
+    if (!same()) return;
+    let result: SyncResult;
+    try {
+      result = await invoke<SyncResult>("connection_sync", {
+        org, id: c.id, kind: c.kind, config: connectionConfig(c),
+      });
+    } catch (e) {
+      await fail(c.id, e);
+      continue;
+    }
+    if (!same()) return;
+    const readAt = localDateTime();
+    try {
+      for (const m of machines) {
+        if (m.connection_id !== c.id || !m.device_id) continue;
+        const device = result.devices.find((d) => d.device_id === m.device_id);
+        if (!device) continue;
         if (!same()) return;
-        try {
-          await recordSync(c.id, false, String(e), org);
-          wrote = true;
-        } catch (w) {
-          logWarn(`Connection ${c.id}: failure not recorded:`, w);
-        }
-        continue;
+        await storeReadings(m, device, readAt, org);
+        touched.add(m.id);
       }
       if (!same()) return;
-      const readAt = localDateTime();
-      try {
-        for (const m of machines) {
-          if (m.connection_id !== c.id || !m.device_id) continue;
-          const device = result.devices.find((d) => d.device_id === m.device_id);
-          if (!device) continue;
-          if (!same()) return;
-          await storeReadings(m, device, readAt, org);
-          touched.add(m.id);
-        }
-        if (!same()) return;
-        await recordSync(c.id, true, undefined, org);
-        wrote = true;
-      } catch (e) {
-        logWarn(`Connection ${c.id}: readings not stored:`, e);
-      }
+      await recordSync(c.id, true, undefined, org);
+      wrote = true;
+    } catch (e) {
+      logWarn(`Connection ${c.id}: readings not stored:`, e);
+      await fail(c.id, e);
     }
+  }
 
-    for (const id of touched) {
-      if (!(await recomputeMachine(id, todayISO, org, same))) return;
-    }
+  for (const id of touched) {
+    if (!(await recomputeMachine(id, todayISO, org, same))) return;
+  }
 
-    if (wrote && same()) {
-      for (const key of ["connections", "machines", "upkeep-items", "machine-readings", "machine-disks"]) {
-        qc.invalidateQueries({ queryKey: [key] });
-      }
+  if (wrote && same()) {
+    for (const key of ["connections", "machines", "upkeep-items", "machine-readings", "machine-disks"]) {
+      qc.invalidateQueries({ queryKey: [key] });
     }
-  } finally {
-    running = false;
   }
 }

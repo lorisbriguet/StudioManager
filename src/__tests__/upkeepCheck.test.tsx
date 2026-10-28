@@ -24,7 +24,6 @@ vi.mock("../db/queries/subscriptions", () => ({
 vi.mock("../lib/upkeep/calendar", () => ({ syncSubscriptionCalendar: vi.fn() }));
 vi.mock("../lib/upkeep/connections", () => ({
   runConnectionSyncs: vi.fn(async () => {}),
-  SYNC_INTERVAL_MS: 6 * 60 * 60 * 1000,
 }));
 vi.mock("../db/index", async (orig) => ({ ...(await orig<typeof import("../db/index")>()), getDb: vi.fn() }));
 
@@ -246,16 +245,17 @@ describe("useUpkeepCheck", () => {
     }
   });
 
-  it("syncs connections on start and every 6 hours while open", async () => {
+  it("ticks connection syncs on start and hourly while open (the runner skips < 6 h)", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-10-28T09:00:00"));
     try {
       const { unmount } = renderHook(() => useUpkeepCheck(), { wrapper });
       await vi.advanceTimersByTimeAsync(10);
       expect(runConnectionSyncs).toHaveBeenCalledTimes(1);
-      await vi.advanceTimersByTimeAsync(5 * 3600_000);
+      expect(vi.mocked(runConnectionSyncs).mock.calls[0][1]).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(59 * 60_000);
       expect(runConnectionSyncs).toHaveBeenCalledTimes(1);
-      await vi.advanceTimersByTimeAsync(3600_000);
+      await vi.advanceTimersByTimeAsync(60_000);
       expect(runConnectionSyncs).toHaveBeenCalledTimes(2);
       unmount();
       await vi.advanceTimersByTimeAsync(6 * 3600_000);

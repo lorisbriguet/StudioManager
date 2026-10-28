@@ -47,6 +47,14 @@ pub struct SyncResult {
     pub devices: Vec<DeviceReading>,
 }
 
+/// One kind of device reader. Errors are user-readable strings; they are
+/// redacted with [`redact`] before reaching the frontend, but connectors must
+/// still keep secrets out of them in the first place:
+/// - map every reqwest error with `e.without_url()` before formatting it, since
+///   request URLs carry query strings (DSM sends `passwd=` and `otp_code=` there);
+/// - never put a response body that echoes credentials or tokens in an error.
+///
+/// Build HTTP clients with [`http_client`] (installs the crypto provider).
 pub trait Connector {
     fn test(&self) -> Result<DeviceList, String>;
     fn sync(&self) -> Result<SyncResult, String>;
@@ -62,32 +70,81 @@ fn build_connector(
     Err(format!("unsupported connection kind: {kind}"))
 }
 
-/// Remove the secret, and every string inside it when it is a JSON blob
-/// (password plus tokens), from a message bound for the frontend.
+/// JSON keys whose values are secret whatever their length.
+const SECRET_KEYS: &[&str] = &[
+    "password", "passwd", "pass", "secret", "token", "access_token", "refresh_token",
+    "device_token", "did", "sid", "synotoken", "otp", "otp_code", "code", "verify_code",
+];
+
+/// Percent-encoding of every byte outside RFC 3986's unreserved set;
+/// `plus_for_space` gives the form-encoded variant.
+fn percent_encode(s: &str, plus_for_space: bool, lower: bool) -> String {
+    let mut out = String::with_capacity(s.len() * 3);
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
+            b' ' if plus_for_space => out.push('+'),
+            _ if lower => out.push_str(&format!("%{b:02x}")),
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
+/// The forms a secret can take inside an error message: as is, in a URL
+/// (percent- or form-encoded, either hex case) and JSON-escaped.
+fn variants(n: &str) -> Vec<String> {
+    let mut v = vec![
+        n.to_string(),
+        percent_encode(n, false, false),
+        percent_encode(n, false, true),
+        percent_encode(n, true, false),
+        percent_encode(n, true, true),
+    ];
+    if let Ok(json) = serde_json::to_string(n) {
+        v.push(json[1..json.len() - 1].to_string());
+    }
+    v.sort();
+    v.dedup();
+    v
+}
+
+/// Remove the secret from a message bound for the frontend (and so from
+/// `connections.last_error`, backups and the UI). When the secret is a JSON
+/// blob, every value under a secret-looking key is removed whatever its length,
+/// and any other string of 4+ characters too. Each needle is also removed in
+/// its URL-encoded and JSON-escaped forms.
 pub(crate) fn redact(msg: &str, secret: Option<&str>) -> String {
     let Some(secret) = secret else { return msg.to_string() };
     let mut needles: Vec<String> = Vec::new();
-    fn collect(v: &JsonValue, out: &mut Vec<String>) {
+    fn collect(v: &JsonValue, keyed_secret: bool, out: &mut Vec<String>) {
         match v {
-            JsonValue::String(s) => out.push(s.clone()),
-            JsonValue::Array(a) => a.iter().for_each(|x| collect(x, out)),
-            JsonValue::Object(o) => o.values().for_each(|x| collect(x, out)),
+            JsonValue::String(s) if keyed_secret || s.chars().count() >= 4 => out.push(s.clone()),
+            JsonValue::Number(n) if keyed_secret => out.push(n.to_string()),
+            JsonValue::Array(a) => a.iter().for_each(|x| collect(x, keyed_secret, out)),
+            JsonValue::Object(o) => o.iter().for_each(|(k, x)| {
+                let key = k.to_ascii_lowercase();
+                collect(x, keyed_secret || SECRET_KEYS.contains(&key.as_str()), out)
+            }),
             _ => {}
         }
     }
     if let Ok(v) = serde_json::from_str::<JsonValue>(secret) {
-        collect(&v, &mut needles);
+        collect(&v, false, &mut needles);
     }
-    // Longest first so a token inside the blob doesn't leave a partial match.
-    // Very short strings (e.g. a region code) are not secrets worth hiding and
-    // would mangle the message.
-    needles.retain(|n| n.chars().count() >= 4);
     if !secret.is_empty() {
         needles.push(secret.to_string());
     }
-    needles.sort_by_key(|n| std::cmp::Reverse(n.len()));
+    let mut all: Vec<String> = needles
+        .iter()
+        .filter(|n| !n.is_empty())
+        .flat_map(|n| variants(n))
+        .collect();
+    // Longest first so a token inside the blob doesn't leave a partial match.
+    all.sort_by_key(|n| std::cmp::Reverse(n.len()));
+    all.dedup();
     let mut out = msg.to_string();
-    for n in &needles {
+    for n in &all {
         out = out.replace(n.as_str(), "[redacted]");
     }
     out
@@ -134,9 +191,34 @@ fn run_sync(
     with_connector(store, org, id, kind, config, factory, |c| c.sync())
 }
 
-/// Test and presentation modes never talk to a real device (spec §8).
-fn refuse_in_mode(app: &tauri::AppHandle) -> Result<(), String> {
-    if crate::active_org(app)?.in_mode() {
+/// The frontend names the organisation it means; refuse when another one is
+/// active, so a call started before a switch can't use the next org's secret.
+fn check_org(requested: &str, active: &str) -> Result<(), String> {
+    if requested != active {
+        return Err(format!("organisation changed: call was for {requested}, active is {active}"));
+    }
+    Ok(())
+}
+
+static CRYPTO_PROVIDER: std::sync::Once = std::sync::Once::new();
+
+/// HTTP client builder for connectors (Tasks 13–14). reqwest is built without
+/// a bundled crypto provider, so install ring as the process default first.
+#[allow(dead_code)] // used by the Synology and Bambu connectors
+pub(crate) fn http_client() -> reqwest::blocking::ClientBuilder {
+    CRYPTO_PROVIDER.call_once(|| {
+        // Err means another provider is already installed: fine.
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+    reqwest::blocking::Client::builder()
+}
+
+/// Test and presentation modes never talk to a real device or write the
+/// Keychain (spec §8), and the call must be for the active organisation.
+fn guard(app: &tauri::AppHandle, org: &str) -> Result<(), String> {
+    let active = crate::active_org(app)?;
+    check_org(org, &active.id)?;
+    if active.in_mode() {
         return Err("connections are off in test and presentation modes".into());
     }
     Ok(())
@@ -151,7 +233,13 @@ async fn blocking<T: Send + 'static>(
 }
 
 #[tauri::command]
-pub(crate) async fn connection_save_secret(org: String, id: i64, secret: String) -> Result<(), String> {
+pub(crate) async fn connection_save_secret(
+    app: tauri::AppHandle,
+    org: String,
+    id: i64,
+    secret: String,
+) -> Result<(), String> {
+    guard(&app, &org)?;
     blocking(move || {
         let account = keychain::account(&org, id)?;
         keychain::Keychain.set(&account, &secret)
@@ -159,8 +247,16 @@ pub(crate) async fn connection_save_secret(org: String, id: i64, secret: String)
     .await
 }
 
+/// In test and presentation modes the connection rows are copies of the real
+/// ones: removing one there must not delete the real Keychain secret, so the
+/// call succeeds without touching it.
 #[tauri::command]
-pub(crate) async fn connection_delete_secret(org: String, id: i64) -> Result<(), String> {
+pub(crate) async fn connection_delete_secret(app: tauri::AppHandle, org: String, id: i64) -> Result<(), String> {
+    let active = crate::active_org(&app)?;
+    check_org(&org, &active.id)?;
+    if active.in_mode() {
+        return Ok(());
+    }
     blocking(move || {
         let account = keychain::account(&org, id)?;
         keychain::Keychain.delete(&account)
@@ -176,7 +272,7 @@ pub(crate) async fn connection_test(
     kind: String,
     config: JsonValue,
 ) -> Result<DeviceList, String> {
-    refuse_in_mode(&app)?;
+    guard(&app, &org)?;
     blocking(move || run_test(&keychain::Keychain, &org, id, &kind, &config, &build_connector)).await
 }
 
@@ -188,7 +284,7 @@ pub(crate) async fn connection_sync(
     kind: String,
     config: JsonValue,
 ) -> Result<SyncResult, String> {
-    refuse_in_mode(&app)?;
+    guard(&app, &org)?;
     blocking(move || run_sync(&keychain::Keychain, &org, id, &kind, &config, &build_connector)).await
 }
 
@@ -303,5 +399,57 @@ mod tests {
         let r = Fine.sync().unwrap();
         let v = serde_json::to_value(&r).unwrap();
         assert_eq!(v["devices"][0]["metrics"][0], serde_json::json!(["print_hours", 12.5]));
+    }
+
+    #[test]
+    fn redacts_percent_encoded_secret() {
+        let store = store_with("p@ss word!");
+        let factory = |_: &str, _: &JsonValue, _: Option<String>| -> Result<Box<dyn Connector>, String> {
+            Ok(Box::new(Failing(
+                "error sending request for url (https://nas:5001/webapi/auth.cgi?account=me&passwd=p%40ss%20word%21&x=1)".into(),
+            )))
+        };
+        let err = run_sync(&store, "6kun0b", 3, "fake", &JsonValue::Null, &factory).unwrap_err();
+        assert!(!err.contains("p%40ss"), "{err}");
+        assert!(err.contains("account=me"), "{err}");
+    }
+
+    #[test]
+    fn redacts_lowercase_percent_encoding() {
+        assert!(!redact("passwd=p%40ss%20word%21".to_lowercase().as_str(), Some("p@ss word!")).contains("%40ss"));
+    }
+
+    #[test]
+    fn redacts_form_encoded_secret() {
+        let out = redact("body passwd=p%40ss+word%21 rejected", Some("p@ss word!"));
+        assert!(!out.contains("p%40ss+word"), "{out}");
+    }
+
+    #[test]
+    fn redacts_json_escaped_secret() {
+        let secret = r#"pa"ss\word"#;
+        let msg = r#"server said {"passwd":"pa\"ss\\word"}"#;
+        let out = redact(msg, Some(secret));
+        assert!(!out.contains(r#"pa\"ss"#), "{out}");
+    }
+
+    #[test]
+    fn redacts_short_values_of_secret_keys() {
+        let secret = r#"{"password":"abc","otp":"12","region":"eu"}"#;
+        let out = redact("login abc failed, otp 12, region eu", Some(secret));
+        assert!(!out.contains("abc") && !out.contains(" 12"), "{out}");
+        // A short value under a non-secret key is left alone.
+        assert!(out.contains("region eu"), "{out}");
+    }
+
+    #[test]
+    fn refuses_another_orgs_connection() {
+        assert!(check_org("6kun0b", "6kun0b").is_ok());
+        assert!(check_org("other1", "6kun0b").is_err());
+    }
+
+    #[test]
+    fn http_client_builds_with_the_ring_provider() {
+        assert!(http_client().build().is_ok());
     }
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { runUpkeepCheck } from "../lib/upkeep/notify";
-import { runConnectionSyncs, SYNC_INTERVAL_MS } from "../lib/upkeep/connections";
+import { runConnectionSyncs } from "../lib/upkeep/connections";
 import { logError } from "../lib/log";
 import { todayLocalISO } from "../utils/localDate";
 
@@ -9,8 +9,9 @@ const MIN_INTERVAL_MS = 60 * 60 * 1000;
 
 /**
  * Upkeep and renewal checks: on start and on window focus, at most once an
- * hour. Connection syncs: on start and every 6 hours while the app is open
- * (each connection is skipped when it synced less than 6 hours ago).
+ * hour. Connection syncs: on start, then an hourly tick while the app is
+ * open; each connection is skipped until its last sync is 6 hours old, so a
+ * sleep or a failed pass never pushes the next one 6 hours further.
  */
 export function useUpkeepCheck() {
   const qc = useQueryClient();
@@ -32,7 +33,7 @@ export function useUpkeepCheck() {
     };
     run();
     sync();
-    const timer = window.setInterval(sync, SYNC_INTERVAL_MS);
+    const timer = window.setInterval(sync, MIN_INTERVAL_MS);
     window.addEventListener("focus", run);
     return () => {
       window.clearInterval(timer);

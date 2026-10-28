@@ -15,7 +15,11 @@ import {
 } from "../lib/upkeep/connections";
 import { syncItemCalendar } from "../lib/upkeep/calendar";
 import { executedStatements, clearExecutedStatements, setSelectHandler } from "../__mocks__/tauri-sql";
-import { invokedCommands, clearInvokedCommands, setInvokeHandler } from "../__mocks__/tauri-api";
+import { invokedCommands, clearInvokedCommands, setInvokeHandler, setBatchFailure } from "../__mocks__/tauri-api";
+import { createElement, type ReactNode } from "react";
+import { renderHook, waitFor } from "@testing-library/react";
+import { QueryClient as RealQueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useDeleteConnection } from "../db/hooks/useConnections";
 import { useAppStore } from "../stores/app-store";
 import { useOrgStore } from "../stores/org-store";
 import type { Connection, Machine, UpkeepItem } from "../types/upkeep";
@@ -89,6 +93,7 @@ beforeEach(() => {
   clearExecutedStatements();
   clearInvokedCommands();
   setInvokeHandler(null);
+  setBatchFailure(null);
   setSelectHandler(null);
   useAppStore.setState({ testMode: false, presentationMode: false });
   useOrgStore.setState({ activeId: "6kun0b", switching: false });
@@ -149,11 +154,29 @@ describe("connection queries", () => {
     expect(await currentReading(3, "print_hours")).toBeNull();
   });
 
-  it("deleteConnection also deletes the Keychain secret", async () => {
+  it("deleteConnection deletes the Keychain secret first, then the row", async () => {
     await deleteConnection(2);
-    expect(executedStatements.some((s) => s.sql.includes("DELETE FROM connections"))).toBe(true);
     const del = invokedCommands.find((c) => c.cmd === "connection_delete_secret");
     expect(del?.args).toEqual({ org: "6kun0b", id: 2 });
+    expect(executedStatements.some((s) => s.sql.includes("DELETE FROM connections"))).toBe(true);
+  });
+
+  it("a failed Keychain delete keeps the row and still refreshes the list", async () => {
+    setInvokeHandler((cmd) => {
+      if (cmd === "connection_delete_secret") throw "Keychain error: denied";
+      return null;
+    });
+    await expect(deleteConnection(2)).rejects.toBe("Keychain error: denied");
+    expect(executedStatements.some((s) => s.sql.includes("DELETE FROM connections"))).toBe(false);
+
+    const qc = new RealQueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const spy = vi.spyOn(qc, "invalidateQueries");
+    const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client: qc }, children);
+    const { result } = renderHook(() => useDeleteConnection(), { wrapper });
+    result.current.mutate(2);
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(spy).toHaveBeenCalledWith({ queryKey: ["connections"] });
+    expect(executedStatements.some((s) => s.sql.includes("DELETE FROM connections"))).toBe(false);
   });
 
   it("the config sent to Rust carries no secret", () => {
@@ -245,6 +268,57 @@ describe("runConnectionSyncs", () => {
     await runConnectionSyncs(qcStub(), { todayISO: TODAY, force: true, connectionId: 5 });
     const ids = invokedCommands.filter((c) => c.cmd === "connection_sync").map((c) => c.args.id);
     expect(ids).toEqual([5]);
+  });
+});
+
+describe("runConnectionSyncs: one pass at a time", () => {
+  it("Sync now during a background pass waits for it, then runs its own forced pass", async () => {
+    routeSelects({ conns: [conn()] });
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let calls = 0;
+    setInvokeHandler(async (cmd) => {
+      if (cmd !== "connection_sync") return null;
+      calls += 1;
+      if (calls === 1) await gate;
+      return syncResult;
+    });
+    const background = runConnectionSyncs(qcStub(), { todayISO: TODAY });
+    await new Promise((r) => setTimeout(r, 0));
+    const now = runConnectionSyncs(qcStub(), { todayISO: TODAY, force: true, connectionId: 2 });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(calls).toBe(1);
+    release();
+    await Promise.all([background, now]);
+    expect(calls).toBe(2);
+  });
+
+  it("a background pass during another one is skipped", async () => {
+    routeSelects({ conns: [conn()] });
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    setInvokeHandler(async (cmd) => {
+      if (cmd === "connection_sync") { await gate; return syncResult; }
+      return null;
+    });
+    const first = runConnectionSyncs(qcStub(), { todayISO: TODAY });
+    await new Promise((r) => setTimeout(r, 0));
+    await runConnectionSyncs(qcStub(), { todayISO: TODAY });
+    release();
+    await first;
+    expect(invokedCommands.filter((c) => c.cmd === "connection_sync")).toHaveLength(1);
+  });
+
+  it("readings that fail to store are recorded as a sync failure", async () => {
+    routeSelects();
+    setInvokeHandler((cmd) => (cmd === "connection_sync" ? syncResult : null));
+    setBatchFailure((stmts) =>
+      stmts.some((x) => x.sql.includes("machine_readings")) ? new Error("database is locked") : null
+    );
+    await runConnectionSyncs(qcStub(), { todayISO: TODAY });
+    const recorded = executedStatements.find((x) => x.sql.includes("UPDATE connections"));
+    expect(recorded?.sql).toMatch(/failing_since\s*=\s*COALESCE/);
+    expect(recorded?.params).toContain("Error: database is locked");
   });
 });
 

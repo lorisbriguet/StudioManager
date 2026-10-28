@@ -40,7 +40,7 @@ export function useCreateConnection() {
           await saveConnectionSecret(id, secret);
         } catch (e) {
           // No half-made connection without its secret.
-          await q.deleteConnection(id).catch(() => {});
+          await q.deleteConnectionRow(id).catch(() => {});
           throw e;
         }
       }
@@ -67,7 +67,8 @@ export function useDeleteConnection() {
   const invalidate = useInvalidateAll();
   return useMutation({
     mutationFn: q.deleteConnection,
-    onSuccess: invalidate,
+    // Refresh either way: a failed Keychain delete keeps the row, and the list must show it.
+    onSettled: invalidate,
     onError: (e) => { toast.error(String(e)); },
   });
 }
