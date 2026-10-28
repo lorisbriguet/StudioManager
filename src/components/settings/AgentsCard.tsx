@@ -3,7 +3,13 @@ import { SettingRow, SettingsCard } from "./SettingsPrimitives";
 import { Toggle } from "../ui/Toggle";
 import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
-import { getAgentsSettings, setAgentsEnabled, type AgentsInfo } from "../../lib/agents";
+import {
+  getAgentsSettings,
+  setAgentsEnabled,
+  setAgentsLimitAlerts,
+  setAgentsMenuBar,
+  type AgentsInfo,
+} from "../../lib/agents";
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -32,6 +38,15 @@ export function AgentsCard() {
     }
   };
 
+  const run = async (call: () => Promise<AgentsInfo>) => {
+    setError(null);
+    try {
+      setInfo(await call());
+    } catch (e) {
+      setError(msg(e));
+    }
+  };
+
   const missing = info !== null && !info.claudePath;
 
   return (
@@ -42,6 +57,22 @@ export function AgentsCard() {
           disabled={!info || (missing && !info.enabled)}
           ariaLabel={t.agents_enable}
           onChange={(enabled) => void toggle(enabled)}
+        />
+      </SettingRow>
+      <SettingRow label={t.agents_menu_bar} desc={t.agents_menu_bar_desc}>
+        <Toggle
+          checked={info?.menuBar ?? false}
+          disabled={!info || !info.enabled}
+          ariaLabel={t.agents_menu_bar}
+          onChange={(on) => void run(() => setAgentsMenuBar(on))}
+        />
+      </SettingRow>
+      <SettingRow label={t.agents_limit_alerts} desc={t.agents_limit_alerts_desc}>
+        <Toggle
+          checked={info?.limitAlerts ?? true}
+          disabled={!info || !info.enabled || !info.menuBar}
+          ariaLabel={t.agents_limit_alerts}
+          onChange={(on) => void run(() => setAgentsLimitAlerts(on))}
         />
       </SettingRow>
       {error && <p role="alert" className="text-xs text-danger-text py-2">{error}</p>}

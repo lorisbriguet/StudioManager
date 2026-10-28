@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 
 export interface AgentsInfo {
   enabled: boolean;
+  menuBar: boolean;
+  limitAlerts: boolean;
   claudePath: string | null;
 }
 
@@ -17,6 +19,15 @@ export function getAgentsSettings(): Promise<AgentsInfo> {
 
 export function setAgentsEnabled(enabled: boolean): Promise<AgentsInfo> {
   return invoke<AgentsInfo>("agents_set_enabled", { enabled });
+}
+
+/** Needs the Agents switch on; also starts the app at login (hidden). */
+export function setAgentsMenuBar(on: boolean): Promise<AgentsInfo> {
+  return invoke<AgentsInfo>("agents_set_menu_bar", { on });
+}
+
+export function setAgentsLimitAlerts(on: boolean): Promise<AgentsInfo> {
+  return invoke<AgentsInfo>("agents_set_limit_alerts", { on });
 }
 
 export function startAgent(
