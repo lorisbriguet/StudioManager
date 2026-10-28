@@ -79,7 +79,7 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold truncate">{agent.name}</h2>
           <span className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${GROUP_STYLE[agent.group].pill}`}>
-            <span className={`size-1.5 rounded-full ${GROUP_STYLE[agent.group].dot}`} aria-hidden />
+            <span className={`dot-sm ${GROUP_STYLE[agent.group].dot}`} aria-hidden />
             {t[GROUP_LABEL_KEYS[agent.group]]}
           </span>
         </div>
@@ -138,7 +138,7 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
 
       <div className="max-w-3xl w-full mx-auto space-y-1.5">
         <div
-          className={`flex items-end gap-2 rounded-2xl border border-[var(--color-input-border)] bg-[var(--color-surface)] pl-4 pr-2 py-2 shadow-sm focus-within:border-[var(--color-accent)] ${
+          className={`flex items-end gap-2 rounded-xl border border-[var(--color-input-border)] bg-[var(--color-surface)] pl-4 pr-2 py-2 shadow-sm focus-within:border-[var(--color-accent)] ${
             canSend ? "" : "opacity-60"
           }`}
         >
@@ -164,7 +164,7 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
             aria-label={t.agents_send}
             disabled={!canSend || sending || text.trim() === ""}
             onClick={() => void send()}
-            className="shrink-0 grid place-items-center size-8 rounded-full bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-40"
+            className="shrink-0 grid place-items-center size-8 rounded-lg bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-40"
           >
             {sending ? <Loader2 size={15} className="animate-spin" /> : <ArrowUp size={16} />}
           </button>

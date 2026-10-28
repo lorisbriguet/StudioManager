@@ -59,7 +59,7 @@ export function Conversation({ sessionId, working }: ConversationProps) {
           <ToolRun key={i} tools={g.tools} />
         ) : g.item.kind === "user" ? (
           <div key={i} className="flex justify-end">
-            <div className="max-w-[80%] rounded-2xl bg-[var(--color-input-bg)] px-4 py-2.5 text-sm whitespace-pre-wrap break-words">
+            <div className="max-w-[80%] rounded-xl bg-[var(--color-input-bg)] px-4 py-2.5 text-sm whitespace-pre-wrap break-words">
               {g.item.text}
             </div>
           </div>
