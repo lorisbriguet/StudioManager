@@ -4,6 +4,7 @@
 //! The config sent by the frontend never contains the secret: it is read here
 //! from the Keychain, and every error returned to the frontend is scrubbed of it.
 
+pub mod bambu;
 pub mod keychain;
 pub mod synology;
 pub mod tls;
@@ -69,7 +70,7 @@ pub trait Connector {
     }
 }
 
-/// Build the connector of a kind. Task 14 registers `bambu_cloud` here.
+/// Build the connector of a kind.
 fn build_connector(
     kind: &str,
     config: &JsonValue,
@@ -77,6 +78,7 @@ fn build_connector(
 ) -> Result<Box<dyn Connector>, String> {
     match kind {
         "synology" => synology::build(config, secret),
+        "bambu_cloud" => bambu::build(config, secret),
         _ => Err(format!("unsupported connection kind: {kind}")),
     }
 }
@@ -236,6 +238,23 @@ pub(crate) fn http_client() -> reqwest::blocking::ClientBuilder {
         let _ = rustls::crypto::ring::default_provider().install_default();
     });
     reqwest::blocking::Client::builder()
+}
+
+/// A reqwest error with its causes ("connection refused", "invalid peer
+/// certificate: UnknownIssuer"), never its URL.
+pub(crate) fn describe(e: reqwest::Error) -> String {
+    let e = e.without_url();
+    let mut msg = e.to_string();
+    let mut source = std::error::Error::source(&e);
+    while let Some(s) = source {
+        let part = s.to_string();
+        if !msg.contains(&part) {
+            msg.push_str(": ");
+            msg.push_str(&part);
+        }
+        source = s.source();
+    }
+    msg
 }
 
 /// Test and presentation modes never talk to a real device or write the
@@ -409,6 +428,12 @@ mod tests {
     fn synology_kind_is_registered() {
         let config = serde_json::json!({ "host": "nas.local", "port": 5001, "account": "studio" });
         assert!(build_connector("synology", &config, Some(r#"{"password":"x"}"#.into())).is_ok());
+    }
+
+    #[test]
+    fn bambu_kind_is_registered() {
+        let config = serde_json::json!({ "region": "global", "account": "me@example.com", "created_at": "2026-09-01 08:00:00" });
+        assert!(build_connector("bambu_cloud", &config, Some(r#"{"access_token":"a"}"#.into())).is_ok());
     }
 
     struct Renews;

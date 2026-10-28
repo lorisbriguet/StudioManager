@@ -184,7 +184,12 @@ describe("connection queries", () => {
 
   it("the config sent to Rust carries no secret", () => {
     const c = connectionConfig(conn({ host: "nas.local", port: 5001 }));
-    expect(Object.keys(c).sort()).toEqual(["account", "cert_fingerprint", "host", "port", "region"]);
+    expect(Object.keys(c).sort()).toEqual(["account", "cert_fingerprint", "created_at", "host", "port", "region"]);
+  });
+
+  it("the config carries the connection's creation, so Bambu counts prints from then", () => {
+    const c = connectionConfig(conn({ kind: "bambu_cloud", region: "global", created_at: "2026-09-01 08:00:00" }));
+    expect(c).toMatchObject({ region: "global", created_at: "2026-09-01 08:00:00" });
   });
 });
 
@@ -197,6 +202,9 @@ describe("connection errors shown to the user", () => {
       expect(connectionErrorText("otp_required", t)).toBe(t.upkeep_err_otp);
       expect(connectionErrorText(new Error("otp_invalid"), t)).toBe(t.upkeep_err_otp);
       expect(connectionErrorText("DSM error 117 on SYNO.Core.System", t)).toBe("DSM error 117 on SYNO.Core.System");
+      expect(connectionErrorText("code_required", t)).toBe(t.upkeep_err_bambu_code);
+      expect(connectionErrorText("code_invalid", t)).toBe(t.upkeep_err_bambu_code);
+      expect(connectionErrorText("token_expired", t)).toBe(t.upkeep_err_bambu_signin);
     });
     it(`the status line of a failing connection is readable in ${lang}`, () => {
       const text = connectionStatusText(conn({ last_sync_at: null, last_error: `untrusted_cert:${FP}` }), t);

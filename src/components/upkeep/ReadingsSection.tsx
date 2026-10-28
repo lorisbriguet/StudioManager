@@ -118,6 +118,9 @@ function LinkForm({ machine, needsBaseline }: { machine: Machine; needsBaseline:
   const [finding, setFinding] = useState(false);
   if (connections.length === 0) return null;
   const conn = connections.find((c) => c.id === connId) ?? null;
+  // Bambu counts hours only from the connection on: the printer's own counter
+  // today is the starting value (spec §8).
+  const askBaseline = needsBaseline || conn?.kind === "bambu_cloud";
 
   const find = async () => {
     if (!conn) return;
@@ -161,7 +164,7 @@ function LinkForm({ machine, needsBaseline }: { machine: Machine; needsBaseline:
               ))}
             </Select>
           </FormField>
-          {needsBaseline && (
+          {askBaseline && (
             <FormField label={t.upkeep_reading_baseline}>
               <Input type="number" min={0} fullWidth={false} className="w-32" value={baseline}
                 onChange={(e) => setBaseline(e.target.value)} />
@@ -182,7 +185,7 @@ function LinkForm({ machine, needsBaseline }: { machine: Machine; needsBaseline:
           </Button>
         </div>
       )}
-      {devices && devices.length > 0 && needsBaseline && (
+      {devices && devices.length > 0 && askBaseline && (
         <p className="text-xs text-muted">{t.upkeep_reading_baseline_desc}</p>
       )}
     </div>

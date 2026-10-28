@@ -28,10 +28,10 @@ describe("ConnectionsCard", () => {
     render(<ConnectionsCard />);
     expect(screen.getByText(t.upkeep_connections_empty)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_connection_add }));
-    // Synology has its form (Task 13); Bambu Lab not yet (Task 14).
+    // Each kind has its setup form.
     expect(screen.getByText(t.upkeep_syno_account_note)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(t.upkeep_connection_kind), { target: { value: "bambu_cloud" } });
-    expect(screen.getByText(t.upkeep_connection_form_soon)).toBeInTheDocument();
+    expect(screen.getByText(t.upkeep_bambu_note)).toBeInTheDocument();
   });
 
   it("lists a connection with its last sync, error and Sync now", () => {

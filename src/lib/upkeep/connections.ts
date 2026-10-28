@@ -19,6 +19,7 @@ import { logWarn } from "../log";
 import { formatDisplayDateTime } from "../../utils/formatDate";
 import { syncItemCalendar } from "./calendar";
 import { dailyUse, forecastUsageDue, usageLeft } from "./schedule";
+import { parseBambuError } from "./bambu";
 import { parseSynologyError } from "./synology";
 import type { Connection, Machine, UpkeepItem } from "../../types/upkeep";
 
@@ -35,17 +36,28 @@ export function connectionConfig(c: Connection): Record<string, unknown> {
     region: c.region,
     account: c.account,
     cert_fingerprint: c.cert_fingerprint,
+    // Bambu counts print hours from the connection's creation (UTC, SQLite text).
+    created_at: c.created_at,
   };
 }
 
-type ErrorLabels = { upkeep_err_untrusted_cert: string; upkeep_err_otp: string };
+type ErrorLabels = {
+  upkeep_err_untrusted_cert: string;
+  upkeep_err_otp: string;
+  upkeep_err_bambu_code: string;
+  upkeep_err_bambu_signin: string;
+};
 
 /**
  * A connector error as the user reads it: the codes that need the user
- * (`untrusted_cert:…`, `otp_required`, `otp_invalid`) become a translated
- * pointer to Reconnect; other (already redacted) messages pass through.
+ * (`untrusted_cert:…`, `otp_required`, `otp_invalid`, Bambu's `code_required`,
+ * `code_invalid`, `token_expired`) become a translated pointer to Reconnect;
+ * other (already redacted) messages pass through.
  */
 export function connectionErrorText(e: unknown, t: ErrorLabels): string {
+  const b = parseBambuError(e);
+  if (b.kind === "code") return t.upkeep_err_bambu_code;
+  if (b.kind === "signin") return t.upkeep_err_bambu_signin;
   const r = parseSynologyError(e);
   if (r.kind === "cert") return t.upkeep_err_untrusted_cert;
   if (r.kind === "otp") return t.upkeep_err_otp;

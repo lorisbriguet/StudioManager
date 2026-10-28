@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 use super::tls::SeenCert;
-use super::{percent_encode, Connector, DeviceInfo, DeviceList, DeviceReading, DiskReading, SyncResult};
+use super::{describe, percent_encode, Connector, DeviceInfo, DeviceList, DeviceReading, DiskReading, SyncResult};
 
 /// One HTTP round trip to `https://<nas>/webapi/<path>`: form body in, JSON out.
 pub(crate) trait Transport {
@@ -388,23 +388,6 @@ struct Https {
     client: reqwest::blocking::Client,
     base: String,
     seen: SeenCert,
-}
-
-/// A reqwest error with its causes ("connection refused", "invalid peer
-/// certificate: UnknownIssuer"), never its URL.
-fn describe(e: reqwest::Error) -> String {
-    let e = e.without_url();
-    let mut msg = e.to_string();
-    let mut source = std::error::Error::source(&e);
-    while let Some(s) = source {
-        let part = s.to_string();
-        if !msg.contains(&part) {
-            msg.push_str(": ");
-            msg.push_str(&part);
-        }
-        source = s.source();
-    }
-    msg
 }
 
 impl Transport for Https {

@@ -1,0 +1,44 @@
+{
+  "total": 7,
+  "hits": [
+    {
+      "id": 1007, "designId": 0, "designTitle": "", "instanceId": 0, "modelId": "SCRUBBED",
+      "title": "Running now", "cover": "", "status": 1, "feedbackStatus": 0,
+      "startTime": "2026-09-12T08:00:00Z", "endTime": "",
+      "weight": 40.5, "length": 1300, "costTime": 0, "profileId": 0, "plateIndex": 1, "plateName": "",
+      "deviceId": "01P00SCRUBBED01", "amsDetailMapping": [], "mode": "cloud_file",
+      "isPublicProfile": false, "isPrintable": true, "deviceModel": "P2S", "deviceName": "Studio P2S",
+      "bedType": "textured_plate"
+    },
+    {
+      "id": 1006, "title": "Small bracket", "status": 2,
+      "startTime": "2026-09-10T14:00:00Z", "endTime": "2026-09-10T14:30:00Z", "costTime": 1800,
+      "deviceId": "03900SCRUBBED02", "deviceModel": "A1 mini", "deviceName": "Bench A1 mini"
+    },
+    {
+      "id": 1005, "title": "Cancelled vase", "status": 4,
+      "startTime": "2026-09-07T09:00:00Z", "endTime": "2026-09-07T09:20:00Z", "costTime": 1200,
+      "deviceId": "01P00SCRUBBED01", "deviceModel": "P2S", "deviceName": "Studio P2S"
+    },
+    {
+      "id": 1004, "title": "Failed enclosure", "status": 3,
+      "startTime": "2026-09-06T09:00:00Z", "endTime": "2026-09-06T10:00:00Z", "costTime": 3600,
+      "deviceId": "01P00SCRUBBED01", "deviceModel": "P2S", "deviceName": "Studio P2S"
+    },
+    {
+      "id": 1003, "title": "Lamp shade", "status": 2,
+      "startTime": "2026-09-05T09:00:00Z", "endTime": "2026-09-05T10:30:00Z",
+      "deviceId": "01P00SCRUBBED01", "deviceModel": "P2S", "deviceName": "Studio P2S"
+    },
+    {
+      "id": 1002, "title": "Cable clips", "status": 2,
+      "startTime": "2026-09-02T10:00:00Z", "endTime": "2026-09-02T12:05:00Z", "costTime": 7200,
+      "deviceId": "01P00SCRUBBED01", "deviceModel": "P2S", "deviceName": "Studio P2S"
+    },
+    {
+      "id": 1001, "title": "Before the connection", "status": 2,
+      "startTime": "2026-08-30T10:00:00Z", "endTime": "2026-08-30T20:00:00Z", "costTime": 36000,
+      "deviceId": "01P00SCRUBBED01", "deviceModel": "P2S", "deviceName": "Studio P2S"
+    }
+  ]
+}
