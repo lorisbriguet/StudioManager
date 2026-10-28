@@ -3,7 +3,6 @@ import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -11,9 +10,9 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { createPortal } from "react-dom";
 import { Check, ChevronDown, Plus, Search } from "lucide-react";
 import { useT } from "../../i18n/useT";
+import { Popover, POPOVER_SURFACE } from "./Popover";
 
 /**
  * Dropdown — the app's one menu component (see DESIGN-SYSTEM.md, "Dropdown").
@@ -22,16 +21,14 @@ import { useT } from "../../i18n/useT";
  *   <DropdownSelect multiple value={tags} onChange={setTags} ... /> pick several
  *   <Dropdown trigger={<Button .../>} items={[...]} />              run a command
  *
- * The panel renders in a portal on <body>, fixed under its trigger, so it is
- * never clipped by a table, card or modal. It flips above the trigger when
- * there is no room below and stays inside the window.
+ * The panel is a Popover (./Popover.tsx): on <body>, fixed under its
+ * trigger, never clipped, flips above when there is no room below.
  *
  * Shared classes below are also used by ContextMenu, so every menu in the app
  * looks the same.
  */
 
-export const MENU_PANEL =
-  "bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu p-1 min-w-[160px] outline-none";
+export const MENU_PANEL = `${POPOVER_SURFACE} p-1 min-w-[160px]`;
 export const MENU_ITEM =
   "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm text-left select-none transition-colors outline-none";
 export const MENU_DIVIDER = "my-1 border-t border-[var(--color-border-divider)]";
@@ -98,12 +95,10 @@ function MenuPanel({
   emptyText,
   initialActive,
 }: MenuPanelProps) {
-  const panelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   const enabled = rows.flatMap((r, i) => (r.kind === "item" && !r.disabled ? [i] : []));
   const [active, setActive] = useState(() =>
@@ -111,50 +106,6 @@ function MenuPanel({
   );
   // Filtering can remove the active row; fall back to the first one.
   const current = enabled.includes(active) ? active : (enabled[0] ?? -1);
-
-  const place = useCallback(() => {
-    const a = anchor.current;
-    const p = panelRef.current;
-    if (!a || !p) return;
-    const r = a.getBoundingClientRect();
-    p.style.minWidth = `${Math.max(160, r.width)}px`;
-    const pw = p.offsetWidth;
-    const ph = p.offsetHeight;
-    const m = 8;
-    const gap = 4;
-    let left = align === "end" ? r.right - pw : r.left;
-    left = Math.max(m, Math.min(left, window.innerWidth - pw - m));
-    const below = r.bottom + gap;
-    const up = below + ph > window.innerHeight - m && r.top - gap - ph >= m;
-    setPos({ top: up ? r.top - gap - ph : below, left });
-  }, [anchor, align]);
-
-  useLayoutEffect(() => {
-    place();
-  }, [place, rows.length]);
-
-  useEffect(() => {
-    const onScroll = (e: Event) => {
-      if (panelRef.current?.contains(e.target as Node)) return;
-      place();
-    };
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", onScroll, true);
-    return () => {
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", onScroll, true);
-    };
-  }, [place]);
-
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (panelRef.current?.contains(t) || anchor.current?.contains(t)) return;
-      onCloseRef.current(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [anchor]);
 
   useEffect(() => {
     (searchRef.current ?? listRef.current)?.focus({ preventScroll: true });
@@ -207,12 +158,6 @@ function MenuPanel({
         e.preventDefault();
         if (current >= 0) pick(current);
         return;
-      case "Escape":
-        // Stop here so a surrounding Modal does not close as well.
-        e.preventDefault();
-        e.stopPropagation();
-        onCloseRef.current(true);
-        return;
       case "Tab":
         e.preventDefault();
         onCloseRef.current(true);
@@ -233,19 +178,15 @@ function MenuPanel({
 
   const activeId = current >= 0 ? `${id}-${current}` : undefined;
 
-  return createPortal(
-    <div
-      ref={panelRef}
-      // React events bubble out of portals to the trigger's ancestors: keep a
-      // pick from also clicking a table row or pressing Enter on a form.
-      onKeyDown={(e) => {
-        e.stopPropagation();
-        onKeyDown(e);
-      }}
-      onClick={(e) => e.stopPropagation()}
-      onMouseDown={(e) => e.stopPropagation()}
-      className={`fixed z-[60] flex flex-col max-w-80 ${MENU_PANEL} animate-in fade-in duration-100`}
-      style={{ top: pos?.top ?? 0, left: pos?.left ?? 0, visibility: pos ? "visible" : "hidden" }}
+  return (
+    <Popover
+      anchor={anchor}
+      align={align}
+      matchWidth
+      autoFocus={false}
+      onClose={onClose}
+      onKeyDown={onKeyDown}
+      className="flex flex-col max-w-80"
     >
       {search && (
         <div className="flex items-center gap-2 -mx-1 -mt-1 mb-1 px-3 py-2 border-b border-[var(--color-border-divider)] text-muted">
@@ -336,8 +277,7 @@ function MenuPanel({
           );
         })}
       </div>
-    </div>,
-    document.body
+    </Popover>
   );
 }
 

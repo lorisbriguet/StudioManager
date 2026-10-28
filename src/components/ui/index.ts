@@ -7,6 +7,7 @@ export { PageHeader } from "./PageHeader";
 export { SearchBar } from "./SearchBar";
 export { Select } from "./Select";
 export { Dropdown, DropdownSelect } from "./Dropdown";
+export { Popover, usePopover, POPOVER_SURFACE } from "./Popover";
 export type { DropdownItem, DropdownOption } from "./Dropdown";
 export { EmptyState } from "./EmptyState";
 export { FormField } from "./FormField";
