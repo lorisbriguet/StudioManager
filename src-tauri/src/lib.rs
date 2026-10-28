@@ -600,6 +600,11 @@ pub fn run() {
             agents::actions::agents_switch_model,
             agents::actions::agents_dismiss,
             agents::transcript::agents_conversation,
+            agents::pty::agents_term_open,
+            agents::pty::agents_term_write,
+            agents::pty::agents_term_resize,
+            agents::pty::agents_term_close,
+            agents::pty::agents_send,
         ])
         .setup(|app| {
             let handle = app.handle();

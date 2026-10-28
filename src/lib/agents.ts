@@ -46,3 +46,38 @@ export function conversation(sessionId: string): Promise<Item[]> {
 export function dismissAgent(sessionId: string): Promise<void> {
   return invoke<void>("agents_dismiss", { sessionId });
 }
+
+/** Terminal output: `data` is base64 of the raw bytes. */
+export const AGENTS_TERM = "agents:term";
+/** A terminal's process ended; close its panel. */
+export const AGENTS_TERM_EXIT = "agents:term-exit";
+
+export interface TermData {
+  termId: number;
+  data: string;
+}
+
+export interface TermExit {
+  termId: number;
+}
+
+export function termOpen(shortId: string, cols: number, rows: number): Promise<number> {
+  return invoke<number>("agents_term_open", { shortId, cols, rows });
+}
+
+/** `data` is the text from xterm's `onData`. */
+export function termWrite(termId: number, data: string): Promise<void> {
+  return invoke<void>("agents_term_write", { termId, data });
+}
+
+export function termResize(termId: number, cols: number, rows: number): Promise<void> {
+  return invoke<void>("agents_term_resize", { termId, cols, rows });
+}
+
+export function termClose(termId: number): Promise<void> {
+  return invoke<void>("agents_term_close", { termId });
+}
+
+export function sendMessage(sessionId: string, text: string): Promise<void> {
+  return invoke<void>("agents_send", { sessionId, text });
+}

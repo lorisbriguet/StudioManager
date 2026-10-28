@@ -211,10 +211,15 @@ pub(super) fn home_dir() -> PathBuf {
 
 // ---------------------------------------------------------------- commands
 
-pub(super) fn ready(state: &super::AgentsState) -> Result<super::cli::RealCli, String> {
+pub(super) fn switched_on(state: &super::AgentsState) -> Result<(), String> {
     if !read_settings(&state.app_dir).enabled {
         return Err(OFF.into());
     }
+    Ok(())
+}
+
+pub(super) fn ready(state: &super::AgentsState) -> Result<super::cli::RealCli, String> {
+    switched_on(state)?;
     state.real_cli().ok_or_else(|| "claude not found".to_string())
 }
 
@@ -264,9 +269,7 @@ pub async fn agents_dismiss(
     state: tauri::State<'_, super::AgentsState>,
     session_id: String,
 ) -> Result<(), String> {
-    if !read_settings(&state.app_dir).enabled {
-        return Err(OFF.into());
-    }
+    switched_on(&state)?;
     dismiss(&state.app_dir, &session_id)
 }
 
