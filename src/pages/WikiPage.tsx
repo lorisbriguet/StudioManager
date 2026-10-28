@@ -536,7 +536,9 @@ export function ArticleEditor({
   const editor = useEditor(
     {
       extensions: [
-        StarterKit,
+        // StarterKit v3 ships its own Link: switched off so the one below,
+        // with the URL allowlist, is the only one.
+        StarterKit.configure({ link: false }),
         Placeholder.configure({
           placeholder: t.start_writing,
         }),

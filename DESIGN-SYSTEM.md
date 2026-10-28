@@ -370,7 +370,7 @@ import { invoiceStatusVariant, quoteStatusVariant, taskStatusVariant, projectSta
 
 ### Year/Section Groups
 
-Use the shared `SectionLabel` (`src/components/ui/SectionLabel.tsx`); `as="h1"` when it names a whole panel. The classes it renders:
+Use the shared `SectionLabel` (`src/components/ui/SectionLabel.tsx`). A page's own title is never a section label: it is `PageHeader`, also at the top of a side column (the wiki explorer). The classes `SectionLabel` renders:
 ```tsx
 <span className="text-[10px] font-medium uppercase tracking-widest text-muted">2026</span>
 ```

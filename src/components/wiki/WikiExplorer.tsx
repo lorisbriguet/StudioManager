@@ -13,7 +13,7 @@ import {
 import { useT } from "../../i18n/useT";
 import { useOrgStore } from "../../stores/org-store";
 import { useWikiFolders } from "../../db/hooks/useWiki";
-import { BAR_ICON_BUTTON, BottomBar, SearchBar, SectionLabel } from "../ui";
+import { BAR_ICON_BUTTON, BottomBar, PageHeader, SearchBar } from "../ui";
 import { ContextMenu, type ContextMenuItem } from "../ContextMenu";
 import type { WikiArticleWithTags } from "../../types/wiki";
 import type { ProjectDoc } from "../../db/hooks/useProjectDocs";
@@ -203,7 +203,7 @@ export function WikiExplorer({
       className="w-60 shrink-0 flex flex-col min-h-0 border-r border-[var(--color-border-divider)]"
     >
       <div className="px-3 pt-5 pb-2 space-y-3">
-        <SectionLabel as="h1" className="px-2">{t.wiki}</SectionLabel>
+        <PageHeader title={t.wiki} className="px-2" />
         <SearchBar value={search} onChange={setSearch} placeholder={t.search_articles} className="w-full" />
         <div className="flex items-center gap-1 px-1">
           <button onClick={() => onNewArticle(null)} disabled={creating} className={BAR_ICON_BUTTON} aria-label={t.new_article} title={t.new_article}>
