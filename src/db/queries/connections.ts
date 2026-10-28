@@ -203,6 +203,29 @@ export async function currentReading(machineId: number, metric: string): Promise
   return rows[0].value + (m[0]?.reading_baseline ?? 0);
 }
 
+/**
+ * First reading of a metric on or after a date, plus the machine's baseline
+ * (like `currentReading`); null when there is none.
+ */
+export async function firstReadingSince(
+  machineId: number,
+  metric: string,
+  sinceISO: string
+): Promise<number | null> {
+  const db = await getDb();
+  const rows = await db.select<{ value: number }[]>(
+    `SELECT value FROM machine_readings WHERE machine_id = $1 AND metric = $2 AND read_at >= $3
+     ORDER BY read_at ASC, id ASC LIMIT 1`,
+    [machineId, metric, sinceISO]
+  );
+  if (rows.length === 0) return null;
+  const m = await db.select<Pick<Machine, "reading_baseline">[]>(
+    "SELECT reading_baseline FROM machines WHERE id = $1",
+    [machineId]
+  );
+  return rows[0].value + (m[0]?.reading_baseline ?? 0);
+}
+
 /** Readings of a metric since a date (inclusive), oldest first. */
 export async function getMachineReadings(
   machineId: number,

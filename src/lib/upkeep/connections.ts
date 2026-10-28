@@ -3,6 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { TransactionBatch } from "../../db";
 import {
   currentReading,
+  firstReadingSince,
   getConnections,
   getMachineReadings,
   recordSync,
@@ -111,6 +112,13 @@ function daysBefore(todayISO: string, n: number): string {
  * (current − reading when last done), date = today + left ÷ average daily use
  * over 30 days. Writes `next_due_on` when it changed and returns whether it
  * did. The caller syncs the Calendar event.
+ *
+ * An item whose usage ran out never moves forward: it keeps a date already
+ * reached (so it stays overdue and its notice fires once) or comes back to
+ * today, with or without a trend. A counter that went below the reading of
+ * the last service (reset or replaced) keeps the date as it is. Only an item
+ * with usage left and no trend loses its date. Done without a reading, the
+ * first reading after the service counts as the reading at the service.
  */
 export async function recomputeUsageForecast(
   item: UpkeepItem,
@@ -122,12 +130,18 @@ export async function recomputeUsageForecast(
   const current = await currentReading(item.machine_id, metric);
   let next: string | null = null;
   if (current != null) {
-    const readings = await getMachineReadings(item.machine_id, metric, daysBefore(todayISO, 30));
-    next = forecastUsageDue(
-      usageLeft(item.usage_every, current, item.last_done_reading),
-      dailyUse(readings, todayISO),
-      todayISO
-    );
+    let done = item.last_done_reading;
+    if (done == null && item.last_done_on) {
+      done = (await firstReadingSince(item.machine_id, metric, item.last_done_on)) ?? current;
+    }
+    if (done != null && current < done) return false;
+    const left = usageLeft(item.usage_every, current, done);
+    if (left <= 0) {
+      next = item.next_due_on && item.next_due_on <= todayISO ? item.next_due_on : todayISO;
+    } else {
+      const readings = await getMachineReadings(item.machine_id, metric, daysBefore(todayISO, 30));
+      next = forecastUsageDue(left, dailyUse(readings, todayISO), todayISO);
+    }
   }
   if (next === item.next_due_on) return false;
   const batch = new TransactionBatch(expectedOrg);
