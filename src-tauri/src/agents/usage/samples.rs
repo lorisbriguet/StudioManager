@@ -17,7 +17,6 @@ pub struct Sample {
     pub at: f64,
 }
 
-
 /// The windows of a `rate_limits` object, as samples. Either a `limits` list
 /// or named windows (`five_hour`, `seven_day`, `seven_day_<x>`).
 pub fn samples_from(rate_limits: &Map<String, Value>, now_s: f64) -> Vec<Sample> {

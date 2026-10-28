@@ -39,9 +39,7 @@ pub struct Alert {
 }
 
 /// `resets_at` can jitter by a few seconds between readings of one window.
-const SAME_WINDOW_MS: i64 = 60_000;
-/// The same tolerance, wider, for matching a sent alert to its window.
-const SAME_ALERT_WINDOW_MS: i64 = 300_000;
+const SAME_WINDOW_MS: i64 = 300_000;
 const MIN_SAMPLES: usize = 3;
 const MIN_SPAN_S: f64 = 30.0 * 60.0;
 const PACE_LEAD_MS: i64 = 3_600_000;
@@ -77,7 +75,7 @@ fn english_label(window: &str) -> String {
 }
 
 /// The pace of one window: wall-clock projection from the earliest sample of the current window
-/// (same `resets_at` within a minute), idle time included.
+/// (same `resets_at` within 5 minutes), idle time included.
 fn pace(window: &str, percent: f64, resets_at: i64, history: &[Sample], now_ms: i64) -> Option<Pace> {
     let mut mine: Vec<&Sample> = history
         .iter()
@@ -110,7 +108,9 @@ fn pace(window: &str, percent: f64, resets_at: i64, history: &[Sample], now_ms: 
     })
 }
 
-/// The windows of `limits.json` as meters. Anything unreadable gives none.
+/// The windows of `limits.json` as meters. Anything unreadable gives none. `limits.json` is only
+/// rewritten when Claude Code runs, so a window that already reset (`resets_at <= now`) is dropped:
+/// it is neither shown nor alerted on.
 pub fn meters(limits_json: &str, history: &[Sample], now_ms: i64) -> Vec<Meter> {
     let Ok(Value::Object(root)) = serde_json::from_str::<Value>(limits_json) else {
         return vec![];
@@ -121,6 +121,7 @@ pub fn meters(limits_json: &str, history: &[Sample], now_ms: i64) -> Vec<Meter> 
     let saved_s = root.get("savedAt").and_then(Value::as_f64).unwrap_or(now_ms as f64 / 1000.0);
     samples_from(rate_limits, saved_s)
         .into_iter()
+        .filter(|s| (s.resets_at * 1000.0) as i64 > now_ms)
         .map(|s| {
             let resets_at = (s.resets_at * 1000.0) as i64;
             Meter {
@@ -152,7 +153,7 @@ fn split_key(key: &str) -> Option<(&str, i64, &str)> {
 
 fn already_sent(sent: &BTreeSet<String>, window: &str, resets_at: i64, kind: &str) -> bool {
     sent.iter().filter_map(|k| split_key(k)).any(|(w, at, k)| {
-        w == window && k == kind && (at - resets_at).abs() <= SAME_ALERT_WINDOW_MS
+        w == window && k == kind && (at - resets_at).abs() <= SAME_WINDOW_MS
     })
 }
 
@@ -332,6 +333,9 @@ mod tests {
             (m[1].window.as_str(), m[1].label.as_str()),
             ("seven_day_claude_design", "Weekly, Claude Design")
         );
+        // A window that already reset (stale limits.json) is not a meter.
+        let stale = meters(&limits(85.0, NOW / 1000 - 10, 10.0, NOW / 1000 + 600), &[], NOW);
+        assert_eq!(stale.iter().map(|m| m.window.as_str()).collect::<Vec<_>>(), ["seven_day", "seven_day_opus"]);
         // Unreadable input has no meters.
         assert!(meters("nope", &[], NOW).is_empty());
         assert!(meters(r#"{"rate_limits":{}}"#, &[], NOW).is_empty());
@@ -344,8 +348,8 @@ mod tests {
         let slow = vec![
             // An earlier window (resets long before) is ignored.
             sample("five_hour", 99.0, reset_s - 5 * 3600, NOW - 3 * HOUR),
-            // resets_at jittered by 30 s still belongs to this window.
-            sample("five_hour", 10.0, reset_s + 30, NOW - 2 * HOUR),
+            // resets_at jittered by 200 s still belongs to this window.
+            sample("five_hour", 10.0, reset_s + 200, NOW - 2 * HOUR),
             sample("five_hour", 20.0, reset_s, NOW - HOUR),
             sample("five_hour", 30.0, reset_s, NOW),
             // Another window never mixes in.
@@ -411,6 +415,14 @@ mod tests {
         // Both at once when past 80% and on pace.
         let both = [meter("five_hour", 85.0, reset, Some(NOW + HOUR))];
         assert_eq!(due_alerts(&both, &BTreeSet::new(), NOW).len(), 2);
+    }
+
+    #[test]
+    fn no_alert_for_a_window_that_already_reset() {
+        let dir = tmp();
+        let past = NOW / 1000 - 60;
+        fs::write(dir.join(LIMITS_FILE), limits(95.0, past, 10.0, NOW / 1000 + 86_400)).unwrap();
+        assert!(check_alerts(&dir, NOW, true).is_empty());
     }
 
     #[test]

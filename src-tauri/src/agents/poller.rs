@@ -195,6 +195,16 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
             }
             continue;
         }
+        // Plan-limit alerts belong to the menu bar; a small file read, no CLI involved.
+        if settings.menu_bar && state.app_dir.join(LIMITS_FILE).exists() {
+            let alerts = check_alerts(&state.app_dir, limits_now_ms(), settings.limit_alerts);
+            for a in &alerts {
+                log::info!("[agents] limit alert: {}", a.key);
+                if let Err(e) = app.notification().builder().title(&a.title).body(&a.body).show() {
+                    log::warn!("[agents] notification failed: {e}");
+                }
+            }
+        }
         let Some(cli) = state.real_cli() else {
             continue;
         };
@@ -227,16 +237,6 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
                 .show();
             if let Err(e) = shown {
                 log::warn!("[agents] notification failed: {e}");
-            }
-        }
-        // Plan-limit alerts belong to the menu bar; a small file read, no CLI involved.
-        if settings.menu_bar && state.app_dir.join(LIMITS_FILE).exists() {
-            let alerts = check_alerts(&state.app_dir, limits_now_ms(), settings.limit_alerts);
-            for a in &alerts {
-                log::info!("[agents] limit alert: {}", a.key);
-                if let Err(e) = app.notification().builder().title(&a.title).body(&a.body).show() {
-                    log::warn!("[agents] notification failed: {e}");
-                }
             }
         }
     }
