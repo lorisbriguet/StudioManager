@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
+import { FieldError } from "../ui/FormField";
 import { Modal } from "../ui/Modal";
 import { Tooltip } from "../ui/Tooltip";
 import { useOrgStore } from "../../stores/org-store";
@@ -19,6 +20,7 @@ export function OrganisationsCard() {
   const [renameError, setRenameError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null);
   const [typed, setTyped] = useState("");
+  const renameErrorId = useId();
 
   const startEditing = (o: { id: string; name: string }) => {
     setEditing({ id: o.id, name: o.name });
@@ -102,11 +104,14 @@ export function OrganisationsCard() {
                       }
                     }}
                     autoFocus
+                    aria-label={t.rename_organisation}
+                    aria-invalid={renameError ? true : undefined}
+                    aria-describedby={renameError ? renameErrorId : undefined}
                   />
                   {renameError && (
-                    <p role="alert" className="text-xs text-danger-text mt-1">
+                    <FieldError id={renameErrorId}>
                       {renameError}
-                    </p>
+                    </FieldError>
                   )}
                 </div>
               ) : (
@@ -143,7 +148,7 @@ export function OrganisationsCard() {
         title={t.delete_organisation}
         footer={
           <>
-            <Button variant="outline" onClick={() => setDeleting(null)}>{t.cancel}</Button>
+            <Button variant="secondary" onClick={() => setDeleting(null)}>{t.cancel}</Button>
             <Button variant="danger" disabled={typed.trim() !== deleting?.name} onClick={() => void commitDelete()}>{t.delete}</Button>
           </>
         }

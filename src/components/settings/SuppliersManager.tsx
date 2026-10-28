@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useId } from "react";
 import { useT } from "../../i18n/useT";
-import { Checkbox, Select, Button } from "../ui";
+import { Checkbox, Select, Button, FIELD_LABEL } from "../ui";
 import { useSupplierCounts, useMergeSuppliers } from "../../db/hooks/useExpenses";
 import { suggestSupplierGroups, type SupplierCount } from "../../lib/supplierMerge";
 import { undoableFromStore } from "../../lib/undo";
@@ -17,6 +17,7 @@ function SupplierGroupCard({
 }) {
   const t = useT();
   const [canonical, setCanonical] = useState(group[0].supplier);
+  const selectId = useId();
   return (
     <div className="rounded-xl bg-[var(--color-input-bg)] p-3 space-y-2">
       <div className="flex flex-wrap gap-1.5">
@@ -30,8 +31,8 @@ function SupplierGroupCard({
         ))}
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-xs text-muted shrink-0">{t.merge_into}</span>
-        <Select value={canonical} onChange={(e) => setCanonical(e.target.value)} className="text-xs py-1">
+        <label htmlFor={selectId} className={`${FIELD_LABEL} shrink-0`}>{t.merge_into}</label>
+        <Select id={selectId} value={canonical} onChange={(e) => setCanonical(e.target.value)}>
           {group.map((g) => (
             <option key={g.supplier} value={g.supplier}>{g.supplier}</option>
           ))}
@@ -51,6 +52,7 @@ export function SuppliersManager() {
   const groups = useMemo(() => suggestSupplierGroups(counts ?? []), [counts]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [manualCanonical, setManualCanonical] = useState("");
+  const manualSelectId = useId();
 
   const doMerge = (canonical: string, names: string[]) => {
     const variants = names.filter((n) => n !== canonical);
@@ -101,8 +103,8 @@ export function SuppliersManager() {
         <h3 className="text-sm font-medium mb-2">{t.all_suppliers}</h3>
         {selected.size >= 2 && (
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs text-muted shrink-0">{t.merge_into}</span>
-            <Select value={manualTarget} onChange={(e) => setManualCanonical(e.target.value)} className="text-xs py-1">
+            <label htmlFor={manualSelectId} className={`${FIELD_LABEL} shrink-0`}>{t.merge_into}</label>
+            <Select id={manualSelectId} value={manualTarget} onChange={(e) => setManualCanonical(e.target.value)}>
               {selectedList.map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
@@ -112,16 +114,19 @@ export function SuppliersManager() {
             </Button>
           </div>
         )}
-        <div className="space-y-1 max-h-96 overflow-y-auto">
+        <div className="flex flex-col items-start gap-1 max-h-96 overflow-y-auto">
           {(counts ?? []).map((s) => (
-            <label key={s.supplier} className="flex items-center gap-2 text-sm py-0.5 cursor-pointer">
-              <Checkbox
-                checked={selected.has(s.supplier)}
-                onChange={() => toggle(s.supplier)}
-              />
-              <span className="flex-1 truncate">{s.supplier}</span>
-              <span className="text-xs text-muted">{s.count}</span>
-            </label>
+            <Checkbox
+              key={s.supplier}
+              label={
+                <>
+                  {s.supplier} <span className="text-xs text-muted">×{s.count}</span>
+                </>
+              }
+              checked={selected.has(s.supplier)}
+              onChange={() => toggle(s.supplier)}
+              className="py-0.5"
+            />
           ))}
         </div>
       </div>

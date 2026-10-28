@@ -52,3 +52,6 @@ export const FORM_WIDTH = "max-w-3xl";
 export const FORM_ACTIONS = "flex items-center justify-end gap-2";
 /** The field label: 12px muted, plain weight. FormField, and labels that can't be one. */
 export const FIELD_LABEL = "block text-xs text-muted";
+/** Columns a grid item takes in a FormGrid. */
+export const FORM_SPAN = { 2: "col-span-2", 3: "col-span-3", 4: "col-span-4", full: "col-span-full" } as const;
+export type FormSpan = keyof typeof FORM_SPAN;

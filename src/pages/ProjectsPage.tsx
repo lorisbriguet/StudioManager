@@ -22,7 +22,7 @@ import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Checkbox, Button, Badge, Card, PageHeader, SearchBar, TableSkeleton, DatePicker, Input, EmptyState, Select, IconButton, FilterChip, ProgressBar, Tooltip } from "../components/ui";
+import { Checkbox, Button, Badge, PageHeader, SearchBar, TableSkeleton, DatePicker, Input, FormField, FormGrid, FormModal, EmptyState, Select, IconButton, FilterChip, ProgressBar, Tooltip } from "../components/ui";
 import { undoable, undoableFromStore } from "../lib/undo";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
@@ -482,54 +482,54 @@ function NewProjectForm({
   });
   const t = useT();
 
+  // No validate schema here: the two required checks report by toast.
+  const submit = () => {
+    if (!form.name.trim()) return toast.error(t.toast_name_required);
+    if (!form.client_id) return toast.error(t.toast_select_client);
+    onSave({
+      ...form,
+      start_date: form.start_date || null,
+      deadline: form.deadline || null,
+      layout_config: null,
+      folder_path: null,
+    });
+  };
+
   return (
-    <Card className="mb-6 space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <Input
-          placeholder={`${t.project_name} *`}
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-        />
-        <Select
-          value={form.client_id}
-          onChange={(e) => setForm({ ...form, client_id: e.target.value })}
-          fullWidth={false}
-        >
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </Select>
-        <DatePicker
-          value={form.start_date || null}
-          onChange={(v) => setForm({ ...form, start_date: v ?? "" })}
-        />
-        <DatePicker
-          value={form.deadline || null}
-          onChange={(v) => setForm({ ...form, deadline: v ?? "" })}
-        />
-      </div>
-      <div className="flex gap-2">
-        <Button
-          onClick={() => {
-            if (!form.name.trim()) return toast.error(t.toast_name_required);
-            if (!form.client_id) return toast.error(t.toast_select_client);
-            onSave({
-              ...form,
-              start_date: form.start_date || null,
-              deadline: form.deadline || null,
-              layout_config: null,
-              folder_path: null,
-            });
-          }}
-        >
-          {t.save}
-        </Button>
-        <Button variant="secondary" onClick={onCancel}>
-          {t.cancel}
-        </Button>
-      </div>
-    </Card>
+    <FormModal open onClose={onCancel} title={t.new_project} submitLabel={t.save} onSubmit={submit}>
+      <FormGrid cols={2}>
+        <FormField label={t.project_name} required>
+          <Input
+            autoFocus
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
+        </FormField>
+        <FormField label={t.client} required>
+          <Select
+            value={form.client_id}
+            onChange={(e) => setForm({ ...form, client_id: e.target.value })}
+          >
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+        <FormField label={t.start}>
+          <DatePicker
+            value={form.start_date || null}
+            onChange={(v) => setForm({ ...form, start_date: v ?? "" })}
+          />
+        </FormField>
+        <FormField label={t.deadline}>
+          <DatePicker
+            value={form.deadline || null}
+            onChange={(v) => setForm({ ...form, deadline: v ?? "" })}
+          />
+        </FormField>
+      </FormGrid>
+    </FormModal>
   );
 }

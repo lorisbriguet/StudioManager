@@ -51,10 +51,13 @@ export function Button({
   children,
   className = "",
   disabled,
+  // "button", not the browser's "submit": a Button inside a form only submits it when asked to.
+  type = "button",
   ...props
 }: ButtonProps) {
   return (
     <button
+      type={type}
       className={`inline-flex items-center gap-1.5 font-medium whitespace-nowrap transition-colors focus-accent disabled:opacity-50 disabled:cursor-not-allowed ${
         variant === "link" ? LINK_BOX : BOX
       } ${variantClasses[variant]} ${className}`}

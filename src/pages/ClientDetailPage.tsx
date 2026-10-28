@@ -3,7 +3,7 @@ import { IconButton } from "../components/ui/IconButton";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Save, Plus, Trash2, Eye, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { Checkbox, Button, Input, PageSpinner, Card, Select, SectionLabel, Textarea, ConfirmButton, Tooltip } from "../components/ui";
+import { Checkbox, Button, Input, PageSpinner, Card, Select, SectionLabel, Textarea, ConfirmButton, Tooltip, FormField, FormGrid, FormActions, FormLayout } from "../components/ui";
 import { useTabStore } from "../stores/tab-store";
 import {
   useClient,
@@ -118,10 +118,9 @@ export function ClientDetailPage() {
       <div className="grid grid-cols-3 gap-6">
         <div className="col-span-2 space-y-4">
           <Section title={t.details}>
-            <div className="grid grid-cols-2 gap-3">
+            <FormGrid cols={2}>
               <Field label={t.display_name} value={form.name ?? ""} onBlur={(v) => saveField("name", v)} />
-              <div>
-                <label className="block text-xs font-medium text-muted mb-1">{t.language}</label>
+              <FormField label={t.language}>
                 <Select
                   value={form.language ?? "FR"}
                   onChange={(e) => { update("language", e.target.value); saveField("language", e.target.value); }}
@@ -129,24 +128,22 @@ export function ClientDetailPage() {
                   <option value="FR">{t.french}</option>
                   <option value="EN">{t.english}</option>
                 </Select>
-              </div>
-            </div>
+              </FormField>
+            </FormGrid>
             <div className="flex items-center gap-3 mt-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox
-                  checked={!!form.has_discount}
-                  onChange={(e) => {
-                    const v = e.target.checked ? 1 : 0;
-                    update("has_discount", v);
-                    saveField("has_discount", v);
-                    if (v && !form.discount_rate) {
-                      update("discount_rate", 0.1);
-                      saveField("discount_rate", 0.1);
-                    }
-                  }}
-                />
-                <span className="text-sm">{t.cultural_discount}</span>
-              </label>
+              <Checkbox
+                label={t.cultural_discount}
+                checked={!!form.has_discount}
+                onChange={(e) => {
+                  const v = e.target.checked ? 1 : 0;
+                  update("has_discount", v);
+                  saveField("has_discount", v);
+                  if (v && !form.discount_rate) {
+                    update("discount_rate", 0.1);
+                    saveField("discount_rate", 0.1);
+                  }
+                }}
+              />
               {!!form.has_discount && (
                 <div className="flex items-center gap-1">
                   <Input
@@ -158,7 +155,7 @@ export function ClientDetailPage() {
                     onChange={(e) => update("discount_rate", Number(e.target.value) / 100)}
                     onBlur={(e) => saveField("discount_rate", Number(e.target.value) / 100)}
                     fullWidth={false}
-                    className="w-16 px-2 py-1 text-center"
+                    className="w-16 text-center"
                   />
                   <span className="text-sm text-muted">%</span>
                 </div>
@@ -340,12 +337,17 @@ function ContactsSection({
 
   return (
     <Card>
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-medium">{t.contacts}</h2>
-        <Button variant="link" icon={<Plus size={12} />} onClick={addDraft} className="hover:text-accent-hover">
-          {t.add}
-        </Button>
-      </div>
+      <SectionLabel
+        as="h2"
+        className="mb-3"
+        action={
+          <Button variant="link" icon={<Plus size={12} />} onClick={addDraft} className="hover:text-accent-hover">
+            {t.add}
+          </Button>
+        }
+      >
+        {t.contacts}
+      </SectionLabel>
 
       {contacts.length === 0 && drafts.length === 0 && (
         <div className="text-sm text-muted">{t.no_contacts}</div>
@@ -357,71 +359,73 @@ function ContactsSection({
             <Card
               key={c.id}
               padding={false}
-              className="border border-[var(--color-input-border)] p-3 space-y-2"
+              className="border border-[var(--color-input-border)] p-3"
             >
-              <div className="grid grid-cols-3 gap-2">
-                <MiniField
-                  label={t.first_name}
-                  value={editForm.first_name}
-                  onChange={(v) => setEditForm((prev) => ({ ...prev, first_name: v }))}
-                  onBlurCb={() => handleEditBlur(c)}
-                  onFocusCb={handleEditFocus}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") cancelEdit();
-                    if (e.key === "Enter") saveEdit(c);
-                  }}
-                />
-                <MiniField
-                  label={t.last_name}
-                  value={editForm.last_name}
-                  onChange={(v) => setEditForm((prev) => ({ ...prev, last_name: v }))}
-                  onBlurCb={() => handleEditBlur(c)}
-                  onFocusCb={handleEditFocus}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") cancelEdit();
-                    if (e.key === "Enter") saveEdit(c);
-                  }}
-                />
-                <MiniField
-                  label={t.role}
-                  value={editForm.role}
-                  onChange={(v) => setEditForm((prev) => ({ ...prev, role: v }))}
-                  onBlurCb={() => handleEditBlur(c)}
-                  onFocusCb={handleEditFocus}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") cancelEdit();
-                    if (e.key === "Enter") saveEdit(c);
-                  }}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <MiniField
-                  label={t.email}
-                  value={editForm.email}
-                  onChange={(v) => setEditForm((prev) => ({ ...prev, email: v }))}
-                  onBlurCb={() => handleEditBlur(c)}
-                  onFocusCb={handleEditFocus}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") cancelEdit();
-                    if (e.key === "Enter") saveEdit(c);
-                  }}
-                />
-                <MiniField
-                  label={t.phone}
-                  value={editForm.phone}
-                  onChange={(v) => setEditForm((prev) => ({ ...prev, phone: v }))}
-                  onBlurCb={() => handleEditBlur(c)}
-                  onFocusCb={handleEditFocus}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") cancelEdit();
-                    if (e.key === "Enter") saveEdit(c);
-                  }}
-                />
-              </div>
-              <div className="flex gap-2 justify-end">
-                <button onClick={cancelEdit} className="text-xs text-muted hover:text-danger">{t.cancel}</button>
-                <button onClick={() => saveEdit(c)} className="text-xs text-accent hover:text-accent-hover font-medium">{t.save}</button>
-              </div>
+              <FormLayout dense capped={false}>
+                <FormGrid cols={3}>
+                  <MiniField
+                    label={t.first_name}
+                    value={editForm.first_name}
+                    onChange={(v) => setEditForm((prev) => ({ ...prev, first_name: v }))}
+                    onBlurCb={() => handleEditBlur(c)}
+                    onFocusCb={handleEditFocus}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") cancelEdit();
+                      if (e.key === "Enter") saveEdit(c);
+                    }}
+                  />
+                  <MiniField
+                    label={t.last_name}
+                    value={editForm.last_name}
+                    onChange={(v) => setEditForm((prev) => ({ ...prev, last_name: v }))}
+                    onBlurCb={() => handleEditBlur(c)}
+                    onFocusCb={handleEditFocus}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") cancelEdit();
+                      if (e.key === "Enter") saveEdit(c);
+                    }}
+                  />
+                  <MiniField
+                    label={t.role}
+                    value={editForm.role}
+                    onChange={(v) => setEditForm((prev) => ({ ...prev, role: v }))}
+                    onBlurCb={() => handleEditBlur(c)}
+                    onFocusCb={handleEditFocus}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") cancelEdit();
+                      if (e.key === "Enter") saveEdit(c);
+                    }}
+                  />
+                </FormGrid>
+                <FormGrid cols={2}>
+                  <MiniField
+                    label={t.email}
+                    value={editForm.email}
+                    onChange={(v) => setEditForm((prev) => ({ ...prev, email: v }))}
+                    onBlurCb={() => handleEditBlur(c)}
+                    onFocusCb={handleEditFocus}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") cancelEdit();
+                      if (e.key === "Enter") saveEdit(c);
+                    }}
+                  />
+                  <MiniField
+                    label={t.phone}
+                    value={editForm.phone}
+                    onChange={(v) => setEditForm((prev) => ({ ...prev, phone: v }))}
+                    onBlurCb={() => handleEditBlur(c)}
+                    onFocusCb={handleEditFocus}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") cancelEdit();
+                      if (e.key === "Enter") saveEdit(c);
+                    }}
+                  />
+                </FormGrid>
+                <FormActions>
+                  <Button variant="secondary" onClick={cancelEdit}>{t.cancel}</Button>
+                  <Button onClick={() => saveEdit(c)}>{t.save}</Button>
+                </FormActions>
+              </FormLayout>
             </Card>
           ) : (
             <Card padding={false}
@@ -488,71 +492,63 @@ function ContactsSection({
         {drafts.map((d, idx) => (
           <div
             key={`draft-${idx}`}
-            className="border border-dashed border-[var(--color-input-border)] rounded-xl p-3 space-y-2"
+            className="border border-dashed border-[var(--color-input-border)] rounded-xl p-3"
           >
-            <div className="grid grid-cols-3 gap-2">
-              <MiniField
-                label={t.first_name}
-                value={d.first_name}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, first_name: v } : x))
-                  )
-                }
-              />
-              <MiniField
-                label={t.last_name}
-                value={d.last_name}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, last_name: v } : x))
-                  )
-                }
-              />
-              <MiniField
-                label={t.role}
-                value={d.role}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, role: v } : x))
-                  )
-                }
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <MiniField
-                label={t.email}
-                value={d.email}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, email: v } : x))
-                  )
-                }
-              />
-              <MiniField
-                label={t.phone}
-                value={d.phone}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, phone: v } : x))
-                  )
-                }
-              />
-            </div>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => removeDraft(idx)}
-                className="text-xs text-muted hover:text-danger"
-              >
-                {t.cancel}
-              </button>
-              <button
-                onClick={() => saveDraft(idx)}
-                className="text-xs text-accent hover:text-accent-hover font-medium"
-              >
-                {t.save}
-              </button>
-            </div>
+            <FormLayout dense capped={false}>
+              <FormGrid cols={3}>
+                <MiniField
+                  label={t.first_name}
+                  value={d.first_name}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, first_name: v } : x))
+                    )
+                  }
+                />
+                <MiniField
+                  label={t.last_name}
+                  value={d.last_name}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, last_name: v } : x))
+                    )
+                  }
+                />
+                <MiniField
+                  label={t.role}
+                  value={d.role}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, role: v } : x))
+                    )
+                  }
+                />
+              </FormGrid>
+              <FormGrid cols={2}>
+                <MiniField
+                  label={t.email}
+                  value={d.email}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, email: v } : x))
+                    )
+                  }
+                />
+                <MiniField
+                  label={t.phone}
+                  value={d.phone}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, phone: v } : x))
+                    )
+                  }
+                />
+              </FormGrid>
+              <FormActions>
+                <Button variant="secondary" onClick={() => removeDraft(idx)}>{t.cancel}</Button>
+                <Button onClick={() => saveDraft(idx)}>{t.save}</Button>
+              </FormActions>
+            </FormLayout>
           </div>
         ))}
       </div>
@@ -612,18 +608,20 @@ function AddressCard({
 
   if (editing) {
     return (
-      <Card padding={false} className="p-3 space-y-2">
-        <div className="grid grid-cols-2 gap-2">
-          <MiniField label={t.label} value={form.label} onChange={(v) => setForm({ ...form, label: v })} onKeyDown={fieldKeys} />
-          <MiniField label={t.billing_name} value={form.billing_name} onChange={(v) => setForm({ ...form, billing_name: v })} onKeyDown={fieldKeys} />
-          <MiniField label={t.address_line_1} value={form.address_line1} onChange={(v) => setForm({ ...form, address_line1: v })} onKeyDown={fieldKeys} />
-          <MiniField label={t.address_line_2} value={form.address_line2} onChange={(v) => setForm({ ...form, address_line2: v })} onKeyDown={fieldKeys} />
-          <MiniField label={t.postal_city} value={form.postal_city} onChange={(v) => setForm({ ...form, postal_city: v })} onKeyDown={fieldKeys} />
-        </div>
-        <div className="flex gap-2 justify-end">
-          <button onClick={cancel} className="text-xs text-muted hover:text-[var(--color-text-secondary)]">{t.cancel}</button>
-          <button onClick={save} className="text-xs text-accent hover:text-accent-hover">{t.save}</button>
-        </div>
+      <Card padding={false} className="p-3">
+        <FormLayout dense capped={false}>
+          <FormGrid cols={2}>
+            <MiniField label={t.label} value={form.label} onChange={(v) => setForm({ ...form, label: v })} onKeyDown={fieldKeys} />
+            <MiniField label={t.billing_name} value={form.billing_name} onChange={(v) => setForm({ ...form, billing_name: v })} onKeyDown={fieldKeys} />
+            <MiniField label={t.address_line_1} value={form.address_line1} onChange={(v) => setForm({ ...form, address_line1: v })} onKeyDown={fieldKeys} />
+            <MiniField label={t.address_line_2} value={form.address_line2} onChange={(v) => setForm({ ...form, address_line2: v })} onKeyDown={fieldKeys} />
+            <MiniField label={t.postal_city} value={form.postal_city} onChange={(v) => setForm({ ...form, postal_city: v })} onKeyDown={fieldKeys} />
+          </FormGrid>
+          <FormActions>
+            <Button variant="secondary" onClick={cancel}>{t.cancel}</Button>
+            <Button onClick={save}>{t.save}</Button>
+          </FormActions>
+        </FormLayout>
       </Card>
     );
   }
@@ -720,12 +718,17 @@ function AddressesSection({
 
   return (
     <Card>
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-medium">{t.billing_addresses}</h2>
-        <Button variant="link" icon={<Plus size={12} />} onClick={addDraft} className="hover:text-accent-hover">
-          {t.add}
-        </Button>
-      </div>
+      <SectionLabel
+        as="h2"
+        className="mb-3"
+        action={
+          <Button variant="link" icon={<Plus size={12} />} onClick={addDraft} className="hover:text-accent-hover">
+            {t.add}
+          </Button>
+        }
+      >
+        {t.billing_addresses}
+      </SectionLabel>
 
       <div className="space-y-3">
         {/* Main address — read-only card from client fields */}
@@ -756,69 +759,61 @@ function AddressesSection({
         {drafts.map((d, idx) => (
           <div
             key={`draft-addr-${idx}`}
-            className="border border-dashed border-[var(--color-input-border)] rounded-xl p-3 space-y-2"
+            className="border border-dashed border-[var(--color-input-border)] rounded-xl p-3"
           >
-            <div className="grid grid-cols-2 gap-2">
-              <MiniField
-                label={t.label}
-                value={d.label}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, label: v } : x))
-                  )
-                }
-              />
-              <MiniField
-                label={t.billing_name}
-                value={d.billing_name}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, billing_name: v } : x))
-                  )
-                }
-              />
-              <MiniField
-                label={t.address_line_1}
-                value={d.address_line1}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, address_line1: v } : x))
-                  )
-                }
-              />
-              <MiniField
-                label={t.address_line_2}
-                value={d.address_line2}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, address_line2: v } : x))
-                  )
-                }
-              />
-              <MiniField
-                label={t.postal_city}
-                value={d.postal_city}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, postal_city: v } : x))
-                  )
-                }
-              />
-            </div>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => removeDraft(idx)}
-                className="text-xs text-muted hover:text-danger"
-              >
-                {t.cancel}
-              </button>
-              <button
-                onClick={() => saveDraft(idx)}
-                className="text-xs text-accent hover:text-accent-hover font-medium"
-              >
-                {t.save}
-              </button>
-            </div>
+            <FormLayout dense capped={false}>
+              <FormGrid cols={2}>
+                <MiniField
+                  label={t.label}
+                  value={d.label}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, label: v } : x))
+                    )
+                  }
+                />
+                <MiniField
+                  label={t.billing_name}
+                  value={d.billing_name}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, billing_name: v } : x))
+                    )
+                  }
+                />
+                <MiniField
+                  label={t.address_line_1}
+                  value={d.address_line1}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, address_line1: v } : x))
+                    )
+                  }
+                />
+                <MiniField
+                  label={t.address_line_2}
+                  value={d.address_line2}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, address_line2: v } : x))
+                    )
+                  }
+                />
+                <MiniField
+                  label={t.postal_city}
+                  value={d.postal_city}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, postal_city: v } : x))
+                    )
+                  }
+                />
+              </FormGrid>
+              <FormActions>
+                <Button variant="secondary" onClick={() => removeDraft(idx)}>{t.cancel}</Button>
+                <Button onClick={() => saveDraft(idx)}>{t.save}</Button>
+              </FormActions>
+            </FormLayout>
           </div>
         ))}
       </div>
@@ -860,17 +855,15 @@ function Field({
   };
 
   return (
-    <div>
-      <label className="block text-xs font-medium text-muted mb-1">{label}</label>
+    <FormField label={label}>
       <Input
         value={local}
         onFocus={() => { focusedRef.current = true; }}
         onChange={(e) => setLocal(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
-        className="py-2"
       />
-    </div>
+    </FormField>
   );
 }
 
@@ -898,8 +891,7 @@ function MiniField({
   }, [value]);
 
   return (
-    <div>
-      <label className="block text-[10px] text-muted mb-0.5">{label}</label>
+    <FormField label={label}>
       <Input
         value={local}
         onChange={(e) => {
@@ -912,9 +904,8 @@ function MiniField({
         }}
         onFocus={onFocusCb}
         onKeyDown={onKeyDown}
-        className="px-2 py-1"
       />
-    </div>
+    </FormField>
   );
 }
 

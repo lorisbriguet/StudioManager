@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Plus, Trash2, Calendar, Link, Unlink } from "lucide-react";
-import { Checkbox, Button, Select, Popover, Tag, Input, Modal, Tooltip } from "../ui";
+import { Checkbox, Button, Select, Popover, Tag, Input, Modal, Tooltip, FormField, FormGrid, FormGroup } from "../ui";
 import { MENU_ITEM } from "../ui/Dropdown";
 import { toast } from "sonner";
 import type { WorkloadColumn, WorkloadColumnType, SelectOption } from "../../types/workload";
@@ -144,12 +144,13 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
         <>
           {!isNew && onDelete && (
             <Button
-              variant="outline"
+              variant="danger"
+              icon={<Trash2 size={12} />}
               onClick={() => {
                 onDelete();
                 onClose();
               }}
-              className="mr-auto text-[var(--color-danger-text)] hover:text-red-700"
+              className="mr-auto"
             >
               {t.delete_column}
             </Button>
@@ -169,21 +170,19 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
         </>
       }
     >
-      <div className="space-y-3">
+      <FormGrid cols={1}>
         {/* Name */}
-        <div>
-          <label className="text-xs text-muted block mb-1">{t.name}</label>
+        <FormField label={t.name}>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
             autoFocus
           />
-        </div>
+        </FormField>
 
         {/* Type */}
-        <div>
-          <label className="text-xs text-muted block mb-1">{t.type}</label>
+        <FormField label={t.type}>
           <Select
             value={type}
             onChange={(e) => setType(e.target.value as WorkloadColumnType)}
@@ -194,11 +193,10 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
               </option>
             ))}
           </Select>
-        </div>
+        </FormField>
 
         {/* Icon */}
-        <div>
-          <label className="text-xs text-muted block mb-1">{t.icon}</label>
+        <FormGroup label={t.icon}>
           <div className="flex items-center gap-3">
             <div className="flex-1 border border-[var(--color-border-divider)] rounded-md overflow-hidden">
               <div className="flex flex-wrap gap-0.5 p-1.5 max-h-24 overflow-y-auto">
@@ -229,54 +227,47 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
             </div>
           </div>
           {icon && (
-            <label className="flex items-center gap-2 mt-2 text-xs text-muted cursor-pointer">
-              <Checkbox
-                checked={iconOnly}
-                onChange={(e) => setIconOnly(e.target.checked)}
-              />
-              {t.icon_only}
-            </label>
+            <Checkbox
+              label={t.icon_only}
+              checked={iconOnly}
+              onChange={(e) => setIconOnly(e.target.checked)}
+              className="mt-2"
+            />
           )}
-        </div>
+        </FormGroup>
 
         {/* Calendar color toggle (select/multi_select only) */}
         {(type === "select" || type === "multi_select") && (
-          <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
-            <Checkbox
-              checked={calendarColor}
-              onChange={(e) => setCalendarColor(e.target.checked)}
-            />
-            <Calendar size={14} className="shrink-0" />
-            {t.calendar_color_column}
-          </label>
+          <Checkbox
+            label={
+              <span className="inline-flex items-center gap-2">
+                <Calendar size={14} className="shrink-0" />
+                {t.calendar_color_column}
+              </span>
+            }
+            checked={calendarColor}
+            onChange={(e) => setCalendarColor(e.target.checked)}
+          />
         )}
 
         {/* Formula */}
         {type === "formula" && (
-          <div>
-            <label className="text-xs text-muted block mb-1">{t.formula}</label>
+          <FormField label={t.formula} error={formulaError || undefined} hint={t.formula_help}>
             <Input
               value={formula}
               onChange={(e) => handleFormulaChange(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
               placeholder="e.g. og_scope ? hours : 0"
-              aria-invalid={formulaError ? true : undefined}
-              className="font-mono aria-[invalid=true]:border-danger-text"
+              className="font-mono"
             />
-            {formulaError ? (
-              <p className="text-[10px] text-[var(--color-danger-text)] mt-1">{formulaError}</p>
-            ) : (
-              <p className="text-[10px] text-muted mt-1">{t.formula_help}</p>
-            )}
-          </div>
+          </FormField>
         )}
 
         {/* Select options */}
         {(type === "select" || type === "multi_select") && (
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs text-muted">{t.options}</label>
-              {linkedListId ? (
+          <FormGroup
+            label={t.options}
+            action={linkedListId ? (
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-accent flex items-center gap-0.5">
                     <Link size={11} />
@@ -331,7 +322,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                   )}
                 </div>
               )}
-            </div>
+          >
             <div className="space-y-1.5 mb-2">
               {options.map((opt, i) => {
                 return (
@@ -405,8 +396,8 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                         className="flex-1"
                         autoFocus
                       />
-                      <button type="button" onClick={handleSaveAsList} className="px-3 text-sm text-accent hover:underline">{t.save}</button>
-                      <IconButton icon={X} label={t.cancel} className="mx-1" onClick={() => setShowSaveAsListInput(false)} />
+                      <Button type="button" onClick={handleSaveAsList}>{t.save}</Button>
+                      <IconButton icon={X} label={t.cancel} onClick={() => setShowSaveAsListInput(false)} />
                     </div>
                   ) : (
                     <Button
@@ -422,9 +413,9 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                 </div>
               </>
             )}
-          </div>
+          </FormGroup>
         )}
-      </div>
+      </FormGrid>
     </Modal>
   );
 }

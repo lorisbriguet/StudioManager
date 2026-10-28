@@ -13,7 +13,7 @@ import { useActivities, useCreateActivity, useUpdateActivity, useDeleteActivity 
 import type { Activity } from "../types/activity";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Button, FormField, Input, PageSpinner, SectionLabel } from "../components/ui";
+import { Button, FormField, FormLayout, FormSection, FormGrid, FormGroup, FormActions, Input, PageSpinner, SectionLabel, FORM_GAP, FORM_WIDTH, FIELD_LABEL } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { TemplateEditor } from "../components/invoice/TemplateEditor";
 import {
@@ -175,19 +175,22 @@ export function ProfilePage() {
             </div>
           ) : (
             <div className="p-8">
-              <div className="flex items-center justify-between mb-4 max-w-lg">
-                <SectionLabel as="h2">
-                  {t.templates}
-                </SectionLabel>
-                <Button
-                  variant="secondary"
-                  icon={<Plus size={12} />}
-                  onClick={() => setEditingTemplate("new")}
-                >
-                  {t.new_invoice_template}
-                </Button>
-              </div>
-              <div className="space-y-1.5 max-w-lg">
+              <SectionLabel
+                as="h2"
+                className={`mb-3 ${FORM_WIDTH}`}
+                action={
+                  <Button
+                    variant="secondary"
+                    icon={<Plus size={12} />}
+                    onClick={() => setEditingTemplate("new")}
+                  >
+                    {t.new_invoice_template}
+                  </Button>
+                }
+              >
+                {t.templates}
+              </SectionLabel>
+              <div className={`space-y-1.5 ${FORM_WIDTH}`}>
                 {invoiceTemplates && invoiceTemplates.length > 0 ? (
                   invoiceTemplates.map((tmpl) => (
                     <div
@@ -226,67 +229,49 @@ export function ProfilePage() {
         </div>
       ) : (
       <div className="flex-1 overflow-y-auto p-8">
-        <form onSubmit={handleSubmit(onSubmit)} className="max-w-2xl space-y-8">
+        <FormLayout as="form" onSubmit={handleSubmit(onSubmit)}>
           {activeCategory === "business" && (
-            <section>
-              <SectionLabel as="h2" className="mb-4">
-                {t.business_profile}
-              </SectionLabel>
-              <div className="grid grid-cols-2 gap-4 max-w-lg">
+            <FormSection title={t.business_profile}>
+              <FormGrid cols={2}>
                 {profileFields.map(({ key, labelKey, type }) => (
                   <FormField
                     key={key}
                     label={t[labelKey]}
                     error={rhfErrors[key]?.message}
-                    className={key === "address" ? "col-span-2" : ""}
+                    span={key === "address" ? "full" : undefined}
                   >
                     <Input {...register(key)} type={type ?? "text"} />
                   </FormField>
                 ))}
-              </div>
-              <Button type="submit" className="mt-6" disabled={updateProfile.isPending}>
-                {updateProfile.isPending ? t.saving : t.save}
-              </Button>
-            </section>
+              </FormGrid>
+            </FormSection>
           )}
 
           {activeCategory === "bank" && (
-            <section>
-              <SectionLabel as="h2" className="mb-4">
-                {t.bank_details}
-              </SectionLabel>
-              <div className="grid grid-cols-2 gap-4 max-w-lg">
+            <FormSection title={t.bank_details}>
+              <FormGrid cols={2}>
                 {bankFields.map(({ key, labelKey }) => (
                   <FormField
                     key={key}
                     label={t[labelKey]}
                     error={rhfErrors[key]?.message}
-                    className={key === "bank_address" || key === "iban" || key === "qr_iban" ? "col-span-2" : ""}
+                    span={key === "bank_address" || key === "iban" || key === "qr_iban" ? "full" : undefined}
                   >
                     <Input {...register(key)} type="text" />
                   </FormField>
                 ))}
-              </div>
-              <Button type="submit" className="mt-6" disabled={updateProfile.isPending}>
-                {updateProfile.isPending ? t.saving : t.save}
-              </Button>
-            </section>
+              </FormGrid>
+            </FormSection>
           )}
 
           {activeCategory === "invoicing" && (
-            <section>
-              <SectionLabel as="h2" className="mb-4">
-                {t.invoice_defaults}
-              </SectionLabel>
-              <div className="space-y-4 max-w-lg">
+            <FormSection title={t.invoice_defaults}>
+              <FormGrid cols={1}>
                 {/* Activities list */}
-                <div>
-                  <label className="block text-xs font-medium text-muted mb-1">
-                    {t.activities}
-                  </label>
-                  <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center text-xs text-muted mb-1">
-                    <span>{t.activity_name_fr}</span>
-                    <span>{t.activity_name_en}</span>
+                <FormGroup label={t.activities}>
+                  <div className={`grid grid-cols-[1fr_1fr_auto] ${FORM_GAP} items-center mb-1`}>
+                    <span className={FIELD_LABEL}>{t.activity_name_fr}</span>
+                    <span className={FIELD_LABEL}>{t.activity_name_en}</span>
                     <span className="w-[14px]" />
                   </div>
                   <div className="space-y-1.5 mb-2">
@@ -300,7 +285,7 @@ export function ProfilePage() {
                       />
                     ))}
                   </div>
-                  <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                  <div className={`grid grid-cols-[1fr_1fr_auto] ${FORM_GAP} items-center`}>
                     <Input
                       value={newFr}
                       onChange={(e) => setNewFr(e.target.value)}
@@ -315,34 +300,38 @@ export function ProfilePage() {
                     />
                     <IconButton icon={Plus} label={t.add_activity} tone="accent" onClick={addNewActivity} />
                   </div>
-                </div>
+                </FormGroup>
 
                 {/* Payment terms */}
-                <FormField
-                  label={t.payment_terms_days}
-                  error={rhfErrors.default_payment_terms_days?.message}
-                >
-                  <Input
-                    {...register("default_payment_terms_days", { valueAsNumber: true })}
-                    type="number"
-                  />
-                </FormField>
+                <FormGrid cols={2}>
+                  <FormField
+                    label={t.payment_terms_days}
+                    error={rhfErrors.default_payment_terms_days?.message}
+                  >
+                    <Input
+                      {...register("default_payment_terms_days", { valueAsNumber: true })}
+                      type="number"
+                    />
+                  </FormField>
+                </FormGrid>
 
-                <div className="flex items-center gap-2">
+                <div>
                   <Toggle
                     checked={!!watch("vat_exempt")}
                     onChange={(v) => setValue("vat_exempt", v ? 1 : 0)}
-                    ariaLabel={t.vat_exempt}
+                    label={t.vat_exempt}
                   />
-                  <label className="text-sm">{t.vat_exempt}</label>
                 </div>
-              </div>
-              <Button type="submit" className="mt-6" disabled={updateProfile.isPending}>
-                {updateProfile.isPending ? t.saving : t.save}
-              </Button>
-            </section>
+              </FormGrid>
+            </FormSection>
           )}
-        </form>
+
+          <FormActions>
+            <Button type="submit" disabled={updateProfile.isPending}>
+              {updateProfile.isPending ? t.saving : t.save}
+            </Button>
+          </FormActions>
+        </FormLayout>
       </div>
       )}
     </div>
@@ -377,7 +366,7 @@ export function ActivityRow({
   const untranslated = isUntranslatedActivity({ name_fr: fr, name_en: en });
 
   return (
-    <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+    <div className={`grid grid-cols-[1fr_1fr_auto] ${FORM_GAP} items-center`}>
       <Input value={fr} onChange={(e) => setFr(e.target.value)} onBlur={commit} />
       <Input value={en} onChange={(e) => setEn(e.target.value)} onBlur={commit} />
       <div className="flex items-center gap-1">

@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect, type RefObject } from "react";
 import { Plus, Trash2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Settings2, Copy, Download, Sigma, Pin, Play, Square } from "lucide-react";
-import { Button, DragHandle, Select, Popover, Input, Modal } from "../ui";
+import { Button, DragHandle, Select, Popover, Input, Modal, FormField } from "../ui";
 import { MENU_ITEM, MENU_DIVIDER } from "../ui/Dropdown";
 import { toast } from "sonner";
 import {
@@ -702,13 +702,14 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
             </>
           }
         >
-          <label className="text-xs text-muted block mb-1">{t.template_name_prompt}</label>
-          <Input
-            value={saveTemplateName}
-            onChange={(e) => setSaveTemplateName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && confirmSaveTemplate()}
-            autoFocus
-          />
+          <FormField label={t.template_name_prompt}>
+            <Input
+              value={saveTemplateName}
+              onChange={(e) => setSaveTemplateName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && confirmSaveTemplate()}
+              autoFocus
+            />
+          </FormField>
         </Modal>
       )}
 

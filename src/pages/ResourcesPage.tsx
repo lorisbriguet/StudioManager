@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Plus, Search, ExternalLink, Trash2, X, Check } from "lucide-react";
-import { PageHeader, Button, EmptyState, FormField, Select, IconButton, Tag, FilterChip, Input, Callout, Card, Table, TableSkeleton } from "../components/ui";
+import { PageHeader, Button, EmptyState, FormField, Select, IconButton, Tag, FilterChip, Input, Callout, FormGrid, FormGridItem, FormModal, Table, TableSkeleton } from "../components/ui";
 import * as v from "../lib/validate";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { toast } from "sonner";
@@ -149,6 +149,7 @@ export function ResourcesPage() {
         <NewResourceForm
           allTags={allTags ?? []}
           existingUrls={rows.map((r) => ({ url: r.url, name: r.name }))}
+          saving={createResource.isPending}
           onSubmit={async (data) => {
             try {
               await createResource.mutateAsync(data);
@@ -299,11 +300,14 @@ function NewResourceForm({
   existingUrls,
   onSubmit,
   onCancel,
+  saving,
 }: {
   allTags: string[];
   existingUrls: { url: string; name: string }[];
   onSubmit: (data: { name: string; url: string; price: string; tags: string[] }) => void;
   onCancel: () => void;
+  /** The create is in flight: blocks a second Save / Enter. */
+  saving: boolean;
 }) {
   const t = useT();
   const [name, setName] = useState("");
@@ -351,9 +355,19 @@ function NewResourceForm({
     setTagInput("");
   };
 
+  const submit = () => {
+    const errs = v.validateForm({ name, url }, resourceSchema);
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+    const data = { name: name.trim(), url: url.trim(), price, tags };
+    if (!checkDuplicate(data)) {
+      onSubmit(data);
+    }
+  };
+
   return (
-    <Card padding={false} className="p-4 mb-4">
-      <div className="grid grid-cols-4 gap-3">
+    <FormModal open onClose={onCancel} title={t.new_resource} size="md" submitLabel={t.save} onSubmit={submit} submitting={saving}>
+      <FormGrid cols={2}>
         <FormField label={t.name} required error={errors.name}>
           <Input
             type="text"
@@ -381,44 +395,38 @@ function NewResourceForm({
             <option value="paid">{t.price_paid}</option>
           </Select>
         </FormField>
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <FormField label={t.tags}>
-              <Input
-                type="text"
-                placeholder={t.add_tag}
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === ",") {
-                    e.preventDefault();
-                    addTag(tagInput);
-                  }
-                }}
-                list="tag-suggestions"
-              />
-            </FormField>
-            <datalist id="tag-suggestions">
-              {allTags.filter((t) => !tags.includes(t)).map((t) => (
-                <option key={t} value={t} />
-              ))}
-            </datalist>
-          </div>
-        </div>
-      </div>
-      {tags.length > 0 && (
-        <div className="flex gap-1.5 mt-2 flex-wrap">
-          {tags.map((tag) => (
-            <Tag key={tag} name={tag} onRemove={() => setTags(tags.filter((t) => t !== tag))} />
+        <FormField label={t.tags}>
+          <Input
+            type="text"
+            placeholder={t.add_tag}
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter adds the tag instead of submitting the form.
+              if (e.key === "Enter" || e.key === ",") {
+                e.preventDefault();
+                addTag(tagInput);
+              }
+            }}
+            list="tag-suggestions"
+          />
+        </FormField>
+        {tags.length > 0 && (
+          <FormGridItem>
+            <TagChips tags={tags} onRemove={(tag) => setTags(tags.filter((t) => t !== tag))} />
+          </FormGridItem>
+        )}
+        <datalist id="tag-suggestions">
+          {allTags.filter((t) => !tags.includes(t)).map((t) => (
+            <option key={t} value={t} />
           ))}
-        </div>
-      )}
+        </datalist>
+      </FormGrid>
       {duplicateWarning && (
         <Callout
           tone="warning"
-          className="mt-2"
           action={
-            <div className="flex items-center gap-2">
+            <>
               <Button
                 onClick={() => { if (pendingSubmit) { onSubmit(pendingSubmit); } setDuplicateWarning(null); setPendingSubmit(null); }}
               >
@@ -427,33 +435,26 @@ function NewResourceForm({
               <Button variant="secondary" onClick={() => { setDuplicateWarning(null); setPendingSubmit(null); }}>
                 {t.cancel}
               </Button>
-            </div>
+            </>
           }
         >
           <span className="font-medium">{t.possible_duplicate}:</span>{" "}
           {t.resource_duplicate_warning.replace("{name}", duplicateWarning)}
         </Callout>
       )}
-      <div className="flex gap-2 mt-3">
-        <button
-          onClick={() => {
-            const errs = v.validateForm({ name, url }, resourceSchema);
-            setErrors(errs);
-            if (Object.keys(errs).length > 0) return;
-            const data = { name: name.trim(), url: url.trim(), price, tags };
-            if (!checkDuplicate(data)) {
-              onSubmit(data);
-            }
-          }}
-          className="px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover disabled:opacity-50"
-        >
-          {t.save}
-        </button>
-        <button onClick={onCancel} className="px-3 py-1.5 text-sm text-muted hover:text-[var(--color-text)]">
-          {t.cancel}
-        </button>
-      </div>
-    </Card>
+    </FormModal>
+  );
+}
+
+/** A resource's tags as pills; removable when `onRemove` is given. `children` follow the pills (the add-tag input). */
+function TagChips({ tags, onRemove, children }: { tags: string[]; onRemove?: (tag: string) => void; children?: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {tags.map((tag) => (
+        <Tag key={tag} name={tag} onRemove={onRemove && (() => onRemove(tag))} />
+      ))}
+      {children}
+    </div>
   );
 }
 
@@ -548,11 +549,11 @@ function ResourceTableRow({
           />
         </Table.Td>
         <Table.Td>
-          <div className="flex flex-wrap gap-1 items-center">
-            {tags.map((tag) => (
-              <Tag key={tag} name={tag} onRemove={() => setTags(tags.filter((t) => t !== tag))} />
-            ))}
-            <input
+          <TagChips tags={tags} onRemove={(tag) => setTags(tags.filter((t) => t !== tag))}>
+            <Input
+              variant="bare"
+              size="sm"
+              fullWidth={false}
               type="text"
               placeholder={t.add_tag}
               value={tagInput}
@@ -566,14 +567,14 @@ function ResourceTableRow({
                 }
               }}
               list={`edit-tag-suggestions-${resource.id}`}
-              className="border-none outline-none text-xs w-16 bg-transparent"
+              className="w-16"
             />
             <datalist id={`edit-tag-suggestions-${resource.id}`}>
               {allTags.filter((t) => !tags.includes(t)).map((t) => (
                 <option key={t} value={t} />
               ))}
             </datalist>
-          </div>
+          </TagChips>
         </Table.Td>
         <Table.Td>
           <Select value={price} onChange={(e) => setPrice(e.target.value)} fullWidth={false}>
@@ -606,11 +607,7 @@ function ResourceTableRow({
       <Table.Select checked={isSelected} onToggle={onToggleSelect} />
       <Table.Td className="font-medium">{resource.name}</Table.Td>
       <Table.Td>
-        <div className="flex flex-wrap gap-1">
-          {resource.tags.map((tag) => (
-            <Tag key={tag} name={tag} />
-          ))}
-        </div>
+        <TagChips tags={resource.tags} />
       </Table.Td>
       <Table.Td>
         {resource.price && (

@@ -4,7 +4,7 @@ import { useT } from "../../i18n/useT";
 import { useTimeEntriesWithDetails, useUpdateTimeEntry, useDeleteTimeEntry } from "../../db/hooks/useTimeEntries";
 import { useProjects } from "../../db/hooks/useProjects";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { Button, DatePicker, Select, IconButton, Input, Table, TableSkeleton } from "../ui";
+import { Button, DatePicker, Select, IconButton, Input, Table, TableSkeleton, FormField, FORM_GAP } from "../ui";
 import { SectionHeader } from "../ui/Settings";
 
 function formatDuration(minutes: number): string {
@@ -68,25 +68,20 @@ export function TimeEntriesManager() {
       <SectionHeader title={t.time_entries_management} />
 
       {/* Filters */}
-      <div className="flex flex-wrap items-end gap-3 mb-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted">{t.start}</label>
+      <div className={`flex flex-wrap items-end ${FORM_GAP} mb-4`}>
+        <FormField label={t.start}>
           <DatePicker size="sm" fullWidth={false}
             value={startDate || null}
             onChange={(v) => setStartDate(v ?? "")}
-            aria-label={t.start}
           />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted">{t.end_date}</label>
+        </FormField>
+        <FormField label={t.end_date}>
           <DatePicker size="sm" fullWidth={false}
             value={endDate || null}
             onChange={(v) => setEndDate(v ?? "")}
-            aria-label={t.end_date}
           />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted">{t.filter_by_project}</label>
+        </FormField>
+        <FormField label={t.filter_by_project}>
           <Select
             value={projectFilter ?? ""}
             onChange={(e) => setProjectFilter(e.target.value ? Number(e.target.value) : undefined)}
@@ -97,7 +92,7 @@ export function TimeEntriesManager() {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </Select>
-        </div>
+        </FormField>
         {(startDate || endDate || projectFilter) && (
           <Button
             type="button"

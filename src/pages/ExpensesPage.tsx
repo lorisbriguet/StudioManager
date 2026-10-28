@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Plus, Paperclip, Eye, Upload, Trash2, CheckCircle, CalendarCheck, Receipt, Settings2, XCircle, Pencil } from "lucide-react";
-import { Button, DatePicker, Input, Select, FormField, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, Card, Modal, Popover, IconButton, Tag, Callout, Tooltip } from "../components/ui";
+import { Button, DatePicker, Input, Select, FormField, FormGrid, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, Modal, Popover, IconButton, Tag, Callout, Tooltip } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
+import { ReceiptNote } from "../components/shared/ReceiptNote";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { formatDisplayDate } from "../utils/formatDate";
@@ -398,19 +399,21 @@ export function ExpensesPage() {
         onClose={() => setEditDateExpense(null)}
         title={t.edit_paid_date}
         footer={
-          <div className="flex gap-2 justify-end">
+          <>
             <Button variant="secondary" onClick={() => setEditDateExpense(null)}>{t.cancel}</Button>
             <Button onClick={saveEditDate}>{t.save}</Button>
-          </div>
+          </>
         }
       >
-        <DatePicker
-          fullWidth
-          value={editDateValue || null}
-          onChange={(v) => setEditDateValue(v ?? "")}
-          onKeyDown={(e) => { if (e.key === "Enter") saveEditDate(); }}
-          autoFocus
-        />
+        <FormField label={t.date}>
+          <DatePicker
+            fullWidth
+            value={editDateValue || null}
+            onChange={(v) => setEditDateValue(v ?? "")}
+            onKeyDown={(e) => { if (e.key === "Enter") saveEditDate(); }}
+            autoFocus
+          />
+        </FormField>
       </Modal>
       <BulkActionBar
         count={bulk.count}
@@ -588,15 +591,26 @@ export function NewExpenseForm({
     undetect("amount");
   };
 
+  const submit = () => {
+    const errs = v.validateForm(
+      { supplier: form.supplier, amount: fieldValue("amount"), invoice_date: form.invoice_date },
+      expenseSchema
+    );
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+    // DB failures surface via the mutation's onError toast (backstop).
+    onSave({
+      ...form,
+      due_date: prefill?.due_date ?? null,
+      paid_date: null,
+      receipt_path: null,
+    });
+  };
+
   return (
-    <Card className="mb-6 space-y-3">
-      {prefill?.receiptPath && (
-        <div className="flex items-center gap-2 text-xs text-success">
-          <Paperclip size={12} />
-          <span>{t.receipt_will_be_attached} {prefill.receiptPath.split("/").pop()}</span>
-        </div>
-      )}
-      <div className="grid grid-cols-2 gap-3">
+    <FormModal open onClose={onCancel} title={t.new_expense} submitLabel={t.save} onSubmit={submit}>
+      {prefill?.receiptPath && <ReceiptNote path={prefill.receiptPath} />}
+      <FormGrid cols={2}>
         <div className="relative">
           <FormField
             label={t.supplier}
@@ -614,12 +628,14 @@ export function NewExpenseForm({
                 undetect("supplier");
               }}
               onFocus={() => setShowSuggestions(true)}
+              // Suggestions are mouse-only, so Enter submits the form; close them first.
+              onKeyDown={(e) => { if (e.key === "Enter") setShowSuggestions(false); }}
               onBlur={() => {
                 setTimeout(() => setShowSuggestions(false), 200);
                 if (!pickingSuggestionRef.current) validateOnBlur("supplier");
                 pickingSuggestionRef.current = false;
               }}
-              className={`py-2 ${detectedClass("supplier")}`}
+              className={detectedClass("supplier")}
               autoComplete="off"
             />
           </FormField>
@@ -655,7 +671,6 @@ export function NewExpenseForm({
           <Select
             value={form.category_code}
             onChange={(e) => setForm({ ...form, category_code: e.target.value })}
-            className="py-2"
           >
             {categories.map((c) => (
               <option key={c.code} value={c.code}>
@@ -702,40 +717,16 @@ export function NewExpenseForm({
               checkForDuplicates();
               validateOnBlur("amount");
             }}
-            className={`py-2 ${detectedClass("amount")}`}
+            className={detectedClass("amount")}
           />
         </FormField>
-      </div>
+      </FormGrid>
       {duplicateWarning && (
         <Callout tone="warning">
           <span className="font-medium">{t.possible_duplicate}:</span>{" "}
           {duplicateWarning.supplier} — {duplicateWarning.amount.toFixed(2)} CHF ({formatDisplayDate(duplicateWarning.date)})
         </Callout>
       )}
-      <div className="flex gap-2">
-        <Button variant="secondary" onClick={onCancel}>
-          {t.cancel}
-        </Button>
-        <Button
-          onClick={() => {
-            const errs = v.validateForm(
-              { supplier: form.supplier, amount: fieldValue("amount"), invoice_date: form.invoice_date },
-              expenseSchema
-            );
-            setErrors(errs);
-            if (Object.keys(errs).length > 0) return;
-            // DB failures surface via the mutation's onError toast (backstop).
-            onSave({
-              ...form,
-              due_date: prefill?.due_date ?? null,
-              paid_date: null,
-              receipt_path: null,
-            });
-          }}
-        >
-          {t.save}
-        </Button>
-      </div>
-    </Card>
+    </FormModal>
   );
 }

@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { PDFViewer } from "@react-pdf/renderer";
 import { ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
-import { Checkbox, Button, Input, Select, IconButton, SectionLabel } from "../ui";
+import { Checkbox, Button, Input, Select, IconButton, FormField, FormLayout, FormSection, FormGrid, FormGroup, FormActions } from "../ui";
 import { InvoicePDF } from "./InvoicePDF";
 import { useT } from "../../i18n/useT";
 import {
@@ -294,123 +294,126 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
   return (
     <div className="flex h-full min-h-0">
       {/* Left panel: settings */}
-      <div className="w-[340px] shrink-0 border-r border-[var(--color-border-divider)] overflow-y-auto p-6 space-y-5 bg-[var(--color-surface)]">
-        <SectionLabel as="h2">
-          {t.template_editor}
-        </SectionLabel>
+      <div className="w-[340px] shrink-0 border-r border-[var(--color-border-divider)] overflow-y-auto p-6 bg-[var(--color-surface)]">
+        <FormLayout capped={false}>
+          <FormSection title={t.template_editor}>
+            <FormGrid cols={1}>
+              {/* Name */}
+              <FormField label={t.name}>
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.new_invoice_template} />
+              </FormField>
 
-        {/* Name */}
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1">{t.name}</label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.new_invoice_template} />
-        </div>
+              {/* Accent color */}
+              <FormGroup label={t.invoice_template_accent_color}>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={accentColor}
+                    onChange={(e) => setAccentColor(e.target.value)}
+                    aria-label={t.invoice_template_accent_color}
+                    className="h-[26px] w-10 cursor-pointer rounded-md border border-[var(--color-border-divider)] bg-[var(--color-input-bg)] p-0.5"
+                  />
+                  <Input
+                    value={accentColor}
+                    onChange={(e) => setAccentColor(e.target.value)}
+                    aria-label={t.invoice_template_accent_color}
+                    fullWidth={false}
+                    className="w-28 font-mono"
+                  />
+                </div>
+              </FormGroup>
 
-        {/* Accent color */}
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1">{t.invoice_template_accent_color}</label>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={accentColor}
-              onChange={(e) => setAccentColor(e.target.value)}
-              className="h-8 w-10 cursor-pointer rounded-lg border border-[var(--color-border-divider)] bg-[var(--color-input-bg)] p-0.5"
-            />
-            <Input value={accentColor} onChange={(e) => setAccentColor(e.target.value)} className="w-28 font-mono text-xs" />
-          </div>
-        </div>
+              {/* Font family */}
+              <FormField label={t.font_family}>
+                <Select
+                  value={fontFamily}
+                  onChange={(e) => setFontFamily(e.target.value as FontFamily)}
+                >
+                  <option value="Helvetica">Helvetica</option>
+                  <option value="Times-Roman">Times Roman</option>
+                  <option value="Courier">Courier</option>
+                </Select>
+              </FormField>
 
-        {/* Font family */}
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1">{t.font_family}</label>
-          <Select
-            value={fontFamily}
-            onChange={(e) => setFontFamily(e.target.value as FontFamily)}
-          >
-            <option value="Helvetica">Helvetica</option>
-            <option value="Times-Roman">Times Roman</option>
-            <option value="Courier">Courier</option>
-          </Select>
-        </div>
+              {/* Logo position */}
+              <FormGroup label={t.logo_position}>
+                <SegmentedControl<LogoPosition>
+                  aria-label={t.logo_position}
+                  value={logoPosition}
+                  onChange={setLogoPosition}
+                  options={[
+                    { value: "left", label: t.logo_left },
+                    { value: "center", label: t.logo_center },
+                    { value: "right", label: t.logo_right },
+                    { value: "hide", label: t.logo_hide },
+                  ]}
+                />
+              </FormGroup>
 
-        {/* Logo position */}
-        <div>
-          <div className="text-xs font-medium text-muted mb-2">{t.logo_position}</div>
-          <SegmentedControl<LogoPosition>
-            aria-label={t.logo_position}
-            value={logoPosition}
-            onChange={setLogoPosition}
-            options={[
-              { value: "left", label: t.logo_left },
-              { value: "center", label: t.logo_center },
-              { value: "right", label: t.logo_right },
-              { value: "hide", label: t.logo_hide },
-            ]}
-          />
-        </div>
+              {/* Margins */}
+              <FormGroup label={t.margins}>
+                <FormGrid cols={2}>
+                  {([
+                    { label: t.margin_top ?? "Top", value: marginTop, set: setMarginTop },
+                    { label: t.margin_right ?? "Right", value: marginRight, set: setMarginRight },
+                    { label: t.margin_bottom ?? "Bottom", value: marginBottom, set: setMarginBottom },
+                    { label: t.margin_left ?? "Left", value: marginLeft, set: setMarginLeft },
+                  ] as { label: string; value: number; set: (v: number) => void }[]).map(({ label, value, set }) => (
+                    <FormField key={label} label={label}>
+                      <Input type="number" value={value} onChange={(e) => set(Number(e.target.value))} className="text-right" />
+                    </FormField>
+                  ))}
+                </FormGrid>
+              </FormGroup>
 
-        {/* Margins */}
-        <div>
-          <label className="block text-xs font-medium text-muted mb-2">{t.margins}</label>
-          <div className="grid grid-cols-2 gap-2">
-            {([
-              { label: t.margin_top ?? "Top", value: marginTop, set: setMarginTop },
-              { label: t.margin_right ?? "Right", value: marginRight, set: setMarginRight },
-              { label: t.margin_bottom ?? "Bottom", value: marginBottom, set: setMarginBottom },
-              { label: t.margin_left ?? "Left", value: marginLeft, set: setMarginLeft },
-            ] as { label: string; value: number; set: (v: number) => void }[]).map(({ label, value, set }) => (
-              <div key={label}>
-                <label className="block text-xs text-muted mb-0.5">{label}</label>
-                <Input type="number" value={value} onChange={(e) => set(Number(e.target.value))} className="text-right" />
-              </div>
-            ))}
-          </div>
-        </div>
+              {/* Field visibility toggles */}
+              <FormGroup label={t.visibility}>
+                <div className="flex flex-col gap-2">
+                  {([
+                    { label: t.show_notes, value: showNotes, set: setShowNotes },
+                    { label: t.show_project_name, value: showProjectName, set: setShowProjectName },
+                    { label: t.show_po_number, value: showPoNumber, set: setShowPoNumber },
+                    { label: t.show_bank_details, value: showBankDetails, set: setShowBankDetails },
+                    { label: t.show_qr_bill, value: showQrBill, set: setShowQrBill },
+                    { label: t.show_footer, value: showFooter, set: setShowFooter },
+                  ] as const).map(({ label, value, set }) => (
+                    <Checkbox
+                      key={label}
+                      label={label}
+                      checked={value}
+                      onChange={(e) => (set as (v: boolean) => void)(e.target.checked)}
+                    />
+                  ))}
+                </div>
+              </FormGroup>
 
-        {/* Field visibility toggles */}
-        <div>
-          <label className="block text-xs font-medium text-muted mb-2">{t.visibility}</label>
-          <div className="space-y-2">
-            {([
-              { label: t.show_notes, value: showNotes, set: setShowNotes },
-              { label: t.show_project_name, value: showProjectName, set: setShowProjectName },
-              { label: t.show_po_number, value: showPoNumber, set: setShowPoNumber },
-              { label: t.show_bank_details, value: showBankDetails, set: setShowBankDetails },
-              { label: t.show_qr_bill, value: showQrBill, set: setShowQrBill },
-              { label: t.show_footer, value: showFooter, set: setShowFooter },
-            ] as const).map(({ label, value, set }) => (
-              <label key={label} className="flex items-center gap-2 text-sm cursor-pointer">
-                <Checkbox checked={value} onChange={(e) => (set as (v: boolean) => void)(e.target.checked)} />
-                {label}
-              </label>
-            ))}
-          </div>
-        </div>
+              {/* Column order */}
+              <FormGroup label={t.column_order}>
+                <div className="space-y-1">
+                  {columnOrder.map((col, idx) => (
+                    <div key={col} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--color-border-divider)] bg-[var(--color-bg)] text-sm">
+                      <span className="flex-1">{columnLabels[col]}</span>
+                      <IconButton size="xs" icon={ChevronUp} label={t.move_up} onClick={() => moveColumn(idx, -1)} disabled={idx === 0} />
+                      <IconButton size="xs" icon={ChevronDown} label={t.move_down} onClick={() => moveColumn(idx, 1)} disabled={idx === columnOrder.length - 1} />
+                    </div>
+                  ))}
+                </div>
+              </FormGroup>
+            </FormGrid>
+          </FormSection>
 
-        {/* Column order */}
-        <div>
-          <label className="block text-xs font-medium text-muted mb-2">{t.column_order}</label>
-          <div className="space-y-1">
-            {columnOrder.map((col, idx) => (
-              <div key={col} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--color-border-divider)] bg-[var(--color-bg)] text-sm">
-                <span className="flex-1">{columnLabels[col]}</span>
-                <IconButton size="xs" icon={ChevronUp} label={t.move_up} onClick={() => moveColumn(idx, -1)} disabled={idx === 0} />
-                <IconButton size="xs" icon={ChevronDown} label={t.move_down} onClick={() => moveColumn(idx, 1)} disabled={idx === columnOrder.length - 1} />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-2 pt-2 pb-4">
-          <Button onClick={handleSave} disabled={isPending}>
-            {isPending ? t.saving : t.save}
-          </Button>
-          {template?.id && !template.is_default && (
-            <Button variant="secondary" onClick={handleSetDefault} disabled={setDefault.isPending}>
-              {t.set_as_default}
+          {/* Actions: secondary, then primary last */}
+          <FormActions>
+            {template?.id && !template.is_default && (
+              <Button variant="secondary" onClick={handleSetDefault} disabled={setDefault.isPending}>
+                {t.set_as_default}
+              </Button>
+            )}
+            <Button onClick={handleSave} disabled={isPending}>
+              {isPending ? t.saving : t.save}
             </Button>
-          )}
-        </div>
+          </FormActions>
+        </FormLayout>
       </div>
 
       {/* Right panel: live PDF preview */}

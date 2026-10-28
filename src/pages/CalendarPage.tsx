@@ -8,7 +8,7 @@ import interactionPlugin from "@fullcalendar/interaction";
 import type { EventInput, EventContentArg, EventDropArg } from "@fullcalendar/core";
 import type { DateClickArg, EventResizeDoneArg } from "@fullcalendar/interaction";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
-import { Button, Select, Popover, Input } from "../components/ui";
+import { Button, Select, Popover, Input, FormActions } from "../components/ui";
 import { useT } from "../i18n/useT";
 import { useTasksWithDueDate, useUpdateTask, useUpdateSubtask, useCreateTask, useCreateSubtask, useTasksByProject } from "../db/hooks/useTasks";
 import { useProjects, useUpdateProject } from "../db/hooks/useProjects";
@@ -697,14 +697,14 @@ export function QuickCreatePopup({
         />
       )}
 
-      <div className="flex justify-end gap-1.5">
-        <Button variant="outline" onClick={onClose}>
+      <FormActions>
+        <Button variant="secondary" onClick={onClose}>
           {t.cancel}
         </Button>
         <Button onClick={handleSubmit} disabled={!canSubmit}>
           {t.add}
         </Button>
-      </div>
+      </FormActions>
     </Popover>
   );
 }

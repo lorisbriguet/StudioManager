@@ -5,6 +5,7 @@ import { Modal } from "./ui/Modal";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { FormField } from "./ui/FormField";
+import { FormGrid } from "./ui/Form";
 import { Radio } from "./ui/Checkbox";
 import { createOrganisation, DEFAULT_ORG_PREFS, type Organisation } from "../lib/orgs";
 import { useOrgStore } from "../stores/org-store";
@@ -71,12 +72,12 @@ export function OrgCreateDialog({ open, onClose }: { open: boolean; onClose: () 
       title={t.new_organisation}
       footer={
         <>
-          <Button variant="outline" onClick={() => { reset(); onClose(); }}>{t.cancel}</Button>
+          <Button variant="secondary" onClick={() => { reset(); onClose(); }}>{t.cancel}</Button>
           <Button onClick={submit} loading={busy}>{t.create_organisation}</Button>
         </>
       }
     >
-      <div className="space-y-4">
+      <FormGrid cols={1}>
         <FormField label={t.organisation_name} required error={error}>
           <Input
             value={name}
@@ -101,7 +102,7 @@ export function OrgCreateDialog({ open, onClose }: { open: boolean; onClose: () 
             onChange={() => setSeed(true)}
           />
         </fieldset>
-      </div>
+      </FormGrid>
     </Modal>
   );
 }

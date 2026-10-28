@@ -7,6 +7,7 @@ import { Toggle } from "../ui/Toggle";
 import { Button } from "../ui/Button";
 import { SectionLabel } from "../ui/SectionLabel";
 import { Checkbox } from "../ui/Checkbox";
+import { FormActions } from "../ui/Form";
 import { useOrgStore } from "../../stores/org-store";
 import { useT } from "../../i18n/useT";
 
@@ -132,13 +133,11 @@ export function AgentAccessCard() {
             <ul className="space-y-1">
               {organisations.map((o) => (
                 <li key={o.id}>
-                  <label className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={info.orgs[o.id] !== false}
-                      onChange={(e) => void save({ enabled: info.enabled, allowMoney: info.allowMoney, orgs: { ...info.orgs, [o.id]: e.target.checked } })}
-                    />
-                    {o.name}
-                  </label>
+                  <Checkbox
+                    label={o.name}
+                    checked={info.orgs[o.id] !== false}
+                    onChange={(e) => void save({ enabled: info.enabled, allowMoney: info.allowMoney, orgs: { ...info.orgs, [o.id]: e.target.checked } })}
+                  />
                 </li>
               ))}
             </ul>
@@ -163,10 +162,10 @@ export function AgentAccessCard() {
               <div className="rounded-lg border border-[var(--color-border-divider)] p-3 my-2">
                 <p className="text-xs text-muted mb-1">{t.agent_access_preview_hint}</p>
                 <pre className="text-xs overflow-auto max-h-48 whitespace-pre-wrap">{preview}</pre>
-                <div className="flex gap-2 mt-2">
+                <FormActions className="mt-2">
+                  <Button variant="secondary" onClick={() => setPreview(null)}>{t.agent_access_cancel}</Button>
                   <Button onClick={() => void confirmAdd()}>{t.agent_access_confirm}</Button>
-                  <Button variant="outline" onClick={() => setPreview(null)}>{t.agent_access_cancel}</Button>
-                </div>
+                </FormActions>
               </div>
             )}
             {installed && <p className="text-xs text-muted py-1">{t.agent_access_installed}</p>}
@@ -207,9 +206,9 @@ export function AgentAccessCard() {
       )}
 
       <div className="py-2.5">
-        <button type="button" className="text-xs text-accent hover:underline" onClick={() => void openUrl(HELP_URL)}>
+        <Button type="button" variant="link" onClick={() => void openUrl(HELP_URL)}>
           {t.agent_access_help}
-        </button>
+        </Button>
       </div>
     </SettingsCard>
   );

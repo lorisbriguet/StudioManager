@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Timer } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Input, Kbd, Modal, SECTION_LABEL } from "./ui";
+import { Button, Input, Kbd, Modal, FormField, FormGrid, FormGroup } from "./ui";
 import { useAppStore } from "../stores/app-store";
 import { useProjects } from "../db/hooks/useProjects";
 import { useTasksByProject } from "../db/hooks/useTasks";
@@ -61,7 +61,24 @@ export function QuickTimerModal() {
   };
 
   return (
-    <Modal open={open} onClose={close} position="top" size="sm" padding={false} aria-label={t.quick_timer}>
+    <Modal
+      open={open}
+      onClose={close}
+      position="top"
+      size="sm"
+      padding={false}
+      aria-label={t.quick_timer}
+      footer={
+        <Button
+          type="button"
+          icon={<Timer size={12} />}
+          disabled={!selectedProjectId || !selectedTaskId}
+          onClick={handleStart}
+        >
+          {t.start_timer_for}
+        </Button>
+      }
+    >
       {/* Header */}
       <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[var(--color-border)]">
         <Timer size={16} className="text-[var(--color-accent)] shrink-0" />
@@ -70,32 +87,31 @@ export function QuickTimerModal() {
       </div>
 
       {/* Body */}
-      <div className="p-4 flex flex-col gap-3">
+      <FormGrid cols={1} className="p-4">
         {/* Project picker */}
-        <div className="flex flex-col gap-1.5">
-          <label className={SECTION_LABEL}>
-            {t.select_project}
-          </label>
-          <Input
-            type="text"
-            placeholder={t.select_project}
-            value={selectedProject ? selectedProject.name : projectSearch}
-            onChange={(e) => {
-              setProjectSearch(e.target.value);
-              setSelectedProjectId(null);
-              setSelectedTaskId(null);
-            }}
-            onFocus={() => {
-              if (selectedProject) {
-                setProjectSearch(selectedProject.name);
+        <div>
+          <FormField label={t.select_project}>
+            <Input
+              type="text"
+              placeholder={t.select_project}
+              value={selectedProject ? selectedProject.name : projectSearch}
+              onChange={(e) => {
+                setProjectSearch(e.target.value);
                 setSelectedProjectId(null);
                 setSelectedTaskId(null);
-              }
-            }}
-            autoFocus
-          />
+              }}
+              onFocus={() => {
+                if (selectedProject) {
+                  setProjectSearch(selectedProject.name);
+                  setSelectedProjectId(null);
+                  setSelectedTaskId(null);
+                }
+              }}
+              autoFocus
+            />
+          </FormField>
           {!selectedProjectId && projectSearch && filteredProjects.length > 0 && (
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden max-h-44 overflow-y-auto shadow-md">
+            <div className="mt-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden max-h-44 overflow-y-auto shadow-md">
               {filteredProjects.map((p) => (
                 <button
                   key={p.id}
@@ -116,10 +132,7 @@ export function QuickTimerModal() {
 
         {/* Task picker */}
         {selectedProjectId && (
-          <div className="flex flex-col gap-1.5">
-            <label className={SECTION_LABEL}>
-              {t.select_task}
-            </label>
+          <FormGroup label={t.select_task}>
             {todoTasks.length === 0 ? (
               <p className="text-sm text-muted px-1">{t.no_results}</p>
             ) : (
@@ -141,21 +154,9 @@ export function QuickTimerModal() {
                 ))}
               </div>
             )}
-          </div>
+          </FormGroup>
         )}
-
-        {/* Start button */}
-        <Button
-          type="button"
-          variant="primary"
-          icon={<Timer size={12} />}
-          disabled={!selectedProjectId || !selectedTaskId}
-          onClick={handleStart}
-          className="mt-1 w-full justify-center disabled:cursor-not-allowed"
-        >
-          {t.start_timer_for}
-        </Button>
-      </div>
+      </FormGrid>
     </Modal>
   );
 }

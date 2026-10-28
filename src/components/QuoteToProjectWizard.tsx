@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { format, addMonths } from "date-fns";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
-import { Checkbox, Button, DatePicker, FormField, Input, Modal, Textarea } from "./ui";
+import { Checkbox, Button, DatePicker, FormField, FormGrid, Input, Modal, Textarea } from "./ui";
 import * as v from "../lib/validate";
 import { useT } from "../i18n/useT";
 import { useCreateProjectFromQuote } from "../db/hooks/useProjects";
@@ -103,7 +103,44 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
   const steps = [t.step_review_items, t.step_project_details, t.step_confirm];
 
   return (
-    <Modal open={open} onClose={onClose} title={t.generate_project_from_quote} size="lg">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={t.generate_project_from_quote}
+      size="lg"
+      footer={
+        <>
+          <Button
+            variant="secondary"
+            onClick={() => (step === 0 ? onClose() : setStep(step - 1))}
+          >
+            {step === 0 ? t.cancel : t.back}
+          </Button>
+          {step < 2 ? (
+            <Button
+              onClick={() => {
+                if (step === 1) {
+                  const errs = v.validateForm({ name: projectName, deadline }, wizardSchema);
+                  setErrors(errs);
+                  if (Object.keys(errs).length > 0) return;
+                }
+                setStep(step + 1);
+              }}
+              disabled={step === 0 && includedCount === 0}
+            >
+              {t.next}
+            </Button>
+          ) : (
+            <Button
+              onClick={handleCreate}
+              disabled={!projectName.trim() || createProject.isPending}
+            >
+              {t.confirm_create_project}
+            </Button>
+          )}
+        </>
+      }
+    >
       {/* Step indicator */}
       <div className="flex items-center gap-2 mb-5">
         {steps.map((label, i) => (
@@ -171,7 +208,7 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
 
       {/* Step 2: Project details */}
       {step === 1 && (
-        <div className="space-y-3">
+        <FormGrid cols={1}>
           <FormField label={t.project_name} required error={errors.name}>
             <Input
               type="text"
@@ -194,7 +231,7 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
               rows={2}
             />
           </FormField>
-        </div>
+        </FormGrid>
       )}
 
       {/* Step 3: Confirm */}
@@ -212,37 +249,6 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
         </div>
       )}
 
-      {/* Navigation */}
-      <div className="flex justify-between mt-5">
-        <Button
-          variant="secondary"
-          onClick={() => (step === 0 ? onClose() : setStep(step - 1))}
-        >
-          {step === 0 ? t.cancel : t.back}
-        </Button>
-        {step < 2 ? (
-          <Button
-            onClick={() => {
-              if (step === 1) {
-                const errs = v.validateForm({ name: projectName, deadline }, wizardSchema);
-                setErrors(errs);
-                if (Object.keys(errs).length > 0) return;
-              }
-              setStep(step + 1);
-            }}
-            disabled={step === 0 && includedCount === 0}
-          >
-            {t.next}
-          </Button>
-        ) : (
-          <Button
-            onClick={handleCreate}
-            disabled={!projectName.trim() || createProject.isPending}
-          >
-            {t.confirm_create_project}
-          </Button>
-        )}
-      </div>
     </Modal>
   );
 }

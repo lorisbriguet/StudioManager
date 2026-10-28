@@ -110,8 +110,8 @@ Every small uppercase label uses `src/components/ui/SectionLabel.tsx`. There is 
 |---------|---------|
 | Table cells | `Table` sets them: 16px sides (12px compact), see [Tables](#tables) |
 | Card padding | `p-4` (compact: `px-3 py-2.5`) |
-| Form field grid | `grid gap-3` |
-| Button row | `flex gap-2`, primary action rightmost, destructive pushed left with `mr-auto` |
+| Form field grid | `FormGrid` (12px both ways), see [Forms](#forms) |
+| Button row | `FormActions` / Modal `footer`: right-aligned, primary last, destructive on the far left |
 | Sidebar nav item | `px-3.5 py-1.5 mx-2` |
 | Page sections | `mb-4` between blocks, `mb-6` after the page header |
 
@@ -479,6 +479,42 @@ import { invoiceStatusVariant, quoteStatusVariant, taskStatusVariant, projectSta
 
 ---
 
+## Forms
+
+Forms are built from `FormLayout`, `FormSection`, `FormGrid`, `FormField` and `FormActions` (`src/components/ui/Form.tsx`, `FormField.tsx`).
+
+```tsx
+<FormLayout as="form" onSubmit={submit}>          {/* 24px between blocks, capped at 768px */}
+  <FormSection title={t.client}>                  {/* SectionLabel, 12px, fields */}
+    <FormGrid cols={2}>                           {/* 1–4 columns, 12px gaps */}
+      <FormField label={t.client} required error={errors.client}><DropdownSelect … /></FormField>
+      <FormField label={t.billing_address} hint={t.billing_hint} span="full"><Input … /></FormField>
+    </FormGrid>
+    <Checkbox label={t.use_global_rate} … />
+  </FormSection>
+  <FormActions destructive={<Button variant="danger">{t.delete}</Button>}>
+    <Button variant="secondary">{t.cancel}</Button>
+    <Button type="submit">{t.create}</Button>
+  </FormActions>
+</FormLayout>
+```
+
+- **Labels:** above the field, 12px muted, plain weight, linked to the field. Only `FormField` draws them; a label over several controls uses `FIELD_LABEL`. No 10px, bold or uppercase field labels, and no placeholder-only forms.
+- **Required:** an accent `*`. **Hint:** a muted line under the field. **Error:** the red line that replaces the hint, announced, with the field's border in red.
+- **Fields:** one height, 26px. Don't add padding to make one taller.
+- **Checkboxes and toggles:** their own `label` / `description`, never wrapped in a hand-written `<label>`.
+- **Actions:** right-aligned with the primary last: Cancel (secondary), other actions, primary. A destructive action sits on the far left. In a Modal they go in `footer`, which is the same row.
+- **Creating a record** (client, expense, income, project, resource) happens in a `FormModal`: fields in the body, which is a `<form>` so Enter submits; Cancel · Create in the footer. A field that uses Enter itself (suggestions, tag entry) calls `preventDefault`.
+- **Spanning:** `FormField span={2 | 3 | 4 | "full"}`; anything else in a grid (a checkbox row, a note) goes in `FormGridItem`.
+- **Buttons inside a form** don't submit it unless they are `type="submit"`: `Button` defaults to `type="button"`. `FormModal`'s form is `noValidate`, so the app's own errors show, not the browser's.
+- **Errors without a visible label** (a row rename, the line-items check) use `FieldError`.
+- **A label over several controls** (a colour and its hex field, a list of checkboxes, an options editor) is a `FormGroup`; its `action` sits at the right of the label row.
+- **Small editor cards** (a contact, an address) use `FormLayout dense capped={false}`: 12px between the fields and the buttons.
+- **Width:** page forms cap at 768px (`FORM_WIDTH`). Pass `capped={false}` in modals, popovers and side panels.
+- **Not this layout:** settings rows (`SettingRow`, label left and control right), filter bars, single-field inline adds and row editing in tables.
+
+---
+
 ## Tables
 
 Every data table uses `Table` (`src/components/ui/Table.tsx`). Don't write `<table>`, `<th>` or `<td>` classes by hand.
@@ -535,6 +571,7 @@ Shared class strings and small parts that the components are built from (`src/co
 | `SURFACE` / `SURFACE_FILL` | A raised surface with / without a border. Add the shadow per use | Popover, Modal / BulkActionBar |
 | `PILL` / `PILL_XS` | The 20px and 16px label pills | Tag, Badge, CountBadge, status pills |
 | `MENU_TONE` | Menu row tones | Dropdown, ContextMenu |
+| `FORM_GAP` / `FORM_STACK` / `FORM_WIDTH` / `FORM_ACTIONS` / `FIELD_LABEL` / `FORM_SPAN` | Form spacing, width, the action row and the field label | FormGrid, FormLayout, FormActions, Modal footer, FormField |
 | `TABLE_X` / `TABLE_ROW_H` / `TABLE_TH` / `NUMERIC` | Table geometry per density: cell sides, row height, header text, numbers | Table, SortHeader, TableSkeleton |
 | `revealClass(reveal)` | Reveal-on-hover for `true` or a named group (`"task"` → `group/task`) | IconButton, DragHandle |
 | `useTagColor(name, color?)` | A tag's colours for the current mode | Tag, FilterChip |
@@ -800,6 +837,7 @@ Before merging any new UI work, verify:
 - [ ] Navigation rows use `NavItem` / `navItemClass`
 - [ ] Dialogs use `Modal` (no hand-built overlay), key hints use `Kbd`
 - [ ] Hints use `Tooltip` (no `title` on buttons/links); progress, notices, confirms and drag grips use the Feedback components
+- [ ] Forms use `FormLayout` / `FormGrid` / `FormField` / `FormActions` (no hand-written labels or button rows)
 - [ ] Data tables use `Table` (no hand-styled `<th>`/`<td>`), row actions in `Table.Actions`
 - [ ] 2–4 way choices use `SegmentedControl`
 - [ ] Tag pills use `Tag`, filter pills use `FilterChip`, number pills use `CountBadge`

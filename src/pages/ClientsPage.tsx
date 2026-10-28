@@ -14,7 +14,7 @@ import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { Checkbox, Button, Badge, Card, Input, Select, FormField, PageHeader, SearchBar, Table, TableSkeleton, EmptyState } from "../components/ui";
+import { Checkbox, Button, Badge, Input, Select, FormField, FormGrid, FormGridItem, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
 import { clientStatusVariant } from "../lib/statusColors";
@@ -312,10 +312,11 @@ function NewClientForm({
   };
 
   return (
-    <Card className="mb-6 space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+    <FormModal open onClose={onCancel} title={t.new_client} submitLabel={t.save} onSubmit={submit} submitDisabled={saving}>
+      <FormGrid cols={2}>
         <FormField label={t.display_name} required error={errors.name}>
           <Input
+            autoFocus
             value={form.name}
             onChange={(e) => { setForm({ ...form, name: e.target.value }); clearError("name"); }}
             onBlur={() => validateOnBlur("name")}
@@ -369,22 +370,14 @@ function NewClientForm({
             <option value="EN">{t.english}</option>
           </Select>
         </FormField>
-      </div>
-      <div className="flex items-center gap-4">
-        <label className="flex items-center gap-2 text-sm">
+        <FormGridItem>
           <Checkbox
+            label={t.cultural_discount}
             checked={!!form.has_discount}
             onChange={(e) => setForm({ ...form, has_discount: e.target.checked ? 1 : 0 })}
           />
-          {t.cultural_discount}
-        </label>
-      </div>
-      <div className="flex gap-2">
-        <Button onClick={submit} disabled={saving}>{t.save}</Button>
-        <Button variant="secondary" onClick={onCancel}>
-          {t.cancel}
-        </Button>
-      </div>
-    </Card>
+        </FormGridItem>
+      </FormGrid>
+    </FormModal>
   );
 }

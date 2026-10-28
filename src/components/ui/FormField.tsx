@@ -1,5 +1,5 @@
 import { cloneElement, useId, type ReactElement, type ReactNode } from "react";
-import { FIELD_LABEL } from "./tokens";
+import { FIELD_LABEL, FORM_SPAN, type FormSpan } from "./tokens";
 
 /**
  * FormField — labeled form control with inline validation (Phase 2 E1).
@@ -56,10 +56,8 @@ interface FormFieldProps {
   /** Help under the field. */
   hint?: ReactNode;
   /** Columns taken in a FormGrid. */
-  span?: 2 | 3 | 4 | "full";
+  span?: FormSpan;
 }
-
-const SPAN = { 2: "col-span-2", 3: "col-span-3", 4: "col-span-4", full: "col-span-full" } as const;
 
 export function FormField({ label, children, error, required = false, className = "", badge, hint, span }: FormFieldProps) {
   const generatedId = useId();
@@ -81,7 +79,7 @@ export function FormField({ label, children, error, required = false, className 
     </label>
   );
   return (
-    <div className={`${span ? SPAN[span] : ""} ${className}`.trim() || undefined}>
+    <div className={`${span ? FORM_SPAN[span] : ""} ${className}`.trim() || undefined}>
       {badge ? (
         <div className="flex items-center justify-between mb-1">
           {labelEl}
@@ -92,14 +90,25 @@ export function FormField({ label, children, error, required = false, className 
       )}
       {control}
       {error ? (
-        <p id={errorId} role="alert" className="mt-1 text-xs text-danger-text">
-          {error}
-        </p>
+        <FieldError id={errorId}>{error}</FieldError>
       ) : hint ? (
         <p id={hintId} className="mt-1 text-xs text-muted">
           {hint}
         </p>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The red error line under a field, announced to screen readers. FormField
+ * draws it; use it alone for an error without a visible label (a row rename,
+ * the line-items check). Link it from the field with aria-describedby.
+ */
+export function FieldError({ id, className = "", children }: { id?: string; className?: string; children: ReactNode }) {
+  return (
+    <p id={id} role="alert" className={`mt-1 text-xs text-danger-text ${className}`}>
+      {children}
+    </p>
   );
 }

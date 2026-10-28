@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { Plus, Trash2, Link, Unlink } from "lucide-react";
-import { Button, Input } from "../ui";
+import { Button, Input, FormField, FormGroup, FormActions } from "../ui";
 import { Popover } from "../ui/Popover";
 import { MENU_ITEM } from "../ui/Dropdown";
 import type { TableColumnDef } from "../../types/project-table";
@@ -68,22 +68,21 @@ export function ColumnEditorPopover({
       autoFocus={false}
       className="min-w-[200px]"
     >
-      <label className="block text-[10px] text-muted mb-1">{t.rename}</label>
-      <Input size="sm"
-        value={colName}
-        onChange={(e) => setColName(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") onCommit(); }}
-        className="mb-2"
-        autoFocus
-      />
+      <FormField label={t.rename} className="mb-3">
+        <Input size="sm"
+          value={colName}
+          onChange={(e) => setColName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") onCommit(); }}
+          autoFocus
+        />
+      </FormField>
       {(col.type === "select" || col.type === "tags") && (
-        <>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-[10px] text-muted">{t.options ?? "Options"}</label>
-            {colLinkedListId ? (
+        <FormGroup
+          label={t.options ?? "Options"}
+          action={colLinkedListId ? (
               <div className="flex items-center gap-1">
-                <span className="text-[10px] text-accent flex items-center gap-0.5">
-                  <Link size={9} />
+                <span className="text-xs text-accent flex items-center gap-0.5">
+                  <Link size={11} />
                   {(customLists ?? []).find((l) => l.id === colLinkedListId)?.name ?? ""}
                 </span>
                 <Button
@@ -136,7 +135,7 @@ export function ColumnEditorPopover({
                 )}
               </div>
             )}
-          </div>
+        >
           {colOptions.map((opt, i) => (
             <div key={i} className="flex items-center gap-1 mb-1">
               <Input size="sm" fullWidth={false}
@@ -173,16 +172,17 @@ export function ColumnEditorPopover({
               </Button>
               <div className="border-t border-[var(--color-border-divider)] mt-2 pt-2">
                 {showSaveAsListInput ? (
-                  <div className="flex gap-1">
+                  <div className="flex gap-2">
                     <Input size="sm" fullWidth={false}
                       value={saveAsListName}
                       onChange={(e) => setSaveAsListName(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") onSaveAsList(); if (e.key === "Escape") { e.preventDefault(); setShowSaveAsListInput(false); } }}
                       placeholder={t.list_name}
+                      aria-label={t.list_name}
                       className="flex-1"
                       autoFocus
                     />
-                    <button type="button" onClick={onSaveAsList} className="text-[10px] text-accent hover:underline">{t.save}</button>
+                    <Button type="button" onClick={onSaveAsList}>{t.save}</Button>
                   </div>
                 ) : (
                   <Button
@@ -198,24 +198,20 @@ export function ColumnEditorPopover({
               </div>
             </>
           )}
-        </>
+        </FormGroup>
       )}
-      <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--color-border-divider)]">
-        <button
-          type="button"
-          onClick={onDelete}
-          className="text-[10px] text-[var(--color-danger-text)] hover:underline"
-        >
-          {t.delete_column}
-        </button>
-        <button
-          type="button"
-          onClick={onCommit}
-          className="text-[10px] text-accent hover:underline"
-        >
+      <FormActions
+        className="mt-3 pt-3 border-t border-[var(--color-border-divider)]"
+        destructive={
+          <Button type="button" variant="danger" onClick={onDelete}>
+            {t.delete_column}
+          </Button>
+        }
+      >
+        <Button type="button" onClick={onCommit}>
           {t.save}
-        </button>
-      </div>
+        </Button>
+      </FormActions>
     </Popover>
   );
 }

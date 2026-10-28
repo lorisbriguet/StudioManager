@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Eye } from "lucide-react";
-import { Checkbox, Button, DatePicker, Input, Select, FormField, Textarea } from "../components/ui";
+import { Button, DatePicker, Input, Select, FormField, FieldError, FormLayout, FormGrid, FormActions, Textarea } from "../components/ui";
 import * as v from "../lib/validate";
 import { toast } from "sonner";
 import { addDays, format } from "date-fns";
@@ -16,6 +16,7 @@ import { useActivities } from "../db/hooks/useActivities";
 import type { Activity } from "../types/activity";
 import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel, round2 } from "../lib/lineItems";
 import { LineItemsTable } from "../components/shared/LineItemsTable";
+import { GlobalRateControl, TemplateField } from "../components/shared/DocumentFields";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { confirmIfDirty } from "../lib/dirty-guard";
 
@@ -312,29 +313,19 @@ export function QuoteFormPage() {
       {/* Dirty tracking: text fields bubble their change events up to this div.
           Select is a custom dropdown that sends no DOM event, so each Select's
           onChange calls markDirty() itself. */}
-      <div className="space-y-4 max-w-3xl" onChange={markDirty}>
+      <FormLayout onChange={markDirty}>
         {/* Template selector */}
         {invoiceTemplates && invoiceTemplates.length > 0 && (
-          <div className="max-w-xs">
-            <label className="block text-xs font-medium text-muted mb-1">
-              {t.select_invoice_template}
-            </label>
-            <Select
-              value={templateId ?? ""}
-              onChange={(e) => { markDirty(); setTemplateId(e.target.value ? Number(e.target.value) : null); }}
-              className="py-2"
-            >
-              <option value="">{t.none}</option>
-              {invoiceTemplates.map((tmpl) => (
-                <option key={tmpl.id} value={tmpl.id}>
-                  {tmpl.name}{tmpl.is_default ? " (default)" : ""}
-                </option>
-              ))}
-            </Select>
-          </div>
+          <FormGrid cols={2}>
+            <TemplateField
+              templates={invoiceTemplates}
+              value={templateId}
+              onChange={(id) => { markDirty(); setTemplateId(id); }}
+            />
+          </FormGrid>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <FormGrid cols={2}>
           <FormField label={t.client} required error={errors.client_id}>
             <Select
               value={clientId}
@@ -348,7 +339,6 @@ export function QuoteFormPage() {
                 clearError("client_id");
               }}
               onBlur={() => setFieldError("client_id", v.validateField(clientId, quoteSchema.client_id))}
-              className="py-2"
             >
               <option value="">{t.select_client}</option>
               {clients?.map((c) => (
@@ -361,7 +351,6 @@ export function QuoteFormPage() {
               <Select
                 value={billingAddressId ?? ""}
                 onChange={(e) => { markDirty(); setBillingAddressId(e.target.value ? Number(e.target.value) : null); }}
-                className="py-2"
               >
                 <option value="">{t.main_address}</option>
                 {clientAddresses?.map((a) => (
@@ -376,7 +365,6 @@ export function QuoteFormPage() {
             <Select
               value={projectId ?? ""}
               onChange={(e) => { markDirty(); setProjectId(e.target.value ? Number(e.target.value) : null); }}
-              className="py-2"
             >
               <option value="">{t.none}</option>
               {clientProjects?.map((p) => (
@@ -397,7 +385,6 @@ export function QuoteFormPage() {
               onChange={(e) => { markDirty();
                 setActivityId(e.target.value === "legacy" || e.target.value === "" ? null : Number(e.target.value));
               }}
-              className="py-2"
             >
               {(activityList ?? []).map((a) => (
                 <option key={a.id} value={String(a.id)}>{activityName(a)}</option>
@@ -408,60 +395,35 @@ export function QuoteFormPage() {
               {activityId === null && !activity && <option value="" />}
             </Select>
           </FormField>
-          <FormField label={t.assignment} className="col-span-2">
+          <FormField label={t.assignment} span="full">
             <Input
               value={assignment}
               onChange={(e) => setAssignment(e.target.value)}
-              className="py-2"
               placeholder={t.description_work}
             />
           </FormField>
-        </div>
+        </FormGrid>
 
         {/* Global rate toggle */}
-        <div className="flex items-center gap-3 mb-2">
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <Checkbox
-              checked={useGlobalRate}
-              onChange={(e) => {
-                setUseGlobalRate(e.target.checked);
-                if (e.target.checked && globalRate > 0) {
-                  applyGlobalRate(globalRate);
-                }
-              }}
-            />
-            {t.apply_global_rate}
-          </label>
-          {useGlobalRate && (
-            <>
-              <Input
-                type="number"
-                value={globalRate || ""}
-                onChange={(e) => {
-                  const rate = e.target.value ? Number(e.target.value) : 0;
-                  setGlobalRate(rate);
-                  applyGlobalRate(rate);
-                }}
-                placeholder={t.global_rate}
-                fullWidth={false}
-                className="w-28 text-right"
-              />
-              <Select
-                value={globalUnit}
-                onChange={(e) => { markDirty();
-                  setGlobalUnit(e.target.value);
-                  if (globalRate > 0) applyGlobalRate(globalRate, e.target.value);
-                }}
-                fullWidth={false}
-              >
-                <option value="hours">{t.hours}</option>
-                <option value="days">{t.days}</option>
-                <option value="units">{t.units}</option>
-                <option value="flat">{t.flat_rate}</option>
-              </Select>
-            </>
-          )}
-        </div>
+        <GlobalRateControl
+          enabled={useGlobalRate}
+          rate={globalRate}
+          unit={globalUnit}
+          onEnabledChange={(checked) => {
+            setUseGlobalRate(checked);
+            if (checked && globalRate > 0) {
+              applyGlobalRate(globalRate);
+            }
+          }}
+          onRateChange={(rate) => {
+            setGlobalRate(rate);
+            applyGlobalRate(rate);
+          }}
+          onUnitChange={(unit) => { markDirty();
+            setGlobalUnit(unit);
+            if (globalRate > 0) applyGlobalRate(globalRate, unit);
+          }}
+        />
 
         <LineItemsTable
           items={items}
@@ -481,9 +443,9 @@ export function QuoteFormPage() {
 
         {/* Phase 2 E2 — summary error for the line-items region (not per-cell) */}
         {errors.line_items && (
-          <p role="alert" className="text-xs text-danger-text">
+          <FieldError className="mt-0">
             {errors.line_items}
-          </p>
+          </FieldError>
         )}
 
         <FormField label={t.notes}>
@@ -494,7 +456,7 @@ export function QuoteFormPage() {
           />
         </FormField>
 
-        <div className="flex gap-2">
+        <FormActions>
           <Button
             variant="secondary"
             onClick={async () => {
@@ -523,8 +485,8 @@ export function QuoteFormPage() {
           >
             {isEdit ? t.update_quote : t.create_quote}
           </Button>
-        </div>
-      </div>
+        </FormActions>
+      </FormLayout>
     </div>
   );
 }

@@ -1,11 +1,48 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
-import { FormLayout, FormGrid, FormSection, FormActions } from "../components/ui/Form";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { FormLayout, FormGrid, FormGridItem, FormSection, FormActions, FormModal } from "../components/ui/Form";
 import { FormField } from "../components/ui/FormField";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 
 afterEach(cleanup);
+
+describe("FormModal", () => {
+  it("submits from the primary button and on Enter, with Cancel before it", () => {
+    const onSubmit = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <FormModal open title="New client" submitLabel="Save" onSubmit={onSubmit} onClose={onClose}>
+        <FormGrid cols={2}>
+          <FormField label="Name"><Input value="" onChange={() => {}} /></FormField>
+          <FormGridItem><span>note</span></FormGridItem>
+        </FormGrid>
+      </FormModal>
+    );
+    const save = screen.getByRole("button", { name: "Save" });
+    const footer = save.parentElement!;
+    const names = Array.from(footer.querySelectorAll("button")).map((b) => b.textContent);
+    expect(names.slice(-2)).toEqual(["Cancel", "Save"]);
+    fireEvent.click(save);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    fireEvent.submit(screen.getByLabelText("Name").closest("form")!);
+    expect(onSubmit).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onClose).toHaveBeenCalled();
+    expect(screen.getByText("note").parentElement!.className).toContain("col-span-full");
+  });
+
+  it("does not submit while disabled", () => {
+    const onSubmit = vi.fn();
+    render(
+      <FormModal open title="New client" submitLabel="Save" submitDisabled onSubmit={onSubmit} onClose={() => {}}>
+        <FormField label="Name"><Input value="" onChange={() => {}} /></FormField>
+      </FormModal>
+    );
+    fireEvent.submit(screen.getByLabelText("Name").closest("form")!);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
 
 describe("Form layout", () => {
   it("links the label to its field and shows a hint under it", () => {

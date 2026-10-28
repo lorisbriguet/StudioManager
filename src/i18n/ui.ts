@@ -860,6 +860,7 @@ const ui = {
     new_invoice_template: "New template",
     template_saved: "Template saved",
     select_invoice_template: "Template",
+    default_suffix: "(default)",
 
     // Custom Lists
     custom_lists: "Custom Lists",
@@ -1896,6 +1897,7 @@ const ui = {
     new_invoice_template: "Nouveau modele",
     template_saved: "Modele enregistre",
     select_invoice_template: "Modele",
+    default_suffix: "(par défaut)",
 
     // Custom Lists
     custom_lists: "Listes personnalisees",

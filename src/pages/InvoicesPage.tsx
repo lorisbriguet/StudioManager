@@ -33,7 +33,7 @@ import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { PageHeader, SearchBar, Table, TableSkeleton, Button, EmptyState, Card, Modal, FormField, DatePicker, Select, IconButton, CountBadge, Toggle } from "../components/ui";
+import { PageHeader, SearchBar, Table, TableSkeleton, Button, EmptyState, Card, Modal, FormField, FormGrid, DatePicker, Select, IconButton, CountBadge, Toggle } from "../components/ui";
 import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
 import { isDraftReference } from "../types/invoice";
 import type { Invoice, InvoiceStatus } from "../types/invoice";
@@ -739,7 +739,7 @@ export function InvoicesPage() {
           </>
         }
       >
-        <div className="space-y-4">
+        <FormGrid cols={1}>
           <FormField label={t.frequency}>
             <Select
               value={recFrequency}
@@ -756,7 +756,7 @@ export function InvoicesPage() {
               onChange={(v) => { setRecNextDue(v ?? ""); setRecNextDueTouched(true); }}
             />
           </FormField>
-        </div>
+        </FormGrid>
       </Modal>
     </div>
   );

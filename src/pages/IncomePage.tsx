@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Plus, Paperclip, Eye, Trash2, Upload, Wallet, Pencil, Settings2 } from "lucide-react";
-import { PageHeader, SearchBar, Button, Card, DatePicker, EmptyState, FormField, Input, Select, Table, TableSkeleton, IconButton, Tag } from "../components/ui";
+import { PageHeader, SearchBar, Button, DatePicker, EmptyState, FormField, FormGrid, FormModal, Input, Select, Table, TableSkeleton, IconButton, Tag } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
 import { toast } from "sonner";
@@ -30,6 +30,7 @@ import { logError } from "../lib/log";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import { useListNavigation } from "../hooks/useListNavigation";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
+import { ReceiptNote } from "../components/shared/ReceiptNote";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
@@ -487,15 +488,24 @@ export function NewIncomeForm({
     }
   }, [prefill, resetDetected]);
 
+  const submit = () => {
+    const errs = v.validateForm(
+      { source: form.source, amount: fieldValue("amount"), date: form.date },
+      incomeSchema
+    );
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+    // DB failures surface via the mutation's onError toast (backstop).
+    onSave({
+      ...form,
+      receipt_path: null,
+    });
+  };
+
   return (
-    <Card className="mb-6 space-y-3">
-      {droppedReceiptPath && (
-        <div className="flex items-center gap-2 text-xs text-success">
-          <Paperclip size={12} />
-          <span>{t.receipt_will_be_attached} {droppedReceiptPath.split("/").pop()}</span>
-        </div>
-      )}
-      <div className="grid grid-cols-2 gap-3">
+    <FormModal open onClose={onCancel} title={initial ? t.edit : t.new_income} submitLabel={t.save} onSubmit={submit}>
+      {droppedReceiptPath && <ReceiptNote path={droppedReceiptPath} />}
+      <FormGrid cols={2}>
         <FormField
           label={t.source}
           required
@@ -517,7 +527,6 @@ export function NewIncomeForm({
           <Select
             value={form.category}
             onChange={(e) => setForm({ ...form, category: e.target.value })}
-            className="py-2"
           >
             {INCOME_CATEGORIES.map((c) => (
               <option key={c} value={c}>{incomeCategoryLabel(t, c)}</option>
@@ -568,29 +577,7 @@ export function NewIncomeForm({
             className={detectedClass("amount")}
           />
         </FormField>
-      </div>
-      <div className="flex gap-2">
-        <Button variant="secondary" onClick={onCancel}>
-          {t.cancel}
-        </Button>
-        <Button
-          onClick={() => {
-            const errs = v.validateForm(
-              { source: form.source, amount: fieldValue("amount"), date: form.date },
-              incomeSchema
-            );
-            setErrors(errs);
-            if (Object.keys(errs).length > 0) return;
-            // DB failures surface via the mutation's onError toast (backstop).
-            onSave({
-              ...form,
-              receipt_path: null,
-            });
-          }}
-        >
-          {t.save}
-        </Button>
-      </div>
-    </Card>
+      </FormGrid>
+    </FormModal>
   );
 }

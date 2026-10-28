@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { ListTodo, Trash2, ArrowLeft, AlertTriangle, Eye } from "lucide-react";
 import { isUntranslatedActivity } from "../lib/activityNudge";
-import { Checkbox, Button, DatePicker, Input, Select, FormField, Popover, Textarea } from "../components/ui";
+import { Button, DatePicker, Input, Select, FormField, FieldError, FormLayout, FormGrid, FormActions, Popover, Textarea } from "../components/ui";
 import { MENU_ITEM } from "../components/ui/Dropdown";
 import * as v from "../lib/validate";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ import type { Activity } from "../types/activity";
 import { logError } from "../lib/log";
 import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel, round2 } from "../lib/lineItems";
 import { LineItemsTable } from "../components/shared/LineItemsTable";
+import { GlobalRateControl, TemplateField } from "../components/shared/DocumentFields";
 import { currencies, getExchangeRate, toCHF, type Currency } from "../lib/exchangeRate";
 import { useTabStore } from "../stores/tab-store";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
@@ -502,28 +503,19 @@ export function InvoiceFormPage() {
       {/* Dirty tracking: text fields bubble their change events up to this div.
           Select is a custom dropdown that sends no DOM event, so each Select's
           onChange calls markDirty() itself. */}
-      <div className="space-y-4 max-w-3xl" onChange={markDirty}>
+      <FormLayout onChange={markDirty}>
         {/* Template selector */}
         {invoiceTemplates && invoiceTemplates.length > 0 && (
-          <div className="max-w-xs">
-            <label className="block text-xs font-medium text-muted mb-1">
-              {t.select_invoice_template}
-            </label>
-            <Select
-              value={templateId ?? ""}
-              onChange={(e) => { markDirty(); setTemplateId(e.target.value ? Number(e.target.value) : null); }}
-            >
-              <option value="">{t.none}</option>
-              {invoiceTemplates.map((tmpl) => (
-                <option key={tmpl.id} value={tmpl.id}>
-                  {tmpl.name}{tmpl.is_default ? " (default)" : ""}
-                </option>
-              ))}
-            </Select>
-          </div>
+          <FormGrid cols={2}>
+            <TemplateField
+              templates={invoiceTemplates}
+              value={templateId}
+              onChange={(id) => { markDirty(); setTemplateId(id); }}
+            />
+          </FormGrid>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <FormGrid cols={2}>
           <FormField label={t.client} required error={errors.client_id}>
             <Select
               value={clientId}
@@ -591,7 +583,21 @@ export function InvoiceFormPage() {
               onBlur={() => setFieldError("invoice_date", v.validateField(invoiceDate, invoiceSchema.invoice_date))}
             />
           </FormField>
-          <FormField label={t.activity}>
+          <FormField
+            label={t.activity}
+            hint={
+              // The EN invoice would print the French name — nudge at the moment of harm
+              selectedClient?.language === "EN" &&
+              (() => {
+                const selected = activityList?.find((a) => a.id === activityId);
+                return selected && isUntranslatedActivity(selected) ? (
+                  <span className="text-[var(--color-warning-text)] inline-flex items-center gap-1">
+                    <AlertTriangle size={12} /> {t.activity_untranslated}
+                  </span>
+                ) : null;
+              })()
+            }
+          >
             <Select
               value={activityId !== null ? String(activityId) : activity ? "legacy" : ""}
               onChange={(e) => { markDirty();
@@ -607,16 +613,6 @@ export function InvoiceFormPage() {
               {activityId === null && !activity && <option value="" />}
             </Select>
           </FormField>
-          {/* The EN invoice would print the French name — nudge at the moment of harm */}
-          {selectedClient?.language === "EN" &&
-            (() => {
-              const selected = activityList?.find((a) => a.id === activityId);
-              return selected && isUntranslatedActivity(selected) ? (
-                <p className="col-span-2 -mt-2 text-xs text-[var(--color-warning-text)] flex items-center gap-1">
-                  <AlertTriangle size={12} /> {t.activity_untranslated}
-                </p>
-              ) : null;
-            })()}
           <FormField label={t.assignment}>
             <Input
               value={assignment}
@@ -656,52 +652,28 @@ export function InvoiceFormPage() {
               />
             </FormField>
           )}
-        </div>
+        </FormGrid>
 
         {/* Global rate toggle */}
-        <div className="flex items-center gap-3 mb-2">
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <Checkbox
-              checked={useGlobalRate}
-              onChange={(e) => {
-                setUseGlobalRate(e.target.checked);
-                if (e.target.checked && globalRate > 0) {
-                  applyGlobalRate(globalRate);
-                }
-              }}
-            />
-            {t.apply_global_rate}
-          </label>
-          {useGlobalRate && (
-            <>
-              <Input
-                type="number"
-                value={globalRate || ""}
-                onChange={(e) => {
-                  const rate = e.target.value ? Number(e.target.value) : 0;
-                  setGlobalRate(rate);
-                  applyGlobalRate(rate);
-                }}
-                placeholder={t.global_rate}
-                fullWidth={false}
-                className="w-28 text-right"
-              />
-              <Select
-                value={globalUnit}
-                onChange={(e) => { markDirty();
-                  setGlobalUnit(e.target.value);
-                  if (globalRate > 0) applyGlobalRate(globalRate, e.target.value);
-                }}
-                fullWidth={false}
-              >
-                <option value="hours">{t.hours}</option>
-                <option value="days">{t.days}</option>
-                <option value="units">{t.units}</option>
-                <option value="flat">{t.flat_rate}</option>
-              </Select>
-            </>
-          )}
-        </div>
+        <GlobalRateControl
+          enabled={useGlobalRate}
+          rate={globalRate}
+          unit={globalUnit}
+          onEnabledChange={(checked) => {
+            setUseGlobalRate(checked);
+            if (checked && globalRate > 0) {
+              applyGlobalRate(globalRate);
+            }
+          }}
+          onRateChange={(rate) => {
+            setGlobalRate(rate);
+            applyGlobalRate(rate);
+          }}
+          onUnitChange={(unit) => { markDirty();
+            setGlobalUnit(unit);
+            if (globalRate > 0) applyGlobalRate(globalRate, unit);
+          }}
+        />
 
         <LineItemsTable
           items={items}
@@ -759,9 +731,9 @@ export function InvoiceFormPage() {
 
         {/* Phase 2 E2 — summary error for the line-items region (not per-cell) */}
         {errors.line_items && (
-          <p role="alert" className="text-xs text-danger-text">
+          <FieldError className="mt-0">
             {errors.line_items}
-          </p>
+          </FieldError>
         )}
 
         <FormField label={t.notes}>
@@ -772,43 +744,41 @@ export function InvoiceFormPage() {
           />
         </FormField>
 
-        <div className="flex gap-2 justify-end">
-          {isEdit && existingInvoice?.status === "draft" && !showDeleteConfirm && (
-            <Button
-              variant="secondary"
-              icon={<Trash2 size={12} />}
-              onClick={() => setShowDeleteConfirm(true)}
-              className="mr-auto text-danger border-danger/30 hover:bg-danger/5"
-            >
-              {t.delete}
-            </Button>
-          )}
-          {showDeleteConfirm && existingInvoice && (
-            <div className="mr-auto flex items-center gap-2">
-              <span className="text-sm text-danger">{t.delete} {existingInvoice.reference}?</span>
+        <FormActions
+          destructive={
+            showDeleteConfirm && existingInvoice ? (
+              <>
+                <span className="text-sm text-danger">{t.delete} {existingInvoice.reference}?</span>
+                <Button
+                  variant="danger"
+                  onClick={() => {
+                    deleteInvoice.mutate(invoiceId, {
+                      onSuccess: () => {
+                        setFormDirty(false);
+                        toast.success(t.delete + " — " + existingInvoice.reference);
+                        navigate("/invoices");
+                      },
+                      onError: (e) => toast.error(String(e)),
+                    });
+                  }}
+                >
+                  {t.delete}
+                </Button>
+                <Button variant="secondary" onClick={() => setShowDeleteConfirm(false)}>
+                  {t.cancel}
+                </Button>
+              </>
+            ) : isEdit && existingInvoice?.status === "draft" ? (
               <Button
                 variant="danger"
-                onClick={() => {
-                  deleteInvoice.mutate(invoiceId, {
-                    onSuccess: () => {
-                      setFormDirty(false);
-                      toast.success(t.delete + " — " + existingInvoice.reference);
-                      navigate("/invoices");
-                    },
-                    onError: (e) => toast.error(String(e)),
-                  });
-                }}
+                icon={<Trash2 size={12} />}
+                onClick={() => setShowDeleteConfirm(true)}
               >
                 {t.delete}
               </Button>
-              <Button
-                variant="secondary"
-                onClick={() => setShowDeleteConfirm(false)}
-              >
-                {t.cancel}
-              </Button>
-            </div>
-          )}
+            ) : null
+          }
+        >
           <Button
             variant="secondary"
             onClick={async () => {
@@ -831,8 +801,8 @@ export function InvoiceFormPage() {
           >
             {isEdit ? t.update_invoice : t.create_invoice}
           </Button>
-        </div>
-      </div>
+        </FormActions>
+      </FormLayout>
 
     </div>
   );

@@ -5,7 +5,7 @@ import { Trash2, Check, Plus } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useUpdateCustomList, useDeleteCustomList, useSetCustomListItems } from "../../db/hooks/useCustomLists";
 import { normalizeTagColorName, TAG_COLOR_NAMES } from "../../lib/tagColors";
-import { Button, Select, IconButton, Tag, Input } from "../ui";
+import { Button, Select, IconButton, Tag, Input, FormActions } from "../ui";
 import { navItemClass } from "../ui/NavItem";
 
 export function CustomListsManager() {
@@ -123,7 +123,7 @@ export function CustomListsManager() {
           ))}
         </div>
         {addingList ? (
-          <div className="mt-2 flex gap-1">
+          <div className="mt-2 flex gap-2">
             <Input size="sm" fullWidth={false}
               value={newListName}
               onChange={(e) => setNewListName(e.target.value)}
@@ -194,9 +194,11 @@ export function CustomListsManager() {
               <IconButton icon={Plus} label={t.new_list_item} tone="accent" onClick={addItem} />
             </div>
             {dirty && (
-              <Button variant="primary" onClick={saveItems}>
-                {t.save}
-              </Button>
+              <FormActions>
+                <Button variant="primary" onClick={saveItems}>
+                  {t.save}
+                </Button>
+              </FormActions>
             )}
           </div>
         )}
