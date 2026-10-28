@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { CollapsibleSection } from "./CollapsibleSection";
+import { SectionTitle } from "./MachineLogSections";
 import { useMachinesByProject, useProjectMaterialCost } from "../../db/hooks/useUpkeep";
 import { useT } from "../../i18n/useT";
 import { formatMoney } from "../../lib/upkeep/money";
@@ -30,7 +30,8 @@ export function EquipmentBlock({ projectId }: { projectId: number }) {
   return (
     <div className="space-y-3">
       {machines.length > 0 && (
-        <CollapsibleSection id={`equipment-machines-${projectId}`} title={t.equipment_machines}>
+        <section>
+          <SectionTitle variant="label">{t.equipment_machines}</SectionTitle>
           <ul className="space-y-1">
             {machines.map((m) => (
               <li key={m.id}>
@@ -44,11 +45,12 @@ export function EquipmentBlock({ projectId }: { projectId: number }) {
               </li>
             ))}
           </ul>
-        </CollapsibleSection>
+        </section>
       )}
 
       {costs.length > 0 && (
-        <CollapsibleSection id={`equipment-materials-${projectId}`} title={t.equipment_materials}>
+        <section>
+          <SectionTitle variant="label">{t.equipment_materials}</SectionTitle>
           <ul className="space-y-1">
             {costs.map((c) => (
               <li key={`${c.name}-${c.unit}-${c.currency}`} className="flex items-center justify-between text-sm">
@@ -71,7 +73,7 @@ export function EquipmentBlock({ projectId }: { projectId: number }) {
               </div>
             ))}
           </div>
-        </CollapsibleSection>
+        </section>
       )}
     </div>
   );

@@ -78,29 +78,12 @@ describe("UpkeepWidget", () => {
     expect(link).toHaveAttribute("href", "/upkeep?tab=subscriptions");
   });
 
-  it("collapses a section from its chevron header", () => {
+  it("shows section headings and no collapse toggle", () => {
     overview = { ...empty, endingSoon: [{ kind: "renewal", name: "Figma", date: "2026-11-02" }] };
     wrap(<UpkeepWidget />);
+    expect(screen.getByRole("heading", { name: "Warranty and renewals" })).toBeInTheDocument();
     expect(screen.getByText("Figma")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Warranty and renewals/ }));
-    expect(screen.queryByText("Figma")).toBeNull();
-  });
-});
-
-describe("CollapsibleSection persistence", () => {
-  it("keys the collapse state by organisation and survives a remount", () => {
-    useOrgStore.setState({ activeId: "o1" });
-    overview = { ...empty, endingSoon: [{ kind: "renewal", name: "Figma", date: "2026-11-02" }] };
-    const first = wrap(<UpkeepWidget />);
-    fireEvent.click(screen.getByRole("button", { name: /Warranty and renewals/ }));
-    expect(localStorage.getItem("upkeep-collapsed:widget-ending:o1")).toBe("1");
-    first.unmount();
-    wrap(<UpkeepWidget />);
-    expect(screen.queryByText("Figma")).toBeNull();
-    cleanup();
-    useOrgStore.setState({ activeId: "o2" });
-    wrap(<UpkeepWidget />);
-    expect(screen.getByText("Figma")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /collapse|expand/i })).toBeNull();
   });
 });
 

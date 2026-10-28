@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Input, Select } from "../ui";
-import { CollapsibleSection } from "../upkeep/CollapsibleSection";
 import { ConnectionsCard } from "../upkeep/ConnectionsCard";
+import { SectionTitle } from "../upkeep/MachineLogSections";
 import { SettingRow } from "./SettingsPrimitives";
 import { logError } from "../../lib/log";
 import { useAppStore } from "../../stores/app-store";
@@ -68,7 +68,8 @@ export function UpkeepSettingsCard() {
 
   return (
     <div className="space-y-6">
-      <CollapsibleSection id="settings-reminders" title={t.upkeep_settings_reminders}>
+      <section>
+        <SectionTitle>{t.upkeep_settings_reminders}</SectionTitle>
         <SettingRow label={t.upkeep_settings_alert} desc={t.upkeep_settings_alert_desc}>
           <Select
             aria-label={t.upkeep_settings_alert}
@@ -81,9 +82,10 @@ export function UpkeepSettingsCard() {
             ))}
           </Select>
         </SettingRow>
-      </CollapsibleSection>
+      </section>
 
-      <CollapsibleSection id="settings-windows" title={t.upkeep_settings_windows}>
+      <section>
+        <SectionTitle>{t.upkeep_settings_windows}</SectionTitle>
         <SettingRow label={t.upkeep_settings_soon_days}>
           <DaysInput label={t.upkeep_settings_soon_days} value={soonDays} onCommit={setSoonDays} />
         </SettingRow>
@@ -93,7 +95,7 @@ export function UpkeepSettingsCard() {
         <SettingRow label={t.upkeep_settings_renewal_days}>
           <DaysInput label={t.upkeep_settings_renewal_days} value={renewalDays} onCommit={setRenewalDays} />
         </SettingRow>
-      </CollapsibleSection>
+      </section>
 
       <ConnectionsCard />
     </div>

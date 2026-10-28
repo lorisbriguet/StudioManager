@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Badge } from "../ui";
-import { CollapsibleSection } from "./CollapsibleSection";
 import { DueList } from "./DueList";
+import { SectionTitle } from "./MachineLogSections";
 import { usePendingRenewals, useUpkeepOverview } from "../../db/hooks/useUpkeep";
 import { useT } from "../../i18n/useT";
 import { formatMoney } from "../../lib/upkeep/money";
@@ -22,13 +22,15 @@ export function UpkeepWidget() {
         {nothing && <div className="text-xs text-muted">{t.upkeep_widget_empty}</div>}
 
         {due.length > 0 && (
-          <CollapsibleSection id="widget-due" title={t.upkeep_due_soon}>
+          <section>
+            <SectionTitle variant="label">{t.upkeep_due_soon}</SectionTitle>
             <DueList rows={due} compact />
-          </CollapsibleSection>
+          </section>
         )}
 
         {pending.length > 0 && (
-          <CollapsibleSection id="widget-pending" title={t.upkeep_widget_pending}>
+          <section>
+            <SectionTitle variant="label">{t.upkeep_widget_pending}</SectionTitle>
             <ul className="space-y-1">
               {pending.map((r) => (
                 <li key={r.id}>
@@ -44,19 +46,16 @@ export function UpkeepWidget() {
                 </li>
               ))}
             </ul>
-          </CollapsibleSection>
+          </section>
         )}
 
         {lowStock.length > 0 && (
-          <CollapsibleSection
-            id="widget-low-stock"
-            title={t.upkeep_low_stock}
-            aside={
+          <section>
+            <SectionTitle variant="label" aside={
               <Link to="/upkeep?tab=consumables" className="text-xs text-accent hover:underline">
                 {t.upkeep_all_consumables}
               </Link>
-            }
-          >
+            }>{t.upkeep_low_stock}</SectionTitle>
             <ul className="space-y-1">
               {lowStock.map((c) => (
                 <li key={c.id} className="flex items-center justify-between text-sm">
@@ -67,11 +66,12 @@ export function UpkeepWidget() {
                 </li>
               ))}
             </ul>
-          </CollapsibleSection>
+          </section>
         )}
 
         {endingSoon.length > 0 && (
-          <CollapsibleSection id="widget-ending" title={t.upkeep_warranty_renewals}>
+          <section>
+            <SectionTitle variant="label">{t.upkeep_warranty_renewals}</SectionTitle>
             <ul className="space-y-1">
               {endingSoon.map((e) => (
                 <li key={`${e.kind}-${e.name}-${e.date}`} className="flex items-center justify-between gap-3 text-sm">
@@ -85,7 +85,7 @@ export function UpkeepWidget() {
                 </li>
               ))}
             </ul>
-          </CollapsibleSection>
+          </section>
         )}
       </div>
     </div>

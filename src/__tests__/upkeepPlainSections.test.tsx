@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, cleanup } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { useAppStore } from "../stores/app-store";
 import { useOrgStore } from "../stores/org-store";
@@ -104,7 +104,8 @@ import { SubscriptionsTab } from "../components/upkeep/SubscriptionsTab";
 
 const t = uiLabels.EN;
 const wrap = (ui: React.ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>);
-const toggle = (title: string) => screen.getByRole("button", { name: new RegExp(`^${t.collapse}: ${title}`) });
+const noToggle = () => expect(screen.queryByRole("button", { name: /collapse|expand/i })).toBeNull();
+const heading = (name: string) => expect(screen.getByRole("heading", { name })).toBeInTheDocument();
 
 beforeEach(() => {
   useAppStore.setState({ language: "EN" });
@@ -113,66 +114,28 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe("upkeep screens: collapsible sections", () => {
-  it("Overview: every section has a toggle; collapsing Low stock hides it and survives a remount", () => {
-    const first = wrap(<OverviewTab />);
-    for (const title of [t.upkeep_due_soon, t.upkeep_low_stock, t.upkeep_warranty_renewals, t.upkeep_replacements, "Machines · 1"]) {
-      expect(toggle(title)).toBeInTheDocument();
-    }
-    expect(screen.getByText("PLA white")).toBeInTheDocument();
-    fireEvent.click(toggle(t.upkeep_low_stock));
-    expect(screen.queryByText("PLA white")).toBeNull();
-    first.unmount();
+describe("upkeep screens: plain sections", () => {
+  it("Overview: section headings, no collapse toggle", () => {
     wrap(<OverviewTab />);
-    expect(screen.queryByText("PLA white")).toBeNull();
-  });
-
-  it("MachineDetail: facts, schedule, readings, files, service log and projects each toggle", () => {
-    wrap(<MachineDetail machineId={1} />);
-    for (const title of [
-      t.upkeep_details, t.upkeep_schedule, t.upkeep_readings,
-      t.upkeep_files_links, t.upkeep_service_log, t.upkeep_linked_projects,
-    ]) {
-      expect(toggle(title)).toBeInTheDocument();
+    for (const name of [t.upkeep_due_soon, t.upkeep_low_stock, t.upkeep_warranty_renewals, t.upkeep_replacements, "Machines · 1"]) {
+      heading(name);
     }
-    expect(screen.getByText("Clean nozzle")).toBeInTheDocument();
-    fireEvent.click(toggle(t.upkeep_schedule));
-    expect(screen.queryByText("Clean nozzle")).toBeNull();
-    expect(localStorage.getItem("upkeep-collapsed:machine-1-schedule:o1")).toBe("1");
+    noToggle();
   });
 
-  it("MachinesTab: the table collapses", () => {
-    wrap(<MachinesTab />);
-    expect(screen.getByText("Workshop")).toBeInTheDocument();
-    fireEvent.click(toggle(t.upkeep_tab_machines));
-    expect(screen.queryByText("Workshop")).toBeNull();
+  it("MachineDetail: section headings, no collapse toggle", () => {
+    wrap(<MachineDetail machineId={1} />);
+    for (const name of [t.upkeep_schedule, t.upkeep_readings, t.upkeep_files_links, t.upkeep_service_log, t.upkeep_linked_projects]) {
+      heading(name);
+    }
+    noToggle();
   });
 
-  it("ConsumablesTab: banner and table collapse", () => {
-    wrap(<ConsumablesTab />);
-    expect(screen.getByRole("status")).toBeInTheDocument();
-    fireEvent.click(toggle(t.upkeep_low_stock));
-    expect(screen.queryByRole("status")).toBeNull();
-    expect(screen.getByText("PLA white")).toBeInTheDocument();
-    fireEvent.click(toggle(t.upkeep_consumables));
-    expect(screen.queryByText("PLA white")).toBeNull();
-  });
-
-  it("SubscriptionsTab: pending renewals and table collapse", () => {
-    wrap(<SubscriptionsTab />);
-    expect(screen.getByText("Creative Cloud")).toBeInTheDocument();
-    fireEvent.click(toggle(t.upkeep_widget_pending));
-    expect(screen.queryByRole("button", { name: t.upkeep_renewal_skip })).toBeNull();
-    fireEvent.click(toggle(t.upkeep_subscriptions));
-    expect(screen.queryByText("Creative Cloud")).toBeNull();
-  });
-});
-
-describe("upkeep screens: one dot size", () => {
-  it("renders no dot-sm anywhere", () => {
-    for (const ui of [<OverviewTab />, <MachinesTab />, <MachineDetail machineId={1} />, <ConsumablesTab />, <SubscriptionsTab />]) {
-      const { container, unmount } = wrap(ui);
-      expect(container.querySelectorAll(".dot-sm")).toHaveLength(0);
+  it("Machines, Consumables and Subscriptions tabs: no collapse toggle, content visible", () => {
+    for (const [ui, text] of [[<MachinesTab />, "Workshop"], [<ConsumablesTab />, "PLA white"], [<SubscriptionsTab />, "Creative Cloud"]] as const) {
+      const { unmount } = wrap(ui);
+      expect(screen.getByText(text)).toBeInTheDocument();
+      noToggle();
       unmount();
     }
   });

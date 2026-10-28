@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { useAppStore } from "../stores/app-store";
 
@@ -46,10 +46,10 @@ describe("EquipmentBlock", () => {
     expect(screen.getByTestId("equipment-total-EUR")).toHaveTextContent(/30/);
   });
 
-  it("collapses the materials section", () => {
+  it("shows section headings and no collapse toggle", () => {
     costs = [{ name: "PLA", amount: 2, unit: "kg", cost: 40, currency: "CHF" }];
     render(<MemoryRouter><EquipmentBlock projectId={1} /></MemoryRouter>);
-    fireEvent.click(screen.getByRole("button", { name: /Materials used/ }));
-    expect(screen.queryByText("PLA")).toBeNull();
+    expect(screen.getByRole("heading", { name: /Materials used/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /collapse|expand/i })).toBeNull();
   });
 });

@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { Pencil, Plus, Trash2, XCircle } from "lucide-react";
 import { Badge, Button, EmptyState } from "../ui";
-import { CollapsibleSection } from "./CollapsibleSection";
 import { PrefilledExpenseModal } from "./PrefilledExpenseModal";
 import { SubscriptionForm } from "./SubscriptionForm";
 import { useT } from "../../i18n/useT";
@@ -48,7 +47,6 @@ export function SubscriptionsTab() {
   return (
     <div className="space-y-4">
       {pending.length > 0 && (
-        <CollapsibleSection id="subscriptions-pending" title={t.upkeep_widget_pending}>
         <div className="space-y-2">
           {pending.map((r) => (
             <div
@@ -68,18 +66,15 @@ export function SubscriptionsTab() {
             </div>
           ))}
         </div>
-        </CollapsibleSection>
       )}
 
-      <CollapsibleSection
-        id="subscriptions-list"
-        title={t.upkeep_subscriptions}
-        aside={<Button icon={<Plus size={14} />} onClick={() => setEditing("new")}>{t.upkeep_add_subscription}</Button>}
-      >
-      <div className="mb-2 text-sm text-muted tabular-nums">
-        {totals.map(([cur, amount]) => (
-          <div key={cur}>{t.upkeep_yearly_total.replace("{amount}", formatMoney(amount, cur))}</div>
-        ))}
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-sm text-muted tabular-nums">
+          {totals.map(([cur, amount]) => (
+            <div key={cur}>{t.upkeep_yearly_total.replace("{amount}", formatMoney(amount, cur))}</div>
+          ))}
+        </div>
+        <Button icon={<Plus size={14} />} onClick={() => setEditing("new")}>{t.upkeep_add_subscription}</Button>
       </div>
 
       {subs.length === 0 ? (
@@ -147,7 +142,6 @@ export function SubscriptionsTab() {
           </table>
         </div>
       )}
-      </CollapsibleSection>
 
       {editing && (
         <SubscriptionForm subscription={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} />
