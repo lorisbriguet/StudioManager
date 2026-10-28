@@ -7,6 +7,7 @@ import { Button, EmptyState, PageHeader } from "../components/ui";
 import { useAgents } from "../components/agents/useAgents";
 import { AgentList } from "../components/agents/AgentList";
 import { AgentDetail } from "../components/agents/AgentDetail";
+import { TerminalPanel } from "../components/agents/TerminalPanel";
 import { StartAgentForm } from "../components/agents/StartAgentForm";
 
 export function AgentsPage() {
@@ -18,7 +19,6 @@ export function AgentsPage() {
   const selectedId = params.get("agent");
   // Short id of an agent just started: selected once it shows up in the list.
   const [pendingShortId, setPendingShortId] = useState<string | null>(null);
-  // Task 11 renders the terminal panel for this short id into the slot below.
   const [terminalFor, setTerminalFor] = useState<string | null>(null);
   const selected = agents.find((a) => a.sessionId === selectedId) ?? null;
 
@@ -80,7 +80,7 @@ export function AgentsPage() {
                 />
               </div>
               {terminalFor && selected.shortId === terminalFor && (
-                <div data-testid="terminal-slot" data-short-id={terminalFor} />
+                <TerminalPanel key={terminalFor} shortId={terminalFor} onClose={() => setTerminalFor(null)} />
               )}
             </div>
           ) : (
