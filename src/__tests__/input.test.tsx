@@ -6,13 +6,14 @@ import { Input, Textarea, fieldClass } from "../components/ui/Input";
 afterEach(cleanup);
 
 describe("Input", () => {
-  it("keeps the md form look by default and forwards ref and events", () => {
+  it("is sm by default and forwards ref and events", () => {
     const ref = createRef<HTMLInputElement>();
     const onChange = vi.fn();
     render(<Input ref={ref} aria-label="Name" defaultValue="Atelier" onChange={onChange} />);
     const el = screen.getByRole("textbox", { name: "Name" });
     expect(ref.current).toBe(el);
-    expect(el.className).toContain("px-3 py-2 text-sm rounded-lg");
+    // sm by default: same height as the thin Select trigger
+    expect(el.className).toContain("px-2.5 py-1 text-xs rounded-md");
     expect(el.className).toContain("w-full");
     fireEvent.change(el, { target: { value: "Atelier Noir" } });
     expect(onChange).toHaveBeenCalled();

@@ -12,7 +12,7 @@ import {
 } from "../../lib/wikiGraph";
 import { GraphView } from "./GraphView";
 import { colorFor } from "./wikiColors";
-import { PANEL_TOP_BAR, TabItem, IconButton, SectionLabel } from "../ui";
+import { PANEL_TOP_BAR, TabItem, IconButton, SectionLabel, Tooltip } from "../ui";
 import { useProjectDoc, type ProjectDoc } from "../../db/hooks/useProjectDocs";
 
 function SnippetText({ s }: { s: Snippet }) {
@@ -140,10 +140,9 @@ export function WikiSidePanel({
                   const src = byId.get(b.sourceId);
                   if (!src) return null;
                   return (
+                    <Tooltip key={b.sourceId} content={t.wiki_new_tab_hint}>
                     <button
-                      key={b.sourceId}
                       onClick={open(b.sourceId)}
-                      title={t.wiki_new_tab_hint}
                       className="w-full text-left p-2.5 rounded-lg border border-[var(--color-border-divider)] bg-[var(--color-surface)] hover:bg-[var(--color-hover-row)]"
                     >
                       <span className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-text)]">
@@ -157,6 +156,7 @@ export function WikiSidePanel({
                         <SnippetText key={i} s={s} />
                       ))}
                     </button>
+                    </Tooltip>
                   );
                 })}
               </div>

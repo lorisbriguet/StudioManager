@@ -424,6 +424,7 @@ const ui = {
     toast_income_deleted: "Income deleted",
     toast_income_updated: "Income updated",
     confirm_delete_client: "Delete this client and ALL its related data: projects, tasks, invoices, quotes, time entries and recurring templates?",
+    confirm_delete_time_entry: "Delete this time entry?",
     confirm_bulk_delete_clients: "Delete the selected clients and ALL their related data (projects, tasks, invoices, quotes, time entries)?",
     confirm_delete_project: "Delete this project and all its tasks?",
 
@@ -1458,6 +1459,7 @@ const ui = {
     toast_income_deleted: "Revenu supprime",
     toast_income_updated: "Revenu modifie",
     confirm_delete_client: "Supprimer ce client et TOUTES ses donnees liees : projets, taches, factures, devis, saisies de temps et modeles recurrents ?",
+    confirm_delete_time_entry: "Supprimer cette saisie de temps ?",
     confirm_bulk_delete_clients: "Supprimer les clients selectionnes et TOUTES leurs donnees liees (projets, taches, factures, devis, saisies de temps) ?",
     confirm_delete_project: "Supprimer ce projet et toutes ses taches ?",
 

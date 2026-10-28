@@ -1,7 +1,6 @@
-import { GripVertical } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useT } from "../../i18n/useT";
+import { DragHandle } from "../ui/Feedback";
 
 export function SortableSubtaskRow({
   id,
@@ -17,7 +16,6 @@ export function SortableSubtaskRow({
   onHoverChange: (id: number | null) => void;
   children: React.ReactNode;
 }) {
-  const t = useT();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
   const style = {
@@ -34,14 +32,7 @@ export function SortableSubtaskRow({
       onMouseEnter={() => onHoverChange(id)}
       onMouseLeave={() => onHoverChange(null)}
     >
-      <div
-        {...attributes}
-        {...listeners}
-        className={`cursor-grab text-muted hover:text-[var(--color-text-secondary)] transition-opacity shrink-0 ${hovered ? "opacity-100" : "opacity-0"}`}
-        aria-label={t.drag_to_reorder}
-      >
-        <GripVertical size={14} />
-      </div>
+      <DragHandle {...attributes} {...listeners} className={hovered ? "opacity-100" : "opacity-0"} />
       {children}
     </div>
   );

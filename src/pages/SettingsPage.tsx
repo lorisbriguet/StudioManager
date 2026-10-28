@@ -15,7 +15,7 @@ import { useT } from "../i18n/useT";
 import type { AppLanguage } from "../i18n/ui";
 import { UpdateChecker } from "../components/UpdateChecker";
 import { WorkloadTemplateManager } from "../components/workload/WorkloadTemplateManager";
-import { Input, Select, Button, IconButton, SectionLabel, SettingRow, SettingsCard, NavItem } from "../components/ui";
+import { Input, Select, Button, IconButton, SectionLabel, SettingRow, SettingsCard, NavItem, Tooltip } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
 import { AgentAccessCard } from "../components/settings/AgentAccessCard";
@@ -481,29 +481,29 @@ export function SettingsPage() {
                 <div className="text-sm mb-2">{t.theme}</div>
                 <div className="grid grid-cols-5 gap-2">
                   {THEMES.map((theme) => (
-                    <button
-                      key={theme.id}
-                      type="button"
-                      onClick={() => setTheme(theme.id)}
-                      className={`flex flex-col rounded-lg overflow-hidden border-2 transition-colors ${
-                        themeId === theme.id
-                          ? "border-accent shadow-sm"
-                          : "border-[var(--color-border-divider)] hover:border-[var(--color-input-border)]"
-                      }`}
-                      title={theme.name}
-                    >
-                      <div className="flex h-10" style={{ background: theme.colors.bg }}>
-                        <div className="w-3 shrink-0" style={{ background: theme.colors.sidebar, borderRight: `1px solid ${theme.colors.sidebarBorder}` }} />
-                        <div className="flex-1 p-1 flex flex-col gap-0.5 justify-center">
-                          <div className="h-1 w-3/4 rounded-full" style={{ background: theme.colors.accent }} />
-                          <div className="h-1 w-1/2 rounded-full opacity-40" style={{ background: theme.colors.textMuted }} />
-                          <div className="h-1 w-2/3 rounded-full opacity-25" style={{ background: theme.colors.textMuted }} />
+                    <Tooltip key={theme.id} content={theme.name}>
+                      <button
+                        type="button"
+                        onClick={() => setTheme(theme.id)}
+                        className={`flex flex-col rounded-lg overflow-hidden border-2 transition-colors ${
+                          themeId === theme.id
+                            ? "border-accent shadow-sm"
+                            : "border-[var(--color-border-divider)] hover:border-[var(--color-input-border)]"
+                        }`}
+                      >
+                        <div className="flex h-10" style={{ background: theme.colors.bg }}>
+                          <div className="w-3 shrink-0" style={{ background: theme.colors.sidebar, borderRight: `1px solid ${theme.colors.sidebarBorder}` }} />
+                          <div className="flex-1 p-1 flex flex-col gap-0.5 justify-center">
+                            <div className="h-1 w-3/4 rounded-full" style={{ background: theme.colors.accent }} />
+                            <div className="h-1 w-1/2 rounded-full opacity-40" style={{ background: theme.colors.textMuted }} />
+                            <div className="h-1 w-2/3 rounded-full opacity-25" style={{ background: theme.colors.textMuted }} />
+                          </div>
                         </div>
-                      </div>
-                      <div className="text-[10px] text-center py-0.5 truncate px-1" style={{ background: theme.colors.surface, color: theme.colors.text }}>
-                        {theme.name}
-                      </div>
-                    </button>
+                        <div className="text-[10px] text-center py-0.5 truncate px-1" style={{ background: theme.colors.surface, color: theme.colors.text }}>
+                          {theme.name}
+                        </div>
+                      </button>
+                    </Tooltip>
                   ))}
                 </div>
               </div>

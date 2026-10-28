@@ -151,7 +151,7 @@ describe("ProjectsPage arrow-key navigation", () => {
     fireEvent.click(cardA);
 
     // Peek panel open — its "open full page" link only renders inside it.
-    await screen.findByTitle("Open full page");
+    await screen.findByRole("link", { name: "Open full page" });
     expect(cardA.className).not.toContain("ring-2");
 
     fireEvent.keyDown(window, { key: "ArrowDown" });

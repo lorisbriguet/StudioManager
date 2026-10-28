@@ -196,7 +196,7 @@ export function DatePicker({
   value,
   onChange,
   placeholder,
-  size = "md",
+  size = "sm",
   variant = "default",
   fullWidth = true,
   disabled,

@@ -8,7 +8,7 @@ import { useDashboardStore, WIDGET_CATALOG, type WidgetType, type DashboardWidge
 import type { LayoutItem } from "react-grid-layout";
 import { renderWidget } from "../components/dashboard/widgets";
 import { DashboardYearContext } from "../components/dashboard/DashboardYearContext";
-import { PageHeader, Button, EmptyState, Select, Popover, IconButton, SectionLabel, Input } from "../components/ui";
+import { PageHeader, Button, EmptyState, Select, Popover, IconButton, SectionLabel, Input, Card } from "../components/ui";
 import { MENU_ITEM, MENU_DIVIDER } from "../components/ui/Dropdown";
 import { useT } from "../i18n/useT";
 import { toast } from "sonner";
@@ -282,7 +282,7 @@ export function DashboardPage() {
       {showWidgetPanel && (() => {
         const categories = [...new Set(WIDGET_CATALOG.map((e) => e.category))];
         return (
-          <div className="mb-4 bg-[var(--color-surface)] rounded-xl p-4 max-h-[60vh] overflow-y-auto">
+          <Card padding={false} className="mb-4 p-4 max-h-[60vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-medium">{t.add}</h2>
               <IconButton icon={X} label={t.close} onClick={() => setShowWidgetPanel(false)} />
@@ -313,7 +313,7 @@ export function DashboardPage() {
                 </div>
               </div>
             ))}
-          </div>
+          </Card>
         );
       })()}
 

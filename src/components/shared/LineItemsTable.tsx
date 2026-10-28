@@ -1,4 +1,4 @@
-import { Plus, Trash2, GripVertical, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -10,7 +10,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Button, Select, IconButton, Input } from "../ui";
+import { Button, DragHandle, Select, IconButton, Input } from "../ui";
 import type { LineItem } from "../../lib/lineItems";
 import { useT } from "../../i18n/useT";
 
@@ -217,17 +217,7 @@ function SortableLineItemRow({ id, children }: { id: number; children: React.Rea
 }
 
 function SortableLineItemHandle({ id }: { id: number }) {
-  const t = useT();
   const { attributes, listeners } = useSortable({ id });
 
-  return (
-    <div
-      {...attributes}
-      {...listeners}
-      className="cursor-grab text-muted hover:text-[var(--color-text-secondary)] flex items-center justify-center"
-      aria-label={t.drag_to_reorder}
-    >
-      <GripVertical size={14} />
-    </div>
-  );
+  return <DragHandle {...attributes} {...listeners} className="flex items-center justify-center" />;
 }

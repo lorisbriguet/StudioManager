@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Plus, Trash2, Calendar, Link, Unlink } from "lucide-react";
-import { Button, Select, Popover, Tag, Input, Modal } from "../ui";
+import { Button, Select, Popover, Tag, Input, Modal, Tooltip } from "../ui";
 import { MENU_ITEM } from "../ui/Dropdown";
 import { toast } from "sonner";
 import type { WorkloadColumn, WorkloadColumnType, SelectOption } from "../../types/workload";
@@ -202,26 +202,27 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
           <div className="flex items-center gap-3">
             <div className="flex-1 border border-[var(--color-border-divider)] rounded-md overflow-hidden">
               <div className="flex flex-wrap gap-0.5 p-1.5 max-h-24 overflow-y-auto">
-                <button
-                  onClick={() => { setIcon(""); setIconOnly(false); }}
-                  className={`p-1 rounded-md ${!icon ? "bg-accent text-white" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
-                  title={t.none}
-                  aria-label={t.none}
-                >
-                  <X size={14} />
-                </button>
+                <Tooltip content={t.none}>
+                  <button
+                    onClick={() => { setIcon(""); setIconOnly(false); }}
+                    className={`p-1 rounded-md ${!icon ? "bg-accent text-white" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
+                    aria-label={t.none}
+                  >
+                    <X size={14} />
+                  </button>
+                </Tooltip>
                 {COLUMN_ICON_NAMES.map((name) => {
                   const Icon = COLUMN_ICONS[name];
                   return (
-                    <button
-                      key={name}
-                      onClick={() => setIcon(name)}
-                      className={`p-1 rounded-md ${icon === name ? "bg-accent text-white" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
-                      title={name}
-                      aria-label={name}
-                    >
-                      <Icon size={14} />
-                    </button>
+                    <Tooltip key={name} content={name}>
+                      <button
+                        onClick={() => setIcon(name)}
+                        className={`p-1 rounded-md ${icon === name ? "bg-accent text-white" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
+                        aria-label={name}
+                      >
+                        <Icon size={14} />
+                      </button>
+                    </Tooltip>
                   );
                 })}
               </div>

@@ -5,6 +5,7 @@ import { useTimeEntriesWithDetails, useUpdateTimeEntry, useDeleteTimeEntry } fro
 import { useProjects } from "../../db/hooks/useProjects";
 import { Button, DatePicker, Select, IconButton, Input } from "../ui";
 import { SectionHeader } from "../ui/Settings";
+import { ConfirmButton } from "../ui/Feedback";
 
 function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -27,7 +28,6 @@ export function TimeEntriesManager() {
     minutes: 0,
     description: "",
   });
-  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const { data: entries, isLoading } = useTimeEntriesWithDetails(
     startDate || undefined,
@@ -60,7 +60,7 @@ export function TimeEntriesManager() {
   };
 
   const handleDelete = (id: number) => {
-    deleteEntry.mutate(id, { onSuccess: () => setConfirmDeleteId(null) });
+    deleteEntry.mutate(id);
   };
 
   return (
@@ -199,21 +199,14 @@ export function TimeEntriesManager() {
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-1">
                           <IconButton icon={Pencil} label={t.edit_entry} size="xs" onClick={() => startEdit(entry)} />
-                          {confirmDeleteId === entry.id ? (
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleDelete(entry.id)}
-                                disabled={deleteEntry.isPending}
-                                className="px-1.5 py-0.5 bg-[var(--color-danger)] text-white rounded-md text-[10px] hover:opacity-80"
-                              >
-                                {t.delete}
-                              </button>
-                              <IconButton icon={X} label={t.cancel} size="xs" onClick={() => setConfirmDeleteId(null)} />
-                            </div>
-                          ) : (
-                            <IconButton icon={Trash2} label={t.delete} size="xs" tone="danger" onClick={() => setConfirmDeleteId(entry.id)} />
-                          )}
+                          <ConfirmButton
+                            label={t.delete}
+                            question={t.confirm_delete_time_entry}
+                            icon={<Trash2 size={12} />}
+                            variant="ghost"
+                            disabled={deleteEntry.isPending}
+                            onConfirm={() => handleDelete(entry.id)}
+                          />
                         </div>
                       </td>
                     </>

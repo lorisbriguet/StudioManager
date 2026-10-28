@@ -3,7 +3,7 @@ import { IconButton } from "../components/ui/IconButton";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Save, Plus, Trash2, Eye, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Input, PageSpinner, Card, Select, SectionLabel, Textarea } from "../components/ui";
+import { Button, Input, PageSpinner, Card, Select, SectionLabel, Textarea, ConfirmButton, Tooltip } from "../components/ui";
 import { useTabStore } from "../stores/tab-store";
 import {
   useClient,
@@ -42,7 +42,6 @@ export function ClientDetailPage() {
 
   const [form, setForm] = useState<Partial<Client>>({});
   const [dirty, setDirty] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Warn before leaving with unsaved edits (anchor clicks, back/forward,
   // window close, and programmatic navigations via the dirty-guard registry)
@@ -99,30 +98,20 @@ export function ClientDetailPage() {
               {t.save}
             </Button>
           )}
-          {confirmDelete ? (
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-[var(--color-danger-text)]">{t.confirm_delete_client}</span>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => {
-                  deleteClient.mutate(id!, {
-                    onSuccess: () => {
-                      undoableFromStore(t.toast_client_deleted);
-                      navigate("/clients");
-                    },
-                  });
-                }}
-              >
-                {t.delete}
-              </Button>
-              <Button variant="secondary" size="sm" onClick={() => setConfirmDelete(false)}>
-                {t.cancel}
-              </Button>
-            </div>
-          ) : (
-            <IconButton icon={Trash2} label={t.delete} size="md" tone="danger" onClick={() => setConfirmDelete(true)} />
-          )}
+          <ConfirmButton
+            label={t.delete}
+            question={t.confirm_delete_client}
+            icon={<Trash2 size={14} />}
+            variant="danger-outline"
+            onConfirm={() => {
+              deleteClient.mutate(id!, {
+                onSuccess: () => {
+                  undoableFromStore(t.toast_client_deleted);
+                  navigate("/clients");
+                },
+              });
+            }}
+          />
         </div>
       </div>
 
@@ -215,20 +204,24 @@ export function ClientDetailPage() {
                 <span>{inv.reference}</span>
                 <div className="flex items-center gap-2">
                   <span className="text-muted">CHF {inv.total.toFixed(2)}</span>
-                  <Link
-                    to={`/invoices/${inv.id}/preview`}
-                    className="opacity-0 group-hover:opacity-100 text-muted hover:text-accent transition-opacity"
-                    title={t.preview}
-                  >
-                    <Eye size={14} />
-                  </Link>
-                  <Link
-                    to={`/invoices/${inv.id}/edit`}
-                    className="opacity-0 group-hover:opacity-100 text-muted hover:text-accent transition-opacity"
-                    title={t.edit}
-                  >
-                    <Pencil size={14} />
-                  </Link>
+                  <Tooltip content={t.preview}>
+                    <Link
+                      to={`/invoices/${inv.id}/preview`}
+                      className="opacity-0 group-hover:opacity-100 text-muted hover:text-accent transition-opacity"
+                      aria-label={t.preview}
+                    >
+                      <Eye size={14} />
+                    </Link>
+                  </Tooltip>
+                  <Tooltip content={t.edit}>
+                    <Link
+                      to={`/invoices/${inv.id}/edit`}
+                      className="opacity-0 group-hover:opacity-100 text-muted hover:text-accent transition-opacity"
+                      aria-label={t.edit}
+                    >
+                      <Pencil size={14} />
+                    </Link>
+                  </Tooltip>
                 </div>
               </div>
             ))}
@@ -362,9 +355,10 @@ function ContactsSection({
       <div className="space-y-2">
         {contacts.map((c) => (
           editingId === c.id ? (
-            <div
+            <Card
               key={c.id}
-              className="border border-[var(--color-input-border)] rounded-xl bg-[var(--color-surface)] p-3 space-y-2"
+              padding={false}
+              className="border border-[var(--color-input-border)] p-3 space-y-2"
             >
               <div className="grid grid-cols-3 gap-2">
                 <MiniField
@@ -429,11 +423,11 @@ function ContactsSection({
                 <button onClick={cancelEdit} className="text-xs text-muted hover:text-danger">{t.cancel}</button>
                 <button onClick={() => saveEdit(c)} className="text-xs text-accent hover:text-accent-hover font-medium">{t.save}</button>
               </div>
-            </div>
+            </Card>
           ) : (
-            <div
+            <Card padding={false}
               key={c.id}
-              className="relative border border-[var(--color-border-divider)] rounded-xl bg-[var(--color-surface)] px-3 py-2.5 group cursor-default"
+              className="relative border border-[var(--color-border-divider)] px-3 py-2.5 group cursor-default"
               onContextMenu={(e) => {
                 e.preventDefault();
                 setContextMenu({ x: e.clientX, y: e.clientY, contactId: c.id });
@@ -459,7 +453,7 @@ function ContactsSection({
                 onClick={() => startEditing(c)}
                 className="absolute top-2.5 right-2.5 opacity-60 hover:opacity-100"
               />
-            </div>
+            </Card>
           )
         ))}
 
@@ -619,7 +613,7 @@ function AddressCard({
 
   if (editing) {
     return (
-      <div className="rounded-xl bg-[var(--color-surface)] p-3 space-y-2">
+      <Card padding={false} className="p-3 space-y-2">
         <div className="grid grid-cols-2 gap-2">
           <MiniField label={t.label} value={form.label} onChange={(v) => setForm({ ...form, label: v })} onKeyDown={fieldKeys} />
           <MiniField label={t.billing_name} value={form.billing_name} onChange={(v) => setForm({ ...form, billing_name: v })} onKeyDown={fieldKeys} />
@@ -631,13 +625,13 @@ function AddressCard({
           <button onClick={cancel} className="text-xs text-muted hover:text-[var(--color-text-secondary)]">{t.cancel}</button>
           <button onClick={save} className="text-xs text-accent hover:text-accent-hover">{t.save}</button>
         </div>
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div
-      className="rounded-xl bg-[var(--color-surface)] p-3 group relative"
+    <Card padding={false}
+      className="p-3 group relative"
       onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); }}
     >
       <div className="flex items-start justify-between">
@@ -663,7 +657,7 @@ function AddressCard({
           ]}
         />
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -737,7 +731,7 @@ function AddressesSection({
       <div className="space-y-3">
         {/* Main address — read-only card from client fields */}
         {(client.address_line1 || client.postal_city) && (
-          <div className="border border-[var(--color-border-divider)] rounded-xl bg-[var(--color-surface)] p-3 opacity-80">
+          <Card padding={false} className="border border-[var(--color-border-divider)] p-3 opacity-80">
             <SectionLabel as="span">{t.main_address}</SectionLabel>
             <div className="mt-1 text-sm">
               {(client.billing_name || client.name) && (
@@ -747,7 +741,7 @@ function AddressesSection({
               {client.address_line2 && <div className="text-muted">{client.address_line2}</div>}
               {client.postal_city && <div className="text-muted">{client.postal_city}</div>}
             </div>
-          </div>
+          </Card>
         )}
 
         {addresses.map((a) => (

@@ -22,19 +22,12 @@ import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Button, Badge, Card, PageHeader, SearchBar, TableSkeleton, DatePicker, Input, EmptyState, Select, IconButton, FilterChip } from "../components/ui";
+import { Button, Badge, Card, PageHeader, SearchBar, TableSkeleton, DatePicker, Input, EmptyState, Select, IconButton, FilterChip, ProgressBar, Tooltip } from "../components/ui";
 import { undoable, undoableFromStore } from "../lib/undo";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
-import type { BadgeVariant } from "../components/ui/Badge";
-
-const statusBadgeVariant: Record<ProjectStatus, BadgeVariant> = {
-  active: "accent",
-  completed: "success",
-  on_hold: "warning",
-  cancelled: "neutral",
-};
+import { projectStatusVariant } from "../lib/statusColors";
 
 const statusKeys: Record<ProjectStatus, UIKey> = {
   active: "active",
@@ -350,7 +343,7 @@ export function ProjectsPage() {
                     />
                     <h3 className="text-sm font-medium leading-tight truncate">{p.name}</h3>
                   </div>
-                  <Badge variant={statusBadgeVariant[p.status]} className="shrink-0 ml-2">
+                  <Badge variant={projectStatusVariant(p.status)} className="shrink-0 ml-2">
                     {t[statusKeys[p.status]]}
                   </Badge>
                 </div>
@@ -358,18 +351,12 @@ export function ProjectsPage() {
                 <div className="text-xs text-muted mb-3">{clientName(p.client_id)}</div>
 
                 {stats.total > 0 && (
-                  <div className="mb-3">
-                    <div className="flex justify-between text-xs text-muted mb-1">
-                      <span>{stats.total} {t.tasks.toLowerCase()}</span>
-                      <span>{pct}%</span>
-                    </div>
-                    <div className="h-1.5 bg-[var(--color-input)] rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-accent rounded-full transition-all"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
+                  <ProgressBar
+                    value={pct}
+                    label={`${stats.total} ${t.tasks.toLowerCase()}`}
+                    showValue
+                    className="mb-3"
+                  />
                 )}
                 {stats.total === 0 && (
                   <div className="text-xs text-muted mb-3">{t.no_tasks}</div>
@@ -435,13 +422,15 @@ export function ProjectsPage() {
           <div className="flex items-center gap-1 p-2 border-b border-[var(--color-border-header)]">
             <IconButton icon={X} label={t.close} onClick={handleClosePeek} />
             <div className="flex-1" />
-            <Link
-              to={`/projects/${peekId}`}
-              className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
-              title={t.open_full_page}
-            >
-              <Maximize2 size={14} />
-            </Link>
+            <Tooltip content={t.open_full_page}>
+              <Link
+                to={`/projects/${peekId}`}
+                className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
+                aria-label={t.open_full_page}
+              >
+                <Maximize2 size={14} />
+              </Link>
+            </Tooltip>
           </div>
           <div className="p-4">
             <ProjectDetailContent key={peekId} projectId={peekId} compact />

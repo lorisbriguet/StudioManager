@@ -56,6 +56,9 @@ import { resolveActivityRevenue } from "../../lib/activityResolve";
 import { tagHash } from "../../lib/tagColors";
 import { yoyDelta } from "../../lib/yoyDelta";
 import { useDashboardYear } from "./DashboardYearContext";
+import { WidgetShell, WidgetTitle } from "./WidgetShell";
+import { ProgressBar } from "../ui/Feedback";
+import { invoiceStatusDotClass, priorityDotClass } from "../../lib/statusColors";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -64,18 +67,11 @@ function formatCHF(amount: number): string {
 }
 
 function PriorityDot({ priority }: { priority: string }) {
-  const color = priority === "high" ? "bg-danger" : priority === "medium" ? "bg-warning" : "bg-success";
-  return <span className={`dot-sm ${color}`} />;
+  return <span className={`dot-sm ${priorityDotClass(priority)}`} />;
 }
 
 function StatusDot({ status }: { status: string }) {
-  const color =
-    status === "paid" ? "bg-success" :
-    status === "overdue" ? "bg-danger" :
-    status === "sent" ? "bg-warning" :
-    status === "draft" ? "bg-[var(--color-indigo-text)]" :
-    "bg-[var(--color-input-bg)]";
-  return <span className={`dot-sm ml-2 ${color}`} />;
+  return <span className={`dot-sm ml-2 ${invoiceStatusDotClass(status)}`} />;
 }
 
 // ── KPI widgets ──
@@ -166,8 +162,8 @@ function ChartRevenue() {
   })) ?? [];
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.revenue} {year}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.revenue} {year}</WidgetTitle>
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} barGap={2}>
@@ -184,7 +180,7 @@ function ChartRevenue() {
           </BarChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -210,11 +206,10 @@ function RecentInvoices() {
   }, [invoices]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-medium">{t.recent_invoices}</h2>
-        <Link to="/invoices" className="text-xs text-accent hover:underline">{t.view_all}</Link>
-      </div>
+    <WidgetShell>
+      <WidgetTitle action={<Link to="/invoices" className="text-xs text-accent hover:underline">{t.view_all}</Link>}>
+        {t.recent_invoices}
+      </WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2">
         {recentInvoices.map((inv) => (
           <Link
@@ -236,7 +231,7 @@ function RecentInvoices() {
           <div className="text-xs text-muted">{t.no_invoices_yet}</div>
         )}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -261,8 +256,8 @@ function TodayTasks() {
   );
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.today}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.today}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {todayTasks.map((task) => (
           <Link key={`t-${task.id}`} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
@@ -284,7 +279,7 @@ function TodayTasks() {
           <div className="text-xs text-muted">{t.nothing_due_today}</div>
         )}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -309,8 +304,8 @@ function OverdueTasks() {
   );
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3 text-danger">{t.overdue}</h2>
+    <WidgetShell>
+      <WidgetTitle tone="danger">{t.overdue}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {overdueTasks.map((task) => (
           <Link key={`t-${task.id}`} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
@@ -332,7 +327,7 @@ function OverdueTasks() {
           <div className="text-xs text-muted">{t.no_overdue_items}</div>
         )}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -362,8 +357,8 @@ function ProjectProgress() {
   }, [projects, tasks]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.progress}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.progress}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-3">
         {activeProjects.map((p) => (
           <Link key={p.id} to={`/projects/${p.id}`} className="block hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
@@ -371,19 +366,14 @@ function ProjectProgress() {
               <span className="truncate">{p.name}</span>
               <span className="text-xs text-muted shrink-0 ml-2">{p.done}/{p.total}</span>
             </div>
-            <div className="w-full bg-[var(--color-input-bg)] rounded-full h-1.5">
-              <div
-                className="bg-accent rounded-full h-1.5 transition-all"
-                style={{ width: `${p.pct}%` }}
-              />
-            </div>
+            <ProgressBar value={p.pct} />
           </Link>
         ))}
         {activeProjects.length === 0 && (
           <div className="text-xs text-muted">{t.no_projects}</div>
         )}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -406,8 +396,8 @@ function UpcomingDeadlines() {
   }, [tasks, today]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.deadline}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.deadline}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {upcoming.map((task) => (
           <Link key={task.id} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
@@ -421,7 +411,7 @@ function UpcomingDeadlines() {
           <div className="text-xs text-muted">{t.nothing_due_today}</div>
         )}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -452,8 +442,8 @@ function RevenueByActivity() {
   const total = rows.reduce((s, r) => s + r.total, 0);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.revenue_by_activity}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.revenue_by_activity}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2">
         {rows.map((r) => {
           const pct = total > 0 ? Math.round((r.total / total) * 100) : 0;
@@ -472,7 +462,7 @@ function RevenueByActivity() {
         })}
         {rows.length === 0 && <div className="text-xs text-muted">{t.no_invoices_yet}</div>}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -486,8 +476,8 @@ function RevenueByClient() {
   const total = rows?.reduce((s, r) => s + r.total, 0) ?? 0;
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.revenue_by_client}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.revenue_by_client}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2">
         {rows?.map((r) => {
           const pct = total > 0 ? Math.round((r.total / total) * 100) : 0;
@@ -506,7 +496,7 @@ function RevenueByClient() {
         })}
         {(!rows || rows.length === 0) && <div className="text-xs text-muted">{t.no_invoices_yet}</div>}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -544,8 +534,8 @@ function ThisWeekEvents() {
   };
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.this_week}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.this_week}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {weekEvents.map((task) => (
           <Link key={task.id} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
@@ -558,7 +548,7 @@ function ThisWeekEvents() {
         ))}
         {weekEvents.length === 0 && <div className="text-xs text-muted">{t.nothing_due_today}</div>}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -584,8 +574,8 @@ function UnpaidInvoices() {
   }, [invoices]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.unpaid_invoices}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.unpaid_invoices}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2">
         {unpaid.map((inv) => (
           <Link key={inv.id} to={`/invoices/${inv.id}/edit`} className="flex justify-between items-center text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1.5 -mx-2">
@@ -602,7 +592,7 @@ function UnpaidInvoices() {
         ))}
         {unpaid.length === 0 && <div className="text-xs text-muted">{t.no_data}</div>}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -636,8 +626,8 @@ function ExpenseBreakdown() {
   }, [expenses, categories, year]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.expense_breakdown} {year}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.expense_breakdown} {year}</WidgetTitle>
       <div className="flex-1 min-h-0">
         {data.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
@@ -653,7 +643,7 @@ function ExpenseBreakdown() {
           <div className="text-xs text-muted">{t.no_data}</div>
         )}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -805,8 +795,8 @@ function ClientActivity() {
   }, [clients, invoices]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.client_activity}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.client_activity}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {active.slice(0, 5).map((c) => (
           <div key={c.name} className="flex items-center justify-between text-sm px-2 py-1 -mx-2">
@@ -822,7 +812,7 @@ function ClientActivity() {
         ))}
         {active.length === 0 && dormant.length === 0 && <div className="text-xs text-muted">{t.no_data}</div>}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -872,8 +862,8 @@ function StaleTasks() {
   }, [tasks]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3 text-warning">{t.stale_tasks}</h2>
+    <WidgetShell>
+      <WidgetTitle tone="warning">{t.stale_tasks}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {stale.map((task) => (
           <Link key={task.id} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
@@ -884,7 +874,7 @@ function StaleTasks() {
         ))}
         {stale.length === 0 && <div className="text-xs text-muted">{t.no_stale_tasks}</div>}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -906,8 +896,8 @@ function ProjectsWithoutDeadline() {
   }, [projects, tasks]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.projects_no_deadline}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.projects_no_deadline}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {noDeadline.map((p) => (
           <Link key={p.id} to={`/projects/${p.id}`} className="flex items-center text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
@@ -916,7 +906,7 @@ function ProjectsWithoutDeadline() {
         ))}
         {noDeadline.length === 0 && <div className="text-xs text-muted">{t.no_data}</div>}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -977,8 +967,8 @@ function UpcomingReminders() {
   }, [invoices, today]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.upcoming_reminders}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.upcoming_reminders}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2">
         {upcoming.map((inv) => (
           <Link key={inv.id} to={`/invoices/${inv.id}/edit`} className="flex justify-between items-center text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1.5 -mx-2">
@@ -993,7 +983,7 @@ function UpcomingReminders() {
         ))}
         {upcoming.length === 0 && <div className="text-xs text-muted">{t.no_data}</div>}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -1015,8 +1005,8 @@ function RecentlyCompleted() {
   }, [tasks]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.recently_completed}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.recently_completed}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {completed.map((task) => (
           <Link key={task.id} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
@@ -1027,7 +1017,7 @@ function RecentlyCompleted() {
         ))}
         {completed.length === 0 && <div className="text-xs text-muted">{t.no_data}</div>}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -1054,8 +1044,8 @@ function StaleProjects() {
   }, [projects, tasks]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3 text-warning">{t.stale_projects}</h2>
+    <WidgetShell>
+      <WidgetTitle tone="warning">{t.stale_projects}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {stale.map((p) => (
           <Link key={p.id} to={`/projects/${p.id}`} className="flex items-center justify-between text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
@@ -1065,7 +1055,7 @@ function StaleProjects() {
         ))}
         {stale.length === 0 && <div className="text-xs text-muted">{t.no_stale_projects}</div>}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -1138,8 +1128,8 @@ function BusiestDay() {
   }, [tasks]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.busiest_day}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.busiest_day}</WidgetTitle>
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data}>
@@ -1151,7 +1141,7 @@ function BusiestDay() {
           </BarChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -1169,8 +1159,8 @@ function QuickCreate() {
   ];
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.quick_create}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.quick_create}</WidgetTitle>
       <div className="flex-1 grid grid-cols-2 gap-2 content-start">
         {items.map((item) => (
           <button
@@ -1184,7 +1174,7 @@ function QuickCreate() {
           </button>
         ))}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -1205,8 +1195,8 @@ function PinnedNotes() {
   };
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-2">{t.pinned_notes}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.pinned_notes}</WidgetTitle>
       <Textarea
         className="flex-1 resize-none! cursor-text"
         value={local}
@@ -1215,7 +1205,7 @@ function PinnedNotes() {
         onTouchStart={(e) => e.stopPropagation()}
         placeholder={t.notes}
       />
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -1453,16 +1443,16 @@ function InvoiceAging() {
 
   if (!hasData) {
     return (
-      <div className="h-full flex flex-col p-4">
-        <h2 className="text-sm font-medium mb-3">{t.invoice_aging}</h2>
+      <WidgetShell>
+        <WidgetTitle>{t.invoice_aging}</WidgetTitle>
         <div className="flex-1 flex items-center justify-center text-xs text-muted">{t.no_data}</div>
-      </div>
+      </WidgetShell>
     );
   }
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.invoice_aging}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.invoice_aging}</WidgetTitle>
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
@@ -1489,7 +1479,7 @@ function InvoiceAging() {
           </div>
         ))}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 

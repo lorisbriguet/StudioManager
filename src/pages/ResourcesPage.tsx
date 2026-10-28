@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Plus, Search, ExternalLink, Trash2, X } from "lucide-react";
-import { PageHeader, Button, EmptyState, FormField, Select, IconButton, Tag, FilterChip, Input } from "../components/ui";
+import { PageHeader, Button, EmptyState, FormField, Select, IconButton, Tag, FilterChip, Input, Callout, Card } from "../components/ui";
 import * as v from "../lib/validate";
 import { Skeleton } from "../components/ui/Skeleton";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
@@ -368,7 +368,7 @@ function NewResourceForm({
   };
 
   return (
-    <div className="rounded-xl p-4 mb-4 bg-[var(--color-surface)]">
+    <Card padding={false} className="p-4 mb-4">
       <div className="grid grid-cols-4 gap-3">
         <FormField label={t.name} required error={errors.name}>
           <Input
@@ -430,22 +430,26 @@ function NewResourceForm({
         </div>
       )}
       {duplicateWarning && (
-        <div className="flex items-center gap-2 p-3 mt-2 bg-[var(--color-warning-bg)] border border-[var(--color-border-header)] rounded-md text-sm">
-          <span className="text-[var(--color-warning-text)] font-medium">{t.possible_duplicate}:</span>
-          <span className="text-[var(--color-warning-text)] flex-1">{t.resource_duplicate_warning.replace("{name}", duplicateWarning)}</span>
-          <button
-            onClick={() => { if (pendingSubmit) { onSubmit(pendingSubmit); } setDuplicateWarning(null); setPendingSubmit(null); }}
-            className="text-xs px-2 py-1 rounded-md bg-[var(--color-warning-text)] text-white hover:opacity-80 shrink-0"
-          >
-            {t.save_anyway}
-          </button>
-          <button
-            onClick={() => { setDuplicateWarning(null); setPendingSubmit(null); }}
-            className="text-xs text-[var(--color-warning-text)] hover:opacity-70 shrink-0"
-          >
-            {t.cancel}
-          </button>
-        </div>
+        <Callout
+          tone="warning"
+          className="mt-2"
+          action={
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => { if (pendingSubmit) { onSubmit(pendingSubmit); } setDuplicateWarning(null); setPendingSubmit(null); }}
+              >
+                {t.save_anyway}
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => { setDuplicateWarning(null); setPendingSubmit(null); }}>
+                {t.cancel}
+              </Button>
+            </div>
+          }
+        >
+          <span className="font-medium">{t.possible_duplicate}:</span>{" "}
+          {t.resource_duplicate_warning.replace("{name}", duplicateWarning)}
+        </Callout>
       )}
       <div className="flex gap-2 mt-3">
         <button
@@ -466,7 +470,7 @@ function NewResourceForm({
           {t.cancel}
         </button>
       </div>
-    </div>
+    </Card>
   );
 }
 

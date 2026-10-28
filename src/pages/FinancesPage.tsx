@@ -24,7 +24,7 @@ import { useClients } from "../db/hooks/useClients";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
-import { PageHeader, PageSpinner, Button, Card, EmptyState, Select, SectionLabel } from "../components/ui";
+import { PageHeader, PageSpinner, Button, Card, EmptyState, Select, SectionLabel, Callout } from "../components/ui";
 import { useNavigate } from "react-router-dom";
 import { useChartTheme } from "../hooks/useChartTheme";
 import { getTagColor } from "../lib/tagColors";
@@ -215,9 +215,9 @@ export function FinancesPage() {
       </PageHeader>
 
       {missingChfCount > 0 && (
-        <div className="flex items-center gap-2 p-3 mb-4 bg-[var(--color-warning-bg)] border border-[var(--color-border-header)] rounded-md text-sm text-[var(--color-warning-text)]">
+        <Callout tone="warning" className="mb-4">
           {t.chf_equivalent_missing_banner.replace("{count}", String(missingChfCount))}
-        </div>
+        </Callout>
       )}
 
       {/* Monthly revenue vs expenses chart */}

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Plus, Trash2, GripVertical, ChevronDown, ChevronRight, Pencil } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, Pencil } from "lucide-react";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { Button, Dropdown, Input } from "./ui";
+import { Button, Card, DragHandle, Dropdown, Input } from "./ui";
 import { TableCell } from "./named-table/TableCell";
 import { ColumnEditorPopover } from "./named-table/ColumnEditorPopover";
 import {
@@ -165,7 +165,7 @@ export function NamedTable({ table, projectId }: Props) {
   };
 
   return (
-    <div className="rounded-xl bg-[var(--color-surface)] overflow-visible">
+    <Card padding={false} className="overflow-visible">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2 bg-[var(--color-surface)]">
         <IconButton
@@ -270,8 +270,8 @@ export function NamedTable({ table, projectId }: Props) {
             <tbody>
               {(rows ?? []).map((row) => (
                 <tr key={row.id} className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] group">
-                  <td className="w-6 px-1 text-muted cursor-grab">
-                    <GripVertical size={12} />
+                  <td className="w-6 px-1">
+                    <DragHandle size={12} />
                   </td>
                   {cols.map((col) => (
                     <td key={col.id} className="px-3 py-1.5" style={{ width: col.width ?? 150 }}>
@@ -308,6 +308,6 @@ export function NamedTable({ table, projectId }: Props) {
           </Button>
         </>
       )}
-    </div>
+    </Card>
   );
 }

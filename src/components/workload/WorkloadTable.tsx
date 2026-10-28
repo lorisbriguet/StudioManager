@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect, type RefObject } from "react";
-import { Plus, Trash2, GripVertical, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Settings2, Copy, Download, Sigma, Pin, Play, Square } from "lucide-react";
-import { Button, Select, Popover, Input, Modal } from "../ui";
+import { Plus, Trash2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Settings2, Copy, Download, Sigma, Pin, Play, Square } from "lucide-react";
+import { Button, DragHandle, Select, Popover, Input, Modal } from "../ui";
 import { MENU_ITEM, MENU_DIVIDER } from "../ui/Dropdown";
 import { toast } from "sonner";
 import {
@@ -837,14 +837,11 @@ function SortableRow({
     >
       {/* Drag handle */}
       <td className={`${stickyFirstCol ? "sticky left-0 z-10" : ""} bg-inherit`}>
-        <div
+        <DragHandle
           {...attributes}
           {...listeners}
-          className="flex items-center justify-center w-full h-full min-h-[32px] cursor-grab text-muted opacity-0 group-hover/row:opacity-50"
-          aria-label={t.drag_to_reorder}
-        >
-          <GripVertical size={14} />
-        </div>
+          className="flex items-center justify-center w-full h-full min-h-[32px] opacity-0 group-hover/row:opacity-50"
+        />
       </td>
 
       {/* System: Task title + timer button */}

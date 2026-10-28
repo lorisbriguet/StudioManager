@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ChevronDown, ChevronRight, GripVertical, Plus, X, Columns2, Maximize2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, X, Columns2, Maximize2 } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -17,7 +17,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useUpdateProject } from "../db/hooks/useProjects";
 import { useT } from "../i18n/useT";
-import { Dropdown, IconButton } from "./ui";
+import { Card, DragHandle, Dropdown, IconButton } from "./ui";
 import type { LayoutConfig, LayoutBlock, BlockType, Project } from "../types/project";
 import { STANDARD_LAYOUT } from "../types/project";
 
@@ -62,16 +62,10 @@ function SortableBlock({ block, renderBlock, onToggleCollapse, onRemove, onToggl
   const isHalf = block.width === "half";
 
   return (
-    <div ref={setNodeRef} style={style} className="group bg-[var(--color-surface)] rounded-xl p-4">
+    <div ref={setNodeRef} style={style} className="group">
+      <Card padding={false} className="p-4">
       <div className="flex items-center gap-2 mb-2">
-        <div
-          {...attributes}
-          {...listeners}
-          className="cursor-grab text-[var(--color-muted)] hover:text-[var(--color-text-secondary)] opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-          aria-label={t.drag_to_reorder}
-        >
-          <GripVertical size={14} />
-        </div>
+        <DragHandle {...attributes} {...listeners} reveal />
         <IconButton icon={isCollapsed ? ChevronRight : ChevronDown} label={isCollapsed ? t.expand : t.collapse} onClick={() => onToggleCollapse(block.type)} />
         <h3 className="text-xs font-semibold tracking-tight">
           {t[block.type] ?? BLOCK_LABELS[block.type]}
@@ -82,6 +76,7 @@ function SortableBlock({ block, renderBlock, onToggleCollapse, onRemove, onToggl
         </div>
       </div>
       {!isCollapsed && renderBlock(block.type)}
+      </Card>
     </div>
   );
 }

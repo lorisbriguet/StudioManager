@@ -3,8 +3,8 @@ import { forwardRef, type InputHTMLAttributes, type TextareaHTMLAttributes } fro
 /**
  * Input / Textarea — text fields. See DESIGN-SYSTEM.md, "Inputs".
  *
- *   <Input value={name} onChange={…} />                       form field (md)
- *   <Input size="sm" type="number" className="w-20 text-right" />   toolbars, compact rows
+ *   <Input value={name} onChange={…} />                       default sm: matches the thin Select trigger
+ *   <Input size="md" />                                       opt-in larger field (rare)
  *   <Input variant="bare" size="sm" />                        table cells: no frame until hover/focus
  *   <Input variant="inline" autoFocus />                      rename in place: accent underline only
  *   <Textarea rows={4} />
@@ -27,7 +27,7 @@ const VARIANT: Record<FieldVariant, string> = {
 
 /** Field classes, for the rare control that can't be Input/Textarea. */
 export function fieldClass({
-  size = "md",
+  size = "sm",
   variant = "default",
   fullWidth = true,
 }: { size?: FieldSize; variant?: FieldVariant; fullWidth?: boolean } = {}) {
@@ -44,7 +44,7 @@ interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "size">
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className = "", fullWidth = true, size = "md", variant = "default", ...props }, ref) => {
+  ({ className = "", fullWidth = true, size = "sm", variant = "default", ...props }, ref) => {
     return <input ref={ref} className={`${fieldClass({ size, variant, fullWidth })} ${className}`} {...props} />;
   }
 );
@@ -58,7 +58,7 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ className = "", fullWidth = true, size = "md", variant = "default", rows = 3, ...props }, ref) => {
+  ({ className = "", fullWidth = true, size = "sm", variant = "default", rows = 3, ...props }, ref) => {
     return (
       <textarea
         ref={ref}

@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { IconButton } from "../components/ui/IconButton";
 import { Link } from "react-router-dom";
-import { ChevronRight, Plus, GripVertical, Trash2, ExternalLink, Play, Square, CheckCircle } from "lucide-react";
+import { ChevronRight, Plus, Trash2, ExternalLink, Play, Square, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { undoable, undoableFromStore } from "../lib/undo";
 import { ask } from "@tauri-apps/plugin-dialog";
@@ -36,7 +36,7 @@ import { useTabStore } from "../stores/tab-store";
 import { useOrgStore } from "../stores/org-store";
 import { useTimerActions } from "../hooks/useTimerActions";
 import { useT } from "../i18n/useT";
-import { PageHeader, SearchBar, TableSkeleton, EmptyState, Select, FilterChip, Input } from "../components/ui";
+import { PageHeader, SearchBar, TableSkeleton, EmptyState, Select, FilterChip, Input, DragHandle } from "../components/ui";
 import { taskStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Task, Subtask, TaskStatus } from "../types/task";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
@@ -292,7 +292,7 @@ export function TasksPage() {
               className="px-4 py-2 border-b border-[var(--color-border-header)] flex items-center gap-2 select-none"
               onContextMenu={(e) => { e.preventDefault(); setHeaderCtxMenu({ x: e.clientX, y: e.clientY, item: { projectId: g.projectId, projectName: g.projectName } }); }}
             >
-              <DragHandle attributes={attributes} listeners={listeners} />
+              <DragHandle {...attributes} {...listeners} className="-my-1 p-0.5" />
               <button
                 onClick={() => {
                   const next = new Set(collapsedProjects);
@@ -740,18 +740,3 @@ function SortableProjectGroup({ id, children }: { id: number; children: (dragHan
     </div>
   );
 }
-
-function DragHandle({ attributes, listeners }: { attributes: SortableReturn["attributes"]; listeners: SortableReturn["listeners"] }) {
-  const t = useT();
-  return (
-    <div
-      {...attributes}
-      {...listeners}
-      className="cursor-grab text-muted hover:text-[var(--color-text-secondary)] shrink-0 -my-1 p-0.5"
-      aria-label={t.drag_to_reorder}
-    >
-      <GripVertical size={14} />
-    </div>
-  );
-}
-

@@ -301,8 +301,8 @@ Text fields use `Input` and `Textarea` from `src/components/ui/Input.tsx`, and p
 ```tsx
 import { Input, Textarea } from "../components/ui";
 
-<Input value={v} onChange={…} />                                  // forms (md)
-<Input size="sm" type="number" fullWidth={false} className="w-20 text-right" />  // toolbars, compact rows
+<Input value={v} onChange={…} />                                  // sm by default, everywhere
+<Input type="number" fullWidth={false} className="w-20 text-right" />
 <Input variant="bare" size="sm" />                                // table cells: frame shows on hover/focus
 <Input variant="inline" autoFocus onBlur={commit} />              // rename in place: accent underline only
 <Textarea rows={4} value={notes} onChange={…} />
@@ -310,8 +310,8 @@ import { Input, Textarea } from "../components/ui";
 
 | | Classes |
 |--|--|
-| `size="md"` (default) | `px-3 py-2 text-sm rounded-lg` |
-| `size="sm"` | `px-2.5 py-1 text-xs rounded-md` |
+| `size="sm"` (default) | `px-2.5 py-1 text-xs rounded-md`, the same height as the Select trigger |
+| `size="md"` | `px-3 py-2 text-sm rounded-lg`, opt-in (rare) |
 | `variant="default"` | `bg-[var(--color-input-bg)] border-[var(--color-input-border)]`, `focus-accent` |
 | `variant="bare"` | transparent; border and fill appear on hover/focus |
 | `variant="inline"` | transparent, `border-b border-accent`, inherits the font size |
@@ -477,6 +477,23 @@ import { invoiceStatusVariant, quoteStatusVariant, taskStatusVariant, projectSta
 ```tsx
 <SectionLabel as="span">2026</SectionLabel>
 ```
+
+---
+
+## Feedback
+
+From `src/components/ui/Feedback.tsx` and `Tooltip.tsx`:
+
+```tsx
+<ProgressBar value={62} label={t.progress} showValue />            // tone accent|success|warning|danger, size sm|md
+<Callout tone="warning" action={<Button size="sm">…</Button>}>{msg}</Callout>  // warning|info|danger|success
+<ConfirmButton label={t.delete} question={t.confirm_delete_client} onConfirm={remove} />
+<DragHandle {...attributes} {...listeners} reveal />                // dnd-kit grip; reveal = group hover
+<Tooltip content={t.open_full_page}><Link …><Maximize2 size={14} /></Link></Tooltip>
+```
+
+- **Hints:** never use the native `title` attribute for a hint on a button or link. Use `Tooltip`, or `IconButton`, which shows its `label` as a tooltip. `title` stays only on truncated plain text, where it reveals the full text.
+- **Deleting:** `ConfirmButton` is the in-place confirm. Deletes that need more context still use the system dialog (`ask()`).
 
 ---
 
@@ -714,6 +731,7 @@ Before merging any new UI work, verify:
 - [ ] Settings sections use `SettingsCard` / `SettingRow`
 - [ ] Navigation rows use `NavItem` / `navItemClass`
 - [ ] Dialogs use `Modal` (no hand-built overlay), key hints use `Kbd`
+- [ ] Hints use `Tooltip` (no `title` on buttons/links); progress, notices, confirms and drag grips use the Feedback components
 - [ ] 2–4 way choices use `SegmentedControl`
 - [ ] Tag pills use `Tag`, filter pills use `FilterChip`, number pills use `CountBadge`
 - [ ] No hand-made floating panel (use `Popover`, `Dropdown` or `ContextMenu`)

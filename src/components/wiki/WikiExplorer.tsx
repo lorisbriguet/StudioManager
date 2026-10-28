@@ -14,7 +14,7 @@ import {
 import { useT } from "../../i18n/useT";
 import { useOrgStore } from "../../stores/org-store";
 import { useWikiFolders } from "../../db/hooks/useWiki";
-import { BottomBar, SearchBar, IconButton, SectionLabel } from "../ui";
+import { BottomBar, SearchBar, IconButton, SectionLabel, Tooltip } from "../ui";
 import type { WikiArticleWithTags } from "../../types/wiki";
 import type { ProjectDoc } from "../../db/hooks/useProjectDocs";
 import type { WikiRef } from "../../lib/wikiTabs";
@@ -197,7 +197,6 @@ export function WikiExplorer({
                   <IconButton
                     icon={Plus}
                     label={`${t.new_article}: ${g.name}`}
-                    title={t.new_article}
                     reveal
                     onClick={() => onNewArticle(g.projectId)}
                     disabled={creating}
@@ -244,10 +243,9 @@ export function WikiExplorer({
                       {filesOpen && (
                         <div className="ml-4.5 pl-1 border-l border-[var(--color-border-divider)] space-y-px">
                           {files.map((d) => (
+                            <Tooltip key={d.key} content={d.title !== d.rel ? `${d.rel} — ${d.title}` : d.rel}>
                             <button
-                              key={d.key}
                               type="button"
-                              title={d.title !== d.rel ? `${d.rel} — ${d.title}` : d.rel}
                               onClick={(e) => onOpen(d.key, e.metaKey || e.ctrlKey)}
                               onAuxClick={(e) => {
                                 if (e.button === 1) onOpen(d.key, true);
@@ -258,6 +256,7 @@ export function WikiExplorer({
                               <File size={14} className="shrink-0" />
                               <span className="flex-1 truncate">{d.rel}</span>
                             </button>
+                            </Tooltip>
                           ))}
                         </div>
                       )}

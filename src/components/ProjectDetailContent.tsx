@@ -20,6 +20,7 @@ import { ContextMenu, type ContextMenuState } from "./ui/ContextMenu";
 import { useInvoices, useInvoicesByProject, useUpdateInvoice } from "../db/hooks/useInvoices";
 import { useQuotes, useQuotesByProject, useUpdateQuote } from "../db/hooks/useQuotes";
 import { Badge, Button, DatePicker, PageSpinner, Select, Textarea } from "./ui";
+import { ProgressBar } from "./ui/Feedback";
 import { invoiceStatusVariant, quoteStatusVariant } from "../lib/statusColors";
 import { useTabStore } from "../stores/tab-store";
 import { open as openDirectory } from "@tauri-apps/plugin-dialog";
@@ -350,18 +351,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
         </div>
 
         {totalCount > 0 && (
-          <div className="mb-4">
-            <div className="flex justify-between text-xs text-muted mb-1">
-              <span>{t.progress}</span>
-              <span>{progress}%</span>
-            </div>
-            <div className="h-1.5 bg-[var(--color-input)] rounded-full overflow-hidden">
-              <div
-                className="h-full bg-accent rounded-full transition-all"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
+          <ProgressBar value={progress} label={t.progress} showValue className="mb-4" />
         )}
 
         <ProjectBlockLayout project={project} projectId={projectId} renderBlock={renderBlock} />

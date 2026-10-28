@@ -30,7 +30,7 @@ import { useUnreadNotificationCount } from "../../db/hooks/useNotifications";
 import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
 import type { UIKey } from "../../i18n/ui";
-import { BOTTOM_BAR, CountBadge, IconButton } from "../ui";
+import { BOTTOM_BAR, CountBadge, IconButton, Tooltip } from "../ui";
 import { navItemClass } from "../ui/NavItem";
 
 type NavItem = { to: string; icon: typeof LayoutDashboard; labelKey: UIKey };
@@ -258,14 +258,15 @@ export function Sidebar() {
       </nav>
       <TimerIndicator collapsed={collapsed} />
       <div className={`${BOTTOM_BAR} border-sidebar-border px-2`}>
-        <button
-          onClick={toggleSidebar}
-          aria-label={collapsed ? t.expand_sidebar : t.collapse_sidebar}
-          title={`${collapsed ? t.expand_sidebar : t.collapse_sidebar} (⌘B)`}
-          className="flex items-center justify-center w-full py-1.5 rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors"
-        >
-          {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-        </button>
+        <Tooltip content={`${collapsed ? t.expand_sidebar : t.collapse_sidebar} (⌘B)`}>
+          <button
+            onClick={toggleSidebar}
+            aria-label={collapsed ? t.expand_sidebar : t.collapse_sidebar}
+            className="flex items-center justify-center w-full py-1.5 rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors"
+          >
+            {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          </button>
+        </Tooltip>
       </div>
     </aside>
   );

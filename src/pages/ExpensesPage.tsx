@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Plus, Paperclip, Eye, ChevronRight, Upload, Trash2, CheckCircle, CalendarCheck, Receipt, Settings2, XCircle, Pencil } from "lucide-react";
-import { Button, DatePicker, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState, Card, Modal, Popover, IconButton, Tag, SectionLabel } from "../components/ui";
+import { Button, DatePicker, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState, Card, Modal, Popover, IconButton, Tag, SectionLabel, Callout, Tooltip } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
@@ -348,15 +348,16 @@ export function ExpensesPage() {
                         <td className="px-4 py-2.5">
                           {exp.receipt_path ? (
                             <div className="flex items-center gap-2">
-                              <Button
-                                variant="link"
-                                size="sm"
-                                icon={<Eye size={14} />}
-                                onClick={() => setPreview({ path: exp.receipt_path!, reference: exp.reference })}
-                                title={t.preview_receipt}
-                              >
-                                {t.view}
-                              </Button>
+                              <Tooltip content={t.preview_receipt}>
+                                <Button
+                                  variant="link"
+                                  size="sm"
+                                  icon={<Eye size={14} />}
+                                  onClick={() => setPreview({ path: exp.receipt_path!, reference: exp.reference })}
+                                >
+                                  {t.view}
+                                </Button>
+                              </Tooltip>
                               <span className="text-xs text-success flex items-center gap-1">
                                 <Paperclip size={12} />
                               </span>
@@ -731,12 +732,10 @@ export function NewExpenseForm({
         </FormField>
       </div>
       {duplicateWarning && (
-        <div className="flex items-center gap-2 p-3 bg-[var(--color-warning-bg)] border border-[var(--color-border-header)] rounded-md text-sm">
-          <span className="text-[var(--color-warning-text)] font-medium">{t.possible_duplicate}:</span>
-          <span className="text-[var(--color-warning-text)]">
-            {duplicateWarning.supplier} — {duplicateWarning.amount.toFixed(2)} CHF ({formatDisplayDate(duplicateWarning.date)})
-          </span>
-        </div>
+        <Callout tone="warning">
+          <span className="font-medium">{t.possible_duplicate}:</span>{" "}
+          {duplicateWarning.supplier} — {duplicateWarning.amount.toFixed(2)} CHF ({formatDisplayDate(duplicateWarning.date)})
+        </Callout>
       )}
       <div className="flex gap-2">
         <Button variant="secondary" onClick={onCancel}>

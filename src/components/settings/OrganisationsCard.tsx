@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
+import { Tooltip } from "../ui/Tooltip";
 import { useOrgStore } from "../../stores/org-store";
 import { renameOrganisation, reorderOrganisations, deleteOrganisation } from "../../lib/orgs";
 import { notifyError } from "../../lib/notifyError";
@@ -117,18 +118,22 @@ export function OrganisationsCard() {
               <Button variant="ghost" size="sm" icon={<ArrowUp size={12} />} aria-label={t.move_up} disabled={idx === 0} onClick={() => void move(idx, -1)} />
               <Button variant="ghost" size="sm" icon={<ArrowDown size={12} />} aria-label={t.move_down} disabled={idx === organisations.length - 1} onClick={() => void move(idx, 1)} />
               <Button variant="ghost" size="sm" icon={<Pencil size={12} />} aria-label={t.rename_organisation} onClick={() => startEditing(o)} />
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={<Trash2 size={12} />}
-                aria-label={t.delete_organisation}
-                disabled={isActive || isLast}
-                title={isActive ? t.delete_organisation_active : isLast ? t.delete_organisation_last : undefined}
-                onClick={() => {
-                  setDeleting({ id: o.id, name: o.name });
-                  setTyped("");
-                }}
-              />
+              {/* span: a disabled button gets no mouse events, and the hint explains why it is disabled */}
+              <Tooltip content={isActive ? t.delete_organisation_active : isLast ? t.delete_organisation_last : undefined}>
+                <span className="inline-flex">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={<Trash2 size={12} />}
+                    aria-label={t.delete_organisation}
+                    disabled={isActive || isLast}
+                    onClick={() => {
+                      setDeleting({ id: o.id, name: o.name });
+                      setTyped("");
+                    }}
+                  />
+                </span>
+              </Tooltip>
             </li>
           );
         })}
