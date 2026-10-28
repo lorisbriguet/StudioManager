@@ -12,3 +12,28 @@ export function getAgentsSettings(): Promise<AgentsInfo> {
 export function setAgentsEnabled(enabled: boolean): Promise<AgentsInfo> {
   return invoke<AgentsInfo>("agents_set_enabled", { enabled });
 }
+
+export function startAgent(
+  folder: string,
+  task: string,
+  model: string,
+  name: string,
+): Promise<string> {
+  return invoke<string>("agents_start", { folder, task, model, name });
+}
+
+export function stopAgent(shortId: string): Promise<void> {
+  return invoke<void>("agents_stop", { shortId });
+}
+
+export function deleteAgent(shortId: string): Promise<void> {
+  return invoke<void>("agents_delete", { shortId });
+}
+
+export function switchModel(sessionId: string, model: string): Promise<string> {
+  return invoke<string>("agents_switch_model", { sessionId, model });
+}
+
+export function dismissAgent(sessionId: string): Promise<void> {
+  return invoke<void>("agents_dismiss", { sessionId });
+}

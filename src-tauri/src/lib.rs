@@ -594,6 +594,11 @@ pub fn run() {
             agents::cli::agents_get_settings,
             agents::cli::agents_set_enabled,
             agents::projects::agents_start_folders,
+            agents::actions::agents_start,
+            agents::actions::agents_stop,
+            agents::actions::agents_delete,
+            agents::actions::agents_switch_model,
+            agents::actions::agents_dismiss,
         ])
         .setup(|app| {
             let handle = app.handle();

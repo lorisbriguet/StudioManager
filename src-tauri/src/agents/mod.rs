@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+pub mod actions;
 pub mod cli;
 pub mod model;
 pub mod projects;
