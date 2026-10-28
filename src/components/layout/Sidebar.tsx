@@ -13,6 +13,7 @@ import {
   BarChart3,
   BookOpen,
   Database,
+  Wrench,
   Square,
   Bell,
   Settings,
@@ -27,6 +28,7 @@ import { useAppStore } from "../../stores/app-store";
 import { useTabStore } from "../../stores/tab-store";
 import { confirmIfDirty } from "../../lib/dirty-guard";
 import { useUnreadNotificationCount } from "../../db/hooks/useNotifications";
+import { useUpkeepOverview } from "../../db/hooks/useUpkeep";
 import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
 import type { UIKey } from "../../i18n/ui";
@@ -44,6 +46,7 @@ const navItems: SidebarItem[] = [
   { divider: true },
   { to: "/wiki", icon: BookOpen, labelKey: "wiki" },
   { to: "/resources", icon: Database, labelKey: "resources" },
+  { to: "/upkeep", icon: Wrench, labelKey: "upkeep" },
   { divider: true },
   { to: "/invoices", icon: FileText, labelKey: "invoices" },
   { to: "/quotes", icon: FilePlus2, labelKey: "quotes" },
@@ -62,6 +65,7 @@ export function Sidebar() {
   const showTasksPage = useAppStore((s) => s.showTasksPage);
   const showIncome = useAppStore((s) => s.showIncome);
   const { data: unreadCount = 0 } = useUnreadNotificationCount();
+  const { overdueCount } = useUpkeepOverview();
   const openTab = useTabStore((s) => s.openTab);
   const t = useT();
   const navigate = useNavigate();
@@ -221,6 +225,8 @@ export function Sidebar() {
           const Icon = item.icon;
           const label = t[item.labelKey];
           const isNotifications = item.labelKey === "notifications";
+          const isUpkeep = item.labelKey === "upkeep";
+          const badgeCount = isNotifications ? unreadCount : isUpkeep ? overdueCount : 0;
           const isFocused = focusIdx === currentLinkIdx;
           return (
             <NavLink
@@ -243,18 +249,18 @@ export function Sidebar() {
             >
               <span className="relative">
                 <Icon size={18} strokeWidth={1.5} />
-                {isNotifications && unreadCount > 0 && (
+                {badgeCount > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 bg-[var(--color-danger)] text-white text-[10px] font-bold min-w-[14px] h-[14px] flex items-center justify-center rounded-full leading-none">
-                    {unreadCount > 9 ? "9+" : unreadCount}
+                    {badgeCount > 9 ? "9+" : badgeCount}
                   </span>
                 )}
               </span>
               {!collapsed && (
                 <span className="flex items-center gap-2">
                   {label}
-                  {isNotifications && unreadCount > 0 && (
+                  {badgeCount > 0 && (
                     <span className="bg-[var(--color-danger)] text-white text-[10px] font-medium px-1.5 py-0.5 rounded-full leading-none">
-                      {unreadCount}
+                      {badgeCount}
                     </span>
                   )}
                 </span>

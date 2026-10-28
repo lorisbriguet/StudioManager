@@ -2,6 +2,26 @@ import { variantClasses, type BadgeVariant } from "../components/ui/Badge";
 import type { InvoiceStatus } from "../types/invoice";
 import type { QuoteStatus } from "../types/quote";
 import type { TaskStatus } from "../types/task";
+import type { MachineStatus } from "../types/upkeep";
+
+const MACHINE_VARIANT: Record<MachineStatus, BadgeVariant> = {
+  working: "success",
+  attention: "warning",
+  broken: "danger",
+  lent: "info",
+  retired: "neutral",
+};
+
+export function machineStatusVariant(s: MachineStatus): BadgeVariant {
+  return MACHINE_VARIANT[s];
+}
+
+/** Upkeep due state: only overdue and soon rows are listed, the rest stay quiet. */
+export function dueStateVariant(s: "overdue" | "soon" | "later" | "none"): BadgeVariant {
+  if (s === "overdue") return "danger";
+  if (s === "soon") return "warning";
+  return "neutral";
+}
 
 /**
  * Maps any entity status to a Badge variant.

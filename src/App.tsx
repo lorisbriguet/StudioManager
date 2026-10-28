@@ -28,6 +28,8 @@ import { FinancesPage } from "./pages/FinancesPage";
 import { InvoicePreviewPage } from "./pages/InvoicePreviewPage";
 import { QuotePreviewPage } from "./pages/QuotePreviewPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
+import { UpkeepPage } from "./pages/UpkeepPage";
+import { MachinePage } from "./pages/MachinePage";
 const WikiPage = lazy(() =>
   import("./pages/WikiPage").then((m) => ({ default: m.WikiPage }))
 );
@@ -191,7 +193,9 @@ export default function App() {
                 <Route path="finances" element={<FinancesPage />} />
                 <Route path="wiki" element={<Suspense fallback={<PageSpinner />}><WikiPage /></Suspense>} />
                 <Route path="resources" element={<ResourcesPage />} />
-                <Route path="notifications" element={<NotificationsPage />} />
+                <Route path="upkeep" element={<UpkeepPage />} />
+                <Route path="upkeep/machines/:id" element={<MachinePage />} />
+                <Route path="notifications"element={<NotificationsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="profile" element={<ProfilePage />} />
               </Route>

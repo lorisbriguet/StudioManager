@@ -4,6 +4,10 @@ import * as m from "../queries/machines";
 import * as u from "../queries/upkeepItems";
 import * as c from "../queries/consumables";
 import * as s from "../queries/subscriptions";
+import { useMemo } from "react";
+import { useAppStore } from "../../stores/app-store";
+import { todayLocalISO } from "../../utils/localDate";
+import { buildUpkeepOverview, type UpkeepOverview } from "../../lib/upkeep/overview";
 import { useUndoStore } from "../../stores/undo-store";
 import { getLabels } from "../../lib/notifyError";
 import {
@@ -712,4 +716,34 @@ export function useSnoozeUpkeep() {
     onSuccess: invalidate,
     onError: (e) => { toast.error(String(e)); },
   });
+}
+
+// ── Overview ────────────────────────────────────────────────
+
+export type { DueRow } from "../../lib/upkeep/overview";
+
+/** Everything the Overview tab, the sidebar badge and the dashboard widget show. */
+export function useUpkeepOverview(): UpkeepOverview {
+  const { data: items } = useActiveUpkeepItems();
+  const { data: machines } = useMachines();
+  const { data: consumables } = useConsumables();
+  const { data: subscriptions } = useSubscriptions();
+  const soonDays = useAppStore((s) => s.upkeepSoonDays);
+  const warrantyWindowDays = useAppStore((s) => s.warrantyWindowDays);
+  const renewalWindowDays = useAppStore((s) => s.renewalWindowDays);
+  const todayISO = todayLocalISO();
+  return useMemo(
+    () =>
+      buildUpkeepOverview({
+        items: items ?? [],
+        machines: machines ?? [],
+        consumables: consumables ?? [],
+        subscriptions: subscriptions ?? [],
+        todayISO,
+        soonDays,
+        warrantyWindowDays,
+        renewalWindowDays,
+      }),
+    [items, machines, consumables, subscriptions, todayISO, soonDays, warrantyWindowDays, renewalWindowDays]
+  );
 }
