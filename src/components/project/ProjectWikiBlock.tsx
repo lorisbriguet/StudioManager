@@ -77,7 +77,7 @@ export function ProjectWikiBlock({ projectId }: { projectId: number }) {
                           <span
                             key={tag}
                             style={{ background: c.bg, color: c.text }}
-                            className="px-1.5 py-0.5 text-[10px] rounded-full font-medium"
+                            className="px-1.5 py-0.5 text-xs rounded-full font-medium"
                           >
                             {tag}
                           </span>

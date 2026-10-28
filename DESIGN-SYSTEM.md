@@ -114,6 +114,8 @@ Columns of the window sit side by side (app sidebar, wiki explorer, editor, side
 | Panel top bar (tab row, panel toolbar) | `h-10` (40px), `border-b` | `PANEL_TOP_BAR` classes |
 | App sidebar header | `h-14` (56px), `border-b` | logo row only |
 
+Both bars draw their line in `--color-border-header` (pass `border-[var(--color-border-header)]` with `PANEL_TOP_BAR`), so the top and bottom lines of a column have the same weight. Icon-only buttons inside a bar use the `BAR_ICON_BUTTON` classes from the same file, with 14px icons.
+
 Bottom bar text is `text-xs text-muted`. A column that has no footer simply ends; it never gets a shorter bar of its own. Dialog footers (`Modal`) are not window bars: they keep `px-5 py-3`.
 
 ---
@@ -151,13 +153,15 @@ All icons use **lucide-react**. Never use unicode characters (no `✕`, `←`, `
 | Close/dismiss | `X` | Never unicode `✕` |
 | Edit | `Pencil` | Never `Edit`, `Edit2`, `PenLine` |
 | Add/create | `Plus` | |
-| Back | `ArrowLeft` | Prev/next in calendars use `ChevronLeft`/`ChevronRight` |
+| Back | `ArrowLeft` | Prev/next in calendars, and back/forward in a tab bar or panel bar (app `TabBar`, wiki), use `ChevronLeft`/`ChevronRight` |
 | Search | `Search` | |
 | External link | `ExternalLink` | |
 | Download | `Download` | |
 | Settings | `Settings2` | |
 | Drag handle | `GripVertical` | |
 | Expand/maximize | `Maximize2` | |
+| Fit to screen | `Scan` | Graph and canvas zoom controls; never `Maximize2` |
+| Open in new tab | `ArrowUpRight` | Inside the app (wiki tabs); `ExternalLink` is for leaving the app |
 | Folder | `FolderOpen` | |
 
 ---
@@ -287,7 +291,7 @@ Use for boolean settings. Don't use checkboxes for settings toggles.
 import { Skeleton } from "../components/ui/Skeleton";
 <Skeleton width="60%" height={14} rounded="md" />
 ```
-Use while data is loading. Match the shape of what will appear.
+Use while data is loading. Match the shape of what will appear. `inline` renders a span, for a placeholder inside text or a button (a tab label still loading). Never show an empty state ("nothing here yet") before the data has loaded.
 
 ### SearchBar
 ```tsx
@@ -365,6 +369,8 @@ import { invoiceStatusVariant, quoteStatusVariant, taskStatusVariant, projectSta
 - No container borders around tables
 
 ### Year/Section Groups
+
+Use the shared `SectionLabel` (`src/components/ui/SectionLabel.tsx`); `as="h1"` when it names a whole panel. The classes it renders:
 ```tsx
 <span className="text-[10px] font-medium uppercase tracking-widest text-muted">2026</span>
 ```
@@ -379,9 +385,12 @@ import { invoiceStatusVariant, quoteStatusVariant, taskStatusVariant, projectSta
     <Icon size={14} /> Label
   </button>
   <div className="my-1 border-t border-[var(--color-border-divider)]" />
-  <button className="... text-red-600 hover:bg-red-50">Danger action</button>
+  <button className="... text-[var(--color-danger-text)] hover:bg-[var(--color-hover-row)]">Danger action</button>
 </div>
 ```
+
+- A right-click menu is the shared `ContextMenu` (`src/components/ContextMenu.tsx`): it stays on screen, closes on Escape and takes the arrow keys. Don't hand-build one.
+- A popup that opens at the text caret and keeps the focus in the editor (the wiki's slash menu and link picker) uses this look, `role="listbox"` with `role="option"` rows, and the `useKeepInViewport` hook (`src/hooks/useKeepInViewport.ts`) so it flips above the caret or slides left instead of leaving the window.
 
 ---
 

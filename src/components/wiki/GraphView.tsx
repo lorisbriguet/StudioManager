@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
-import { Maximize2, ZoomIn, ZoomOut } from "lucide-react";
+import { Scan, ZoomIn, ZoomOut } from "lucide-react";
 import { useT } from "../../i18n/useT";
+import { BAR_ICON_BUTTON } from "../ui";
 import { createSim, layoutGraph, placeLabels, type Point, type Sim, type SimNode } from "../../lib/wikiGraph";
 import { colorFor } from "./wikiColors";
 
@@ -13,12 +14,14 @@ export interface GraphNodeInput {
   file?: boolean;
 }
 
-interface Box {
+/** The part of the graph in view, in graph units. */
+export interface GraphBox {
   x: number;
   y: number;
   w: number;
   h: number;
 }
+type Box = GraphBox;
 
 /** Label size on screen, in pixels, whatever the zoom. */
 const LABEL_PX = 11;
@@ -60,6 +63,9 @@ export function GraphView({
   alwaysLabels = false,
   onOpen,
   label,
+  initialView = null,
+  onViewChange,
+  reserveRight = 0,
 }: {
   nodes: GraphNodeInput[];
   edges: [number, number][];
@@ -69,11 +75,25 @@ export function GraphView({
   alwaysLabels?: boolean;
   onOpen: (id: number, newTab: boolean) => void;
   label: string;
+  /** Zoom and pan to start from (null: fit everything). */
+  initialView?: GraphBox | null;
+  /** Called when the zoom or pan changes, to restore it later. */
+  onViewChange?: (view: GraphBox | null) => void;
+  /** Pixels on the right covered by an overlay: fitting keeps dots out of them. */
+  reserveRight?: number;
 }) {
   const t = useT();
   const svgRef = useRef<SVGSVGElement>(null);
   const [hot, setHot] = useState<number | null>(null);
-  const [view, setView] = useState<Box | null>(null);
+  const [view, setView] = useState<Box | null>(initialView);
+  const onViewChangeRef = useRef(onViewChange);
+  onViewChangeRef.current = onViewChange;
+  useEffect(() => {
+    onViewChangeRef.current?.(view);
+  }, [view]);
+  // Keyboard: the graph is one tab stop; arrow keys move between dots.
+  const [keyId, setKeyId] = useState<number | null>(null);
+  const nodeEls = useRef(new Map<number, SVGGElement>());
   const [px, setPx] = useState<{ w: number; h: number } | null>(null);
   const [, setFrame] = useState(0);
 
@@ -110,12 +130,25 @@ export function GraphView({
     // layoutKey captures exactly the inputs that change the layout.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layoutKey]);
-  const fit = useMemo(() => bounds(laid, compact ? 50 : 80), [laid, compact]);
+  // Fit the dots into the part of the view that `reserveRight` leaves free
+  // (the graph settings panel floats over the right edge).
+  const fit = useMemo(() => {
+    const b = bounds(laid, compact ? 50 : 80);
+    const free = px ? px.w - reserveRight : 0;
+    if (!px || reserveRight <= 0 || free < 160) return b;
+    const s = Math.max(b.w / free, b.h / px.h);
+    const cx = b.x + b.w / 2;
+    const cy = b.y + b.h / 2;
+    return { x: cx - (free / 2) * s, y: cy - (px.h / 2) * s, w: px.w * s, h: px.h * s };
+  }, [laid, compact, px, reserveRight]);
 
   // A new graph: drop the live simulation and refit.
   const live = useRef<{ sim: Sim; alpha: number; raf: number } | null>(null);
+  // The first layout keeps `initialView`; a later change of graph refits.
+  // (Compared by identity, so StrictMode's second effect run keeps it too.)
+  const firstLaid = useRef(laid);
   useEffect(() => {
-    setView(null);
+    if (laid !== firstLaid.current) setView(null);
     return () => {
       if (live.current?.raf && typeof cancelAnimationFrame === "function") cancelAnimationFrame(live.current.raf);
       live.current = null;
@@ -264,13 +297,24 @@ export function GraphView({
     })
   );
 
-  const iconBtn = "p-1.5 rounded-md text-muted hover:bg-[var(--color-hover-row)]";
+  const iconBtn = `${BAR_ICON_BUTTON} p-1.5`;
+
+  // Arrow keys walk the dots in title order; only one dot is a tab stop.
+  const keyOrder = useMemo(() => [...nodes].sort((a, b) => a.title.localeCompare(b.title)).map((n) => n.id), [nodes]);
+  const tabStop =
+    keyId != null && keyOrder.includes(keyId) ? keyId : focusId != null && keyOrder.includes(focusId) ? focusId : keyOrder[0];
+  const moveKey = (from: number, step: number) => {
+    const i = keyOrder.indexOf(from);
+    const next = keyOrder[(i + step + keyOrder.length) % keyOrder.length];
+    setKeyId(next);
+    nodeEls.current.get(next)?.focus();
+  };
 
   return (
     <div className="relative w-full h-full">
       <svg
         ref={svgRef}
-        role="img"
+        role="group"
         aria-label={label}
         viewBox={`${box.x} ${box.y} ${box.w} ${box.h}`}
         preserveAspectRatio="xMidYMid meet"
@@ -310,8 +354,12 @@ export function GraphView({
           return (
             <g
               key={n.id}
+              ref={(el) => {
+                if (el) nodeEls.current.set(n.id, el);
+                else nodeEls.current.delete(n.id);
+              }}
               role="button"
-              tabIndex={0}
+              tabIndex={n.id === tabStop ? 0 : -1}
               aria-label={n.project_name ? `${n.title}, ${n.project_name}` : n.title}
               className="cursor-pointer outline-none"
               onPointerEnter={() => setHot(n.id)}
@@ -319,7 +367,10 @@ export function GraphView({
                 if (!drag.current?.moved) setHot(null);
               }}
               onPointerDown={(e) => onPointerDown(e, n.id)}
-              onFocus={() => setHot(n.id)}
+              onFocus={() => {
+                setHot(n.id);
+                setKeyId(n.id);
+              }}
               onBlur={() => setHot(null)}
               onClick={(e) => {
                 if (drag.current?.moved) return;
@@ -329,6 +380,12 @@ export function GraphView({
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   onOpen(n.id, e.metaKey || e.ctrlKey);
+                } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+                  e.preventDefault();
+                  moveKey(n.id, 1);
+                } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+                  e.preventDefault();
+                  moveKey(n.id, -1);
                 }
               }}
             >
@@ -386,7 +443,7 @@ export function GraphView({
             <ZoomOut size={16} />
           </button>
           <button onClick={() => setView(null)} className={iconBtn} aria-label={t.wiki_graph_fit} title={t.wiki_graph_fit}>
-            <Maximize2 size={16} />
+            <Scan size={16} />
           </button>
         </div>
       )}

@@ -25,10 +25,14 @@ export function docKey(projectId: number, rel: string): string {
 }
 
 /** The Markdown files of every project that has a folder. Read again when
- *  the window gets focus, so edits made in an editor show up. */
-export function useProjectDocs(projects: { id: number; name: string; folder_path: string | null }[]) {
+ *  the window gets focus, so edits made in an editor show up. `loading`
+ *  stays true until every folder has answered once. */
+export function useProjectDocs(projects: { id: number; name: string; folder_path: string | null }[]): {
+  docs: ProjectDoc[];
+  loading: boolean;
+} {
   const withFolder = projects.filter((p) => p.folder_path);
-  const results = useQueries({
+  return useQueries({
     queries: withFolder.map((p) => ({
       queryKey: ["project-docs", p.id, p.folder_path],
       queryFn: async (): Promise<ProjectDoc[]> => {
@@ -49,8 +53,18 @@ export function useProjectDocs(projects: { id: number; name: string; folder_path
       staleTime: 30_000,
       refetchOnWindowFocus: true,
     })),
+    combine: combineDocs,
   });
-  return results.flatMap((r) => r.data ?? []);
+}
+
+/** Module-level (a stable reference), so react-query only re-combines when
+ *  a result changes: the list keeps its identity between renders and what
+ *  the wiki computes from it isn't redone on every render. */
+function combineDocs(results: { data?: ProjectDoc[]; isPending: boolean }[]) {
+  return {
+    docs: results.flatMap((r) => r.data ?? []),
+    loading: results.some((r) => r.isPending),
+  };
 }
 
 export function useProjectDoc(doc: ProjectDoc | undefined) {
