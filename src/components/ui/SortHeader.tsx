@@ -1,5 +1,6 @@
 import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
-import { MUTED_INTERACTIVE } from "./tokens";
+import { MUTED_INTERACTIVE, TABLE_TH, TABLE_X } from "./tokens";
+import { useTableDensity } from "./Table";
 
 export type SortDir = "asc" | "desc";
 export type SortState<K extends string = string> = { key: K; dir: SortDir };
@@ -18,10 +19,11 @@ export function SortHeader<K extends string>({
   align?: "left" | "right";
 }) {
   const active = current.key === sortKey;
+  const density = useTableDensity();
   return (
     <th
       aria-sort={active ? (current.dir === "asc" ? "ascending" : "descending") : "none"}
-      className={`${align === "right" ? "text-right" : "text-left"} px-4 py-2 text-xs font-medium select-none`}
+      className={`${TABLE_TH} ${TABLE_X[density]} ${align === "right" ? "text-right" : "text-left"}`}
     >
       <button
         type="button"

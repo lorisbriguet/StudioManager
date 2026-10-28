@@ -26,3 +26,17 @@ export const SURFACE = `${SURFACE_FILL} border border-[var(--color-border-header
  */
 export const PILL = "inline-flex items-center gap-1 rounded-full font-medium whitespace-nowrap px-2 py-0.5 text-xs leading-4";
 export const PILL_XS = "inline-flex items-center gap-1 rounded-full font-medium whitespace-nowrap px-1.5 text-[10px] leading-4";
+
+/**
+ * Tables. Two densities: default 40px rows with 16px sides (lists),
+ * compact 32px rows with 12px sides (settings lists, editing grids).
+ * The header is 32px in both. Rows have a minimum height so a row holding
+ * a 26px control or a pill is as tall as a text row.
+ */
+export type TableDensity = "default" | "compact";
+export const TABLE_X: Record<TableDensity, string> = { default: "px-4", compact: "px-3" };
+export const TABLE_ROW_H: Record<TableDensity, string> = { default: "h-10", compact: "h-8" };
+/** Header cell text: Table.Th and SortHeader. Add TABLE_X for the sides. */
+export const TABLE_TH = "h-8 py-0 text-xs font-medium text-muted whitespace-nowrap select-none";
+/** Numbers: right-aligned, digits of equal width so columns line up. */
+export const NUMERIC = "text-right tabular-nums";
