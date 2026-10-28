@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Save, Plus, Trash2, Eye, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Input, PageSpinner, Card } from "../components/ui";
+import { Button, Input, PageSpinner, Card, Select } from "../components/ui";
 import { useTabStore } from "../stores/tab-store";
 import {
   useClient,
@@ -141,14 +141,13 @@ export function ClientDetailPage() {
               <Field label={t.display_name} value={form.name ?? ""} onBlur={(v) => saveField("name", v)} />
               <div>
                 <label className="block text-xs font-medium text-muted mb-1">{t.language}</label>
-                <select
+                <Select
                   value={form.language ?? "FR"}
                   onChange={(e) => { update("language", e.target.value); saveField("language", e.target.value); }}
-                  className="w-full border border-[var(--color-border-divider)] rounded-lg px-3 py-2 text-sm bg-[var(--color-surface)]"
                 >
                   <option value="FR">{t.french}</option>
                   <option value="EN">{t.english}</option>
-                </select>
+                </Select>
               </div>
             </div>
             <div className="flex items-center gap-3 mt-3">

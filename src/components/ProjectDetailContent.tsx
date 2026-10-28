@@ -20,7 +20,7 @@ import type { ProjectStatus } from "../types/project";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu";
 import { useInvoices, useInvoicesByProject, useUpdateInvoice } from "../db/hooks/useInvoices";
 import { useQuotes, useQuotesByProject, useUpdateQuote } from "../db/hooks/useQuotes";
-import { Badge, Button, PageSpinner } from "./ui";
+import { Badge, Button, PageSpinner, Select } from "./ui";
 import { invoiceStatusVariant, quoteStatusVariant } from "../lib/statusColors";
 import { useTabStore } from "../stores/tab-store";
 import { open as openDirectory } from "@tauri-apps/plugin-dialog";
@@ -193,13 +193,12 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
             )}
             {unlinkedInvoices.length > 0 && (
               <div className="mt-2">
-                <select
+                <Select
                   value=""
                   onChange={(e) => {
                     const id = Number(e.target.value);
                     if (id) updateInvoice.mutate({ id, data: { project_id: projectId } });
                   }}
-                  className="text-xs border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1 w-full"
                 >
                   <option value="">{t.link_invoice}</option>
                   {unlinkedInvoices.map((inv) => (
@@ -207,7 +206,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                       {inv.reference.startsWith("DRAFT") ? t.draft : inv.reference} — {inv.total.toFixed(2)} CHF
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
             )}
           </div>
@@ -234,13 +233,12 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
             )}
             {unlinkedQuotes.length > 0 && (
               <div className="mt-2">
-                <select
+                <Select
                   value=""
                   onChange={(e) => {
                     const id = Number(e.target.value);
                     if (id) updateQuote.mutate({ id, data: { project_id: projectId } });
                   }}
-                  className="text-xs border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1 w-full"
                 >
                   <option value="">{t.link_quote}</option>
                   {unlinkedQuotes.map((qt) => (
@@ -248,7 +246,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                       {qt.reference.startsWith("DRAFT") ? t.draft : qt.reference} — {qt.total.toFixed(2)} CHF
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
             )}
           </div>
@@ -273,7 +271,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
               </Link>
             )}
           </div>
-          <select
+          <Select
             value={status}
             onChange={(e) => {
               const v = e.target.value as ProjectStatus;
@@ -283,13 +281,13 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                 { onSuccess: () => toast.success(t.toast_status_updated) }
               );
             }}
-            className="border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-2 py-1 text-xs"
+            fullWidth={false}
           >
             <option value="active">{t.active}</option>
             <option value="completed">{t.completed}</option>
             <option value="on_hold">{t.on_hold}</option>
             <option value="cancelled">{t.cancelled}</option>
-          </select>
+          </Select>
         </div>
 
         <div className="flex items-center gap-4 mb-4 text-xs">

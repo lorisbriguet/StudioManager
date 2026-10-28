@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { pickOption } from "./fixtures/dropdown";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
@@ -52,8 +53,7 @@ describe("WorkloadColumnEditor Enter-to-save", () => {
     const { onSave } = renderEditor();
     const nameInput = screen.getAllByRole("textbox")[0];
     fireEvent.change(nameInput, { target: { value: "Calc" } });
-    const typeSelect = screen.getAllByRole("combobox")[0];
-    fireEvent.change(typeSelect, { target: { value: "formula" } });
+    pickOption(screen.getAllByRole("combobox")[0], "Formula");
     const formulaInput = screen.getByPlaceholderText(/og_scope/);
     fireEvent.change(formulaInput, { target: { value: "1 + 2" } });
     fireEvent.keyDown(formulaInput, { key: "Enter" });

@@ -309,9 +309,9 @@ export function QuoteFormPage() {
         </h1>
       </div>
 
-      {/* Dirty tracking on change only. React's onChange already fires per keystroke
-          for text fields; listening to `input` as well made the first <select> pick
-          re-render the form before WebKit's `change`, reverting the controlled value. */}
+      {/* Dirty tracking: text fields bubble their change events up to this div.
+          Select is a custom dropdown that sends no DOM event, so each Select's
+          onChange calls markDirty() itself. */}
       <div className="space-y-4 max-w-3xl" onChange={markDirty}>
         {/* Template selector */}
         {invoiceTemplates && invoiceTemplates.length > 0 && (
@@ -321,7 +321,7 @@ export function QuoteFormPage() {
             </label>
             <Select
               value={templateId ?? ""}
-              onChange={(e) => setTemplateId(e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) => { markDirty(); setTemplateId(e.target.value ? Number(e.target.value) : null); }}
               className="py-2"
             >
               <option value="">{t.none}</option>
@@ -338,7 +338,7 @@ export function QuoteFormPage() {
           <FormField label={t.client} required error={errors.client_id}>
             <Select
               value={clientId}
-              onChange={(e) => {
+              onChange={(e) => { markDirty();
                 setClientId(e.target.value);
                 setBillingAddressId(null);
                 setProjectId(null);
@@ -360,7 +360,7 @@ export function QuoteFormPage() {
             <FormField label={t.billing_address}>
               <Select
                 value={billingAddressId ?? ""}
-                onChange={(e) => setBillingAddressId(e.target.value ? Number(e.target.value) : null)}
+                onChange={(e) => { markDirty(); setBillingAddressId(e.target.value ? Number(e.target.value) : null); }}
                 className="py-2"
               >
                 <option value="">{t.main_address}</option>
@@ -375,7 +375,7 @@ export function QuoteFormPage() {
           <FormField label={t.project_optional}>
             <Select
               value={projectId ?? ""}
-              onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) => { markDirty(); setProjectId(e.target.value ? Number(e.target.value) : null); }}
               className="py-2"
             >
               <option value="">{t.none}</option>
@@ -396,7 +396,7 @@ export function QuoteFormPage() {
           <FormField label={t.activity}>
             <Select
               value={activityId !== null ? String(activityId) : activity ? "legacy" : ""}
-              onChange={(e) => {
+              onChange={(e) => { markDirty();
                 setActivityId(e.target.value === "legacy" || e.target.value === "" ? null : Number(e.target.value));
               }}
               className="py-2"
@@ -450,19 +450,19 @@ export function QuoteFormPage() {
                 fullWidth={false}
                 className="w-28 text-right"
               />
-              <select
+              <Select
                 value={globalUnit}
-                onChange={(e) => {
+                onChange={(e) => { markDirty();
                   setGlobalUnit(e.target.value);
                   if (globalRate > 0) applyGlobalRate(globalRate, e.target.value);
                 }}
-                className="border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm bg-[var(--color-surface)]"
+                fullWidth={false}
               >
                 <option value="hours">{t.hours}</option>
                 <option value="days">{t.days}</option>
                 <option value="units">{t.units}</option>
                 <option value="flat">{t.flat_rate}</option>
-              </select>
+              </Select>
             </>
           )}
         </div>

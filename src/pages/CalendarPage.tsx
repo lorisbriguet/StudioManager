@@ -8,7 +8,7 @@ import interactionPlugin from "@fullcalendar/interaction";
 import type { EventInput, EventContentArg, EventDropArg } from "@fullcalendar/core";
 import type { DateClickArg, EventResizeDoneArg } from "@fullcalendar/interaction";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "../components/ui";
+import { Button, Select } from "../components/ui";
 import { useT } from "../i18n/useT";
 import { useTasksWithDueDate, useUpdateTask, useUpdateSubtask, useCreateTask, useCreateSubtask, useTasksByProject } from "../db/hooks/useTasks";
 import { useProjects, useUpdateProject } from "../db/hooks/useProjects";
@@ -641,13 +641,13 @@ export function QuickCreatePopup({
   return createPortal(
     <div
       ref={popoverRef}
-      className="fixed z-[9999] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] p-3 w-[260px]"
+      className="fixed z-[9999] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu p-3 w-[260px]"
       style={{ top, left }}
     >
       <div className="text-xs text-muted mb-2">
         {date} · {timeLabel}
       </div>
-      <select
+      <Select
         value={projectId}
         onChange={(e) => {
           setProjectId(e.target.value ? Number(e.target.value) : "");
@@ -655,13 +655,13 @@ export function QuickCreatePopup({
           setSubtaskTitle("");
           setTitle("");
         }}
-        className="w-full bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-lg px-2 py-1.5 text-xs focus-accent mb-2"
+        className="mb-2"
       >
         <option value="">{t.select_project}</option>
         {projects.map((p) => (
           <option key={p.id} value={p.id}>{p.name}</option>
         ))}
-      </select>
+      </Select>
 
       {/* Task name with autocomplete */}
       <div className="relative mb-2">
@@ -701,7 +701,7 @@ export function QuickCreatePopup({
           />
         )}
         {!selectedTask && showSuggestions && suggestions.length > 0 && (
-          <div className="absolute z-10 top-full left-0 right-0 mt-0.5 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 max-h-32 overflow-y-auto">
+          <div className="absolute z-10 top-full left-0 right-0 mt-0.5 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu py-1 max-h-32 overflow-y-auto">
             {suggestions.map((task) => (
               <button
                 key={task.id}

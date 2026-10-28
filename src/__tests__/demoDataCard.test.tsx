@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { pickOption } from "./fixtures/dropdown";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -67,7 +68,7 @@ describe("DemoDataCard", () => {
   it("loads the chosen persona with its configuration and applies its preferences", async () => {
     ask.mockResolvedValue(true);
     renderCard();
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "music" } });
+    pickOption(screen.getByRole("combobox"), "Music project");
     fireEvent.click(screen.getByRole("button", { name: /load into this organisation/i }));
     await waitFor(() => expect(seedPersona).toHaveBeenCalledTimes(1));
     expect(seedPersona.mock.calls[0][1]).toBe("music");

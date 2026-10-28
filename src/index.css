@@ -46,6 +46,23 @@
   --color-hover-row: #f8f8f8;
 }
 
+/* ─── Menus (Dropdown, ContextMenu) ───
+   Kept out of @theme so the values are read at runtime: the shadow changes
+   with .dark and the tint follows the theme's accent. */
+:root {
+  --shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+@utility shadow-menu {
+  box-shadow: var(--shadow-menu);
+}
+/* Selected row in a menu, and the same row while hovered */
+@utility bg-accent-tint {
+  background-color: color-mix(in srgb, var(--color-accent) 5%, transparent);
+}
+@utility bg-accent-tint-strong {
+  background-color: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
@@ -127,6 +144,7 @@ body {
   --color-input-bg: #1a1a1a;
   --color-input-border: #2a2a2a;
   --color-hover-row: #1a1a1a;
+  --shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 .dark input,

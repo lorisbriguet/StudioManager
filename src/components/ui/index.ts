@@ -6,6 +6,8 @@ export { Modal } from "./Modal";
 export { PageHeader } from "./PageHeader";
 export { SearchBar } from "./SearchBar";
 export { Select } from "./Select";
+export { Dropdown, DropdownSelect } from "./Dropdown";
+export type { DropdownItem, DropdownOption } from "./Dropdown";
 export { EmptyState } from "./EmptyState";
 export { FormField } from "./FormField";
 export { PageSpinner } from "./Spinner";

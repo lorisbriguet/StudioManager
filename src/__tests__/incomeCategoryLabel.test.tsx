@@ -58,8 +58,7 @@ describe("Income category labels", () => {
     fireEvent.contextMenu(row);
     fireEvent.click(await screen.findByRole("menuitem", { name: /edit/i }));
 
-    const select = (await screen.findByDisplayValue("Side income")) as HTMLSelectElement;
-    expect(select.value).toBe("side_income");
+    expect(await screen.findByRole("combobox", { name: /category/i })).toHaveTextContent("Side income");
     expect(screen.queryByText("side_income")).not.toBeInTheDocument();
   });
 
@@ -73,6 +72,6 @@ describe("Income category labels", () => {
     fireEvent.contextMenu(row);
     fireEvent.click(await screen.findByRole("menuitem", { name: /modifier|edit/i }));
 
-    expect(await screen.findByDisplayValue("Revenu accessoire")).toBeInTheDocument();
+    expect(await screen.findByRole("combobox", { name: /categorie|category/i })).toHaveTextContent("Revenu accessoire");
   });
 });

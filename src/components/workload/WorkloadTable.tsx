@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { Plus, Trash2, GripVertical, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Settings2, X, Copy, Download, Sigma, Pin, Play, Square } from "lucide-react";
-import { Button } from "../ui";
+import { Button, Select } from "../ui";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
@@ -414,7 +414,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
     <div>
       {/* Toolbar */}
       <div className="flex items-center gap-2 mb-3 select-none">
-        <select
+        <Select
           value={templateId ?? ""}
           onChange={(e) => {
             const val = e.target.value;
@@ -426,7 +426,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
               handleTemplateChange(val ? Number(val) : null);
             }
           }}
-          className="text-xs border border-[var(--color-border-divider)] rounded-lg px-2 py-1"
+          fullWidth={false}
         >
           <option value="">{t.select_template}</option>
           {templates?.map((tpl) => (
@@ -440,7 +440,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
           {columns.length > 0 && (
             <option value="__save__">{t.save_as_template}</option>
           )}
-        </select>
+        </Select>
         <div className="flex-1" />
         <button
           onClick={() => onEditColumn?.(null, columns.length)}

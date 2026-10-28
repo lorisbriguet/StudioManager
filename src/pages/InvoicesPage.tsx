@@ -527,17 +527,17 @@ export function InvoicesPage() {
                       {baseInv ? `CHF ${(baseInv.chf_equivalent ?? baseInv.total).toFixed(2)}` : "—"}
                     </td>
                     <td className="py-2 pr-2">
-                      <select
+                      <Select
                         value={tmpl.frequency}
                         onChange={(e) =>
                           updateTemplate.mutate({ id: tmpl.id, data: { frequency: e.target.value as RecurringFrequency } })
                         }
-                        className="text-xs border border-[var(--color-input-border)] rounded-lg px-1.5 py-0.5"
+                        fullWidth={false}
                       >
                         {FREQUENCIES.map((f) => (
                           <option key={f} value={f}>{t[f] ?? f}</option>
                         ))}
-                      </select>
+                      </Select>
                     </td>
                     <td className="py-2 pr-2 text-muted">{formatDisplayDate(tmpl.next_due)}</td>
                     <td className="py-2 pr-2">
@@ -667,7 +667,7 @@ export function InvoicesPage() {
                         <td className="px-4 py-2.5">{inv.client_name}</td>
                         <td className="px-4 py-2.5 text-muted">{formatDisplayDate(inv.invoice_date)}</td>
                         <td className="px-4 py-2.5">
-                          <select
+                          <Select
                             value={inv.status}
                             onChange={(e) => {
                               const status = e.target.value as InvoiceStatus;
@@ -688,14 +688,16 @@ export function InvoicesPage() {
                                 }
                               );
                             }}
-                            className={`text-xs px-2 py-0.5 rounded-full border-0 appearance-none cursor-pointer ${statusClasses(invoiceStatusVariant(inv.status), inv.status)}`}
+                            variant="bare"
+                            fullWidth={false}
+                            className={`px-2 py-0.5 rounded-full ${statusClasses(invoiceStatusVariant(inv.status), inv.status)}`}
                           >
                             {inv.status === "draft" && <option value="draft">{t.draft}</option>}
                             <option value="sent">{t.sent}</option>
                             <option value="paid">{t.paid}</option>
                             <option value="overdue">{t.overdue}</option>
                             <option value="cancelled">{t.cancelled}</option>
-                          </select>
+                          </Select>
                         </td>
                         <td className="px-4 py-2.5 text-right font-medium">
                           {inv.status === "cancelled" ? (

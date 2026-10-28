@@ -8,7 +8,7 @@ import { useDashboardStore, WIDGET_CATALOG, type WidgetType, type DashboardWidge
 import type { LayoutItem } from "react-grid-layout";
 import { renderWidget } from "../components/dashboard/widgets";
 import { DashboardYearContext } from "../components/dashboard/DashboardYearContext";
-import { PageHeader, Button, EmptyState } from "../components/ui";
+import { PageHeader, Button, EmptyState, Select } from "../components/ui";
 import { useT } from "../i18n/useT";
 import { toast } from "sonner";
 import { useDashboardPresets, useCreateDashboardPreset, useUpdateDashboardPreset, useDeleteDashboardPreset } from "../db/hooks/useDashboardPresets";
@@ -111,7 +111,7 @@ function PresetDropdown() {
       </Button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[220px]">
+        <div className="absolute right-0 top-full mt-1 z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu py-1 min-w-[220px]">
           {/* Built-in presets */}
           {builtinPresets.map((preset) => (
             <button
@@ -262,16 +262,16 @@ export function DashboardPage() {
     <DashboardYearContext.Provider value={year}>
     <div ref={containerRef} className="overflow-x-hidden">
       <PageHeader title={t.dashboard}>
-        <select
+        <Select
           value={year}
           onChange={(e) => setYear(Number(e.target.value))}
           aria-label={t.year}
-          className="border border-[var(--color-border-divider)] rounded-lg px-2 py-1 text-sm bg-[var(--color-surface)]"
+          fullWidth={false}
         >
           {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((y) => (
             <option key={y} value={y}>{y}</option>
           ))}
-        </select>
+        </Select>
         <PresetDropdown />
         <Button
           variant="secondary"

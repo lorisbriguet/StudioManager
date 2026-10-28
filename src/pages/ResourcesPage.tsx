@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Plus, Search, ExternalLink, Trash2, X } from "lucide-react";
-import { PageHeader, Button, EmptyState, FormField } from "../components/ui";
+import { PageHeader, Button, EmptyState, FormField, Select } from "../components/ui";
 import * as v from "../lib/validate";
 import { Skeleton } from "../components/ui/Skeleton";
 import { SavedFilterBar } from "../components/SavedFilterBar";
@@ -401,15 +401,14 @@ function NewResourceForm({
           />
         </FormField>
         <FormField label={t.price_label}>
-          <select
+          <Select
             value={price}
             onChange={(e) => setPrice(e.target.value)}
-            className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-1.5 text-sm"
           >
             <option value="">{t.price_label}</option>
             <option value="free">{t.price_free}</option>
             <option value="paid">{t.price_paid}</option>
-          </select>
+          </Select>
         </FormField>
         <div className="flex gap-2">
           <div className="relative flex-1">
@@ -629,11 +628,11 @@ function ResourceTableRow({
           </div>
         </td>
         <td className="px-3 py-2">
-          <select value={price} onChange={(e) => setPrice(e.target.value)} className="border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-sm">
+          <Select value={price} onChange={(e) => setPrice(e.target.value)} fullWidth={false}>
             <option value="">—</option>
             <option value="free">{t.price_free}</option>
             <option value="paid">{t.price_paid}</option>
-          </select>
+          </Select>
         </td>
         <td className="px-3 py-2">
           <input

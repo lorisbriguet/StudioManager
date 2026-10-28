@@ -498,9 +498,9 @@ export function InvoiceFormPage() {
         </h1>
       </div>
 
-      {/* Dirty tracking on change only. React's onChange already fires per keystroke
-          for text fields; listening to `input` as well made the first <select> pick
-          re-render the form before WebKit's `change`, reverting the controlled value. */}
+      {/* Dirty tracking: text fields bubble their change events up to this div.
+          Select is a custom dropdown that sends no DOM event, so each Select's
+          onChange calls markDirty() itself. */}
       <div className="space-y-4 max-w-3xl" onChange={markDirty}>
         {/* Template selector */}
         {invoiceTemplates && invoiceTemplates.length > 0 && (
@@ -510,7 +510,7 @@ export function InvoiceFormPage() {
             </label>
             <Select
               value={templateId ?? ""}
-              onChange={(e) => setTemplateId(e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) => { markDirty(); setTemplateId(e.target.value ? Number(e.target.value) : null); }}
             >
               <option value="">{t.none}</option>
               {invoiceTemplates.map((tmpl) => (
@@ -526,7 +526,7 @@ export function InvoiceFormPage() {
           <FormField label={t.client} required error={errors.client_id}>
             <Select
               value={clientId}
-              onChange={(e) => {
+              onChange={(e) => { markDirty();
                 setClientId(e.target.value);
                 setContactId(null);
                 setBillingAddressId(null);
@@ -547,7 +547,7 @@ export function InvoiceFormPage() {
           <FormField label={t.intended_for}>
             <Select
               value={contactId ?? ""}
-              onChange={(e) => setContactId(e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) => { markDirty(); setContactId(e.target.value ? Number(e.target.value) : null); }}
             >
               <option value="">{t.none}</option>
               {clientContacts?.map((c) => (
@@ -561,7 +561,7 @@ export function InvoiceFormPage() {
             <FormField label={t.billing_address}>
               <Select
                 value={billingAddressId ?? ""}
-                onChange={(e) => setBillingAddressId(e.target.value ? Number(e.target.value) : null)}
+                onChange={(e) => { markDirty(); setBillingAddressId(e.target.value ? Number(e.target.value) : null); }}
               >
                 <option value="">{t.main_address}</option>
                 {clientAddresses?.map((a) => (
@@ -575,7 +575,7 @@ export function InvoiceFormPage() {
           <FormField label={t.project_optional}>
             <Select
               value={projectId ?? ""}
-              onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) => { markDirty(); setProjectId(e.target.value ? Number(e.target.value) : null); }}
             >
               <option value="">{t.none}</option>
               {clientProjects?.map((p) => (
@@ -594,7 +594,7 @@ export function InvoiceFormPage() {
           <FormField label={t.activity}>
             <Select
               value={activityId !== null ? String(activityId) : activity ? "legacy" : ""}
-              onChange={(e) => {
+              onChange={(e) => { markDirty();
                 setActivityId(e.target.value === "legacy" || e.target.value === "" ? null : Number(e.target.value));
               }}
             >
@@ -634,7 +634,7 @@ export function InvoiceFormPage() {
           <FormField label={t.currency}>
             <Select
               value={currency}
-              onChange={(e) => setCurrency(e.target.value as Currency)}
+              onChange={(e) => { markDirty(); setCurrency(e.target.value as Currency); }}
             >
               {currencies.map((c) => (
                 <option key={c} value={c}>{c}</option>
@@ -688,19 +688,19 @@ export function InvoiceFormPage() {
                 fullWidth={false}
                 className="w-28 text-right"
               />
-              <select
+              <Select
                 value={globalUnit}
-                onChange={(e) => {
+                onChange={(e) => { markDirty();
                   setGlobalUnit(e.target.value);
                   if (globalRate > 0) applyGlobalRate(globalRate, e.target.value);
                 }}
-                className="border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm bg-[var(--color-surface)]"
+                fullWidth={false}
               >
                 <option value="hours">{t.hours}</option>
                 <option value="days">{t.days}</option>
                 <option value="units">{t.units}</option>
                 <option value="flat">{t.flat_rate}</option>
-              </select>
+              </Select>
             </>
           )}
         </div>

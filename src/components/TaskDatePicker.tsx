@@ -21,7 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { formatDisplayDate } from "../utils/formatDate";
-import { Button } from "./ui";
+import { Button, Select } from "./ui";
 import { useT } from "../i18n/useT";
 
 /** Parse a date string safely — handles both "yyyy-MM-dd" and full ISO timestamps */
@@ -292,21 +292,21 @@ export function TaskDatePicker({
           <div className="flex items-center gap-2 mb-2">
             <Bell size={14} className="text-muted shrink-0" />
             <span className="text-xs flex-1">{t.reminder}</span>
-            <select
+            <Select
               value={reminder ?? "none"}
               onChange={(e) =>
                 onChange({
                   reminder: e.target.value === "none" ? null : (e.target.value as ReminderOption),
                 })
               }
-              className="border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-xs"
+              fullWidth={false}
             >
               {REMINDER_KEYS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {t[opt.labelKey]}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {/* Clear button */}

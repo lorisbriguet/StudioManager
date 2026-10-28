@@ -10,7 +10,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Button } from "../ui";
+import { Button, Select } from "../ui";
 import type { LineItem } from "../../lib/lineItems";
 import { useT } from "../../i18n/useT";
 
@@ -157,17 +157,16 @@ export function LineItemsTable({
                   )}
                   {!hideRate && (
                     <td className="px-1 py-1">
-                      <select
+                      <Select
                         value={item.unit ?? ""}
                         onChange={(e) => onUpdate(i, "unit", e.target.value || null)}
-                        className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm"
                       >
                         <option value="">—</option>
                         <option value="hours">{t.hours}</option>
                         <option value="days">{t.days}</option>
                         <option value="units">{t.units}</option>
                         <option value="flat">{t.flat_rate}</option>
-                      </select>
+                      </Select>
                     </td>
                   )}
                   <td className="px-1 py-1">

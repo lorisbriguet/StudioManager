@@ -123,7 +123,7 @@ Bottom bar text is `text-xs text-muted`. A column that has no footer simply ends
 | Element | Class |
 |---------|-------|
 | Modals | `shadow-[0_16px_48px_rgba(0,0,0,0.5)]` |
-| Dropdowns, context menus | `shadow-[0_8px_24px_rgba(0,0,0,0.4)]` |
+| Dropdowns, context menus | `shadow-menu` (soft in light, `0 8px 24px rgba(0,0,0,0.4)` in dark) |
 | Cards (optional, for lift) | `shadow-[0_1px_3px_rgba(0,0,0,0.2)]` |
 
 ---
@@ -371,17 +371,52 @@ import { invoiceStatusVariant, quoteStatusVariant, taskStatusVariant, projectSta
 
 ---
 
-## Dropdown / Context Menu Pattern
+## Dropdown
+
+Every menu and select in the app uses `src/components/ui/Dropdown.tsx`. Never use a native `<select>`: it opens the system menu, which doesn't match the app. Spec and live preview: [StudioManager Dropdown](https://claude.ai/artifact/ByQ9fZTPqMmURLyBVYN5o2).
+
+| Need | Use |
+|------|-----|
+| Pick one value, `<option>` children | `<Select value onChange>` (same API as a native select: `e.target.value`) |
+| Options with icons, descriptions, groups, search, "Create …" | `<DropdownSelect options={[...]} value onChange>` |
+| Pick several values | `<DropdownSelect multiple value={string[]} onChange>` |
+| Commands behind a button (edit, duplicate, delete) | `<Dropdown trigger={<Button …/>} items={[...]}>` |
+| Commands at the cursor (right-click) | `<ContextMenu>` (same panel and rows) |
 
 ```tsx
-<div className="bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[160px]">
-  <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]">
-    <Icon size={14} /> Label
-  </button>
-  <div className="my-1 border-t border-[var(--color-border-divider)]" />
-  <button className="... text-red-600 hover:bg-red-50">Danger action</button>
-</div>
+<Select value={currency} onChange={(e) => setCurrency(e.target.value)}>
+  <option value="CHF">CHF</option>
+  <option value="EUR">EUR</option>
+</Select>
+
+<DropdownSelect value={clientId} onChange={setClientId} placeholder={t.select_client}
+  onCreate={(name) => createClient(name)}
+  options={clients.map((c) => ({ value: c.id, label: c.name, description: c.city }))} />
+
+<Dropdown align="end" trigger={<Button variant="ghost" size="sm" icon={<MoreHorizontal size={14} />} />}
+  items={[
+    { label: t.edit, icon: <Pencil size={14} />, onSelect: edit },
+    { divider: true },
+    { label: t.delete, icon: <Trash2 size={14} />, danger: true, onSelect: remove },
+  ]} />
 ```
+
+**Trigger.** Thin by default everywhere, forms included: `bg-[var(--color-input-bg)]`, no border, `px-2.5 py-1 text-xs rounded-md`, chevron 12 (same as `Button` secondary `size="sm"`). Options:
+- `prefix="Status:"`: a muted label inside the trigger, for toolbars and page headers.
+- `size="md"`: form height with an input border. Opt-in only.
+- `variant="bare"`: no fill, no padding, no colour of its own. For table cells and status pills.
+- `fullWidth`: defaults to `true`. Pass `false` inline.
+
+**Panel.** `bg-[var(--color-surface)] border-[var(--color-border-header)] rounded-xl shadow-menu p-1`, min 160px, max 320px wide, 288px tall then scrolls. It renders on `<body>`, 4px under the trigger, so tables, cards and modals never clip it. It flips up when there's no room below.
+
+**Rows.** Inset: `px-2 py-1 rounded-md text-sm`, hover `bg-[var(--color-hover-row)]`. Selected: `text-accent font-medium bg-accent-tint` plus a check 14 on the right. Danger: `text-[var(--color-danger-text)]` on `bg-[var(--color-danger-bg)]`, always last, after a divider. Divider: `my-1 border-t border-[var(--color-border-divider)]`. Group label: the 10px uppercase section label. Use `MENU_PANEL`, `MENU_ITEM`, `MENU_DIVIDER` and `MENU_GROUP_LABEL` from `Dropdown.tsx` for any custom popover.
+
+**Behaviour.**
+- Search turns on by itself above 10 options.
+- Keyboard: arrows (they skip disabled rows), Home/End, type-ahead, Enter/Space to pick. Esc and Tab close and return focus to the trigger, and Esc doesn't close a surrounding Modal.
+- Clicks and keys inside the panel don't reach the trigger's ancestors (table rows, forms).
+- `Select` sends no DOM `change` event, so a form that tracks dirty state with `<div onChange>` must call `markDirty()` in each Select's `onChange`.
+- Tests: open with `pickOption(trigger, "Label")` from `src/__tests__/fixtures/dropdown.ts`.
 
 ---
 
@@ -457,4 +492,5 @@ Before merging any new UI work, verify:
 - [ ] No unicode characters as icons
 - [ ] All user-visible text uses `useT()` i18n keys
 - [ ] Status colors come from `statusColors.ts`
-- [ ] Shared components used where available (Button, Badge, Input, Select, Modal, Card, Toggle)
+- [ ] Shared components used where available (Button, Badge, Input, Select / DropdownSelect / Dropdown, Modal, Card, Toggle)
+- [ ] No native `<select>`

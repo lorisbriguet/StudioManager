@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Bookmark, Plus, X, Pencil, Trash2, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { createPortal } from "react-dom";
-import { Button } from "./ui";
+import { Button, Select } from "./ui";
 import {
   useSavedFilters,
   useCreateSavedFilter,
@@ -69,7 +69,7 @@ function ConditionRow({
 
   return (
     <div className="flex items-center gap-1.5">
-      <select
+      <Select
         value={condition.field}
         onChange={(e) => {
           const newField = fields.find((f) => f.key === e.target.value);
@@ -77,32 +77,34 @@ function ConditionRow({
           const newOp = newOps.includes(condition.operator) ? condition.operator : newOps[0];
           onChange({ field: e.target.value, operator: newOp, value: "" });
         }}
-        className="text-xs px-1.5 py-1 border border-[var(--color-border-divider)] rounded-lg bg-transparent min-w-[80px]"
+        fullWidth={false}
+        className="min-w-[80px]"
       >
         {fields.map((f) => (
           <option key={f.key} value={f.key}>{f.label}</option>
         ))}
-      </select>
-      <select
+      </Select>
+      <Select
         value={condition.operator}
         onChange={(e) => onChange({ ...condition, operator: e.target.value as FilterOperator })}
-        className="text-xs px-1.5 py-1 border border-[var(--color-border-divider)] rounded-lg bg-transparent"
+        fullWidth={false}
       >
         {ops.map((op) => (
           <option key={op} value={op}>{opLabels[op]}</option>
         ))}
-      </select>
+      </Select>
       {fieldDef?.type === "select" && fieldDef.options ? (
-        <select
+        <Select
           value={condition.value}
           onChange={(e) => onChange({ ...condition, value: e.target.value })}
-          className="text-xs px-1.5 py-1 border border-[var(--color-border-divider)] rounded-lg bg-transparent min-w-[80px]"
+          fullWidth={false}
+        className="min-w-[80px]"
         >
           <option value="">--</option>
           {fieldDef.options.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
-        </select>
+        </Select>
       ) : (
         <input
           value={condition.value}
@@ -269,14 +271,15 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
       {conditions.map((c, i) => (
         <div key={i} className="flex items-center gap-1.5">
           {i > 0 && (
-            <select
+            <Select
               value={conditionLogic}
               onChange={(e) => setConditionLogic(e.target.value as ConditionLogic)}
-              className="text-[10px] px-1.5 py-0.5 rounded-lg border border-[var(--color-input-border)] bg-[var(--color-input-bg)] text-muted min-w-fit w-14"
+              fullWidth={false}
+              className="min-w-fit w-14"
             >
               <option value="and">AND</option>
               <option value="or">OR</option>
-            </select>
+            </Select>
           )}
           {i === 0 && <div className="w-14" />}
           <div className="flex-1">

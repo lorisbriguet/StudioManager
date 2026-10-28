@@ -1,4 +1,5 @@
 import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { MENU_DIVIDER, MENU_ITEM, MENU_PANEL } from "./ui/Dropdown";
 
 export interface ContextMenuItem {
   label: string;
@@ -162,7 +163,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
       role="menu"
       tabIndex={-1}
       onKeyDown={handleKeyDown}
-      className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[160px] animate-in fade-in duration-100 outline-none"
+      className={`fixed z-50 ${MENU_PANEL} animate-in fade-in duration-100`}
       style={{ left: x, top: y }}
     >
       {items.map((item, i) => {
@@ -171,7 +172,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
             <div
               key={i}
               role="separator"
-              className="my-1 border-t border-[var(--color-border-divider)]"
+              className={MENU_DIVIDER}
             />
           );
         }
@@ -182,7 +183,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
             tabIndex={-1}
             onClick={() => activate(item)}
             disabled={item.disabled}
-            className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left transition-colors outline-none ${
+            className={`${MENU_ITEM} ${
               item.disabled
                 ? "text-muted opacity-50 cursor-not-allowed"
                 : item.danger

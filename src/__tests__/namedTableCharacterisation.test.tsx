@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { pickOption } from "./fixtures/dropdown";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NamedTable } from "../components/NamedTable";
@@ -200,16 +201,17 @@ describe("NamedTable checkbox cell", () => {
 describe("NamedTable select cell", () => {
   it("renders an empty placeholder option plus each column option, selected from the row value", () => {
     renderTable(makeTable(), [makeRow({ col_select: "Doing" })]);
-    const select = screen.getByDisplayValue("Doing") as HTMLSelectElement;
-    expect(select.tagName).toBe("SELECT");
-    const optionLabels = Array.from(select.options).map((o) => o.textContent);
+    const select = screen.getAllByRole("combobox").find((el) => el.textContent === "Doing")!;
+    fireEvent.click(select);
+    const optionLabels = screen.getAllByRole("option").map((o) => o.textContent);
     expect(optionLabels).toEqual(["—", "Todo", "Doing", "Done"]);
+    expect(screen.getByRole("option", { name: "Doing" })).toHaveAttribute("aria-selected", "true");
   });
 
   it("changing the selection calls updateRow.mutate with the new value", () => {
     renderTable(makeTable(), [makeRow({ col_select: "Todo" })]);
-    const select = screen.getByDisplayValue("Todo") as HTMLSelectElement;
-    fireEvent.change(select, { target: { value: "Done" } });
+    const select = screen.getAllByRole("combobox").find((el) => el.textContent === "Todo")!;
+    pickOption(select, "Done");
 
     expect(updateRowMutate).toHaveBeenCalledWith({ id: 1, data: { col_select: "Done" } });
   });

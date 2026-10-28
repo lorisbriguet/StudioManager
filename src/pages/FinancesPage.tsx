@@ -24,7 +24,7 @@ import { useClients } from "../db/hooks/useClients";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
-import { PageHeader, PageSpinner, Button, Card, EmptyState } from "../components/ui";
+import { PageHeader, PageSpinner, Button, Card, EmptyState, Select } from "../components/ui";
 import { useNavigate } from "react-router-dom";
 import { useChartTheme } from "../hooks/useChartTheme";
 import { getTagColor } from "../lib/tagColors";
@@ -202,15 +202,15 @@ export function FinancesPage() {
   return (
     <div>
       <PageHeader title={t.finances}>
-        <select
+        <Select
           value={year}
           onChange={(e) => setYear(Number(e.target.value))}
-          className="border border-[var(--color-border-divider)] rounded-lg px-3 py-1.5 text-sm bg-[var(--color-surface)]"
+          fullWidth={false}
         >
           {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((y) => (
             <option key={y} value={y}>{y}</option>
           ))}
-        </select>
+        </Select>
         <Button icon={<Download size={14} />} loading={exporting} onClick={exportForTrustee}>{t.export_trustee}</Button>
       </PageHeader>
 

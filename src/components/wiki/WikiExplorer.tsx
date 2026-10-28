@@ -301,7 +301,7 @@ export function WikiExplorer({
       {menu && (
         <div
           ref={menuRef}
-          className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[180px]"
+          className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu py-1 min-w-[180px]"
           style={{ top: menu.y, left: menu.x }}
         >
           <button

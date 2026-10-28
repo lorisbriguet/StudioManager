@@ -119,7 +119,7 @@ export function WikiGraph({
 
       <section
         aria-label={t.wiki_graph_settings}
-        className="absolute top-4 right-4 w-64 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] p-3 space-y-3"
+        className="absolute top-4 right-4 w-64 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu p-3 space-y-3"
       >
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold tracking-tight">{t.wiki_graph_settings}</span>

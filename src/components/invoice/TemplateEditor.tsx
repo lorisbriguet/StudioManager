@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { PDFViewer } from "@react-pdf/renderer";
 import { ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Input } from "../ui";
+import { Button, Input, Select } from "../ui";
 import { InvoicePDF } from "./InvoicePDF";
 import { useT } from "../../i18n/useT";
 import {
@@ -321,15 +321,14 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
         {/* Font family */}
         <div>
           <label className="block text-xs font-medium text-muted mb-1">{t.font_family}</label>
-          <select
+          <Select
             value={fontFamily}
             onChange={(e) => setFontFamily(e.target.value as FontFamily)}
-            className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-2 text-sm bg-[var(--color-input-bg)] text-[var(--color-text)]"
           >
             <option value="Helvetica">Helvetica</option>
             <option value="Times-Roman">Times Roman</option>
             <option value="Courier">Courier</option>
-          </select>
+          </Select>
         </div>
 
         {/* Logo position */}

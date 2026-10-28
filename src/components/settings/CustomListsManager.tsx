@@ -6,7 +6,7 @@ import { useT } from "../../i18n/useT";
 import { useAppStore } from "../../stores/app-store";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useUpdateCustomList, useDeleteCustomList, useSetCustomListItems } from "../../db/hooks/useCustomLists";
 import { getStoredTagColor, normalizeTagColorName, TAG_COLOR_NAMES } from "../../lib/tagColors";
-import { Button } from "../ui";
+import { Button, Select } from "../ui";
 
 export function CustomListsManager() {
   const t = useT();
@@ -177,15 +177,15 @@ export function CustomListsManager() {
                       {item.value}
                     </span>
                   </div>
-                  <select
+                  <Select
                     value={normalizeTagColorName(item.color)}
                     onChange={(e) => updateItemColor(i, e.target.value)}
-                    className="text-xs border border-[var(--color-border-divider)] rounded-lg px-1 py-1"
+                    fullWidth={false}
                   >
                     {TAG_COLOR_NAMES.map((c) => (
                       <option key={c} value={c}>{c}</option>
                     ))}
-                  </select>
+                  </Select>
                   <button type="button" onClick={() => removeItem(i)} aria-label={t.delete} className="text-muted hover:text-[var(--color-danger-text)]">
                     <Trash2 size={12} />
                   </button>
@@ -201,15 +201,15 @@ export function CustomListsManager() {
                 placeholder={t.new_list_item}
                 className="flex-1 border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm"
               />
-              <select
+              <Select
                 value={newItemColor}
                 onChange={(e) => setNewItemColor(e.target.value)}
-                className="text-sm border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5"
+                fullWidth={false}
               >
                 {TAG_COLOR_NAMES.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
-              </select>
+              </Select>
               <button type="button" onClick={addItem} aria-label={t.new_list_item} className="p-1.5 text-muted hover:text-accent">
                 <Plus size={16} />
               </button>

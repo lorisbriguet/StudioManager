@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, Plus, Trash2, Calendar, Link, Unlink } from "lucide-react";
-import { Button } from "../ui";
+import { Button, Select } from "../ui";
 import { toast } from "sonner";
 import type { WorkloadColumn, WorkloadColumnType, SelectOption } from "../../types/workload";
 import { getStoredTagColor, normalizeTagColorName, TAG_COLOR_NAMES } from "../../lib/tagColors";
@@ -161,17 +161,16 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
           {/* Type */}
           <div>
             <label className="text-xs text-muted block mb-1">{t.type}</label>
-            <select
+            <Select
               value={type}
               onChange={(e) => setType(e.target.value as WorkloadColumnType)}
-              className="w-full border border-[var(--color-border-divider)] rounded-md px-3 py-2 text-sm"
             >
               {COLUMN_TYPES.map((ct) => (
                 <option key={ct.value} value={ct.value}>
                   {ct.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {/* Icon */}
@@ -316,7 +315,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                       >
                         {opt.value}
                       </span>
-                      <select
+                      <Select
                         value={normalizeTagColorName(opt.color)}
                         onChange={(e) => {
                           if (linkedListId) return;
@@ -325,14 +324,14 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                           setOptions(next);
                         }}
                         disabled={!!linkedListId}
-                        className="text-xs border border-[var(--color-border-divider)] rounded-lg px-1 py-0.5 disabled:opacity-60"
+                        fullWidth={false}
                       >
                         {TAG_COLOR_NAMES.map((c) => (
                           <option key={c} value={c}>
                             {c}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                       {!linkedListId && (
                         <button
                           onClick={() => setOptions(options.filter((_, j) => j !== i))}
@@ -356,17 +355,17 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                       placeholder={t.new_option}
                       className="flex-1 border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm"
                     />
-                    <select
+                    <Select
                       value={newOptColor}
                       onChange={(e) => setNewOptColor(e.target.value)}
-                      className="text-sm border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5"
+                      fullWidth={false}
                     >
                       {TAG_COLOR_NAMES.map((c) => (
                         <option key={c} value={c}>
                           {c}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                     <button
                       onClick={addOption}
                       className="p-1.5 text-muted hover:text-accent"

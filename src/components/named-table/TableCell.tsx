@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
 import { X } from "lucide-react";
 import { getTagColor } from "../../lib/tagColors";
+import { Select } from "../ui/Select";
 import type { TableColumnDef, ProjectTableRow } from "../../types/project-table";
 
 interface Props {
@@ -50,16 +51,17 @@ export function TableCell({
       );
     case "select":
       return (
-        <select
+        <Select
           value={(row.data[col.id] as string) ?? ""}
           onChange={(e) => onChange({ ...row.data, [col.id]: e.target.value })}
-          className="text-xs bg-transparent border-0 outline-none cursor-pointer"
+          variant="bare"
+          fullWidth={false}
         >
           <option value="">—</option>
           {(col.options ?? []).map((opt) => (
             <option key={opt} value={opt}>{opt}</option>
           ))}
-        </select>
+        </Select>
       );
     case "tags": {
       const selected = (row.data[col.id] as string[] | undefined) ?? [];

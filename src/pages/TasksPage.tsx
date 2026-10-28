@@ -35,7 +35,7 @@ import { useTabStore } from "../stores/tab-store";
 import { useOrgStore } from "../stores/org-store";
 import { useTimerActions } from "../hooks/useTimerActions";
 import { useT } from "../i18n/useT";
-import { PageHeader, SearchBar, TableSkeleton, EmptyState } from "../components/ui";
+import { PageHeader, SearchBar, TableSkeleton, EmptyState, Select } from "../components/ui";
 import { taskStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Task, Subtask, TaskStatus } from "../types/task";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
@@ -408,7 +408,7 @@ export function TasksPage() {
                           {doneSubtasks}/{taskSubs.length}
                         </span>
                       )}
-                      <select
+                      <Select
                         value={tk.status}
                         onChange={(e) =>
                           updateTask.mutate({
@@ -416,11 +416,13 @@ export function TasksPage() {
                             data: { status: e.target.value as TaskStatus },
                           })
                         }
-                        className={`px-2 py-1 text-xs rounded-full border-0 appearance-none cursor-pointer ${statusClasses(taskStatusVariant(tk.status))}`}
+                        variant="bare"
+                        fullWidth={false}
+                        className={`px-2 py-1 rounded-full ${statusClasses(taskStatusVariant(tk.status))}`}
                       >
                         <option value="todo">{t.todo}</option>
                         <option value="done">{t.done}</option>
-                      </select>
+                      </Select>
                       <TaskDatePicker
                         dueDate={tk.due_date}
                         endDate={tk.end_date}

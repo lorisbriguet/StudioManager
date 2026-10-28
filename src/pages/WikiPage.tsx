@@ -219,7 +219,7 @@ function LinkInsertPopup({
   return (
     <div
       ref={popupRef}
-      className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] w-80 overflow-hidden"
+      className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu w-80 overflow-hidden"
       style={{ top: position.top, left: position.left }}
     >
       <div className="px-3 pt-3 pb-2">
@@ -347,7 +347,7 @@ function SlashCommandMenu({
   return (
     <div
       ref={menuRef}
-      className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[180px]"
+      className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu py-1 min-w-[180px]"
       style={{ top: position.top, left: position.left }}
     >
       {filtered.map((cmd, i) => {

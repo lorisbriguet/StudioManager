@@ -12,10 +12,9 @@ import { ask } from "@tauri-apps/plugin-dialog";
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn(async () => false) }));
 
 // Reported: picking a client on a new invoice or quote did not take the first
-// time. WebKit fires `input` on a <select> before `change`; the form wrapper
-// marked itself dirty on `input`, that first state flip re-rendered the form
-// while the client was still empty, React re-applied the empty controlled
-// value to the select, and the `change` that followed carried "" again.
+// time (WebKit fired `input` before `change` on the native <select>, and the
+// dirty-tracking re-render wiped the pick). Select is now a custom dropdown
+// with no native control, but the first pick must still stick.
 
 function mountAt(path: string, element: React.ReactElement) {
   setSelectHandler((sql) => {
@@ -41,16 +40,6 @@ function mountAt(path: string, element: React.ReactElement) {
   );
 }
 
-/** Replays WebKit's event order for a native <select> pick: `input`, then `change`. */
-async function pickLikeWebKit(select: HTMLSelectElement, value: string) {
-  select.value = value;
-  fireEvent.input(select);
-  // Any state update caused by `input` has now rendered. WebKit dispatches
-  // `change` with whatever the element holds at this point.
-  expect(select.value, "select value survived the input event").toBe(value);
-  fireEvent.change(select);
-}
-
 beforeEach(async () => {
   await getDb();
   useAppStore.setState({ language: "EN" });
@@ -65,19 +54,19 @@ afterEach(() => {
 describe("client select — first pick must stick", () => {
   it("new invoice", async () => {
     mountAt("/invoices/new", <InvoiceFormPage />);
-    const select = (await screen.findByLabelText(/client/i)) as HTMLSelectElement;
-    await waitFor(() => expect(select.options.length).toBeGreaterThan(1));
-    await pickLikeWebKit(select, "C-002");
-    expect((screen.getByLabelText(/client/i) as HTMLSelectElement).value).toBe("C-002");
+    const select = await screen.findByLabelText(/client/i);
+    fireEvent.click(select);
+    fireEvent.click(await screen.findByRole("option", { name: "Fondation Artvis" }));
+    expect(screen.getByLabelText(/client/i)).toHaveTextContent("Fondation Artvis");
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("new quote", async () => {
     mountAt("/quotes/new", <QuoteFormPage />);
-    const select = (await screen.findByLabelText(/client/i)) as HTMLSelectElement;
-    await waitFor(() => expect(select.options.length).toBeGreaterThan(1));
-    await pickLikeWebKit(select, "C-002");
-    expect((screen.getByLabelText(/client/i) as HTMLSelectElement).value).toBe("C-002");
+    const select = await screen.findByLabelText(/client/i);
+    fireEvent.click(select);
+    fireEvent.click(await screen.findByRole("option", { name: "Fondation Artvis" }));
+    expect(screen.getByLabelText(/client/i)).toHaveTextContent("Fondation Artvis");
   });
 
   it("new invoice still marks the form dirty when typing in a text field", async () => {

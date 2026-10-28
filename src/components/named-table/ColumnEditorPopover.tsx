@@ -72,7 +72,7 @@ export function ColumnEditorPopover({
   return createPortal(
     <div
       ref={colEditorRef}
-      className="fixed z-[9999] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] p-3 min-w-[200px]"
+      className="fixed z-[9999] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu p-3 min-w-[200px]"
       style={{ top: pos.top, left: pos.left }}
     >
       <label className="block text-[10px] text-muted mb-1">{t.rename}</label>

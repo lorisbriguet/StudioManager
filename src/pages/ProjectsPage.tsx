@@ -22,7 +22,7 @@ import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Button, Badge, Card, PageHeader, SearchBar, TableSkeleton, Input, EmptyState } from "../components/ui";
+import { Button, Badge, Card, PageHeader, SearchBar, TableSkeleton, Input, EmptyState, Select } from "../components/ui";
 import { undoable, undoableFromStore } from "../lib/undo";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
@@ -512,17 +512,17 @@ function NewProjectForm({
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
         />
-        <select
+        <Select
           value={form.client_id}
           onChange={(e) => setForm({ ...form, client_id: e.target.value })}
-          className="border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-3 py-1.5 text-sm"
+          fullWidth={false}
         >
           {clients.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
           ))}
-        </select>
+        </Select>
         <Input
           type="date"
           value={form.start_date}

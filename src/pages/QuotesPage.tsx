@@ -27,7 +27,7 @@ import { SavedFilterBar } from "../components/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { QuoteToProjectWizard } from "../components/QuoteToProjectWizard";
 import { useTabStore } from "../stores/tab-store";
-import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState } from "../components/ui";
+import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Select } from "../components/ui";
 import { quoteStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Quote, QuoteStatus, QuoteLineItem } from "../types/quote";
 import type { Client } from "../types/client";
@@ -351,20 +351,22 @@ export function QuotesPage() {
                 <td className="px-4 py-2.5">{q.client_name}</td>
                 <td className="px-4 py-2.5 text-muted">{formatDisplayDate(q.quote_date)}</td>
                 <td className="px-4 py-2.5">
-                  <select
+                  <Select
                     value={q.status}
                     onChange={(e) => {
                       const status = e.target.value as QuoteStatus;
                       updateQuote.mutate({ id: q.id, data: { status } });
                     }}
-                    className={`text-xs px-2 py-0.5 rounded-full border-0 appearance-none cursor-pointer ${statusClasses(quoteStatusVariant(q.status))}`}
+                    variant="bare"
+                    fullWidth={false}
+                    className={`px-2 py-0.5 rounded-full ${statusClasses(quoteStatusVariant(q.status))}`}
                   >
                     {q.status === "draft" && <option value="draft">{t.draft}</option>}
                     <option value="sent">{t.sent}</option>
                     <option value="accepted">{t.accepted}</option>
                     <option value="rejected">{t.rejected}</option>
                     <option value="expired">{t.expired}</option>
-                  </select>
+                  </Select>
                 </td>
                 <td className="px-4 py-2.5 text-right font-medium">
                   CHF {q.total.toFixed(2)}

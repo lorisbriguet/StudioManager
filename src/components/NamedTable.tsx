@@ -290,7 +290,7 @@ export function NamedTable({ table, projectId }: Props) {
                   {showColPicker && colPickerPos && createPortal(
                     <div
                       ref={colPickerRef}
-                      className="fixed z-[9999] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[140px]"
+                      className="fixed z-[9999] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu py-1 min-w-[140px]"
                       style={{ top: colPickerPos.top, left: colPickerPos.left }}
                     >
                       {(["text", "number", "checkbox", "select", "tags", "date"] as const).map((type) => (

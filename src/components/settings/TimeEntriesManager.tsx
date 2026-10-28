@@ -3,7 +3,7 @@ import { X, Pencil, Trash2, Check } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useTimeEntriesWithDetails, useUpdateTimeEntry, useDeleteTimeEntry } from "../../db/hooks/useTimeEntries";
 import { useProjects } from "../../db/hooks/useProjects";
-import { Button } from "../ui";
+import { Button, Select } from "../ui";
 import { SectionHeader } from "./SettingsPrimitives";
 
 function formatDuration(minutes: number): string {
@@ -89,16 +89,16 @@ export function TimeEntriesManager() {
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs text-muted">{t.filter_by_project}</label>
-          <select
+          <Select
             value={projectFilter ?? ""}
             onChange={(e) => setProjectFilter(e.target.value ? Number(e.target.value) : undefined)}
-            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1 text-xs text-[var(--color-text)]"
+            fullWidth={false}
           >
             <option value="">{t.all_projects}</option>
             {(projects ?? []).map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
-          </select>
+          </Select>
         </div>
         {(startDate || endDate || projectFilter) && (
           <Button
