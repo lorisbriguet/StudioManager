@@ -386,7 +386,7 @@ export function SettingsPage() {
   }, [handleSettingsKeyDown]);
 
   return (
-    <div className="flex gap-0 h-full -m-8">
+    <div className="flex gap-0 flex-1 min-h-0 -m-8">
       {/* Category sidebar */}
       <div className="w-48 shrink-0 border-r border-[var(--color-border-divider)] py-5">
         <h1 className="text-sm font-semibold px-5 mb-4 text-muted uppercase tracking-wider">{t.settings}</h1>
