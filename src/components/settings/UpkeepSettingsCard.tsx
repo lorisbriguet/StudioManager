@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Input, Select } from "../ui";
 import { CollapsibleSection } from "../upkeep/CollapsibleSection";
+import { ConnectionsCard } from "../upkeep/ConnectionsCard";
 import { SettingRow } from "./SettingsPrimitives";
 import { logError } from "../../lib/log";
 import { useAppStore } from "../../stores/app-store";
@@ -94,7 +95,7 @@ export function UpkeepSettingsCard() {
         </SettingRow>
       </CollapsibleSection>
 
-      {/* TASK 12: connections list goes here, as another CollapsibleSection. */}
+      <ConnectionsCard />
     </div>
   );
 }

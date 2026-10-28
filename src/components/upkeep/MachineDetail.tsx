@@ -10,6 +10,7 @@ import { MachineExpenseRow } from "./MachineExpenseRow";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { FilesSection, ServiceLogSection } from "./MachineLogSections";
 import { UpkeepItemForm } from "./UpkeepItemForm";
+import { ReadingsSection } from "./ReadingsSection";
 import { repeatsLabel } from "./DueList";
 import { useT } from "../../i18n/useT";
 import {
@@ -313,8 +314,7 @@ export function MachineDetail({ machineId, compact = false, onDeleted }: {
       </CollapsibleSection>
 
       <CollapsibleSection id={`machine-${machine.id}-readings`} title={t.upkeep_readings}>
-        {/* Replaced by ReadingsSection when a connection exists (Task 12). */}
-        <p className="text-sm text-muted">{t.upkeep_no_connection}</p>
+        <ReadingsSection machine={machine} items={active} />
       </CollapsibleSection>
 
       <FilesSection machineId={machine.id} />

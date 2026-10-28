@@ -14,6 +14,7 @@ import { formatMoney } from "../../lib/upkeep/money";
 import { notifyError } from "../../lib/notifyError";
 import { todayLocalISO } from "../../utils/localDate";
 import type { Consumable } from "../../types/upkeep";
+import { MeterBar } from "./MeterBar";
 
 const fmt = (n: number) => String(Math.round(n * 100) / 100);
 
@@ -22,15 +23,7 @@ function StockBar({ c }: { c: Consumable }) {
   const pct = c.reorder_level > 0 ? Math.min(100, (c.stock / (c.reorder_level * 2)) * 100) : 100;
   return (
     <div className="flex items-center gap-2.5">
-      <div className="h-1.5 w-[120px] rounded-full bg-[var(--color-input-bg)] overflow-hidden">
-        <div
-          className="h-full rounded-full"
-          style={{
-            width: `${pct}%`,
-            background: isLow(c) ? "var(--color-danger-text)" : "var(--color-success-text)",
-          }}
-        />
-      </div>
+      <MeterBar pct={pct} color={isLow(c) ? "var(--color-danger-text)" : "var(--color-success-text)"} />
       <span className="text-xs text-muted tabular-nums">{fmt(c.stock)} {c.unit}</span>
     </div>
   );

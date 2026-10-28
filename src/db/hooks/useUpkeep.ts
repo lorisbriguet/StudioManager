@@ -17,6 +17,7 @@ import {
   syncMachineItemsCalendar,
   syncSubscriptionCalendar,
 } from "../../lib/upkeep/calendar";
+import { markDoneWithForecast, syncItemWithForecast } from "../../lib/upkeep/connections";
 import type {
   Machine,
   MachineFile,
@@ -298,7 +299,7 @@ export function useCreateUpkeepItem() {
   return useMutation({
     mutationFn: async (data: UpkeepItemInput) => {
       let id = await u.createUpkeepItem(data);
-      void syncItemCalendar(id);
+      void syncItemWithForecast(id);
       useUndoStore.getState().push({
         label: `${getLabels().undo_create_upkeep_item} "${data.title}"`,
         execute: async () => {
@@ -325,7 +326,7 @@ export function useUpdateUpkeepItem() {
       const prev = await u.getUpkeepItem(id);
       await u.updateUpkeepItem(id, data);
       const force = itemNeedsRecreate(data);
-      void syncItemCalendar(id, { force });
+      void syncItemWithForecast(id, { force });
       if (prev) {
         const prevData: Record<string, unknown> = {};
         for (const key of Object.keys(data)) {
@@ -399,9 +400,9 @@ export function useMarkUpkeepDone() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, doneOn, reading, note }: { id: number; doneOn: string; reading: number | null; note?: string }) => {
-      const item = await u.markUpkeepDone(id, doneOn, reading, note);
-      void syncItemCalendar(id);
-      return item;
+      // Usage items take the current reading and are re-forecast at once;
+      // the Calendar event follows.
+      return markDoneWithForecast(id, doneOn, reading, note);
     },
     onSuccess: (item) => {
       invalidate();

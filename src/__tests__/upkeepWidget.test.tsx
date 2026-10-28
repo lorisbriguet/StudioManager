@@ -11,6 +11,16 @@ let overview: UpkeepOverview;
 let pending: { id: number; name: string; amount: number; currency: string; renewed_on: string }[] = [];
 const syncAll = vi.fn(async () => 0);
 
+vi.mock("../db/hooks/useConnections", () => {
+  const m = () => ({ mutate: () => {}, mutateAsync: async () => 0, isPending: false });
+  return {
+    useConnections: () => ({ data: [] }),
+    useMachineDisks: () => ({ data: [] }),
+    useCurrentReading: () => ({ data: null }),
+    useLinkMachine: m, useRecordManualReading: m, useSyncNow: m,
+    useCreateConnection: m, useUpdateConnection: m, useDeleteConnection: m,
+  };
+});
 vi.mock("../db/hooks/useUpkeep", () => ({
   useUpkeepOverview: () => overview,
   usePendingRenewals: () => ({ data: pending }),

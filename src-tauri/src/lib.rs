@@ -1,5 +1,6 @@
 mod agent_access;
 mod apple;
+mod connectors;
 mod dbfiles;
 mod migrate;
 mod project_docs;
@@ -604,6 +605,10 @@ pub fn run() {
             agent_access::preview_claude_desktop,
             agent_access::install_claude_desktop,
             agent_access::recent_agent_changes,
+            connectors::connection_save_secret,
+            connectors::connection_delete_secret,
+            connectors::connection_test,
+            connectors::connection_sync,
         ])
         .setup(|app| {
             let handle = app.handle();

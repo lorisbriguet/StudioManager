@@ -35,3 +35,9 @@ trash = "5"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # Renders a project's Markdown files for the wiki (same pin as the agent server).
 pulldown-cmark = { version = "0.13.5", default-features = false, features = ["html"] }
+# Upkeep connections: HTTPS for the Synology and Bambu connectors (Tasks 13–14).
+# reqwest 0.13 calls its rustls backend `rustls` (0.12's `rustls-tls`); same
+# version the updater plugin already pulls in.
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "blocking"] }
+# Connection secrets live only in the macOS Keychain.
+keyring = { version = "3", features = ["apple-native"] }

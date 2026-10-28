@@ -42,6 +42,16 @@ const overview = {
   overdueCount: 1,
 } as unknown as UpkeepOverview;
 
+vi.mock("../db/hooks/useConnections", () => {
+  const m = () => ({ mutate: () => {}, mutateAsync: async () => 0, isPending: false });
+  return {
+    useConnections: () => ({ data: [] }),
+    useMachineDisks: () => ({ data: [] }),
+    useCurrentReading: () => ({ data: null }),
+    useLinkMachine: m, useRecordManualReading: m, useSyncNow: m,
+    useCreateConnection: m, useUpdateConnection: m, useDeleteConnection: m,
+  };
+});
 vi.mock("../db/hooks/useUpkeep", () => ({
   useUpkeepOverview: () => overview,
   useMachines: () => ({ data: [m1] }),

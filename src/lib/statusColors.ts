@@ -2,7 +2,7 @@ import { variantClasses, type BadgeVariant } from "../components/ui/Badge";
 import type { InvoiceStatus } from "../types/invoice";
 import type { QuoteStatus } from "../types/quote";
 import type { TaskStatus } from "../types/task";
-import type { MachineStatus } from "../types/upkeep";
+import type { DiskHealth, MachineStatus } from "../types/upkeep";
 
 const MACHINE_VARIANT: Record<MachineStatus, BadgeVariant> = {
   working: "success",
@@ -21,6 +21,21 @@ export function dueStateVariant(s: "overdue" | "soon" | "later" | "none"): Badge
   if (s === "overdue") return "danger";
   if (s === "soon") return "warning";
   return "neutral";
+}
+
+const DISK_VARIANT: Record<DiskHealth, BadgeVariant> = {
+  healthy: "success",
+  warning: "warning",
+  failing: "danger",
+};
+
+export function diskHealthVariant(h: DiskHealth): BadgeVariant {
+  return DISK_VARIANT[h] ?? "warning";
+}
+
+/** Connection state: failing since a date, or working. */
+export function connectionVariant(failing: boolean): BadgeVariant {
+  return failing ? "danger" : "success";
 }
 
 /**

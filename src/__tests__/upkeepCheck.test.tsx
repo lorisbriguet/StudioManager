@@ -22,10 +22,15 @@ vi.mock("../db/queries/subscriptions", () => ({
   applyRenewals: vi.fn(),
 }));
 vi.mock("../lib/upkeep/calendar", () => ({ syncSubscriptionCalendar: vi.fn() }));
+vi.mock("../lib/upkeep/connections", () => ({
+  runConnectionSyncs: vi.fn(async () => {}),
+  SYNC_INTERVAL_MS: 6 * 60 * 60 * 1000,
+}));
 vi.mock("../db/index", async (orig) => ({ ...(await orig<typeof import("../db/index")>()), getDb: vi.fn() }));
 
 import { runUpkeepCheck } from "../lib/upkeep/notify";
 import { useUpkeepCheck } from "../hooks/useUpkeepCheck";
+import { runConnectionSyncs } from "../lib/upkeep/connections";
 import { createNotification } from "../db/queries/notifications";
 import { sendNativeNotification } from "../lib/nativeNotification";
 import { getActiveUpkeepItems } from "../db/queries/upkeepItems";
@@ -236,6 +241,25 @@ describe("useUpkeepCheck", () => {
       window.dispatchEvent(new Event("focus"));
       await vi.advanceTimersByTimeAsync(10);
       expect(getActiveUpkeepItems).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("syncs connections on start and every 6 hours while open", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-28T09:00:00"));
+    try {
+      const { unmount } = renderHook(() => useUpkeepCheck(), { wrapper });
+      await vi.advanceTimersByTimeAsync(10);
+      expect(runConnectionSyncs).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(5 * 3600_000);
+      expect(runConnectionSyncs).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(3600_000);
+      expect(runConnectionSyncs).toHaveBeenCalledTimes(2);
+      unmount();
+      await vi.advanceTimersByTimeAsync(6 * 3600_000);
+      expect(runConnectionSyncs).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
     }

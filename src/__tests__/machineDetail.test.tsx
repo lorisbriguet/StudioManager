@@ -12,6 +12,19 @@ const { mut } = vi.hoisted(() => ({
   mut: () => ({ mutate: () => {}, mutateAsync: async () => 0, isPending: false }),
 }));
 
+const recordReading = vi.fn();
+const syncNow = vi.fn();
+let connections: unknown[] = [];
+let disks: unknown[] = [];
+let reading: number | null = null;
+vi.mock("../db/hooks/useConnections", () => ({
+  useConnections: () => ({ data: connections }),
+  useMachineDisks: () => ({ data: disks }),
+  useCurrentReading: () => ({ data: reading }),
+  useLinkMachine: mut,
+  useRecordManualReading: () => ({ mutate: recordReading, isPending: false }),
+  useSyncNow: () => ({ mutate: syncNow, isPending: false }),
+}));
 vi.mock("../db/hooks/useUpkeep", () => ({
   useMachine: () => ({ data: machineRow }),
   useUpkeepItems: () => ({ data: items }),
@@ -72,6 +85,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   machineRow = machine();
   items = [item()];
+  connections = [];
+  disks = [];
+  reading = null;
 });
 
 describe("MachineDetail", () => {
@@ -116,5 +132,41 @@ describe("MachineDetail", () => {
   it("shows No connection in the readings slot", () => {
     renderDetail();
     expect(screen.getByText(t.upkeep_no_connection)).toBeInTheDocument();
+  });
+
+  it("readings: a usage item without a connection offers the current reading input", () => {
+    items = [item({ id: 9, schedule: "usage", usage_metric: "print_hours", usage_every: 200, next_due_on: null })];
+    reading = 120;
+    renderDetail();
+    expect(screen.queryByText(t.upkeep_no_connection)).not.toBeInTheDocument();
+    expect(screen.getByText(/120 h/)).toBeInTheDocument();
+    const input = screen.getByLabelText(t.upkeep_current_reading);
+    fireEvent.change(input, { target: { value: "135" } });
+    fireEvent.click(screen.getByRole("button", { name: t.upkeep_current_reading_save }));
+    expect(recordReading).toHaveBeenCalledWith(
+      { machine: expect.objectContaining({ id: 1 }), value: 135 },
+      expect.anything()
+    );
+  });
+
+  it("readings: a linked machine shows its connection, error, disks and Sync now", () => {
+    machineRow = machine({ connection_id: 2, device_id: "SN1" });
+    connections = [{
+      id: 2, kind: "synology", label: "Studio NAS", last_sync_at: "2026-10-28T08:00:00.000Z",
+      last_error: "timeout", failing_since: "2026-10-27",
+    }];
+    disks = [{
+      id: 1, machine_id: 1, slot: "Drive 1", model: "WD Red", serial: "X", size_bytes: null,
+      power_on_hours: 8760 * 2, health: "warning", notified_health: null, bad_sectors: 0,
+      temperature: null, first_seen: "2026-01-01 00:00:00", last_read_at: "",
+    }];
+    renderDetail();
+    expect(screen.getByText(t.upkeep_connected_to.replace("{label}", "Studio NAS"))).toBeInTheDocument();
+    expect(screen.getByText(/timeout/)).toBeInTheDocument();
+    expect(screen.getByText(t.upkeep_disk_health_warning)).toBeInTheDocument();
+    expect(screen.getByRole("meter", { name: t.upkeep_disk_age_years.replace("{n}", "2") })).toBeInTheDocument();
+    expect(screen.queryByLabelText(t.upkeep_current_reading)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: t.upkeep_sync_now }));
+    expect(syncNow).toHaveBeenCalledWith(2);
   });
 });
