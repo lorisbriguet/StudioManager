@@ -498,6 +498,8 @@ mod tests {
     struct ScriptSpawner {
         first: String,
         after_down: Option<String>,
+        /// Shown once the process receives typed text (anything but a key sequence or Enter).
+        after_text: Option<String>,
         writes: Arc<Mutex<Vec<String>>>,
         killed: Arc<AtomicBool>,
         /// Processes alive now, and the most ever alive at once.
@@ -517,6 +519,7 @@ mod tests {
             self.max_live.fetch_max(live, Ordering::SeqCst);
             Ok(Box::new(ScriptProc {
                 after_down: self.after_down.clone(),
+                after_text: self.after_text.clone(),
                 writes: self.writes.clone(),
                 killed: self.killed.clone(),
                 live: self.live.clone(),
@@ -528,6 +531,7 @@ mod tests {
 
     struct ScriptProc {
         after_down: Option<String>,
+        after_text: Option<String>,
         writes: Arc<Mutex<Vec<String>>>,
         killed: Arc<AtomicBool>,
         live: Arc<AtomicUsize>,
@@ -555,10 +559,14 @@ mod tests {
     impl PtyProcess for ScriptProc {
         fn write(&mut self, data: &[u8]) -> Result<(), String> {
             self.writes.lock().unwrap().push(String::from_utf8_lossy(data).into_owned());
-            if data == b"\x1b[B" {
-                if let (Some(next), Some(tx)) = (&self.after_down, self.tx.lock().unwrap().as_ref()) {
-                    let _ = tx.send(draw(next));
-                }
+            let next = match data {
+                b"\x1b[B" => &self.after_down,
+                b"\r" => &None,
+                d if d.starts_with(b"\x1b") => &None,
+                _ => &self.after_text,
+            };
+            if let (Some(next), Some(tx)) = (next, self.tx.lock().unwrap().as_ref()) {
+                let _ = tx.send(draw(next));
             }
             Ok(())
         }
@@ -595,12 +603,17 @@ mod tests {
     }
 
     fn fake(first: &str, after_down: Option<&str>) -> Fake {
+        fake_typed(first, after_down, None)
+    }
+
+    fn fake_typed(first: &str, after_down: Option<&str>, after_text: Option<&str>) -> Fake {
         let writes = Arc::new(Mutex::new(vec![]));
         let killed = Arc::new(AtomicBool::new(false));
         let max_live = Arc::new(AtomicUsize::new(0));
         let spawner = ScriptSpawner {
             first: first.into(),
             after_down: after_down.map(String::from),
+            after_text: after_text.map(String::from),
             writes: writes.clone(),
             killed: killed.clone(),
             live: Arc::default(),
@@ -723,5 +736,20 @@ mod tests {
         assert_eq!(err, "Answer the open prompt first");
         assert!(f.writes().is_empty());
         assert_eq!(f.hub.len(), 0);
+    }
+
+    #[test]
+    fn send_withholds_enter_when_prompt_opens_while_typing() {
+        // No prompt when the send starts; one opens as the text is typed.
+        let f = fake_typed(NONE, None, Some(FIRST));
+        let err = send_message(&f.hub, &idle_agent(), "hi").unwrap_err();
+        assert!(err.starts_with("Answer the open prompt first"), "{err}");
+        assert!(err.contains("typed but not sent"), "{err}");
+        assert_eq!(f.writes(), vec!["hi"], "no Enter");
+        assert_eq!(f.hub.len(), 0, "temporary terminal closed");
+        // Without a prompt the same send presses Enter.
+        let f = fake_typed(NONE, None, Some(NONE));
+        send_message(&f.hub, &idle_agent(), "hi").unwrap();
+        assert_eq!(f.writes(), vec!["hi", "\r"]);
     }
 }

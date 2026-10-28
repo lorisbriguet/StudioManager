@@ -16,6 +16,9 @@ const ENTER_AFTER_MS: u64 = 300;
 const TEMP_CLOSE_AFTER_MS: u64 = 2_000;
 const TEMP_COLS: u16 = 80;
 const TEMP_ROWS: u16 = 24;
+/// A prompt opened while the message was being typed: the Enter was not sent.
+pub const PROMPT_OPENED: &str =
+    "Answer the open prompt first. Your message was typed but not sent: it is still in the input.";
 
 /// One process running in a pty.
 pub trait PtyProcess: Send {
@@ -413,10 +416,19 @@ fn refuse_if_prompt(hub: &TerminalHub, id: u32) -> Result<(), String> {
     Ok(())
 }
 
-/// Writes the text, then the Enter 300 ms later.
+/// Writes the text, then the Enter 300 ms later, unless a prompt has opened meanwhile.
+///
+/// Invariant: only `prompt::choose` presses Enter on a prompt. A prompt that opened between
+/// `refuse_if_prompt` and here would take this Enter as confirming its highlighted option
+/// (often "Yes"), so the screen is read again right before it.
 fn type_line(hub: &TerminalHub, id: u32, payload: &str) -> Result<(), String> {
+    let since = hub.inner.clock.now_ms();
     hub.write(id, payload.as_bytes())?;
     hub.inner.clock.sleep_ms(ENTER_AFTER_MS);
+    let screen = super::prompt::settled_screen(hub, id, since)?;
+    if super::prompt::parse_prompt(&screen).is_some() {
+        return Err(PROMPT_OPENED.into());
+    }
     hub.write(id, b"\r")
 }
 
