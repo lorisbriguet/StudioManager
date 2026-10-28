@@ -321,11 +321,11 @@ pub async fn agents_prompt(
     state: tauri::State<'_, super::AgentsState>,
     short_id: String,
 ) -> Result<Option<Prompt>, String> {
-    let cli = super::actions::ready(&state)?;
+    let login = super::actions::ready(&state)?;
     let hub = state.hub.clone();
     let cache = state.cached();
     super::pty::blocking(move || {
-        require_background(&cli, &cache, &short_id)?;
+        require_background(&super::actions::cli(&login)?, &cache, &short_id)?;
         read_prompt(&hub, &short_id)
     })
     .await
@@ -339,11 +339,11 @@ pub async fn agents_answer(
     label: String,
     fingerprint: String,
 ) -> Result<(), String> {
-    let cli = super::actions::ready(&state)?;
+    let login = super::actions::ready(&state)?;
     let hub = state.hub.clone();
     let cache = state.cached();
     super::pty::blocking(move || {
-        require_background(&cli, &cache, &short_id)?;
+        require_background(&super::actions::cli(&login)?, &cache, &short_id)?;
         answer(&hub, &short_id, number, &label, &fingerprint)
     })
     .await

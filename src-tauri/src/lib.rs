@@ -591,6 +591,7 @@ pub fn run() {
             agent_access::preview_claude_desktop,
             agent_access::install_claude_desktop,
             agent_access::recent_agent_changes,
+            agents::cli::agents_get_enabled,
             agents::cli::agents_get_settings,
             agents::cli::agents_set_enabled,
             agents::projects::agents_start_folders,

@@ -52,7 +52,7 @@ import { useAppStore } from "./stores/app-store";
 import { useOrgStore } from "./stores/org-store";
 import { getLabels, notifyError } from "./lib/notifyError";
 import { requestNotificationPermission } from "./lib/nativeNotification";
-import { getAgentsSettings } from "./lib/agents";
+import { getAgentsEnabled } from "./lib/agents";
 
 import { queryClient } from "./lib/queryClient";
 
@@ -66,8 +66,8 @@ function StartupChecks() {
 
   useEffect(() => {
     requestNotificationPermission();
-    getAgentsSettings()
-      .then((i) => useAppStore.getState().setAgentsEnabled(i?.enabled === true))
+    getAgentsEnabled()
+      .then((enabled) => useAppStore.getState().setAgentsEnabled(enabled === true))
       .catch(() => {});
   }, []);
 

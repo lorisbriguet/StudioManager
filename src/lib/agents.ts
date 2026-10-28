@@ -5,6 +5,12 @@ export interface AgentsInfo {
   claudePath: string | null;
 }
 
+/** The switch only: no lookup of `claude`, so app startup runs nothing while it is off. */
+export function getAgentsEnabled(): Promise<boolean> {
+  return invoke<boolean>("agents_get_enabled");
+}
+
+/** The switch and the path of `claude` (looked up again while it is missing). */
 export function getAgentsSettings(): Promise<AgentsInfo> {
   return invoke<AgentsInfo>("agents_get_settings");
 }

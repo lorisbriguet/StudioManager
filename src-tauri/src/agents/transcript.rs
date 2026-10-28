@@ -1,6 +1,6 @@
 //! Reading an agent's conversation from its transcript under `~/.claude/projects`.
 
-use super::actions::{home_dir, ready, valid_session_id};
+use super::actions::{cli, home_dir, ready, valid_session_id};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::VecDeque;
@@ -121,13 +121,13 @@ pub async fn agents_conversation(
     state: tauri::State<'_, super::AgentsState>,
     session_id: String,
 ) -> Result<Vec<Item>, String> {
-    ready(&state)?;
+    let login = ready(&state)?;
     let claude_dir = home_dir().join(".claude");
-    tauri::async_runtime::spawn_blocking(move || {
-        locate(&claude_dir, &session_id).map(|p| read_tail(&p, LIMIT)).unwrap_or_default()
+    super::pty::blocking(move || {
+        cli(&login)?;
+        Ok(locate(&claude_dir, &session_id).map(|p| read_tail(&p, LIMIT)).unwrap_or_default())
     })
     .await
-    .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

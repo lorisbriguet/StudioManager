@@ -68,6 +68,20 @@ pub fn cached_login_env(cache: &LoginCache) -> Arc<LoginEnv> {
     guard.get_or_insert_with(|| Arc::new(super::cli::resolve_login_env())).clone()
 }
 
+/// Like `cached_login_env`, but looks again when the cached lookup found no `claude`, so
+/// installing Claude Code then reopening the settings card is enough.
+pub fn fresh_login_env(cache: &LoginCache) -> Arc<LoginEnv> {
+    refresh_login_env(cache, &super::cli::resolve_login_env)
+}
+
+fn refresh_login_env(cache: &LoginCache, resolve: &dyn Fn() -> LoginEnv) -> Arc<LoginEnv> {
+    let mut guard = lock(cache);
+    match guard.as_ref() {
+        Some(env) if env.claude.is_some() => env.clone(),
+        _ => guard.insert(Arc::new(resolve())).clone(),
+    }
+}
+
 /// Runs exactly `claude attach <short id>` in the home folder, with `spawn_env`.
 pub struct RealSpawner {
     login: LoginCache,
@@ -540,7 +554,7 @@ pub async fn agents_term_open(
 ) -> Result<u32, String> {
     use base64::Engine;
     use tauri::Emitter;
-    super::actions::ready(&state)?;
+    let login = super::actions::ready(&state)?;
     let hub = state.hub.clone();
     let data_app = app.clone();
     let on_data: OnData = Box::new(move |term_id, bytes| {
@@ -550,7 +564,11 @@ pub async fn agents_term_open(
     let on_exit: OnExit = Box::new(move |term_id| {
         let _ = app.emit(TERM_EXIT_EVENT, TermExit { term_id });
     });
-    blocking(move || hub.open(&short_id, cols, rows, on_data, on_exit)).await
+    blocking(move || {
+        super::actions::cli(&login)?;
+        hub.open(&short_id, cols, rows, on_data, on_exit)
+    })
+    .await
 }
 
 /// `data` is the UTF-8 text from xterm's `onData`.
@@ -597,10 +615,11 @@ pub async fn agents_send(
     session_id: String,
     text: String,
 ) -> Result<(), String> {
-    let cli = super::actions::ready(&state)?;
+    let login = super::actions::ready(&state)?;
     let hub = state.hub.clone();
     let cache = state.cached();
     blocking(move || {
+        let cli = super::actions::cli(&login)?;
         let agent = super::actions::find_agent_cached(&cli, &cache, &session_id)?;
         send_message(&hub, &agent, &text)
     })
@@ -762,6 +781,26 @@ pub(super) mod tests {
             r#"[{{"sessionId":"00000000-1111-2222-3333-444444444444","id":"0a1b2c3d","kind":"{kind}","status":"{status}"}}]"#
         );
         parse_agents(&json).unwrap().remove(0)
+    }
+
+    #[test]
+    fn login_env_looked_up_again_only_while_claude_missing() {
+        let cache = LoginCache::default();
+        let calls = std::sync::atomic::AtomicUsize::new(0);
+        let found = std::cell::Cell::new(false);
+        let resolve = || {
+            calls.fetch_add(1, Ordering::SeqCst);
+            let claude = found.get().then(|| std::path::PathBuf::from("/opt/x/claude"));
+            LoginEnv { claude, path: "/usr/bin".into() }
+        };
+        assert_eq!(refresh_login_env(&cache, &resolve).claude, None);
+        assert_eq!(refresh_login_env(&cache, &resolve).claude, None);
+        assert_eq!(calls.load(Ordering::SeqCst), 2, "missing: looked up again");
+        found.set(true); // Claude Code installed meanwhile
+        assert!(refresh_login_env(&cache, &resolve).claude.is_some());
+        assert!(refresh_login_env(&cache, &resolve).claude.is_some());
+        assert_eq!(calls.load(Ordering::SeqCst), 3, "found: cached");
+        assert!(cached_login_env(&cache).claude.is_some(), "shared with the cached lookup");
     }
 
     #[test]

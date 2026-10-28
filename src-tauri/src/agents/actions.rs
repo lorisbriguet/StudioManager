@@ -3,6 +3,7 @@
 use super::cli::{read_settings, Cli, CliOutput};
 use super::model::{parse_agents, Agent, Kind};
 use super::projects::read_trusted;
+use super::pty::blocking;
 use super::validate::{valid_model, valid_name, valid_short_id, valid_task};
 use crate::agent_access::write_atomic;
 use serde::{Deserialize, Serialize};
@@ -263,9 +264,16 @@ pub(super) fn switched_on(state: &super::AgentsState) -> Result<(), String> {
     Ok(())
 }
 
-pub(super) fn ready(state: &super::AgentsState) -> Result<super::cli::RealCli, String> {
+/// Checks the switch, and hands back what `cli` needs. `cli` may run the login-shell lookup
+/// and every CLI call blocks, so both happen inside `pty::blocking`.
+pub(super) fn ready(state: &super::AgentsState) -> Result<super::pty::LoginCache, String> {
     switched_on(state)?;
-    state.real_cli().ok_or_else(|| "claude not found".to_string())
+    Ok(state.login_cache())
+}
+
+/// The `claude` runner, or "claude not found". Call it on a blocking thread.
+pub(super) fn cli(login: &super::pty::LoginCache) -> Result<super::cli::RealCli, String> {
+    super::cli::real_cli(login).ok_or_else(|| "claude not found".to_string())
 }
 
 #[tauri::command]
@@ -276,8 +284,9 @@ pub async fn agents_start(
     model: String,
     name: String,
 ) -> Result<String, String> {
-    let cli = ready(&state)?;
-    start(&cli, &read_trusted(&home_dir()), &folder, &task, &model, &name)
+    let login = ready(&state)?;
+    blocking(move || start(&cli(&login)?, &read_trusted(&home_dir()), &folder, &task, &model, &name))
+        .await
 }
 
 #[tauri::command]
@@ -285,8 +294,8 @@ pub async fn agents_stop(
     state: tauri::State<'_, super::AgentsState>,
     short_id: String,
 ) -> Result<(), String> {
-    let cli = ready(&state)?;
-    stop(&cli, &home_dir(), &short_id)
+    let login = ready(&state)?;
+    blocking(move || stop(&cli(&login)?, &home_dir(), &short_id)).await
 }
 
 #[tauri::command]
@@ -294,8 +303,8 @@ pub async fn agents_delete(
     state: tauri::State<'_, super::AgentsState>,
     short_id: String,
 ) -> Result<(), String> {
-    let cli = ready(&state)?;
-    delete(&cli, &home_dir(), &short_id)
+    let login = ready(&state)?;
+    blocking(move || delete(&cli(&login)?, &home_dir(), &short_id)).await
 }
 
 #[tauri::command]
@@ -304,10 +313,15 @@ pub async fn agents_switch_model(
     session_id: String,
     model: String,
 ) -> Result<String, String> {
-    let cli = ready(&state)?;
+    let login = ready(&state)?;
     let cache = state.cached();
-    let agent = find_agent_cached(&cli, &cache, &session_id)?;
-    switch_model(&cli, &home_dir(), &agent, &model, &state.app_dir)
+    let app_dir = state.app_dir.clone();
+    blocking(move || {
+        let cli = cli(&login)?;
+        let agent = find_agent_cached(&cli, &cache, &session_id)?;
+        switch_model(&cli, &home_dir(), &agent, &model, &app_dir)
+    })
+    .await
 }
 
 #[tauri::command]

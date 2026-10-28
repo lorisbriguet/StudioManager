@@ -214,20 +214,41 @@ pub struct AgentsInfo {
     pub claude_path: Option<String>,
 }
 
-fn info(state: &super::AgentsState) -> AgentsInfo {
+/// A runner for `claude` from the cached login environment, or None when it cannot be found.
+/// The first call runs the login-shell lookup.
+pub fn real_cli(login: &super::pty::LoginCache) -> Option<RealCli> {
+    let env = super::pty::cached_login_env(login);
+    let claude = env.claude.clone()?;
+    Some(RealCli { claude, path_env: env.path.clone() })
+}
+
+/// Runs the login-shell lookup (again, if `claude` was not found before): call it on a
+/// blocking thread.
+fn info(app_dir: &Path, login: &super::pty::LoginCache) -> AgentsInfo {
     AgentsInfo {
-        enabled: read_settings(&state.app_dir).enabled,
-        claude_path: state.login_env().claude.as_ref().map(|p| p.display().to_string()),
+        enabled: read_settings(app_dir).enabled,
+        claude_path: super::pty::fresh_login_env(login)
+            .claude
+            .as_ref()
+            .map(|p| p.display().to_string()),
     }
 }
 
-/// Async so the first (login-shell) lookup runs off the main thread. Exempt
-/// from the "switched off" guard, like `agents_set_enabled`.
+/// The switch only, for app startup: no login-shell lookup, so a switched-off feature runs
+/// nothing.
+#[tauri::command]
+pub async fn agents_get_enabled(state: tauri::State<'_, super::AgentsState>) -> Result<bool, String> {
+    Ok(read_settings(&state.app_dir).enabled)
+}
+
+/// The switch and the `claude` path, for the settings card. Exempt from the "switched off"
+/// guard, like `agents_set_enabled`.
 #[tauri::command]
 pub async fn agents_get_settings(
     state: tauri::State<'_, super::AgentsState>,
 ) -> Result<AgentsInfo, String> {
-    Ok(info(&state))
+    let (app_dir, login) = (state.app_dir.clone(), state.login_cache());
+    super::pty::blocking(move || Ok(info(&app_dir, &login))).await
 }
 
 #[tauri::command]
@@ -235,18 +256,19 @@ pub async fn agents_set_enabled(
     state: tauri::State<'_, super::AgentsState>,
     enabled: bool,
 ) -> Result<AgentsInfo, String> {
-    if enabled && state.login_env().claude.is_none() {
-        return Err("claude not found".into());
-    }
-    write_settings(&state.app_dir, &AgentsSettings { enabled })?;
-    if !enabled {
-        // Each panel still gets `agents:term-exit` from its reader thread.
-        let hub = state.hub.clone();
-        tauri::async_runtime::spawn_blocking(move || hub.close_all())
-            .await
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(info(&state))
+    let (app_dir, login, hub) = (state.app_dir.clone(), state.login_cache(), state.hub.clone());
+    super::pty::blocking(move || {
+        if enabled && super::pty::fresh_login_env(&login).claude.is_none() {
+            return Err("claude not found".into());
+        }
+        write_settings(&app_dir, &AgentsSettings { enabled })?;
+        if !enabled {
+            // Each panel still gets `agents:term-exit` from its reader thread.
+            hub.close_all();
+        }
+        Ok(info(&app_dir, &login))
+    })
+    .await
 }
 
 #[cfg(test)]

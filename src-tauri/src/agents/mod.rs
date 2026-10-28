@@ -32,9 +32,10 @@ impl AgentsState {
         Self { app_dir, login_env, hub, last: Mutex::new(Vec::new()) }
     }
 
-    /// The login-shell environment, resolved on first use and cached.
-    pub fn login_env(&self) -> Arc<cli::LoginEnv> {
-        pty::cached_login_env(&self.login_env)
+    /// The cached login-shell environment, for use on a blocking thread: resolving it runs a
+    /// login shell (up to 10 s).
+    pub fn login_cache(&self) -> pty::LoginCache {
+        self.login_env.clone()
     }
 
     /// A copy of the poller's last list (empty before the first pass).
@@ -42,11 +43,10 @@ impl AgentsState {
         self.last.lock().map(|c| c.clone()).unwrap_or_default()
     }
 
-    /// A runner for the `claude` CLI, or None when it cannot be found.
+    /// A runner for the `claude` CLI, or None when it cannot be found. May run the login-shell
+    /// lookup: call it off the async runtime.
     pub fn real_cli(&self) -> Option<cli::RealCli> {
-        let env = self.login_env();
-        let claude = env.claude.clone()?;
-        Some(cli::RealCli { claude, path_env: env.path.clone() })
+        cli::real_cli(&self.login_env)
     }
 }
 
