@@ -49,7 +49,7 @@ export function AgentsPage() {
   // Full-height columns like Settings: the page runs edge to edge (-m-8), and both
   // columns start with a PANEL_TOP_BAR so the line between them never steps.
   return (
-    <div className="flex h-full min-h-0 -m-8">
+    <div className="flex flex-1 min-h-0 -m-8">
       <aside className="w-72 shrink-0 flex flex-col min-h-0 border-r border-[var(--color-border-divider)]">
         <div className={`${PANEL_TOP_BAR} pl-5 pr-3 justify-between border-[var(--color-border-divider)]`}>
           <h1 className="text-sm font-semibold text-muted uppercase tracking-wider">{t.agents}</h1>
