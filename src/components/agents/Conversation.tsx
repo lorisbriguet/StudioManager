@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ChevronRight } from "lucide-react";
+import { Bot, ChevronRight } from "lucide-react";
 import { conversation, type Item } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
+import { EmptyState } from "../ui";
 
 const REFRESH_MS = 3000;
 
@@ -50,7 +51,7 @@ export function Conversation({ sessionId, working }: ConversationProps) {
     endRef.current?.scrollIntoView?.({ block: "end" });
   }, [items]);
 
-  if (items.length === 0) return <p className="text-sm text-muted text-center py-8">{t.agents_no_conversation}</p>;
+  if (items.length === 0) return <EmptyState icon={<Bot size={32} />} message={t.agents_no_conversation} />;
 
   return (
     <div className="max-w-3xl mx-auto px-2 py-4 space-y-6">
@@ -108,7 +109,7 @@ function ToolRun({ tools }: { tools: ToolItem[] }) {
         {label}
       </button>
       {open && (
-        <ul className="mt-1.5 ml-1.5 pl-3 border-l border-[var(--color-border)] space-y-1">
+        <ul className="mt-1.5 ml-1.5 pl-3 border-l border-[var(--color-border-divider)] space-y-1">
           {tools.map((tool, i) => (
             <li key={i} className="font-mono truncate">
               <span className="text-[var(--color-text)]">{tool.name}</span>

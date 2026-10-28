@@ -88,15 +88,15 @@ export function PromptAnswer({ shortId, onOpenTerminal }: PromptAnswerProps) {
     </div>
   );
 
-  if (!prompt) return <div className="rounded-lg border border-[var(--color-border)] p-3">{terminalHint}</div>;
+  if (!prompt) return <div className="rounded-xl border border-[var(--color-border-divider)] p-3">{terminalHint}</div>;
 
   const buttons = prompt.options.filter((o) => !TERMINAL_ONLY.has(o.label.trim().toLowerCase()));
   const hasTerminalOnly = buttons.length < prompt.options.length || buttons.length === 0;
 
   return (
-    <div className="rounded-lg border border-[var(--color-border)] p-3 space-y-3">
+    <div className="rounded-xl border border-[var(--color-border-divider)] p-3 space-y-3">
       {prompt.detail && (
-        <pre className="text-xs font-mono whitespace-pre-wrap break-words bg-[var(--color-input-bg)] rounded-md p-2">
+        <pre className="text-xs font-mono whitespace-pre-wrap break-words bg-[var(--color-input-bg)] rounded-lg p-2">
           {prompt.detail}
         </pre>
       )}

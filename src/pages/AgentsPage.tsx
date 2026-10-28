@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { Bot, Plus } from "lucide-react";
 import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
-import { Button, EmptyState, PageHeader } from "../components/ui";
+import { Button, EmptyState, PageHeader, PANEL_TOP_BAR } from "../components/ui";
 import { useAgents } from "../components/agents/useAgents";
 import { AgentList } from "../components/agents/AgentList";
 import { AgentDetail } from "../components/agents/AgentDetail";
@@ -35,7 +35,7 @@ export function AgentsPage() {
     return (
       <div>
         <PageHeader title={t.agents} />
-        <EmptyState message={t.agents_off} />
+        <EmptyState icon={<Bot size={32} />} message={t.agents_off} />
       </div>
     );
   }
@@ -48,29 +48,32 @@ export function AgentsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <PageHeader title={t.agents}>
-        <Button icon={<Plus size={14} />} onClick={() => setStarting(true)}>
-          {t.agents_new}
-        </Button>
-      </PageHeader>
-      <div className="flex flex-1 min-h-0 gap-6">
-        <div className="w-72 shrink-0 flex flex-col min-h-0">
+      <PageHeader title={t.agents} />
+      <div className="flex flex-1 min-h-0 border-t border-[var(--color-border-divider)]">
+        <div className="w-72 shrink-0 flex flex-col min-h-0 border-r border-[var(--color-border-divider)]">
+          <div className={`${PANEL_TOP_BAR} px-3 border-[var(--color-border-divider)]`}>
+            <Button size="sm" icon={<Plus size={14} />} onClick={() => setStarting(true)}>
+              {t.agents_new}
+            </Button>
+          </div>
           {agents.length === 0 ? (
-            <EmptyState message={t.agents_empty} />
+            <EmptyState icon={<Bot size={32} />} message={t.agents_empty} />
           ) : (
             <AgentList byGroup={byGroup} selectedId={selectedId} onSelect={select} />
           )}
         </div>
-        <div className="flex-1 min-w-0 overflow-y-auto">
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
           {starting ? (
-            <StartAgentForm
-              onStarted={(shortId) => {
-                setStarting(false);
-                setPendingShortId(shortId);
-              }}
-              onCancel={() => setStarting(false)} />
+            <div className="flex-1 min-h-0 overflow-y-auto p-4">
+              <StartAgentForm
+                onStarted={(shortId) => {
+                  setStarting(false);
+                  setPendingShortId(shortId);
+                }}
+                onCancel={() => setStarting(false)} />
+            </div>
           ) : selected ? (
-            <div className="flex flex-col h-full gap-4">
+            <>
               <div className="flex-1 min-h-0">
                 <AgentDetail
                   agent={selected}
@@ -80,11 +83,13 @@ export function AgentsPage() {
                 />
               </div>
               {terminalFor && selected.shortId === terminalFor && (
-                <TerminalPanel key={terminalFor} shortId={terminalFor} onClose={() => setTerminalFor(null)} />
+                <div className="p-4 pt-0 shrink-0">
+                  <TerminalPanel key={terminalFor} shortId={terminalFor} onClose={() => setTerminalFor(null)} />
+                </div>
               )}
-            </div>
+            </>
           ) : (
-            <EmptyState message={t.agents_select_hint} />
+            <EmptyState icon={<Bot size={32} />} message={t.agents_select_hint} />
           )}
         </div>
       </div>

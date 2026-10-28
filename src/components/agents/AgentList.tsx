@@ -3,6 +3,7 @@ import { ChevronRight } from "lucide-react";
 import type { Agent, Group } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
 import type { UIKey } from "../../i18n/ui";
+import { Badge, type BadgeVariant } from "../ui/Badge";
 import { GROUPS } from "./useAgents";
 
 const GROUP_KEYS: Record<Group, UIKey> = {
@@ -13,31 +14,35 @@ const GROUP_KEYS: Record<Group, UIKey> = {
 };
 
 /** One colour per group, from the app's status tokens (light and dark aware). */
-export const GROUP_STYLE: Record<Group, { dot: string; text: string; row: string; pill: string }> = {
+export const GROUP_STYLE: Record<Group, { dot: string; text: string; row: string }> = {
   "needs-you": {
-    dot: "bg-[var(--color-warning)]",
+    dot: "bg-warning",
     text: "text-[var(--color-warning-text)]",
     row: "bg-[var(--color-warning-bg)]",
-    pill: "bg-[var(--color-warning-bg)] text-[var(--color-warning-text)]",
   },
   working: {
     dot: "bg-[var(--color-info-text)] animate-pulse",
     text: "text-[var(--color-info-text)]",
     row: "",
-    pill: "bg-[var(--color-info-bg)] text-[var(--color-info-text)]",
   },
   idle: {
     dot: "bg-[var(--color-text-secondary)] opacity-40",
     text: "text-muted",
     row: "",
-    pill: "bg-[var(--color-input-bg)] text-muted",
   },
   done: {
-    dot: "bg-[var(--color-success)]",
+    dot: "bg-success",
     text: "text-[var(--color-success-text)]",
     row: "",
-    pill: "bg-[var(--color-success-bg)] text-[var(--color-success-text)]",
   },
+};
+
+/** Badge variant per group (count pill, detail status). */
+export const GROUP_VARIANT: Record<Group, BadgeVariant> = {
+  "needs-you": "warning",
+  working: "info",
+  idle: "neutral",
+  done: "success",
 };
 
 export const GROUP_LABEL_KEYS = GROUP_KEYS;
@@ -90,10 +95,8 @@ export function AgentList({ byGroup, selectedId, onSelect }: AgentListProps) {
         const heading = (
           <>
             <span className={`dot ${GROUP_STYLE[g].dot}`} aria-hidden />
-            <h2 className={`text-xs font-semibold uppercase tracking-wide ${GROUP_STYLE[g].text}`}>{t[GROUP_KEYS[g]]}</h2>
-            <span className={`ml-auto rounded-full px-1.5 text-[10px] font-medium ${GROUP_STYLE[g].pill}`}>
-              {byGroup[g].length}
-            </span>
+            <h2 className={`text-[10px] font-medium uppercase tracking-widest ${GROUP_STYLE[g].text}`}>{t[GROUP_KEYS[g]]}</h2>
+            <Badge variant={GROUP_VARIANT[g]} className="ml-auto">{byGroup[g].length}</Badge>
           </>
         );
         return (
@@ -118,7 +121,7 @@ export function AgentList({ byGroup, selectedId, onSelect }: AgentListProps) {
                   type="button"
                   onClick={() => onSelect(a.sessionId)}
                   aria-current={a.sessionId === selectedId || undefined}
-                  className={`w-full text-left px-3 py-2 rounded-md transition-colors focus-accent ${
+                  className={`w-full text-left px-3 py-2.5 rounded-md transition-colors focus-accent ${
                     a.sessionId === selectedId
                       ? "bg-accent-light"
                       : `${GROUP_STYLE[g].row} hover:bg-[var(--color-hover-row)]`
@@ -129,9 +132,7 @@ export function AgentList({ byGroup, selectedId, onSelect }: AgentListProps) {
                     <span className="truncate">{a.name}</span>
                     {a.model && <span className="text-xs font-normal text-muted">{a.model}</span>}
                     {a.quiet && (
-                      <span className="text-xs font-normal text-muted rounded-full bg-[var(--color-input-bg)] px-1.5">
-                        {t.agents_quiet}
-                      </span>
+                      <Badge variant="neutral">{t.agents_quiet}</Badge>
                     )}
                   </div>
                   <div className="pl-3.5 text-xs text-muted truncate">{agentLabel(a)}</div>

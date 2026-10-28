@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { startAgent, startFolders, type StartFolder } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
-import { Button, FormField, Select } from "../ui";
+import { Button, FormField, Input, Select } from "../ui";
 
 const MODELS = ["sonnet", "opus", "haiku", "fable"];
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -110,14 +110,13 @@ export function StartAgentForm({ onStarted, onCancel }: StartAgentFormProps) {
           </Select>
         </FormField>
         <FormField label={t.agents_name}>
-          <input
+          <Input
             value={name}
             maxLength={64}
             onChange={(e) => {
               setNameEdited(true);
               setName(e.target.value);
             }}
-            className="w-full bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-lg px-3 py-2 text-sm focus-accent"
           />
         </FormField>
       </div>

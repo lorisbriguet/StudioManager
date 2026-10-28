@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { ArrowUp, Loader2 } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { dismissAgent, deleteAgent, sendMessage, stopAgent, switchModel, type Agent } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
-import { Button, Select } from "../ui";
-import { agentLabel, GROUP_LABEL_KEYS, GROUP_STYLE } from "./AgentList";
+import { Badge, Button, PANEL_TOP_BAR, Select } from "../ui";
+import { agentLabel, GROUP_LABEL_KEYS, GROUP_STYLE, GROUP_VARIANT } from "./AgentList";
 import { Conversation } from "./Conversation";
 import { PromptAnswer } from "./PromptAnswer";
 
@@ -74,75 +74,72 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
       : null;
 
   return (
-    <div className="flex flex-col h-full min-h-0 gap-4">
-      <div>
-        <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold truncate">{agent.name}</h2>
-          <span className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${GROUP_STYLE[agent.group].pill}`}>
-            <span className={`dot-sm ${GROUP_STYLE[agent.group].dot}`} aria-hidden />
-            {t[GROUP_LABEL_KEYS[agent.group]]}
-          </span>
+    <div className="flex flex-col h-full min-h-0">
+      <div className={`${PANEL_TOP_BAR} gap-2 px-4 border-[var(--color-border-divider)]`}>
+        <h2 className="text-sm font-semibold tracking-tight truncate">{agent.name}</h2>
+        <Badge variant={GROUP_VARIANT[agent.group]} className="shrink-0 gap-1.5">
+          <span className={`dot-sm ${GROUP_STYLE[agent.group].dot}`} aria-hidden />
+          {t[GROUP_LABEL_KEYS[agent.group]]}
+        </Badge>
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="secondary" size="sm" disabled={!shortId} onClick={() => void stop()}>
+            {t.agents_stop}
+          </Button>
+          <Button variant="danger" size="sm" disabled={!shortId} onClick={() => void remove()}>
+            {t.agents_delete}
+          </Button>
+          {agent.group === "needs-you" && (
+            <Button variant="ghost" size="sm" onClick={() => void run(() => dismissAgent(agent.sessionId))}>
+              {t.agents_dismiss}
+            </Button>
+          )}
+          {shortId && (
+            <Button variant="ghost" size="sm" onClick={() => onOpenTerminal(shortId)}>
+              {t.agents_open_terminal}
+            </Button>
+          )}
+          {background && (
+            <Select
+              fullWidth={false}
+              className="w-32"
+              aria-label={t.agents_model}
+              value={knownModel ? (agent.model as string) : ""}
+              onChange={(e) => void run(async () => {
+                  const next = await switchModel(agent.sessionId, e.target.value);
+                  onSwitched?.(next);
+                })}
+            >
+              {!knownModel && <option value="" disabled />}
+              {MODELS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </Select>
+          )}
         </div>
-        <div className="text-sm text-muted">{agentLabel(agent)}</div>
       </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Button variant="secondary" size="sm" disabled={!shortId} onClick={() => void stop()}>
-          {t.agents_stop}
-        </Button>
-        <Button variant="danger" size="sm" disabled={!shortId} onClick={() => void remove()}>
-          {t.agents_delete}
-        </Button>
-        {agent.group === "needs-you" && (
-          <Button variant="ghost" size="sm" onClick={() => void run(() => dismissAgent(agent.sessionId))}>
-            {t.agents_dismiss}
-          </Button>
-        )}
-        {shortId && (
-          <Button variant="ghost" size="sm" onClick={() => onOpenTerminal(shortId)}>
-            {t.agents_open_terminal}
-          </Button>
-        )}
-        {background && (
-          <Select
-            fullWidth={false}
-            className="w-32"
-            aria-label={t.agents_model}
-            value={knownModel ? (agent.model as string) : ""}
-            onChange={(e) => void run(async () => {
-                const next = await switchModel(agent.sessionId, e.target.value);
-                onSwitched?.(next);
-              })}
-          >
-            {!knownModel && <option value="" disabled />}
-            {MODELS.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </Select>
-        )}
-      </div>
+      <div className="px-4 pt-3 text-xs text-muted">{agentLabel(agent)}</div>
 
       {error && (
-        <p role="alert" className="text-sm text-[var(--color-danger-text)]">
+        <p role="alert" className="px-4 pt-3 text-sm text-[var(--color-danger-text)]">
           {error}
         </p>
       )}
 
       {agent.group === "needs-you" && background && shortId && (
-        <PromptAnswer shortId={shortId} onOpenTerminal={onOpenTerminal} />
+        <div className="px-4 pt-3">
+          <PromptAnswer shortId={shortId} onOpenTerminal={onOpenTerminal} />
+        </div>
       )}
 
       <div className="flex-1 min-h-0 overflow-y-auto">
         <Conversation sessionId={agent.sessionId} working={agent.group === "working"} />
       </div>
 
-      <div className="max-w-3xl w-full mx-auto space-y-1.5">
+      <div className="max-w-3xl w-full mx-auto space-y-1.5 px-4 pb-4">
         <div
-          className={`flex items-end gap-2 rounded-xl border border-[var(--color-input-border)] bg-[var(--color-surface)] pl-4 pr-2 py-2 shadow-sm focus-within:border-[var(--color-accent)] ${
-            canSend ? "" : "opacity-60"
-          }`}
+          className="flex items-end gap-2 rounded-xl border border-[var(--color-input-border)] bg-[var(--color-input-bg)] pl-4 pr-2 py-2 focus-within:border-[var(--color-accent)]"
         >
           <textarea
             value={text}
@@ -159,17 +156,17 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
               }
             }}
             style={{ fieldSizing: "content" } as React.CSSProperties}
-            className="flex-1 resize-none bg-transparent py-1.5 text-sm leading-relaxed outline-none min-h-[2rem] max-h-48 overflow-y-auto"
+            className="flex-1 resize-none bg-transparent! border-0 p-0 py-1.5 text-sm leading-relaxed outline-none min-h-[2rem] max-h-48 overflow-y-auto placeholder:text-muted disabled:cursor-not-allowed disabled:placeholder:opacity-50"
           />
-          <button
-            type="button"
+          <Button
+            size="sm"
+            className="shrink-0 size-8 justify-center"
             aria-label={t.agents_send}
-            disabled={!canSend || sending || text.trim() === ""}
+            icon={<ArrowUp size={16} />}
+            loading={sending}
+            disabled={!canSend || text.trim() === ""}
             onClick={() => void send()}
-            className="shrink-0 grid place-items-center size-8 rounded-lg bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-40"
-          >
-            {sending ? <Loader2 size={15} className="animate-spin" /> : <ArrowUp size={16} />}
-          </button>
+          />
         </div>
         {disabledReason && <p className="text-xs text-muted text-center">{disabledReason}</p>}
       </div>

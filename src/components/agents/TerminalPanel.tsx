@@ -4,7 +4,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { listen } from "@tauri-apps/api/event";
 import { useT } from "../../i18n/useT";
-import { Button } from "../ui";
+import { Button, PANEL_TOP_BAR } from "../ui";
 import {
   AGENTS_TERM,
   AGENTS_TERM_EXIT,
@@ -159,8 +159,8 @@ export function TerminalPanel({ shortId, onClose }: TerminalPanelProps) {
   }, [shortId]);
 
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col h-72 shrink-0">
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-border)]">
+    <div className="rounded-xl border border-[var(--color-border-divider)] bg-[var(--color-surface)] overflow-hidden flex flex-col h-72 shrink-0">
+      <div className={`${PANEL_TOP_BAR} justify-between px-3 border-[var(--color-border-divider)]`}>
         <span className="text-sm text-muted">
           {ended ? t.agents_terminal_closed : shortId}
         </span>
