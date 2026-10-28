@@ -101,7 +101,7 @@ All 12 checklist items pass after three fixes found by the pass:
 - [x] UI rules: shared TabItem, BottomBar / panel top bar heights (DESIGN-SYSTEM.md, Window Bars)
 
 Follow-ups:
-- [ ] Dev only: a full Vite reload can call getDb() before the active organisation is known, creating an empty `studiomanager.db` at the data-folder root (harmless, `organisations.json` blocks the legacy upgrade) — make getDb wait for the org
+- [x] Dev only: a full Vite reload can call getDb() before the active organisation is known, creating an empty `studiomanager.db` at the data-folder root (harmless, `organisations.json` blocks the legacy upgrade) — make getDb wait for the org
 - [ ] Project files are read-only; an "Open in editor" action next to Show in Finder
 - [ ] MCP still creates a wiki folder per project on put_wiki_article; folders are no longer shown, so stop creating them
 - [ ] Art Basel design-system toolkit and client folders: their Markdown files are not cross-linked yet
