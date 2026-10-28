@@ -228,38 +228,62 @@ export interface AppState {
   setNativeNotifications: (enabled: boolean) => void;
 }
 
-const initialDark = getInitialDarkMode();
-applyDarkClass(initialDark);
-
-if (localStorage.getItem("reduceMotion") === "true") {
-  document.documentElement.classList.add("reduce-motion");
-}
-
-const initialAccent = getInitialAccent();
-const initialThemeId = localStorage.getItem("themeId") ?? "default-light";
-const initialTheme = getThemeById(initialThemeId);
-if (initialTheme && initialThemeId !== "default-light") {
-  applyThemeColors(initialTheme);
-} else {
-  applyAccentColor(initialAccent.color, initialDark ? initialAccent.darkLight : initialAccent.light, initialAccent.darkLight);
-}
-
-// Derive the effective accent for the initial theme so the picker stays in sync
-function getInitialAccentForTheme(): AccentPreset {
-  if (initialTheme && initialThemeId !== "default-light") {
+/** The accent the picker shows: the theme's own for a non-default theme. */
+function accentForTheme(theme: ThemeDefinition | undefined, themeId: string, accent: AccentPreset): AccentPreset {
+  if (theme && themeId !== "default-light") {
     const matchingPreset = ACCENT_PRESETS.find(
-      (p) => p.color.toLowerCase() === initialTheme.colors.accent.toLowerCase()
+      (p) => p.color.toLowerCase() === theme.colors.accent.toLowerCase()
     );
     return matchingPreset ?? {
       name: "Theme",
-      color: initialTheme.colors.accent,
-      light: initialTheme.colors.accentLight,
-      darkLight: initialTheme.colors.accentLight,
+      color: theme.colors.accent,
+      light: theme.colors.accentLight,
+      darkLight: theme.colors.accentLight,
     };
   }
-  return initialAccent;
+  return accent;
 }
-const effectiveInitialAccent = getInitialAccentForTheme();
+
+/** Dark mode, reduced motion, theme and accent as stored, applied to the document. */
+function applyStoredAppearance() {
+  const darkMode = getInitialDarkMode();
+  applyDarkClass(darkMode);
+  const reduceMotion = localStorage.getItem("reduceMotion") === "true";
+  document.documentElement.classList.toggle("reduce-motion", reduceMotion);
+  const accent = getInitialAccent();
+  const themeId = localStorage.getItem("themeId") ?? "default-light";
+  const theme = getThemeById(themeId);
+  if (theme && themeId !== "default-light") {
+    applyThemeColors(theme);
+  } else {
+    applyAccentColor(accent.color, darkMode ? accent.darkLight : accent.light, accent.darkLight);
+  }
+  return { darkMode, reduceMotion, themeId, accentColor: accentForTheme(theme, themeId, accent) };
+}
+
+const initialAppearance = applyStoredAppearance();
+const initialDark = initialAppearance.darkMode;
+const effectiveInitialAccent = initialAppearance.accentColor;
+
+/** The localStorage keys `syncAppearanceFromStorage` follows. */
+export const APPEARANCE_KEYS = ["darkMode", "themeId", "accentColor", "reduceMotion", "appLanguage", "dateFormat"];
+
+/** For a second window (the menu bar panel): pick up theme, dark mode, accent, reduced motion,
+ *  language and date format changed in the main window, as a reload would. */
+export function syncAppearanceFromStorage() {
+  // Drop what an earlier theme set inline, so going back to the default theme looks like a reload.
+  const el = document.documentElement;
+  for (const name of Array.from(el.style)) {
+    if (name.startsWith("--color-")) el.style.removeProperty(name);
+  }
+  document.body.style.background = "";
+  document.body.style.color = "";
+  useAppStore.setState({
+    ...applyStoredAppearance(),
+    language: (localStorage.getItem("appLanguage") as AppLanguage) ?? "EN",
+    dateFormat: (localStorage.getItem("dateFormat") as DateFormatOption) ?? "dd.MM.yyyy",
+  });
+}
 
 export const useAppStore = create<AppState>((set) => ({
   commandPaletteOpen: false,
