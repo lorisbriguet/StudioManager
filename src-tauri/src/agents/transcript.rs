@@ -38,6 +38,44 @@ pub fn last_change_ms(path: &Path) -> Option<i64> {
     Some(t.duration_since(std::time::UNIX_EPOCH).ok()?.as_millis() as i64)
 }
 
+/// How much of the transcript's end `last_model` reads.
+const MODEL_TAIL_BYTES: u64 = 256 * 1024;
+
+/// The short model name ("opus", "sonnet", "haiku", "fable") of a full model id;
+/// any other id is returned as is.
+pub fn model_alias(id: &str) -> String {
+    ["opus", "sonnet", "haiku", "fable"]
+        .into_iter()
+        .find(|a| id.contains(a))
+        .map(str::to_string)
+        .unwrap_or_else(|| id.to_string())
+}
+
+/// The model of the newest reply in a transcript's text (`message.model`), as a short name.
+pub fn last_model_in(jsonl: &str) -> Option<String> {
+    jsonl.lines().rev().find_map(|line| {
+        let v: Value = serde_json::from_str(line.trim()).ok()?;
+        let m = v.get("message")?.get("model")?.as_str()?;
+        // Synthetic entries (e.g. "<synthetic>") are not a model choice.
+        (!m.starts_with('<')).then(|| model_alias(m))
+    })
+}
+
+/// `last_model_in` on the last `MODEL_TAIL_BYTES` of the file, so a long transcript stays cheap.
+pub fn last_model(path: &Path) -> Option<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = std::fs::File::open(path).ok()?;
+    let len = f.metadata().ok()?.len();
+    let start = len.saturating_sub(MODEL_TAIL_BYTES);
+    f.seek(SeekFrom::Start(start)).ok()?;
+    let mut buf = Vec::new();
+    f.read_to_end(&mut buf).ok()?;
+    let text = String::from_utf8_lossy(&buf);
+    // A read starting mid-file begins mid-line: skip that partial line.
+    let text = if start > 0 { text.split_once('\n').map_or("", |(_, rest)| rest) } else { &text };
+    last_model_in(text)
+}
+
 fn truncate(s: &str) -> String {
     s.chars().take(SUMMARY_MAX).collect()
 }
@@ -135,6 +173,45 @@ mod tests {
     use super::*;
 
     const FIXTURE: &str = include_str!("../../tests/fixtures/agents/transcript.jsonl");
+
+    #[test]
+    fn model_alias_maps_known_families() {
+        assert_eq!(model_alias("claude-opus-5-5"), "opus");
+        assert_eq!(model_alias("claude-sonnet-5-5"), "sonnet");
+        assert_eq!(model_alias("claude-haiku-5-5"), "haiku");
+        assert_eq!(model_alias("claude-fable-5-1"), "fable");
+        assert_eq!(model_alias("some-other-model"), "some-other-model");
+    }
+
+    #[test]
+    fn last_model_takes_the_newest_reply_and_skips_synthetic() {
+        let jsonl = concat!(
+            r#"{"type":"assistant","message":{"model":"claude-sonnet-5-5","content":"a"}}"#, "\n",
+            r#"{"type":"user","message":{"content":"b"}}"#, "\n",
+            r#"{"type":"assistant","message":{"model":"claude-opus-5-5","content":"c"}}"#, "\n",
+            r#"{"type":"assistant","message":{"model":"<synthetic>","content":"d"}}"#, "\n",
+            "not json\n",
+        );
+        assert_eq!(last_model_in(jsonl).as_deref(), Some("opus"));
+        assert_eq!(last_model_in(r#"{"type":"user","message":{"content":"x"}}"#), None);
+    }
+
+    #[test]
+    fn last_model_reads_only_the_tail_of_a_long_file() {
+        let dir = std::env::temp_dir().join(format!("sm-model-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("t.jsonl");
+        let filler = format!("{}\n", "x".repeat(1000)).repeat(400); // ~400 KB, beyond the tail window
+        let body = format!(
+            "{}\n{}{}\n",
+            r#"{"type":"assistant","message":{"model":"claude-haiku-5-5"}}"#,
+            filler,
+            r#"{"type":"assistant","message":{"model":"claude-fable-5-1"}}"#
+        );
+        std::fs::write(&p, body).unwrap();
+        assert_eq!(last_model(&p).as_deref(), Some("fable"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     #[test]
     fn summarise_text_and_tools() {

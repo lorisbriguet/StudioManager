@@ -6,7 +6,7 @@ use super::actions::{fetch_agents, home_dir, retain_dismissed};
 use super::cli::read_settings;
 use super::model::{apply_quiet, Agent, Group};
 use super::projects::{load_index, FolderIndex};
-use super::transcript::{last_change_ms, locate};
+use super::transcript::{last_change_ms, last_model, locate};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -85,11 +85,43 @@ pub fn quiet_pass(
     apply_quiet(agents, now_ms, last_change_ms, &dismissed);
 }
 
-fn label_and_quiet(agents: &mut [Agent], index: &FolderIndex, app_dir: &std::path::Path) {
+/// The model last read from each agent's transcript, keyed by session id, with the
+/// transcript's modification time it was read at.
+pub type ModelCache = HashMap<String, (i64, Option<String>)>;
+
+/// Fills in `model` for agents the CLI didn't report one for, from their transcript's newest
+/// reply. A transcript is only read again when its modification time changed.
+pub fn fill_models(
+    agents: &mut [Agent],
+    cache: &mut ModelCache,
+    mtime_of: &dyn Fn(&Agent) -> Option<i64>,
+    read_model: &dyn Fn(&Agent) -> Option<String>,
+) {
+    for a in agents.iter_mut().filter(|a| a.model.is_none()) {
+        let Some(mtime) = mtime_of(a) else { continue };
+        let fresh = matches!(cache.get(&a.session_id), Some((t, _)) if *t == mtime);
+        if !fresh {
+            cache.insert(a.session_id.clone(), (mtime, read_model(a)));
+        }
+        a.model = cache.get(&a.session_id).and_then(|(_, m)| m.clone());
+    }
+    // Forget agents that are gone.
+    cache.retain(|id, _| agents.iter().any(|a| &a.session_id == id));
+}
+
+fn label_and_quiet(
+    agents: &mut [Agent],
+    index: &FolderIndex,
+    app_dir: &std::path::Path,
+    models: &mut ModelCache,
+) {
     for a in agents.iter_mut() {
         a.project = index.label_for(&a.cwd);
     }
     let claude_dir = home_dir().join(".claude");
+    let mtime = |a: &Agent| locate(&claude_dir, &a.session_id).and_then(|p| last_change_ms(&p));
+    let read = |a: &Agent| locate(&claude_dir, &a.session_id).and_then(|p| last_model(&p));
+    fill_models(agents, models, &mtime, &read);
     let last = |a: &Agent| locate(&claude_dir, &a.session_id).and_then(|p| last_change_ms(&p));
     quiet_pass(agents, app_dir, now_ms(), &last);
 }
@@ -112,6 +144,7 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
     let mut poll = PollState::default();
     let mut index = FolderIndex::default();
     let mut index_at: Option<Instant> = None;
+    let mut models = ModelCache::new();
     loop {
         std::thread::sleep(POLL_INTERVAL);
         let Some(state) = app.try_state::<super::AgentsState>() else {
@@ -137,7 +170,7 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
             index_at = Some(Instant::now());
         }
         let result = fetch_agents(&cli).map(|mut v| {
-            label_and_quiet(&mut v, &index, &state.app_dir);
+            label_and_quiet(&mut v, &index, &state.app_dir, &mut models);
             v
         });
         let (emit, notify) = poll_once(&mut poll, result);
@@ -180,6 +213,42 @@ mod tests {
             kind: Kind::Background, status: "busy".into(), state: None, waiting_for: None,
             started_at: 0, group: g, quiet: None, project: None, model: None,
         }
+    }
+
+    #[test]
+    fn fill_models_reads_once_per_transcript_change() {
+        use std::cell::{Cell, RefCell};
+        let reads = Cell::new(0);
+        let mtime = Cell::new(100);
+        let model = RefCell::new("opus".to_string());
+        let mtime_of = |_: &Agent| Some(mtime.get());
+        let read = |_: &Agent| {
+            reads.set(reads.get() + 1);
+            Some(model.borrow().clone())
+        };
+        let mut cache = ModelCache::new();
+
+        let mut v = vec![ag("a", Group::Working)];
+        fill_models(&mut v, &mut cache, &mtime_of, &read);
+        assert_eq!(v[0].model.as_deref(), Some("opus"));
+
+        // Same transcript: no new read, model kept.
+        let mut v = vec![ag("a", Group::Working)];
+        fill_models(&mut v, &mut cache, &mtime_of, &read);
+        assert_eq!((reads.get(), v[0].model.as_deref()), (1, Some("opus")));
+
+        // Transcript changed (model switched): read again.
+        mtime.set(200);
+        *model.borrow_mut() = "sonnet".into();
+        let mut v = vec![ag("a", Group::Working)];
+        fill_models(&mut v, &mut cache, &mtime_of, &read);
+        assert_eq!((reads.get(), v[0].model.as_deref()), (2, Some("sonnet")));
+
+        // A model the CLI reports wins and costs no read; gone agents leave the cache.
+        let mut v = vec![Agent { model: Some("haiku".into()), ..ag("b", Group::Idle) }];
+        fill_models(&mut v, &mut cache, &mtime_of, &read);
+        assert_eq!((reads.get(), v[0].model.as_deref()), (2, Some("haiku")));
+        assert!(cache.is_empty());
     }
 
     #[test]
