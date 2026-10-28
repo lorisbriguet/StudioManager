@@ -108,6 +108,13 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Link resources to projects
 - Click to open URLs externally
 
+### Wiki
+- Vault-style layout: articles grouped by project, tabs with back/forward, reading and editing modes
+- Links between articles: `/link` or type `[[`, Cmd-click to follow; backlinks with their sentence, outgoing links and unlinked mentions in the side panel
+- Graph view of every article and how they link, one cluster per project; drag dots, pan and zoom
+- A project's own Markdown files (README, design system, docs) show read-only straight from its folder, with their links in the graph
+- Built-in user guide, linked article to article
+
 ### Finance & P&L
 - Real-time profit & loss overview — only sent/paid/overdue invoices count as revenue (drafts excluded)
 - Revenue, operating expenses, social charges breakdown
