@@ -33,6 +33,7 @@ import type { Quote, QuoteStatus, QuoteLineItem } from "../types/quote";
 import type { Client } from "../types/client";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
+import { PILL } from "../components/ui/tokens";
 
 type SortKey = "reference" | "client_name" | "quote_date" | "status" | "total";
 
@@ -355,7 +356,7 @@ export function QuotesPage() {
                     }}
                     variant="bare"
                     fullWidth={false}
-                    className={`px-2 py-0.5 rounded-full ${statusClasses(quoteStatusVariant(q.status))}`}
+                    className={`${PILL} ${statusClasses(quoteStatusVariant(q.status))}`}
                   >
                     {q.status === "draft" && <option value="draft">{t.draft}</option>}
                     <option value="sent">{t.sent}</option>

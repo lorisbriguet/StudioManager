@@ -41,6 +41,7 @@ import type { Client } from "../types/client";
 import type { RecurringFrequency } from "../types/recurring";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
+import { PILL } from "../components/ui/tokens";
 
 const FREQUENCIES: RecurringFrequency[] = ["monthly", "quarterly", "biannual", "annual"];
 
@@ -674,7 +675,7 @@ export function InvoicesPage() {
                             }}
                             variant="bare"
                             fullWidth={false}
-                            className={`px-2 py-0.5 rounded-full ${statusClasses(invoiceStatusVariant(inv.status), inv.status)}`}
+                            className={`${PILL} ${statusClasses(invoiceStatusVariant(inv.status), inv.status)}`}
                           >
                             {inv.status === "draft" && <option value="draft">{t.draft}</option>}
                             <option value="sent">{t.sent}</option>

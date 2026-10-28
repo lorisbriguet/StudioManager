@@ -1,3 +1,4 @@
+import { PILL, PILL_XS } from "./tokens";
 export type BadgeVariant = "success" | "warning" | "danger" | "neutral" | "accent" | "info" | "indigo";
 
 interface BadgeProps {
@@ -9,8 +10,10 @@ interface BadgeProps {
 }
 
 const SIZE = {
-  sm: "text-xs px-2.5 py-0.5 gap-1",
-  xs: "text-[10px] px-1.5 py-px gap-1",
+  /** 20px */
+  sm: PILL,
+  /** 16px: dense rows, beside a form label */
+  xs: PILL_XS,
 };
 
 export const variantClasses: Record<BadgeVariant, string> = {
@@ -25,7 +28,7 @@ export const variantClasses: Record<BadgeVariant, string> = {
 
 export function Badge({ variant, children, size = "sm", className = "" }: BadgeProps) {
   return (
-    <span className={`inline-flex items-center rounded-full font-medium status-transition ${SIZE[size]} ${variantClasses[variant]} ${className}`}>
+    <span className={`status-transition ${SIZE[size]} ${variantClasses[variant]} ${className}`}>
       {children}
     </span>
   );
@@ -56,7 +59,7 @@ export function CountBadge({
   }[tone];
   return (
     <span
-      className={`inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full text-[10px] font-medium leading-none tabular-nums ${toneCls} ${className}`}
+      className={`${PILL_XS} justify-center min-w-4 px-1 tabular-nums ${toneCls} ${className}`}
     >
       {value > max ? `${max}+` : value}
     </span>

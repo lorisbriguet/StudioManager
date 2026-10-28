@@ -426,7 +426,15 @@ import { Tag } from "../components/ui";
 <Tag name="side_income">{t.side_income}</Tag>      // translated label, colour still from the name
 ```
 
-`sm` (default) is `text-xs px-2 py-0.5`; `xs` is `text-[10px] px-1.5 py-0.5`. Both are `rounded-full font-medium`.
+**Pill heights.** Labels (Tag, Badge, status pills, CountBadge) use two heights, and controls use one:
+
+| | Height | Box | Used by |
+|--|--|--|--|
+| `PILL` | 20px | `px-2 py-0.5 text-xs leading-4 rounded-full font-medium` | Tag, Badge (default), the status pills on invoice, quote and task rows |
+| `PILL_XS` | 16px | `px-1.5 text-[10px] leading-4 rounded-full font-medium` | `size="xs"` on Tag and Badge (dense rows, table cells), CountBadge |
+| `CONTROL_BOX` | 26px | the control box | FilterChip (it's clickable, so it lines up with Button and Select) |
+
+The × on a removable Tag is a 16px round hit area with a hover tint. Deep dive: [StudioManager Pills](https://claude.ai/artifact/WcEWyoB8NSz8JSJTRS5Si3).
 
 ### FilterChip
 
@@ -513,6 +521,7 @@ Shared class strings and small parts that the components are built from (`src/co
 | `CONTROL_BOX` | The 26px control box: `px-2.5 py-1 text-xs leading-4 border` | Button, Input, Select trigger, FilterChip, SegmentedControl (its segments are 22px inside a 2px track, 26px in total) |
 | `MUTED_INTERACTIVE` | Muted text that darkens on hover | NavItem, TabItem, SegmentedControl, FilterChip, SortHeader, DragHandle |
 | `SURFACE` / `SURFACE_FILL` | A raised surface with / without a border. Add the shadow per use | Popover, Modal / BulkActionBar |
+| `PILL` / `PILL_XS` | The 20px and 16px label pills | Tag, Badge, CountBadge, status pills |
 | `MENU_TONE` | Menu row tones | Dropdown, ContextMenu |
 | `revealClass(reveal)` | Reveal-on-hover for `true` or a named group (`"task"` → `group/task`) | IconButton, DragHandle |
 | `useTagColor(name, color?)` | A tag's colours for the current mode | Tag, FilterChip |

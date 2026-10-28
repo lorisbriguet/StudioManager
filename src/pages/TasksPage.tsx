@@ -41,6 +41,7 @@ import { taskStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Task, Subtask, TaskStatus } from "../types/task";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
+import { PILL } from "../components/ui/tokens";
 
 export function TasksPage() {
   const t = useT();
@@ -409,7 +410,7 @@ export function TasksPage() {
                         }
                         variant="bare"
                         fullWidth={false}
-                        className={`px-2 py-1 rounded-full ${statusClasses(taskStatusVariant(tk.status))}`}
+                        className={`${PILL} ${statusClasses(taskStatusVariant(tk.status))}`}
                       >
                         <option value="todo">{t.todo}</option>
                         <option value="done">{t.done}</option>

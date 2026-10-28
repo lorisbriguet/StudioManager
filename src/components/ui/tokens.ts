@@ -18,3 +18,11 @@ export const SURFACE_FILL = "bg-[var(--color-surface)] rounded-xl";
 
 /** A raised surface: popovers, menus, dialogs. Add the shadow per use. */
 export const SURFACE = `${SURFACE_FILL} border border-[var(--color-border-header)]`;
+
+/**
+ * Label pills (they label, they don't act): Tag, Badge, status pills.
+ * PILL is 20px = py-0.5 (4px) + 16px line. PILL_XS is 16px = the 16px line alone,
+ * for dense rows and numbers (CountBadge). FilterChip is a control and uses CONTROL_BOX.
+ */
+export const PILL = "inline-flex items-center gap-1 rounded-full font-medium whitespace-nowrap px-2 py-0.5 text-xs leading-4";
+export const PILL_XS = "inline-flex items-center gap-1 rounded-full font-medium whitespace-nowrap px-1.5 text-[10px] leading-4";

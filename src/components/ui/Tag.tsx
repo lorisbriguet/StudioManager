@@ -2,6 +2,7 @@ import type { MouseEvent, ReactNode } from "react";
 import { X } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useTagColor } from "./tagColor";
+import { PILL, PILL_XS } from "./tokens";
 
 /**
  * Tag — a coloured pill for user tags and list options. See DESIGN-SYSTEM.md, "Tags".
@@ -29,14 +30,16 @@ export interface TagProps {
 }
 
 const SIZE = {
-  sm: { box: "text-xs px-2 py-0.5 gap-1", x: 10 },
-  xs: { box: "text-[10px] px-1.5 py-0.5 gap-0.5", x: 10 },
+  /** 20px */
+  sm: { box: PILL, x: 10 },
+  /** 16px: dense rows, table cells */
+  xs: { box: PILL_XS, x: 10 },
 };
 
 export function Tag({ name, color, children, size = "sm", onRemove, onClick, title, className = "" }: TagProps) {
   const t = useT();
   const c = useTagColor(name, color);
-  const cls = `inline-flex items-center rounded-full font-medium whitespace-nowrap max-w-full ${SIZE[size].box} ${className}`;
+  const cls = `${SIZE[size].box} max-w-full ${className}`;
   const style = { background: c.bg, color: c.text };
   const label = <span className="truncate">{children ?? name}</span>;
 
@@ -65,7 +68,7 @@ export function Tag({ name, color, children, size = "sm", onRemove, onClick, tit
           }}
           aria-label={`${t.remove_tag} ${name}`}
           title={`${t.remove_tag} ${name}`}
-          className="shrink-0 -mr-0.5 rounded-full opacity-60 hover:opacity-100 focus-accent transition-opacity"
+          className="shrink-0 -mr-1 w-4 h-4 grid place-items-center rounded-full opacity-60 hover:opacity-100 hover:bg-black/10 focus-accent transition"
         >
           <X size={SIZE[size].x} aria-hidden="true" />
         </button>

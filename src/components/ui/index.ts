@@ -36,6 +36,6 @@ export { Kbd } from "./Kbd";
 export { Tooltip, useTooltip } from "./Tooltip";
 export { ProgressBar, Callout, ConfirmButton, DragHandle } from "./Feedback";
 export { Checkbox, Radio } from "./Checkbox";
-export { CONTROL_BOX, MUTED_INTERACTIVE, SURFACE, SURFACE_FILL } from "./tokens";
+export { CONTROL_BOX, MUTED_INTERACTIVE, SURFACE, SURFACE_FILL, PILL, PILL_XS } from "./tokens";
 export { PanelTitle } from "./PanelTitle";
 export type { PanelTitleProps } from "./PanelTitle";
