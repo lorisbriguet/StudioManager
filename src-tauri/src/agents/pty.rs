@@ -16,6 +16,8 @@ const ENTER_AFTER_MS: u64 = 300;
 const TEMP_CLOSE_AFTER_MS: u64 = 2_000;
 const TEMP_COLS: u16 = 80;
 const TEMP_ROWS: u16 = 24;
+/// A watch terminal is closed once it has not been used for this long.
+pub const WATCH_IDLE_MS: i64 = 5_000;
 /// A prompt opened while the message was being typed: the Enter was not sent.
 pub const PROMPT_OPENED: &str =
     "Answer the open prompt first. Your message was typed but not sent: it is still in the input.";
@@ -37,6 +39,8 @@ pub trait PtySpawner: Send + Sync {
 pub trait Clock: Send + Sync {
     fn now_ms(&self) -> i64;
     fn sleep_ms(&self, ms: u64);
+    /// Returns once `now_ms()` has reached `t`, without moving time on.
+    fn sleep_until_ms(&self, t: i64);
 }
 
 pub struct SystemClock;
@@ -47,6 +51,12 @@ impl Clock for SystemClock {
     }
     fn sleep_ms(&self, ms: u64) {
         std::thread::sleep(std::time::Duration::from_millis(ms));
+    }
+    fn sleep_until_ms(&self, t: i64) {
+        let left = t - self.now_ms();
+        if left > 0 {
+            self.sleep_ms(left as u64);
+        }
     }
 }
 
@@ -126,7 +136,7 @@ struct Term {
     parser: Mutex<vt100::Parser>,
     /// Epoch ms of the latest output; 0 before any.
     last_output: AtomicI64,
-    /// Opened for one send or answer, and never handed out by `existing`.
+    /// Opened for one send or answer, or as a watch terminal; never handed out by `existing`.
     temporary: bool,
 }
 
@@ -154,6 +164,15 @@ struct Inner {
     /// Short ids being sent to or answered; see `lock_agent`.
     busy: Mutex<HashSet<String>>,
     freed: Condvar,
+    /// Watch terminals by short id; see `watch`.
+    watches: Mutex<HashMap<String, Watch>>,
+}
+
+/// A hidden terminal kept attached while an agent's prompt is being read.
+struct Watch {
+    term_id: u32,
+    /// Epoch ms of the latest read or answer through it.
+    last_used: i64,
 }
 
 /// Holds an agent for one send, prompt read or answer; released on drop. Can be moved to the
@@ -192,6 +211,7 @@ impl TerminalHub {
                 terms: Mutex::default(),
                 busy: Mutex::default(),
                 freed: Condvar::new(),
+                watches: Mutex::default(),
             }),
         }
     }
@@ -237,7 +257,7 @@ impl TerminalHub {
         self.open_term(short_id, cols, rows, on_data, on_exit, false)
     }
 
-    /// Attaches a terminal for one send or answer: `existing` never returns it.
+    /// Attaches a terminal for one send, answer or watch: `existing` never returns it.
     pub fn open_temporary(&self, short_id: &str, cols: u16, rows: u16) -> Result<u32, String> {
         self.open_term(short_id, cols, rows, Box::new(|_, _| {}), Box::new(|_| {}), true)
     }
@@ -340,9 +360,62 @@ impl TerminalHub {
 
     /// Closes every terminal (Agents switched off). Each reader thread still runs its `on_exit`.
     pub fn close_all(&self) {
+        lock(&self.inner.watches).clear();
         let terms: Vec<Arc<Term>> = lock(&self.inner.terms).live.drain().map(|(_, t)| t).collect();
         for term in terms {
             term.end();
+        }
+    }
+
+    /// The agent's live watch terminal, if any. The caller holds the agent (`lock_agent`).
+    pub fn watching(&self, short_id: &str) -> Option<u32> {
+        let id = lock(&self.inner.watches).get(short_id).map(|w| w.term_id)?;
+        self.get(id).map(|_| id)
+    }
+
+    /// The agent's watch terminal: a temporary terminal (never handed out by `existing`) reused
+    /// by every prompt read, so reading every 2 s does not attach and detach every 2 s. It is
+    /// closed `WATCH_IDLE_MS` after its last use (`touch_watch`). The caller holds the agent.
+    pub fn watch(&self, short_id: &str, cols: u16, rows: u16) -> Result<u32, String> {
+        if let Some(id) = self.watching(short_id) {
+            return Ok(id);
+        }
+        let id = self.open_temporary(short_id, cols, rows)?;
+        let last_used = self.inner.clock.now_ms();
+        lock(&self.inner.watches).insert(short_id.to_string(), Watch { term_id: id, last_used });
+        let hub = self.clone();
+        let short_id = short_id.to_string();
+        std::thread::spawn(move || hub.close_when_idle(&short_id, id));
+        Ok(id)
+    }
+
+    /// Marks the agent's watch terminal as used now.
+    pub fn touch_watch(&self, short_id: &str) {
+        let now = self.inner.clock.now_ms();
+        if let Some(w) = lock(&self.inner.watches).get_mut(short_id) {
+            w.last_used = now;
+        }
+    }
+
+    /// Watch thread: closes watch terminal `id` once idle, unless another watch replaced it.
+    fn close_when_idle(&self, short_id: &str, id: u32) {
+        let clock = self.inner.clock.clone();
+        let last_used = |w: &HashMap<String, Watch>| {
+            w.get(short_id).filter(|w| w.term_id == id).map(|w| w.last_used)
+        };
+        loop {
+            let Some(last) = last_used(&lock(&self.inner.watches)) else { return };
+            clock.sleep_until_ms(last + WATCH_IDLE_MS);
+            // Not while a read or answer is using it.
+            let _held = self.lock_agent(short_id);
+            let mut watches = lock(&self.inner.watches);
+            let Some(last) = last_used(&watches) else { return };
+            if clock.now_ms() - last >= WATCH_IDLE_MS {
+                watches.remove(short_id);
+                drop(watches);
+                self.close(id);
+                return;
+            }
         }
     }
 
@@ -653,6 +726,12 @@ pub(super) mod tests {
             self.now.fetch_add(ms as i64, Ordering::SeqCst);
             // Let the reader threads run.
             std::thread::sleep(Duration::from_millis(1));
+        }
+        fn sleep_until_ms(&self, t: i64) {
+            // Time moves only when a test or another sleeper moves it.
+            while self.now_ms() < t {
+                std::thread::sleep(Duration::from_millis(2));
+            }
         }
     }
 

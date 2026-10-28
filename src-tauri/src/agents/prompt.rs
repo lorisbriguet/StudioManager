@@ -194,25 +194,31 @@ pub(super) fn settled_screen(hub: &TerminalHub, id: u32, since: i64) -> Result<S
     }
 }
 
-/// The agent's open panel, or a new temporary terminal (`true`).
+/// Where an answer types: the agent's open panel, else its watch terminal (left open for the
+/// next read), else a new temporary terminal (`true`).
 fn attach(hub: &TerminalHub, short_id: &str) -> Result<(u32, bool), String> {
-    match hub.existing(short_id) {
+    match hub.existing(short_id).or_else(|| hub.watching(short_id)) {
         Some(id) => Ok((id, false)),
         None => Ok((hub.open_temporary(short_id, TEMP_COLS, TEMP_ROWS)?, true)),
     }
 }
 
-/// The prompt the agent waits on, if any.
+/// The prompt the agent waits on, if any: read from its open panel, or else from its watch
+/// terminal, which stays attached between reads and closes 5 s after the last one.
 pub fn read_prompt(hub: &TerminalHub, short_id: &str) -> Result<Option<Prompt>, String> {
     if !valid_short_id(short_id) {
         return Err("Invalid agent id".into());
     }
     let _held = hub.lock_agent(short_id);
-    let (id, temp) = attach(hub, short_id)?;
-    let screen = settled_screen(hub, id, 0);
-    if temp {
-        hub.close(id);
-    }
+    let screen = match hub.existing(short_id) {
+        Some(id) => settled_screen(hub, id, 0),
+        None => {
+            let id = hub.watch(short_id, TEMP_COLS, TEMP_ROWS)?;
+            let screen = settled_screen(hub, id, 0);
+            hub.touch_watch(short_id);
+            screen
+        }
+    };
     Ok(parse_prompt(&screen?))
 }
 
@@ -233,6 +239,7 @@ pub fn answer(
     let held = hub.lock_agent(short_id);
     let (id, temp) = attach(hub, short_id)?;
     let result = choose(hub, id, number, expected_label, fingerprint);
+    hub.touch_watch(short_id);
     if temp {
         if result.is_ok() {
             // The agent stays held until its temporary terminal is gone.
@@ -591,6 +598,7 @@ mod tests {
 
     struct Fake {
         hub: TerminalHub,
+        clock: Arc<FakeClock>,
         writes: Arc<Mutex<Vec<String>>>,
         killed: Arc<AtomicBool>,
         max_live: Arc<AtomicUsize>,
@@ -620,7 +628,7 @@ mod tests {
             max_live: max_live.clone(),
         };
         let clock = Arc::new(FakeClock { now: AtomicI64::new(1_000), ..Default::default() });
-        Fake { hub: TerminalHub::new(Arc::new(spawner), clock), writes, killed, max_live }
+        Fake { hub: TerminalHub::new(Arc::new(spawner), clock.clone()), clock, writes, killed, max_live }
     }
 
     #[test]
@@ -686,15 +694,37 @@ mod tests {
     }
 
     #[test]
-    fn read_prompt_through_temporary_terminal() {
+    fn reads_share_one_watch_terminal_closed_when_idle() {
         let f = fake(FIRST, None);
         let p = read_prompt(&f.hub, "0a1b2c3d").unwrap().expect("prompt");
         assert_eq!(p.options, vec![opt(1, "Yes", true), opt(2, "No", false)]);
         assert_eq!(p.detail, "Bash command\ntouch /tmp/demo/a");
-        assert!(f.writes().is_empty());
-        assert_eq!(f.hub.len(), 0);
+        assert_eq!(f.hub.len(), 1, "the watch terminal stays attached");
+        assert_eq!(f.hub.existing("0a1b2c3d"), None, "and is never handed out");
+        // A read 2 s later reuses it.
+        f.clock.now.fetch_add(2_000, Ordering::SeqCst);
+        assert!(read_prompt(&f.hub, "0a1b2c3d").unwrap().is_some());
+        assert_eq!(f.max_live.load(Ordering::SeqCst), 1, "one terminal for both reads");
+        // 4 s after the last read it is still open; at 5 s it closes.
+        f.clock.now.fetch_add(4_000, Ordering::SeqCst);
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert_eq!(f.hub.len(), 1);
+        assert!(!f.killed.load(Ordering::SeqCst));
+        f.clock.now.fetch_add(1_000, Ordering::SeqCst);
+        assert!(eventually(|| f.hub.len() == 0), "closed after 5 s idle");
         assert!(f.killed.load(Ordering::SeqCst));
+        assert!(f.writes().is_empty(), "reading never types");
         assert!(read_prompt(&f.hub, "nope").is_err());
+    }
+
+    #[test]
+    fn answer_reuses_watch_terminal() {
+        let f = fake(FIRST, Some(MOVED));
+        read_prompt(&f.hub, "0a1b2c3d").unwrap().expect("prompt");
+        answer(&f.hub, "0a1b2c3d", 2, "No", &fingerprint(FIRST)).unwrap();
+        assert_eq!(f.writes(), vec!["\x1b[B", "\r"]);
+        assert_eq!(f.max_live.load(Ordering::SeqCst), 1);
+        assert_eq!(f.hub.len(), 1, "the watch terminal stays for the next read");
     }
 
     #[test]
@@ -717,7 +747,7 @@ mod tests {
         for t in threads {
             assert!(t.join().unwrap().unwrap().is_some());
         }
-        // An answer's terminal lingers for a second; a read meanwhile waits for it to close.
+        // The answer and the next read go through the same watch terminal.
         answer(&f.hub, "0a1b2c3d", 1, "Yes", &fingerprint(FIRST)).unwrap();
         read_prompt(&f.hub, "0a1b2c3d").unwrap();
         assert_eq!(f.max_live.load(Ordering::SeqCst), 1);
