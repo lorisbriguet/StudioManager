@@ -429,6 +429,29 @@ import { invoiceStatusVariant, quoteStatusVariant, taskStatusVariant, projectSta
 
 ---
 
+## Navigation
+
+Rows in a navigation list use `src/components/ui/NavItem.tsx`: the app sidebar, settings and profile categories, the wiki explorer and custom lists.
+
+```tsx
+<NavItem active={cat === key} icon={<Palette size={14} />} onClick={() => setCat(key)}>{t.appearance}</NavItem>
+
+// router link, or a row that holds other controls
+<NavLink className={({ isActive }) => navItemClass({ active: isActive, size: "md", fill: false })} />
+<div className={`${navItemClass({ active })} group`}>…</div>
+```
+
+| Size | Classes | Use |
+|------|---------|-----|
+| `sm` (default) | `gap-2 px-3 py-1.5 text-xs` | Settings, wiki explorer, custom lists |
+| `md` | `gap-2.5 px-3.5 py-1.5 text-sm` | App sidebar, profile |
+
+- **Active row:** `bg-accent-light text-accent font-medium` and `aria-current="page"`.
+- **Inactive row:** `text-muted`, turning `hover-row` with secondary text on hover.
+- **Width:** rows are full width. Pass `fill: false` when the row has side margins.
+
+---
+
 ## Settings
 
 Settings pages use `src/components/ui/Settings.tsx`. Never rebuild the card shell or its header by hand.
@@ -617,5 +640,6 @@ Before merging any new UI work, verify:
 - [ ] Icon-only buttons use `IconButton`
 - [ ] Uppercase labels use `SectionLabel`
 - [ ] Settings sections use `SettingsCard` / `SettingRow`
+- [ ] Navigation rows use `NavItem` / `navItemClass`
 - [ ] Tag pills use `Tag`, filter pills use `FilterChip`, number pills use `CountBadge`
 - [ ] No hand-made floating panel (use `Popover`, `Dropdown` or `ContextMenu`)

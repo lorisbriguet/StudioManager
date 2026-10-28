@@ -6,6 +6,7 @@ import { useT } from "../../i18n/useT";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useUpdateCustomList, useDeleteCustomList, useSetCustomListItems } from "../../db/hooks/useCustomLists";
 import { normalizeTagColorName, TAG_COLOR_NAMES } from "../../lib/tagColors";
 import { Button, Select, IconButton, Tag } from "../ui";
+import { navItemClass } from "../ui/NavItem";
 
 export function CustomListsManager() {
   const t = useT();
@@ -98,7 +99,7 @@ export function CustomListsManager() {
             <p className="text-xs text-muted py-2">{t.no_lists}</p>
           )}
           {allLists.map((list) => (
-            <div key={list.id} className={`flex items-center gap-1 rounded-md px-2 py-1.5 group cursor-pointer ${selectedId === list.id ? "bg-accent-light text-accent" : "hover:bg-[var(--color-hover-row)]"}`}>
+            <div key={list.id} className={`${navItemClass({ active: selectedId === list.id })} group cursor-pointer`}>
               {renamingId === list.id ? (
                 <input
                   value={renameValue}

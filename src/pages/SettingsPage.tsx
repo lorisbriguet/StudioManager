@@ -15,7 +15,7 @@ import { useT } from "../i18n/useT";
 import type { AppLanguage } from "../i18n/ui";
 import { UpdateChecker } from "../components/UpdateChecker";
 import { WorkloadTemplateManager } from "../components/workload/WorkloadTemplateManager";
-import { Input, Select, Button, IconButton, SectionLabel, SettingRow, SettingsCard } from "../components/ui";
+import { Input, Select, Button, IconButton, SectionLabel, SettingRow, SettingsCard, NavItem } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
 import { AgentAccessCard } from "../components/settings/AgentAccessCard";
@@ -391,22 +391,16 @@ export function SettingsPage() {
           {categorySections.map((section) => (
             <div key={section.label}>
               <SectionLabel className="px-3 mb-1">{section.label}</SectionLabel>
-              <div className="space-y-px">
+              <div className="space-y-px px-1">
                 {section.items.map((cat) => (
-                  <button
+                  <NavItem
                     key={cat.key}
-                    type="button"
+                    active={activeCategory === cat.key}
+                    icon={cat.icon}
                     onClick={() => setActiveCategory(cat.key)}
-                    className={`w-full text-left px-3 py-1.5 mx-1 rounded-md text-xs transition-colors flex items-center gap-2 ${
-                      activeCategory === cat.key
-                        ? "bg-accent-light text-accent font-medium"
-                        : "text-muted hover:bg-[var(--color-hover-row)]"
-                    }`}
-                    style={{ width: "calc(100% - 8px)" }}
                   >
-                    {cat.icon}
                     {cat.label}
-                  </button>
+                  </NavItem>
                 ))}
               </div>
             </div>

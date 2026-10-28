@@ -31,6 +31,7 @@ import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
 import type { UIKey } from "../../i18n/ui";
 import { BOTTOM_BAR, CountBadge } from "../ui";
+import { navItemClass } from "../ui/NavItem";
 
 type NavItem = { to: string; icon: typeof LayoutDashboard; labelKey: UIKey };
 type SidebarItem = NavItem | { divider: true };
@@ -234,11 +235,7 @@ export function Sidebar() {
                 }
               }}
               className={({ isActive }) =>
-                `flex items-center gap-2.5 px-3.5 py-1.5 mx-2 rounded-md text-sm transition-colors ${
-                  isActive
-                    ? "bg-accent-light text-accent font-medium"
-                    : "text-muted hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
-                }${isFocused ? " ring-2 ring-accent/40 ring-inset" : ""}`
+                `${navItemClass({ active: isActive, size: "md", fill: false })} mx-2${isFocused ? " ring-2 ring-accent/40 ring-inset" : ""}`
               }
             >
               <span className="relative">

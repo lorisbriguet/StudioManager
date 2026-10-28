@@ -21,6 +21,7 @@ import {
   useDeleteInvoiceTemplate,
 } from "../db/hooks/useInvoiceTemplates";
 import type { InvoiceTemplate } from "../types/invoice-template";
+import { NavItem } from "../components/ui/NavItem";
 
 type FormData = Omit<BusinessProfile, "id">;
 
@@ -146,22 +147,18 @@ export function ProfilePage() {
         <h1 className="text-xl font-semibold px-6 mb-6">{t.profile}</h1>
         <nav className="space-y-0.5 px-3">
           {categories.map((cat) => (
-            <button
+            <NavItem
               key={cat.key}
-              type="button"
+              size="md"
+              active={activeCategory === cat.key}
+              icon={cat.icon}
               onClick={() => {
                 setActiveCategory(cat.key);
                 setEditingTemplate(null);
               }}
-              className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 ${
-                activeCategory === cat.key
-                  ? "bg-accent-light text-accent font-medium"
-                  : "text-muted hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text)]"
-              }`}
             >
-              {cat.icon && <span className="shrink-0">{cat.icon}</span>}
               {cat.label}
-            </button>
+            </NavItem>
           ))}
         </nav>
       </div>

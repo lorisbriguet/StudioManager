@@ -20,6 +20,7 @@ import type { ProjectDoc } from "../../db/hooks/useProjectDocs";
 import type { WikiRef } from "../../lib/wikiTabs";
 import { colorFor } from "./wikiColors";
 import { ContextMenu } from "../ContextMenu";
+import { navItemClass } from "../ui/NavItem";
 
 interface Group {
   key: string;
@@ -149,10 +150,7 @@ export function WikiExplorer({
     (d: ProjectDoc) => !query || d.rel.toLowerCase().includes(query) || d.title.toLowerCase().includes(query),
     [query]
   );
-  const rowClass = (active: boolean) =>
-    `w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-xs text-left transition-colors ${
-      active ? "bg-accent-light text-accent font-medium" : "text-muted hover:bg-[var(--color-hover-row)]"
-    }`;
+  const rowClass = (active: boolean) => navItemClass({ active });
 
   return (
     <aside

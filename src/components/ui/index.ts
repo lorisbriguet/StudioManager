@@ -20,3 +20,4 @@ export { PageSpinner } from "./Spinner";
 export { TableSkeleton } from "./TableSkeleton";
 export { BottomBar, BOTTOM_BAR, PANEL_TOP_BAR } from "./Bars";
 export { TabItem } from "./TabItem";
+export { NavItem, navItemClass } from "./NavItem";
