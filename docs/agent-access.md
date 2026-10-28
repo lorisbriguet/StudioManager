@@ -6,7 +6,7 @@ It is off until you turn it on. To watch and answer Claude Code agents running o
 
 ## Turning it on
 
-1. Open StudioManager, then Settings > Agent access.
+1. Open StudioManager, then Settings > Agents (Agent access card).
 2. Switch on "Allow AI agents to use StudioManager".
 3. Pick the organisations agents may use. An organisation you leave unticked is invisible to agents.
 4. Optionally allow agents to read invoices, quotes and expenses (the "money" tools below). This is a separate switch and is off by default. The money tools appear in the AI app only after it restarts the StudioManager server (quit and reopen the AI app, or reconnect the server) after you switch this on.
@@ -17,7 +17,7 @@ The settings are stored in `agent-access.json` in the app's data folder. If the 
 
 ## Connecting a client
 
-The program lives inside the app bundle at `StudioManager.app/Contents/MacOS/studiomanager-mcp`. Settings > Agent access shows the exact path and ready-made snippets.
+The program lives inside the app bundle at `StudioManager.app/Contents/MacOS/studiomanager-mcp`. Settings > Agents (Agent access card) shows the exact path and ready-made snippets.
 
 - **Claude Desktop:** press "Add…". The app shows the change to Claude Desktop's configuration file, backs the file up next to itself, and writes it only after you confirm. Restart Claude Desktop afterwards.
 - **Claude Code:** copy the command shown in Settings and run it in a terminal, for example `claude mcp add studiomanager -- '/Applications/StudioManager.app/Contents/MacOS/studiomanager-mcp'`.
@@ -51,7 +51,7 @@ That is 26 tools, 5 of them money tools. Names given to the tools (projects, cli
 
 - **No deletes.** No tool removes or drops anything. Task and subtask status can only be set to `todo` or `done`.
 - **Backups.** Before the first write per organisation in a session, the server takes a full copy of the database to `<data folder>/backups/agent/`. The 20 most recent per organisation are kept.
-- **Change log.** Every write adds a line to `<data folder>/agent-log.jsonl` (time, organisation, tool, summary); the last 500 lines are kept. Settings > Agent access shows the recent entries.
+- **Change log.** Every write adds a line to `<data folder>/agent-log.jsonl` (time, organisation, tool, summary); the last 500 lines are kept. Settings > Agents (Agent access card) shows the recent entries.
 - **Test and presentation mode.** While either mode is active, writes are refused. Reads still work on the real data.
 - **Apple Calendar.** If calendar sync is on, changes an agent makes to a task's or subtask's due date or status are not pushed to Apple Calendar. The event catches up the next time you edit that task in the app.
 - **Fields agents never write:** calendar links, workload fields, layout configuration and tracked time.
