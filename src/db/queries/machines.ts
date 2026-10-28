@@ -59,6 +59,12 @@ export async function updateMachine(id: number, data: Partial<MachineInput>): Pr
   validateFields(fields);
   const db = await getDb();
   const sets = fields.map((f, i) => `${f} = $${i + 1}`);
+  // A new warranty date is a new warranty notice; saving the same date keeps
+  // the marker (SQLite reads the old row in every right-hand side).
+  const wi = fields.indexOf("warranty_until");
+  if (wi >= 0) {
+    sets.push(`warranty_notified_for = CASE WHEN warranty_until IS $${wi + 1} THEN warranty_notified_for ELSE NULL END`);
+  }
   sets.push("updated_at = datetime('now')");
   await db.execute(
     `UPDATE machines SET ${sets.join(", ")} WHERE id = $${fields.length + 1}`,

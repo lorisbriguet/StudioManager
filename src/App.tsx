@@ -39,6 +39,7 @@ import { QuickTimerModal } from "./components/QuickTimerModal";
 import { OrgGate } from "./components/OrgGate";
 import { PageSpinner } from "./components/ui";
 import { useOverdueCheck } from "./hooks/useOverdueCheck";
+import { useUpkeepCheck } from "./hooks/useUpkeepCheck";
 import { useRecurringCheck } from "./hooks/useRecurringCheck";
 import { useAutoBackup } from "./hooks/useAutoBackup";
 import { useGuideUpdateCheck } from "./hooks/useGuideUpdateCheck";
@@ -54,6 +55,7 @@ import { queryClient } from "./lib/queryClient";
 
 function StartupChecks() {
   useOverdueCheck();
+  useUpkeepCheck();
   useRecurringCheck();
   useAutoBackup();
   useGuideUpdateCheck();

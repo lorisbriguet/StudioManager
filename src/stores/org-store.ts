@@ -51,6 +51,9 @@ export function applyPrefsToAppStore(prefs: OrgPrefs): void {
     calendarSync: prefs.calendarSync,
     calendarName: prefs.calendarName,
     upkeepAlertDefault: prefs.upkeepAlertDefault ?? "day_9am",
+    upkeepSoonDays: prefs.upkeepSoonDays ?? 14,
+    warrantyWindowDays: prefs.warrantyWindowDays ?? 60,
+    renewalWindowDays: prefs.renewalWindowDays ?? 14,
     backupPath: prefs.backupPath,
     exportLanguage: prefs.exportLanguage,
   });

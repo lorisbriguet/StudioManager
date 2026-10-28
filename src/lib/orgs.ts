@@ -10,6 +10,12 @@ export interface OrgPrefs {
   calendarName: string;
   /** Absent in registries written before upkeep; read as 'day_9am'. */
   upkeepAlertDefault?: Exclude<UpkeepAlert, "default">;
+  /** Absent in older registries; read as 14. */
+  upkeepSoonDays?: number;
+  /** Absent in older registries; read as 60. */
+  warrantyWindowDays?: number;
+  /** Absent in older registries; read as 14. */
+  renewalWindowDays?: number;
   backupPath: string;
   exportLanguage: AppLanguage;
 }
@@ -35,6 +41,9 @@ export const DEFAULT_ORG_PREFS: OrgPrefs = {
   calendarSync: false,
   calendarName: "StudioManager",
   upkeepAlertDefault: "day_9am",
+  upkeepSoonDays: 14,
+  warrantyWindowDays: 60,
+  renewalWindowDays: 14,
   backupPath: "",
   exportLanguage: "FR",
 };
