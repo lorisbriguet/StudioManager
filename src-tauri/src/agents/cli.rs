@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 const READER_GRACE: Duration = Duration::from_millis(500);
@@ -42,6 +42,33 @@ impl Default for AgentsSettings {
 /// The menu bar is part of the Agents feature: it cannot be on while Agents is off.
 pub fn can_enable_menu_bar(s: &AgentsSettings) -> bool {
     s.enabled
+}
+
+/// Serialises every read-modify-write of `agents.json` and the menu bar icon's check-then-build
+/// that follows a change (`menubar::sync_tray` takes the guard as proof): two quick toggles
+/// can't lose a write or leave an icon and a panel behind while `menuBar` is false.
+static SETTINGS_LOCK: Mutex<()> = Mutex::new(());
+
+/// Held while `agents.json` is changed and the menu bar follows it.
+pub struct SettingsGuard(#[allow(dead_code)] MutexGuard<'static, ()>);
+
+/// Never take it on the main thread while a command may hold it: building the menu bar icon
+/// waits for the main thread.
+pub fn lock_settings() -> SettingsGuard {
+    SettingsGuard(SETTINGS_LOCK.lock().unwrap_or_else(|e| e.into_inner()))
+}
+
+/// Read `agents.json`, change it, write it back, under the settings lock. Nothing is written
+/// when `change` fails.
+pub fn update_settings<R>(
+    dir: &Path,
+    change: impl FnOnce(&mut AgentsSettings) -> Result<R, String>,
+) -> Result<R, String> {
+    let _held = lock_settings();
+    let mut s = read_settings(dir);
+    let out = change(&mut s)?;
+    write_settings(dir, &s)?;
+    Ok(out)
 }
 
 pub fn read_settings(dir: &Path) -> AgentsSettings {
@@ -286,17 +313,22 @@ pub async fn agents_set_enabled(
         if enabled && super::pty::fresh_login_env(&login).claude.is_none() {
             return Err("claude not found".into());
         }
-        let mut s = read_settings(&app_dir);
-        s.enabled = enabled;
-        if !enabled {
-            // The menu bar is part of Agents: it goes off with it, and so does start at login.
-            s.menu_bar = false;
-            // Disabling never fails (best effort).
-            let _ = crate::menubar::set_autostart(&app, false);
+        {
+            let held = lock_settings();
+            let mut s = read_settings(&app_dir);
+            s.enabled = enabled;
+            if !enabled {
+                // The menu bar is part of Agents: it goes off with it, and so does start at login.
+                s.menu_bar = false;
+                // Disabling never fails (best effort).
+                let _ = crate::menubar::set_autostart(&app, false);
+            }
+            write_settings(&app_dir, &s)?;
+            if !enabled {
+                crate::menubar::sync_tray(&app, false, &held);
+            }
         }
-        write_settings(&app_dir, &s)?;
         if !enabled {
-            crate::menubar::sync_tray(&app, false);
             // Each panel still gets `agents:term-exit` from its reader thread.
             hub.close_all();
         }
@@ -315,15 +347,18 @@ pub async fn agents_set_menu_bar(
 ) -> Result<AgentsInfo, String> {
     let (app_dir, login) = (state.app_dir.clone(), state.login_cache());
     super::pty::blocking(move || {
-        let mut s = read_settings(&app_dir);
-        if on && !can_enable_menu_bar(&s) {
-            return Err("Turn the Agents page on first".into());
+        {
+            let held = lock_settings();
+            let mut s = read_settings(&app_dir);
+            if on && !can_enable_menu_bar(&s) {
+                return Err("Turn the Agents page on first".into());
+            }
+            // Start at login first: if macOS refuses it, nothing changes and the card says why.
+            crate::menubar::set_autostart(&app, on)?;
+            s.menu_bar = on;
+            write_settings(&app_dir, &s)?;
+            crate::menubar::sync_tray(&app, on, &held);
         }
-        // Start at login first: if macOS refuses it, nothing changes and the card says why.
-        crate::menubar::set_autostart(&app, on)?;
-        s.menu_bar = on;
-        write_settings(&app_dir, &s)?;
-        crate::menubar::sync_tray(&app, on);
         Ok(info(&app_dir, &login))
     })
     .await
@@ -336,9 +371,10 @@ pub async fn agents_set_limit_alerts(
 ) -> Result<AgentsInfo, String> {
     let (app_dir, login) = (state.app_dir.clone(), state.login_cache());
     super::pty::blocking(move || {
-        let mut s = read_settings(&app_dir);
-        s.limit_alerts = on;
-        write_settings(&app_dir, &s)?;
+        update_settings(&app_dir, |s| {
+            s.limit_alerts = on;
+            Ok(())
+        })?;
         Ok(info(&app_dir, &login))
     })
     .await
@@ -386,6 +422,42 @@ mod tests {
         let off = AgentsSettings { enabled: false, ..Default::default() };
         assert!(can_enable_menu_bar(&on));
         assert!(!can_enable_menu_bar(&off));
+    }
+
+    #[test]
+    fn concurrent_updates_lose_nothing() {
+        let d = tmp("concurrent");
+        write_settings(&d, &AgentsSettings::default()).unwrap();
+        // Each update reads a counter and writes it back plus one; another thread toggles the
+        // menu bar in between. Without the lock, updates read the same value and some are lost.
+        let threads: Vec<_> = (0..8)
+            .map(|i| {
+                let d = d.clone();
+                std::thread::spawn(move || {
+                    for _ in 0..25 {
+                        update_settings(&d, |s| {
+                            let n = s.previous_status_line.as_ref().and_then(|v| v.as_u64()).unwrap_or(0);
+                            s.previous_status_line = Some(serde_json::json!(n + 1));
+                            s.menu_bar = i % 2 == 0;
+                            Ok(())
+                        })
+                        .unwrap();
+                    }
+                })
+            })
+            .collect();
+        for t in threads {
+            t.join().unwrap();
+        }
+        assert_eq!(read_settings(&d).previous_status_line, Some(serde_json::json!(200)));
+        // A failed change writes nothing.
+        let before = std::fs::read_to_string(d.join(SETTINGS_FILE)).unwrap();
+        let r: Result<(), String> = update_settings(&d, |s| {
+            s.enabled = true;
+            Err("no".into())
+        });
+        assert_eq!(r.unwrap_err(), "no");
+        assert_eq!(std::fs::read_to_string(d.join(SETTINGS_FILE)).unwrap(), before);
     }
 
     #[test]

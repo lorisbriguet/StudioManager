@@ -9,7 +9,7 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_autostart::ManagerExt;
 
-use crate::agents::cli::read_settings;
+use crate::agents::cli::{read_settings, SettingsGuard};
 
 /// Passed to the app when macOS starts it at login.
 pub const STARTUP_ARG: &str = "--menubar";
@@ -79,8 +79,9 @@ fn icon(needs_you: bool) -> Option<Image<'static>> {
     Image::from_bytes(if needs_you { ICON_AMBER } else { ICON_TEMPLATE }).ok()
 }
 
-/// Show the menu bar icon (and prepare its panel) or remove both.
-pub fn sync_tray(app: &AppHandle, enabled: bool) {
+/// Show the menu bar icon (and prepare its panel) or remove both. The settings guard keeps the
+/// check-then-build atomic against a second toggle.
+pub fn sync_tray(app: &AppHandle, enabled: bool, _held: &SettingsGuard) {
     if !enabled {
         let _ = app.remove_tray_by_id(TRAY_ID);
         if let Some(w) = app.get_webview_window(PANEL_LABEL) {

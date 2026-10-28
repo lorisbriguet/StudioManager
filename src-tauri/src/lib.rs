@@ -661,7 +661,8 @@ pub fn run() {
             if !(menubar::started_hidden() && keep_running) {
                 menubar::show_main(handle);
             }
-            menubar::sync_tray(handle, keep_running);
+            // On the main thread, before any command can run: the lock is free.
+            menubar::sync_tray(handle, keep_running, &agents::cli::lock_settings());
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()

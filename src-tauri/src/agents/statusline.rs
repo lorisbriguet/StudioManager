@@ -3,7 +3,7 @@
 //! preview the user approved, with a backup first and the previous `statusLine` kept in
 //! `agents.json` to restore on removal. Only the `statusLine` key is ever touched.
 
-use super::cli::{read_settings, write_settings};
+use super::cli::{lock_settings, read_settings, write_settings};
 use crate::agent_access::install_previewed;
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -165,6 +165,8 @@ pub fn install_at(
     expected: &str,
     stamp: &str,
 ) -> Result<Option<PathBuf>, String> {
+    // agents.json is read and written inside: no other change may interleave.
+    let _held = lock_settings();
     install_previewed(
         settings,
         expected,
@@ -193,6 +195,8 @@ pub fn remove_at(
     expected: &str,
     stamp: &str,
 ) -> Result<Option<PathBuf>, String> {
+    // The saved line is read first and forgotten last: no other change may interleave.
+    let _held = lock_settings();
     let saved = read_settings(app_dir).previous_status_line;
     let backup = install_previewed(
         settings,
