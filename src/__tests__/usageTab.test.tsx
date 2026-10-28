@@ -70,6 +70,8 @@ const calls = (cmd: string) => invokedCommands.filter((c) => c.cmd === cmd).leng
 beforeEach(() => {
   clearInvokedCommands();
   useAppStore.setState({ language: "EN" });
+  vi.useFakeTimers({ toFake: ["Date"] }); // only the clock; real timers keep waitFor working
+  vi.setSystemTime(NOW);
   clipboard.writeText.mockClear();
   Object.defineProperty(navigator, "clipboard", { value: clipboard, configurable: true });
 });
@@ -161,6 +163,7 @@ describe("UsageTab", () => {
 
   it("refreshes limits every 30 s and activity every 60 s, and stops on unmount", async () => {
     vi.useFakeTimers();
+    vi.setSystemTime(NOW);
     serve();
     const { unmount } = render(<UsageTab trailing={null} />);
     await act(async () => {});
@@ -182,6 +185,7 @@ describe("UsageTab", () => {
 
   it("does not stack a call while one is in flight", async () => {
     vi.useFakeTimers();
+    vi.setSystemTime(NOW);
     setInvokeHandler((cmd) => (cmd === "agents_usage_limits" ? new Promise(() => {}) : activity));
     render(<UsageTab trailing={null} />);
     await act(async () => {
