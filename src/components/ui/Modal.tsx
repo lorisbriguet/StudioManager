@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { IconButton } from "./IconButton";
+import { PanelTitle } from "./PanelTitle";
+import { SURFACE } from "./tokens";
 
 interface ModalProps {
   open: boolean;
@@ -131,15 +133,18 @@ export function Modal({ open, onClose, title, children, footer, size = "sm", pos
         aria-labelledby={title ? titleId : undefined}
         aria-label={title ? undefined : aria["aria-label"]}
         tabIndex={-1}
-        className={`bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.5)] w-full ${sizeClasses[size]} mx-4 overflow-hidden modal-animate outline-none`}
+        className={`${SURFACE} shadow-[0_16px_48px_rgba(0,0,0,0.5)] w-full ${sizeClasses[size]} mx-4 overflow-hidden modal-animate outline-none`}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleTrapKeyDown}
       >
         {title && (
-          <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--color-border-divider)]">
-            <h3 id={titleId} className="text-sm font-medium">{title}</h3>
-            <IconButton icon={X} label={t.close} size="sm" onClick={onClose} />
-          </div>
+          <PanelTitle
+            as="h3"
+            id={titleId}
+            title={title}
+            action={<IconButton icon={X} label={t.close} onClick={onClose} />}
+            className="px-5 py-3 border-b border-[var(--color-border-divider)]"
+          />
         )}
         {padding ? <div className={title ? "p-5" : "p-6"}>{children}</div> : children}
         {footer && (

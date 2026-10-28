@@ -1,5 +1,5 @@
-import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { MENU_DIVIDER, MENU_ITEM } from "./Dropdown";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { MENU_DIVIDER, MENU_ITEM, MENU_TONE } from "./Dropdown";
 import { Popover } from "./Popover";
 
 /**
@@ -37,6 +37,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const capturedRef = useRef(false);
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
 
   // Capture the pre-open focused element at first render, before focus moves
   // into the menu. The component mounts fresh on each open, so first render is
@@ -142,6 +143,14 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
           if (item.divider) {
             return <div key={i} role="separator" className={MENU_DIVIDER} />;
           }
+          // Same tones as Dropdown rows. Here the active row is the focused one;
+          // hovering a row focuses it, as Dropdown's hover moves its active row.
+          const isActive = i === focusedIndex;
+          const tone = item.disabled
+            ? MENU_TONE.disabled
+            : item.danger
+              ? isActive ? MENU_TONE.dangerActive : MENU_TONE.danger
+              : isActive ? MENU_TONE.active : MENU_TONE.base;
           return (
             <button
               key={i}
@@ -149,17 +158,22 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
               role="menuitem"
               tabIndex={-1}
               onClick={() => activate(item)}
+              onFocus={() => setFocusedIndex(i)}
+              onBlur={() => setFocusedIndex((cur) => (cur === i ? null : cur))}
+              onMouseMove={(e) => {
+                if (!item.disabled && document.activeElement !== e.currentTarget) {
+                  e.currentTarget.focus({ preventScroll: true });
+                }
+              }}
               disabled={item.disabled}
-              className={`${MENU_ITEM} ${
-                item.disabled
-                  ? "text-muted opacity-50 cursor-not-allowed"
-                  : item.danger
-                    ? "text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)] focus-visible:bg-[var(--color-danger-bg)] focus:bg-[var(--color-danger-bg)]"
-                    : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] focus-visible:bg-[var(--color-hover-row)] focus:bg-[var(--color-hover-row)]"
-              }`}
+              className={`${MENU_ITEM} ${tone}`}
             >
-              {item.icon && <span className="w-4 h-4 flex items-center justify-center">{item.icon}</span>}
-              {item.label}
+              {item.icon && (
+                <span className={`w-4 h-4 flex items-center justify-center shrink-0 ${item.danger ? "" : "text-muted"}`}>
+                  {item.icon}
+                </span>
+              )}
+              <span className="flex-1 min-w-0 truncate">{item.label}</span>
             </button>
           );
         })}

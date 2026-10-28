@@ -13,5 +13,8 @@ export const CONTROL_BOX = "px-2.5 py-1 text-xs leading-4 border";
 /** Muted text that darkens on hover: inactive nav rows, tabs, segments, sort headers, grips. */
 export const MUTED_INTERACTIVE = "text-muted hover:text-[var(--color-text-secondary)]";
 
-/** A raised surface: popovers, menus, dialogs, floating bars. Add the shadow per use. */
-export const SURFACE = "bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl";
+/** A raised surface without a border: floating bars. Add the shadow per use. */
+export const SURFACE_FILL = "bg-[var(--color-surface)] rounded-xl";
+
+/** A raised surface: popovers, menus, dialogs. Add the shadow per use. */
+export const SURFACE = `${SURFACE_FILL} border border-[var(--color-border-header)]`;

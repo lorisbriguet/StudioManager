@@ -1,8 +1,7 @@
 import type { MouseEvent, ReactNode } from "react";
 import { X } from "lucide-react";
-import { getStoredTagColor, getTagColor } from "../../lib/tagColors";
-import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
+import { useTagColor } from "./tagColor";
 
 /**
  * Tag — a coloured pill for user tags and list options. See DESIGN-SYSTEM.md, "Tags".
@@ -35,9 +34,8 @@ const SIZE = {
 };
 
 export function Tag({ name, color, children, size = "sm", onRemove, onClick, title, className = "" }: TagProps) {
-  const dark = useAppStore((s) => s.darkMode);
   const t = useT();
-  const c = color !== undefined ? getStoredTagColor(color, dark) : getTagColor(name, dark);
+  const c = useTagColor(name, color);
   const cls = `inline-flex items-center rounded-full font-medium whitespace-nowrap max-w-full ${SIZE[size].box} ${className}`;
   const style = { background: c.bg, color: c.text };
   const label = <span className="truncate">{children ?? name}</span>;

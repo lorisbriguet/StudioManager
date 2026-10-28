@@ -11,6 +11,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Button, DragHandle, Select, IconButton, Input } from "../ui";
+import { PanelTitle } from "../ui/PanelTitle";
 import type { LineItem } from "../../lib/lineItems";
 import { useT } from "../../i18n/useT";
 
@@ -77,16 +78,19 @@ export function LineItemsTable({
   };
 
   return (
-    <div className="p-0">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-medium">{t.line_items}</h2>
-        <div className="flex items-center gap-3">
-          {headerActions}
-          <Button variant="link" icon={<Plus size={12} />} onClick={onAdd}>
-            {t.add_line}
-          </Button>
-        </div>
-      </div>
+    <div>
+      <PanelTitle
+        title={t.line_items}
+        className="mb-3"
+        action={
+          <div className="flex items-center gap-3">
+            {headerActions}
+            <Button variant="link" icon={<Plus size={12} />} onClick={onAdd}>
+              {t.add_line}
+            </Button>
+          </div>
+        }
+      />
       {globalRateLabel && (
         <div className="text-xs text-muted mb-2 italic">{globalRateLabel}</div>
       )}
@@ -120,7 +124,7 @@ export function LineItemsTable({
                     {renderDesignation ? (
                       renderDesignation(item, i)
                     ) : (
-                      <Input size="sm"
+                      <Input
                         value={item.designation}
                         onChange={(e) => onUpdate(i, "designation", e.target.value)}
                         placeholder={t.description}
@@ -129,7 +133,7 @@ export function LineItemsTable({
                   </td>
                   {!hideRate && (
                     <td className="px-1 py-1">
-                      <Input size="sm"
+                      <Input
                         type="number"
                         value={item.rate ?? ""}
                         onChange={(e) => onUpdate(i, "rate", e.target.value ? Number(e.target.value) : null)}
@@ -153,7 +157,7 @@ export function LineItemsTable({
                     </td>
                   )}
                   <td className="px-1 py-1">
-                    <Input size="sm"
+                    <Input
                       type="number"
                       value={item.quantity}
                       onChange={(e) => onUpdate(i, "quantity", Number(e.target.value))}
@@ -161,7 +165,7 @@ export function LineItemsTable({
                     />
                   </td>
                   <td className="px-1 py-1">
-                    <Input size="sm"
+                    <Input
                       type="number"
                       value={item.amount}
                       onChange={(e) => onUpdate(i, "amount", Number(e.target.value))}

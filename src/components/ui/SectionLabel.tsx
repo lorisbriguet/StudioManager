@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { PanelTitle } from "./PanelTitle";
 
 /**
  * SectionLabel — the small uppercase label above a group of content
@@ -32,12 +33,5 @@ export function SectionLabel({ children, as: Tag = "div", action, id, className 
       </Tag>
     );
   }
-  return (
-    <div className={`flex items-center justify-between gap-2 ${className}`}>
-      <Tag id={id} className={`${SECTION_LABEL} min-w-0 truncate`}>
-        {children}
-      </Tag>
-      <div className="flex items-center gap-1 shrink-0">{action}</div>
-    </div>
-  );
+  return <PanelTitle as={Tag} id={id} title={children} action={action} variant="label" className={className} />;
 }

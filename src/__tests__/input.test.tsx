@@ -13,7 +13,7 @@ describe("Input", () => {
     const el = screen.getByRole("textbox", { name: "Name" });
     expect(ref.current).toBe(el);
     // sm by default: same height as the thin Select trigger
-    expect(el.className).toContain("px-2.5 py-1 text-xs rounded-md");
+    expect(el.className).toContain("px-2.5 py-1 text-xs leading-4 border rounded-md");
     expect(el.className).toContain("w-full");
     fireEvent.change(el, { target: { value: "Atelier Noir" } });
     expect(onChange).toHaveBeenCalled();

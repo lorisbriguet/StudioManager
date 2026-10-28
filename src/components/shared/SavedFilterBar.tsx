@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type RefObject } from "react";
 import { Bookmark, Plus, X, Pencil, Trash2, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { Button, Select, FilterChip, Input } from "../ui";
+import { SegmentedControl, type SegmentedOption } from "../ui/SegmentedControl";
 import { ContextMenu } from "../ui/ContextMenu";
 import {
   useSavedFilters,
@@ -27,8 +28,62 @@ interface Props {
   fields?: FilterableField[];
 }
 
+/** A new condition starts on its type's first operator, as when its field changes in ConditionRow. */
 function defaultOperator(type: FilterableField["type"]): FilterOperator {
-  return type === "number" ? "eq" : "eq";
+  return operatorsForType(type)[0];
+}
+
+const LOGIC_OPTIONS: SegmentedOption<ConditionLogic>[] = [
+  { value: "and", label: "AND" },
+  { value: "or", label: "OR" },
+];
+/** Width of the AND/OR column, so condition rows line up (the first row has no control). */
+const LOGIC_COLUMN = "w-26";
+
+/** The "name a new filter" row: name field, conditions toggle, Save, cancel. */
+function NewFilterRow({
+  inputRef,
+  value,
+  onChange,
+  onSave,
+  onCancel,
+  conditions,
+  inputClassName,
+  t,
+}: {
+  inputRef: RefObject<HTMLInputElement | null>;
+  value: string;
+  onChange: (value: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  /** The conditions toggle, when the page has filterable fields. */
+  conditions?: { open: boolean; onToggle: () => void };
+  inputClassName: string;
+  t: Record<string, string>;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Input
+        fullWidth={false}
+        ref={inputRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") onSave();
+          if (e.key === "Escape") onCancel();
+        }}
+        placeholder={t.filter_name}
+        className={inputClassName}
+      />
+      {conditions && (
+        <IconButton icon={Filter} label={t.add_condition} tone="accent" active={conditions.open} onClick={conditions.onToggle} />
+      )}
+      <Button variant="link" onClick={onSave}>
+        {t.save}
+      </Button>
+      <IconButton icon={X} label={t.cancel} size="xs" onClick={onCancel} />
+    </div>
+  );
 }
 
 function operatorsForType(type: FilterableField["type"]): FilterOperator[] {
@@ -107,7 +162,7 @@ function ConditionRow({
           ))}
         </Select>
       ) : (
-        <Input size="sm" fullWidth={false}
+        <Input fullWidth={false}
           value={condition.value}
           onChange={(e) => onChange({ ...condition, value: e.target.value })}
           placeholder={t.value}
@@ -262,18 +317,17 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
     <div className="flex flex-col gap-1.5 mt-1.5 mb-1">
       {conditions.map((c, i) => (
         <div key={i} className="flex items-center gap-1.5">
-          {i > 0 && (
-            <Select
-              value={conditionLogic}
-              onChange={(e) => setConditionLogic(e.target.value as ConditionLogic)}
-              fullWidth={false}
-              className="min-w-fit w-14"
-            >
-              <option value="and">AND</option>
-              <option value="or">OR</option>
-            </Select>
-          )}
-          {i === 0 && <div className="w-14" />}
+          <div className={`${LOGIC_COLUMN} shrink-0`}>
+            {i > 0 && (
+              <SegmentedControl<ConditionLogic>
+                aria-label={t.condition_logic}
+                value={conditionLogic}
+                onChange={setConditionLogic}
+                options={LOGIC_OPTIONS}
+                fullWidth
+              />
+            )}
+          </div>
           <div className="flex-1">
             <ConditionRow
               condition={c}
@@ -285,7 +339,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
           </div>
         </div>
       ))}
-      <div className="flex items-center gap-2 ml-14.5">
+      <div className="flex items-center gap-2 ml-26.5">
         <Button
           variant="link"
           icon={<Plus size={12} />}
@@ -296,12 +350,9 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
         </Button>
         {editingFilterId != null && (
           <>
-            <button
-              onClick={handleUpdateFilter}
-              className="text-xs text-accent hover:text-accent-hover px-1"
-            >
+            <Button variant="link" onClick={handleUpdateFilter}>
               {t.save}
-            </button>
+            </Button>
             <IconButton icon={X} label={t.cancel} size="xs" onClick={() => { setEditingFilterId(null); setShowConditions(false); }} />
           </>
         )}
@@ -309,30 +360,39 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
     </div>
   );
 
+  const cancelNaming = () => {
+    setNaming(false);
+    setNameInput("");
+    setConditions([]);
+    setShowConditions(false);
+  };
+
+  const newFilterRowProps = {
+    inputRef,
+    value: nameInput,
+    onChange: setNameInput,
+    onSave: handleSave,
+    onCancel: cancelNaming,
+    conditions:
+      fields && fields.length > 0
+        ? {
+            open: showConditions,
+            onToggle: () => {
+              setShowConditions(!showConditions);
+              if (!showConditions && conditions.length === 0) addCondition();
+            },
+          }
+        : undefined,
+    t,
+  };
+
   if (!filters || filters.length === 0) {
     return (
       <div className="flex flex-col gap-1 mb-3">
         <div className="flex items-center gap-2">
           {naming ? (
             <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-1.5">
-                <Input size="sm" fullWidth={false}
-                  ref={inputRef}
-                  value={nameInput}
-                  onChange={(e) => setNameInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSave();
-                    if (e.key === "Escape") { setNaming(false); setNameInput(""); setConditions([]); setShowConditions(false); }
-                  }}
-                  placeholder={t.filter_name}
-                  className="w-36"
-                />
-                {fields && fields.length > 0 && (
-                  <IconButton icon={Filter} label={t.add_condition} tone="accent" active={showConditions} onClick={() => { setShowConditions(!showConditions); if (!showConditions && conditions.length === 0) addCondition(); }} />
-                )}
-                <button onClick={handleSave} className="text-xs text-accent hover:text-accent-hover px-1">{t.save}</button>
-                <IconButton icon={X} label={t.cancel} size="xs" onClick={() => { setNaming(false); setNameInput(""); setConditions([]); setShowConditions(false); }} />
-              </div>
+              <NewFilterRow {...newFilterRowProps} inputClassName="w-36" />
               {conditionsUI}
             </div>
           ) : (
@@ -358,12 +418,31 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
         </FilterChip>
 
         {filters.map((f) => {
+          // Renaming: the field takes the chip's place (an input can't sit inside the chip's <button>).
+          if (editingId === f.id) {
+            return (
+              <Input
+                key={f.id}
+                fullWidth={false}
+                ref={editInputRef}
+                aria-label={t.rename}
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleRename();
+                  if (e.key === "Escape") { setEditingId(null); setEditName(""); }
+                }}
+                onBlur={handleRename}
+                className="w-28"
+              />
+            );
+          }
           const condCount = f.filters.conditions?.length ?? 0;
           return (
             <FilterChip
               key={f.id}
               active={activeFilterId === f.id}
-              count={editingId !== f.id && condCount > 0 ? condCount : undefined}
+              count={condCount > 0 ? condCount : undefined}
               onClick={() => {
                 if (activeFilterId === f.id && fields && fields.length > 0) {
                   // Already active — toggle condition editor
@@ -385,48 +464,13 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
                 setCtxMenu({ x: e.clientX, y: e.clientY, filter: f });
               }}
             >
-              {editingId === f.id ? (
-                <Input variant="inline" fullWidth={false}
-                  ref={editInputRef}
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  onKeyDown={(e) => {
-                    e.stopPropagation();
-                    if (e.key === "Enter") handleRename();
-                    if (e.key === "Escape") { setEditingId(null); setEditName(""); }
-                  }}
-                  onBlur={handleRename}
-                  onClick={(e) => e.stopPropagation()}
-                  className="w-20"
-                />
-              ) : (
-                f.name
-              )}
+              {f.name}
             </FilterChip>
           );
         })}
 
         {naming ? (
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-1.5">
-              <Input size="sm" fullWidth={false}
-                ref={inputRef}
-                value={nameInput}
-                onChange={(e) => setNameInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSave();
-                  if (e.key === "Escape") { setNaming(false); setNameInput(""); setConditions([]); setShowConditions(false); }
-                }}
-                placeholder={t.filter_name}
-                className="w-28"
-              />
-              {fields && fields.length > 0 && (
-                <IconButton icon={Filter} label={t.add_condition} tone="accent" active={showConditions} onClick={() => { setShowConditions(!showConditions); if (!showConditions && conditions.length === 0) addCondition(); }} />
-              )}
-              <button onClick={handleSave} className="text-xs text-accent hover:text-accent-hover px-1">{t.save}</button>
-              <IconButton icon={X} label={t.cancel} size="xs" onClick={() => { setNaming(false); setNameInput(""); setConditions([]); setShowConditions(false); }} />
-            </div>
-          </div>
+          <NewFilterRow {...newFilterRowProps} inputClassName="w-28" />
         ) : (
           <IconButton icon={Plus} label={t.save_filter} size="xs" tone="accent" onClick={handleStartNaming} />
         )}

@@ -1,4 +1,5 @@
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
+import { CONTROL_BOX, MUTED_INTERACTIVE } from "./tokens";
 
 /**
  * SegmentedControl — pick one of a few options shown side by side
@@ -33,8 +34,18 @@ interface SegmentedControlProps<V extends string> {
   className?: string;
 }
 
+// sm is 26px tall in total, like every other control (tokens.ts CONTROL_BOX):
+//   track p-0.5            2 + 2  =  4
+//   segment py-0.5         2 + 2  =  4
+//   segment line leading-4        = 16
+//   segment border         1 + 1  =  2
+//                                   26
+// So a segment is CONTROL_BOX with 1px less padding top and bottom (22px);
+// its border stays, transparent, so the box is the same as the others.
+const SEGMENT_BOX = CONTROL_BOX.replace("py-1", "py-0.5");
+
 const SIZE = {
-  sm: "px-3 py-1 text-xs",
+  sm: `${SEGMENT_BOX} border-transparent`,
   md: "px-3.5 py-1.5 text-sm",
 };
 
@@ -89,7 +100,7 @@ export function SegmentedControl<V extends string>({
             } ${fullWidth ? "flex-1" : ""} ${
               on
                 ? "bg-[var(--color-surface)] text-[var(--color-text)] font-medium shadow-[0_1px_2px_rgba(0,0,0,0.08)]"
-                : "text-muted hover:text-[var(--color-text-secondary)]"
+                : MUTED_INTERACTIVE
             }`}
           >
             {o.icon}

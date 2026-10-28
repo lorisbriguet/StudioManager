@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Card } from "./Card";
 import { SectionLabel } from "./SectionLabel";
 
 /**
@@ -54,10 +55,10 @@ export function SettingsCard({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl bg-[var(--color-surface)] border border-[var(--color-border-divider)] px-4 pt-3 pb-1">
+    <Card as="section" padding={false} className="border border-[var(--color-border-divider)] px-4 pt-3 pb-1">
       {title && <SectionHeader title={title} desc={desc} />}
       {children}
-    </section>
+    </Card>
   );
 }
 

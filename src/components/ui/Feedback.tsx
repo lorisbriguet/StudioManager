@@ -2,6 +2,9 @@ import { useEffect, useRef, useState, type HTMLAttributes, type ReactNode, type 
 import { AlertTriangle, CheckCircle2, GripVertical, Info, XCircle } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { Button } from "./Button";
+import { variantClasses } from "./Badge";
+import { revealClass, type RevealGroup } from "./IconButton";
+import { MUTED_INTERACTIVE } from "./tokens";
 
 /**
  * Small building blocks: ProgressBar, Callout, ConfirmButton, DragHandle.
@@ -11,6 +14,7 @@ import { Button } from "./Button";
 // ─── ProgressBar ────────────────────────────────────────────────────────
 
 type Tone = "accent" | "success" | "warning" | "danger";
+/** The fill is the tone's text colour (the same variables as Badge / Callout's text). */
 const FILL: Record<Tone, string> = {
   accent: "bg-accent",
   success: "bg-[var(--color-success-text)]",
@@ -62,11 +66,12 @@ export function ProgressBar({
 
 // ─── Callout ────────────────────────────────────────────────────────────
 
+/** Colours are Badge's: a warning callout and a warning badge are the same tone. */
 const CALLOUT = {
-  warning: { cls: "bg-[var(--color-warning-bg)] text-[var(--color-warning-text)]", Icon: AlertTriangle },
-  info: { cls: "bg-[var(--color-info-bg)] text-[var(--color-info-text)]", Icon: Info },
-  danger: { cls: "bg-[var(--color-danger-bg)] text-[var(--color-danger-text)]", Icon: XCircle },
-  success: { cls: "bg-[var(--color-success-bg)] text-[var(--color-success-text)]", Icon: CheckCircle2 },
+  warning: { cls: variantClasses.warning, Icon: AlertTriangle },
+  info: { cls: variantClasses.info, Icon: Info },
+  danger: { cls: variantClasses.danger, Icon: XCircle },
+  success: { cls: variantClasses.success, Icon: CheckCircle2 },
 };
 
 /**
@@ -188,8 +193,8 @@ export function DragHandle({
   ref,
   ...props
 }: HTMLAttributes<HTMLDivElement> & {
-  /** Only on hover of a `group` ancestor (or keyboard focus). */
-  reveal?: boolean;
+  /** Only on hover of the row (or keyboard focus): `true` = nearest `group`, or a named group, as IconButton. */
+  reveal?: RevealGroup | false;
   size?: 12 | 14;
   ref?: Ref<HTMLDivElement>;
 }) {
@@ -199,9 +204,9 @@ export function DragHandle({
       ref={ref}
       aria-label={t.drag_to_reorder}
       {...props}
-      className={`cursor-grab active:cursor-grabbing touch-none shrink-0 text-muted hover:text-[var(--color-text-secondary)] rounded focus-accent transition-opacity ${
-        reveal ? "opacity-0 group-hover:opacity-100 focus-visible:opacity-100" : ""
-      } ${className}`}
+      className={`cursor-grab active:cursor-grabbing touch-none shrink-0 ${MUTED_INTERACTIVE} rounded focus-accent transition-opacity ${revealClass(
+        reveal
+      )} ${className}`}
     >
       <GripVertical size={size} aria-hidden="true" />
     </div>

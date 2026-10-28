@@ -308,7 +308,7 @@ export function DatePicker({
         aria-describedby={aria["aria-describedby"]}
         aria-required={aria["aria-required"]}
         data-testid={aria["data-testid"]}
-        className={`pr-8 tabular-nums aria-[invalid=true]:border-danger-text ${inputClassName}`}
+        className={`pr-8 tabular-nums ${inputClassName}`}
       />
       <IconButton
         icon={CalendarIcon}

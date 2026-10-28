@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { PanelTitle, type PanelTitleProps } from "../ui/PanelTitle";
 
 /**
  * The frame every list/chart dashboard widget sits in, and its title.
@@ -12,27 +13,17 @@ export function WidgetShell({ children }: { children: ReactNode }) {
   return <div className="h-full flex flex-col p-4">{children}</div>;
 }
 
-const TONE = {
-  default: "",
-  danger: "text-danger",
-  warning: "text-warning",
-};
-
+/** A PanelTitle (h2, text-sm medium) with the widget's bottom margin. */
 export function WidgetTitle({
   children,
   tone = "default",
   action,
 }: {
   children: ReactNode;
-  tone?: keyof typeof TONE;
+  /** danger / warning use the dark-mode aware text colours. */
+  tone?: PanelTitleProps["tone"];
   /** Right-aligned control next to the title (e.g. a "View all" link). */
   action?: ReactNode;
 }) {
-  if (!action) return <h2 className={`text-sm font-medium mb-3 ${TONE[tone]}`}>{children}</h2>;
-  return (
-    <div className="flex items-center justify-between mb-3">
-      <h2 className={`text-sm font-medium ${TONE[tone]}`}>{children}</h2>
-      {action}
-    </div>
-  );
+  return <PanelTitle title={children} tone={tone} action={action} className="mb-3" />;
 }

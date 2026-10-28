@@ -1,4 +1,5 @@
 import { forwardRef, type InputHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { CONTROL_BOX } from "./tokens";
 
 /**
  * Input / Textarea — text fields. See DESIGN-SYSTEM.md, "Inputs".
@@ -15,12 +16,17 @@ export type FieldVariant = "default" | "bare" | "inline";
 
 const SIZE: Record<FieldSize, string> = {
   md: "px-3 py-2 text-sm rounded-lg",
-  sm: "px-2.5 py-1 text-xs rounded-md",
+  // 26px, the shared control box (tokens.ts): lines up with Button and the Select trigger.
+  sm: `${CONTROL_BOX} rounded-md`,
 };
 
+// Framed variants turn their border red when the field is aria-invalid
+// (FormField sets it from `error`; DatePicker sets it on an unparseable date).
+const INVALID = "aria-[invalid=true]:border-danger-text";
+
 const VARIANT: Record<FieldVariant, string> = {
-  default: "bg-[var(--color-input-bg)] border border-[var(--color-input-border)] focus-accent",
-  bare: "bg-transparent border border-transparent hover:border-[var(--color-input-border)] focus:border-[var(--color-input-border)] focus:bg-[var(--color-input-bg)] focus-accent",
+  default: `bg-[var(--color-input-bg)] border border-[var(--color-input-border)] focus-accent ${INVALID}`,
+  bare: `bg-transparent border border-transparent hover:border-[var(--color-input-border)] focus:border-[var(--color-input-border)] focus:bg-[var(--color-input-bg)] focus-accent ${INVALID}`,
   // Font size inherits from the text being renamed; the underline is the focus cue.
   inline: "bg-transparent border-0 border-b border-accent rounded-none px-0.5 py-0 outline-none",
 };

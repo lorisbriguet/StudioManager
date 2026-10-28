@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
+import { MUTED_INTERACTIVE } from "./tokens";
 
 /**
  * NavItem — a row in a navigation list (app sidebar, settings and profile
@@ -32,7 +33,7 @@ export function navItemClass({
   return `${fill ? "w-full " : ""}flex items-center rounded-md text-left transition-colors focus-accent ${SIZE[size]} ${
     active
       ? "bg-accent-light text-accent font-medium"
-      : "text-muted hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
+      : `hover:bg-[var(--color-hover-row)] ${MUTED_INTERACTIVE}`
   }`;
 }
 

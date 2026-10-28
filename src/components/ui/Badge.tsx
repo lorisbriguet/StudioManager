@@ -30,3 +30,35 @@ export function Badge({ variant, children, size = "sm", className = "" }: BadgeP
     </span>
   );
 }
+
+/**
+ * CountBadge — a small number pill (unread, conditions, items).
+ * Neutral is the neutral Badge's colours.
+ *
+ *   <CountBadge value={3} />   <CountBadge value={2} tone="danger" />
+ */
+export function CountBadge({
+  value,
+  tone = "neutral",
+  max = 99,
+  className = "",
+}: {
+  value: number;
+  tone?: "neutral" | "danger" | "accent" | "inverse";
+  max?: number;
+  className?: string;
+}) {
+  const toneCls = {
+    neutral: variantClasses.neutral,
+    danger: "bg-[var(--color-danger-text)] text-white",
+    accent: "bg-accent text-white",
+    inverse: "bg-white/25 text-current",
+  }[tone];
+  return (
+    <span
+      className={`inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full text-[10px] font-medium leading-none tabular-nums ${toneCls} ${className}`}
+    >
+      {value > max ? `${max}+` : value}
+    </span>
+  );
+}

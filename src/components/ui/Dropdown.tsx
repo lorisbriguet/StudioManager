@@ -12,8 +12,11 @@ import {
 } from "react";
 import { Check, ChevronDown, Plus, Search } from "lucide-react";
 import { useT } from "../../i18n/useT";
-import { Popover, POPOVER_SURFACE } from "./Popover";
+import { fieldClass } from "./Input";
+import { Kbd } from "./Kbd";
+import { Popover } from "./Popover";
 import { SECTION_LABEL } from "./SectionLabel";
+import { CONTROL_BOX } from "./tokens";
 
 /**
  * Dropdown — the app's one menu component (see DESIGN-SYSTEM.md, "Dropdown").
@@ -29,7 +32,6 @@ import { SECTION_LABEL } from "./SectionLabel";
  * looks the same.
  */
 
-export const MENU_PANEL = `${POPOVER_SURFACE} p-1 min-w-[160px]`;
 export const MENU_ITEM =
   "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm text-left select-none transition-colors outline-none";
 export const MENU_DIVIDER = "my-1 border-t border-[var(--color-border-divider)]";
@@ -271,7 +273,7 @@ function MenuPanel({
                 {r.description && <span className="text-xs text-muted font-normal truncate">{r.description}</span>}
               </span>
               {r.meta != null && <span className="text-xs text-muted tabular-nums shrink-0">{r.meta}</span>}
-              {r.shortcut && <span className="text-xs text-muted tracking-wide shrink-0">{r.shortcut}</span>}
+              {r.shortcut && <Kbd>{r.shortcut}</Kbd>}
               {role === "listbox" && r.checked === undefined && (
                 <Check size={14} className={`shrink-0 text-accent ${r.selected ? "" : "invisible"}`} aria-hidden="true" />
               )}
@@ -339,8 +341,10 @@ export type DropdownSelectProps = DropdownSelectCommon &
 const TRIGGER_BASE =
   "focus-accent inline-flex items-center text-left min-w-0 max-w-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
 const TRIGGER_SIZE = {
-  sm: "gap-1.5 rounded-md px-2.5 py-1 text-xs border border-transparent bg-[var(--color-input-bg)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] aria-expanded:bg-[var(--color-hover-row)]",
-  md: "gap-2 rounded-lg px-3 py-2 text-sm border border-[var(--color-input-border)] bg-[var(--color-input-bg)] text-[var(--color-text)]",
+  // 26px, the shared control box (tokens.ts), filled instead of framed.
+  sm: `gap-1.5 rounded-md ${CONTROL_BOX} border-transparent bg-[var(--color-input-bg)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] aria-expanded:bg-[var(--color-hover-row)]`,
+  // The md field (Input size="md"), so a md trigger and a md Input match.
+  md: `gap-2 text-[var(--color-text)] ${fieldClass({ size: "md", fullWidth: false })}`,
   // No colour of its own: a bare trigger takes its parent's, or a status pill's classes.
   bare: "gap-1 text-xs bg-transparent border-0 p-0",
 };

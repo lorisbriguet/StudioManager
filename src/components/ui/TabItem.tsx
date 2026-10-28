@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { X, Pin } from "lucide-react";
 import { IconButton } from "./IconButton";
+import { MUTED_INTERACTIVE } from "./tokens";
 
 /**
  * One tab, as in the app's tab bar: an accent underline on the active tab,
@@ -8,27 +9,22 @@ import { IconButton } from "./IconButton";
  * look the same. A non-interactive container holds two sibling buttons
  * (activate, close): a button inside a button is invalid.
  */
-export function TabItem({
-  label,
-  active,
-  onActivate,
-  onClose,
-  closeLabel,
-  pinned = false,
-  icon,
-  role,
-}: {
+type TabItemProps = {
   label: string;
   active: boolean;
   onActivate: () => void;
-  /** Omit for tabs that can't be closed. Middle-click closes too. */
-  onClose?: () => void;
-  closeLabel?: string;
   pinned?: boolean;
   icon?: ReactNode;
   /** "tab" inside a role="tablist"; the app's page tabs are links to pages. */
   role?: "tab";
-}) {
+} & (
+  /** Omit both for tabs that can't be closed. */
+  | { onClose?: undefined; closeLabel?: undefined }
+  /** Closable (middle-click closes too); the close button needs a name. */
+  | { onClose: () => void; closeLabel: string }
+);
+
+export function TabItem({ label, active, onActivate, onClose, closeLabel, pinned = false, icon, role }: TabItemProps) {
   return (
     <div
       onAuxClick={(e) => {
@@ -40,7 +36,7 @@ export function TabItem({
       className={`flex items-center gap-1.5 px-3.5 py-2 text-sm shrink-0 border-b-2 transition-colors group select-none ${
         active
           ? "border-accent text-[var(--color-text)] font-medium"
-          : "border-transparent text-muted hover:text-[var(--color-text-secondary)]"
+          : `border-transparent ${MUTED_INTERACTIVE}`
       }`}
     >
       <button
@@ -49,7 +45,7 @@ export function TabItem({
         role={role}
         aria-selected={role === "tab" ? active : undefined}
         aria-current={role === "tab" ? undefined : active ? "page" : undefined}
-        className="flex items-center gap-1.5 cursor-pointer min-w-0"
+        className="flex items-center gap-1.5 cursor-pointer min-w-0 rounded focus-accent"
       >
         {pinned && <Pin size={10} className="text-muted shrink-0" />}
         {icon}
@@ -58,7 +54,7 @@ export function TabItem({
       {onClose && !pinned && (
         <IconButton
           icon={X}
-          label={closeLabel ?? ""}
+          label={closeLabel}
           size="xs"
           tone="danger"
           reveal

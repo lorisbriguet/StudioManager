@@ -1,5 +1,5 @@
-import type { ButtonHTMLAttributes, FocusEvent, MouseEvent, Ref } from "react";
-import { useTooltip } from "./Tooltip";
+import type { ButtonHTMLAttributes, Ref } from "react";
+import { Tooltip } from "./Tooltip";
 import type { LucideIcon } from "lucide-react";
 
 /**
@@ -24,7 +24,7 @@ import type { LucideIcon } from "lucide-react";
 type Tone = "default" | "danger" | "accent";
 type Size = "xs" | "sm";
 /** Named hover groups used by rows in the app (group/task, group/row…). */
-type RevealGroup = true | "row" | "task" | "sub" | "item" | "col";
+export type RevealGroup = true | "row" | "task" | "sub" | "item" | "col";
 
 interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
   icon: LucideIcon;
@@ -48,7 +48,7 @@ const SIZE: Record<Size, { box: string; icon: number }> = {
 };
 
 // Spelled out so Tailwind generates each one.
-const REVEAL: Record<string, string> = {
+export const REVEAL_CLASSES: Record<"group" | Exclude<RevealGroup, true>, string> = {
   group: "opacity-0 group-hover:opacity-100",
   row: "opacity-0 group-hover/row:opacity-100",
   task: "opacity-0 group-hover/task:opacity-100",
@@ -56,6 +56,15 @@ const REVEAL: Record<string, string> = {
   item: "opacity-0 group-hover/item:opacity-100",
   col: "opacity-0 group-hover/col:opacity-100",
 };
+
+/**
+ * Hidden until its row is hovered (`true` = nearest `group`, or a named group)
+ * or it has keyboard focus. Shared with DragHandle. A falsy value gives "".
+ */
+export function revealClass(reveal: RevealGroup | false | undefined): string {
+  if (!reveal) return "";
+  return `${REVEAL_CLASSES[reveal === true ? "group" : reveal]} focus-visible:opacity-100`;
+}
 
 const TONE: Record<Tone, string> = {
   default: "hover:text-[var(--color-text)] hover:bg-[var(--color-hover-row)]",
@@ -75,40 +84,14 @@ export function IconButton({
   className = "",
   type = "button",
   title,
-  onMouseEnter,
-  onMouseLeave,
-  onMouseDown,
-  onFocus,
-  onBlur,
   ...props
 }: IconButtonProps) {
-  const tip = useTooltip(title ?? label);
+  // Tooltip adds its hover/focus handlers and aria-describedby, and still runs the caller's.
   return (
-    <>
+    <Tooltip content={title ?? label}>
     <button
       type={type}
       aria-label={label}
-      aria-describedby={tip.triggerProps["aria-describedby"]}
-      onMouseEnter={(e: MouseEvent<HTMLButtonElement>) => {
-        tip.triggerProps.onMouseEnter(e);
-        onMouseEnter?.(e);
-      }}
-      onMouseLeave={(e: MouseEvent<HTMLButtonElement>) => {
-        tip.triggerProps.onMouseLeave();
-        onMouseLeave?.(e);
-      }}
-      onMouseDown={(e: MouseEvent<HTMLButtonElement>) => {
-        tip.triggerProps.onMouseDown();
-        onMouseDown?.(e);
-      }}
-      onFocus={(e: FocusEvent<HTMLButtonElement>) => {
-        tip.triggerProps.onFocus(e);
-        onFocus?.(e);
-      }}
-      onBlur={(e: FocusEvent<HTMLButtonElement>) => {
-        tip.triggerProps.onBlur();
-        onBlur?.(e);
-      }}
       className={`inline-flex items-center justify-center shrink-0 transition-colors focus-accent disabled:opacity-30 disabled:pointer-events-none ${
         SIZE[size].box
       } ${
@@ -120,13 +103,12 @@ export function IconButton({
               ? "text-accent"
               : "text-muted"
       } ${TONE[color ?? tone]} ${
-        reveal ? `${REVEAL[reveal === true ? "group" : reveal]} focus-visible:opacity-100 aria-expanded:opacity-100` : ""
+        reveal ? `${revealClass(reveal)} aria-expanded:opacity-100` : ""
       } ${className}`}
       {...props}
     >
       <Icon size={SIZE[size].icon} className={iconClassName} aria-hidden="true" />
     </button>
-    {tip.element}
-    </>
+    </Tooltip>
   );
 }

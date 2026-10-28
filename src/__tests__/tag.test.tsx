@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { Tag } from "../components/ui/Tag";
-import { FilterChip, CountBadge } from "../components/ui/FilterChip";
+import { FilterChip } from "../components/ui/FilterChip";
+import { CountBadge } from "../components/ui/Badge";
 import { getTagColor, getStoredTagColor } from "../lib/tagColors";
 import { useAppStore } from "../stores/app-store";
 

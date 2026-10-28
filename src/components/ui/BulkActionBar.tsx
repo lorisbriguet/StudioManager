@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { IconButton } from "./IconButton";
 import { Button } from "./Button";
+import { SURFACE_FILL } from "./tokens";
 
 interface BulkAction {
   label: string;
@@ -22,7 +23,8 @@ export function BulkActionBar({ count, actions, onClear }: Props) {
   if (count === 0) return null;
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2.5 rounded-xl bg-[var(--color-surface)] shadow-lg bulk-bar-animate">
+    // The surface without its border, as before: the shadow alone lifts the bar.
+    <div className={`${SURFACE_FILL} shadow-lg fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2.5 bulk-bar-animate`}>
       <span className="text-sm font-medium whitespace-nowrap">
         {count} {t.selected}
       </span>

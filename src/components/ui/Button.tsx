@@ -1,4 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
+import { Spinner } from "./Spinner";
+import { CONTROL_BOX } from "./tokens";
 
 /**
  * Button — text buttons. See DESIGN-SYSTEM.md, "Button".
@@ -37,8 +39,8 @@ const variantClasses: Record<ButtonVariant, string> = {
   link: "bg-transparent border-transparent text-accent hover:underline",
 };
 
-// 26px: py-1 (8) + 16px line + 1px border top and bottom, like the fields.
-const BOX = "px-2.5 py-1 text-xs leading-4 rounded-md border";
+// 26px, the shared control box (tokens.ts), like the fields.
+const BOX = `${CONTROL_BOX} rounded-md`;
 // Link buttons are text: no padding, no box.
 const LINK_BOX = "p-0 text-xs leading-4 border-0";
 
@@ -61,12 +63,9 @@ export function Button({
       {...props}
     >
       {loading ? (
-        // border-current so the spinner inherits the variant's text color
-        // (an accent-colored spinner would vanish on the primary accent bg)
-        <span
-          aria-hidden="true"
-          className="inline-block h-3 w-3 shrink-0 border-2 border-current border-t-transparent rounded-full animate-spin"
-        />
+        // tone="current": the spinner takes the variant's text colour
+        // (an accent spinner would vanish on the primary accent bg)
+        <Spinner tone="current" size={12} />
       ) : (
         icon
       )}

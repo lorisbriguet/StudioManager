@@ -504,6 +504,28 @@ import { invoiceStatusVariant, quoteStatusVariant, taskStatusVariant, projectSta
 
 ---
 
+## Building blocks
+
+Shared class strings and small parts that the components are built from (`src/components/ui/tokens.ts` and friends). Use them in new components instead of retyping the classes.
+
+| | What it is | Used by |
+|--|--|--|
+| `CONTROL_BOX` | The 26px control box: `px-2.5 py-1 text-xs leading-4 border` | Button, Input, Select trigger, FilterChip, SegmentedControl (its segments are 22px inside a 2px track, 26px in total) |
+| `MUTED_INTERACTIVE` | Muted text that darkens on hover | NavItem, TabItem, SegmentedControl, FilterChip, SortHeader, DragHandle |
+| `SURFACE` / `SURFACE_FILL` | A raised surface with / without a border. Add the shadow per use | Popover, Modal / BulkActionBar |
+| `MENU_TONE` | Menu row tones | Dropdown, ContextMenu |
+| `revealClass(reveal)` | Reveal-on-hover for `true` or a named group (`"task"` → `group/task`) | IconButton, DragHandle |
+| `useTagColor(name, color?)` | A tag's colours for the current mode | Tag, FilterChip |
+| `<PanelTitle title action? tone? variant?>` | A title on the left and an action on the right | Modal header, SectionLabel with `action`, dashboard widgets, line items |
+| `<Spinner tone="accent"\|"current">` | The loading spinner, announced as "Loading" | Button `loading`, PageSpinner |
+| `Labelled` | A control with a clickable label and description | Checkbox, Radio, Toggle |
+
+- **`Card`:** it takes `as="section"`, and SettingsCard is built on it.
+- **`Toggle`:** it takes `label` and `description`, like Checkbox.
+- **`SortHeader`:** each column header is a real button, with `aria-sort` on the `<th>`.
+
+---
+
 ## Feedback
 
 From `src/components/ui/Feedback.tsx` and `Tooltip.tsx`:
