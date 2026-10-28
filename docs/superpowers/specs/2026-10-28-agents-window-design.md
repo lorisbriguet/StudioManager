@@ -2,6 +2,8 @@
 
 Date: 2026-10-28 · Status: draft for Loris's review
 
+Plan: [2026-10-28-agents-window.md](../plans/2026-10-28-agents-window.md)
+
 Related: [Agent access (MCP server) design](2026-10-27-agent-access-mcp-design.md) · [Agent access guide](../../agent-access.md) · [IDEAS.md](../../../IDEAS.md)
 
 Decisions marked *[call]* were made by the designer, not by Loris; he can overturn any.
