@@ -21,6 +21,7 @@ import {
   removeItemEvents,
   removeSubscriptionEvent,
   syncAllUpkeepEvents,
+  removeUpkeepEvent,
 } from "../lib/upkeep/calendar";
 import { purgeAllCalendarEvents } from "../lib/appleCalendar";
 import { setItemCalendarEvent, getUpkeepItem } from "../db/queries/upkeepItems";
@@ -29,7 +30,8 @@ import { getDb } from "../db";
 import { executedStatements, clearExecutedStatements, setSelectHandler } from "../__mocks__/tauri-sql";
 import { useAppStore } from "../stores/app-store";
 import { notifyError } from "../lib/notifyError";
-import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
+import { setInvokeHandler, invokedCommands, clearInvokedCommands, setBatchFailure } from "../__mocks__/tauri-api";
+import { useOrgStore } from "../stores/org-store";
 import type { Machine, Subscription, UpkeepItem } from "../types/upkeep";
 
 function item(over: Partial<UpkeepItem> = {}): UpkeepItem {
@@ -423,6 +425,29 @@ describe("turning calendar sync on", () => {
     expect(calls("calendar_create_event")).toHaveLength(2);
   });
 
+  it("changing the default alert recreates only the events that follow it", async () => {
+    setSelectHandler((sql, params) => {
+      if (sql.includes("FROM upkeep_items WHERE id")) {
+        const id = params[0] as number;
+        return [item({
+          id, alert: id === 7 ? "default" : "none",
+          calendar_event_id: `E${id}`, calendar_event_date: "2026-11-10",
+        })];
+      }
+      if (sql.includes("FROM upkeep_items")) return [item({ id: 7, alert: "default" }), item({ id: 8, alert: "none" })];
+      if (sql.includes("FROM machines")) return [machine()];
+      if (sql.includes("FROM subscriptions WHERE id")) {
+        const id = params[0] as number;
+        return [sub({ id, alert: id === 5 ? "default" : "week_before", calendar_event_id: `S${id}` })];
+      }
+      if (sql.includes("FROM subscriptions")) return [sub({ id: 5, alert: "default" }), sub({ id: 6, alert: "week_before" })];
+      return [];
+    });
+    await syncAllUpkeepEvents({ forceDefaultAlert: true });
+    expect(calls("calendar_delete_event").map((c) => c.args.uid)).toEqual(["E7", "S5"]);
+    expect(calls("calendar_create_event")).toHaveLength(2);
+  });
+
   it("purgeAllCalendarEvents also deletes and forgets upkeep and renewal events", async () => {
     setSelectHandler((sql) => {
       if (sql.includes("FROM upkeep_items")) return [{ calendar_event_id: "U1" }];
@@ -435,4 +460,131 @@ describe("turning calendar sync on", () => {
     expect(sqls.some((q) => q.includes("UPDATE upkeep_items SET calendar_event_id = NULL, calendar_event_date = NULL"))).toBe(true);
     expect(sqls.some((q) => q.includes("UPDATE subscriptions SET calendar_event_id = NULL"))).toBe(true);
   });
+});
+
+describe("a rolled subscription", () => {
+  beforeEach(async () => {
+    await getDb();
+    clearExecutedStatements();
+  });
+
+  it("its event follows the new renews_on (as the upkeep check syncs it)", async () => {
+    // applyRenewals moved renews_on from 2026-10-01 to 2026-11-01; the event still sits on 10-01.
+    setSelectHandler((sql) =>
+      sql.includes("FROM subscriptions") ? [sub({ renews_on: "2026-11-01", calendar_event_id: "S-OLD" })] : []);
+    await syncSubscriptionCalendar(5, { force: true });
+    expect(calls("calendar_delete_event").map((c) => c.args.uid)).toEqual(["S-OLD"]);
+    expect(calls("calendar_create_event")[0].args).toMatchObject({ date: "2026-11-01" });
+    const write = executedStatements.find((st) => st.sql.includes("UPDATE subscriptions"));
+    expect(write?.params).toEqual(["NEW-UID", 5]);
+  });
+});
+
+describe("organisation switch during a calendar sync", () => {
+  beforeEach(async () => {
+    await getDb();
+    clearExecutedStatements();
+    setBatchFailure(null);
+    useOrgStore.setState({ activeId: "org-a", switching: false });
+  });
+  afterEach(() => {
+    setBatchFailure(null);
+    useOrgStore.setState({ activeId: "org-a", switching: false });
+  });
+
+  function holdCreate(uid: string) {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    setInvokeHandler(async (cmd) => {
+      if (cmd === "calendar_create_event") {
+        await gate;
+        return uid;
+      }
+      return null;
+    });
+    return () => release();
+  }
+  const deletedUids = () => calls("calendar_delete_event").map((c) => c.args.uid);
+  const eventWrites = () => executedStatements.filter((st) => st.sql.includes("calendar_event_id"));
+
+  it("an item event made for org A is deleted, not written into org B", async () => {
+    setSelectHandler((sql) => {
+      if (sql.includes("FROM upkeep_items")) return [item({ id: 111 })];
+      if (sql.includes("FROM machines")) return [machine()];
+      return [];
+    });
+    const release = holdCreate("A-UID");
+    const sync = syncItemCalendar(111);
+    await new Promise((r) => setTimeout(r, 0));
+    useOrgStore.setState({ activeId: "org-b" });
+    release();
+    await sync;
+    expect(deletedUids()).toEqual(["A-UID"]);
+    expect(eventWrites()).toHaveLength(0);
+  });
+
+  it("a subscription event made while a switch started is deleted, not written", async () => {
+    setSelectHandler((sql) => (sql.includes("FROM subscriptions") ? [sub({ id: 112 })] : []));
+    const release = holdCreate("A-SUB");
+    const sync = syncSubscriptionCalendar(112);
+    await new Promise((r) => setTimeout(r, 0));
+    useOrgStore.setState({ switching: true });
+    release();
+    await sync;
+    expect(deletedUids()).toEqual(["A-SUB"]);
+    expect(eventWrites()).toHaveLength(0);
+  });
+
+  it("the id is written bound to the org it was made for; a refused write deletes the event", async () => {
+    setSelectHandler((sql) => {
+      if (sql.includes("FROM upkeep_items")) return [item({ id: 113 })];
+      if (sql.includes("FROM machines")) return [machine()];
+      return [];
+    });
+    setBatchFailure((stmts) =>
+      stmts.some((s) => s.sql.includes("calendar_event_id")) ? new Error("organisation changed") : null);
+    await syncItemCalendar(113);
+    const batch = calls("execute_batch").find((c) =>
+      (c.args.statements as { sql: string }[]).some((s) => s.sql.includes("calendar_event_id")));
+    expect(batch?.args.expectedOrg).toBe("org-a");
+    expect(deletedUids()).toEqual(["NEW-UID"]);
+  });
+
+  it("does not start while a switch is in progress", async () => {
+    setSelectHandler((sql) => {
+      if (sql.includes("FROM upkeep_items")) return [item({ id: 114 })];
+      if (sql.includes("FROM machines")) return [machine()];
+      return [];
+    });
+    useOrgStore.setState({ switching: true });
+    await syncItemCalendar(114);
+    expect(invokedCommands).toHaveLength(0);
+  });
+});
+
+describe("test and presentation modes leave Apple Calendar alone", () => {
+  afterEach(() => {
+    useAppStore.setState({ testMode: false, presentationMode: false });
+  });
+
+  for (const mode of ["testMode", "presentationMode"] as const) {
+    it(`${mode}: no create, move or delete`, async () => {
+      useAppStore.setState({ [mode]: true });
+      setSelectHandler((sql) => {
+        if (sql.includes("FROM upkeep_items")) return [item({ next_due_on: "2026-12-10", calendar_event_id: "E1", calendar_event_date: "2026-11-10" })];
+        if (sql.includes("FROM machines")) return [machine()];
+        if (sql.includes("FROM subscriptions")) return [sub({ calendar_event_id: "S1" })];
+        return [];
+      });
+      expect(await syncItemEvent(item(), machine())).toEqual({ calendar_event_id: null, calendar_event_date: null });
+      expect(await syncItemEvent(item({ archived: 1, calendar_event_id: "E1", calendar_event_date: "2026-11-10" }), machine()))
+        .toEqual({ calendar_event_id: "E1", calendar_event_date: "2026-11-10" });
+      expect(await syncSubscriptionEvent(sub({ calendar_event_id: "S1" }), { force: true })).toEqual({ calendar_event_id: "S1" });
+      expect(await removeUpkeepEvent("E1")).toBe(false);
+      expect(await syncAllUpkeepEvents({ forceDefaultAlert: true })).toBe(0);
+      await syncItemCalendar(7, { force: true });
+      expect(calls("calendar_create_event")).toHaveLength(0);
+      expect(calls("calendar_delete_event")).toHaveLength(0);
+    });
+  }
 });

@@ -61,8 +61,8 @@ export function UpkeepSettingsCard() {
 
   const onAlertChange = (alert: ConcreteAlert) => {
     setAlertDefault(alert);
-    // Existing Calendar events carry the old alarm: rebuild them with the new default.
-    syncAllUpkeepEvents().catch((e) => logError("Upkeep calendar re-sync failed:", e));
+    // Events that follow the default carry the old alarm: rebuild them with the new one.
+    syncAllUpkeepEvents({ forceDefaultAlert: true }).catch((e) => logError("Upkeep calendar re-sync failed:", e));
   };
 
   return (

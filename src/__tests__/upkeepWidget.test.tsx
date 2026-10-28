@@ -9,7 +9,7 @@ import type { Machine, UpkeepItem } from "../types/upkeep";
 
 let overview: UpkeepOverview;
 let pending: { id: number; name: string; amount: number; currency: string; renewed_on: string }[] = [];
-const syncAll = vi.fn(async () => 0);
+const syncAll = vi.fn(async (_opts?: unknown) => 0);
 
 vi.mock("../db/hooks/useConnections", () => {
   const m = () => ({ mutate: () => {}, mutateAsync: async () => 0, isPending: false });
@@ -27,7 +27,7 @@ vi.mock("../db/hooks/useUpkeep", () => ({
   useMarkUpkeepDone: () => ({ mutate: vi.fn() }),
   useSnoozeUpkeep: () => ({ mutate: vi.fn() }),
 }));
-vi.mock("../lib/upkeep/calendar", () => ({ syncAllUpkeepEvents: () => Promise.resolve(syncAll()) }));
+vi.mock("../lib/upkeep/calendar", () => ({ syncAllUpkeepEvents: (opts?: unknown) => Promise.resolve(syncAll(opts)) }));
 
 import { UpkeepWidget } from "../components/upkeep/UpkeepWidget";
 import { UpkeepSettingsCard } from "../components/settings/UpkeepSettingsCard";
@@ -94,6 +94,7 @@ describe("UpkeepSettingsCard", () => {
     fireEvent.change(screen.getByLabelText("Calendar alert"), { target: { value: "week_before" } });
     expect(useAppStore.getState().upkeepAlertDefault).toBe("week_before");
     expect(syncAll).toHaveBeenCalledTimes(1);
+    expect(syncAll).toHaveBeenCalledWith({ forceDefaultAlert: true });
   });
 
   it("lets the days field be cleared and retyped", () => {

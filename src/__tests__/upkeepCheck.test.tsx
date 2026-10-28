@@ -115,7 +115,7 @@ describe("runUpkeepCheck", () => {
     vi.mocked(applyRenewals).mockResolvedValueOnce(1);
     await runUpkeepCheck(qcStub(), TODAY);
     expect(applyRenewals).toHaveBeenCalledTimes(1);
-    expect(syncSubscriptionCalendar).toHaveBeenCalledWith(5);
+    expect(syncSubscriptionCalendar).toHaveBeenCalledWith(5, { force: true });
   });
 
   it("reads disks and connections with local selects and notifies", async () => {
@@ -191,7 +191,7 @@ describe("runUpkeepCheck", () => {
     expect(await runUpkeepCheck(qcStub(), TODAY)).toBe(1);
     expect(applyRenewals).toHaveBeenCalledTimes(2);
     expect(vi.mocked(applyRenewals).mock.calls[0][2]).toBe("org-a");
-    expect(syncSubscriptionCalendar).toHaveBeenCalledWith(6);
+    expect(syncSubscriptionCalendar).toHaveBeenCalledWith(6, { force: true });
     expect(batchCalls()).toHaveLength(1);
   });
 

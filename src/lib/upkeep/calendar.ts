@@ -4,6 +4,7 @@ import {
   updateCalendarEvent,
 } from "../appleCalendar";
 import { useAppStore } from "../../stores/app-store";
+import { useOrgStore } from "../../stores/org-store";
 import { notifyError, getLabels } from "../notifyError";
 import { effectiveDue, shouldMoveEvent } from "./schedule";
 import { getMachine } from "../../db/queries/machines";
@@ -16,7 +17,8 @@ import type { Machine, Subscription, UpkeepAlert, UpkeepItem } from "../../types
  * item for its NEXT due date, with a display alarm, so the reminder fires even
  * when the app is closed. Every function here swallows calendar failures
  * (one notifyError) and returns the ids to persist, so a save never fails
- * because of the calendar.
+ * because of the calendar. Test and presentation modes never touch Apple
+ * Calendar: their databases are copies or demos, the calendar is the real one.
  */
 
 type ConcreteAlert = Exclude<UpkeepAlert, "default">;
@@ -46,6 +48,12 @@ type SubscriptionEventIds = Pick<Subscription, "calendar_event_id">;
 
 const notifyFailure = (e: unknown) => notifyError(getLabels().calendar_sync_failed, e);
 
+/** Test or presentation mode: leave the real Apple Calendar alone. */
+function calendarOff(): boolean {
+  const app = useAppStore.getState();
+  return app.testMode || app.presentationMode;
+}
+
 function resolveAlert(alert: UpkeepAlert): number | null {
   return alertMinutes(alert, useAppStore.getState().upkeepAlertDefault ?? "day_9am");
 }
@@ -53,6 +61,7 @@ function resolveAlert(alert: UpkeepAlert): number | null {
 /** Delete an event by uid; true when there is nothing left to track. */
 export async function removeUpkeepEvent(uid: string | null): Promise<boolean> {
   if (!uid) return true;
+  if (calendarOff()) return false;
   try {
     await deleteCalendarEvent(uid);
     return true;
@@ -71,6 +80,7 @@ export async function syncItemEvent(
     calendar_event_id: item.calendar_event_id,
     calendar_event_date: item.calendar_event_date,
   };
+  if (calendarOff()) return current;
   const due = effectiveDue(item);
   const wanted =
     useAppStore.getState().calendarSync &&
@@ -117,6 +127,7 @@ export async function syncSubscriptionEvent(
   opts: SyncOptions = {}
 ): Promise<SubscriptionEventIds> {
   const current: SubscriptionEventIds = { calendar_event_id: sub.calendar_event_id };
+  if (calendarOff()) return current;
   const wanted =
     useAppStore.getState().calendarSync && sub.status !== "cancelled" && sub.in_calendar !== 0;
 
@@ -171,24 +182,62 @@ function serialize<T>(key: string, work: () => Promise<T>): Promise<T | undefine
 const latestUid = new Map<string, string | null>();
 
 /**
- * After creating or moving an event: if the row was deleted meanwhile, delete
- * the new event instead of leaving it orphaned. True when the row still exists.
+ * The organisation open when a sync step starts. A step reads its row, runs
+ * osascript (up to 10 s) and writes the new uid back: `same()` (false while
+ * a switch is in progress) is checked before each DB call, and the write is
+ * bound to `org` so Rust refuses it once another organisation is open.
  */
-async function keepIfRowExists(key: string, uid: string, exists: () => Promise<boolean>): Promise<boolean> {
-  if (await exists()) return true;
-  await removeUpkeepEvent(uid);
-  latestUid.delete(key);
-  return false;
+function orgGuard(): { org: string; same: () => boolean } {
+  const org = useOrgStore.getState().activeId;
+  return {
+    org,
+    same: () => {
+      const s = useOrgStore.getState();
+      return !s.switching && s.activeId === org;
+    },
+  };
+}
+
+/**
+ * Store the row's new event ids. If the row was deleted meanwhile, the
+ * organisation changed, or Rust refused the write, delete the event just made
+ * instead of leaving it orphaned or writing it into another organisation's
+ * row. True when the ids were stored.
+ */
+async function storeOrDiscard(
+  key: string,
+  newUid: string | null,
+  same: () => boolean,
+  exists: () => Promise<boolean>,
+  write: () => Promise<void>
+): Promise<boolean> {
+  const discard = async () => {
+    if (newUid) await removeUpkeepEvent(newUid);
+    latestUid.delete(key);
+    return false;
+  };
+  if (!same()) return discard();
+  if (newUid && !(await exists())) return discard();
+  if (!same()) return discard();
+  try {
+    await write();
+    return true;
+  } catch (e) {
+    await discard();
+    throw e;
+  }
 }
 
 /** Sync one item; true when it ends up on a new event (created or moved). */
 function syncItemById(id: number, opts: SyncOptions): Promise<boolean | undefined> {
   const key = `item:${id}`;
   return serialize(key, async () => {
+    const { org, same } = orgGuard();
+    if (!same()) return false;
     const item = await getUpkeepItem(id);
-    if (!item) return false;
+    if (!item || !same()) return false;
     const machine = await getMachine(item.machine_id);
-    if (!machine) return false;
+    if (!machine || !same()) return false;
     const ids = await syncItemEvent(item, machine, opts);
     latestUid.set(key, ids.calendar_event_id);
     if (
@@ -198,28 +247,32 @@ function syncItemById(id: number, opts: SyncOptions): Promise<boolean | undefine
       return false;
     }
     const isNew = ids.calendar_event_id !== null && ids.calendar_event_id !== item.calendar_event_id;
-    if (isNew && !(await keepIfRowExists(key, ids.calendar_event_id as string, async () => (await getUpkeepItem(id)) !== null))) {
-      return false;
-    }
-    await setItemCalendarEvent(id, ids.calendar_event_id, ids.calendar_event_date);
-    return isNew;
+    const stored = await storeOrDiscard(
+      key, isNew ? ids.calendar_event_id : null, same,
+      async () => (await getUpkeepItem(id)) !== null,
+      () => setItemCalendarEvent(id, ids.calendar_event_id, ids.calendar_event_date, org)
+    );
+    return stored && isNew;
   });
 }
 
 function syncSubscriptionById(id: number, opts: SyncOptions): Promise<boolean | undefined> {
   const key = `sub:${id}`;
   return serialize(key, async () => {
+    const { org, same } = orgGuard();
+    if (!same()) return false;
     const sub = await getSubscription(id);
-    if (!sub) return false;
+    if (!sub || !same()) return false;
     const ids = await syncSubscriptionEvent(sub, opts);
     latestUid.set(key, ids.calendar_event_id);
     if (ids.calendar_event_id === sub.calendar_event_id) return false;
     const isNew = ids.calendar_event_id !== null;
-    if (isNew && !(await keepIfRowExists(key, ids.calendar_event_id as string, async () => (await getSubscription(id)) !== null))) {
-      return false;
-    }
-    await setSubscriptionCalendarEvent(id, ids.calendar_event_id);
-    return isNew;
+    const stored = await storeOrDiscard(
+      key, ids.calendar_event_id, same,
+      async () => (await getSubscription(id)) !== null,
+      () => setSubscriptionCalendarEvent(id, ids.calendar_event_id, org)
+    );
+    return stored && isNew;
   });
 }
 
@@ -267,18 +320,27 @@ export async function removeSubscriptionEvent(sub: Subscription): Promise<void> 
   await removeTracked(`sub:${sub.id}`, sub.calendar_event_id);
 }
 
+export interface SyncAllOptions {
+  /** The default alert changed: recreate the events of rows that follow it. */
+  forceDefaultAlert?: boolean;
+}
+
 /**
  * Turning calendar sync on: give every item and subscription that should be
- * in the calendar its event. Returns how many events were created.
+ * in the calendar its event. With `forceDefaultAlert`, also rebuild existing
+ * events whose alert is "default" so they carry the new alarm. Returns how
+ * many events were created.
  */
-export async function syncAllUpkeepEvents(): Promise<number> {
+export async function syncAllUpkeepEvents(opts: SyncAllOptions = {}): Promise<number> {
+  if (calendarOff()) return 0;
+  const force = (alert: UpkeepAlert) => !!opts.forceDefaultAlert && alert === "default";
   let count = 0;
   try {
     for (const i of await getUpkeepItems()) {
-      if (await syncItemById(i.id, {})) count++;
+      if (await syncItemById(i.id, { force: force(i.alert) })) count++;
     }
     for (const s of await getSubscriptions()) {
-      if (await syncSubscriptionById(s.id, {})) count++;
+      if (await syncSubscriptionById(s.id, { force: force(s.alert) })) count++;
     }
   } catch (e) {
     notifyFailure(e);

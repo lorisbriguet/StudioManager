@@ -217,18 +217,21 @@ export async function markUpkeepDone(
 
 /**
  * Remember the Apple Calendar event of an item. Bookkeeping only: does not
- * touch updated_at or any user-visible field.
+ * touch updated_at or any user-visible field. With `expectedOrg`, Rust
+ * refuses the write if another organisation is open by then.
  */
 export async function setItemCalendarEvent(
   id: number,
   eventId: string | null,
-  eventDate: string | null
+  eventDate: string | null,
+  expectedOrg?: string
 ): Promise<void> {
-  const db = await getDb();
-  await db.execute(
+  const batch = new TransactionBatch(expectedOrg);
+  batch.add(
     "UPDATE upkeep_items SET calendar_event_id = $1, calendar_event_date = $2 WHERE id = $3",
     [eventId, eventDate, id]
   );
+  await batch.commit();
 }
 
 /** Hide an item from alerts for 1, 3 or 7 days. */

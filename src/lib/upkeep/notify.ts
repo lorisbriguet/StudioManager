@@ -221,7 +221,7 @@ export async function runUpkeepCheck(qc: QueryClient, todayISO: string): Promise
       if (n > 0) {
         rolled = true;
         if (!sameOrg()) return 0;
-        await syncSubscriptionCalendar(sub.id);
+        await syncSubscriptionCalendar(sub.id, { force: true });
       }
     } catch (e) {
       // One bad subscription must not block every other reminder.
