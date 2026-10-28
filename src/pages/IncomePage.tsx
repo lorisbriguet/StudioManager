@@ -351,7 +351,7 @@ export function IncomePage() {
                           )}
                         </td>
                         <td className="px-4 py-2.5">
-                          <IconButton
+                          <IconButton size="xs"
                             icon={Settings2}
                             label={t.more_actions}
                             onClick={(e) => {

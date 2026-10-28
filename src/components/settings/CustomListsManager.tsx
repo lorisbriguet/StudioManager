@@ -132,7 +132,7 @@ export function CustomListsManager() {
               className="flex-1"
               autoFocus
             />
-            <IconButton icon={Check} label={t.create} filled onClick={handleCreateList} />
+            <Button icon={<Check size={12} />} onClick={handleCreateList}>{t.create}</Button>
           </div>
         ) : (
           <Button

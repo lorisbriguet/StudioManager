@@ -544,7 +544,7 @@ export function InvoicesPage() {
                       />
                     </td>
                     <td className="py-2 text-right">
-                      <IconButton
+                      <IconButton size="xs"
                         icon={Trash2}
                         label={t.delete_template}
                         tone="danger"
@@ -636,7 +636,7 @@ export function InvoicesPage() {
                           />
                         </td>
                         <td className="w-8 px-1">
-                          <IconButton
+                          <IconButton size="xs"
                             icon={Settings2}
                             label={t.more_actions}
                             onClick={(e) => {

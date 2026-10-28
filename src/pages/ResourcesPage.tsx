@@ -666,7 +666,7 @@ function ResourceTableRow({
         )}
       </td>
       <td className="px-3 py-2">
-        <IconButton
+        <IconButton size="xs"
           icon={Trash2}
           label={t.delete}
           tone="danger"

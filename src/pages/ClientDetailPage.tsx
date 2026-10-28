@@ -446,7 +446,7 @@ function ContactsSection({
                   {c.phone && <span className="text-xs text-muted">{c.phone}</span>}
                 </div>
               )}
-              <IconButton
+              <IconButton size="xs"
                 icon={Pencil}
                 label={t.edit}
                 onClick={() => startEditing(c)}

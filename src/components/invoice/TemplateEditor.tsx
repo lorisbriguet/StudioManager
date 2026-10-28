@@ -393,8 +393,8 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
             {columnOrder.map((col, idx) => (
               <div key={col} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--color-border-divider)] bg-[var(--color-bg)] text-sm">
                 <span className="flex-1">{columnLabels[col]}</span>
-                <IconButton icon={ChevronUp} label={t.move_up} onClick={() => moveColumn(idx, -1)} disabled={idx === 0} />
-                <IconButton icon={ChevronDown} label={t.move_down} onClick={() => moveColumn(idx, 1)} disabled={idx === columnOrder.length - 1} />
+                <IconButton size="xs" icon={ChevronUp} label={t.move_up} onClick={() => moveColumn(idx, -1)} disabled={idx === 0} />
+                <IconButton size="xs" icon={ChevronDown} label={t.move_down} onClick={() => moveColumn(idx, 1)} disabled={idx === columnOrder.length - 1} />
               </div>
             ))}
           </div>

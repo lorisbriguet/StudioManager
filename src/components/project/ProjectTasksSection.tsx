@@ -196,7 +196,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                       : "opacity-0 pointer-events-none group-hover/task:opacity-100 group-hover/task:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto"
                   }
                 />
-                <IconButton
+                <IconButton size="xs"
                   icon={Trash2}
                   label={t.delete}
                   tone="danger"
@@ -262,7 +262,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                         endTime={s.end_time} reminder={s.reminder}
                         onChange={(vals) => updateSubtask.mutate({ id: s.id, data: vals })}
                       />
-                      <IconButton
+                      <IconButton size="xs"
                         icon={Trash2}
                         label={t.delete}
                         tone="danger"

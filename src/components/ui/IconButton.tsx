@@ -37,8 +37,6 @@ interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
   active?: boolean;
   /** Coloured at rest, not only on hover: a running timer (danger), a confirm check (accent). */
   color?: "danger" | "accent";
-  /** Solid accent fill with a white icon (a primary confirm next to a field). */
-  filled?: boolean;
   /** Classes on the icon itself, e.g. a rotating expand chevron. */
   iconClassName?: string;
   ref?: Ref<HTMLButtonElement>;
@@ -73,7 +71,6 @@ export function IconButton({
   reveal = false,
   active = false,
   color,
-  filled = false,
   iconClassName,
   className = "",
   type = "button",
@@ -115,18 +112,14 @@ export function IconButton({
       className={`inline-flex items-center justify-center shrink-0 transition-colors focus-accent disabled:opacity-30 disabled:pointer-events-none ${
         SIZE[size].box
       } ${
-        filled
-          ? "bg-accent text-white hover:opacity-85"
-          : `${
-              active
-                ? "text-[var(--color-text)] bg-[var(--color-hover-row)]"
-                : color === "danger"
-                  ? "text-[var(--color-danger-text)]"
-                  : color === "accent"
-                    ? "text-accent"
-                    : "text-muted"
-            } ${TONE[color ?? tone]}`
-      } ${
+        active
+          ? "text-[var(--color-text)] bg-[var(--color-hover-row)]"
+          : color === "danger"
+            ? "text-[var(--color-danger-text)]"
+            : color === "accent"
+              ? "text-accent"
+              : "text-muted"
+      } ${TONE[color ?? tone]} ${
         reveal ? `${REVEAL[reveal === true ? "group" : reveal]} focus-visible:opacity-100 aria-expanded:opacity-100` : ""
       } ${className}`}
       {...props}

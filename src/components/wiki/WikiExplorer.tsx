@@ -194,7 +194,7 @@ export function WikiExplorer({
                   <span className="text-xs text-muted">{list.length + files.length}</span>
                 </button>
                 {g.projectId != null && (
-                  <IconButton
+                  <IconButton size="xs"
                     icon={Plus}
                     label={`${t.new_article}: ${g.name}`}
                     reveal

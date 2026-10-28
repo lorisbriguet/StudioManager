@@ -111,8 +111,8 @@ export function LineItemsTable({
                     <div className="flex items-center">
                       <SortableLineItemHandle id={item._id} />
                       <div className="flex flex-col">
-                        <IconButton icon={ChevronUp} label={t.move_up} onClick={() => moveRow(i, i - 1)} disabled={i === 0} />
-                        <IconButton icon={ChevronDown} label={t.move_down} onClick={() => moveRow(i, i + 1)} disabled={i === items.length - 1} />
+                        <IconButton size="xs" icon={ChevronUp} label={t.move_up} onClick={() => moveRow(i, i - 1)} disabled={i === 0} />
+                        <IconButton size="xs" icon={ChevronDown} label={t.move_down} onClick={() => moveRow(i, i + 1)} disabled={i === items.length - 1} />
                       </div>
                     </div>
                   </td>
@@ -170,7 +170,7 @@ export function LineItemsTable({
                   </td>
                   <td className="pl-1 py-1">
                     {items.length > 1 && (
-                      <IconButton icon={Trash2} label={t.delete} tone="danger" onClick={() => onRemove(i)} />
+                      <IconButton size="xs" icon={Trash2} label={t.delete} tone="danger" onClick={() => onRemove(i)} />
                     )}
                   </td>
                 </SortableLineItemRow>

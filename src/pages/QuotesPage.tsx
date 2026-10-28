@@ -332,7 +332,7 @@ export function QuotesPage() {
                   />
                 </td>
                 <td className="w-8 px-1">
-                  <IconButton
+                  <IconButton size="xs"
                     icon={Settings2}
                     label={t.more_actions}
                     onClick={(e) => {

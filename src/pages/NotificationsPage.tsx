@@ -110,7 +110,7 @@ export function NotificationsPage() {
                   </p>
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <IconButton
+                  <IconButton size="xs"
                     icon={Copy}
                     label={t.copy}
                     onClick={(e) => {
@@ -120,7 +120,7 @@ export function NotificationsPage() {
                     }}
                   />
                   {!n.read && (
-                    <IconButton
+                    <IconButton size="xs"
                       icon={Check}
                       label={t.mark_read}
                       onClick={(e) => {
@@ -129,7 +129,7 @@ export function NotificationsPage() {
                       }}
                     />
                   )}
-                  <IconButton
+                  <IconButton size="xs"
                     icon={Trash2}
                     label={t.delete}
                     tone="danger"

@@ -241,7 +241,7 @@ import { Button } from "../components/ui";
 - `danger`: outlined red, for every destructive action.
 - `link`: text only.
 
-Deep dive, with the counts behind this choice: [StudioManager Button](https://claude.ai/artifact/1wWC1A5CxpM4qxsXjd6wbw).
+Deep dive, with the counts behind this choice: [StudioManager Button](https://claude.ai/artifact/1wWC1A5CxpM4qxsXjd6wbw). The IconButton one: [StudioManager IconButton](https://claude.ai/artifact/BMjCuNLsU3XthiC8Vjmewo).
 
 ### Button Icon Rules
 - **Icon + text**: always use `<Button icon={<Icon size={14} />}>Label</Button>` — never raw `<button>` with icon and text side by side
@@ -254,8 +254,8 @@ Deep dive, with the counts behind this choice: [StudioManager Button](https://cl
 
 ```tsx
 <IconButton icon={Pencil} label={t.edit} onClick={edit} />
-<IconButton icon={Trash2} label={t.delete} tone="danger" reveal onClick={remove} />
-<IconButton icon={X} label={t.close} size="xs" onClick={onClose} />
+<IconButton icon={Trash2} label={t.delete} size="xs" tone="danger" reveal onClick={remove} />   // row action
+<IconButton icon={X} label={t.remove} size="xs" reveal="task" />                              // row with group/task
 <IconButton icon={MoreHorizontal} label={t.more} {...pop.triggerProps} />
 ```
 
@@ -263,17 +263,16 @@ Deep dive, with the counts behind this choice: [StudioManager Button](https://cl
 |------|--------|--|
 | `icon` | a lucide icon component | `Pencil`, not `<Pencil />` |
 | `label` | string (required) | aria-label and hover title, from `useT()` |
-| `size` | `xs` · `sm` (default) · `md` | `p-0.5` icon 12 · `p-1` icon 14 · `p-1.5` icon 16 |
+| `size` | `sm` (default) · `xs` | `sm`: a 26px square with a 14px icon (toolbars, headers, dialogs, next to fields). `xs`: a 20px square with a 12px icon (inside table rows, lists, tree rows). The box is fixed, so there's no padding to set. |
 | `tone` | `default` · `danger` · `accent` | Hover colour and tint: text + hover-row, danger-text + danger-bg, accent + hover-row |
-| `reveal` | boolean | Hidden until its `group` row is hovered or the button has keyboard focus |
+| `reveal` | `true` · `"row"` · `"task"` · `"sub"` · `"item"` · `"col"` | Hidden until its row is hovered (`true` is the nearest `group`; a name targets `group/<name>`) or the button has keyboard focus |
 | `active` | boolean | Pressed/open look |
 | `color` | `danger` · `accent` | Coloured at rest, not only on hover: a running timer, a confirm check |
-| `filled` | boolean | Solid accent fill, white icon: a primary confirm next to a field |
-| `iconSize` / `iconClassName` | number / string | Rare overrides, e.g. a rotating expand chevron |
+| `iconClassName` | string | Classes on the icon, e.g. a rotating expand chevron. The icon size can't be changed. |
 
 At rest an IconButton is `text-muted`. Disabled is `opacity-30`, with clicks turned off.
 
-When the row uses a named group (`group/task`), `reveal` can't reach it. Pass `className="opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100"` instead. Always-coloured buttons use `color`/`filled`. The × in a tag is `Tag onRemove`, and in a badge it's an `IconButton size="xs"`.
+Always-coloured buttons (a running timer, a confirm check) use `color`. A primary confirm with a label is a `Button`, not an IconButton. The × in a tag is `Tag onRemove`, and in a badge it's an `IconButton size="xs"`.
 
 ### Sanctioned Raw-Button Exceptions
 

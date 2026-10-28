@@ -204,7 +204,7 @@ export function ProfilePage() {
                           <span className="ml-2 text-xs text-muted">(default)</span>
                         )}
                       </button>
-                      <IconButton
+                      <IconButton size="xs"
                         icon={Trash2}
                         label={t.delete_template}
                         tone="danger"

@@ -176,14 +176,14 @@ export function TimeEntriesManager() {
                       </td>
                       <td className="px-3 py-1.5">
                         <div className="flex items-center gap-1">
-                          <IconButton
+                          <IconButton size="xs"
                             icon={Check}
                             label={t.save}
                             color="accent"
                             onClick={saveEdit}
                             disabled={updateEntry.isPending}
                           />
-                          <IconButton icon={X} label={t.cancel} onClick={() => setEditingId(null)} />
+                          <IconButton size="xs" icon={X} label={t.cancel} onClick={() => setEditingId(null)} />
                         </div>
                       </td>
                     </>

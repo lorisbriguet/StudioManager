@@ -435,7 +435,7 @@ export function TasksPage() {
                             : "opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100"
                         }
                       />
-                      <IconButton
+                      <IconButton size="xs"
                         onClick={() => deleteTask.mutate(tk.id, {
                           onSuccess: () => undoableFromStore(t.toast_task_deleted),
                         })}
@@ -504,7 +504,7 @@ export function TasksPage() {
                               reminder={s.reminder}
                               onChange={(vals) => updateSubtask.mutate({ id: s.id, data: vals })}
                             />
-                            <IconButton
+                            <IconButton size="xs"
                               onClick={() => deleteSubtask.mutate(s.id, {
                                 onSuccess: () => undoableFromStore(t.toast_subtask_deleted),
                               })}
