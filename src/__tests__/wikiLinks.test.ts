@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isAllowedWikiLink } from "../lib/wikiLinks";
+import { isAllowedWikiLink, parseWikiArticleId } from "../lib/wikiLinks";
 
 // Stored wiki content must never carry executable or local-file URLs.
 
@@ -17,5 +17,21 @@ describe("isAllowedWikiLink", () => {
     expect(isAllowedWikiLink("data:text/html,<script>1</script>")).toBe(false);
     expect(isAllowedWikiLink("file:///etc/passwd")).toBe(false);
     expect(isAllowedWikiLink("vbscript:x")).toBe(false);
+  });
+});
+
+describe("parseWikiArticleId", () => {
+  it("reads the article id from internal wiki links", () => {
+    expect(parseWikiArticleId("/wiki?article=42")).toBe(42);
+    expect(parseWikiArticleId(" /wiki?article=7 ")).toBe(7);
+    expect(parseWikiArticleId("/wiki?x=1&article=3")).toBe(3);
+  });
+
+  it("returns null for anything else", () => {
+    expect(parseWikiArticleId("https://example.com/wiki?article=42")).toBeNull();
+    expect(parseWikiArticleId("/wiki?article=")).toBeNull();
+    expect(parseWikiArticleId("/wiki?article=abc")).toBeNull();
+    expect(parseWikiArticleId("/wiki?article=0")).toBeNull();
+    expect(parseWikiArticleId("/wiki?article=4x")).toBeNull();
   });
 });

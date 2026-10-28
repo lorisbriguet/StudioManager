@@ -771,6 +771,8 @@ const ui = {
     bulleted_list: "Bulleted List",
     wiki_divider: "Divider",
     wiki_link: "Link",
+    wiki_link_open_hint: "Cmd/Ctrl-click a link to open it",
+    wiki_article_not_found: "Article not found",
     revenue_label: "Revenue",
     expenses_label: "Expenses",
     // Dashboard preset update
@@ -1745,6 +1747,8 @@ const ui = {
     bulleted_list: "Liste a puces",
     wiki_divider: "Separateur",
     wiki_link: "Lien",
+    wiki_link_open_hint: "Cmd/Ctrl-clic sur un lien pour l'ouvrir",
+    wiki_article_not_found: "Article introuvable",
     revenue_label: "Revenus",
     expenses_label: "Depenses",
     // Dashboard preset update

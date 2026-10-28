@@ -3,7 +3,10 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
-import { isAllowedWikiLink } from "../lib/wikiLinks";
+import { useSearchParams } from "react-router-dom";
+import { open as openUrl } from "@tauri-apps/plugin-shell";
+import { isAllowedWikiLink, parseWikiArticleId } from "../lib/wikiLinks";
+import { logError } from "../lib/log";
 import {
   Plus,
   ArrowLeft,
@@ -204,6 +207,9 @@ function LinkInsertPopup({
               <span className="truncate">{article.title}</span>
             </button>
           ))}
+          <div className="px-3 pt-1 pb-0.5">
+            <span className="text-[10px] text-muted">{t.wiki_link_open_hint}</span>
+          </div>
         </div>
       )}
       {!isUrl && query.trim() && matchedArticles.length === 0 && (
@@ -304,9 +310,12 @@ function SlashCommandMenu({
 export function ArticleEditor({
   articleId,
   onBack,
+  onOpenArticle,
 }: {
   articleId: number;
   onBack: () => void;
+  /** Called when the user Cmd/Ctrl-clicks an internal wiki link. */
+  onOpenArticle?: (id: number) => void;
 }) {
   const t = useT();
   const darkMode = useAppStore((s) => s.darkMode);
@@ -538,6 +547,31 @@ export function ArticleEditor({
     [editor]
   );
 
+  // Links can't open on a plain click: that click places the cursor so the
+  // link text stays editable. Cmd/Ctrl-click follows the link instead.
+  const handleEditorClick = useCallback(
+    (e: React.MouseEvent) => {
+      const anchor = (e.target as HTMLElement).closest("a");
+      if (!anchor) return;
+      // Never let the webview itself navigate to a stored href.
+      e.preventDefault();
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const href = anchor.getAttribute("href") ?? "";
+      const targetId = parseWikiArticleId(href);
+      if (targetId !== null) {
+        if (targetId !== articleId) onOpenArticle?.(targetId);
+        return;
+      }
+      if (/^https?:\/\//i.test(href)) {
+        openUrl(href).catch((err) => {
+          logError("Open URL failed:", err);
+          toast.error(t.failed_to_open_url);
+        });
+      }
+    },
+    [articleId, onOpenArticle, t.failed_to_open_url]
+  );
+
   if (!article) return null;
 
   return (
@@ -635,7 +669,7 @@ export function ArticleEditor({
         </div>
 
         {/* Tiptap editor */}
-        <div className="tiptap-editor relative">
+        <div className="tiptap-editor relative" onClick={handleEditorClick}>
           <EditorContent editor={editor} />
           {slashMenu && (
             <SlashCommandMenu
@@ -977,9 +1011,39 @@ export function WikiPage() {
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState<string[]>([]);
 
-  const { data: allArticles = [] } = useWikiArticles();
+  const { data: allArticles = [], isSuccess: articlesLoaded } = useWikiArticles();
   const { data: allTags = [] } = useAllWikiTags();
   const createArticle = useCreateWikiArticle();
+
+  const openArticle = useCallback(
+    (id: number) => {
+      if (allArticles.some((a: WikiArticleWithTags) => a.id === id)) {
+        setSelectedArticleId(id);
+      } else {
+        toast.error(t.wiki_article_not_found);
+      }
+    },
+    [allArticles, t.wiki_article_not_found]
+  );
+
+  // Open the article named in the address (`/wiki?article=42`), e.g. from a
+  // project page. The param is consumed so the open article stays driven by
+  // in-page state, and the same link can be followed again later.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedArticle = searchParams.get("article");
+  useEffect(() => {
+    if (requestedArticle === null || !articlesLoaded) return;
+    const id = parseWikiArticleId(`/wiki?article=${requestedArticle}`);
+    if (id !== null) openArticle(id);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("article");
+        return next;
+      },
+      { replace: true }
+    );
+  }, [requestedArticle, articlesLoaded, openArticle, setSearchParams]);
   const deleteArticle = useDeleteWikiArticle();
 
   const handleDeleteArticle = useCallback(async (id: number) => {
@@ -1031,9 +1095,13 @@ export function WikiPage() {
       {/* Main area */}
       <div className="flex-1 flex flex-col min-h-0">
         {selectedArticleId ? (
+          // Keyed so moving between articles remounts the editor: the unmount
+          // flush then saves typing still inside the 2s autosave window.
           <ArticleEditor
+            key={selectedArticleId}
             articleId={selectedArticleId}
             onBack={() => setSelectedArticleId(null)}
+            onOpenArticle={openArticle}
           />
         ) : (
           <>
