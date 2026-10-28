@@ -5,6 +5,8 @@
 //! from the Keychain, and every error returned to the frontend is scrubbed of it.
 
 pub mod keychain;
+pub mod synology;
+pub mod tls;
 
 use keychain::SecretStore;
 use serde::{Deserialize, Serialize};
@@ -54,20 +56,29 @@ pub struct SyncResult {
 ///   request URLs carry query strings (DSM sends `passwd=` and `otp_code=` there);
 /// - never put a response body that echoes credentials or tokens in an error.
 ///
-/// Build HTTP clients with [`http_client`] (installs the crypto provider).
+/// Build HTTP clients with [`http_client`] (installs the crypto provider), or
+/// [`tls::pinned_http_client`] for a device that may use a self-signed
+/// certificate.
 pub trait Connector {
     fn test(&self) -> Result<DeviceList, String>;
     fn sync(&self) -> Result<SyncResult, String>;
+    /// A new secret to keep after `test` or `sync`, e.g. the DSM device token
+    /// earned with a one-time code. Saved to the Keychain, never returned.
+    fn updated_secret(&self) -> Option<String> {
+        None
+    }
 }
 
-/// Build the connector of a kind. Tasks 13–14 register `synology` and
-/// `bambu_cloud` here.
+/// Build the connector of a kind. Task 14 registers `bambu_cloud` here.
 fn build_connector(
     kind: &str,
-    _config: &JsonValue,
-    _secret: Option<String>,
+    config: &JsonValue,
+    secret: Option<String>,
 ) -> Result<Box<dyn Connector>, String> {
-    Err(format!("unsupported connection kind: {kind}"))
+    match kind {
+        "synology" => synology::build(config, secret),
+        _ => Err(format!("unsupported connection kind: {kind}")),
+    }
 }
 
 /// JSON keys whose values are secret whatever their length.
@@ -78,7 +89,7 @@ const SECRET_KEYS: &[&str] = &[
 
 /// Percent-encoding of every byte outside RFC 3986's unreserved set;
 /// `plus_for_space` gives the form-encoded variant.
-fn percent_encode(s: &str, plus_for_space: bool, lower: bool) -> String {
+pub(crate) fn percent_encode(s: &str, plus_for_space: bool, lower: bool) -> String {
     let mut out = String::with_capacity(s.len() * 3);
     for b in s.bytes() {
         match b {
@@ -164,9 +175,17 @@ fn with_connector<T>(
 ) -> Result<T, String> {
     let account = keychain::account(org, id)?;
     let secret = store.get(&account)?;
-    let scrub = |e: String| redact(&e, secret.as_deref());
-    let connector = factory(kind, config, secret.clone()).map_err(scrub)?;
-    run(connector.as_ref()).map_err(scrub)
+    let connector = factory(kind, config, secret.clone()).map_err(|e| redact(&e, secret.as_deref()))?;
+    let result = run(connector.as_ref());
+    // Kept even when the call failed: a one-time code is spent either way.
+    let updated = connector.updated_secret();
+    let scrub = |e: String| redact(&redact(&e, secret.as_deref()), updated.as_deref());
+    if let Some(new) = updated.as_deref() {
+        if let Err(e) = store.set(&account, new) {
+            log::warn!("connection {id}: the renewed secret could not be saved: {}", scrub(e));
+        }
+    }
+    result.map_err(scrub)
 }
 
 fn run_test(
@@ -204,7 +223,6 @@ static CRYPTO_PROVIDER: std::sync::Once = std::sync::Once::new();
 
 /// HTTP client builder for connectors (Tasks 13–14). reqwest is built without
 /// a bundled crypto provider, so install ring as the process default first.
-#[allow(dead_code)] // used by the Synology and Bambu connectors
 pub(crate) fn http_client() -> reqwest::blocking::ClientBuilder {
     CRYPTO_PROVIDER.call_once(|| {
         // Err means another provider is already installed: fine.
@@ -374,10 +392,64 @@ mod tests {
     #[test]
     fn unknown_kind_is_a_clear_error() {
         let store = MemoryStore::default();
-        let err = run_sync(&store, "6kun0b", 3, "synology", &JsonValue::Null, &build_connector)
+        let err = run_sync(&store, "6kun0b", 3, "fax", &JsonValue::Null, &build_connector)
             .err()
             .unwrap();
-        assert_eq!(err, "unsupported connection kind: synology");
+        assert_eq!(err, "unsupported connection kind: fax");
+    }
+
+    #[test]
+    fn synology_kind_is_registered() {
+        let config = serde_json::json!({ "host": "nas.local", "port": 5001, "account": "studio" });
+        assert!(build_connector("synology", &config, Some(r#"{"password":"x"}"#.into())).is_ok());
+    }
+
+    struct Renews;
+    impl Connector for Renews {
+        fn test(&self) -> Result<DeviceList, String> {
+            Err("otp_invalid".into())
+        }
+        fn sync(&self) -> Result<SyncResult, String> {
+            Ok(SyncResult { devices: vec![] })
+        }
+        fn updated_secret(&self) -> Option<String> {
+            Some(r#"{"password":"pw","device_token":"new-token"}"#.into())
+        }
+    }
+
+    #[test]
+    fn updated_secret_is_saved_even_when_the_call_fails() {
+        let factory = |_: &str, _: &JsonValue, _: Option<String>| -> Result<Box<dyn Connector>, String> {
+            Ok(Box::new(Renews))
+        };
+        let store = store_with(r#"{"password":"pw","otp_code":"123456"}"#);
+        run_sync(&store, "6kun0b", 3, "fake", &JsonValue::Null, &factory).unwrap();
+        assert_eq!(store.get("6kun0b:3").unwrap().as_deref(), Some(r#"{"password":"pw","device_token":"new-token"}"#));
+        let store = store_with(r#"{"password":"pw","otp_code":"000000"}"#);
+        assert_eq!(run_test(&store, "6kun0b", 3, "fake", &JsonValue::Null, &factory).unwrap_err(), "otp_invalid");
+        assert!(!store.get("6kun0b:3").unwrap().unwrap().contains("otp_code"));
+    }
+
+    #[test]
+    fn errors_are_scrubbed_of_the_updated_secret_too() {
+        struct Leaky;
+        impl Connector for Leaky {
+            fn test(&self) -> Result<DeviceList, String> {
+                Err("token new-token-xyz refused".into())
+            }
+            fn sync(&self) -> Result<SyncResult, String> {
+                unreachable!()
+            }
+            fn updated_secret(&self) -> Option<String> {
+                Some(r#"{"password":"pw","device_token":"new-token-xyz"}"#.into())
+            }
+        }
+        let factory = |_: &str, _: &JsonValue, _: Option<String>| -> Result<Box<dyn Connector>, String> {
+            Ok(Box::new(Leaky))
+        };
+        let store = store_with(r#"{"password":"pw"}"#);
+        let err = run_test(&store, "6kun0b", 3, "fake", &JsonValue::Null, &factory).unwrap_err();
+        assert!(!err.contains("new-token-xyz"), "{err}");
     }
 
     #[test]

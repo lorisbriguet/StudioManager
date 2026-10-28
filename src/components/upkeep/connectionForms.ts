@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import type { ConnectionKind } from "../../types/upkeep";
+import { SynologyForm } from "./SynologyForm";
 
 /**
  * Setup form of a connection kind, shown in the "Add connection" dialog. It
@@ -11,7 +12,9 @@ export interface ConnectionFormProps {
   onCancel: () => void;
 }
 
-/** Tasks 13–14 register the Synology and Bambu Lab forms here. */
-export const CONNECTION_FORMS: Partial<Record<ConnectionKind, ComponentType<ConnectionFormProps>>> = {};
+/** Setup form per kind. Task 14 registers the Bambu Lab form here. */
+export const CONNECTION_FORMS: Partial<Record<ConnectionKind, ComponentType<ConnectionFormProps>>> = {
+  synology: SynologyForm,
+};
 
 export const CONNECTION_KINDS: ConnectionKind[] = ["synology", "bambu_cloud"];

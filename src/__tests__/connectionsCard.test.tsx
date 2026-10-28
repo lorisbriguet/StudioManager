@@ -9,7 +9,10 @@ vi.mock("../db/hooks/useConnections", () => ({
   useConnections: () => ({ data: connections }),
   useSyncNow: () => ({ mutate: syncNow, isPending: false }),
   useDeleteConnection: () => ({ mutate: remove, isPending: false }),
+  useCreateConnection: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateConnection: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
+vi.mock("../hooks/useUnsavedChangesWarning", () => ({ useUnsavedChangesWarning: () => {} }));
 
 import { ConnectionsCard } from "../components/upkeep/ConnectionsCard";
 
@@ -25,7 +28,9 @@ describe("ConnectionsCard", () => {
     render(<ConnectionsCard />);
     expect(screen.getByText(t.upkeep_connections_empty)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_connection_add }));
-    // No kind is implemented yet (Tasks 13–14 register their forms).
+    // Synology has its form (Task 13); Bambu Lab not yet (Task 14).
+    expect(screen.getByText(t.upkeep_syno_account_note)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(t.upkeep_connection_kind), { target: { value: "bambu_cloud" } });
     expect(screen.getByText(t.upkeep_connection_form_soon)).toBeInTheDocument();
   });
 
