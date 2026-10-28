@@ -1,11 +1,9 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Plus, Search, ExternalLink, Trash2, X } from "lucide-react";
-import { PageHeader, Button, EmptyState, FormField, Select, IconButton } from "../components/ui";
+import { PageHeader, Button, EmptyState, FormField, Select, IconButton, Tag, FilterChip } from "../components/ui";
 import * as v from "../lib/validate";
 import { Skeleton } from "../components/ui/Skeleton";
 import { SavedFilterBar } from "../components/SavedFilterBar";
-import { getTagColor, getNamedTagColor } from "../lib/tagColors";
-import { useAppStore } from "../stores/app-store";
 import { toast } from "sonner";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
@@ -38,7 +36,6 @@ interface ResourceRow {
 
 export function ResourcesPage() {
   const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
   const { data: resources, isLoading } = useResources();
   const { data: allTags } = useAllTags();
   const createResource = useCreateResource();
@@ -192,22 +189,15 @@ export function ResourcesPage() {
         {(allTags ?? []).length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">
             {(allTags ?? []).map((tag) => {
-              const c = getTagColor(tag, darkMode);
               const active = tagFilter === tag;
               return (
-                <button
+                <FilterChip
                   key={tag}
+                  tag={tag}
+                  active={active}
+                  activeIcon={<X size={10} />}
                   onClick={() => { setTagFilter(active ? null : tag); setActiveFilterId(null); }}
-                  style={{
-                    background: active ? c.bg : "transparent",
-                    color: active ? c.text : "var(--color-muted)",
-                    borderColor: active ? c.text : "var(--color-border-divider)",
-                  }}
-                  className="px-2 py-0.5 text-xs rounded-full font-medium border transition-colors flex items-center gap-1"
-                >
-                  {tag}
-                  {active && <X size={10} />}
-                </button>
+                />
               );
             })}
           </div>
@@ -332,7 +322,6 @@ function NewResourceForm({
   onCancel: () => void;
 }) {
   const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [price, setPrice] = useState("");
@@ -438,21 +427,9 @@ function NewResourceForm({
       </div>
       {tags.length > 0 && (
         <div className="flex gap-1.5 mt-2 flex-wrap">
-          {tags.map((tag) => {
-            const c = getTagColor(tag, darkMode);
-            return (
-              <span
-                key={tag}
-                style={{ background: c.bg, color: c.text }}
-                className="px-2 py-0.5 text-xs rounded-full font-medium flex items-center gap-1"
-              >
-                {tag}
-                <button onClick={() => setTags(tags.filter((t) => t !== tag))} aria-label={`${t.remove_tag} ${tag}`}>
-                  <X size={10} />
-                </button>
-              </span>
-            );
-          })}
+          {tags.map((tag) => (
+            <Tag key={tag} name={tag} onRemove={() => setTags(tags.filter((t) => t !== tag))} />
+          ))}
         </div>
       )}
       {duplicateWarning && (
@@ -522,7 +499,6 @@ function ResourceTableRow({
   onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
   const [name, setName] = useState(resource.name);
   const [url, setUrl] = useState(resource.url);
   const [price, setPrice] = useState(resource.price);
@@ -595,15 +571,9 @@ function ResourceTableRow({
         </td>
         <td className="px-3 py-2">
           <div className="flex flex-wrap gap-1 items-center">
-            {tags.map((tag) => {
-              const c = getTagColor(tag, darkMode);
-              return (
-                <span key={tag} style={{ background: c.bg, color: c.text }} className="px-2 py-0.5 text-xs rounded-full font-medium flex items-center gap-1">
-                  {tag}
-                  <button onClick={() => setTags(tags.filter((t) => t !== tag))} aria-label={`${t.remove_tag} ${tag}`}><X size={10} /></button>
-                </span>
-              );
-            })}
+            {tags.map((tag) => (
+              <Tag key={tag} name={tag} onRemove={() => setTags(tags.filter((t) => t !== tag))} />
+            ))}
             <input
               type="text"
               placeholder={t.add_tag}
@@ -675,25 +645,17 @@ function ResourceTableRow({
       <td className="px-3 py-2 font-medium">{resource.name}</td>
       <td className="px-3 py-2">
         <div className="flex flex-wrap gap-1">
-          {resource.tags.map((tag) => {
-            const c = getTagColor(tag, darkMode);
-            return (
-              <span key={tag} style={{ background: c.bg, color: c.text }} className="px-2 py-0.5 text-xs rounded-full font-medium">
-                {tag}
-              </span>
-            );
-          })}
+          {resource.tags.map((tag) => (
+            <Tag key={tag} name={tag} />
+          ))}
         </div>
       </td>
       <td className="px-3 py-2">
-        {resource.price && (() => {
-          const c = getNamedTagColor(resource.price === "free" ? "green" : "red", darkMode);
-          return (
-            <span style={{ background: c.bg, color: c.text }} className="px-2 py-0.5 text-xs rounded-full font-medium">
-              {resource.price === "free" ? t.price_free : t.price_paid}
-            </span>
-          );
-        })()}
+        {resource.price && (
+          <Tag name={resource.price} color={resource.price === "free" ? "green" : "red"}>
+            {resource.price === "free" ? t.price_free : t.price_paid}
+          </Tag>
+        )}
       </td>
       <td className="px-3 py-2">
         {resource.url && (

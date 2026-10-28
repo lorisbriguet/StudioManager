@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Plus, Trash2, Calendar, Link, Unlink } from "lucide-react";
-import { Button, Select, Popover } from "../ui";
+import { Button, Select, Popover, Tag } from "../ui";
 import { MENU_ITEM } from "../ui/Dropdown";
 import { toast } from "sonner";
 import type { WorkloadColumn, WorkloadColumnType, SelectOption } from "../../types/workload";
-import { getStoredTagColor, normalizeTagColorName, TAG_COLOR_NAMES } from "../../lib/tagColors";
-import { useAppStore } from "../../stores/app-store";
+import { normalizeTagColorName, TAG_COLOR_NAMES } from "../../lib/tagColors";
 import { COLUMN_ICONS, COLUMN_ICON_NAMES } from "./columnIcons";
 import { evaluateFormula } from "../../lib/formulaEval";
 import { useT } from "../../i18n/useT";
@@ -32,7 +31,6 @@ const COLUMN_TYPES: { value: WorkloadColumnType; label: string }[] = [
 
 export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDelete, onClose }: Props) {
   const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
   const isNew = column === null;
 
   const [name, setName] = useState(column?.name ?? "");
@@ -316,15 +314,9 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
               </div>
               <div className="space-y-1.5 mb-2">
                 {options.map((opt, i) => {
-                  const c = getStoredTagColor(opt.color, darkMode);
                   return (
                     <div key={i} className="flex items-center gap-2">
-                      <span
-                        style={{ background: c.bg, color: c.text }}
-                        className="px-2 py-0.5 rounded-full text-xs"
-                      >
-                        {opt.value}
-                      </span>
+                      <Tag name={opt.value} color={opt.color} />
                       <Select
                         value={normalizeTagColorName(opt.color)}
                         onChange={(e) => {

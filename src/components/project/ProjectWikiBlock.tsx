@@ -2,15 +2,12 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, BookOpen } from "lucide-react";
 import { useWikiArticlesByProject, useWikiArticles, useUpdateWikiArticle } from "../../db/hooks/useWiki";
-import { Button } from "../ui";
+import { Button, Tag } from "../ui";
 import { useT } from "../../i18n/useT";
-import { getTagColor } from "../../lib/tagColors";
-import { useAppStore } from "../../stores/app-store";
 
 export function ProjectWikiBlock({ projectId }: { projectId: number }) {
   const t = useT();
   const navigate = useNavigate();
-  const darkMode = useAppStore((s) => s.darkMode);
   const { data: wikiArticles } = useWikiArticlesByProject(projectId);
   const { data: allArticles = [] } = useWikiArticles();
   const updateWikiArticle = useUpdateWikiArticle();
@@ -35,18 +32,9 @@ export function ProjectWikiBlock({ projectId }: { projectId: number }) {
               <BookOpen size={14} className="text-muted shrink-0" />
               <span className="text-sm truncate">{article.title}</span>
               <div className="flex items-center gap-1 ml-auto shrink-0">
-                {(article.tags ?? []).map((tag: string) => {
-                  const c = getTagColor(tag, darkMode);
-                  return (
-                    <span
-                      key={tag}
-                      style={{ background: c.bg, color: c.text }}
-                      className="px-2 py-0.5 text-xs rounded-full font-medium"
-                    >
-                      {tag}
-                    </span>
-                  );
-                })}
+                {(article.tags ?? []).map((tag: string) => (
+                  <Tag key={tag} name={tag} />
+                ))}
               </div>
             </button>
           ))}
@@ -71,18 +59,9 @@ export function ProjectWikiBlock({ projectId }: { projectId: number }) {
                   {a.title}
                   {a.tags && a.tags.length > 0 && (
                     <div className="flex items-center gap-1 ml-auto shrink-0">
-                      {a.tags.map((tag: string) => {
-                        const c = getTagColor(tag, darkMode);
-                        return (
-                          <span
-                            key={tag}
-                            style={{ background: c.bg, color: c.text }}
-                            className="px-1.5 py-0.5 text-[10px] rounded-full font-medium"
-                          >
-                            {tag}
-                          </span>
-                        );
-                      })}
+                      {a.tags.map((tag: string) => (
+                        <Tag key={tag} name={tag} size="xs" />
+                      ))}
                     </div>
                   )}
                 </button>

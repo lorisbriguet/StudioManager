@@ -30,7 +30,7 @@ import { useUnreadNotificationCount } from "../../db/hooks/useNotifications";
 import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
 import type { UIKey } from "../../i18n/ui";
-import { BOTTOM_BAR } from "../ui";
+import { BOTTOM_BAR, CountBadge } from "../ui";
 
 type NavItem = { to: string; icon: typeof LayoutDashboard; labelKey: UIKey };
 type SidebarItem = NavItem | { divider: true };
@@ -253,9 +253,7 @@ export function Sidebar() {
                 <span className="flex items-center gap-2">
                   {label}
                   {isNotifications && unreadCount > 0 && (
-                    <span className="bg-[var(--color-danger)] text-white text-[10px] font-medium px-1.5 py-0.5 rounded-full leading-none">
-                      {unreadCount}
-                    </span>
+                    <CountBadge value={unreadCount} tone="danger" />
                   )}
                 </span>
               )}

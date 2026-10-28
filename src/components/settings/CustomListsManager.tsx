@@ -3,14 +3,12 @@ import { toast } from "sonner";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { Trash2, Check, Plus } from "lucide-react";
 import { useT } from "../../i18n/useT";
-import { useAppStore } from "../../stores/app-store";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useUpdateCustomList, useDeleteCustomList, useSetCustomListItems } from "../../db/hooks/useCustomLists";
-import { getStoredTagColor, normalizeTagColorName, TAG_COLOR_NAMES } from "../../lib/tagColors";
-import { Button, Select, IconButton } from "../ui";
+import { normalizeTagColorName, TAG_COLOR_NAMES } from "../../lib/tagColors";
+import { Button, Select, IconButton, Tag } from "../ui";
 
 export function CustomListsManager() {
   const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
   const { data: lists } = useCustomLists();
   const createList = useCreateCustomList();
   const updateList = useUpdateCustomList();
@@ -159,16 +157,10 @@ export function CustomListsManager() {
           <div>
             <div className="space-y-1.5 mb-3">
               {localItems.map((item, i) => {
-                const c = getStoredTagColor(item.color, darkMode);
                 return (
                 <div key={i} className="flex items-center gap-2">
                   <div className="flex-1 min-w-0">
-                    <span
-                      style={{ background: c.bg, color: c.text }}
-                      className="inline-block max-w-full truncate align-middle px-2 py-0.5 rounded-full text-xs"
-                    >
-                      {item.value}
-                    </span>
+                    <Tag name={item.value} color={item.color} />
                   </div>
                   <Select
                     value={normalizeTagColorName(item.color)}

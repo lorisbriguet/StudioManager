@@ -36,7 +36,7 @@ import { useTabStore } from "../stores/tab-store";
 import { useOrgStore } from "../stores/org-store";
 import { useTimerActions } from "../hooks/useTimerActions";
 import { useT } from "../i18n/useT";
-import { PageHeader, SearchBar, TableSkeleton, EmptyState, Select } from "../components/ui";
+import { PageHeader, SearchBar, TableSkeleton, EmptyState, Select, FilterChip } from "../components/ui";
 import { taskStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Task, Subtask, TaskStatus } from "../types/task";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
@@ -257,17 +257,13 @@ export function TasksPage() {
       <div className="flex items-center gap-4 mb-4">
         <div className="flex gap-2">
           {statusTabs.map((tab) => (
-            <button
+            <FilterChip
               key={tab.value}
+              active={filter === tab.value}
               onClick={() => { setFilter(tab.value); setActiveFilterId(null); setFilterConditions([]); }}
-              className={`px-3 py-1 text-xs rounded-full border ${
-                filter === tab.value
-                  ? "bg-accent text-white border-accent"
-                  : "border-[var(--color-input-border)] text-muted hover:bg-[var(--color-hover-row)]"
-              }`}
             >
               {tab.label}
-            </button>
+            </FilterChip>
           ))}
         </div>
         <SearchBar

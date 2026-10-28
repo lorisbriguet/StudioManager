@@ -30,7 +30,7 @@ import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
 import { PriorityBadge } from "./PriorityBadge";
 import { SortableSubtaskRow } from "./SortableSubtaskRow";
-import { IconButton } from "../ui";
+import { IconButton, FilterChip } from "../ui";
 
 export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
   projectId: number;
@@ -96,17 +96,9 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
       <div className="flex justify-end mb-2">
         <div className="flex gap-1">
           {(["todo", "done", "all"] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setTaskFilter(f)}
-              className={`px-2 py-0.5 text-xs rounded-full border ${
-                taskFilter === f
-                  ? "bg-accent text-white border-accent"
-                  : "border-[var(--color-input-border)] text-muted hover:bg-[var(--color-hover-row)]"
-              }`}
-            >
+            <FilterChip key={f} active={taskFilter === f} onClick={() => setTaskFilter(f)}>
               {f === "todo" ? t.todo : f === "done" ? t.done : t.all}
-            </button>
+            </FilterChip>
           ))}
         </div>
       </div>

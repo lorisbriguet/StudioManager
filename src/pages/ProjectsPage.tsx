@@ -22,7 +22,7 @@ import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Button, Badge, Card, PageHeader, SearchBar, TableSkeleton, Input, EmptyState, Select, IconButton } from "../components/ui";
+import { Button, Badge, Card, PageHeader, SearchBar, TableSkeleton, Input, EmptyState, Select, IconButton, FilterChip } from "../components/ui";
 import { undoable, undoableFromStore } from "../lib/undo";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
@@ -277,17 +277,13 @@ export function ProjectsPage() {
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <div className="flex flex-wrap gap-2">
             {(["all", "active", "completed", "on_hold", "cancelled"] as const).map((s) => (
-              <button
+              <FilterChip
                 key={s}
+                active={filter === s}
                 onClick={() => { setFilter(s); setActiveFilterId(null); setFilterConditions([]); }}
-                className={`px-3 py-1 text-xs rounded-full border ${
-                  filter === s
-                    ? "bg-accent text-white border-accent"
-                    : "border-[var(--color-input-border)] text-muted hover:bg-[var(--color-hover-row)]"
-                }`}
               >
                 {filterLabels[s]}
-              </button>
+              </FilterChip>
             ))}
           </div>
           <SearchBar

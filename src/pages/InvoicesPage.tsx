@@ -33,7 +33,7 @@ import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Card, Modal, FormField, Input, Select, IconButton } from "../components/ui";
+import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Card, Modal, FormField, Input, Select, IconButton, CountBadge } from "../components/ui";
 import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
 import { isDraftReference } from "../types/invoice";
 import type { Invoice, InvoiceStatus } from "../types/invoice";
@@ -454,9 +454,7 @@ export function InvoicesPage() {
       >
         {t.recurring}
         {(templates?.length ?? 0) > 0 && (
-          <span className="ml-1 text-xs bg-[var(--color-input-bg)] text-[var(--color-muted)] rounded-full px-1.5 py-0.5">
-            {templates?.length}
-          </span>
+          <CountBadge value={templates?.length ?? 0} className="ml-1" />
         )}
       </Button>
       <Button icon={<Plus size={16} />} onClick={() => navigate("/invoices/new")}>

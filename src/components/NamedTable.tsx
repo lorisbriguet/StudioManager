@@ -14,7 +14,6 @@ import {
 } from "../db/hooks/useProjectTables";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useSetCustomListItems } from "../db/hooks/useCustomLists";
 import { useT } from "../i18n/useT";
-import { useAppStore } from "../stores/app-store";
 import { toast } from "sonner";
 import type { ProjectTable, TableColumnDef, ProjectTableRow } from "../types/project-table";
 import { IconButton } from "./ui/IconButton";
@@ -26,7 +25,6 @@ interface Props {
 
 export function NamedTable({ table, projectId }: Props) {
   const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
   const { data: rows } = useProjectTableRows(table.id);
   const createRow = useCreateProjectTableRow(table.id);
   const updateRow = useUpdateProjectTableRow(table.id);
@@ -278,8 +276,6 @@ export function NamedTable({ table, projectId }: Props) {
                       <TableCell
                         row={row}
                         col={col}
-                        darkMode={darkMode}
-                        t={t}
                         isEditing={editingCell?.rowId === row.id && editingCell?.colId === col.id}
                         editValue={editValue}
                         cellInputRef={cellInputRef}

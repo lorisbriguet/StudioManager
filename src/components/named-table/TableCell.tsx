@@ -1,14 +1,11 @@
 import type { RefObject } from "react";
-import { X } from "lucide-react";
-import { getTagColor } from "../../lib/tagColors";
+import { Tag } from "../ui/Tag";
 import { Select } from "../ui/Select";
 import type { TableColumnDef, ProjectTableRow } from "../../types/project-table";
 
 interface Props {
   row: ProjectTableRow;
   col: TableColumnDef;
-  darkMode: boolean;
-  t: Record<string, string>;
   /** True when this exact (row, col) pair is the one being edited. */
   isEditing: boolean;
   editValue: string;
@@ -28,8 +25,6 @@ interface Props {
 export function TableCell({
   row,
   col,
-  darkMode,
-  t,
   isEditing,
   editValue,
   cellInputRef,
@@ -74,21 +69,9 @@ export function TableCell({
       };
       return (
         <div className="flex flex-wrap gap-1 items-center">
-          {selected.map((tag) => {
-            const color = getTagColor(tag, darkMode);
-            return (
-              <span
-                key={tag}
-                style={{ background: color.bg, color: color.text }}
-                className="px-1.5 py-0.5 text-[10px] rounded-full flex items-center gap-0.5"
-              >
-                {tag}
-                <button type="button" onClick={() => removeTag(tag)} aria-label={`${t.remove_tag} ${tag}`} className="hover:text-danger">
-                  <X size={10} />
-                </button>
-              </span>
-            );
-          })}
+          {selected.map((tag) => (
+            <Tag key={tag} name={tag} size="xs" onRemove={() => removeTag(tag)} />
+          ))}
           {available.map((opt) => (
             <button
               key={opt}

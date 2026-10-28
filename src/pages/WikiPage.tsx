@@ -10,7 +10,6 @@ import { logError } from "../lib/log";
 import {
   Plus,
   BookOpen,
-  X,
   Trash2,
   Heading1,
   Heading2,
@@ -30,10 +29,8 @@ import {
 import { ask } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { useT } from "../i18n/useT";
-import { useAppStore } from "../stores/app-store";
-import { getTagColor } from "../lib/tagColors";
 import { notifyError, getLabels } from "../lib/notifyError";
-import { Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem, Popover, IconButton } from "../components/ui";
+import { Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem, Popover, IconButton, Tag } from "../components/ui";
 import { MENU_ITEM } from "../components/ui/Dropdown";
 import { Select } from "../components/ui/Select";
 import {
@@ -388,7 +385,6 @@ export function ArticleEditor({
   nav?: { canBack: boolean; canForward: boolean; onBack: () => void; onForward: () => void; folderName?: string };
 }) {
   const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
   const { data: article } = useWikiArticle(articleId);
   const { data: articleTags = [] } = useWikiArticleTags(articleId);
   const { data: allTags = [] } = useAllWikiTags();
@@ -755,27 +751,9 @@ export function ArticleEditor({
           {/* Metadata row */}
           <div className="flex items-center gap-3 mb-6 flex-wrap">
             <div className="flex items-center gap-1.5 flex-wrap">
-              {articleTags.map((tag) => {
-                const color = getTagColor(tag, darkMode);
-                return (
-                  <span
-                    key={tag}
-                    style={{ background: color.bg, color: color.text }}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full font-medium"
-                  >
-                    {tag}
-                    {!reading && (
-                      <button
-                        onClick={() => handleRemoveTag(tag)}
-                        className="opacity-60 hover:opacity-100"
-                        aria-label={`${t.remove_tag} ${tag}`}
-                      >
-                        <X size={10} />
-                      </button>
-                    )}
-                  </span>
-                );
-              })}
+              {articleTags.map((tag) => (
+                <Tag key={tag} name={tag} onRemove={reading ? undefined : () => handleRemoveTag(tag)} />
+              ))}
               {!reading && (
                 <div className="relative">
                   <input

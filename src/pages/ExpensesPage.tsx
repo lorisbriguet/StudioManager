@@ -1,11 +1,9 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Plus, Paperclip, Eye, ChevronRight, Upload, Trash2, CheckCircle, CalendarCheck, Receipt, Settings2, XCircle, Pencil } from "lucide-react";
-import { Button, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState, Card, Modal, Popover, IconButton } from "../components/ui";
+import { Button, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState, Card, Modal, Popover, IconButton, Tag } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
 import { SavedFilterBar } from "../components/SavedFilterBar";
-import { getTagColor, getNamedTagColor } from "../lib/tagColors";
-import { useAppStore } from "../stores/app-store";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { formatDisplayDate } from "../utils/formatDate";
@@ -45,7 +43,6 @@ type SortKey = "reference" | "supplier" | "category_code" | "invoice_date" | "am
 
 export function ExpensesPage() {
   const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
   const { data: expenses, isLoading } = useExpenses();
   const { data: categories } = useExpenseCategories();
   const { data: pastSuppliers } = useDistinctSuppliers();
@@ -86,11 +83,6 @@ export function ExpensesPage() {
 
   const categoryName = (code: string) => categoryMap.get(code)?.name_fr ?? code;
 
-  const categoryColor = (code: string) => {
-    const cat = categoryMap.get(code);
-    if (cat?.color) return getNamedTagColor(cat.color, darkMode);
-    return getTagColor(code, darkMode);
-  };
 
   const filtered = useMemo(() => {
     if (!expenses) return [];
@@ -346,11 +338,7 @@ export function ExpensesPage() {
                         <td className="px-4 py-2.5 font-medium">{exp.reference}</td>
                         <td className="px-4 py-2.5">{exp.supplier}</td>
                         <td className="px-4 py-2.5">
-                          {(() => { const c = categoryColor(exp.category_code); return (
-                            <span style={{ background: c.bg, color: c.text }} className="px-2 py-0.5 text-xs rounded-full font-medium">
-                              {exp.category_code}
-                            </span>
-                          ); })()}
+                          <Tag name={exp.category_code} color={categoryMap.get(exp.category_code)?.color || undefined} />
                           <span className="ml-1 text-xs text-muted">{categoryName(exp.category_code)}</span>
                         </td>
                         <td className="px-4 py-2.5 text-muted">{formatDisplayDate(exp.invoice_date)}</td>

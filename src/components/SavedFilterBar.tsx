@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Bookmark, Plus, X, Pencil, Trash2, Filter } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Select } from "./ui";
+import { Button, Select, FilterChip } from "./ui";
 import { ContextMenu } from "./ContextMenu";
 import {
   useSavedFilters,
@@ -355,22 +355,17 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
   return (
     <div className="flex flex-col gap-1 mb-3">
       <div className="flex items-center gap-1.5 flex-wrap">
-        <button
-          onClick={handleClearAll}
-          className={`text-xs px-2.5 py-1 rounded-full transition-colors ${
-            activeFilterId == null
-              ? "bg-accent text-white"
-              : "text-muted hover:bg-[var(--color-hover-row)]"
-          }`}
-        >
+        <FilterChip active={activeFilterId == null} onClick={handleClearAll}>
           {t.all}
-        </button>
+        </FilterChip>
 
         {filters.map((f) => {
           const condCount = f.filters.conditions?.length ?? 0;
           return (
-            <button
+            <FilterChip
               key={f.id}
+              active={activeFilterId === f.id}
+              count={editingId !== f.id && condCount > 0 ? condCount : undefined}
               onClick={() => {
                 if (activeFilterId === f.id && fields && fields.length > 0) {
                   // Already active — toggle condition editor
@@ -391,11 +386,6 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
                 e.preventDefault();
                 setCtxMenu({ x: e.clientX, y: e.clientY, filter: f });
               }}
-              className={`text-xs px-2.5 py-1 rounded-full transition-colors flex items-center gap-1 ${
-                activeFilterId === f.id
-                  ? "bg-accent text-white"
-                  : "text-muted hover:bg-[var(--color-hover-row)]"
-              }`}
             >
               {editingId === f.id ? (
                 <input
@@ -412,18 +402,9 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
                   className="text-xs bg-transparent border-b border-accent w-20 outline-none"
                 />
               ) : (
-                <>
-                  {f.name}
-                  {condCount > 0 && (
-                    <span className={`text-[10px] rounded-full px-1 py-0 ${
-                      activeFilterId === f.id ? "bg-white/25" : "bg-[var(--color-input-bg)] text-[var(--color-muted)]"
-                    }`}>
-                      {condCount}
-                    </span>
-                  )}
-                </>
+                f.name
               )}
-            </button>
+            </FilterChip>
           );
         })}
 

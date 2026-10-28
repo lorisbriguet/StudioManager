@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import type { SelectOption } from "../../types/workload";
-import { getStoredTagColor, TAG_COLOR_NAMES } from "../../lib/tagColors";
-import { useAppStore } from "../../stores/app-store";
+import { TAG_COLOR_NAMES } from "../../lib/tagColors";
 import { useT } from "../../i18n/useT";
 import { Popover } from "../ui/Popover";
+import { Tag } from "../ui/Tag";
 
 interface Props {
   options: SelectOption[];
@@ -27,7 +27,6 @@ export function SelectTagPicker({
 }: Props) {
   const t = useT();
   const [search, setSearch] = useState("");
-  const darkMode = useAppStore((s) => s.darkMode);
 
   const filtered = options.filter((o) =>
     o.value.toLowerCase().includes(search.toLowerCase())
@@ -73,7 +72,6 @@ export function SelectTagPicker({
       </div>
       <div className="max-h-48 overflow-y-auto">
         {filtered.map((opt) => {
-          const c = getStoredTagColor(opt.color, darkMode);
           const selected = value.includes(opt.value);
           return (
             <button
@@ -83,12 +81,7 @@ export function SelectTagPicker({
                 selected ? "bg-[var(--color-hover-row)]" : ""
               }`}
             >
-              <span
-                style={{ background: c.bg, color: c.text }}
-                className="inline-block px-2 py-0.5 rounded-full text-xs"
-              >
-                {opt.value}
-              </span>
+              <Tag name={opt.value} color={opt.color} />
               {selected && (
                 <X size={12} className="ml-auto text-muted shrink-0" />
               )}

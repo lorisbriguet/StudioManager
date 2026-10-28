@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Plus, Trash2, Copy, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "../ui";
+import { Button, Tag } from "../ui";
 import {
   useWorkloadTemplates,
   useCreateWorkloadTemplate,
@@ -11,14 +11,11 @@ import {
 import { WorkloadColumnEditor } from "./WorkloadColumnEditor";
 import { DEFAULT_WORKLOAD_COLUMNS } from "../../types/workload";
 import type { WorkloadColumn } from "../../types/workload";
-import { getStoredTagColor } from "../../lib/tagColors";
-import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
 import { IconButton } from "../ui/IconButton";
 
 export function WorkloadTemplateManager() {
   const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
   const { data: templates } = useWorkloadTemplates();
   const createTemplate = useCreateWorkloadTemplate();
   const updateTemplate = useUpdateWorkloadTemplate();
@@ -168,18 +165,9 @@ export function WorkloadTemplateManager() {
                     {(col.type === "select" || col.type === "multi_select") &&
                       col.options && (
                         <div className="flex gap-0.5 flex-1 overflow-hidden">
-                          {col.options.slice(0, 4).map((opt) => {
-                            const c = getStoredTagColor(opt.color, darkMode);
-                            return (
-                              <span
-                                key={opt.value}
-                                style={{ background: c.bg, color: c.text }}
-                                className="px-1.5 py-0 rounded-full text-[10px]"
-                              >
-                                {opt.value}
-                              </span>
-                            );
-                          })}
+                          {col.options.slice(0, 4).map((opt) => (
+                            <Tag key={opt.value} name={opt.value} color={opt.color} size="xs" />
+                          ))}
                           {col.options.length > 4 && (
                             <span className="text-muted">
                               +{col.options.length - 4}
