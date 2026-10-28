@@ -2,11 +2,10 @@ import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Plus, Paperclip, Eye, Trash2, Upload, Wallet, Pencil, Settings2 } from "lucide-react";
 import { PageHeader, SearchBar, Button, DatePicker, EmptyState, FormField, FormGrid, FormModal, Input, Select, Table, TableSkeleton, IconButton, Tag } from "../components/ui";
 import * as v from "../lib/validate";
-import { undoableFromStore } from "../lib/undo";
+import { deleteWithUndo } from "../lib/undo";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { formatDisplayDate } from "../utils/formatDate";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { copyFile, mkdir, exists } from "@tauri-apps/plugin-fs";
 import { orgPaths } from "../lib/orgPaths";
 import { attachReceipt as attachReceiptFlow, sanitizeSegment } from "../lib/attachReceipt";
@@ -24,6 +23,7 @@ import { BulkActionBar } from "../components/ui/BulkActionBar";
 import { useReceiptDrop } from "../hooks/useReceiptDrop";
 import { useDetectedFields } from "../hooks/useDetectedFields";
 import { useBulkSelect } from "../hooks/useBulkSelect";
+import { useBulkDelete } from "../hooks/useBulkDelete";
 import { useT } from "../i18n/useT";
 import type { Income } from "../types/income";
 import { logError } from "../lib/log";
@@ -101,12 +101,8 @@ export function IncomePage() {
 
   const bulk = useBulkSelect(filtered);
 
-  const bulkDelete = useCallback(async () => {
-    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
-    const ids = [...bulk.selected] as number[];
-    ids.forEach((id) => deleteIncome.mutate(id));
-    bulk.clearSelection();
-  }, [bulk, deleteIncome, t]);
+  const deleteSelection = useBulkDelete("income", (id: number) => deleteIncome.mutateAsync(id));
+  const bulkDelete = () => void deleteSelection([...bulk.selected] as number[], bulk.clearSelection);
 
   const { expandedYears, groupedByYear, toggleYear } = useYearGrouping(
     filtered,
@@ -376,7 +372,7 @@ export function IncomePage() {
               ? { label: t.view, icon: <Eye size={14} />, onClick: () => setPreview({ path: ctxMenu.item.receipt_path!, reference: ctxMenu.item.reference }) }
               : { label: t.attach, icon: <Paperclip size={14} />, onClick: () => attachReceipt(ctxMenu.item.id, ctxMenu.item.reference, ctxMenu.item.source) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteIncome.mutate(ctxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_income_deleted) }) },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteWithUndo(deleteIncome, ctxMenu.item.id, t.toast_income_deleted) },
           ]}
         />
       )}
@@ -513,6 +509,7 @@ export function NewIncomeForm({
           badge={detectedBadge("source", () => setForm((f) => ({ ...f, source: "" })))}
         >
           <Input
+            autoFocus
             value={form.source}
             onChange={(e) => {
               setForm({ ...form, source: e.target.value });

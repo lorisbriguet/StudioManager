@@ -368,22 +368,32 @@ Every date field uses `DatePicker` from `src/components/ui/DatePicker.tsx`. Neve
 ### Modal
 ```tsx
 import { Modal, Kbd } from "../components/ui";
-<Modal open={open} onClose={close} title="Title" footer={<Button>Save</Button>}>
+<Modal open={open} onClose={close} title="Title" footer={<Button>Close</Button>}>
   Content
 </Modal>
 
 // palette-style: top of the window, content laid out edge to edge
-<Modal open={open} onClose={close} position="top" size="lg" padding={false} aria-label={t.quick_timer}>
+<Modal open={open} onClose={close} position="top" size="md" padding={false} aria-label={t.quick_timer}>
   … <Kbd>Esc</Kbd>
 </Modal>
 ```
 
-- **Size:** `size` is `sm` (the default) · `md` · `lg` · `xl` · `2xl` · `full` (viewers: 80% × 85% of the window).
+- **Three widths:**
+
+  | `size` | Width | For |
+  |--|--|--|
+  | `sm` (Modal's default) | 400px | Confirmations, prompts, forms of one to three fields (rename, paid date, make recurring, new organisation, save as template) |
+  | `md` (FormModal's default) | 560px | Record forms (client, expense, income, project, resource), the column editor, the quote-to-project wizard, the command palette, the quick timer |
+  | `full` | 80% × 85% of the window | Viewers (receipts, PDFs): the content fills it |
+
+- **Height:** every size stops at 85% of the window. The header and the footer stay put; only the body scrolls.
+- **Padding:** the body has 20px on every side, with or without a title. `padding={false}` drops it for content that lays itself out edge to edge (palettes, viewers).
+- **Fields mean FormModal:** a dialog with fields is a `FormModal` (see [Forms](#forms)), never a Modal with a hand-wired Enter key. Give the first field `autoFocus`.
+- **Questions mean ConfirmDialog:** see [Confirmations](#confirmations).
+- **A name for every dialog:** a `title`, or an `aria-label` when there is none (palettes).
 - **Rendering:** it renders on `<body>`, so a transformed panel (the side peek) can't trap it. Tests should query `document` or `screen`, not the render container.
 - **Position:** `position="top"` places the dialog 20% from the top.
-- **Padding:** `padding={false}` drops the body padding.
-- **No title:** give it an `aria-label`.
-- **Built in:** backdrop click and Esc close the dialog, focus is trapped while open, and focus returns to where it was on close.
+- **Built in:** backdrop click and Esc close the dialog (only the topmost one, when a confirmation is open over a form), focus is trapped while open, and focus returns to where it was on close.
 - **Never build your own overlay** (`fixed inset-0 bg-black/…`).
 - **`Kbd`:** draws a key hint.
 
@@ -504,7 +514,7 @@ Forms are built from `FormLayout`, `FormSection`, `FormGrid`, `FormField` and `F
 - **Fields:** one height, 26px. Don't add padding to make one taller.
 - **Checkboxes and toggles:** their own `label` / `description`, never wrapped in a hand-written `<label>`.
 - **Actions:** right-aligned with the primary last: Cancel (secondary), other actions, primary. A destructive action sits on the far left. In a Modal they go in `footer`, which is the same row.
-- **Creating a record** (client, expense, income, project, resource) happens in a `FormModal`: fields in the body, which is a `<form>` so Enter submits; Cancel · Create in the footer. A field that uses Enter itself (suggestions, tag entry) calls `preventDefault`.
+- **Every dialog with fields is a `FormModal`:** creating a record (client, expense, income, project, resource, `md`) and the small prompts (new organisation, paid date, make recurring, save as template, `sm`). The body is a `<form>`, so Enter submits; Cancel · other actions · primary in the footer, a Delete in `destructive` on the far left (the column editor). The first field has `autoFocus`. While it saves, pass `submitting` (spinner on the primary, no second submit), not `submitDisabled`, which is for a form that isn't ready. A field that uses Enter itself (suggestions, tag entry) calls `preventDefault`. Tests press Enter with `pressEnter` (`src/__tests__/fixtures/form.ts`): happy-dom doesn't submit a form from a keydown.
 - **Spanning:** `FormField span={2 | 3 | 4 | "full"}`; anything else in a grid (a checkbox row, a note) goes in `FormGridItem`.
 - **Buttons inside a form** don't submit it unless they are `type="submit"`: `Button` defaults to `type="button"`. `FormModal`'s form is `noValidate`, so the app's own errors show, not the browser's.
 - **Errors without a visible label** (a row rename, the line-items check) use `FieldError`.
@@ -593,13 +603,54 @@ From `src/components/ui/Feedback.tsx` and `Tooltip.tsx`:
 ```tsx
 <ProgressBar value={62} label={t.progress} showValue />            // tone accent|success|warning|danger, size sm|md
 <Callout tone="warning" action={<Button>…</Button>}>{msg}</Callout>  // warning|info|danger|success
-<ConfirmButton label={t.delete} question={t.confirm_delete_client} onConfirm={remove} />
+<ConfirmButton label={t.delete} question={t.confirm_delete_named.replace("{name}", ref)} onConfirm={remove} />
 <DragHandle {...attributes} {...listeners} reveal />                // dnd-kit grip; reveal = group hover
 <Tooltip content={t.open_full_page}><Link …><Maximize2 size={14} /></Link></Tooltip>
 ```
 
 - **Hints:** never use the native `title` attribute for a hint on a button or link. Use `Tooltip`, or `IconButton`, which shows its `label` as a tooltip. `title` stays only on truncated plain text, where it reveals the full text.
-- **Deleting:** `ConfirmButton` is the in-place confirm. Deletes that need more context still use the system dialog (`ask()`).
+- **Asking before an action:** see [Confirmations](#confirmations).
+
+---
+
+## Confirmations
+
+The app asks with its own dialog, never the system one: no `ask()` from `@tauri-apps/plugin-dialog` (its `open` and `save` file pickers stay).
+
+```tsx
+import { useConfirm, confirmDelete } from "../lib/confirm";
+
+const confirm = useConfirm();
+const ok = await confirm({
+  title: t.restore_backup_title.replace("{name}", file), // the question, with its object
+  message: t.restore_confirm,                            // what happens
+  confirmLabel: t.restore,                               // the verb on the button
+  tone: "danger",                                        // red verb button
+});
+
+await confirmDelete(client.name, t.delete_client_cascade);                 // "Delete Atelier?" + what goes with it
+await confirm({ …, requireText: org.name });                              // verb disabled until the name is typed
+const choice = await confirm({ …, extra: { label: t.export_as_draft, value: "draft" } }); // true | false | "draft"
+```
+
+- **`ConfirmDialog`** (`src/components/ui/ConfirmDialog.tsx`): a `Modal` of size `sm` with the title, the message, then Cancel · the extra choice · the verb. Cancel has the focus (with `requireText`, the field does), so a stray Enter never runs the action; Esc and the backdrop cancel.
+- **`confirm()` / `useConfirm()`** (`src/lib/confirm.ts`) return a promise: true for the verb, false for Cancel, or the extra choice's `value`. They work from non-React code too (the unsaved-changes guard, the bulk PDF export, switching organisation): a small store (`src/stores/confirm-store.ts`, like the undo store) holds the questions and the one `<ConfirmHost/>` in `App` shows them, one at a time. A test that triggers a question renders `<ConfirmHost/>` and clicks the button, or mocks `confirm` from `lib/confirm` in a lib test.
+- **Words:** a translated title that asks with its object ("Delete {name}?", "Exit test mode?"), a message that says what happens, the verb on the button ("Delete", "Restore", "Leave"), never OK / Yes. No sentence glued from pieces (`t.delete + "?"`) and no English fallback (`t.x ?? "…"`).
+- **The draft warning** before exporting a draft invoice or quote is one dialog everywhere (preview pages, download and email from the lists): `confirmDraftExport()` / `settleDraftBeforeExport()` in `src/lib/confirmDraftExport.ts`, Cancel · Export as draft · Mark as sent & export.
+
+### Which deletes ask
+
+| Delete | Asks first | Then |
+|--|--|--|
+| A single record that takes nothing with it (expense, income, invoice from the list, quote, task, subtask, resource, wiki article, list, time entry, template, table, row, column, filter, preset, notification…) | No | The toast with Undo |
+| A cascading delete: a client (its projects, tasks, documents), a project (its tasks) | Yes, with what goes with it | The toast with Undo |
+| Every bulk delete | Yes: "Delete 3 expenses?" | One toast, one Undo for all |
+| No undo possible: a whole organisation, restoring a backup or snapshot, demo data, resetting the guide, leaving test or presentation mode | Yes (an organisation: type its name) | — |
+
+- **Where it asks:** in place with `ConfirmButton` for a single delete behind its own visible button (a client or project page, the invoice form: "Delete {reference}?"); a `ConfirmDialog` for bulk deletes, a context-menu delete, a whole organisation or the database.
+- **Undo:** a delete mutation pushes its own undo entry (`src/db/hooks`); the page then shows the toast with `deleteWithUndo(mutation, id, t.x_deleted)` (or `undoableFromStore` after a `mutateAsync`). A delete with no hook of its own pushes one with `pushUndoable`. Rows with no restore query are copied before the delete and put back as they were, same ids, with `snapshotRows` / `pushRestore` (`src/db/undoRestore.ts`). The toast stays 8 seconds (`UNDO_DURATION` in `src/lib/undo.ts`).
+- **Bulk:** `useBulkDelete(entity, id => mutation.mutateAsync(id), { message })` (`src/hooks/useBulkDelete.ts`): one question with the count, the deletes in turn (a failed one is reported by its mutation, the rest go on), then one toast; `batchUndo` folds their undo entries into one, so Undo or Cmd+Z brings the whole selection back.
+- **Test and presentation mode:** leave through `useExitMode()` (`src/hooks/useExitMode.ts`), from the banner and from Settings.
 
 ---
 

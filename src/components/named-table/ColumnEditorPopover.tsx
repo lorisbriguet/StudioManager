@@ -63,7 +63,7 @@ export function ColumnEditorPopover({
       {(col.type === "select" || col.type === "tags") && (
         // Named-table options are plain names: no colours, renamed in place.
         <OptionsEditor
-          label={t.options ?? "Options"}
+          label={t.options}
           colors={false}
           options={colOptions.map((value) => ({ value }))}
           onChange={(next) => setColOptions(next.map((o) => o.value))}

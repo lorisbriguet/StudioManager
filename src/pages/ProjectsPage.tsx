@@ -2,7 +2,6 @@ import { useState, useMemo, useRef, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus, X, Eye, Trash2, ExternalLink, Maximize2, FolderOpen, Play, Pause, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from "../db/hooks/useProjects";
 import { useClients } from "../db/hooks/useClients";
 import { useAllTasks } from "../db/hooks/useTasks";
@@ -23,7 +22,9 @@ import { effectivePriority, type TaskPriority } from "../types/task";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
 import { Checkbox, Button, Badge, PageHeader, SearchBar, TableSkeleton, DatePicker, Input, FormField, FormGrid, FormModal, EmptyState, Select, IconButton, FilterChip, ProgressBar, Tooltip } from "../components/ui";
-import { undoable, undoableFromStore } from "../lib/undo";
+import { undoable, deleteWithUndo } from "../lib/undo";
+import { confirmDelete } from "../lib/confirm";
+import { useBulkDelete } from "../hooks/useBulkDelete";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
@@ -209,12 +210,11 @@ export function ProjectsPage() {
     bulk.clearSelection();
   }, [bulk, updateProject, projects, t]);
 
-  const bulkDelete = useCallback(async () => {
-    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
-    const ids = [...bulk.selected] as number[];
-    ids.forEach((id) => deleteProject.mutate(id));
-    bulk.clearSelection();
-  }, [bulk, deleteProject, t]);
+  // Cascading (a project takes its tasks with it): ask first, then Undo.
+  const deleteSelection = useBulkDelete("projects", (id: number) => deleteProject.mutateAsync(id), {
+    message: t.delete_projects_cascade,
+  });
+  const bulkDelete = () => void deleteSelection([...bulk.selected] as number[], bulk.clearSelection);
 
   const handleProjectClick = useCallback((projectId: number) => {
     if (projectOpenMode === "peek") {
@@ -395,7 +395,11 @@ export function ProjectsPage() {
             { label: t.view_details, icon: <Eye size={14} />, onClick: () => navigate(`/projects/${ctxMenu.item.id}`) },
             { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/projects/${ctxMenu.item.id}`, ctxMenu.item.name) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteProject.mutate(ctxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_project_deleted) }) },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: async () => {
+              const project = ctxMenu.item;
+              if (!(await confirmDelete(project.name, t.delete_project_cascade))) return;
+              deleteWithUndo(deleteProject, project.id, t.toast_project_deleted);
+            } },
           ]}
         />
       )}

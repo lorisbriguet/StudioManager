@@ -6,6 +6,8 @@ import {
   updateSavedFilterData,
   deleteSavedFilter,
 } from "../queries/savedFilters";
+import { snapshotRows, pushRestore } from "../undoRestore";
+import { getLabels } from "../../lib/notifyError";
 import type { SavedFilterData } from "../../types/saved-filter";
 
 export function useSavedFilters(page: string) {
@@ -43,8 +45,14 @@ export function useUpdateSavedFilter(page: string) {
 
 export function useDeleteSavedFilter(page: string) {
   const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["saved-filters", page] });
   return useMutation({
-    mutationFn: (id: number) => deleteSavedFilter(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["saved-filters", page] }),
+    mutationFn: async (id: number) => {
+      const snap = await snapshotRows([{ table: "saved_filters", where: "id = $1", params: [id] }]);
+      await deleteSavedFilter(id);
+      const name = String(snap[0].rows[0]?.name ?? "");
+      pushRestore(`${getLabels().undo_delete_filter} "${name}"`, snap, { redo: () => deleteSavedFilter(id), invalidate });
+    },
+    onSuccess: invalidate,
   });
 }

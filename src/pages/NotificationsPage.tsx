@@ -13,6 +13,7 @@ import {
 } from "../db/hooks/useNotifications";
 import { formatDisplayDateTime } from "../utils/formatDate";
 import { useT } from "../i18n/useT";
+import { deleteWithUndo } from "../lib/undo";
 import type { AppNotification } from "../types/notification";
 
 const typeConfig: Record<string, { icon: typeof Bell; color: string }> = {
@@ -65,7 +66,7 @@ export function NotificationsPage() {
           </Button>
         )}
         {notifications.length > 0 && (
-          <Button variant="danger" icon={<Trash2 size={12} />} onClick={() => clearAll.mutate()}>
+          <Button variant="danger" icon={<Trash2 size={12} />} onClick={() => deleteWithUndo(clearAll, undefined, t.notifications_cleared)}>
             {t.clear_all}
           </Button>
         )}
@@ -135,7 +136,7 @@ export function NotificationsPage() {
                     tone="danger"
                     onClick={(e) => {
                       e.stopPropagation();
-                      deleteNotif.mutate(n.id);
+                      deleteWithUndo(deleteNotif, n.id, t.notification_deleted);
                     }}
                   />
                 </div>

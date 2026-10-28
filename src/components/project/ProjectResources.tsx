@@ -9,6 +9,7 @@ import {
 import { getResources } from "../../db/queries/resources";
 import { Button, IconButton } from "../ui";
 import { useT } from "../../i18n/useT";
+import { deleteWithUndo } from "../../lib/undo";
 
 export function ProjectResources({ projectId }: { projectId: number }) {
   const t = useT();
@@ -49,7 +50,7 @@ export function ProjectResources({ projectId }: { projectId: number }) {
           <span className="text-xs text-muted truncate max-w-[200px]">
             {r.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
           </span>
-          <IconButton icon={X} label={t.remove} size="xs" tone="danger" reveal onClick={() => unlinkResource.mutate({ resourceId: r.id, projectId })} />
+          <IconButton icon={X} label={t.remove} size="xs" tone="danger" reveal onClick={() => deleteWithUndo(unlinkResource, { resourceId: r.id, projectId }, t.resource_unlinked)} />
         </div>
       ))}
       {showPicker ? (

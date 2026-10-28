@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { Plus, X, Palette, Trash2, Building2, Landmark, FileText, AlertTriangle } from "lucide-react";
 import { isUntranslatedActivity } from "../lib/activityNudge";
 import { toast } from "sonner";
+import { deleteWithUndo } from "../lib/undo";
 import {
   useBusinessProfile,
   useUpdateBusinessProfile,
@@ -212,11 +213,7 @@ export function ProfilePage() {
                         label={t.delete_template}
                         tone="danger"
                         disabled={!!tmpl.is_default}
-                        onClick={() => {
-                          deleteTemplate.mutate(tmpl.id, {
-                            onError: (e) => toast.error(String(e)),
-                          });
-                        }}
+                        onClick={() => deleteWithUndo(deleteTemplate, tmpl.id, t.invoice_template_deleted)}
                       />
                     </div>
                   ))
@@ -280,7 +277,7 @@ export function ProfilePage() {
                         key={a.id}
                         activity={a}
                         onSave={(name_fr, name_en) => updateActivityMut.mutate({ id: a.id, name_fr, name_en })}
-                        onDelete={() => deleteActivityMut.mutate(a.id)}
+                        onDelete={() => deleteWithUndo(deleteActivityMut, a.id, t.activity_deleted)}
                         removeLabel={t.remove}
                       />
                     ))}

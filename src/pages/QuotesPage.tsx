@@ -5,8 +5,9 @@ import { toast } from "sonner";
 import { pdf } from "@react-pdf/renderer";
 import { invoke } from "@tauri-apps/api/core";
 import { writeFile } from "@tauri-apps/plugin-fs";
-import { undoable, undoableFromStore } from "../lib/undo";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { undoable, deleteWithUndo } from "../lib/undo";
+import { settleDraftBeforeExport } from "../lib/confirmDraftExport";
+import { useBulkDelete } from "../hooks/useBulkDelete";
 import { pdfFileName } from "../lib/pdfFilename";
 import { orgPaths } from "../lib/orgPaths";
 import { runBulkPdfExport } from "../lib/bulkPdfExport";
@@ -132,11 +133,11 @@ export function QuotesPage() {
     }
   };
 
+  const settleDraft = (q: Quote) =>
+    settleDraftBeforeExport(q.reference, () => updateQuote.mutateAsync({ id: q.id, data: { status: "sent" } }));
+
   const doDownloadPdf = async (q: Quote & { client_name: string }) => {
-    if (q.reference.startsWith("DRAFT")) {
-      const proceed = await ask(t.export_draft_warning, { kind: "warning", okLabel: t.download_pdf, cancelLabel: t.cancel });
-      if (!proceed) return;
-    }
+    if (!(await settleDraft(q))) return;
     const toastId = toast.loading(t.generating_pdf);
     try {
       const result = await generateQuotePdfBytes(q.id, q.client_id);
@@ -168,10 +169,7 @@ export function QuotesPage() {
   };
 
   const doEmailPdf = async (q: Quote & { client_name: string }) => {
-    if (q.reference.startsWith("DRAFT")) {
-      const proceed = await ask(t.export_draft_warning, { kind: "warning", okLabel: t.email_pdf, cancelLabel: t.cancel });
-      if (!proceed) return;
-    }
+    if (!(await settleDraft(q))) return;
     const toastId = toast.loading(t.generating_pdf);
     try {
       const result = await generateQuotePdfBytes(q.id, q.client_id);
@@ -254,11 +252,8 @@ export function QuotesPage() {
     bulk.clearSelection();
   }, [bulk, updateQuote, filtered, t]);
 
-  const bulkDelete = useCallback(async () => {
-    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
-    ([...bulk.selected] as number[]).forEach((id) => deleteQuote.mutate(id));
-    bulk.clearSelection();
-  }, [bulk, deleteQuote, t]);
+  const deleteSelection = useBulkDelete("quotes", (id: number) => deleteQuote.mutateAsync(id));
+  const bulkDelete = () => void deleteSelection([...bulk.selected] as number[], bulk.clearSelection);
 
   const bulkExportPdfs = async () => {
     const docs = ([...bulk.selected] as number[])
@@ -392,7 +387,7 @@ export function QuotesPage() {
             ...(!ctxMenu.item.converted_to_invoice_id ? [{ label: t.convert_to_invoice, icon: <FileOutput size={14} />, onClick: () => navigate(`/invoices/new?from_quote=${ctxMenu.item.id}`) }] : []),
             ...(ctxMenu.item.status === "accepted" && !ctxMenu.item.converted_to_project_id ? [{ label: t.generate_project, icon: <FolderPlus size={14} />, onClick: () => openWizard(ctxMenu.item) }] : []),
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteQuote.mutate(ctxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_quote_deleted) }) },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteWithUndo(deleteQuote, ctxMenu.item.id, t.toast_quote_deleted) },
           ]}
         />
       )}

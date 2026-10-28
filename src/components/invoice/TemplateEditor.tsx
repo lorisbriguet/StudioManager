@@ -354,10 +354,10 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
               <FormGroup label={t.margins}>
                 <FormGrid cols={2}>
                   {([
-                    { label: t.margin_top ?? "Top", value: marginTop, set: setMarginTop },
-                    { label: t.margin_right ?? "Right", value: marginRight, set: setMarginRight },
-                    { label: t.margin_bottom ?? "Bottom", value: marginBottom, set: setMarginBottom },
-                    { label: t.margin_left ?? "Left", value: marginLeft, set: setMarginLeft },
+                    { label: t.margin_top, value: marginTop, set: setMarginTop },
+                    { label: t.margin_right, value: marginRight, set: setMarginRight },
+                    { label: t.margin_bottom, value: marginBottom, set: setMarginBottom },
+                    { label: t.margin_left, value: marginLeft, set: setMarginLeft },
                   ] as { label: string; value: number; set: (v: number) => void }[]).map(({ label, value, set }) => (
                     <FormField key={label} label={label}>
                       <Input type="number" value={value} onChange={(e) => set(Number(e.target.value))} className="text-right" />

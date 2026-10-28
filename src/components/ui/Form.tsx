@@ -1,7 +1,7 @@
 import { useId, type ElementType, type FormEvent, type HTMLAttributes, type ReactNode } from "react";
 import { useT } from "../../i18n/useT";
 import { Button } from "./Button";
-import { Modal } from "./Modal";
+import { Modal, type ModalSize } from "./Modal";
 import { SectionLabel } from "./SectionLabel";
 import { FIELD_LABEL, FORM_ACTIONS, FORM_GAP, FORM_SPAN, FORM_STACK, FORM_WIDTH, type FormSpan } from "./tokens";
 
@@ -113,21 +113,23 @@ interface FormModalProps {
   extraActions?: ReactNode;
   /** Far-left action (Delete). */
   destructive?: ReactNode;
-  size?: "sm" | "md" | "lg" | "xl" | "2xl";
+  /** md (560px, the default): record forms and editors. sm (400px): one to three fields. */
+  size?: Exclude<ModalSize, "full">;
   children: ReactNode;
 }
 
 /**
- * A form in a dialog: creating a client, an expense, a project…
- * The body is a <form>, so Enter in a field submits; the footer is
- * Cancel (secondary), any extra actions, then the primary.
+ * Every dialog with fields: creating a client, an expense, a project, a
+ * one-field prompt… The body is a <form>, so Enter in a field submits; the
+ * footer is Cancel (secondary), any extra actions, then the primary. Give the
+ * first field `autoFocus`; pass `submitting` while it saves.
  *
  *   <FormModal open title={t.new_client} submitLabel={t.save} onSubmit={save} onClose={close}>
  *     <FormGrid cols={2}>…</FormGrid>
  *   </FormModal>
  */
 export function FormModal({
-  open, onClose, title, onSubmit, submitLabel, submitDisabled, submitting, extraActions, destructive, size = "lg", children,
+  open, onClose, title, onSubmit, submitLabel, submitDisabled, submitting, extraActions, destructive, size = "md", children,
 }: FormModalProps) {
   const t = useT();
   const formId = useId();

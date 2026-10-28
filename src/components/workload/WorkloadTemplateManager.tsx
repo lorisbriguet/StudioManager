@@ -13,6 +13,8 @@ import { DEFAULT_WORKLOAD_COLUMNS } from "../../types/workload";
 import type { WorkloadColumn } from "../../types/workload";
 import { useT } from "../../i18n/useT";
 import { IconButton } from "../ui/IconButton";
+import { pushUndoable } from "../../lib/undo";
+import type { WorkloadTemplate } from "../../types/workload";
 
 export function WorkloadTemplateManager() {
   const t = useT();
@@ -51,11 +53,17 @@ export function WorkloadTemplateManager() {
     );
   };
 
-  const handleDelete = (id: number) => {
-    deleteTemplate.mutate(id, {
+  // No question: Undo re-creates the template with its columns.
+  const handleDelete = (tpl: WorkloadTemplate) => {
+    deleteTemplate.mutate(tpl.id, {
       onSuccess: () => {
-        toast.success(t.toast_deleted);
-        if (editingTemplateId === id) setEditingTemplateId(null);
+        if (editingTemplateId === tpl.id) setEditingTemplateId(null);
+        pushUndoable(t.workload_template_deleted, {
+          label: `${t.undo_delete_workload_template} "${tpl.name}"`,
+          execute: async () => {
+            await createTemplate.mutateAsync({ name: tpl.name, columns: tpl.columns });
+          },
+        });
       },
     });
   };
@@ -87,8 +95,23 @@ export function WorkloadTemplateManager() {
 
   const handleDeleteColumn = () => {
     if (!editingTemplate || !editingColumn) return;
-    const next = editingTemplate.columns.filter((_, i) => i !== editingColumn.index);
-    updateTemplate.mutate({ id: editingTemplate.id, columns: next });
+    const { id, columns: prev } = editingTemplate;
+    const next = prev.filter((_, i) => i !== editingColumn.index);
+    updateTemplate.mutate(
+      { id, columns: next },
+      {
+        onSuccess: () =>
+          pushUndoable(t.column_deleted, {
+            label: t.undo_delete_column,
+            execute: async () => {
+              await updateTemplate.mutateAsync({ id, columns: prev });
+            },
+            redo: async () => {
+              await updateTemplate.mutateAsync({ id, columns: next });
+            },
+          }),
+      }
+    );
   };
 
   return (
@@ -148,7 +171,7 @@ export function WorkloadTemplateManager() {
                 }}
               />
               <IconButton size="xs" icon={Copy} label={t.duplicate} tone="accent" onClick={() => handleDuplicate(tpl)} />
-              <IconButton size="xs" icon={Trash2} label={t.delete} tone="danger" onClick={() => handleDelete(tpl.id)} />
+              <IconButton size="xs" icon={Trash2} label={t.delete} tone="danger" onClick={() => handleDelete(tpl)} />
             </div>
 
             {/* Expanded column list */}

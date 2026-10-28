@@ -65,7 +65,7 @@ export function QuickTimerModal() {
       open={open}
       onClose={close}
       position="top"
-      size="sm"
+      size="md"
       padding={false}
       aria-label={t.quick_timer}
       footer={

@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as q from "../queries/activities";
+import { snapshotRows, pushRestore } from "../undoRestore";
+import { getLabels } from "../../lib/notifyError";
 
 export function useActivities() {
   return useQuery({ queryKey: ["activities"], queryFn: q.getActivities });
@@ -25,8 +27,13 @@ export function useUpdateActivity() {
 
 export function useDeleteActivity() {
   const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["activities"] });
   return useMutation({
-    mutationFn: (id: number) => q.deleteActivity(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["activities"] }),
+    mutationFn: async (id: number) => {
+      const snap = await snapshotRows([{ table: "activities", where: "id = $1", params: [id] }]);
+      await q.deleteActivity(id);
+      pushRestore(getLabels().undo_delete_activity, snap, { redo: () => q.deleteActivity(id), invalidate });
+    },
+    onSuccess: invalidate,
   });
 }

@@ -4,7 +4,6 @@ import { PageHeader, Button, EmptyState, FormField, Select, IconButton, Tag, Fil
 import * as v from "../lib/validate";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { toast } from "sonner";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
 import {
   useResources,
@@ -18,8 +17,10 @@ import { SortHeader, sortRows, type SortState } from "../components/ui/SortHeade
 import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu";
 import { BulkActionBar } from "../components/ui/BulkActionBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
+import { useBulkDelete } from "../hooks/useBulkDelete";
 import { useT } from "../i18n/useT";
 import { logError } from "../lib/log";
+import { undoableFromStore } from "../lib/undo";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
@@ -100,17 +101,13 @@ export function ResourcesPage() {
 
   const bulk = useBulkSelect(filtered);
 
-  const bulkDelete = useCallback(async () => {
-    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
-    const ids = [...bulk.selected] as number[];
-    ids.forEach((id) => deleteResource.mutate(id));
-    bulk.clearSelection();
-  }, [bulk, deleteResource, t]);
+  const deleteSelection = useBulkDelete("resources", (id: number) => deleteResource.mutateAsync(id));
+  const bulkDelete = () => void deleteSelection([...bulk.selected] as number[], bulk.clearSelection);
 
-  const handleDelete = async (id: number, name: string) => {
+  const handleDelete = async (id: number) => {
     try {
       await deleteResource.mutateAsync(id);
-      toast.success(`${t.delete}: ${name}`);
+      undoableFromStore(t.toast_resource_deleted);
     } catch (err) {
       logError("Delete resource failed:", err);
       toast.error(t.delete_failed);
@@ -233,7 +230,7 @@ export function ResourcesPage() {
                   toast.error(t.update_failed);
                 }
               }}
-              onDelete={() => handleDelete(r.id, r.name)}
+              onDelete={() => handleDelete(r.id)}
               onOpenUrl={() => handleOpenUrl(r.url)}
               onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: r }); }}
             />
@@ -265,7 +262,7 @@ export function ResourcesPage() {
             ...(ctxMenu.item.url ? [{ label: t.open_link, icon: <ExternalLink size={14} />, onClick: () => handleOpenUrl(ctxMenu.item.url) }] : []),
             { label: t.edit, onClick: () => setEditingId(ctxMenu.item.id) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => handleDelete(ctxMenu.item.id, ctxMenu.item.name) },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => handleDelete(ctxMenu.item.id) },
           ]}
         />
       )}
@@ -366,7 +363,7 @@ function NewResourceForm({
   };
 
   return (
-    <FormModal open onClose={onCancel} title={t.new_resource} size="md" submitLabel={t.save} onSubmit={submit} submitting={saving}>
+    <FormModal open onClose={onCancel} title={t.new_resource} submitLabel={t.save} onSubmit={submit} submitting={saving}>
       <FormGrid cols={2}>
         <FormField label={t.name} required error={errors.name}>
           <Input

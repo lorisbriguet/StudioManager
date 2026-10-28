@@ -3,7 +3,7 @@ import { X, Pencil, Trash2, Check } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useTimeEntriesWithDetails, useUpdateTimeEntry, useDeleteTimeEntry } from "../../db/hooks/useTimeEntries";
 import { useProjects } from "../../db/hooks/useProjects";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { deleteWithUndo } from "../../lib/undo";
 import { Button, DatePicker, Select, IconButton, Input, Table, TableSkeleton, FormField, FORM_GAP } from "../ui";
 import { SectionHeader } from "../ui/Settings";
 
@@ -59,9 +59,7 @@ export function TimeEntriesManager() {
     );
   };
 
-  const handleDelete = (id: number) => {
-    deleteEntry.mutate(id);
-  };
+  const handleDelete = (id: number) => deleteWithUndo(deleteEntry, id, t.time_entry_deleted);
 
   return (
     <div>
@@ -190,9 +188,7 @@ export function TimeEntriesManager() {
                           size="xs"
                           tone="danger"
                           disabled={deleteEntry.isPending}
-                          onClick={async () => {
-                            if (await ask(t.confirm_delete_time_entry, { kind: "warning" })) handleDelete(entry.id);
-                          }}
+                          onClick={() => handleDelete(entry.id)}
                         />
                       </Table.Actions>
                     </>

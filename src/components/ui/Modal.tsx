@@ -6,13 +6,16 @@ import { IconButton } from "./IconButton";
 import { PanelTitle } from "./PanelTitle";
 import { FORM_ACTIONS, SURFACE } from "./tokens";
 
+export type ModalSize = "sm" | "md" | "full";
+
 interface ModalProps {
   open: boolean;
   onClose: () => void;
   title?: string;
   children: ReactNode;
   footer?: ReactNode;
-  size?: "sm" | "md" | "lg" | "xl" | "2xl" | "full";
+  /** sm 400px (confirms, prompts, 1–3 fields) · md 560px (record forms, editors, palettes) · full (viewers). */
+  size?: ModalSize;
   /** top: palette-style dialogs (command palette, quick timer) sit at 20% from the top. */
   position?: "center" | "top";
   /** false: the content lays itself out edge to edge (no body padding). */
@@ -21,14 +24,13 @@ interface ModalProps {
   "aria-label"?: string;
 }
 
-const sizeClasses = {
-  sm: "max-w-sm",
-  md: "max-w-md",
-  lg: "max-w-lg",
-  xl: "max-w-xl",
-  "2xl": "max-w-2xl",
+// Every size caps at 85% of the window: the header and footer stay put and
+// only the body scrolls.
+const sizeClasses: Record<ModalSize, string> = {
+  sm: "max-w-[400px] max-h-[85vh]",
+  md: "max-w-[560px] max-h-[85vh]",
   /** viewers (receipts, PDFs): 80% × 85% of the window, content fills it */
-  full: "w-[80vw]! max-w-none h-[85vh] flex flex-col",
+  full: "w-[80vw]! max-w-none h-[85vh]",
 };
 
 const FOCUSABLE_SELECTOR =
@@ -54,7 +56,12 @@ export function Modal({ open, onClose, title, children, footer, size = "sm", pos
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      // Only the topmost dialog closes (a confirmation opened over a form).
+      // Portals mount on <body> in opening order, so the newest is last.
+      const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+      if (dialogs.length > 0 && dialogs[dialogs.length - 1] !== ref.current) return;
+      onClose();
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -133,7 +140,7 @@ export function Modal({ open, onClose, title, children, footer, size = "sm", pos
         aria-labelledby={title ? titleId : undefined}
         aria-label={title ? undefined : aria["aria-label"]}
         tabIndex={-1}
-        className={`${SURFACE} shadow-[0_16px_48px_rgba(0,0,0,0.5)] w-full ${sizeClasses[size]} mx-4 overflow-hidden modal-animate outline-none`}
+        className={`${SURFACE} shadow-[0_16px_48px_rgba(0,0,0,0.5)] w-full ${sizeClasses[size]} mx-4 flex flex-col overflow-hidden modal-animate outline-none`}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleTrapKeyDown}
       >
@@ -143,12 +150,12 @@ export function Modal({ open, onClose, title, children, footer, size = "sm", pos
             id={titleId}
             title={title}
             action={<IconButton icon={X} label={t.close} onClick={onClose} />}
-            className="px-5 py-3 border-b border-[var(--color-border-divider)]"
+            className="shrink-0 px-5 py-3 border-b border-[var(--color-border-divider)]"
           />
         )}
-        {padding ? <div className={title ? "p-5" : "p-6"}>{children}</div> : children}
+        <div className={`flex-1 min-h-0 overflow-y-auto ${padding ? "p-5" : "flex flex-col"}`}>{children}</div>
         {footer && (
-          <div className={`${FORM_ACTIONS} px-5 py-3 border-t border-[var(--color-border-divider)]`}>
+          <div className={`${FORM_ACTIONS} shrink-0 px-5 py-3 border-t border-[var(--color-border-divider)]`}>
             {footer}
           </div>
         )}

@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Modal } from "./ui/Modal";
-import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { FormField } from "./ui/FormField";
-import { FormGrid } from "./ui/Form";
+import { FormGrid, FormModal } from "./ui/Form";
 import { Radio } from "./ui/Checkbox";
 import { createOrganisation, DEFAULT_ORG_PREFS, type Organisation } from "../lib/orgs";
 import { useOrgStore } from "../stores/org-store";
@@ -66,23 +64,20 @@ export function OrgCreateDialog({ open, onClose }: { open: boolean; onClose: () 
   };
 
   return (
-    <Modal
+    <FormModal
       open={open}
       onClose={() => { reset(); onClose(); }}
       title={t.new_organisation}
-      footer={
-        <>
-          <Button variant="secondary" onClick={() => { reset(); onClose(); }}>{t.cancel}</Button>
-          <Button onClick={submit} loading={busy}>{t.create_organisation}</Button>
-        </>
-      }
+      size="sm"
+      submitLabel={t.create_organisation}
+      onSubmit={() => void submit()}
+      submitting={busy}
     >
       <FormGrid cols={1}>
         <FormField label={t.organisation_name} required error={error}>
           <Input
             value={name}
             onChange={(e) => { setName(e.target.value); setError(undefined); }}
-            onKeyDown={(e) => { if (e.key === "Enter") void submit(); }}
             autoFocus
           />
         </FormField>
@@ -103,6 +98,6 @@ export function OrgCreateDialog({ open, onClose }: { open: boolean; onClose: () 
           />
         </fieldset>
       </FormGrid>
-    </Modal>
+    </FormModal>
   );
 }

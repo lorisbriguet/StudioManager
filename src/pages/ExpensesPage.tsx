@@ -1,15 +1,14 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Plus, Paperclip, Eye, Upload, Trash2, CheckCircle, CalendarCheck, Receipt, Settings2, XCircle, Pencil } from "lucide-react";
-import { Button, DatePicker, Input, Select, FormField, FormGrid, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, Modal, Popover, IconButton, Tag, Callout, Tooltip } from "../components/ui";
+import { Button, DatePicker, Input, Select, FormField, FormGrid, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, Popover, IconButton, Tag, Callout, Tooltip } from "../components/ui";
 import * as v from "../lib/validate";
-import { undoableFromStore } from "../lib/undo";
+import { deleteWithUndo } from "../lib/undo";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { ReceiptNote } from "../components/shared/ReceiptNote";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { formatDisplayDate } from "../utils/formatDate";
 import { todayLocalISO } from "../utils/localDate";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { copyFile, mkdir, exists } from "@tauri-apps/plugin-fs";
 import { orgPaths } from "../lib/orgPaths";
 import { attachReceipt as attachReceiptFlow, sanitizeSegment } from "../lib/attachReceipt";
@@ -30,6 +29,7 @@ import { useReceiptDrop } from "../hooks/useReceiptDrop";
 import { useListNavigation } from "../hooks/useListNavigation";
 import { useDetectedFields } from "../hooks/useDetectedFields";
 import { useBulkSelect } from "../hooks/useBulkSelect";
+import { useBulkDelete } from "../hooks/useBulkDelete";
 import type { Expense } from "../types/expense";
 import { getNextExpenseReference } from "../db/queries/expenses";
 import { SortHeader, sortRows, type SortState } from "../components/ui/SortHeader";
@@ -140,12 +140,8 @@ export function ExpensesPage() {
 
   const bulk = useBulkSelect(filtered);
 
-  const bulkDelete = useCallback(async () => {
-    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
-    const ids = [...bulk.selected] as number[];
-    ids.forEach((id) => deleteExpense.mutate(id));
-    bulk.clearSelection();
-  }, [bulk, deleteExpense, t]);
+  const deleteSelection = useBulkDelete("expenses", (id: number) => deleteExpense.mutateAsync(id));
+  const bulkDelete = () => void deleteSelection([...bulk.selected] as number[], bulk.clearSelection);
 
   const saveEditDate = () => {
     if (!editDateExpense) return;
@@ -359,7 +355,7 @@ export function ExpensesPage() {
           {filtered.length === 0 && !isLoading && (
             <Table.Empty colSpan={9}>
               <EmptyState
-                message={(expenses?.length ?? 0) === 0 ? (t.no_expenses_yet ?? "No expenses yet") : (t.no_matching_expenses ?? "No matching expenses")}
+                message={(expenses?.length ?? 0) === 0 ? (t.no_expenses_yet) : (t.no_matching_expenses)}
                 icon={<Receipt size={32} />}
                 action={(expenses?.length ?? 0) === 0 ? (
                   <Button icon={<Plus size={12} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
@@ -390,31 +386,28 @@ export function ExpensesPage() {
                 ]
               : [{ label: t.mark_as_unpaid, icon: <XCircle size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: null } }, { onSuccess: () => toast.success(t.marked_as_unpaid) }) }]),
             { label: t.edit_paid_date, icon: <Pencil size={14} />, onClick: () => { setEditDateValue(ctxMenu.item.paid_date ?? format(new Date(), "yyyy-MM-dd")); setEditDateExpense(ctxMenu.item); } },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteExpense.mutate(ctxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_expense_deleted) }) },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteWithUndo(deleteExpense, ctxMenu.item.id, t.toast_expense_deleted) },
           ]}
         />
       )}
-      <Modal
+      <FormModal
         open={!!editDateExpense}
         onClose={() => setEditDateExpense(null)}
         title={t.edit_paid_date}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setEditDateExpense(null)}>{t.cancel}</Button>
-            <Button onClick={saveEditDate}>{t.save}</Button>
-          </>
-        }
+        size="sm"
+        submitLabel={t.save}
+        onSubmit={saveEditDate}
+        submitting={updateExpense.isPending}
       >
         <FormField label={t.date}>
           <DatePicker
             fullWidth
             value={editDateValue || null}
             onChange={(v) => setEditDateValue(v ?? "")}
-            onKeyDown={(e) => { if (e.key === "Enter") saveEditDate(); }}
             autoFocus
           />
         </FormField>
-      </Modal>
+      </FormModal>
       <BulkActionBar
         count={bulk.count}
         onClear={bulk.clearSelection}
@@ -547,6 +540,7 @@ export function NewExpenseForm({
   // Set on suggestion mousedown (which fires before the input's blur) so the
   // blur handler does not validate the stale pre-selection supplier value.
   const pickingSuggestionRef = useRef(false);
+  const focusedOnceRef = useRef(false);
   const supplierInputRef = useRef<HTMLInputElement>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<{ supplier: string; amount: number; date: string } | null>(null);
   const duplicateCheck = useDuplicateCheck();
@@ -627,7 +621,12 @@ export function NewExpenseForm({
                 clearError("supplier");
                 undetect("supplier");
               }}
-              onFocus={() => setShowSuggestions(true)}
+              autoFocus
+              // Not on the autoFocus when the dialog opens: the list would cover the form.
+              onFocus={() => {
+                if (focusedOnceRef.current) setShowSuggestions(true);
+                focusedOnceRef.current = true;
+              }}
               // Suggestions are mouse-only, so Enter submits the form; close them first.
               onKeyDown={(e) => { if (e.key === "Enter") setShowSuggestions(false); }}
               onBlur={() => {

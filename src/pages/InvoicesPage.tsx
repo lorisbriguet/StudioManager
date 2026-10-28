@@ -3,11 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { Plus, Eye, Pencil, Trash2, CheckCircle, Send, Repeat, RefreshCw, X, AlertTriangle, ExternalLink, FileText, Settings2, Download, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { pdf } from "@react-pdf/renderer";
-import { undoable, undoableFromStore } from "../lib/undo";
+import { undoable, deleteWithUndo } from "../lib/undo";
+import { useConfirm } from "../lib/confirm";
+import { settleDraftBeforeExport } from "../lib/confirmDraftExport";
+import { useBulkDelete } from "../hooks/useBulkDelete";
 import { useInvoices, useUpdateInvoice, useDeleteInvoice } from "../db/hooks/useInvoices";
 import { getInvoice, getInvoiceLineItems } from "../db/queries/invoices";
 import { getClient, getClientContacts, getClientAddresses } from "../db/queries/clients";
@@ -33,7 +35,7 @@ import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { PageHeader, SearchBar, Table, TableSkeleton, Button, EmptyState, Card, Modal, FormField, FormGrid, DatePicker, Select, IconButton, CountBadge, Toggle } from "../components/ui";
+import { PageHeader, SearchBar, Table, TableSkeleton, Button, EmptyState, Card, FormModal, FormField, FormGrid, DatePicker, Select, IconButton, CountBadge, Toggle } from "../components/ui";
 import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
 import { isDraftReference } from "../types/invoice";
 import type { Invoice, InvoiceStatus } from "../types/invoice";
@@ -224,15 +226,15 @@ export function InvoicesPage() {
     [bulk.selected, enriched]
   );
 
-  const bulkDelete = useCallback(async () => {
+  const confirm = useConfirm();
+  const deleteSelection = useBulkDelete("invoices", (id: number) => deleteInvoice.mutateAsync(id));
+  const bulkDelete = () => {
     if (selectionHasNonDraft) {
       toast.error(t.invoice_delete_only_drafts);
       return;
     }
-    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
-    ([...bulk.selected] as number[]).forEach((id) => deleteInvoice.mutate(id));
-    bulk.clearSelection();
-  }, [bulk, deleteInvoice, selectionHasNonDraft, t]);
+    void deleteSelection([...bulk.selected] as number[], bulk.clearSelection);
+  };
 
   const { expandedYears, groupedByYear, toggleYear } = useYearGrouping(
     filtered,
@@ -270,11 +272,11 @@ export function InvoicesPage() {
     }
   };
 
+  const settleDraft = (inv: Invoice) =>
+    settleDraftBeforeExport(inv.reference, () => updateInvoice.mutateAsync({ id: inv.id, data: { status: "sent" } }));
+
   const doDownloadPdf = async (inv: Invoice & { client_name: string }) => {
-    if (inv.reference.startsWith("DRAFT")) {
-      const proceed = await ask(t.export_draft_warning, { kind: "warning", okLabel: t.download_pdf, cancelLabel: t.cancel });
-      if (!proceed) return;
-    }
+    if (!(await settleDraft(inv))) return;
     const toastId = toast.loading(t.generating_pdf);
     try {
       const result = await generateInvoicePdfBytes(inv.id, inv.client_id);
@@ -306,10 +308,7 @@ export function InvoicesPage() {
   };
 
   const doEmailPdf = async (inv: Invoice & { client_name: string }) => {
-    if (inv.reference.startsWith("DRAFT")) {
-      const proceed = await ask(t.export_draft_warning, { kind: "warning", okLabel: t.email_pdf, cancelLabel: t.cancel });
-      if (!proceed) return;
-    }
+    if (!(await settleDraft(inv))) return;
     const toastId = toast.loading(t.generating_pdf);
     try {
       const result = await generateInvoicePdfBytes(inv.id, inv.client_id);
@@ -387,7 +386,11 @@ export function InvoicesPage() {
     // A manually chosen past date triggers the catch-up loop (one draft per
     // elapsed period) — legitimate for intentional backfill, so warn, don't block.
     if (recNextDue < todayLocalISO()) {
-      const proceed = await ask(t.recurring_past_date_warning, { kind: "warning", okLabel: t.create, cancelLabel: t.cancel });
+      const proceed = await confirm({
+        title: t.recurring_past_date_title,
+        message: t.recurring_past_date_warning,
+        confirmLabel: t.create,
+      });
       if (!proceed) return;
     }
     createTemplate.mutate(
@@ -549,12 +552,7 @@ export function InvoicesPage() {
                         icon={Trash2}
                         label={t.delete_template}
                         tone="danger"
-                        onClick={async () => {
-                          if (!(await ask(t.confirm_delete_template, { kind: "warning" }))) return;
-                          deleteTemplate.mutate(tmpl.id, {
-                            onSuccess: () => undoableFromStore(t.template_deleted),
-                          });
-                        }}
+                        onClick={() => deleteWithUndo(deleteTemplate, tmpl.id, t.template_deleted)}
                       />
                     </Table.Actions>
                   </Table.Row>
@@ -711,7 +709,7 @@ export function InvoicesPage() {
             ...(ctxMenu.item.status === "overdue" ? [{ label: t.generate_reminder, icon: <AlertTriangle size={14} />, onClick: () => handleGenerateReminder(ctxMenu.item) }] : []),
             ...(isDraftReference(ctxMenu.item.reference) ? [
               { label: "", divider: true, onClick: () => {} },
-              { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteInvoice.mutate(ctxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_invoice_deleted) }) },
+              { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteWithUndo(deleteInvoice, ctxMenu.item.id, t.toast_invoice_deleted) },
             ] : []),
           ]}
         />
@@ -726,22 +724,20 @@ export function InvoicesPage() {
           ...(selectionHasNonDraft ? [] : [{ label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true }]),
         ]}
       />
-      <Modal
+      <FormModal
         open={recurringInv !== null}
         onClose={() => setRecurringInv(null)}
         title={t.create_recurring}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setRecurringInv(null)}>{t.cancel}</Button>
-            <Button onClick={confirmMakeRecurring} disabled={!recNextDue || createTemplate.isPending}>
-              {t.create}
-            </Button>
-          </>
-        }
+        size="sm"
+        submitLabel={t.create}
+        onSubmit={() => void confirmMakeRecurring()}
+        submitDisabled={!recNextDue}
+        submitting={createTemplate.isPending}
       >
         <FormGrid cols={1}>
           <FormField label={t.frequency}>
             <Select
+              autoFocus
               value={recFrequency}
               onChange={(e) => handleRecFrequencyChange(e.target.value as RecurringFrequency)}
             >
@@ -757,7 +753,7 @@ export function InvoicesPage() {
             />
           </FormField>
         </FormGrid>
-      </Modal>
+      </FormModal>
     </div>
   );
 }

@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Download } from "lucide-react";
-import { Button, PageSpinner, Modal, IconButton } from "../components/ui";
+import { Button, PageSpinner, IconButton } from "../components/ui";
+import { confirmDraftExport } from "../lib/confirmDraftExport";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useInvoice, useInvoiceLineItems, useUpdateInvoice } from "../db/hooks/useInvoices";
@@ -41,7 +42,6 @@ export function InvoicePreviewPage() {
     : undefined;
   const [storedPdfUrl, setStoredPdfUrl] = useState<string | null>(null);
   const [postProcessedUrl, setPostProcessedUrl] = useState<string | null>(null);
-  const [showDraftWarning, setShowDraftWarning] = useState(false);
   const [exporting, setExporting] = useState(false);
   const updateInvoice = useUpdateInvoice();
   const t = useT();
@@ -168,12 +168,11 @@ export function InvoicePreviewPage() {
     }
   };
 
-  const downloadPdf = () => {
-    if (invoice.status === "draft") {
-      setShowDraftWarning(true);
-    } else {
-      doDownload();
-    }
+  const downloadPdf = async () => {
+    if (invoice.status !== "draft") return doDownload();
+    const choice = await confirmDraftExport();
+    if (choice === "draft") await doDownload();
+    if (choice === "sent") handleMarkSentAndExport();
   };
 
   const handleMarkSentAndExport = () => {
@@ -181,14 +180,10 @@ export function InvoicePreviewPage() {
       { id: invoiceId, data: { status: "sent" } },
       {
         onSuccess: async () => {
-          setShowDraftWarning(false);
           const fresh = await getInvoice(invoiceId);
           await doDownload(fresh ?? invoice);
         },
-        onError: (e) => {
-          setShowDraftWarning(false);
-          toast.error(String(e));
-        },
+        onError: (e) => toast.error(String(e)),
       }
     );
   };
@@ -200,7 +195,7 @@ export function InvoicePreviewPage() {
         <h1 className="text-sm font-semibold flex-1">
           {invoice.reference} — {client.name}
         </h1>
-        <Button icon={<Download size={12} />} loading={exporting} onClick={downloadPdf}>
+        <Button icon={<Download size={12} />} loading={exporting || updateInvoice.isPending} onClick={downloadPdf}>
           {t.download_pdf}
         </Button>
       </div>
@@ -228,25 +223,6 @@ export function InvoicePreviewPage() {
           </PDFViewer>
         )}
       </div>
-      <Modal
-        open={showDraftWarning}
-        onClose={() => setShowDraftWarning(false)}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setShowDraftWarning(false)}>
-              {t.cancel}
-            </Button>
-            <Button variant="secondary" onClick={() => { setShowDraftWarning(false); doDownload(); }}>
-              {t.export_as_draft}
-            </Button>
-            <Button loading={updateInvoice.isPending} onClick={handleMarkSentAndExport}>
-              {t.mark_sent_and_export}
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm">{t.export_draft_warning}</p>
-      </Modal>
     </div>
   );
 }

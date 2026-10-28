@@ -107,7 +107,7 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
       open={open}
       onClose={onClose}
       title={t.generate_project_from_quote}
-      size="lg"
+      size="md"
       footer={
         <>
           <Button

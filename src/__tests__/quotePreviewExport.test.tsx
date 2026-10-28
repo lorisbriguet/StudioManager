@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { QuotePreviewPage } from "../pages/QuotePreviewPage";
 import { useAppStore } from "../stores/app-store";
+import { ConfirmHost } from "../components/ui/ConfirmDialog";
 import { getDb } from "../db";
 import {
   setSelectHandler,
@@ -73,6 +74,7 @@ function renderPage() {
           <Route path="/quotes/:id" element={<QuotePreviewPage />} />
         </Routes>
       </MemoryRouter>
+      <ConfirmHost />
     </QueryClientProvider>
   );
 }

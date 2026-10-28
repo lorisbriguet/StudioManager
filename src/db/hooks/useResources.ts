@@ -155,6 +155,17 @@ export function useUnlinkResourceFromProject() {
   return useMutation({
     mutationFn: async ({ resourceId, projectId }: { resourceId: number; projectId: number }) => {
       await q.unlinkResourceFromProject(resourceId, projectId);
+      useUndoStore.getState().push({
+        label: getLabels().undo_unlink_resource,
+        execute: async () => {
+          await q.linkResourceToProject(resourceId, projectId);
+          qc.invalidateQueries({ queryKey: ["resources", "project", projectId] });
+        },
+        redo: async () => {
+          await q.unlinkResourceFromProject(resourceId, projectId);
+          qc.invalidateQueries({ queryKey: ["resources", "project", projectId] });
+        },
+      });
     },
     onSuccess: (_, { projectId }) => {
       qc.invalidateQueries({ queryKey: ["resources", "project", projectId] });

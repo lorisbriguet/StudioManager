@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, Trash2, Calendar } from "lucide-react";
-import { Checkbox, Button, Select, Input, Modal, Tooltip, FormField, FormGrid, FormGroup } from "../ui";
+import { Checkbox, Button, Select, Input, FormModal, Tooltip, FormField, FormGrid, FormGroup } from "../ui";
 import { toast } from "sonner";
 import type { WorkloadColumn, WorkloadColumnType, SelectOption } from "../../types/workload";
 import { COLUMN_ICONS, COLUMN_ICON_NAMES } from "./columnIcons";
@@ -111,43 +111,30 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
   const handleSaveAsList = async (listName: string) => {
     const id = await createCustomList.mutateAsync(listName);
     await setCustomListItems.mutateAsync({ listId: id, items: options.map((o) => ({ value: o.value, color: o.color })) });
-    toast.success(t.list_created ?? "List created");
+    toast.success(t.list_created);
   };
 
   return (
-    <Modal
+    <FormModal
       open
       onClose={onClose}
       title={isNew ? t.add_column : t.edit_column}
-      size="md"
-      footer={
-        <>
-          {!isNew && onDelete && (
-            <Button
-              variant="danger"
-              icon={<Trash2 size={12} />}
-              onClick={() => {
-                onDelete();
-                onClose();
-              }}
-              className="mr-auto"
-            >
-              {t.delete_column}
-            </Button>
-          )}
+      submitLabel={t.save}
+      onSubmit={handleSave}
+      submitDisabled={!name.trim() || (type === "formula" && !!formulaError && !!formula.trim())}
+      destructive={
+        !isNew && onDelete ? (
           <Button
-            variant="secondary"
-            onClick={onClose}
+            variant="danger"
+            icon={<Trash2 size={12} />}
+            onClick={() => {
+              onDelete();
+              onClose();
+            }}
           >
-            {t.cancel}
+            {t.delete_column}
           </Button>
-          <Button
-            onClick={handleSave}
-            disabled={!name.trim() || (type === "formula" && !!formulaError && !!formula.trim())}
-          >
-            {t.save}
-          </Button>
-        </>
+        ) : undefined
       }
     >
       <FormGrid cols={1}>
@@ -156,7 +143,6 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
             autoFocus
           />
         </FormField>
@@ -182,6 +168,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
               <div className="flex flex-wrap gap-0.5 p-1.5 max-h-24 overflow-y-auto">
                 <Tooltip content={t.none}>
                   <button
+                    type="button"
                     onClick={() => { setIcon(""); setIconOnly(false); }}
                     className={`p-1 rounded-md ${!icon ? "bg-accent text-white" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
                     aria-label={t.none}
@@ -194,6 +181,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                   return (
                     <Tooltip key={name} content={name}>
                       <button
+                        type="button"
                         onClick={() => setIcon(name)}
                         className={`p-1 rounded-md ${icon === name ? "bg-accent text-white" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
                         aria-label={name}
@@ -236,7 +224,6 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
             <Input
               value={formula}
               onChange={(e) => handleFormulaChange(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
               placeholder="e.g. og_scope ? hours : 0"
               className="font-mono"
             />
@@ -257,6 +244,6 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
           />
         )}
       </FormGrid>
-    </Modal>
+    </FormModal>
   );
 }

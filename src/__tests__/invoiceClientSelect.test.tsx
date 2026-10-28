@@ -7,9 +7,9 @@ import { QuoteFormPage } from "../pages/QuoteFormPage";
 import { useAppStore } from "../stores/app-store";
 import { getDb } from "../db";
 import { setSelectHandler, clearExecutedStatements } from "../__mocks__/tauri-sql";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { confirm } from "../lib/confirm";
 
-vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn(async () => false) }));
+vi.mock("../lib/confirm", async (orig) => ({ ...(await orig<object>()), confirm: vi.fn(async () => false) }));
 
 // Reported: picking a client on a new invoice or quote did not take the first
 // time (WebKit fired `input` before `change` on the native <select>, and the
@@ -76,8 +76,8 @@ describe("client select — first pick must stick", () => {
     fireEvent.change(notes, { target: { value: "x" } });
     // Dirty tracking is what the input listener existed for; removing it must
     // not silence text edits. Navigating back should now ask for confirmation.
-    vi.mocked(ask).mockClear();
+    vi.mocked(confirm).mockClear();
     fireEvent.click(screen.getByRole("button", { name: /back/i }));
-    await waitFor(() => expect(ask).toHaveBeenCalled());
+    await waitFor(() => expect(confirm).toHaveBeenCalled());
   });
 });

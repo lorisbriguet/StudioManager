@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect, type RefObject } from "react";
 import { Plus, Trash2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Settings2, Copy, Download, Sigma, Pin, Play, Square } from "lucide-react";
-import { Button, DragHandle, Select, Popover, Input, Modal, FormField } from "../ui";
+import { Button, DragHandle, Select, Popover, Input, FormModal, FormField } from "../ui";
 import { MENU_ITEM, MENU_DIVIDER } from "../ui/Dropdown";
 import { toast } from "sonner";
 import {
@@ -679,38 +679,25 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
         );
       })()}
 
-      {/* Save as template modal (Modal renders on <body> itself) */}
+      {/* Save as template (the dialog renders on <body> itself) */}
       {showSaveModal && (
-        <Modal
+        <FormModal
           open
           onClose={() => setShowSaveModal(false)}
           title={t.save_as_template}
-          footer={
-            <>
-              <Button
-                variant="secondary"
-                onClick={() => setShowSaveModal(false)}
-              >
-                {t.cancel}
-              </Button>
-              <Button
-                onClick={confirmSaveTemplate}
-                disabled={!saveTemplateName.trim()}
-              >
-                {t.save}
-              </Button>
-            </>
-          }
+          size="sm"
+          submitLabel={t.save}
+          onSubmit={confirmSaveTemplate}
+          submitDisabled={!saveTemplateName.trim()}
         >
           <FormField label={t.template_name_prompt}>
             <Input
               value={saveTemplateName}
               onChange={(e) => setSaveTemplateName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && confirmSaveTemplate()}
               autoFocus
             />
           </FormField>
-        </Modal>
+        </FormModal>
       )}
 
       {/* Section context menu (right-click on "Workload" header) */}

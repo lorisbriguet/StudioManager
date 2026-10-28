@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { ChevronRight, Trash2, Play, Square, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { deleteWithUndo } from "../../lib/undo";
 import {
   DndContext,
   closestCenter,
@@ -200,7 +201,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                   icon={Trash2}
                   label={t.delete}
                   tone="danger"
-                  onClick={() => deleteTask.mutate(tk.id, { onSuccess: () => toast.success(t.toast_task_deleted) })}
+                  onClick={() => deleteWithUndo(deleteTask, tk.id, t.toast_task_deleted)}
                   reveal="task" className="pointer-events-none group-hover/task:pointer-events-auto"
                 />
               </div>
@@ -266,7 +267,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                         icon={Trash2}
                         label={t.delete}
                         tone="danger"
-                        onClick={() => deleteSubtask.mutate(s.id, { onSuccess: () => toast.success(t.toast_subtask_deleted) })}
+                        onClick={() => deleteWithUndo(deleteSubtask, s.id, t.toast_subtask_deleted)}
                         reveal="sub" className="pointer-events-none group-hover/sub:pointer-events-auto"
                       />
                     </SortableSubtaskRow>

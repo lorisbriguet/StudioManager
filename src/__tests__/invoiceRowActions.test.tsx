@@ -16,6 +16,7 @@ import { undoable } from "../lib/undo";
 vi.mock("../lib/undo", () => ({
   undoable: vi.fn(),
   undoableFromStore: vi.fn(),
+  deleteWithUndo: vi.fn(),
 }));
 
 // Row-level "mark paid" must be undoable like the status dropdown and the

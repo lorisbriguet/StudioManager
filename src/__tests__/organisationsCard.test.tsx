@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { OrganisationsCard } from "../components/settings/OrganisationsCard";
+import { ConfirmHost } from "../components/ui/ConfirmDialog";
 import { useOrgStore } from "../stores/org-store";
 import { useAppStore } from "../stores/app-store";
 import { uiLabels } from "../i18n/ui";
@@ -42,11 +43,11 @@ describe("OrganisationsCard", () => {
   });
 
   it("disables delete on the active organisation and requires typing the name for others", async () => {
-    render(<OrganisationsCard />);
+    render(<><OrganisationsCard /><ConfirmHost /></>);
     const deletes = screen.getAllByRole("button", { name: /delete organisation/i });
     expect(deletes[0]).toBeDisabled();
     fireEvent.click(deletes[1]);
-    const confirmBtn = screen.getByRole("button", { name: /^delete$/i });
+    const confirmBtn = await screen.findByRole("button", { name: /^delete$/i });
     expect(confirmBtn).toBeDisabled();
     fireEvent.change(screen.getByPlaceholderText("Label"), { target: { value: "Label" } });
     expect(confirmBtn).toBeEnabled();

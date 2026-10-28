@@ -4,11 +4,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 import { FolderOpen, HardDrive, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield, X, Clock, Store, Building2, Database as DatabaseIcon, Bot } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
-import { open, ask } from "@tauri-apps/plugin-dialog";
+import { open } from "@tauri-apps/plugin-dialog";
 import { purgeAllCalendarEvents, syncAllExisting, listWritableCalendars } from "../lib/appleCalendar";
 import { createBackup, listBackups, restoreFromBackup, RestoreError, validateBackupPath, isBackupRunning, setBackupRunning, isScopeDenied } from "../lib/backup";
 import { resetDb } from "../db";
-import { enterTestMode, exitTestMode, enterPresentationMode, exitPresentationMode } from "../lib/modes";
+import { enterTestMode, enterPresentationMode } from "../lib/modes";
+import { useExitMode } from "../hooks/useExitMode";
+import { useConfirm } from "../lib/confirm";
 import { useAppStore, ACCENT_PRESETS, type DateFormatOption, type ProjectOpenMode } from "../stores/app-store";
 import { THEMES } from "../lib/themes";
 import { useT } from "../i18n/useT";
@@ -92,6 +94,8 @@ export function SettingsPage() {
   const testMode = useAppStore((s) => s.testMode);
   const presentationMode = useAppStore((s) => s.presentationMode);
   const [togglingTestMode, setTogglingTestMode] = useState(false);
+  const { exitMode, exiting } = useExitMode();
+  const confirm = useConfirm();
   const [togglingPresentation, setTogglingPresentation] = useState(false);
   const [snapshotting, setSnapshotting] = useState(false);
   const [restoringSnapshot, setRestoringSnapshot] = useState(false);
@@ -127,21 +131,6 @@ export function SettingsPage() {
     }
   };
 
-  const handleExitTestMode = async () => {
-    const confirmed = await ask(t.test_mode_confirm_exit, { kind: "warning" });
-    if (!confirmed) return;
-    setTogglingTestMode(true);
-    try {
-      await exitTestMode();
-      toast.success(t.toast_test_mode_exited);
-      setTimeout(() => window.location.reload(), 500);
-    } catch (e) {
-      logError("Exit test mode failed:", e);
-      toast.error(`${t.toast_test_mode_failed}: ${String(e)}`);
-    } finally {
-      setTogglingTestMode(false);
-    }
-  };
 
   const handleEnterPresentation = async () => {
     setTogglingPresentation(true);
@@ -157,21 +146,6 @@ export function SettingsPage() {
     }
   };
 
-  const handleExitPresentation = async () => {
-    const confirmed = await ask(t.presentation_mode_confirm_exit, { kind: "warning" });
-    if (!confirmed) return;
-    setTogglingPresentation(true);
-    try {
-      await exitPresentationMode();
-      toast.success(t.toast_presentation_exited);
-      setTimeout(() => window.location.reload(), 500);
-    } catch (e) {
-      logError("Exit presentation mode failed:", e);
-      toast.error(`${t.toast_presentation_failed}: ${String(e)}`);
-    } finally {
-      setTogglingPresentation(false);
-    }
-  };
 
   const handleCreateSnapshot = async () => {
     setSnapshotting(true);
@@ -188,7 +162,12 @@ export function SettingsPage() {
   };
 
   const handleRestoreSnapshot = async () => {
-    const confirmed = await ask(t.restore_snapshot_confirm, { kind: "warning" });
+    const confirmed = await confirm({
+      title: t.restore_snapshot_title,
+      message: t.restore_snapshot_confirm,
+      confirmLabel: t.restore,
+      tone: "danger",
+    });
     if (!confirmed) return;
     setRestoringSnapshot(true);
     try {
@@ -287,7 +266,12 @@ export function SettingsPage() {
       toast.error(t.toast_set_backup_dir);
       return;
     }
-    const confirmed = await ask(t.restore_confirm, { kind: "warning" });
+    const confirmed = await confirm({
+      title: t.restore_backup_title.replace("{name}", selectedBackup),
+      message: t.restore_confirm,
+      confirmLabel: t.restore,
+      tone: "danger",
+    });
     if (!confirmed) return;
     setRestoring(true);
     try {
@@ -456,18 +440,24 @@ export function SettingsPage() {
                 <Button
                   variant="outline"
                   onClick={async () => {
-                    if (!(await ask(t.reset_user_guide_confirm ?? "Reset the User Guide to default? This will delete the current guide and re-create it.", { kind: "warning" }))) return;
+                    const ok = await confirm({
+                      title: t.reset_user_guide_title,
+                      message: t.reset_user_guide_confirm,
+                      confirmLabel: t.reset_user_guide_btn,
+                      tone: "danger",
+                    });
+                    if (!ok) return;
                     try {
                       const db = await import("../db").then((m) => m.getDb());
                       const { resetUserGuide } = await import("../db/seeds/user-guide");
                       await resetUserGuide(db);
-                      toast.success(t.reset_user_guide_done ?? "User Guide reset");
+                      toast.success(t.reset_user_guide_done);
                     } catch (e) {
                       toast.error(String(e));
                     }
                   }}
                 >
-                  {t.reset_user_guide_btn ?? "Reset"}
+                  {t.reset_user_guide_btn}
                 </Button>
               </SettingRow>
               </SettingsCard>
@@ -645,7 +635,7 @@ export function SettingsPage() {
                 {testMode ? (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-[var(--color-warning-text)] font-medium flex items-center gap-1"><FlaskConical size={12} /> {t.test_mode_active}</span>
-                    <Button variant="danger" onClick={handleExitTestMode} disabled={togglingTestMode}>
+                    <Button variant="danger" onClick={() => void exitMode("test")} disabled={togglingTestMode || exiting === "test"}>
                       {t.exit_test_mode}
                     </Button>
                   </div>
@@ -663,7 +653,7 @@ export function SettingsPage() {
                 {presentationMode ? (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-[var(--color-indigo-text)] font-medium">{t.presentation_active}</span>
-                    <Button variant="danger" onClick={handleExitPresentation} disabled={togglingPresentation}>
+                    <Button variant="danger" onClick={() => void exitMode("presentation")} disabled={togglingPresentation || exiting === "presentation"}>
                       {t.exit_presentation_mode}
                     </Button>
                   </div>

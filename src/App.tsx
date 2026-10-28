@@ -35,6 +35,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { CommandPalette } from "./components/CommandPalette";
+import { ConfirmHost } from "./components/ui/ConfirmDialog";
 import { QuickTimerModal } from "./components/QuickTimerModal";
 import { OrgGate } from "./components/OrgGate";
 import { PageSpinner } from "./components/ui";
@@ -199,6 +200,7 @@ export default function App() {
           </ErrorBoundary>
         </BrowserRouter>
       </OrgGate>
+      <ConfirmHost />
       <Toaster position="bottom-right" />
       <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
     </QueryClientProvider>

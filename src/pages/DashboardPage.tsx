@@ -12,6 +12,7 @@ import { PageHeader, Button, EmptyState, Select, Popover, IconButton, SectionLab
 import { MENU_ITEM, MENU_DIVIDER } from "../components/ui/Dropdown";
 import { useT } from "../i18n/useT";
 import { toast } from "sonner";
+import { deleteWithUndo } from "../lib/undo";
 import { useDashboardPresets, useCreateDashboardPreset, useUpdateDashboardPreset, useDeleteDashboardPreset } from "../db/hooks/useDashboardPresets";
 import "react-grid-layout/css/styles.css";
 
@@ -81,7 +82,7 @@ function PresetDropdown() {
 
   const handleDelete = (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
-    deletePreset.mutate(id);
+    deleteWithUndo(deletePreset, id, t.preset_deleted);
     if (activePresetId === id) {
       // Revert to "Custom" since active preset was deleted
       setActivePreset(null, t.custom_layout, widgets, layout);

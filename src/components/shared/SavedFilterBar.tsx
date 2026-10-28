@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, type RefObject } from "react";
 import { Bookmark, Plus, X, Pencil, Trash2, Filter } from "lucide-react";
 import { toast } from "sonner";
+import { deleteWithUndo } from "../../lib/undo";
 import { Button, Select, FilterChip, Input } from "../ui";
 import { SegmentedControl, type SegmentedOption } from "../ui/SegmentedControl";
 import { ContextMenu } from "../ui/ContextMenu";
@@ -251,10 +252,8 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
   };
 
   const handleDelete = (id: number) => {
-    deleteFilter.mutate(id, {
-      onSuccess: () => {
-        if (activeFilterId === id) onActiveChange(null);
-      },
+    deleteWithUndo(deleteFilter, id, t.filter_deleted, () => {
+      if (activeFilterId === id) onActiveChange(null);
     });
   };
 

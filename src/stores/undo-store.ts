@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-interface UndoAction {
+export interface UndoAction {
   label: string;
   execute: () => Promise<void> | void;
   /** If provided, allows redo after undo */

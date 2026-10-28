@@ -3,8 +3,7 @@ import { IconButton } from "../components/ui/IconButton";
 import { Link } from "react-router-dom";
 import { ChevronRight, Plus, Trash2, ExternalLink, Play, Square, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
-import { undoable, undoableFromStore } from "../lib/undo";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { deleteWithUndo, undoable } from "../lib/undo";
 import {
   DndContext,
   closestCenter,
@@ -31,6 +30,7 @@ import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu
 import { BulkActionBar } from "../components/ui/BulkActionBar";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
+import { useBulkDelete } from "../hooks/useBulkDelete";
 import { useListNavigation } from "../hooks/useListNavigation";
 import { useTabStore } from "../stores/tab-store";
 import { useOrgStore } from "../stores/org-store";
@@ -206,12 +206,8 @@ export function TasksPage() {
     bulk.clearSelection();
   }, [bulk, updateTask, flatTasks, t]);
 
-  const bulkDelete = useCallback(async () => {
-    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
-    const ids = [...bulk.selected] as number[];
-    ids.forEach((id) => deleteTask.mutate(id));
-    bulk.clearSelection();
-  }, [bulk, deleteTask, t]);
+  const deleteSelection = useBulkDelete("tasks", (id: number) => deleteTask.mutateAsync(id));
+  const bulkDelete = () => void deleteSelection([...bulk.selected] as number[], bulk.clearSelection);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -437,9 +433,7 @@ export function TasksPage() {
                         }
                       />
                       <IconButton size="xs"
-                        onClick={() => deleteTask.mutate(tk.id, {
-                          onSuccess: () => undoableFromStore(t.toast_task_deleted),
-                        })}
+                        onClick={() => deleteWithUndo(deleteTask, tk.id, t.toast_task_deleted)}
                         icon={Trash2}
                         label={t.delete}
                         tone="danger"
@@ -506,9 +500,7 @@ export function TasksPage() {
                               onChange={(vals) => updateSubtask.mutate({ id: s.id, data: vals })}
                             />
                             <IconButton size="xs"
-                              onClick={() => deleteSubtask.mutate(s.id, {
-                                onSuccess: () => undoableFromStore(t.toast_subtask_deleted),
-                              })}
+                              onClick={() => deleteWithUndo(deleteSubtask, s.id, t.toast_subtask_deleted)}
                               icon={Trash2}
                               label={t.delete}
                               tone="danger"
@@ -675,7 +667,7 @@ export function TasksPage() {
             { label: ctxMenu.item.status === "done" ? t.todo : t.done, onClick: () => updateTask.mutate({ id: ctxMenu.item.id, data: { status: ctxMenu.item.status === "done" ? "todo" : "done" } }) },
             { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/projects/${ctxMenu.item.project_id}`, projectName(ctxMenu.item.project_id)) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteTask.mutate(ctxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_task_deleted) }) },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteWithUndo(deleteTask, ctxMenu.item.id, t.toast_task_deleted) },
           ]}
         />
       )}
@@ -687,7 +679,7 @@ export function TasksPage() {
           items={[
             { label: subCtxMenu.item.status === "done" ? t.todo : t.done, onClick: () => updateSubtask.mutate({ id: subCtxMenu.item.id, data: { status: subCtxMenu.item.status === "done" ? "todo" : "done" } }) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteSubtask.mutate(subCtxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_subtask_deleted) }) },
+            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteWithUndo(deleteSubtask, subCtxMenu.item.id, t.toast_subtask_deleted) },
           ]}
         />
       )}

@@ -1,3 +1,4 @@
+import { pressEnter } from "./fixtures/form";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -110,8 +111,8 @@ describe("OrgCreateDialog", () => {
     const onClose = mount();
     const input = screen.getByLabelText(/organisation name/i);
     fireEvent.change(input, { target: { value: "Label" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    fireEvent.keyDown(input, { key: "Enter" });
+    pressEnter(input);
+    pressEnter(input);
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(invokedCommands.filter((c) => c.cmd === "create_organisation")).toHaveLength(1);
   });

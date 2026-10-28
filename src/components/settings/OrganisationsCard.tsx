@@ -4,11 +4,11 @@ import { toast } from "sonner";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { FieldError } from "../ui/FormField";
-import { Modal } from "../ui/Modal";
 import { Tooltip } from "../ui/Tooltip";
 import { useOrgStore } from "../../stores/org-store";
 import { renameOrganisation, reorderOrganisations, deleteOrganisation } from "../../lib/orgs";
 import { notifyError } from "../../lib/notifyError";
+import { useConfirm } from "../../lib/confirm";
 import { useT } from "../../i18n/useT";
 import { SettingsCard } from "../ui/Settings";
 
@@ -18,8 +18,7 @@ export function OrganisationsCard() {
   const activeId = useOrgStore((s) => s.activeId);
   const [editing, setEditing] = useState<{ id: string; name: string } | null>(null);
   const [renameError, setRenameError] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null);
-  const [typed, setTyped] = useState("");
+  const confirm = useConfirm();
   const renameErrorId = useId();
 
   const startEditing = (o: { id: string; name: string }) => {
@@ -68,13 +67,19 @@ export function OrganisationsCard() {
     }
   };
 
-  const commitDelete = async () => {
-    if (!deleting) return;
+  // A whole organisation, no undo: the name has to be typed.
+  const remove = async (o: { id: string; name: string }) => {
+    const ok = await confirm({
+      title: t.confirm_delete_named.replace("{name}", o.name),
+      message: t.delete_organisation_confirm,
+      confirmLabel: t.delete,
+      tone: "danger",
+      requireText: o.name,
+    });
+    if (!ok) return;
     try {
-      useOrgStore.getState().applyRegistry(await deleteOrganisation(deleting.id));
+      useOrgStore.getState().applyRegistry(await deleteOrganisation(o.id));
       toast.success(t.organisation_deleted);
-      setDeleting(null);
-      setTyped("");
     } catch (e) {
       notifyError(t.operation_failed, e);
     }
@@ -131,10 +136,7 @@ export function OrganisationsCard() {
                     icon={<Trash2 size={12} />}
                     aria-label={t.delete_organisation}
                     disabled={isActive || isLast}
-                    onClick={() => {
-                      setDeleting({ id: o.id, name: o.name });
-                      setTyped("");
-                    }}
+                    onClick={() => void remove(o)}
                   />
                 </span>
               </Tooltip>
@@ -142,20 +144,6 @@ export function OrganisationsCard() {
           );
         })}
       </ul>
-      <Modal
-        open={!!deleting}
-        onClose={() => setDeleting(null)}
-        title={t.delete_organisation}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setDeleting(null)}>{t.cancel}</Button>
-            <Button variant="danger" disabled={typed.trim() !== deleting?.name} onClick={() => void commitDelete()}>{t.delete}</Button>
-          </>
-        }
-      >
-        <p className="text-sm text-muted mb-3">{t.delete_organisation_confirm}</p>
-        <Input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={deleting?.name} autoFocus />
-      </Modal>
     </SettingsCard>
   );
 }

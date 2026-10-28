@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { ListTodo, Trash2, ArrowLeft, AlertTriangle, Eye } from "lucide-react";
 import { isUntranslatedActivity } from "../lib/activityNudge";
-import { Button, DatePicker, Input, Select, FormField, FieldError, FormLayout, FormGrid, FormActions, Popover, Textarea } from "../components/ui";
+import { Button, ConfirmButton, DatePicker, Input, Select, FormField, FieldError, FormLayout, FormGrid, FormActions, Popover, Textarea } from "../components/ui";
+import { deleteWithUndo } from "../lib/undo";
 import { MENU_ITEM } from "../components/ui/Dropdown";
 import * as v from "../lib/validate";
 import { toast } from "sonner";
@@ -60,7 +61,6 @@ export function InvoiceFormPage() {
   const updateInvoice = useUpdateInvoice();
   const deleteInvoice = useDeleteInvoice();
   const queryClient = useQueryClient();
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Track whether the user has made any changes to the form
   const [formDirty, setFormDirty] = useState(false);
@@ -746,36 +746,18 @@ export function InvoiceFormPage() {
 
         <FormActions
           destructive={
-            showDeleteConfirm && existingInvoice ? (
-              <>
-                <span className="text-sm text-danger">{t.delete} {existingInvoice.reference}?</span>
-                <Button
-                  variant="danger"
-                  onClick={() => {
-                    deleteInvoice.mutate(invoiceId, {
-                      onSuccess: () => {
-                        setFormDirty(false);
-                        toast.success(t.delete + " — " + existingInvoice.reference);
-                        navigate("/invoices");
-                      },
-                      onError: (e) => toast.error(String(e)),
-                    });
-                  }}
-                >
-                  {t.delete}
-                </Button>
-                <Button variant="secondary" onClick={() => setShowDeleteConfirm(false)}>
-                  {t.cancel}
-                </Button>
-              </>
-            ) : isEdit && existingInvoice?.status === "draft" ? (
-              <Button
-                variant="danger"
+            isEdit && existingInvoice?.status === "draft" ? (
+              <ConfirmButton
+                label={t.delete}
                 icon={<Trash2 size={12} />}
-                onClick={() => setShowDeleteConfirm(true)}
-              >
-                {t.delete}
-              </Button>
+                question={t.confirm_delete_named.replace("{name}", existingInvoice.reference)}
+                onConfirm={() =>
+                  deleteWithUndo(deleteInvoice, invoiceId, t.toast_invoice_deleted, () => {
+                    setFormDirty(false);
+                    navigate("/invoices");
+                  })
+                }
+              />
             ) : null
           }
         >

@@ -26,7 +26,7 @@ import {
   Waypoints,
   File,
 } from "lucide-react";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { deleteWithUndo } from "../lib/undo";
 import { toast } from "sonner";
 import { useT } from "../i18n/useT";
 import { notifyError, getLabels } from "../lib/notifyError";
@@ -210,13 +210,13 @@ function LinkInsertPopup({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={t.link_url_or_article ?? "URL or article name..."}
+          placeholder={t.link_url_or_article}
           aria-label={t.wiki_link_to_article}
         />
       </div>
       {isUrl && (
         <div className="px-3 pb-2">
-          <span className="text-xs text-muted">{t.press_enter_to_insert ?? "Press Enter to insert link"}</span>
+          <span className="text-xs text-muted">{t.press_enter_to_insert}</span>
         </div>
       )}
       {optionCount > 0 && (
@@ -263,12 +263,12 @@ function LinkInsertPopup({
       )}
       {!isUrl && q && optionCount === 0 && (
         <div className="px-3 pb-2">
-          <span className="text-xs text-muted">{t.no_results ?? "No results"}</span>
+          <span className="text-xs text-muted">{t.no_results}</span>
         </div>
       )}
       {!q && !bracket && (
         <div className="px-3 pb-2">
-          <span className="text-xs text-muted">{t.link_hint ?? "Type a URL (http...) or search wiki articles"}</span>
+          <span className="text-xs text-muted">{t.link_hint}</span>
         </div>
       )}
     </Popover>
@@ -550,13 +550,11 @@ export function ArticleEditor({
     [articleId, updateArticle]
   );
 
-  const handleDeleteArticle = useCallback(async () => {
-    const confirmed = await ask(t.delete + "?", { kind: "warning" });
-    if (confirmed) {
-      deleteArticle.mutate(articleId);
-      onBack?.();
-    }
-  }, [articleId, deleteArticle, onBack, t.delete]);
+  // No question: Undo brings the article back (with its content and tags).
+  const handleDeleteArticle = useCallback(() => {
+    deleteWithUndo(deleteArticle, articleId, t.article_deleted);
+    onBack?.();
+  }, [articleId, deleteArticle, onBack, t.article_deleted]);
 
   // Keep a ref for unmount cleanup to avoid a stale closure over `editor`
   // (articleIdRef is declared above, next to the debounce it also guards)
@@ -985,11 +983,8 @@ export function WikiPage() {
   );
 
   const handleDeleteArticle = useCallback(
-    async (id: number) => {
-      const confirmed = await ask(t.delete + "?", { kind: "warning" });
-      if (confirmed) deleteArticle.mutate(id);
-    },
-    [deleteArticle, t.delete]
+    (id: number) => deleteWithUndo(deleteArticle, id, t.article_deleted),
+    [deleteArticle, t.article_deleted]
   );
 
   const handleLinkIt = useCallback(

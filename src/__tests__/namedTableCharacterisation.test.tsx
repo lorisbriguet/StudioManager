@@ -354,10 +354,11 @@ describe("NamedTable column editor popover", () => {
 
     fireEvent.click(screen.getByText("Delete column"));
 
-    expect(updateTableMutate).toHaveBeenCalledWith({
-      id: 1,
-      data: { column_config: COLUMNS.slice(1) },
-    });
+    // Second argument: the onSuccess that offers Undo.
+    expect(updateTableMutate).toHaveBeenCalledWith(
+      { id: 1, data: { column_config: COLUMNS.slice(1) } },
+      expect.objectContaining({ onSuccess: expect.any(Function) })
+    );
     expect(screen.queryByDisplayValue("Name")).not.toBeInTheDocument();
   });
 

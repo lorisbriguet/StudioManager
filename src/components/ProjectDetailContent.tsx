@@ -26,6 +26,7 @@ import { useTabStore } from "../stores/tab-store";
 import { open as openDirectory } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { useT } from "../i18n/useT";
+import { undoableFromStore } from "../lib/undo";
 import { ProjectResources } from "./project/ProjectResources";
 import { ProjectWikiBlock } from "./project/ProjectWikiBlock";
 import { ProjectTasksSection } from "./project/ProjectTasksSection";
@@ -99,8 +100,12 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
   const handleDeleteColumn = useCallback(() => {
     if (editingColumn === null) return;
     const next = wlColumns.filter((_, i) => i !== editingColumn.index);
-    setWlConfig.mutate({ templateId: wlTemplateId, columns: next });
-  }, [wlColumns, wlTemplateId, editingColumn, setWlConfig]);
+    // The config mutation pushes its own undo entry.
+    setWlConfig.mutate(
+      { templateId: wlTemplateId, columns: next },
+      { onSuccess: () => undoableFromStore(t.column_deleted) }
+    );
+  }, [wlColumns, wlTemplateId, editingColumn, setWlConfig, t]);
 
   useEffect(() => {
     if (project) setStatus(project.status);

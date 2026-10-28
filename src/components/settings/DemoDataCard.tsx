@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { useConfirm } from "../../lib/confirm";
 import { toast } from "sonner";
 import { Database as DatabaseIcon } from "lucide-react";
 import { Button } from "../ui/Button";
@@ -25,10 +25,16 @@ export function DemoDataCard() {
   const [persona, setPersona] = useState<PersonaId>("designer");
   const [loading, setLoading] = useState(false);
   const blocked = testMode || presentationMode;
+  const confirm = useConfirm();
 
   const load = async () => {
     if (blocked || loading) return;
-    const confirmed = await ask(t.demo_data_confirm.replace("{name}", orgName), { kind: "warning" });
+    const confirmed = await confirm({
+      title: t.demo_data_title.replace("{name}", orgName),
+      message: t.demo_data_confirm.replace("{name}", orgName),
+      confirmLabel: t.demo_data_replace,
+      tone: "danger",
+    });
     if (!confirmed) return;
     setLoading(true);
     try {

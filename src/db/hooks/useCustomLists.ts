@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import * as q from "../queries/customLists";
+import { snapshotRows, pushRestore } from "../undoRestore";
+import { getLabels } from "../../lib/notifyError";
 
 export function useCustomLists() {
   return useQuery({
@@ -38,12 +40,21 @@ export function useUpdateCustomList() {
 
 export function useDeleteCustomList() {
   const qc = useQueryClient();
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["custom-lists"] });
+    qc.invalidateQueries({ queryKey: ["custom-list-items"] });
+  };
   return useMutation({
-    mutationFn: (id: number) => q.deleteCustomList(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["custom-lists"] });
-      qc.invalidateQueries({ queryKey: ["custom-list-items"] });
+    mutationFn: async (id: number) => {
+      const snap = await snapshotRows([
+        { table: "custom_lists", where: "id = $1", params: [id] },
+        { table: "custom_list_items", where: "list_id = $1", params: [id] },
+      ]);
+      await q.deleteCustomList(id);
+      const name = String(snap[0].rows[0]?.name ?? "");
+      pushRestore(`${getLabels().undo_delete_list} "${name}"`, snap, { redo: () => q.deleteCustomList(id), invalidate });
     },
+    onSuccess: invalidate,
     onError: (e) => { toast.error(String(e)); },
   });
 }

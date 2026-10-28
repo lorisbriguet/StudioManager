@@ -8,6 +8,8 @@ export { FilterChip } from "./FilterChip";
 export { Card } from "./Card";
 export { Input, Textarea, fieldClass } from "./Input";
 export { Modal } from "./Modal";
+export type { ModalSize } from "./Modal";
+export { ConfirmDialog, ConfirmHost } from "./ConfirmDialog";
 export { PageHeader } from "./PageHeader";
 export { SectionLabel, SECTION_LABEL } from "./SectionLabel";
 export { SettingRow, SettingsCard, SectionHeader } from "./Settings";

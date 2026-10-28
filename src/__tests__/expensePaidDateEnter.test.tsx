@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ExpensesPage } from "../pages/ExpensesPage";
+import { pressEnter } from "./fixtures/form";
 import { useAppStore } from "../stores/app-store";
 import { getDb } from "../db";
 import {
@@ -78,7 +79,9 @@ describe("Edit paid date modal", () => {
     const input = document.querySelector<HTMLInputElement>('input[inputmode="numeric"]')!;
     expect(input).not.toBeNull();
     fireEvent.change(input, { target: { value: `${YEAR}-02-01` } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    // The dialog is a FormModal: Enter submits its form.
+    expect(input.form).not.toBeNull();
+    pressEnter(input);
 
     await waitFor(() => {
       const upd = executedStatements.find((s) => s.sql.includes("UPDATE expenses"));

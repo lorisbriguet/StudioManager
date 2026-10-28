@@ -6,9 +6,7 @@ import { useWindowTitle } from "../../hooks/useWindowTitle";
 import { useAppStore } from "../../stores/app-store";
 import { useOrgStore } from "../../stores/org-store";
 import { useT } from "../../i18n/useT";
-import { ask } from "@tauri-apps/plugin-dialog";
-import { exitTestMode as exitTestModeShared, exitPresentationMode as exitPresentationModeShared } from "../../lib/modes";
-import { toast } from "sonner";
+import { useExitMode } from "../../hooks/useExitMode";
 import { X } from "lucide-react";
 
 export function MainLayout() {
@@ -24,29 +22,7 @@ export function MainLayout() {
   // does not mirror one onto the other.
   useWindowTitle(orgName);
 
-  const exitTestMode = async () => {
-    const confirmed = await ask(t.test_mode_confirm_exit, { kind: "warning" });
-    if (!confirmed) return;
-    try {
-      await exitTestModeShared();
-      toast.success(t.toast_test_mode_exited);
-      setTimeout(() => window.location.reload(), 500);
-    } catch {
-      toast.error(t.toast_test_mode_failed);
-    }
-  };
-
-  const exitPresentationMode = async () => {
-    const confirmed = await ask(t.presentation_mode_confirm_exit, { kind: "warning" });
-    if (!confirmed) return;
-    try {
-      await exitPresentationModeShared();
-      toast.success(t.toast_presentation_exited);
-      setTimeout(() => window.location.reload(), 500);
-    } catch {
-      toast.error(String(t.toast_presentation_failed));
-    }
-  };
+  const { exitMode, exiting } = useExitMode();
 
   return (
     <div className="flex h-full">
@@ -56,7 +32,9 @@ export function MainLayout() {
           <div className="bg-[var(--color-banner-test)] text-white text-sm font-semibold py-1.5 px-4 shrink-0 flex items-center justify-center gap-3">
             <span>{t.test_mode_banner}{" "}{t.mode_in_organisation.replace("{name}", orgName)}</span>
             <button
-              onClick={exitTestMode}
+              type="button"
+              onClick={() => void exitMode("test")}
+              disabled={exiting === "test"}
               className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[var(--color-banner-test-hover)] hover:opacity-80 text-xs"
             >
               <X size={12} /> {t.exit_test_mode}
@@ -67,7 +45,9 @@ export function MainLayout() {
           <div className="bg-[var(--color-banner-presentation)] text-white text-sm font-semibold py-1.5 px-4 shrink-0 flex items-center justify-center gap-3">
             <span>{t.presentation_mode_banner}{" "}{t.mode_in_organisation.replace("{name}", orgName)}</span>
             <button
-              onClick={exitPresentationMode}
+              type="button"
+              onClick={() => void exitMode("presentation")}
+              disabled={exiting === "presentation"}
               className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[var(--color-banner-presentation-hover)] hover:opacity-80 text-xs"
             >
               <X size={12} /> {t.exit_presentation_mode}

@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Plus, Trash2, ChevronDown, ChevronRight, Pencil } from "lucide-react";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { Button, Card, DragHandle, Dropdown, Input } from "./ui";
 import { TableCell } from "./named-table/TableCell";
 import { ColumnEditorPopover } from "./named-table/ColumnEditorPopover";
@@ -15,6 +14,7 @@ import {
 import { useCustomLists, useCustomListItems, useCreateCustomList, useSetCustomListItems } from "../db/hooks/useCustomLists";
 import { useT } from "../i18n/useT";
 import { toast } from "sonner";
+import { deleteWithUndo, pushUndoable } from "../lib/undo";
 import type { ProjectTable, TableColumnDef, ProjectTableRow } from "../types/project-table";
 import { IconButton } from "./ui/IconButton";
 import { Table } from "./ui/Table";
@@ -105,7 +105,7 @@ export function NamedTable({ table, projectId }: Props) {
   const handleSaveAsList = async (name: string) => {
     const id = await createCustomList.mutateAsync(name);
     await setCustomListItems.mutateAsync({ listId: id, items: colOptions.map((v) => ({ value: v })) });
-    toast.success(t.list_created ?? "List created");
+    toast.success(t.list_created);
   };
 
   const openColEditor = (col: TableColumnDef, e?: React.MouseEvent) => {
@@ -139,9 +139,25 @@ export function NamedTable({ table, projectId }: Props) {
     setColEditorPos(null);
   }, [editingCol, cols, colName, colOptions, colLinkedListId, updateTable, table.id]);
 
+  // The rows keep the column's values, so putting the column back restores them.
   const deleteColumn = (colId: string) => {
+    const prev = cols;
     const updated = cols.filter((c) => c.id !== colId);
-    updateTable.mutate({ id: table.id, data: { column_config: updated } });
+    updateTable.mutate(
+      { id: table.id, data: { column_config: updated } },
+      {
+        onSuccess: () =>
+          pushUndoable(t.column_deleted, {
+            label: t.undo_delete_column,
+            execute: async () => {
+              await updateTable.mutateAsync({ id: table.id, data: { column_config: prev } });
+            },
+            redo: async () => {
+              await updateTable.mutateAsync({ id: table.id, data: { column_config: updated } });
+            },
+          }),
+      }
+    );
     setEditingCol(null);
     setColEditorPos(null);
   };
@@ -193,7 +209,7 @@ export function NamedTable({ table, projectId }: Props) {
           label={t.delete}
           size="xs"
           tone="danger"
-          onClick={async () => { if (await ask(t.confirm_delete_table, { kind: "warning" })) deleteTable.mutate(table.id); }}
+          onClick={() => deleteWithUndo(deleteTable, table.id, t.table_deleted)}
         />
       </div>
 
@@ -272,7 +288,7 @@ export function NamedTable({ table, projectId }: Props) {
                     </Table.Td>
                   ))}
                   <Table.Actions>
-                    <IconButton icon={Trash2} label={t.delete} size="xs" tone="danger" onClick={() => deleteRow.mutate(row.id)} />
+                    <IconButton icon={Trash2} label={t.delete} size="xs" tone="danger" onClick={() => deleteWithUndo(deleteRow, row.id, t.row_deleted)} />
                   </Table.Actions>
                 </Table.Row>
               ))}

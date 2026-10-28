@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import { ConfirmButton, IconButton } from "../components/ui";
-import { toast } from "sonner";
+import { deleteWithUndo } from "../lib/undo";
 import { ProjectDetailContent } from "../components/ProjectDetailContent";
 import { useProject, useDeleteProject } from "../db/hooks/useProjects";
 import { useTabStore } from "../stores/tab-store";
@@ -34,14 +34,7 @@ export function ProjectDetailPage() {
             question={t.confirm_delete_project}
             icon={<Trash2 size={14} />}
             variant="danger"
-            onConfirm={() => {
-              deleteProject.mutate(projectId, {
-                onSuccess: () => {
-                  toast.success(t.toast_project_deleted);
-                  navigate("/projects");
-                },
-              });
-            }}
+            onConfirm={() => deleteWithUndo(deleteProject, projectId, t.toast_project_deleted, () => navigate("/projects"))}
           />
         </div>
       </div>

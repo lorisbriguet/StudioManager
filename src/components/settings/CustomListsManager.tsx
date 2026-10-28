@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { undoableFromStore } from "../../lib/undo";
 import { Trash2, Check, Plus } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useUpdateCustomList, useDeleteCustomList, useSetCustomListItems } from "../../db/hooks/useCustomLists";
@@ -44,12 +44,11 @@ export function CustomListsManager() {
     toast.success(t.list_created);
   };
 
+  // No question: Undo puts the list and its items back.
   const handleDeleteList = async (id: number) => {
-    const confirmed = await ask(t.delete_list_confirm, { kind: "warning" });
-    if (!confirmed) return;
     await deleteList.mutateAsync(id);
     if (selectedId === id) setSelectedId(null);
-    toast.success(t.list_deleted);
+    undoableFromStore(t.list_deleted);
   };
 
   const commitRename = async () => {

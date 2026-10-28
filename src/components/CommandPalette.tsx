@@ -56,7 +56,7 @@ export function CommandPalette() {
   };
 
   return (
-    <Modal open={open} onClose={close} position="top" size="lg" padding={false} aria-label={t.search_or_jump}>
+    <Modal open={open} onClose={close} position="top" size="md" padding={false} aria-label={t.search_or_jump}>
       <Command
         className="overflow-hidden"
         shouldFilter={true}

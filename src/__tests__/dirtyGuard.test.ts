@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { confirm } from "../lib/confirm";
 import { registerDirtyGuard, confirmIfDirty, isConfirming } from "../lib/dirty-guard";
 import { useAppStore } from "../stores/app-store";
 
-vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
+// The question is the app's ConfirmDialog; answer it from the test.
+vi.mock("../lib/confirm", () => ({ confirm: vi.fn() }));
 
 // The dirty-guard registry is the single gate between a dirty form and any
 // programmatic navigation — silent data loss if it misbehaves.
@@ -18,26 +19,26 @@ describe("dirty-guard", () => {
 
   beforeEach(() => {
     useAppStore.setState({ language: "EN" });
-    vi.mocked(ask).mockReset();
+    vi.mocked(confirm).mockReset();
     while (unregisters.length) unregisters.pop()!();
   });
 
   it("passes through when no guard is dirty", async () => {
     register(() => false);
     await expect(confirmIfDirty("/somewhere")).resolves.toBe(true);
-    expect(ask).not.toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalled();
   });
 
   it("treats same-path navigation as a no-op even when dirty", async () => {
     register(() => true);
     await expect(confirmIfDirty(window.location.pathname)).resolves.toBe(true);
-    expect(ask).not.toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalled();
   });
 
   it("proceeds and marks guards clean when the user confirms leaving", async () => {
     const markClean = vi.fn();
     register(() => true, markClean);
-    vi.mocked(ask).mockResolvedValue(true);
+    vi.mocked(confirm).mockResolvedValue(true);
     await expect(confirmIfDirty("/away")).resolves.toBe(true);
     expect(markClean).toHaveBeenCalledTimes(1);
   });
@@ -45,7 +46,7 @@ describe("dirty-guard", () => {
   it("blocks navigation and keeps state dirty when the user stays", async () => {
     const markClean = vi.fn();
     register(() => true, markClean);
-    vi.mocked(ask).mockResolvedValue(false);
+    vi.mocked(confirm).mockResolvedValue(false);
     await expect(confirmIfDirty("/away")).resolves.toBe(false);
     expect(markClean).not.toHaveBeenCalled();
   });
@@ -53,7 +54,7 @@ describe("dirty-guard", () => {
   it("resolves concurrent callers false while a dialog is open", async () => {
     register(() => true);
     let resolveAsk!: (v: boolean) => void;
-    vi.mocked(ask).mockImplementation(
+    vi.mocked(confirm).mockImplementation(
       () => new Promise<boolean>((resolve) => { resolveAsk = resolve; })
     );
     const first = confirmIfDirty("/away");
@@ -64,12 +65,12 @@ describe("dirty-guard", () => {
     resolveAsk(true);
     await expect(first).resolves.toBe(true);
     expect(isConfirming()).toBe(false);
-    expect(ask).toHaveBeenCalledTimes(1);
+    expect(confirm).toHaveBeenCalledTimes(1);
   });
 
   it("fails closed when the native dialog errors", async () => {
     register(() => true);
-    vi.mocked(ask).mockRejectedValue(new Error("no dialog"));
+    vi.mocked(confirm).mockRejectedValue(new Error("no dialog"));
     await expect(confirmIfDirty("/away")).resolves.toBe(false);
     expect(isConfirming()).toBe(false);
   });
@@ -78,6 +79,6 @@ describe("dirty-guard", () => {
     const un = register(() => true);
     un();
     await expect(confirmIfDirty("/away")).resolves.toBe(true);
-    expect(ask).not.toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalled();
   });
 });

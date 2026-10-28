@@ -2,7 +2,6 @@ import { useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus, Eye, Trash2, ExternalLink, Users } from "lucide-react";
 import { toast } from "sonner";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { useClients, useCreateClient, useDeleteClient, getNextClientId } from "../db/hooks/useClients";
 import { useProjects } from "../db/hooks/useProjects";
 import { SortHeader, sortRows, type SortState } from "../components/ui/SortHeader";
@@ -16,7 +15,9 @@ import { useTabStore } from "../stores/tab-store";
 import { useListNavigation } from "../hooks/useListNavigation";
 import { Checkbox, Button, Badge, Input, Select, FormField, FormGrid, FormGridItem, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState } from "../components/ui";
 import * as v from "../lib/validate";
-import { undoableFromStore } from "../lib/undo";
+import { deleteWithUndo } from "../lib/undo";
+import { confirmDelete } from "../lib/confirm";
+import { useBulkDelete } from "../hooks/useBulkDelete";
 import { clientStatusVariant } from "../lib/statusColors";
 import type { Client } from "../types/client";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
@@ -112,12 +113,12 @@ export function ClientsPage() {
 
   const bulk = useBulkSelect(filtered);
 
-  const bulkDelete = useCallback(async () => {
-    if (!(await ask(t.confirm_bulk_delete_clients, { kind: "warning" }))) return;
-    const ids = [...bulk.selected] as string[];
-    ids.forEach((id) => deleteClient.mutate(id));
-    bulk.clearSelection();
-  }, [bulk, deleteClient, t]);
+  // Cascading: a client takes its projects, tasks and documents with it, so
+  // both deletes ask first (then Undo brings everything back).
+  const deleteSelection = useBulkDelete("clients", (id: string) => deleteClient.mutateAsync(id), {
+    message: t.delete_clients_cascade,
+  });
+  const bulkDelete = () => void deleteSelection([...bulk.selected] as string[], bulk.clearSelection);
 
   if (isLoading) return (
     <div>
@@ -238,10 +239,9 @@ export function ClientsPage() {
             { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/clients/${ctxMenu.item.id}`, ctxMenu.item.name) },
             { label: "", divider: true, onClick: () => {} },
             { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: async () => {
-              if (!(await ask(t.confirm_delete_client, { kind: "warning" }))) return;
-              deleteClient.mutate(ctxMenu.item.id, {
-                onSuccess: () => undoableFromStore(t.toast_client_deleted),
-              });
+              const client = ctxMenu.item;
+              if (!(await confirmDelete(client.name, t.delete_client_cascade))) return;
+              deleteWithUndo(deleteClient, client.id, t.toast_client_deleted);
             } },
           ]}
         />
@@ -312,7 +312,7 @@ function NewClientForm({
   };
 
   return (
-    <FormModal open onClose={onCancel} title={t.new_client} submitLabel={t.save} onSubmit={submit} submitDisabled={saving}>
+    <FormModal open onClose={onCancel} title={t.new_client} submitLabel={t.save} onSubmit={submit} submitting={saving}>
       <FormGrid cols={2}>
         <FormField label={t.display_name} required error={errors.name}>
           <Input

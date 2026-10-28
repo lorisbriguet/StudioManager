@@ -24,7 +24,7 @@ import { useT } from "../i18n/useT";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { ClientTimeline } from "../components/ClientTimeline";
 import { ContextMenu } from "../components/ui/ContextMenu";
-import { undoableFromStore } from "../lib/undo";
+import { deleteWithUndo, undoableFromStore } from "../lib/undo";
 import type { Client, ClientContact, ClientAddress } from "../types/client";
 
 export function ClientDetailPage() {
@@ -103,14 +103,7 @@ export function ClientDetailPage() {
             question={t.confirm_delete_client}
             icon={<Trash2 size={14} />}
             variant="danger"
-            onConfirm={() => {
-              deleteClient.mutate(id!, {
-                onSuccess: () => {
-                  undoableFromStore(t.toast_client_deleted);
-                  navigate("/clients");
-                },
-              });
-            }}
+            onConfirm={() => deleteWithUndo(deleteClient, id!, t.toast_client_deleted, () => navigate("/clients"))}
           />
         </div>
       </div>

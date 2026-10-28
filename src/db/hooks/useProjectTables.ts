@@ -4,6 +4,7 @@ import * as q from "../queries/projectTables";
 import { useUndoStore } from "../../stores/undo-store";
 import type { TableColumnDef } from "../../types/project-table";
 import { getLabels } from "../../lib/notifyError";
+import { snapshotRows, pushRestore } from "../undoRestore";
 
 export function useProjectTables(projectId: number) {
   return useQuery({
@@ -94,8 +95,13 @@ export function useUpdateProjectTableRow(tableId: number) {
 
 export function useDeleteProjectTableRow(tableId: number) {
   const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["project-table-rows", tableId] });
   return useMutation({
-    mutationFn: (id: number) => q.deleteProjectTableRow(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["project-table-rows", tableId] }),
+    mutationFn: async (id: number) => {
+      const snap = await snapshotRows([{ table: "project_table_rows", where: "id = $1", params: [id] }]);
+      await q.deleteProjectTableRow(id);
+      pushRestore(getLabels().undo_delete_row, snap, { redo: () => q.deleteProjectTableRow(id), invalidate });
+    },
+    onSuccess: invalidate,
   });
 }

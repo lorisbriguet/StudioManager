@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Download, FolderPlus } from "lucide-react";
-import { Button, PageSpinner, Modal, IconButton } from "../components/ui";
+import { Button, PageSpinner, IconButton } from "../components/ui";
+import { confirmDraftExport } from "../lib/confirmDraftExport";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { useQuote, useUpdateQuote } from "../db/hooks/useQuotes";
 import { getQuote } from "../db/queries/quotes";
@@ -32,7 +33,6 @@ export function QuotePreviewPage() {
     ? (quote as { template_id?: number | null }).template_id ?? null
     : null;
   const { data: quoteTemplate } = useInvoiceTemplate(quoteTemplateId);
-  const [showDraftWarning, setShowDraftWarning] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
   const [exporting, setExporting] = useState(false);
   const updateQuote = useUpdateQuote();
@@ -87,12 +87,11 @@ export function QuotePreviewPage() {
     }
   };
 
-  const downloadPdf = () => {
-    if (quote.status === "draft") {
-      setShowDraftWarning(true);
-    } else {
-      doDownload();
-    }
+  const downloadPdf = async () => {
+    if (quote.status !== "draft") return doDownload();
+    const choice = await confirmDraftExport();
+    if (choice === "draft") await doDownload();
+    if (choice === "sent") handleMarkSentAndExport();
   };
 
   const handleMarkSentAndExport = () => {
@@ -100,14 +99,10 @@ export function QuotePreviewPage() {
       { id: quoteId, data: { status: "sent" } },
       {
         onSuccess: async () => {
-          setShowDraftWarning(false);
           const fresh = await getQuote(quoteId);
           await doDownload(fresh ?? quote);
         },
-        onError: (e) => {
-          setShowDraftWarning(false);
-          toast.error(String(e));
-        },
+        onError: (e) => toast.error(String(e)),
       }
     );
   };
@@ -124,7 +119,7 @@ export function QuotePreviewPage() {
             {t.generate_project}
           </Button>
         )}
-        <Button icon={<Download size={12} />} loading={exporting} onClick={downloadPdf}>
+        <Button icon={<Download size={12} />} loading={exporting || updateQuote.isPending} onClick={downloadPdf}>
           {t.download_pdf}
         </Button>
       </div>
@@ -147,25 +142,6 @@ export function QuotePreviewPage() {
           clientName={client.name}
         />
       )}
-      <Modal
-        open={showDraftWarning}
-        onClose={() => setShowDraftWarning(false)}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setShowDraftWarning(false)}>
-              {t.cancel}
-            </Button>
-            <Button variant="secondary" onClick={() => { setShowDraftWarning(false); doDownload(); }}>
-              {t.export_as_draft}
-            </Button>
-            <Button loading={updateQuote.isPending} onClick={handleMarkSentAndExport}>
-              {t.mark_sent_and_export}
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm">{t.export_draft_warning}</p>
-      </Modal>
     </div>
   );
 }

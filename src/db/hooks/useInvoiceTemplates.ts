@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import * as q from "../queries/invoiceTemplates";
+import { snapshotRows, pushRestore } from "../undoRestore";
+import { getLabels } from "../../lib/notifyError";
 import type { InvoiceTemplate } from "../../types/invoice-template";
 
 export function useInvoiceTemplates() {
@@ -52,9 +54,15 @@ export function useUpdateInvoiceTemplate() {
 
 export function useDeleteInvoiceTemplate() {
   const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["invoice-templates"] });
   return useMutation({
-    mutationFn: (id: number) => q.deleteInvoiceTemplate(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["invoice-templates"] }),
+    mutationFn: async (id: number) => {
+      const snap = await snapshotRows([{ table: "invoice_templates", where: "id = $1", params: [id] }]);
+      await q.deleteInvoiceTemplate(id);
+      const name = String(snap[0].rows[0]?.name ?? "");
+      pushRestore(`${getLabels().undo_delete_invoice_template} "${name}"`, snap, { redo: () => q.deleteInvoiceTemplate(id), invalidate });
+    },
+    onSuccess: invalidate,
     onError: (e) => { toast.error(String(e)); },
   });
 }

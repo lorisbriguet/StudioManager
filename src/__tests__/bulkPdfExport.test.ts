@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ask, open } from "@tauri-apps/plugin-dialog";
+import { open } from "@tauri-apps/plugin-dialog";
+import { confirm } from "../lib/confirm";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
 import { runBulkPdfExport } from "../lib/bulkPdfExport";
@@ -15,10 +16,11 @@ vi.mock("../lib/log", () => ({
   logDebug: vi.fn(),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({
-  ask: vi.fn(),
   open: vi.fn(),
   writeFile: vi.fn(),
 }));
+// The draft warning is the app's ConfirmDialog; answer it from the test.
+vi.mock("../lib/confirm", () => ({ confirm: vi.fn() }));
 vi.mock("sonner", () => ({
   toast: {
     info: vi.fn(),
@@ -33,6 +35,7 @@ vi.mock("sonner", () => ({
 const LABELS = {
   export_pdfs: "Export PDFs",
   bulk_export_draft_warning: "Includes drafts",
+  bulk_export_draft_title: "Export drafts?",
   pdf_generation_busy: "Busy",
   bulk_export_progress: "{n}/{total}",
   bulk_export_done: "Done {n}",
@@ -44,7 +47,7 @@ const bytes = new Uint8Array([1]);
 const okResult = (reference: string) => ({ bytes, reference, client: { name: "ACME" } });
 
 beforeEach(() => {
-  vi.mocked(ask).mockReset().mockResolvedValue(true);
+  vi.mocked(confirm).mockReset().mockResolvedValue(true);
   vi.mocked(open).mockReset().mockResolvedValue("/out");
   vi.mocked(writeFile).mockReset().mockResolvedValue(undefined);
   vi.mocked(toast.info).mockReset();
@@ -87,12 +90,12 @@ describe("runBulkPdfExport", () => {
       onDone: vi.fn(),
     });
     expect(toast.info).toHaveBeenCalled();
-    expect(ask).not.toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalled();
     expect(writeFile).not.toHaveBeenCalled();
   });
 
   it("stops cleanly when the draft warning is declined", async () => {
-    vi.mocked(ask).mockResolvedValue(false);
+    vi.mocked(confirm).mockResolvedValue(false);
     await runBulkPdfExport({
       docs: [{ id: 1, reference: "DRAFT-x" }],
       busyIds: new Set<number>(),
