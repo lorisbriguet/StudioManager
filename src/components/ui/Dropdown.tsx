@@ -35,7 +35,8 @@ export const MENU_ITEM =
 export const MENU_DIVIDER = "my-1 border-t border-[var(--color-border-divider)]";
 export const MENU_GROUP_LABEL = `px-2 pt-2 pb-1 ${SECTION_LABEL}`;
 
-const TONE = {
+/** Menu row tones, shared by Dropdown and ContextMenu. */
+export const MENU_TONE = {
   base: "text-[var(--color-text-secondary)] cursor-pointer",
   active: "bg-[var(--color-hover-row)] text-[var(--color-text)] cursor-pointer",
   selected: "text-accent font-medium bg-accent-tint cursor-pointer",
@@ -227,12 +228,12 @@ function MenuPanel({
             );
           const isActive = i === current;
           const tone = r.disabled
-            ? TONE.disabled
+            ? MENU_TONE.disabled
             : r.danger
-              ? isActive ? TONE.dangerActive : TONE.danger
+              ? isActive ? MENU_TONE.dangerActive : MENU_TONE.danger
               : r.selected
-                ? isActive ? TONE.selectedActive : TONE.selected
-                : isActive ? TONE.active : TONE.base;
+                ? isActive ? MENU_TONE.selectedActive : MENU_TONE.selected
+                : isActive ? MENU_TONE.active : MENU_TONE.base;
           const itemRole = role === "listbox" ? "option" : r.checked !== undefined ? "menuitemcheckbox" : "menuitem";
           return (
             <div

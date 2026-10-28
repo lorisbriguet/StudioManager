@@ -10,6 +10,7 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
+import { SURFACE } from "./tokens";
 
 /**
  * Popover — the one floating panel of the app (see DESIGN-SYSTEM.md, "Popover").
@@ -35,8 +36,7 @@ import { createPortal } from "react-dom";
  */
 
 /** Surface shared by every floating panel. */
-export const POPOVER_SURFACE =
-  "bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu outline-none";
+export const POPOVER_SURFACE = `${SURFACE} shadow-menu outline-none`;
 
 const PADDING = {
   /** menus: rows bring their own inset */

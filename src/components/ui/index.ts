@@ -34,3 +34,4 @@ export { Kbd } from "./Kbd";
 export { Tooltip, useTooltip } from "./Tooltip";
 export { ProgressBar, Callout, ConfirmButton, DragHandle } from "./Feedback";
 export { Checkbox, Radio } from "./Checkbox";
+export { CONTROL_BOX, MUTED_INTERACTIVE, SURFACE } from "./tokens";
