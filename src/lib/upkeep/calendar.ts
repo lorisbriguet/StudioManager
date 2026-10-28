@@ -127,7 +127,7 @@ export async function syncSubscriptionEvent(
   if (sub.calendar_event_id && !opts.force) return current;
 
   const event = {
-    title: `${sub.name} renews`,
+    title: getLabels().upkeep_renewal_event_title.replace("{name}", sub.name),
     date: sub.renews_on,
     alertMinutes: resolveAlert(sub.alert),
   };
@@ -164,33 +164,71 @@ function serialize<T>(key: string, work: () => Promise<T>): Promise<T | undefine
   return next;
 }
 
+// Event uid each row's last sync left in the calendar. A delete reads its row
+// before the delete, possibly while a sync is still creating or moving the
+// event; its removal step runs after that sync on the same chain and takes
+// the uid from here, so the event the sync just made is the one removed.
+const latestUid = new Map<string, string | null>();
+
+/**
+ * After creating or moving an event: if the row was deleted meanwhile, delete
+ * the new event instead of leaving it orphaned. True when the row still exists.
+ */
+async function keepIfRowExists(key: string, uid: string, exists: () => Promise<boolean>): Promise<boolean> {
+  if (await exists()) return true;
+  await removeUpkeepEvent(uid);
+  latestUid.delete(key);
+  return false;
+}
+
 /** Sync one item; true when it ends up on a new event (created or moved). */
 function syncItemById(id: number, opts: SyncOptions): Promise<boolean | undefined> {
-  return serialize(`item:${id}`, async () => {
+  const key = `item:${id}`;
+  return serialize(key, async () => {
     const item = await getUpkeepItem(id);
     if (!item) return false;
     const machine = await getMachine(item.machine_id);
     if (!machine) return false;
     const ids = await syncItemEvent(item, machine, opts);
+    latestUid.set(key, ids.calendar_event_id);
     if (
       ids.calendar_event_id === item.calendar_event_id &&
       ids.calendar_event_date === item.calendar_event_date
     ) {
       return false;
     }
+    const isNew = ids.calendar_event_id !== null && ids.calendar_event_id !== item.calendar_event_id;
+    if (isNew && !(await keepIfRowExists(key, ids.calendar_event_id as string, async () => (await getUpkeepItem(id)) !== null))) {
+      return false;
+    }
     await setItemCalendarEvent(id, ids.calendar_event_id, ids.calendar_event_date);
-    return ids.calendar_event_id !== null && ids.calendar_event_id !== item.calendar_event_id;
+    return isNew;
   });
 }
 
 function syncSubscriptionById(id: number, opts: SyncOptions): Promise<boolean | undefined> {
-  return serialize(`sub:${id}`, async () => {
+  const key = `sub:${id}`;
+  return serialize(key, async () => {
     const sub = await getSubscription(id);
     if (!sub) return false;
     const ids = await syncSubscriptionEvent(sub, opts);
+    latestUid.set(key, ids.calendar_event_id);
     if (ids.calendar_event_id === sub.calendar_event_id) return false;
+    const isNew = ids.calendar_event_id !== null;
+    if (isNew && !(await keepIfRowExists(key, ids.calendar_event_id as string, async () => (await getSubscription(id)) !== null))) {
+      return false;
+    }
     await setSubscriptionCalendarEvent(id, ids.calendar_event_id);
-    return ids.calendar_event_id !== null;
+    return isNew;
+  });
+}
+
+/** Removal step for a deleted row: queued behind any in-flight sync of it. */
+function removeTracked(key: string, readUid: string | null): Promise<unknown> {
+  return serialize(key, async () => {
+    const uid = latestUid.has(key) ? latestUid.get(key) ?? null : readUid;
+    latestUid.delete(key);
+    await removeUpkeepEvent(uid);
   });
 }
 
@@ -218,17 +256,15 @@ export async function syncMachineItemsCalendar(machineId: number, opts: SyncOpti
 }
 
 /** Delete the events of item rows being deleted (rows read before the delete). */
+// Always queued, even when the row read had no event: a sync in flight may
+// be creating one.
 export async function removeItemEvents(items: UpkeepItem[]): Promise<void> {
-  for (const i of items) {
-    if (!i.calendar_event_id) continue;
-    await serialize(`item:${i.id}`, () => removeUpkeepEvent(i.calendar_event_id));
-  }
+  await Promise.all(items.map((i) => removeTracked(`item:${i.id}`, i.calendar_event_id)));
 }
 
 /** Delete the renewal event of a subscription row being deleted. */
 export async function removeSubscriptionEvent(sub: Subscription): Promise<void> {
-  if (!sub.calendar_event_id) return;
-  await serialize(`sub:${sub.id}`, () => removeUpkeepEvent(sub.calendar_event_id));
+  await removeTracked(`sub:${sub.id}`, sub.calendar_event_id);
 }
 
 /**

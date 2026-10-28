@@ -7,10 +7,10 @@ vi.mock("../lib/log", () => ({
   logDebug: vi.fn(),
 }));
 
-vi.mock("../lib/notifyError", () => ({
-  notifyError: vi.fn(),
-  getLabels: () => new Proxy({}, { get: (_t, k) => String(k) }),
-}));
+vi.mock("../lib/notifyError", async () => {
+  const { uiLabels } = await vi.importActual<typeof import("../i18n/ui")>("../i18n/ui");
+  return { notifyError: vi.fn(), getLabels: () => uiLabels.EN };
+});
 
 import {
   alertMinutes,
@@ -19,6 +19,7 @@ import {
   syncItemCalendar,
   syncSubscriptionCalendar,
   removeItemEvents,
+  removeSubscriptionEvent,
   syncAllUpkeepEvents,
 } from "../lib/upkeep/calendar";
 import { purgeAllCalendarEvents } from "../lib/appleCalendar";
@@ -289,9 +290,115 @@ describe("persisting event ids", () => {
   });
 
   it("removeItemEvents deletes the events of rows about to be deleted", async () => {
-    await removeItemEvents([item({ calendar_event_id: "A" }), item({ id: 8, calendar_event_id: null })]);
+    await removeItemEvents([item({ id: 201, calendar_event_id: "A" }), item({ id: 202, calendar_event_id: null })]);
     expect(calls("calendar_delete_event").map((c) => c.args.uid)).toEqual(["A"]);
     expect(executedStatements).toHaveLength(0);
+  });
+});
+
+describe("delete while a sync is in flight", () => {
+  beforeEach(async () => {
+    await getDb();
+    clearExecutedStatements();
+  });
+
+  /** calendar_create_event resolves only when `release` is called. */
+  function holdCreate(uid: string) {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    setInvokeHandler(async (cmd) => {
+      if (cmd === "calendar_create_event") {
+        await gate;
+        return uid;
+      }
+      return null;
+    });
+    return () => release();
+  }
+
+  const deletedUids = () => calls("calendar_delete_event").map((c) => c.args.uid);
+
+  it("create then delete before the sync resolves leaves no item event", async () => {
+    let row: UpkeepItem | null = item({ id: 101 });
+    setSelectHandler((sql) => {
+      if (sql.includes("FROM upkeep_items")) return row ? [row] : [];
+      if (sql.includes("FROM machines")) return [machine()];
+      return [];
+    });
+    const release = holdCreate("LATE-UID");
+    const sync = syncItemCalendar(101);
+    await new Promise((r) => setTimeout(r, 0)); // sync is now waiting on Calendar
+    const read = row!; // the delete hook reads the row (no event id yet) ...
+    row = null; // ... deletes it ...
+    const removal = removeItemEvents([read]); // ... and queues the removal
+    release();
+    await Promise.all([sync, removal]);
+    expect(deletedUids()).toContain("LATE-UID");
+  });
+
+  it("move then delete before the sync resolves leaves no item event", async () => {
+    let row: UpkeepItem | null = item({
+      id: 102, next_due_on: "2026-12-10", calendar_event_id: "E1", calendar_event_date: "2026-11-10",
+    });
+    setSelectHandler((sql) => {
+      if (sql.includes("FROM upkeep_items")) return row ? [row] : [];
+      if (sql.includes("FROM machines")) return [machine()];
+      return [];
+    });
+    const release = holdCreate("E2");
+    const sync = syncItemCalendar(102);
+    await new Promise((r) => setTimeout(r, 0));
+    const read = row!; // still says E1
+    row = null;
+    const removal = removeItemEvents([read]);
+    release();
+    await Promise.all([sync, removal]);
+    expect(deletedUids()).toEqual(expect.arrayContaining(["E1", "E2"]));
+  });
+
+  it("the sync itself removes its new event when the row is gone afterwards", async () => {
+    let row: UpkeepItem | null = item({ id: 103 });
+    setSelectHandler((sql) => {
+      if (sql.includes("FROM upkeep_items")) return row ? [row] : [];
+      if (sql.includes("FROM machines")) return [machine()];
+      return [];
+    });
+    const release = holdCreate("GONE-UID");
+    const sync = syncItemCalendar(103);
+    await new Promise((r) => setTimeout(r, 0));
+    row = null; // deleted by a path that queues no removal (e.g. a cascade)
+    release();
+    await sync;
+    expect(deletedUids()).toEqual(["GONE-UID"]);
+    expect(executedStatements.some((st) => st.sql.includes("calendar_event_date"))).toBe(false);
+  });
+
+  it("subscription create then delete before the sync resolves leaves no event", async () => {
+    let row: Subscription | null = sub({ id: 104 });
+    setSelectHandler((sql) => (sql.includes("FROM subscriptions") ? (row ? [row] : []) : []));
+    const release = holdCreate("SUB-UID");
+    const sync = syncSubscriptionCalendar(104);
+    await new Promise((r) => setTimeout(r, 0));
+    const read = row!;
+    row = null;
+    const removal = removeSubscriptionEvent(read);
+    release();
+    await Promise.all([sync, removal]);
+    expect(deletedUids()).toContain("SUB-UID");
+  });
+
+  it("subscription move then delete before the sync resolves leaves no event", async () => {
+    let row: Subscription | null = sub({ id: 105, calendar_event_id: "S1" });
+    setSelectHandler((sql) => (sql.includes("FROM subscriptions") ? (row ? [row] : []) : []));
+    const release = holdCreate("S2");
+    const sync = syncSubscriptionCalendar(105, { force: true });
+    await new Promise((r) => setTimeout(r, 0));
+    const read = row!;
+    row = null;
+    const removal = removeSubscriptionEvent(read);
+    release();
+    await Promise.all([sync, removal]);
+    expect(deletedUids()).toEqual(expect.arrayContaining(["S1", "S2"]));
   });
 });
 
