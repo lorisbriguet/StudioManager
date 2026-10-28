@@ -54,7 +54,7 @@ export function Conversation({ sessionId, working }: ConversationProps) {
   if (items.length === 0) return <EmptyState icon={<Bot size={32} />} message={t.agents_no_conversation} />;
 
   return (
-    <div className="max-w-3xl mx-auto px-2 py-4 space-y-6">
+    <div className="max-w-3xl mx-auto px-5 py-5 space-y-6">
       {groupTools(items).map((g, i) =>
         g.kind === "tools" ? (
           <ToolRun key={i} tools={g.tools} />

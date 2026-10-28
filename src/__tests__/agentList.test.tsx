@@ -40,17 +40,23 @@ describe("AgentList", () => {
     expect(screen.queryByText("old-one")).toBeNull();
     const toggle = screen.getByRole("button", { name: /Done/ });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(toggle).toHaveTextContent("2");
+    expect(screen.getByRole("heading", { name: "Done" }).parentElement).toHaveTextContent("2");
     fireEvent.click(toggle);
     expect(screen.getByText("old-one")).toBeInTheDocument();
     expect(screen.getByText("older-one")).toBeInTheDocument();
-    expect(localStorage.getItem("agents.doneCollapsed")).toBe("false");
+    expect(JSON.parse(localStorage.getItem("agents.foldedGroups") ?? "null")).toEqual([]);
   });
 
-  it("remembers an unfolded Done", () => {
-    localStorage.setItem("agents.doneCollapsed", "false");
+  it("every group folds, and the choice is remembered", () => {
+    const { unmount } = render(<AgentList byGroup={byGroup()} selectedId={null} onSelect={() => {}} />);
+    const working = screen.getByRole("button", { name: /Working/ });
+    expect(working).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(working);
+    expect(screen.queryByText("busy-one")).toBeNull();
+    unmount();
     render(<AgentList byGroup={byGroup()} selectedId={null} onSelect={() => {}} />);
-    expect(screen.getByText("old-one")).toBeInTheDocument();
+    expect(screen.queryByText("busy-one")).toBeNull();
+    expect(screen.getByRole("button", { name: /Working/ })).toHaveAttribute("aria-expanded", "false");
   });
 
   it("keeps the selected done agent visible while folded", () => {

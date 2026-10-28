@@ -194,10 +194,10 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className={`${PANEL_TOP_BAR} gap-2 px-4 border-[var(--color-border-divider)]`}>
+      <div className={`${PANEL_TOP_BAR} gap-2 px-5 border-[var(--color-border-divider)]`}>
         <h2 className="text-sm font-semibold tracking-tight truncate">{agent.name}</h2>
         <Badge variant={agentGroupVariant(agent.group)} className="shrink-0 gap-1.5">
-          <span className={`dot-sm ${GROUP_STYLE[agent.group].dot}`} aria-hidden />
+          <span className={`dot ${GROUP_STYLE[agent.group].dot}`} aria-hidden />
           {t[GROUP_LABEL_KEYS[agent.group]]}
         </Badge>
         <div className="ml-auto flex items-center gap-2">
@@ -231,16 +231,16 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
           )}
         </div>
       </div>
-      <div className="px-4 pt-3 text-xs text-muted">{agentLabel(agent)}</div>
+      <div className="px-5 pt-3 text-xs text-muted">{agentLabel(agent)}</div>
 
       {error && (
-        <p role="alert" className="px-4 pt-3 text-sm text-[var(--color-danger-text)]">
+        <p role="alert" className="px-5 pt-3 text-sm text-[var(--color-danger-text)]">
           {error}
         </p>
       )}
 
       {agent.group === "needs-you" && background && shortId && (
-        <div className="px-4 pt-3">
+        <div className="px-5 pt-3">
           <PromptAnswer shortId={shortId} onOpenTerminal={onOpenTerminal} />
         </div>
       )}
@@ -249,9 +249,9 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
         <Conversation sessionId={agent.sessionId} working={agent.group === "working"} />
       </div>
 
-      <div className="max-w-3xl w-full mx-auto space-y-1.5 px-4 pb-4">
+      <div className="max-w-3xl w-full mx-auto space-y-1.5 px-5 pb-5">
         <div
-          className={`rounded-xl border bg-[var(--color-input-bg)] pl-2 pr-2 py-2 focus-within:border-[var(--color-accent)] ${
+          className={`rounded-xl border bg-[var(--color-input-bg)] px-2 py-2 focus-within:border-[var(--color-accent)] ${
             dragging ? "border-[var(--color-accent)]" : "border-[var(--color-input-border)]"
           }`}
         >
@@ -316,7 +316,7 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
               }
             }}
             style={{ fieldSizing: "content" } as React.CSSProperties}
-            className="flex-1 resize-none bg-transparent! border-0 p-0 py-1.5 text-sm leading-relaxed outline-none min-h-[2rem] max-h-48 overflow-y-auto placeholder:text-muted disabled:cursor-not-allowed disabled:placeholder:opacity-50"
+            className="flex-1 resize-none bg-transparent! border-0 p-0 py-1.5 text-sm leading-relaxed outline-none min-h-8 max-h-48 overflow-y-auto placeholder:text-muted disabled:cursor-not-allowed disabled:placeholder:opacity-50"
           />
           <Button
             size="sm"

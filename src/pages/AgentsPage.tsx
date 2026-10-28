@@ -46,52 +46,55 @@ export function AgentsPage() {
     setParams({ agent: id });
   };
 
+  // Full-height columns like Settings: the page runs edge to edge (-m-8), and both
+  // columns start with a PANEL_TOP_BAR so the line between them never steps.
   return (
-    <div className="flex flex-col h-full">
-      <PageHeader title={t.agents} />
-      <div className="flex flex-1 min-h-0 border-t border-[var(--color-border-divider)]">
-        <div className="w-72 shrink-0 flex flex-col min-h-0 border-r border-[var(--color-border-divider)]">
-          <div className={`${PANEL_TOP_BAR} px-3 border-[var(--color-border-divider)]`}>
-            <Button size="sm" icon={<Plus size={14} />} onClick={() => setStarting(true)}>
-              {t.agents_new}
-            </Button>
-          </div>
-          {agents.length === 0 ? (
-            <EmptyState icon={<Bot size={32} />} message={t.agents_empty} />
-          ) : (
-            <AgentList byGroup={byGroup} selectedId={selectedId} onSelect={select} />
-          )}
+    <div className="flex h-full min-h-0 -m-8">
+      <aside className="w-72 shrink-0 flex flex-col min-h-0 border-r border-[var(--color-border-divider)]">
+        <div className={`${PANEL_TOP_BAR} pl-5 pr-3 justify-between border-[var(--color-border-divider)]`}>
+          <h1 className="text-sm font-semibold text-muted uppercase tracking-wider">{t.agents}</h1>
+          <Button size="sm" variant="ghost" icon={<Plus size={14} />} onClick={() => setStarting(true)}>
+            {t.agents_new}
+          </Button>
         </div>
-        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-          {starting ? (
-            <div className="flex-1 min-h-0 overflow-y-auto p-4">
+        {agents.length === 0 ? (
+          <EmptyState icon={<Bot size={32} />} message={t.agents_empty} />
+        ) : (
+          <AgentList byGroup={byGroup} selectedId={selectedId} onSelect={select} />
+        )}
+      </aside>
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+        {starting ? (
+          <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6">
+            <div className="max-w-xl">
               <StartAgentForm
                 onStarted={(shortId) => {
                   setStarting(false);
                   setPendingShortId(shortId);
                 }}
-                onCancel={() => setStarting(false)} />
+                onCancel={() => setStarting(false)}
+              />
             </div>
-          ) : selected ? (
-            <>
-              <div className="flex-1 min-h-0">
-                <AgentDetail
-                  agent={selected}
-                  onOpenTerminal={setTerminalFor}
-                  onDeleted={() => setParams({})}
-                  onSwitched={setPendingShortId}
-                />
+          </div>
+        ) : selected ? (
+          <>
+            <div className="flex-1 min-h-0">
+              <AgentDetail
+                agent={selected}
+                onOpenTerminal={setTerminalFor}
+                onDeleted={() => setParams({})}
+                onSwitched={setPendingShortId}
+              />
+            </div>
+            {terminalFor && selected.shortId === terminalFor && (
+              <div className="shrink-0 px-5 pb-5">
+                <TerminalPanel key={terminalFor} shortId={terminalFor} onClose={() => setTerminalFor(null)} />
               </div>
-              {terminalFor && selected.shortId === terminalFor && (
-                <div className="p-4 pt-0 shrink-0">
-                  <TerminalPanel key={terminalFor} shortId={terminalFor} onClose={() => setTerminalFor(null)} />
-                </div>
-              )}
-            </>
-          ) : (
-            <EmptyState icon={<Bot size={32} />} message={t.agents_select_hint} />
-          )}
-        </div>
+            )}
+          </>
+        ) : (
+          <EmptyState icon={<Bot size={32} />} message={t.agents_select_hint} />
+        )}
       </div>
     </div>
   );
