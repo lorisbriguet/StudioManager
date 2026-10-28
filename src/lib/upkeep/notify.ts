@@ -194,13 +194,14 @@ export function markerStatement(n: PlannedNotice): { sql: string; params: unknow
 
 /**
  * Roll due subscription renewals, plan the notices that are owed and write them.
- * Returns the number of notices created. Does nothing in test and presentation
- * modes. Every DB call is preceded by an organisation check (which also fails
+ * Returns the number of notices created, or null when an organisation switch
+ * (or a switch in progress) stopped the run, so the caller retries it once
+ * the switch is over. Does nothing (0) in test and presentation modes. Every DB call is preceded by an organisation check (which also fails
  * while a switch is in progress), and every write carries the expected
  * organisation so Rust refuses it if the active one changed in between.
  * Each notice and its marker go in one batch: both land or neither does.
  */
-export async function runUpkeepCheck(qc: QueryClient, todayISO: string): Promise<number> {
+export async function runUpkeepCheck(qc: QueryClient, todayISO: string): Promise<number | null> {
   const app = useAppStore.getState();
   if (app.testMode || app.presentationMode) return 0;
   const org = useOrgStore.getState().activeId;
@@ -208,19 +209,19 @@ export async function runUpkeepCheck(qc: QueryClient, todayISO: string): Promise
     const s = useOrgStore.getState();
     return !s.switching && s.activeId === org;
   };
-  if (!sameOrg()) return 0;
+  if (!sameOrg()) return null;
 
   // Renewals first: a rolled subscription can owe a "renewal happened" notice.
   const allSubs = await getSubscriptions();
   let rolled = false;
   for (const sub of allSubs) {
     if (sub.status !== "active") continue;
-    if (!sameOrg()) return 0;
+    if (!sameOrg()) return null;
     try {
       const n = await applyRenewals(sub, todayISO, org);
       if (n > 0) {
         rolled = true;
-        if (!sameOrg()) return 0;
+        if (!sameOrg()) return null;
         await syncSubscriptionCalendar(sub.id, { force: true });
       }
     } catch (e) {
@@ -229,27 +230,27 @@ export async function runUpkeepCheck(qc: QueryClient, todayISO: string): Promise
     }
   }
 
-  if (!sameOrg()) return 0;
+  if (!sameOrg()) return null;
   const subs = rolled ? await getSubscriptions() : allSubs;
-  if (!sameOrg()) return 0;
+  if (!sameOrg()) return null;
   const items = await getActiveUpkeepItems();
-  if (!sameOrg()) return 0;
+  if (!sameOrg()) return null;
   const machines = await getMachines();
-  if (!sameOrg()) return 0;
+  if (!sameOrg()) return null;
   const consumables = await getConsumables();
-  if (!sameOrg()) return 0;
+  if (!sameOrg()) return null;
   const pendingRenewals = await getPendingRenewals();
-  if (!sameOrg()) return 0;
+  if (!sameOrg()) return null;
   const db = await getDb();
   const disks = await db.select<MachineDisk[]>(
     `SELECT d.* FROM machine_disks d JOIN machines m ON m.id = d.machine_id
      WHERE m.status != 'retired'`
   );
-  if (!sameOrg()) return 0;
+  if (!sameOrg()) return null;
   const connections = await db.select<Connection[]>(
     "SELECT * FROM connections WHERE failing_since IS NOT NULL AND failing_notified = 0"
   );
-  if (!sameOrg()) return 0;
+  if (!sameOrg()) return null;
 
   const notices = planNotifications({
     items, machines, consumables, subs, pendingRenewals, disks, connections, todayISO,

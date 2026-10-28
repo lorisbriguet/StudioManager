@@ -129,12 +129,12 @@ describe("runUpkeepCheck", () => {
     expect(sql).toContain("failing_notified");
   });
 
-  it("skips writes when org changed", async () => {
+  it("skips writes when org changed and reports the run as skipped", async () => {
     vi.mocked(getMachines).mockImplementation(async () => {
       useOrgStore.setState({ activeId: "org-b" });
       return [machine] as never;
     });
-    expect(await runUpkeepCheck(qcStub(), TODAY)).toBe(0);
+    expect(await runUpkeepCheck(qcStub(), TODAY)).toBeNull();
     expect(createNotification).not.toHaveBeenCalled();
     expect(applyRenewals).not.toHaveBeenCalled();
     expect(batchCalls()).toHaveLength(0);
@@ -142,7 +142,7 @@ describe("runUpkeepCheck", () => {
 
   it("stops while an organisation switch is in progress, before any DB call", async () => {
     useOrgStore.setState({ switching: true });
-    expect(await runUpkeepCheck(qcStub(), TODAY)).toBe(0);
+    expect(await runUpkeepCheck(qcStub(), TODAY)).toBeNull();
     useOrgStore.setState({ switching: false });
     expect(getSubscriptions).not.toHaveBeenCalled();
     expect(getDb).not.toHaveBeenCalled();
@@ -240,6 +240,79 @@ describe("useUpkeepCheck", () => {
       window.dispatchEvent(new Event("focus"));
       await vi.advanceTimersByTimeAsync(10);
       expect(getActiveUpkeepItems).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a check skipped by an organisation switch runs as soon as the switch ends", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-28T09:00:00"));
+    useOrgStore.setState({ activeId: "org-b", switching: true });
+    try {
+      renderHook(() => useUpkeepCheck(), { wrapper });
+      await vi.advanceTimersByTimeAsync(10);
+      expect(getActiveUpkeepItems).not.toHaveBeenCalled();
+      useOrgStore.setState({ switching: false });
+      await vi.advanceTimersByTimeAsync(10);
+      expect(getActiveUpkeepItems).toHaveBeenCalledTimes(1);
+      // Ran for real this time: a focus within the hour does not run it again.
+      window.dispatchEvent(new Event("focus"));
+      await vi.advanceTimersByTimeAsync(10);
+      expect(getActiveUpkeepItems).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a check that ran for the previous organisation does not hold back the next one's", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-28T09:00:00"));
+    try {
+      renderHook(() => useUpkeepCheck(), { wrapper });
+      await vi.advanceTimersByTimeAsync(10);
+      expect(getActiveUpkeepItems).toHaveBeenCalledTimes(1);
+      useOrgStore.setState({ switching: true });
+      useOrgStore.setState({ activeId: "org-b", switching: false });
+      await vi.advanceTimersByTimeAsync(10);
+      expect(getActiveUpkeepItems).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a switch that ends while a check is running gets its own check after it", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-28T09:00:00"));
+    let release!: () => void;
+    vi.mocked(getSubscriptions).mockImplementationOnce(
+      () => new Promise((r) => { release = () => r([]); })
+    );
+    try {
+      renderHook(() => useUpkeepCheck(), { wrapper });
+      await vi.advanceTimersByTimeAsync(10);
+      useOrgStore.setState({ switching: true });
+      useOrgStore.setState({ activeId: "org-b", switching: false });
+      release(); // the org-a run now sees the switch and stops
+      await vi.advanceTimersByTimeAsync(10);
+      expect(getActiveUpkeepItems).toHaveBeenCalledTimes(1); // org-b's run
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a skipped check is not stamped: the next focus retries it", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-28T09:00:00"));
+    useOrgStore.setState({ switching: true });
+    try {
+      const { unmount } = renderHook(() => useUpkeepCheck(), { wrapper });
+      await vi.advanceTimersByTimeAsync(10);
+      unmount(); // the switch remounts the app: this instance never sees it end
+      useOrgStore.setState({ switching: false });
+      renderHook(() => useUpkeepCheck(), { wrapper });
+      await vi.advanceTimersByTimeAsync(10);
+      expect(getActiveUpkeepItems).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }
