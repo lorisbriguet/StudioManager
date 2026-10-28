@@ -72,8 +72,9 @@ pub struct ScanState {
     tokens: HashMap<(String, String, String), u64>,
     /// (day, cwd) -> agent time in ms.
     time_ms: HashMap<(String, String), i64>,
-    /// Message ids already counted (a reply is written as several lines).
-    seen: HashSet<String>,
+    /// Lines and replies already counted -> their day. A reply is written as several lines, and
+    /// a resumed session's copy replays old lines.
+    seen: HashMap<String, String>,
     /// Bytes read over this state's life (tests check scans only read new bytes).
     pub bytes_read: u64,
 }
@@ -89,15 +90,16 @@ fn day_key(t: DateTime<Local>) -> String {
     t.format("%Y-%m-%d").to_string()
 }
 
-/// Every `*.jsonl` directly under a project folder of `~/.claude/projects`.
+/// Every transcript of `~/.claude/projects`: `<project>/<session>.jsonl` and the subagents' at
+/// `<project>/<session>/subagents/agent-*.jsonl`.
 fn transcripts(home: &Path) -> Vec<(PathBuf, u64)> {
     let mut out = Vec::new();
     let Ok(dirs) = std::fs::read_dir(home.join(".claude/projects")) else {
         return out;
     };
     let max_age = std::time::Duration::from_secs(MAX_FILE_AGE_DAYS * 86400);
-    for dir in dirs.flatten() {
-        let Ok(files) = std::fs::read_dir(dir.path()) else { continue };
+    let mut collect = |dir: &Path| {
+        let Ok(files) = std::fs::read_dir(dir) else { return };
         for f in files.flatten() {
             let path = f.path();
             if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
@@ -113,9 +115,24 @@ fn transcripts(home: &Path) -> Vec<(PathBuf, u64)> {
                 out.push((path, meta.len()));
             }
         }
+    };
+    for dir in dirs.flatten() {
+        let project = dir.path();
+        collect(&project);
+        let Ok(sessions) = std::fs::read_dir(&project) else { continue };
+        for s in sessions.flatten() {
+            if s.path().is_dir() {
+                collect(&s.path().join("subagents"));
+            }
+        }
     }
     out.sort();
     out
+}
+
+/// Subagents run inside their parent session's wall time: tokens count, time does not.
+fn is_subagent(path: &Path) -> bool {
+    path.parent().and_then(|p| p.file_name()).is_some_and(|n| n == "subagents")
 }
 
 impl ScanState {
@@ -149,15 +166,16 @@ impl ScanState {
         let Some(end) = buf.iter().rposition(|b| *b == b'\n') else { return };
         let consumed = end + 1;
         self.bytes_read += consumed as u64;
+        let subagent = is_subagent(path);
         let mut state = self.files.remove(path).unwrap_or_default();
         state.offset = offset + consumed as u64;
         for line in buf[..consumed].split(|b| *b == b'\n') {
-            self.add_line(&mut state, &String::from_utf8_lossy(line));
+            self.add_line(&mut state, subagent, &String::from_utf8_lossy(line));
         }
         self.files.insert(path.to_path_buf(), state);
     }
 
-    fn add_line(&mut self, file: &mut FileState, line: &str) {
+    fn add_line(&mut self, file: &mut FileState, subagent: bool, line: &str) {
         if !line.contains("\"timestamp\"") {
             return;
         }
@@ -178,9 +196,19 @@ impl ScanState {
             .or_else(|| file.last.as_ref().map(|(_, c)| c.clone()));
         let Some(cwd) = cwd else { return };
 
+        let msg = v.get("message");
+        let reply_key = msg.and_then(|m| m.get("id")).and_then(|i| i.as_str()).map(|id| {
+            let req = v.get("requestId").and_then(|r| r.as_str()).unwrap_or("");
+            format!("m:{id}:{req}")
+        });
+        let uuid_key = v.get("uuid").and_then(|u| u.as_str()).map(|u| format!("u:{u}"));
+        // A line already read (a resumed session's copy replays them) adds nothing.
+        let line_key = uuid_key.clone().or_else(|| reply_key.clone());
+        let new_line = line_key.map_or(true, |k| self.seen.insert(k, day.clone()).is_none());
+
         if let Some((prev, _)) = &file.last {
             let gap = ms - prev;
-            if (0..MAX_GAP_MS).contains(&gap) {
+            if new_line && !subagent && (0..MAX_GAP_MS).contains(&gap) {
                 *self.time_ms.entry((day.clone(), cwd.clone())).or_default() += gap;
             }
         }
@@ -188,7 +216,7 @@ impl ScanState {
             file.last = Some((ms, cwd.clone()));
         }
 
-        let Some(msg) = v.get("message") else { return };
+        let Some(msg) = msg else { return };
         let Some(usage) = msg.get("usage") else { return };
         let tokens = ["output_tokens", "input_tokens"]
             .iter()
@@ -197,11 +225,13 @@ impl ScanState {
         if tokens == 0 {
             return;
         }
-        if let Some(id) = msg.get("id").and_then(|i| i.as_str()) {
-            let req = v.get("requestId").and_then(|r| r.as_str()).unwrap_or("");
-            if !self.seen.insert(format!("{id}:{req}")) {
-                return;
-            }
+        // Without a uuid the reply key was the line key and is already checked.
+        let new_reply = match (&uuid_key, reply_key) {
+            (Some(_), Some(k)) => self.seen.insert(k, day.clone()).is_none(),
+            _ => new_line,
+        };
+        if !new_reply {
+            return;
         }
         let model = msg
             .get("model")
@@ -216,6 +246,7 @@ impl ScanState {
         let oldest = day_key(now - Duration::days(DAYS - 1));
         self.tokens.retain(|(d, _, _), _| *d >= oldest);
         self.time_ms.retain(|(d, _), _| *d >= oldest);
+        self.seen.retain(|_, d| *d >= oldest);
     }
 
     fn build(&self, index: &FolderIndex, now: DateTime<Local>) -> Activity {
@@ -293,10 +324,10 @@ fn model_mix(per_model: HashMap<String, u64>) -> String {
     }
     let list: Vec<String> = models
         .iter()
+        .take(2)
         .map(|(m, n)| format!("{m} {}%", pct(*n)))
         .collect();
-    let lead = if models[0].1 * 2 >= total { "Mostly" } else { "A mix of" };
-    format!("{lead} {}", list.join(", "))
+    format!("Mostly {}", list.join(", "))
 }
 
 /// Minutes per client and project, largest first; groups under a minute are left out.
@@ -511,5 +542,81 @@ mod tests {
         assert_eq!(week["Acme"].projects, vec![("Website".to_string(), 9)]);
         assert_eq!(week[OTHER].minutes, 1);
         assert_eq!(week[OTHER].projects, vec![("scratch".to_string(), 1)]);
+    }
+
+    fn with_uuid(line: String, uuid: &str) -> String {
+        line.replacen("{\"type\"", &format!("{{\"uuid\":\"{uuid}\",\"type\""), 1)
+    }
+
+    fn week_minutes(a: &Activity) -> u32 {
+        a.time.week.iter().map(|c| c.minutes).sum()
+    }
+
+    #[test]
+    fn resumed_copy_counts_once() {
+        let home = tmp();
+        let now = Local::now();
+        let t0 = now - Duration::hours(1);
+        let mut text = String::new();
+        for (i, m) in [0, 2, 4].iter().enumerate() {
+            text += &with_uuid(user(t0 + Duration::minutes(*m), "/tmp/demo/x"), &format!("u{i}"));
+        }
+        text += &with_uuid(
+            assistant(t0 + Duration::minutes(5), "/tmp/demo/x", "a", "claude-opus-5-5", 0, 40, 0),
+            "u3",
+        );
+        append(&file(&home, "s1.jsonl"), &text);
+        // The copy replays the same lines, then continues with a new one.
+        append(&file(&home, "s2.jsonl"), &text);
+        append(
+            &file(&home, "s2.jsonl"),
+            &with_uuid(user(t0 + Duration::minutes(7), "/tmp/demo/x"), "u4"),
+        );
+        let a = ScanState::default().scan(&home, &FolderIndex::default(), now);
+        assert_eq!(total(&a), 40);
+        assert_eq!(week_minutes(&a), 7);
+    }
+
+    #[test]
+    fn subagent_tokens_count_but_not_time() {
+        let home = tmp();
+        let now = Local::now();
+        let t0 = now - Duration::hours(1);
+        let sub = home.join(".claude/projects/-tmp-demo/sess-1/subagents");
+        fs::create_dir_all(&sub).unwrap();
+        append(&file(&home, "sess-1.jsonl"), &user(t0, "/tmp/demo/x"));
+        append(&file(&home, "sess-1.jsonl"), &user(t0 + Duration::minutes(2), "/tmp/demo/x"));
+        append(&sub.join("agent-1.jsonl"), &assistant(t0, "/tmp/demo/x", "s", "claude-opus-5-5", 0, 25, 0));
+        append(&sub.join("agent-1.jsonl"), &user(t0 + Duration::minutes(3), "/tmp/demo/x"));
+        let a = ScanState::default().scan(&home, &FolderIndex::default(), now);
+        assert_eq!(total(&a), 25);
+        assert_eq!(week_minutes(&a), 2);
+    }
+
+    #[test]
+    fn old_seen_entries_are_pruned() {
+        let home = tmp();
+        let now = Local::now();
+        append(
+            &file(&home, "s1.jsonl"),
+            &with_uuid(user(now, "/tmp/demo/x"), "u0"),
+        );
+        let mut st = ScanState::default();
+        st.scan(&home, &FolderIndex::default(), now);
+        assert_eq!(st.seen.len(), 1);
+        st.scan(&home, &FolderIndex::default(), now + Duration::days(10));
+        assert!(st.seen.is_empty());
+    }
+
+    #[test]
+    fn model_mix_mostly_even_under_half() {
+        let home = tmp();
+        let now = Local::now();
+        let f = file(&home, "s1.jsonl");
+        append(&f, &assistant(now, "/tmp/demo/x", "a", "claude-opus-5-5", 0, 40, 0));
+        append(&f, &assistant(now, "/tmp/demo/x", "b", "claude-sonnet-5-5", 0, 35, 0));
+        append(&f, &assistant(now, "/tmp/demo/x", "c", "claude-haiku-4-5", 0, 25, 0));
+        let a = ScanState::default().scan(&home, &FolderIndex::default(), now);
+        assert_eq!(a.model_mix, "Mostly Opus 5.5 40%, Sonnet 5.5 35%");
     }
 }
