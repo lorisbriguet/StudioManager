@@ -33,6 +33,7 @@ function agent(group: Group, over: Partial<Agent> = {}): Agent {
     quiet: null,
     project: null,
     model: null,
+    modelLabel: null,
     ...over,
   };
 }
@@ -165,7 +166,7 @@ describe("AgentsPage selection of a new agent", () => {
       </MemoryRouter>,
     );
     fireEvent.click(await screen.findByLabelText("Model"));
-    fireEvent.click(screen.getByRole("menuitem", { name: "opus" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Opus 5.5" }));
     await waitFor(() => expect(invokedCommands.some((c) => c.cmd === "agents_switch_model")).toBe(true));
     await emit("agents:changed", [old, next]);
     const row = await screen.findByRole("button", { name: /new-agent/ });

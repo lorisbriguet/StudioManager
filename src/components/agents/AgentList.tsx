@@ -6,6 +6,7 @@ import { Badge } from "../ui";
 import { useT } from "../../i18n/useT";
 import type { UIKey } from "../../i18n/ui";
 import { GROUPS } from "./useAgents";
+import { MODEL_LABELS } from "./ModelMenu";
 
 const GROUP_KEYS: Record<Group, UIKey> = {
   "needs-you": "agents_group_needs_you",
@@ -124,7 +125,9 @@ export function AgentList({ byGroup, selectedId, onSelect }: AgentListProps) {
                       <div className="flex items-center gap-2 text-sm font-medium">
                         <span className={`dot ${GROUP_STYLE[g].dot}`} aria-hidden />
                         <span className="truncate">{a.name}</span>
-                        {a.model && <span className="shrink-0 text-xs font-normal text-muted">{a.model}</span>}
+                        {(a.modelLabel ?? a.model) && (
+                          <span className="shrink-0 text-xs font-normal text-muted">{a.modelLabel ?? (a.model && MODEL_LABELS[a.model]) ?? a.model}</span>
+                        )}
                         {a.quiet && <Badge variant="neutral">{t.agents_quiet}</Badge>}
                       </div>
                       {/* Indented past the dot (8px) and its gap (8px). */}

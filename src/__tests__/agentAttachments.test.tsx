@@ -36,6 +36,7 @@ function agent(over: Partial<Agent> = {}): Agent {
     quiet: null,
     project: null,
     model: "sonnet",
+    modelLabel: null,
     ...over,
   };
 }

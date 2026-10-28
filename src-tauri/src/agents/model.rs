@@ -46,6 +46,8 @@ pub struct Agent {
     pub quiet: Option<Quiet>,
     pub project: Option<ProjectLabel>,
     pub model: Option<String>,
+    /// The exact model in use, e.g. "Opus 5.5", when known from the transcript.
+    pub model_label: Option<String>,
 }
 
 pub fn group_of(status: &str, state: Option<&str>) -> Group {
@@ -101,6 +103,7 @@ pub fn parse_agents(json: &str) -> Result<Vec<Agent>, String> {
             quiet: None,
             project: None,
             model: str_of(it, "model"),
+            model_label: None,
         });
     }
     Ok(out)
@@ -167,7 +170,7 @@ mod tests {
         Agent {
             session_id: id.into(), short_id: None, pid: None, name: id.into(), cwd: "/x".into(),
             kind: Kind::Background, status: "waiting".into(), state: None, waiting_for: None,
-            started_at: 0, group: g, quiet: None, project: None, model: None,
+            started_at: 0, group: g, quiet: None, project: None, model: None, model_label: None,
         }
     }
 

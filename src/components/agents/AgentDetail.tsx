@@ -221,6 +221,7 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
             <ModelMenu
               label={t.agents_model}
               value={knownModel ? (agent.model as string) : null}
+              currentLabel={agent.modelLabel}
               onChange={(m) =>
                 void run(async () => {
                   const next = await switchModel(agent.sessionId, m);

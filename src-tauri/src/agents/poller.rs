@@ -6,7 +6,7 @@ use super::actions::{fetch_agents, home_dir, retain_dismissed};
 use super::cli::read_settings;
 use super::model::{apply_quiet, Agent, Group};
 use super::projects::{load_index, FolderIndex};
-use super::transcript::{last_change_ms, last_model, locate};
+use super::transcript::{last_change_ms, last_model, locate, model_alias, model_label};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -85,7 +85,7 @@ pub fn quiet_pass(
     apply_quiet(agents, now_ms, last_change_ms, &dismissed);
 }
 
-/// The model last read from each agent's transcript, keyed by session id, with the
+/// The full model id last read from each agent's transcript, keyed by session id, with the
 /// transcript's modification time it was read at.
 pub type ModelCache = HashMap<String, (i64, Option<String>)>;
 
@@ -103,7 +103,10 @@ pub fn fill_models(
         if !fresh {
             cache.insert(a.session_id.clone(), (mtime, read_model(a)));
         }
-        a.model = cache.get(&a.session_id).and_then(|(_, m)| m.clone());
+        if let Some(id) = cache.get(&a.session_id).and_then(|(_, m)| m.clone()) {
+            a.model = Some(model_alias(&id));
+            a.model_label = model_label(&id);
+        }
     }
     // Forget agents that are gone.
     cache.retain(|id, _| agents.iter().any(|a| &a.session_id == id));
@@ -211,7 +214,7 @@ mod tests {
         Agent {
             session_id: id.into(), short_id: None, pid: None, name: id.into(), cwd: "/x/proj".into(),
             kind: Kind::Background, status: "busy".into(), state: None, waiting_for: None,
-            started_at: 0, group: g, quiet: None, project: None, model: None,
+            started_at: 0, group: g, quiet: None, project: None, model: None, model_label: None,
         }
     }
 
@@ -220,7 +223,7 @@ mod tests {
         use std::cell::{Cell, RefCell};
         let reads = Cell::new(0);
         let mtime = Cell::new(100);
-        let model = RefCell::new("opus".to_string());
+        let model = RefCell::new("claude-opus-5-5".to_string());
         let mtime_of = |_: &Agent| Some(mtime.get());
         let read = |_: &Agent| {
             reads.set(reads.get() + 1);
@@ -231,6 +234,7 @@ mod tests {
         let mut v = vec![ag("a", Group::Working)];
         fill_models(&mut v, &mut cache, &mtime_of, &read);
         assert_eq!(v[0].model.as_deref(), Some("opus"));
+        assert_eq!(v[0].model_label.as_deref(), Some("Opus 5.5"));
 
         // Same transcript: no new read, model kept.
         let mut v = vec![ag("a", Group::Working)];
@@ -239,7 +243,7 @@ mod tests {
 
         // Transcript changed (model switched): read again.
         mtime.set(200);
-        *model.borrow_mut() = "sonnet".into();
+        *model.borrow_mut() = "claude-sonnet-5-5".into();
         let mut v = vec![ag("a", Group::Working)];
         fill_models(&mut v, &mut cache, &mtime_of, &read);
         assert_eq!((reads.get(), v[0].model.as_deref()), (2, Some("sonnet")));

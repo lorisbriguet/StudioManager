@@ -21,6 +21,7 @@ function agent(over: Partial<Agent> = {}): Agent {
     quiet: null,
     project: null,
     model: "sonnet",
+    modelLabel: null,
     ...over,
   };
 }
@@ -97,7 +98,7 @@ describe("AgentDetail", () => {
   it("switches model", async () => {
     render(<AgentDetail agent={agent()} onOpenTerminal={() => {}} />);
     fireEvent.click(screen.getByLabelText("Model"));
-    fireEvent.click(screen.getByRole("menuitem", { name: "opus" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Opus 5.5" }));
     await waitFor(() =>
       expect(invokedCommands.find((c) => c.cmd === "agents_switch_model")?.args).toEqual({
         sessionId: "sess-1",
@@ -111,7 +112,7 @@ describe("AgentDetail", () => {
     let switched = "";
     render(<AgentDetail agent={agent()} onOpenTerminal={() => {}} onSwitched={(id) => (switched = id)} />);
     fireEvent.click(screen.getByLabelText("Model"));
-    fireEvent.click(screen.getByRole("menuitem", { name: "opus" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Opus 5.5" }));
     await waitFor(() => expect(switched).toBe("abcd1234"));
   });
 

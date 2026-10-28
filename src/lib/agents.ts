@@ -152,6 +152,8 @@ export interface Agent {
   quiet: "stale" | "dismissed" | null;
   project: ProjectLabel | null;
   model: string | null;
+  /** The exact model in use, e.g. "Opus 5.5", when known from the transcript. */
+  modelLabel: string | null;
 }
 
 export interface StartFolder {

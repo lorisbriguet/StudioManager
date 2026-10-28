@@ -4,15 +4,26 @@ import { ContextMenu } from "../ContextMenu";
 
 export const MODELS = ["haiku", "sonnet", "opus", "fable"];
 
+/** The model each short name points to today. The CLI's short names always mean the latest
+ *  version and it can't report which one, so update these when new models ship. */
+export const MODEL_LABELS: Record<string, string> = {
+  haiku: "Haiku 5.5",
+  sonnet: "Sonnet 5.5",
+  opus: "Opus 5.5",
+  fable: "Fable 5.1",
+};
+
 interface ModelMenuProps {
   value: string | null;
+  /** The exact model in use, when known (e.g. from the agent's transcript). */
+  currentLabel?: string | null;
   onChange: (model: string) => void;
   label: string;
   disabled?: boolean;
 }
 
 /** A compact model picker using the app's dropdown menu pattern instead of a native select. */
-export function ModelMenu({ value, onChange, label, disabled }: ModelMenuProps) {
+export function ModelMenu({ value, currentLabel, onChange, label, disabled }: ModelMenuProps) {
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
   return (
     <>
@@ -28,7 +39,7 @@ export function ModelMenu({ value, onChange, label, disabled }: ModelMenuProps) 
         }}
         className="inline-flex items-center gap-1.5 h-8 pl-3 pr-2 rounded-lg border border-[var(--color-input-border)] bg-[var(--color-input-bg)] text-sm focus-accent hover:bg-[var(--color-hover-row)] disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        <span className={value ? "" : "text-muted"}>{value ?? label}</span>
+        <span className={value ? "" : "text-muted"}>{currentLabel ?? (value ? MODEL_LABELS[value] ?? value : label)}</span>
         <ChevronDown size={14} className="text-muted" />
       </button>
       {at && (
@@ -37,7 +48,7 @@ export function ModelMenu({ value, onChange, label, disabled }: ModelMenuProps) 
           y={at.y}
           onClose={() => setAt(null)}
           items={MODELS.map((m) => ({
-            label: m,
+            label: MODEL_LABELS[m] ?? m,
             icon: <Check size={14} className={m === value ? "" : "invisible"} />,
             onClick: () => {
               setAt(null);

@@ -19,6 +19,7 @@ function agent(group: Group, name: string): Agent {
     quiet: null,
     project: null,
     model: null,
+    modelLabel: null,
   };
 }
 

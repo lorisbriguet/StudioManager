@@ -51,13 +51,28 @@ pub fn model_alias(id: &str) -> String {
         .unwrap_or_else(|| id.to_string())
 }
 
-/// The model of the newest reply in a transcript's text (`message.model`), as a short name.
+/// A display name with the version for a full model id: "claude-opus-5-5" -> "Opus 5.5".
+/// Date suffixes ("-20250514") are not part of the version. None for an unknown family.
+pub fn model_label(id: &str) -> Option<String> {
+    let family = ["opus", "sonnet", "haiku", "fable"].into_iter().find(|f| id.contains(f))?;
+    let after = id.split_once(family).map_or("", |(_, rest)| rest);
+    let version: Vec<&str> = after
+        .split('-')
+        .filter(|p| !p.is_empty())
+        .take_while(|p| p.len() <= 2 && p.chars().all(|c| c.is_ascii_digit()))
+        .collect();
+    let mut name = family.to_string();
+    name[..1].make_ascii_uppercase();
+    Some(if version.is_empty() { name } else { format!("{name} {}", version.join(".")) })
+}
+
+/// The full model id of the newest reply in a transcript's text (`message.model`).
 pub fn last_model_in(jsonl: &str) -> Option<String> {
     jsonl.lines().rev().find_map(|line| {
         let v: Value = serde_json::from_str(line.trim()).ok()?;
         let m = v.get("message")?.get("model")?.as_str()?;
         // Synthetic entries (e.g. "<synthetic>") are not a model choice.
-        (!m.starts_with('<')).then(|| model_alias(m))
+        (!m.starts_with('<')).then(|| m.to_string())
     })
 }
 
@@ -84,10 +99,24 @@ fn truncate(s: &str) -> String {
 fn line_items(line: &str) -> Vec<Item> {
     let Ok(v) = serde_json::from_str::<Value>(line) else { return vec![] };
     let kind = v.get("type").and_then(Value::as_str).unwrap_or("");
+    let at = v.get("timestamp").and_then(Value::as_str).map(String::from);
+    // A message sent while the agent was working is stored as a queued-command
+    // attachment, not as a user line. Only those a person sent count; the same
+    // mechanism also carries system notices.
+    if kind == "attachment" {
+        let a = v.get("attachment");
+        let human = a.and_then(|a| a.pointer("/origin/kind")).and_then(Value::as_str) == Some("human");
+        let queued = a.and_then(|a| a.get("type")).and_then(Value::as_str) == Some("queued_command");
+        let text = a.and_then(|a| a.get("prompt")).and_then(Value::as_str).unwrap_or("").trim();
+        return if human && queued && !text.is_empty() {
+            vec![Item::User { text: text.to_string(), at }]
+        } else {
+            vec![]
+        };
+    }
     if kind != "user" && kind != "assistant" {
         return vec![];
     }
-    let at = v.get("timestamp").and_then(Value::as_str).map(String::from);
     let blocks: Vec<Value> = match v.pointer("/message/content") {
         Some(Value::String(s)) => vec![serde_json::json!({"type": "text", "text": s})],
         Some(Value::Array(a)) => a.clone(),
@@ -184,6 +213,15 @@ mod tests {
     }
 
     #[test]
+    fn model_label_shows_family_and_version() {
+        assert_eq!(model_label("claude-opus-5-5").as_deref(), Some("Opus 5.5"));
+        assert_eq!(model_label("claude-fable-5-1").as_deref(), Some("Fable 5.1"));
+        assert_eq!(model_label("claude-sonnet-4-5-20250929").as_deref(), Some("Sonnet 4.5"));
+        assert_eq!(model_label("claude-haiku").as_deref(), Some("Haiku"));
+        assert_eq!(model_label("gpt-4o"), None);
+    }
+
+    #[test]
     fn last_model_takes_the_newest_reply_and_skips_synthetic() {
         let jsonl = concat!(
             r#"{"type":"assistant","message":{"model":"claude-sonnet-5-5","content":"a"}}"#, "\n",
@@ -192,7 +230,7 @@ mod tests {
             r#"{"type":"assistant","message":{"model":"<synthetic>","content":"d"}}"#, "\n",
             "not json\n",
         );
-        assert_eq!(last_model_in(jsonl).as_deref(), Some("opus"));
+        assert_eq!(last_model_in(jsonl).as_deref(), Some("claude-opus-5-5"));
         assert_eq!(last_model_in(r#"{"type":"user","message":{"content":"x"}}"#), None);
     }
 
@@ -209,7 +247,7 @@ mod tests {
             r#"{"type":"assistant","message":{"model":"claude-fable-5-1"}}"#
         );
         std::fs::write(&p, body).unwrap();
-        assert_eq!(last_model(&p).as_deref(), Some("fable"));
+        assert_eq!(last_model(&p).as_deref(), Some("claude-fable-5-1"));
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -244,6 +282,20 @@ mod tests {
         );
         let items = summarise(&line, 10);
         assert!(matches!(&items[0], Item::Tool { summary, .. } if summary.chars().count() == 200));
+    }
+
+    #[test]
+    fn messages_sent_mid_turn_are_shown_but_system_notices_are_not() {
+        let jsonl = concat!(
+            r#"{"type":"queue-operation","operation":"enqueue","content":"fix settings too"}"#, "\n",
+            r#"{"type":"attachment","timestamp":"2026-01-01T10:00:05.000Z","attachment":{"type":"queued_command","prompt":"fix settings too","origin":{"kind":"human"}}}"#, "\n",
+            r#"{"type":"attachment","attachment":{"type":"queued_command","prompt":"<task-notification>done</task-notification>","origin":{"kind":"task-notification"}}}"#, "\n",
+            r#"{"type":"attachment","attachment":{"type":"todo_reminder","content":"x"}}"#, "\n",
+        );
+        assert_eq!(
+            summarise(jsonl, 300),
+            vec![Item::User { text: "fix settings too".into(), at: Some("2026-01-01T10:00:05.000Z".into()) }]
+        );
     }
 
     #[test]
