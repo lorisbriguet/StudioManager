@@ -5,6 +5,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { Database as DatabaseIcon } from "lucide-react";
 import { Button } from "../ui/Button";
+import { SectionLabel } from "../ui/SectionLabel";
 import { Select } from "../ui/Select";
 import { getDb } from "../../db";
 import { PERSONAS, PERSONA_IDS, seedPersona, type PersonaId } from "../../db/seeds/personas";
@@ -48,7 +49,7 @@ export function DemoDataCard() {
   return (
     <section className="rounded-xl bg-[var(--color-surface)] border border-[var(--color-border-divider)] px-4 pt-3 pb-3">
       <div className="border-b border-[var(--color-border-divider)] pb-2 mb-3">
-        <h2 className="text-[10px] font-medium uppercase tracking-widest text-muted">{t.demo_data}</h2>
+        <SectionLabel as="h2">{t.demo_data}</SectionLabel>
         <p className="text-xs text-muted mt-1 normal-case tracking-normal">{t.demo_data_desc}</p>
       </div>
       <div className="flex items-center justify-between gap-3 py-2.5">

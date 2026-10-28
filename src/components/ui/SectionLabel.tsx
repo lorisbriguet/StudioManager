@@ -17,7 +17,7 @@ export const SECTION_LABEL = "text-[10px] font-medium uppercase tracking-widest 
 interface SectionLabelProps {
   children: ReactNode;
   /** Use a heading tag when the label names a section (h2/h3). */
-  as?: "div" | "span" | "p" | "h2" | "h3" | "h4";
+  as?: "div" | "span" | "p" | "h1" | "h2" | "h3" | "h4";
   /** Right-aligned content on the same row (a count, an icon button). */
   action?: ReactNode;
   id?: string;

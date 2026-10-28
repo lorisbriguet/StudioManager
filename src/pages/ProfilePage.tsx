@@ -13,7 +13,7 @@ import { useActivities, useCreateActivity, useUpdateActivity, useDeleteActivity 
 import type { Activity } from "../types/activity";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Button, FormField, Input, PageSpinner } from "../components/ui";
+import { Button, FormField, Input, PageSpinner, SectionLabel } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { TemplateEditor } from "../components/invoice/TemplateEditor";
 import {
@@ -179,9 +179,9 @@ export function ProfilePage() {
           ) : (
             <div className="p-8">
               <div className="flex items-center justify-between mb-4 max-w-lg">
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
+                <SectionLabel as="h2">
                   {t.templates}
-                </h2>
+                </SectionLabel>
                 <Button
                   size="sm"
                   variant="secondary"
@@ -233,9 +233,9 @@ export function ProfilePage() {
         <form onSubmit={handleSubmit(onSubmit)} className="max-w-2xl space-y-8">
           {activeCategory === "business" && (
             <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted mb-4">
+              <SectionLabel as="h2" className="mb-4">
                 {t.business_profile}
-              </h2>
+              </SectionLabel>
               <div className="grid grid-cols-2 gap-4 max-w-lg">
                 {profileFields.map(({ key, labelKey, type }) => (
                   <FormField
@@ -256,9 +256,9 @@ export function ProfilePage() {
 
           {activeCategory === "bank" && (
             <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted mb-4">
+              <SectionLabel as="h2" className="mb-4">
                 {t.bank_details}
-              </h2>
+              </SectionLabel>
               <div className="grid grid-cols-2 gap-4 max-w-lg">
                 {bankFields.map(({ key, labelKey }) => (
                   <FormField
@@ -279,9 +279,9 @@ export function ProfilePage() {
 
           {activeCategory === "invoicing" && (
             <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted mb-4">
+              <SectionLabel as="h2" className="mb-4">
                 {t.invoice_defaults}
-              </h2>
+              </SectionLabel>
               <div className="space-y-4 max-w-lg">
                 {/* Activities list */}
                 <div>

@@ -24,7 +24,7 @@ import { useClients } from "../db/hooks/useClients";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
-import { PageHeader, PageSpinner, Button, Card, EmptyState, Select } from "../components/ui";
+import { PageHeader, PageSpinner, Button, Card, EmptyState, Select, SectionLabel } from "../components/ui";
 import { useNavigate } from "react-router-dom";
 import { useChartTheme } from "../hooks/useChartTheme";
 import { getTagColor } from "../lib/tagColors";
@@ -221,7 +221,7 @@ export function FinancesPage() {
       )}
 
       {/* Monthly revenue vs expenses chart */}
-      <div className="text-[10px] font-medium uppercase tracking-widest text-muted mb-2">{t.finances_overview}</div>
+      <SectionLabel className="mb-2">{t.finances_overview}</SectionLabel>
       <Card className="mb-6">
         <h2 className="text-sm font-medium mb-4">{t.revenue_vs_expenses}</h2>
         <ResponsiveContainer width="100%" height={200}>
@@ -240,7 +240,7 @@ export function FinancesPage() {
         </ResponsiveContainer>
       </Card>
 
-      <div className="text-[10px] font-medium uppercase tracking-widest text-muted mb-2">{t.finances_breakdown}</div>
+      <SectionLabel className="mb-2">{t.finances_breakdown}</SectionLabel>
       <div className="grid grid-cols-2 gap-6">
         {/* Expense breakdown pie chart */}
         {pieData.length > 0 && (

@@ -18,6 +18,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { FileText, Receipt, ClipboardList, FolderPlus } from "lucide-react";
 import { useCountUp } from "../../hooks/useCountUp";
+import { SectionLabel } from "../ui/SectionLabel";
 import { useDashboardKPIs, useMonthlyData, useRevenueByActivity, useRevenueByClient } from "../../db/hooks/useFinance";
 import { useProjects } from "../../db/hooks/useProjects";
 // V1.11 C1: task-list widgets (today, overdue, deadlines, this-week, stale,
@@ -86,7 +87,7 @@ export function KPIWidget({ label, value, numericValue, accent, delta }: { label
     : value;
   return (
     <div className="h-full flex flex-col justify-center px-4">
-      <div className="text-xs text-muted uppercase tracking-wide mb-1">{label}</div>
+      <SectionLabel className="mb-1">{label}</SectionLabel>
       <div className={`text-lg font-semibold ${accent ? "text-warning" : ""}`}>{displayValue}</div>
       {delta != null && (
         <div className={`text-[10px] font-medium ${delta >= 0 ? "text-[var(--color-success-text)]" : "text-[var(--color-danger-text)]"}`}>
@@ -670,7 +671,7 @@ function MonthlyComparison() {
 
   return (
     <div className="h-full flex flex-col justify-center px-4">
-      <div className="text-xs text-muted uppercase tracking-wide mb-1">{t.monthly_comparison}</div>
+      <SectionLabel className="mb-1">{t.monthly_comparison}</SectionLabel>
       <div className="text-lg font-semibold">{formatCHF(currentRev)}</div>
       <div className="text-xs text-muted mt-1">
         {lastRev > 0 ? (
@@ -698,7 +699,7 @@ function ProfitMargin() {
 
   return (
     <div className="h-full flex flex-col justify-center px-4">
-      <div className="text-xs text-muted uppercase tracking-wide mb-1">{t.profit_margin}</div>
+      <SectionLabel className="mb-1">{t.profit_margin}</SectionLabel>
       <div className={`text-lg font-semibold ${margin < 0 ? "text-danger" : margin < 20 ? "text-warning" : "text-success"}`}>
         {margin}%
       </div>
@@ -718,7 +719,7 @@ function TopClient() {
 
   return (
     <div className="h-full flex flex-col justify-center px-4">
-      <div className="text-xs text-muted uppercase tracking-wide mb-1">{t.top_client}</div>
+      <SectionLabel className="mb-1">{t.top_client}</SectionLabel>
       {top ? (
         <>
           <div className="text-lg font-semibold truncate">{top.label}</div>
@@ -762,7 +763,7 @@ function QuoteConversionRate() {
 
   return (
     <div className="h-full flex flex-col justify-center px-4">
-      <div className="text-xs text-muted uppercase tracking-wide mb-1">{t.quote_conversion_rate}</div>
+      <SectionLabel className="mb-1">{t.quote_conversion_rate}</SectionLabel>
       <div className="text-lg font-semibold">{rate}%</div>
       <div className="text-xs text-muted mt-1">{converted}/{total} {t.of_quotes_converted}</div>
     </div>
@@ -838,7 +839,7 @@ function NewClientsYear() {
 
   return (
     <div className="h-full flex flex-col justify-center px-4">
-      <div className="text-xs text-muted uppercase tracking-wide mb-1">{t.new_clients_year}</div>
+      <SectionLabel className="mb-1">{t.new_clients_year}</SectionLabel>
       <div className="text-lg font-semibold">{count}</div>
       <div className="text-xs text-muted mt-1">{t.new_this_year}</div>
     </div>
@@ -944,7 +945,7 @@ function FreeDaysWeek() {
 
   return (
     <div className="h-full flex flex-col justify-center px-4">
-      <div className="text-xs text-muted uppercase tracking-wide mb-1">{t.free_days_week}</div>
+      <SectionLabel className="mb-1">{t.free_days_week}</SectionLabel>
       <div className="text-lg font-semibold">{freeDays}/5</div>
       <div className="text-xs text-muted mt-1">{t.free}</div>
     </div>
@@ -1106,7 +1107,7 @@ function WeeklyStreak() {
 
   return (
     <div className="h-full flex flex-col justify-center px-4">
-      <div className="text-xs text-muted uppercase tracking-wide mb-1">{t.weekly_streak}</div>
+      <SectionLabel className="mb-1">{t.weekly_streak}</SectionLabel>
       <div className="text-lg font-semibold">{streak}</div>
       <div className="text-xs text-muted mt-1">{t.weeks}</div>
     </div>
@@ -1340,7 +1341,7 @@ function BillableSummary() {
 
   return (
     <div className="h-full flex flex-col justify-center px-4">
-      <div className="text-xs text-muted uppercase tracking-wide mb-1">{t.billable_summary}</div>
+      <SectionLabel className="mb-1">{t.billable_summary}</SectionLabel>
       <div className="text-lg font-semibold">{animated.toFixed(1)}h</div>
       <div className="text-xs text-muted">{t.tracked}</div>
     </div>

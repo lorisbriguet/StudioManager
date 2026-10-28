@@ -3,7 +3,7 @@ import { IconButton } from "../components/ui/IconButton";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Save, Plus, Trash2, Eye, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Input, PageSpinner, Card, Select } from "../components/ui";
+import { Button, Input, PageSpinner, Card, Select, SectionLabel } from "../components/ui";
 import { useTabStore } from "../stores/tab-store";
 import {
   useClient,
@@ -643,7 +643,7 @@ function AddressCard({
     >
       <div className="flex items-start justify-between">
         <div>
-          {a.label && <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{a.label}</span>}
+          {a.label && <SectionLabel as="span">{a.label}</SectionLabel>}
           <div className="mt-1 text-sm">
             {a.billing_name && <div className="font-medium">{a.billing_name}</div>}
             {a.address_line1 && <div className="text-muted">{a.address_line1}</div>}
@@ -739,7 +739,7 @@ function AddressesSection({
         {/* Main address — read-only card from client fields */}
         {(client.address_line1 || client.postal_city) && (
           <div className="border border-[var(--color-border-divider)] rounded-xl bg-[var(--color-surface)] p-3 opacity-80">
-            <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{t.main_address}</span>
+            <SectionLabel as="span">{t.main_address}</SectionLabel>
             <div className="mt-1 text-sm">
               {(client.billing_name || client.name) && (
                 <div className="font-medium">{client.billing_name || client.name}</div>
@@ -839,7 +839,7 @@ function AddressesSection({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <Card>
-      <h2 className="text-xs font-semibold uppercase tracking-wider text-muted mb-3">{title}</h2>
+      <SectionLabel as="h2" className="mb-3">{title}</SectionLabel>
       {children}
     </Card>
   );

@@ -15,7 +15,7 @@ import { useT } from "../i18n/useT";
 import type { AppLanguage } from "../i18n/ui";
 import { UpdateChecker } from "../components/UpdateChecker";
 import { WorkloadTemplateManager } from "../components/workload/WorkloadTemplateManager";
-import { Input, Select, Button, IconButton } from "../components/ui";
+import { Input, Select, Button, IconButton, SectionLabel } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
 import { AgentAccessCard } from "../components/settings/AgentAccessCard";
@@ -387,11 +387,11 @@ export function SettingsPage() {
     <div className="flex gap-0 h-full -m-8">
       {/* Category sidebar */}
       <div className="w-48 shrink-0 border-r border-[var(--color-border-divider)] py-5">
-        <h1 className="text-sm font-semibold px-5 mb-4 text-muted uppercase tracking-wider">{t.settings}</h1>
+        <SectionLabel as="h1" className="px-5 mb-4">{t.settings}</SectionLabel>
         <nav className="space-y-3 px-1">
           {categorySections.map((section) => (
             <div key={section.label}>
-              <div className="text-[10px] font-medium uppercase tracking-widest text-muted px-3 mb-1">{section.label}</div>
+              <SectionLabel className="px-3 mb-1">{section.label}</SectionLabel>
               <div className="space-y-px">
                 {section.items.map((cat) => (
                   <button

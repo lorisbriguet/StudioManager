@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Timer } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "./ui";
+import { Button, SECTION_LABEL } from "./ui";
 import { useAppStore } from "../stores/app-store";
 import { useProjects } from "../db/hooks/useProjects";
 import { useTasksByProject } from "../db/hooks/useTasks";
@@ -90,7 +90,7 @@ export function QuickTimerModal() {
           <div className="p-4 flex flex-col gap-3">
             {/* Project picker */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-muted uppercase tracking-widest">
+              <label className={SECTION_LABEL}>
                 {t.select_project}
               </label>
               <input
@@ -135,7 +135,7 @@ export function QuickTimerModal() {
             {/* Task picker */}
             {selectedProjectId && (
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted uppercase tracking-widest">
+                <label className={SECTION_LABEL}>
                   {t.select_task}
                 </label>
                 {todoTasks.length === 0 ? (

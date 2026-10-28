@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../ui/Button";
+import { SectionLabel } from "../ui/SectionLabel";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
 import { useOrgStore } from "../../stores/org-store";
@@ -79,7 +80,7 @@ export function OrganisationsCard() {
   return (
     <section className="rounded-xl bg-[var(--color-surface)] border border-[var(--color-border-divider)] px-4 pt-3 pb-1">
       <div className="border-b border-[var(--color-border-divider)] pb-2 mb-3">
-        <h2 className="text-[10px] font-medium uppercase tracking-widest text-muted">{t.organisations}</h2>
+        <SectionLabel as="h2">{t.organisations}</SectionLabel>
         <p className="text-xs text-muted mt-1 normal-case tracking-normal">{t.organisations_desc}</p>
       </div>
       <ul>

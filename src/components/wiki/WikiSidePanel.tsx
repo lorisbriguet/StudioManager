@@ -12,7 +12,7 @@ import {
 } from "../../lib/wikiGraph";
 import { GraphView } from "./GraphView";
 import { colorFor } from "./wikiColors";
-import { PANEL_TOP_BAR, TabItem, IconButton } from "../ui";
+import { PANEL_TOP_BAR, TabItem, IconButton, SectionLabel } from "../ui";
 import { useProjectDoc, type ProjectDoc } from "../../db/hooks/useProjectDocs";
 
 function SnippetText({ s }: { s: Snippet }) {
@@ -33,10 +33,6 @@ function localGraph(graph: ReturnType<typeof buildWikiGraph>, id: number) {
     edges: graph.edges.filter(([a, b]) => keep.has(a) && keep.has(b)),
     refOf: new Map(graph.items.map((i) => [i.id, i.ref])),
   };
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <div className="text-[10px] font-medium uppercase tracking-widest text-muted mb-2">{children}</div>;
 }
 
 export function WikiSidePanel({
@@ -93,7 +89,7 @@ export function WikiSidePanel({
 
       {tab === "outline" ? (
         <div className="flex-1 overflow-y-auto p-3">
-          <SectionLabel>{t.wiki_outline}</SectionLabel>
+          <SectionLabel className="mb-2">{t.wiki_outline}</SectionLabel>
           {outline.length === 0 ? (
             <p className="text-xs text-muted">{t.wiki_no_headings}</p>
           ) : (
@@ -112,10 +108,9 @@ export function WikiSidePanel({
       ) : (
         <div className="flex-1 overflow-y-auto p-3 space-y-5">
           <section aria-label={t.wiki_local_graph}>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{t.wiki_local_graph}</span>
-              <IconButton icon={Maximize2} label={t.wiki_open_graph} onClick={onOpenGraph} />
-            </div>
+            <SectionLabel as="span" className="mb-2" action={<IconButton icon={Maximize2} label={t.wiki_open_graph} onClick={onOpenGraph} />}>
+              {t.wiki_local_graph}
+            </SectionLabel>
             <div className="h-44 rounded-xl border border-[var(--color-border-divider)] bg-[var(--color-bg)]">
               <GraphView
                 compact
@@ -134,7 +129,7 @@ export function WikiSidePanel({
           </section>
 
           <section aria-label={t.wiki_backlinks}>
-            <SectionLabel>
+            <SectionLabel className="mb-2">
               {t.wiki_backlinks} · {backlinks.length}
             </SectionLabel>
             {backlinks.length === 0 ? (
@@ -169,7 +164,7 @@ export function WikiSidePanel({
           </section>
 
           <section aria-label={t.wiki_outgoing}>
-            <SectionLabel>
+            <SectionLabel className="mb-2">
               {t.wiki_outgoing} · {outgoing.length + outgoingFiles.length}
             </SectionLabel>
             {outgoingFiles.map((key) => (
@@ -209,7 +204,7 @@ export function WikiSidePanel({
 
           {unlinked.length > 0 && (
             <section aria-label={t.wiki_unlinked}>
-              <SectionLabel>
+              <SectionLabel className="mb-2">
                 {t.wiki_unlinked} · {unlinked.length}
               </SectionLabel>
               <div className="space-y-1.5">
@@ -281,7 +276,7 @@ export function DocSidePanel({
       <div className="flex-1 overflow-y-auto p-3">
         {tab === "outline" ? (
           <>
-            <SectionLabel>{t.wiki_outline}</SectionLabel>
+            <SectionLabel className="mb-2">{t.wiki_outline}</SectionLabel>
             {outline.length === 0 ? (
               <p className="text-xs text-muted">{t.wiki_no_headings}</p>
             ) : (
@@ -302,10 +297,9 @@ export function DocSidePanel({
           <div className="space-y-5">
           {local && (
             <section aria-label={t.wiki_local_graph}>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{t.wiki_local_graph}</span>
-                <IconButton icon={Maximize2} label={t.wiki_open_graph} onClick={onOpenGraph} />
-              </div>
+              <SectionLabel as="span" className="mb-2" action={<IconButton icon={Maximize2} label={t.wiki_open_graph} onClick={onOpenGraph} />}>
+                {t.wiki_local_graph}
+              </SectionLabel>
               <div className="h-44 rounded-xl border border-[var(--color-border-divider)] bg-[var(--color-bg)]">
                 <GraphView
                   compact
@@ -324,7 +318,7 @@ export function DocSidePanel({
             </section>
           )}
           <section aria-label={t.wiki_linked_from}>
-            <SectionLabel>
+            <SectionLabel className="mb-2">
               {t.wiki_linked_from} · {linkedFrom.length}
             </SectionLabel>
             {linkedFrom.length === 0 ? (
@@ -356,7 +350,7 @@ export function DocSidePanel({
           </section>
           {linkedFiles.length > 0 && (
             <section aria-label={t.wiki_outgoing}>
-              <SectionLabel>
+              <SectionLabel className="mb-2">
                 {t.wiki_outgoing} · {linkedFiles.length}
               </SectionLabel>
               {linkedFiles.map((d) => (

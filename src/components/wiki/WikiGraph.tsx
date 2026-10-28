@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { SearchBar, IconButton } from "../ui";
+import { SearchBar, IconButton, SectionLabel } from "../ui";
 import { Toggle } from "../ui/Toggle";
 import { useT } from "../../i18n/useT";
 import type { WikiArticleWithTags, WikiFolder } from "../../types/wiki";
@@ -136,7 +136,7 @@ export function WikiGraph({
             <SearchBar value={filter} onChange={setFilter} placeholder={t.wiki_graph_filter} className="w-full" />
 
             <div>
-              <div className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1">{t.wiki_graph_display}</div>
+              <SectionLabel className="mb-1">{t.wiki_graph_display}</SectionLabel>
               {[
                 [t.wiki_graph_local, scope === "local", (v: boolean) => setScope(v ? "local" : "global"), focusId == null] as const,
                 [t.wiki_graph_files, showFiles, setShowFiles, scope === "local"] as const,
@@ -152,7 +152,7 @@ export function WikiGraph({
             </div>
 
             <div>
-              <div className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1">{t.wiki_graph_groups}</div>
+              <SectionLabel className="mb-1">{t.wiki_graph_groups}</SectionLabel>
               <div className="max-h-48 overflow-y-auto -mx-1 space-y-px">
                 {projects.map((p) => {
                   const shown = !hiddenProjects.has(p.key);

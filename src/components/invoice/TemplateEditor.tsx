@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { PDFViewer } from "@react-pdf/renderer";
 import { ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Input, Select, IconButton } from "../ui";
+import { Button, Input, Select, IconButton, SectionLabel } from "../ui";
 import { InvoicePDF } from "./InvoicePDF";
 import { useT } from "../../i18n/useT";
 import {
@@ -294,9 +294,9 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
     <div className="flex h-full min-h-0">
       {/* Left panel: settings */}
       <div className="w-[340px] shrink-0 border-r border-[var(--color-border-divider)] overflow-y-auto p-6 space-y-5 bg-[var(--color-surface)]">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
+        <SectionLabel as="h2">
           {t.template_editor}
-        </h2>
+        </SectionLabel>
 
         {/* Name */}
         <div>

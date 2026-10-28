@@ -5,6 +5,7 @@ import { open as openUrl } from "@tauri-apps/plugin-shell";
 import { SettingRow, SettingsCard } from "./SettingsPrimitives";
 import { Toggle } from "../ui/Toggle";
 import { Button } from "../ui/Button";
+import { SectionLabel } from "../ui/SectionLabel";
 import { useOrgStore } from "../../stores/org-store";
 import { useT } from "../../i18n/useT";
 
@@ -152,7 +153,7 @@ export function AgentAccessCard() {
           </SettingRow>
 
           <div className="py-2.5 border-b border-[var(--color-border-divider)]">
-            <div className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1">{t.agent_access_connect}</div>
+            <SectionLabel className="mb-1">{t.agent_access_connect}</SectionLabel>
             {info.claudeDesktopInstalled && (
               <SettingRow label={t.agent_access_claude_desktop}>
                 <Button size="sm" variant="secondary" onClick={() => void startAdd()}>{t.agent_access_add}</Button>
@@ -187,7 +188,7 @@ export function AgentAccessCard() {
           </div>
 
           <div className="py-2.5 border-b border-[var(--color-border-divider)]">
-            <div className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1">{t.agent_access_recent}</div>
+            <SectionLabel className="mb-1">{t.agent_access_recent}</SectionLabel>
             {log.length === 0 ? (
               <p className="text-xs text-muted">{t.agent_access_none}</p>
             ) : (

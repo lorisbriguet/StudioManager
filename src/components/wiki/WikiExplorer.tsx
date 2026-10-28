@@ -14,7 +14,7 @@ import {
 import { useT } from "../../i18n/useT";
 import { useOrgStore } from "../../stores/org-store";
 import { useWikiFolders } from "../../db/hooks/useWiki";
-import { BottomBar, SearchBar, IconButton } from "../ui";
+import { BottomBar, SearchBar, IconButton, SectionLabel } from "../ui";
 import type { WikiArticleWithTags } from "../../types/wiki";
 import type { ProjectDoc } from "../../db/hooks/useProjectDocs";
 import type { WikiRef } from "../../lib/wikiTabs";
@@ -160,7 +160,7 @@ export function WikiExplorer({
       className="w-60 shrink-0 flex flex-col min-h-0 border-r border-[var(--color-border-divider)]"
     >
       <div className="px-3 pt-5 pb-2 space-y-3">
-        <h1 className="text-sm font-semibold px-2 text-muted uppercase tracking-wider">{t.wiki}</h1>
+        <SectionLabel as="h1" className="px-2">{t.wiki}</SectionLabel>
         <SearchBar value={search} onChange={setSearch} placeholder={t.search_articles} className="w-full" />
         <div className="flex items-center gap-1 px-1">
           <IconButton icon={FilePlus} label={t.new_article} onClick={() => onNewArticle(null)} disabled={creating} />

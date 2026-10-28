@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Plus, Paperclip, Eye, ChevronRight, Upload, Trash2, CheckCircle, CalendarCheck, Receipt, Settings2, XCircle, Pencil } from "lucide-react";
-import { Button, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState, Card, Modal, Popover, IconButton, Tag } from "../components/ui";
+import { Button, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState, Card, Modal, Popover, IconButton, Tag, SectionLabel } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
 import { SavedFilterBar } from "../components/SavedFilterBar";
@@ -299,7 +299,7 @@ export function ExpensesPage() {
                           size={14}
                           className={`text-muted transition-transform ${isOpen ? "rotate-90" : ""}`}
                         />
-                        <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{year}</span>
+                        <SectionLabel as="span">{year}</SectionLabel>
                         <span className="text-xs text-muted">
                           {yearExpenses.length} {yearExpenses.length !== 1 ? t.expenses_count_plural : t.expenses_count_singular}
                         </span>

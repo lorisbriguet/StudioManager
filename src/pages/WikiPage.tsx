@@ -30,7 +30,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { useT } from "../i18n/useT";
 import { notifyError, getLabels } from "../lib/notifyError";
-import { Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem, Popover, IconButton, Tag } from "../components/ui";
+import { Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem, Popover, IconButton, Tag, SectionLabel } from "../components/ui";
 import { MENU_ITEM } from "../components/ui/Dropdown";
 import { Select } from "../components/ui/Select";
 import {
@@ -223,7 +223,7 @@ function LinkInsertPopup({
       {optionCount > 0 && (
         <div className="border-t border-[var(--color-border-divider)] py-1 max-h-64 overflow-y-auto">
           <div className="px-3 py-1">
-            <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{t.wiki_link_to_article}</span>
+            <SectionLabel as="span">{t.wiki_link_to_article}</SectionLabel>
           </div>
           {matchedArticles.map((article, i) => (
             <button

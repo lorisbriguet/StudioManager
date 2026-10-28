@@ -8,7 +8,7 @@ import { useDashboardStore, WIDGET_CATALOG, type WidgetType, type DashboardWidge
 import type { LayoutItem } from "react-grid-layout";
 import { renderWidget } from "../components/dashboard/widgets";
 import { DashboardYearContext } from "../components/dashboard/DashboardYearContext";
-import { PageHeader, Button, EmptyState, Select, Popover, IconButton } from "../components/ui";
+import { PageHeader, Button, EmptyState, Select, Popover, IconButton, SectionLabel } from "../components/ui";
 import { MENU_ITEM, MENU_DIVIDER } from "../components/ui/Dropdown";
 import { useT } from "../i18n/useT";
 import { toast } from "sonner";
@@ -291,7 +291,7 @@ export function DashboardPage() {
             </div>
             {categories.map((cat) => (
               <div key={cat} className="mb-3">
-                <div className="text-[10px] text-muted uppercase tracking-wide mb-1.5 capitalize">{cat}</div>
+                <SectionLabel className="mb-1.5">{cat}</SectionLabel>
                 <div className="grid grid-cols-5 gap-2">
                   {WIDGET_CATALOG.filter((e) => e.category === cat).map((entry) => {
                     const label = t[entry.labelKey as keyof typeof t] ?? entry.labelKey;

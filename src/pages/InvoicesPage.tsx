@@ -33,7 +33,7 @@ import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Card, Modal, FormField, Input, Select, IconButton, CountBadge } from "../components/ui";
+import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Card, Modal, FormField, Input, Select, IconButton, CountBadge, SectionLabel } from "../components/ui";
 import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
 import { isDraftReference } from "../types/invoice";
 import type { Invoice, InvoiceStatus } from "../types/invoice";
@@ -500,7 +500,7 @@ export function InvoicesPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--color-border-header)] text-left text-xs text-muted uppercase">
+                <tr className="border-b border-[var(--color-border-header)] text-left text-xs text-muted">
                   <th className="py-2 pr-2">{t.base_invoice}</th>
                   <th className="py-2 pr-2">{t.client}</th>
                   <th className="py-2 pr-2 text-right">{t.amount}</th>
@@ -617,7 +617,7 @@ export function InvoicesPage() {
                           size={14}
                           className={`text-muted transition-transform ${isOpen ? "rotate-90" : ""}`}
                         />
-                        <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{year}</span>
+                        <SectionLabel as="span">{year}</SectionLabel>
                         <span className="text-xs text-muted">
                           {yearInvoices.length} {yearInvoices.length !== 1 ? t.invoices_count_plural : t.invoices_count_singular}
                         </span>

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Plus, Paperclip, Eye, ChevronRight, Trash2, Upload, Wallet, Pencil, Settings2 } from "lucide-react";
-import { PageHeader, SearchBar, Button, Card, EmptyState, FormField, Input, Select, TableSkeleton, IconButton } from "../components/ui";
+import { PageHeader, SearchBar, Button, Card, EmptyState, FormField, Input, Select, TableSkeleton, IconButton, SectionLabel } from "../components/ui";
 import * as v from "../lib/validate";
 import { undoableFromStore } from "../lib/undo";
 import { toast } from "sonner";
@@ -288,7 +288,7 @@ export function IncomePage() {
                           size={14}
                           className={`text-muted transition-transform ${isOpen ? "rotate-90" : ""}`}
                         />
-                        <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{year}</span>
+                        <SectionLabel as="span">{year}</SectionLabel>
                         <span className="text-xs text-muted">
                           {yearIncomes.length} {yearIncomes.length !== 1 ? t.incomes_count_plural : t.incomes_count_singular}
                         </span>
