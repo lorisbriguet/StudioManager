@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 import { createRef } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { IconButton } from "../components/ui/IconButton";
@@ -8,12 +8,20 @@ import { usePopover } from "../components/ui/Popover";
 afterEach(cleanup);
 
 describe("IconButton", () => {
-  it("is a labelled button with a matching title, type=button by default", () => {
+  it("is a labelled button, type=button by default, with a tooltip instead of a native title", () => {
+    vi.useFakeTimers();
     const onClick = vi.fn();
     render(<IconButton icon={Pencil} label="Edit" onClick={onClick} />);
     const btn = screen.getByRole("button", { name: "Edit" });
-    expect(btn).toHaveAttribute("title", "Edit");
+    expect(btn).not.toHaveAttribute("title");
     expect(btn).toHaveAttribute("type", "button");
+    fireEvent.mouseEnter(btn);
+    act(() => vi.advanceTimersByTime(500));
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Edit");
+    expect(btn).toHaveAttribute("aria-describedby", screen.getByRole("tooltip").id);
+    fireEvent.mouseLeave(btn);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    vi.useRealTimers();
     fireEvent.click(btn);
     expect(onClick).toHaveBeenCalledTimes(1);
   });

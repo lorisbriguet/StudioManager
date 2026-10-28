@@ -31,3 +31,5 @@ export { BulkActionBar } from "./BulkActionBar";
 export { DatePicker, Calendar, DateShortcuts, parseLocalDate, parseTypedDate, toDateString } from "./DatePicker";
 export { Toggle } from "./Toggle";
 export { Kbd } from "./Kbd";
+export { Tooltip, useTooltip } from "./Tooltip";
+export { ProgressBar, Callout, ConfirmButton, DragHandle } from "./Feedback";

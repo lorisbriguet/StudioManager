@@ -1,4 +1,5 @@
-import type { ButtonHTMLAttributes, Ref } from "react";
+import type { ButtonHTMLAttributes, FocusEvent, MouseEvent, Ref } from "react";
+import { useTooltip } from "./Tooltip";
 import type { LucideIcon } from "lucide-react";
 
 /**
@@ -11,7 +12,8 @@ import type { LucideIcon } from "lucide-react";
  *   <IconButton icon={ChevronRight} label={t.expand} size="xs" iconSize={14}
  *     iconClassName={`transition-transform ${open ? "rotate-90" : ""}`} />
  *
- * `label` is required: it becomes the aria-label and the hover title.
+ * `label` is required: it becomes the aria-label and the hover Tooltip
+ * (pass `title` to show a different hint).
  * The icon size follows `size` (12 / 14 / 16), per the icon size table.
  * `reveal` hides the button until its row (a `group` ancestor) is hovered or
  * the button has keyboard focus.
@@ -66,13 +68,40 @@ export function IconButton({
   className = "",
   type = "button",
   title,
+  onMouseEnter,
+  onMouseLeave,
+  onMouseDown,
+  onFocus,
+  onBlur,
   ...props
 }: IconButtonProps) {
+  const tip = useTooltip(title ?? label);
   return (
+    <>
     <button
       type={type}
       aria-label={label}
-      title={title ?? label}
+      aria-describedby={tip.triggerProps["aria-describedby"]}
+      onMouseEnter={(e: MouseEvent<HTMLButtonElement>) => {
+        tip.triggerProps.onMouseEnter(e);
+        onMouseEnter?.(e);
+      }}
+      onMouseLeave={(e: MouseEvent<HTMLButtonElement>) => {
+        tip.triggerProps.onMouseLeave();
+        onMouseLeave?.(e);
+      }}
+      onMouseDown={(e: MouseEvent<HTMLButtonElement>) => {
+        tip.triggerProps.onMouseDown();
+        onMouseDown?.(e);
+      }}
+      onFocus={(e: FocusEvent<HTMLButtonElement>) => {
+        tip.triggerProps.onFocus(e);
+        onFocus?.(e);
+      }}
+      onBlur={(e: FocusEvent<HTMLButtonElement>) => {
+        tip.triggerProps.onBlur();
+        onBlur?.(e);
+      }}
       className={`inline-flex items-center justify-center shrink-0 transition-colors focus-accent disabled:opacity-30 disabled:pointer-events-none ${
         SIZE[size].box
       } ${
@@ -94,5 +123,7 @@ export function IconButton({
     >
       <Icon size={iconSize ?? SIZE[size].icon} className={iconClassName} aria-hidden="true" />
     </button>
+    {tip.element}
+    </>
   );
 }

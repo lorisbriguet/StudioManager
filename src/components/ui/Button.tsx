@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "danger-outline" | "success" | "link";
 type ButtonSize = "sm" | "md" | "lg";
@@ -9,6 +9,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode;
   /** Busy state: replaces the icon with a spinner and disables the button. */
   loading?: boolean;
+  ref?: Ref<HTMLButtonElement>;
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
