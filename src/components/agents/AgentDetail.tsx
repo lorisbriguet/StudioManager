@@ -1,14 +1,46 @@
-import { useState } from "react";
-import { ArrowUp } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowUp, ImagePlus, X } from "lucide-react";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { dismissAgent, deleteAgent, sendMessage, stopAgent, switchModel, type Agent } from "../../lib/agents";
+import { readFile } from "@tauri-apps/plugin-fs";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { dismissAgent, deleteAgent, saveImage, sendMessage, stopAgent, switchModel, type Agent } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
-import { Badge, Button, PANEL_TOP_BAR, Select } from "../ui";
+import { Badge, Button, PANEL_TOP_BAR } from "../ui";
 import { agentLabel, GROUP_LABEL_KEYS, GROUP_STYLE, GROUP_VARIANT } from "./AgentList";
 import { Conversation } from "./Conversation";
 import { PromptAnswer } from "./PromptAnswer";
+import { MODELS, ModelMenu } from "./ModelMenu";
 
-const MODELS = ["haiku", "sonnet", "opus", "fable"];
+const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+const IMAGE_EXT: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp" };
+
+/** The image type of a dropped file's path, or null for anything else. */
+export function imageTypeOf(path: string): string | null {
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  return IMAGE_EXT[ext] ?? null;
+}
+
+/** Appends text to a draft, separated by a space unless the draft ends with whitespace. */
+export function appendToDraft(draft: string, text: string): string {
+  if (!draft) return text;
+  return /\s$/.test(draft) ? draft + text : `${draft} ${text}`;
+}
+
+interface Attachment {
+  file: File;
+  url: string;
+}
+
+/** The file's bytes as base64 (no data: prefix). */
+function toBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",", 2)[1] ?? "");
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
 
 interface AgentDetailProps {
   agent: Agent;
@@ -24,9 +56,91 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
+  const [images, setImages] = useState<Attachment[]>([]);
+  const fileInput = useRef<HTMLInputElement>(null);
   const background = agent.kind === "background";
   const canSend = background && agent.status !== "waiting";
+  const imagesRef = useRef(images);
+  imagesRef.current = images;
+
+  // Attachments belong to one agent's draft; free their previews when it changes or unmounts.
+  useEffect(() => {
+    setImages([]);
+    return () => imagesRef.current.forEach((a) => URL.revokeObjectURL(a.url));
+  }, [agent.sessionId]);
+
+  const addImages = (files: Iterable<File>) => {
+    const next: Attachment[] = [];
+    for (const file of files) {
+      if (!IMAGE_TYPES.includes(file.type)) {
+        setError(t.agents_image_type);
+        continue;
+      }
+      if (file.size > MAX_IMAGE_BYTES) {
+        setError(t.agents_image_size);
+        continue;
+      }
+      next.push({ file, url: URL.createObjectURL(file) });
+    }
+    if (next.length) setImages((cur) => [...cur, ...next]);
+  };
+
+  // Files dropped on the window arrive as paths (Tauri's native drop). Images are attached;
+  // any other file is pasted into the draft as its path.
+  const [dragging, setDragging] = useState(false);
+  const dropRef = useRef<(paths: string[]) => void>(() => {});
+  dropRef.current = async (paths) => {
+    const others: string[] = [];
+    const files: File[] = [];
+    for (const path of paths) {
+      const type = imageTypeOf(path);
+      if (!type) {
+        others.push(path);
+        continue;
+      }
+      try {
+        const bytes = await readFile(path);
+        files.push(new File([bytes], path.split("/").pop() ?? "image", { type }));
+      } catch {
+        // Not readable from here: hand the agent the path instead.
+        others.push(path);
+      }
+    }
+    if (files.length) addImages(files);
+    if (others.length) setText((cur) => appendToDraft(cur, others.join(" ")));
+  };
+  useEffect(() => {
+    if (!canSend) return;
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    getCurrentWebview()
+      .onDragDropEvent((event) => {
+        if (cancelled) return;
+        const p = event.payload;
+        if (p.type === "enter" || p.type === "over") setDragging(true);
+        else if (p.type === "leave") setDragging(false);
+        else if (p.type === "drop") {
+          setDragging(false);
+          if (p.paths.length) void dropRef.current(p.paths);
+        }
+      })
+      .then((fn) => {
+        if (cancelled) fn();
+        else unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      setDragging(false);
+      unlisten?.();
+    };
+  }, [canSend]);
+
+  const removeImage = (url: string) => {
+    URL.revokeObjectURL(url);
+    setImages((cur) => cur.filter((a) => a.url !== url));
+  };
+
   const shortId = agent.shortId;
   const knownModel = MODELS.includes(agent.model ?? "");
 
@@ -40,13 +154,17 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
   };
 
   const send = async () => {
-    const body = text.trim();
-    if (!body || !canSend || sending) return;
+    const typed = text.trim();
+    if ((!typed && images.length === 0) || !canSend || sending) return;
     setSending(true);
     setError(null);
     try {
-      await sendMessage(agent.sessionId, body);
+      // Each image is saved on this Mac and named by its path, so the agent can open it.
+      const paths = await Promise.all(images.map(async (a) => saveImage(a.file.type, await toBase64(a.file))));
+      await sendMessage(agent.sessionId, [typed, ...paths].filter(Boolean).join("\n\n"));
       setText("");
+      images.forEach((a) => URL.revokeObjectURL(a.url));
+      setImages([]);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -99,23 +217,16 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
             </Button>
           )}
           {background && (
-            <Select
-              fullWidth={false}
-              className="w-32"
-              aria-label={t.agents_model}
-              value={knownModel ? (agent.model as string) : ""}
-              onChange={(e) => void run(async () => {
-                  const next = await switchModel(agent.sessionId, e.target.value);
+            <ModelMenu
+              label={t.agents_model}
+              value={knownModel ? (agent.model as string) : null}
+              onChange={(m) =>
+                void run(async () => {
+                  const next = await switchModel(agent.sessionId, m);
                   onSwitched?.(next);
-                })}
-            >
-              {!knownModel && <option value="" disabled />}
-              {MODELS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </Select>
+                })
+              }
+            />
           )}
         </div>
       </div>
@@ -139,8 +250,49 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
 
       <div className="max-w-3xl w-full mx-auto space-y-1.5 px-4 pb-4">
         <div
-          className="flex items-end gap-2 rounded-xl border border-[var(--color-input-border)] bg-[var(--color-input-bg)] pl-4 pr-2 py-2 focus-within:border-[var(--color-accent)]"
+          className={`rounded-xl border bg-[var(--color-input-bg)] pl-2 pr-2 py-2 focus-within:border-[var(--color-accent)] ${
+            dragging ? "border-[var(--color-accent)]" : "border-[var(--color-input-border)]"
+          }`}
         >
+          {images.length > 0 && (
+            <div className="flex flex-wrap gap-2 px-2 pb-2">
+              {images.map((a) => (
+                <div key={a.url} className="relative group">
+                  <img src={a.url} alt={a.file.name} className="size-14 rounded-lg object-cover border border-[var(--color-input-border)]" />
+                  <button
+                    type="button"
+                    aria-label={t.agents_remove_image}
+                    onClick={() => removeImage(a.url)}
+                    className="absolute -top-1.5 -right-1.5 grid place-items-center size-5 rounded-full bg-[var(--color-surface)] border border-[var(--color-input-border)] text-muted hover:text-[var(--color-text)]"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex items-end gap-1.5">
+          <button
+            type="button"
+            aria-label={t.agents_attach_image}
+            title={t.agents_attach_image}
+            disabled={!canSend}
+            onClick={() => fileInput.current?.click()}
+            className="shrink-0 grid place-items-center size-8 rounded-lg text-muted hover:text-[var(--color-text)] hover:bg-[var(--color-hover-row)] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <ImagePlus size={16} />
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept={IMAGE_TYPES.join(",")}
+            multiple
+            hidden
+            onChange={(e) => {
+              if (e.target.files) addImages(e.target.files);
+              e.target.value = "";
+            }}
+          />
           <textarea
             value={text}
             rows={1}
@@ -148,6 +300,13 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
             disabled={!canSend}
             placeholder={t.agents_message_placeholder}
             onChange={(e) => setText(e.target.value)}
+            onPaste={(e) => {
+              const files = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/"));
+              if (files.length) {
+                e.preventDefault();
+                addImages(files);
+              }
+            }}
             onKeyDown={(e) => {
               // Enter sends, Shift+Enter adds a line (IME composition left alone).
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -164,9 +323,10 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
             aria-label={t.agents_send}
             icon={<ArrowUp size={16} />}
             loading={sending}
-            disabled={!canSend || text.trim() === ""}
+            disabled={!canSend || (text.trim() === "" && images.length === 0)}
             onClick={() => void send()}
           />
+          </div>
         </div>
         {disabledReason && <p className="text-xs text-muted text-center">{disabledReason}</p>}
       </div>

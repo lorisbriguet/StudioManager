@@ -84,6 +84,11 @@ export function termClose(termId: number): Promise<void> {
   return invoke<void>("agents_term_close", { termId });
 }
 
+/** Saves an attached image on this Mac and returns its path. `data` is base64. */
+export function saveImage(mime: string, data: string): Promise<string> {
+  return invoke<string>("agents_save_image", { mime, data });
+}
+
 export function sendMessage(sessionId: string, text: string): Promise<void> {
   return invoke<void>("agents_send", { sessionId, text });
 }

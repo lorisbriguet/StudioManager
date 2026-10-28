@@ -96,7 +96,8 @@ describe("AgentDetail", () => {
 
   it("switches model", async () => {
     render(<AgentDetail agent={agent()} onOpenTerminal={() => {}} />);
-    fireEvent.change(screen.getByLabelText("Model"), { target: { value: "opus" } });
+    fireEvent.click(screen.getByLabelText("Model"));
+    fireEvent.click(screen.getByRole("menuitem", { name: "opus" }));
     await waitFor(() =>
       expect(invokedCommands.find((c) => c.cmd === "agents_switch_model")?.args).toEqual({
         sessionId: "sess-1",
@@ -109,7 +110,8 @@ describe("AgentDetail", () => {
     setInvokeHandler((cmd) => (cmd === "agents_switch_model" ? "abcd1234" : null));
     let switched = "";
     render(<AgentDetail agent={agent()} onOpenTerminal={() => {}} onSwitched={(id) => (switched = id)} />);
-    fireEvent.change(screen.getByLabelText("Model"), { target: { value: "opus" } });
+    fireEvent.click(screen.getByLabelText("Model"));
+    fireEvent.click(screen.getByRole("menuitem", { name: "opus" }));
     await waitFor(() => expect(switched).toBe("abcd1234"));
   });
 

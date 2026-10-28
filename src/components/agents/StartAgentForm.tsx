@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { startAgent, startFolders, type StartFolder } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
 import { Button, FormField, Input, Select } from "../ui";
+import { ModelMenu } from "./ModelMenu";
 
-const MODELS = ["sonnet", "opus", "haiku", "fable"];
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
 /** Lowercase, spaces to "-", only [a-z0-9._-], repeats collapsed, leading non-alphanumerics trimmed, max 64. */
@@ -101,13 +101,7 @@ export function StartAgentForm({ onStarted, onCancel }: StartAgentFormProps) {
       </FormField>
       <div className="grid grid-cols-[auto_1fr] gap-3">
         <FormField label={t.agents_model}>
-          <Select fullWidth={false} className="w-32" value={model} onChange={(e) => setModel(e.target.value)}>
-            {MODELS.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </Select>
+          <ModelMenu label={t.agents_model} value={model} onChange={setModel} />
         </FormField>
         <FormField label={t.agents_name}>
           <Input

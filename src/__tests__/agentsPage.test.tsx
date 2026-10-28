@@ -164,7 +164,8 @@ describe("AgentsPage selection of a new agent", () => {
         <AgentsPage />
       </MemoryRouter>,
     );
-    fireEvent.change(await screen.findByLabelText("Model"), { target: { value: "opus" } });
+    fireEvent.click(await screen.findByLabelText("Model"));
+    fireEvent.click(screen.getByRole("menuitem", { name: "opus" }));
     await waitFor(() => expect(invokedCommands.some((c) => c.cmd === "agents_switch_model")).toBe(true));
     await emit("agents:changed", [old, next]);
     const row = await screen.findByRole("button", { name: /new-agent/ });

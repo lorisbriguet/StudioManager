@@ -609,6 +609,7 @@ pub fn run() {
             agents::prompt::agents_prompt,
             agents::prompt::agents_answer,
             agents::poller::agents_list,
+            agents::uploads::agents_save_image,
         ])
         .setup(|app| {
             let handle = app.handle();

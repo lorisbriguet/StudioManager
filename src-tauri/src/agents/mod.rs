@@ -6,6 +6,7 @@ pub mod projects;
 pub mod prompt;
 pub mod pty;
 pub mod transcript;
+pub mod uploads;
 pub mod validate;
 
 use std::path::PathBuf;
@@ -55,4 +56,7 @@ pub fn init(handle: &tauri::AppHandle) {
     let app_dir = crate::app_data_dir(handle).unwrap_or_default();
     handle.manage(AgentsState::new(app_dir));
     poller::start(handle);
+    // Old attached images; best effort, off the startup path.
+    let dir = handle.state::<AgentsState>().app_dir.clone();
+    std::thread::spawn(move || uploads::clean_old(&dir, std::time::SystemTime::now()));
 }
