@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default permissions. fs scope is deliberately limited to APPDATA + Documents + Downloads + Desktop + ~/Library/CloudStorage (cloud drives such as Synology Drive, where the user's working data and backup folders live); dialog/drag-drop picks extend it per-session. The webview cannot execute shell commands: Apple Mail sharing, Calendar sync and PDF/HEIC extraction run as dedicated Rust commands with fixed scripts (src-tauri/src/apple.rs); shell:allow-open remains for opening URLs in the browser.",
+  "description": "Default permissions. fs scope is deliberately limited to APPDATA + Documents + Downloads + Desktop + ~/Library/CloudStorage (cloud drives such as Synology Drive, where the user's working data and backup folders live); dialog/drag-drop picks extend it per-session. No shell plugin execute/spawn: Apple Mail sharing, Calendar sync and PDF/HEIC extraction run as dedicated Rust commands with fixed scripts (src-tauri/src/apple.rs); shell:allow-open remains for opening http(s)/mailto URLs in the browser. The webview can still run programs through the app's own routine commands (routines_save + routines_run save and run a command routine: any program, arguments and working folder); a native confirmation is required whenever a command routine's program, arguments or working folder is added or changed (src-tauri/src/agents/routines).",
   "windows": ["main"],
   "permissions": [
     "core:default",
