@@ -564,9 +564,47 @@ async fn open_in_finder(path: String) -> Result<(), String> {
     }
 }
 
+/// May a webview of this app load `url`? Only the app's own pages: the
+/// `tauri://localhost` custom protocol (`http(s)://tauri.localhost` where
+/// the platform serves it that way), blobs those pages create (PDF
+/// previews in iframes), `about:blank`/`about:srcdoc`, and, in a debug
+/// build, the Vite dev server (`dev_url`). Everything else is refused: a
+/// link in an agent reply or a document must open in the browser, never
+/// replace the app with someone else's page.
+pub(crate) fn allow_navigation(url: &tauri::Url, dev_url: Option<&tauri::Url>) -> bool {
+    match url.scheme() {
+        "tauri" => url.host_str() == Some("localhost"),
+        "http" | "https" if url.host_str() == Some("tauri.localhost") => true,
+        "about" => matches!(url.path(), "blank" | "srcdoc"),
+        "blob" => tauri::Url::parse(url.path())
+            .is_ok_and(|inner| inner.scheme() != "blob" && allow_navigation(&inner, dev_url)),
+        _ => dev_url.is_some_and(|dev| {
+            url.scheme() == dev.scheme()
+                && url.host_str() == dev.host_str()
+                && url.port_or_known_default() == dev.port_or_known_default()
+        }),
+    }
+}
+
+/// Applies `allow_navigation` to every webview, the main window and the
+/// menu bar panel alike (a plugin's hook runs for all of them).
+fn navigation_guard<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    tauri::plugin::Builder::new("navigation-guard")
+        .on_navigation(|webview, url| {
+            let dev_url = if cfg!(debug_assertions) { webview.config().build.dev_url.as_ref() } else { None };
+            let allowed = allow_navigation(url, dev_url);
+            if !allowed {
+                log::warn!("blocked navigation of {} to {}", webview.label(), url.scheme());
+            }
+            allowed
+        })
+        .build()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(navigation_guard())
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -823,6 +861,55 @@ mod tests {
         assert!(check_expected_org(Some("abc123"), "abc123").is_ok());
         let err = check_expected_org(Some("old111"), "abc123").unwrap_err();
         assert!(err.contains("old111") && err.contains("abc123"));
+    }
+
+    fn url(s: &str) -> tauri::Url {
+        tauri::Url::parse(s).unwrap()
+    }
+
+    #[test]
+    fn navigation_stays_on_the_apps_own_pages() {
+        for ok in [
+            "tauri://localhost/",
+            "tauri://localhost/menubar",
+            "tauri://localhost/projects/12?tab=wiki#notes",
+            "https://tauri.localhost/",
+            "http://tauri.localhost/menubar",
+            "blob:tauri://localhost/6f1c1a54-2d6c-4f7e-9c1e-0b8c2e1d9a11",
+            "about:blank",
+            "about:srcdoc",
+        ] {
+            assert!(allow_navigation(&url(ok), None), "{ok} must be allowed");
+        }
+        for bad in [
+            "https://evil.example/login",
+            "http://localhost:1420/",
+            "tauri://evil.example/",
+            "https://tauri.localhost.evil.example/",
+            "file:///Users/me/Downloads/page.html",
+            "data:text/html,<h1>hi</h1>",
+            "blob:https://evil.example/6f1c1a54",
+            "blob:blob:tauri://localhost/x",
+            "javascript:alert(1)",
+            "mailto:me@example.com",
+            "vscode://file/etc/passwd",
+            "about:settings",
+        ] {
+            assert!(!allow_navigation(&url(bad), None), "{bad} must be refused");
+        }
+    }
+
+    #[test]
+    fn the_dev_server_is_allowed_only_when_given() {
+        let dev = url("http://localhost:1420");
+        assert!(allow_navigation(&url("http://localhost:1420/menubar"), Some(&dev)));
+        assert!(allow_navigation(&url("blob:http://localhost:1420/abc"), Some(&dev)));
+        assert!(!allow_navigation(&url("http://localhost:1421/"), Some(&dev)));
+        assert!(!allow_navigation(&url("https://localhost:1420/"), Some(&dev)));
+        assert!(!allow_navigation(&url("http://127.0.0.1:1420/"), Some(&dev)));
+        assert!(!allow_navigation(&url("https://evil.example/"), Some(&dev)));
+        // and the app's own origin still is
+        assert!(allow_navigation(&url("tauri://localhost/"), Some(&dev)));
     }
 
     #[test]
