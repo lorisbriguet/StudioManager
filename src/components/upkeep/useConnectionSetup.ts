@@ -37,8 +37,14 @@ export function useConnectionSetup(connection: Connection | undefined, onDone: (
 
   const removeRef = useRef(remove.mutate);
   removeRef.current = remove.mutate;
-  useEffect(() => () => {
-    if (!existing && idRef.current != null && !doneRef.current) removeRef.current(idRef.current);
+  /** False once the form is closed: a first save still running then removes what it made. */
+  const openRef = useRef(true);
+  useEffect(() => {
+    openRef.current = true;
+    return () => {
+      openRef.current = false;
+      if (!existing && idRef.current != null && !doneRef.current) removeRef.current(idRef.current);
+    };
   }, [existing]);
 
   /**
@@ -59,7 +65,14 @@ export function useConnectionSetup(connection: Connection | undefined, onDone: (
    */
   const save = async (data: ConnectionInput, secret?: string, opts: { oneTime?: boolean } = {}): Promise<number> => {
     if (idRef.current == null) {
-      idRef.current = await create.mutateAsync({ data, secret });
+      const id = await create.mutateAsync({ data, secret });
+      idRef.current = id;
+      if (!openRef.current && !existing) {
+        // Closed (Escape, Cancel) while the first save ran: the cleanup found
+        // no id yet, so the row and its Keychain secret go now.
+        removeRef.current(id);
+        throw new Error("connection setup closed");
+      }
     } else {
       await update.mutateAsync({ id: idRef.current, data, secret });
     }

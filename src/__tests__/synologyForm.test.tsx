@@ -210,6 +210,19 @@ describe("SynologyForm", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it("closed while the first Connect is saving, it leaves no connection or secret behind", async () => {
+    let resolve!: (id: number) => void;
+    create.mockReturnValue(new Promise<number>((r) => { resolve = r; }));
+    const { unmount } = render(<SynologyForm onDone={vi.fn()} onCancel={vi.fn()} />);
+    fill();
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    unmount(); // Escape
+    expect(remove).not.toHaveBeenCalled();
+    resolve(7);
+    await waitFor(() => expect(remove).toHaveBeenCalledWith(7));
+    expect(testConnection).not.toHaveBeenCalled();
+  });
+
   it("removes the half-made connection when closed before it works", async () => {
     testConnection.mockRejectedValue("DSM refused the account name or password");
     const { unmount } = render(<SynologyForm onDone={vi.fn()} onCancel={vi.fn()} />);
