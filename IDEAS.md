@@ -144,6 +144,10 @@ Follow-ups:
 - [ ] Follow-up: the Tasks "+" button and subtask creation share the double-submit pattern that was fixed elsewhere
 - [ ] Follow-up: `NamedTable` has no optimistic cell update - a cell only reflects an edit once the row query refetches (surfaced by the characterisation tests, pre-existing)
 
+## Full check (2026-10-29)
+
+Eight reading passes by separate agents over everything merged since 2026-10-28 (agents page, menu bar, studio upkeep, UI component library, wiki vault, MCP wiki links): three on the interface, five on security and the backend. Full report: [docs/audits/2026-10-29-full-check.md](docs/audits/2026-10-29-full-check.md). Two high findings (an invalid date still submits a form; a link in an agent reply can navigate the webview away), no critical. The 43 interface findings are being fixed on `worktree-ui-fixes`; D.1/D.2 are fixed in PR #7.
+
 ## Audit — round 5, full application (2026-09-28)
 
 Four independent reading passes (correctness/data, security/platform, UI/a11y/perf, tests/tooling) over 51k lines of TypeScript and 2.5k of Rust, plus deterministic tooling. Full report: [docs/audits/2026-09-28-full-audit.md](docs/audits/2026-09-28-full-audit.md). Clean bill on the organisations layer, the data upgrade, SQL parameterisation, capabilities and CSP, the updater chain, and design-system compliance.
