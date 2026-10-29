@@ -85,4 +85,18 @@ describe("quick timer pickers", () => {
     fireEvent.click(task);
     await waitFor(() => expect(task).toHaveAttribute("aria-pressed", "true"));
   });
+
+  it("Esc closes the project suggestions first, the modal on a second press", async () => {
+    setSelectHandler((sql) => (/FROM projects/i.test(sql) ? [{ id: 1, name: "Alpha", status: "active" }] : []));
+    useAppStore.setState({ quickTimerOpen: true });
+    wrap(<QuickTimerModal />);
+    const field = screen.getByPlaceholderText(/select project/i);
+    fireEvent.change(field, { target: { value: "alp" } });
+    await screen.findByRole("button", { name: "Alpha" });
+    fireEvent.keyDown(field, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Alpha" })).toBeNull());
+    expect(useAppStore.getState().quickTimerOpen).toBe(true);
+    fireEvent.keyDown(field, { key: "Escape" });
+    await waitFor(() => expect(useAppStore.getState().quickTimerOpen).toBe(false));
+  });
 });

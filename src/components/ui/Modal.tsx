@@ -87,7 +87,8 @@ export function Modal({ open, onClose, title, children, footer, size = "sm", pos
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      // A child that handled Esc itself (closing a suggestion list) prevents the default.
+      if (e.key !== "Escape" || e.defaultPrevented) return;
       // Only the topmost dialog closes (a confirmation opened over a form).
       // Portals mount on <body> in opening order, so the newest is last.
       const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');

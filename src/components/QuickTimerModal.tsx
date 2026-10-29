@@ -94,6 +94,13 @@ export function QuickTimerModal() {
                 setSelectedProjectId(null);
                 setSelectedTaskId(null);
               }}
+              onKeyDown={(e) => {
+                // Esc closes the suggestions first, the modal only on a second press
+                if (e.key === "Escape" && suggestOpen) {
+                  e.preventDefault();
+                  setSuggestOpen(false);
+                }
+              }}
               onFocus={() => {
                 if (selectedProject) {
                   setProjectSearch(selectedProject.name);

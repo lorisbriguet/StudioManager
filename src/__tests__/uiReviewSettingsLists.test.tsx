@@ -127,4 +127,29 @@ describe("Select inside a FormModal", () => {
     fireEvent.click(backdrop);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
+
+  it("a menu action in a Dropdown also keeps the form open", async () => {
+    const { useState } = await import("react");
+    const { FormModal } = await import("../components/ui/Form");
+    const { Dropdown } = await import("../components/ui/Dropdown");
+    useAppStore.setState({ language: "EN" });
+    const onSelect = vi.fn();
+    function Harness() {
+      const [open, setOpen] = useState(true);
+      return (
+        <FormModal open={open} title="Pick" submitLabel="Save" onSubmit={() => {}} onClose={() => setOpen(false)}>
+          <Dropdown trigger={<button type="button">Insert</button>} items={[{ label: "Due date", onSelect }]} />
+        </FormModal>
+      );
+    }
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "Insert" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Due date" }));
+    expect(onSelect).toHaveBeenCalledOnce();
+    const backdrop = screen.getByRole("dialog").parentElement!;
+    fireEvent.mouseDown(backdrop);
+    fireEvent.click(backdrop);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
 });
+
