@@ -644,6 +644,7 @@ name = "studiomanager-mcp"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "libc",
  "pulldown-cmark",
  "rmcp",
  "rusqlite",

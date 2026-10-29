@@ -1,16 +1,25 @@
 //! Change log of agent writes: `<data dir>/agent-log.jsonl`, one JSON object
-//! per line. Each line is one `O_APPEND` write, so two servers (Claude
-//! Desktop and Claude Code) writing at once both keep their line. Past
-//! `TRIM_AT` lines the file is cut back to the newest `MAX_LINES`.
+//! per line. Two servers (Claude Desktop and Claude Code) may write at once,
+//! so each write holds an exclusive `flock` on the file for its append and,
+//! past `TRIM_AT` lines, for cutting it back to the newest `MAX_LINES`. The
+//! trim writes a temp file and renames it over the log, so the app reads the
+//! old file or the new one, never half of one. The rename gives the path a
+//! new file: a writer that opened the old one and waited for its lock sees
+//! that once it holds the lock, and opens the path again.
 
+use std::fs::File;
 use std::io::Write;
+use std::os::unix::fs::MetadataExt;
+use std::os::unix::io::AsRawFd;
 use std::path::Path;
 
 pub const LOG_FILE: &str = "agent-log.jsonl";
 pub const MAX_LINES: usize = 500;
-/// Trimming rewrites the file; doing it once per 500 writes keeps the
-/// moment another server's append could land in between rare.
+/// Trimming reads and rewrites the file; once per 500 writes keeps that cheap.
 pub const TRIM_AT: usize = 2 * MAX_LINES;
+
+/// Opens before giving up on a log that keeps being replaced under us.
+const OPEN_TRIES: usize = 16;
 
 /// Best effort: a log failure never fails the write it describes.
 pub fn append(dir: &Path, org: &str, tool: &str, summary: &str) {
@@ -22,16 +31,50 @@ pub fn append(dir: &Path, org: &str, tool: &str, summary: &str) {
     });
     let path = dir.join(LOG_FILE);
     let line = format!("{entry}\n");
-    let appended = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .and_then(|mut f| f.write_all(line.as_bytes()));
-    if appended.is_ok() {
+    let Some(mut file) = open_locked(&path) else {
+        return;
+    };
+    if file.write_all(line.as_bytes()).is_ok() {
         trim_if_due(dir, &path);
+    }
+    // Closing `file` releases the lock.
+}
+
+/// The log opened for appending, locked, and still the file at `path`.
+fn open_locked(path: &Path) -> Option<File> {
+    for _ in 0..OPEN_TRIES {
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .ok()?;
+        lock(&file).ok()?;
+        let held = file.metadata().ok()?;
+        match std::fs::metadata(path) {
+            Ok(now) if now.dev() == held.dev() && now.ino() == held.ino() => return Some(file),
+            // A trim renamed a new log over this one while we waited.
+            _ => continue,
+        }
+    }
+    None
+}
+
+/// Waits for the exclusive lock; it lasts until `file` is closed.
+fn lock(file: &File) -> std::io::Result<()> {
+    loop {
+        // SAFETY: plain syscall on a descriptor `file` keeps open.
+        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) } == 0 {
+            return Ok(());
+        }
+        let err = std::io::Error::last_os_error();
+        if err.kind() != std::io::ErrorKind::Interrupted {
+            return Err(err);
+        }
     }
 }
 
+/// Called with the log locked, so no line can land between the read and
+/// the rename.
 fn trim_if_due(dir: &Path, path: &Path) {
     let Ok(existing) = std::fs::read_to_string(path) else {
         return;
@@ -85,14 +128,23 @@ mod tests {
         assert_eq!(names.len(), 1, "no temp file left behind");
     }
 
+    /// Lines left after `n` appends: every append past `TRIM_AT` cuts back
+    /// to `MAX_LINES`, whoever wrote it.
+    fn kept_after(n: usize) -> usize {
+        (0..n).fold(0, |kept, _| if kept + 1 > TRIM_AT { MAX_LINES } else { kept + 1 })
+    }
+
     #[test]
     fn concurrent_writers_keep_every_line() {
+        // 8 writers, 1,600 lines: the file is trimmed twice while they write.
+        const WRITERS: usize = 8;
+        const EACH: usize = 200;
         let dir = temp_data_dir();
-        let writers: Vec<_> = (0..8)
+        let writers: Vec<_> = (0..WRITERS)
             .map(|w| {
                 let dir = dir.clone();
                 std::thread::spawn(move || {
-                    for i in 0..50 {
+                    for i in 0..EACH {
                         append(&dir, "org001", "create_task", &format!("w{w} entry {i}"));
                     }
                 })
@@ -102,13 +154,18 @@ mod tests {
             w.join().unwrap();
         }
         let all = lines(&dir);
-        assert_eq!(all.len(), 400);
-        for w in 0..8 {
-            let mine = all
+        // Only trims dropped lines, and only the oldest ones.
+        assert_eq!(all.len(), kept_after(WRITERS * EACH));
+        for w in 0..WRITERS {
+            let mine: Vec<usize> = all
                 .iter()
-                .filter(|l| l["summary"].as_str().unwrap().starts_with(&format!("w{w} ")))
-                .count();
-            assert_eq!(mine, 50, "writer {w}");
+                .filter_map(|l| l["summary"].as_str().unwrap().strip_prefix(&format!("w{w} entry ")))
+                .map(|i| i.parse().unwrap())
+                .collect();
+            let first = EACH - mine.len();
+            assert_eq!(mine, (first..EACH).collect::<Vec<_>>(), "writer {w} keeps its newest lines in order");
         }
+        let names: Vec<_> = std::fs::read_dir(&dir).unwrap().collect();
+        assert_eq!(names.len(), 1, "no temp file left behind");
     }
 }
