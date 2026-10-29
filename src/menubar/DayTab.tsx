@@ -18,17 +18,23 @@ import {
   type Run,
 } from "../lib/routines";
 
-/** Loads the routines and their last runs, and again whenever Rust says they changed. */
+const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+/** Rust's error while the Agents switch is off (`agents/actions.rs`). */
+const AGENTS_OFF = "Agents are switched off";
+
+/** Loads the routines and their last runs, and again whenever Rust says they changed. A failed
+ *  load (e.g. "Agents are switched off", an unreadable runs file) keeps what is there and says why. */
 function useRoutines() {
   const [data, setData] = useState<{ routines: Routines; runs: Run[] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const load = useCallback(async () => {
-    try {
-      const [routines, runs] = await Promise.all([getRoutines(), getRoutineRuns()]);
-      setData({ routines, runs });
-    } catch {
-      // Agents switched off or a read failed: show what is there, or the empty state.
-      setData((d) => d ?? { routines: { sections: [], routines: [] }, runs: [] });
-    }
+    const [routines, runs] = await Promise.allSettled([getRoutines(), getRoutineRuns()]);
+    const failed = [routines, runs].find((r): r is PromiseRejectedResult => r.status === "rejected");
+    setError(failed ? errorText(failed.reason) : null);
+    setData((d) => ({
+      routines: routines.status === "fulfilled" ? routines.value : (d?.routines ?? { sections: [], routines: [] }),
+      runs: runs.status === "fulfilled" ? runs.value : (d?.runs ?? []),
+    }));
   }, []);
   useEffect(() => {
     let alive = true;
@@ -45,7 +51,7 @@ function useRoutines() {
       unlisten?.();
     };
   }, [load]);
-  return data;
+  return { data, error };
 }
 
 const timeOf = (epochMs: number, locale: string) =>
@@ -69,7 +75,7 @@ function RoutineRow({ routine, run, sessionId }: { routine: Routine; run: Run | 
     try {
       await action();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   };
 
@@ -135,15 +141,28 @@ function RoutineRow({ routine, run, sessionId }: { routine: Routine; run: Run | 
  */
 export function DayTab() {
   const t = useT();
-  const data = useRoutines();
+  const { data, error } = useRoutines();
   const { agents } = useAgents();
+  /** Why a section link didn't open (e.g. "Not found: …"), by section id. */
+  const [linkError, setLinkError] = useState<{ section: string; message: string } | null>(null);
 
   if (!data) return null;
   const { routines, runs } = data;
+  const shownError = error === AGENTS_OFF ? t.agents_off : error;
+  const loadError = shownError && (
+    <div role="alert" className="px-4 pt-3 text-xs text-danger-text">
+      {shownError}
+    </div>
+  );
+  const openLink = (section: string, index: number) => {
+    setLinkError(null);
+    openSectionLink(section, index).catch((e) => setLinkError({ section, message: errorText(e) }));
+  };
   if (routines.routines.length === 0) {
     return (
       <EmptyState
-        message={t.routines_day_empty}
+        tone={shownError ? "danger" : "default"}
+        message={shownError || t.routines_day_empty}
         action={
           <Button variant="secondary" onClick={() => void openMainWindow({ settings: "agents" })}>
             {t.routines_open_settings}
@@ -155,6 +174,7 @@ export function DayTab() {
 
   return (
     <div className="pb-2">
+      {loadError}
       {routines.sections.map((s) => {
         const rows = routines.routines.filter((r) => r.sectionId === s.id);
         if (rows.length === 0 && s.links.length === 0) return null;
@@ -164,12 +184,17 @@ export function DayTab() {
               <SectionLabel as="h2">{s.name}</SectionLabel>
               <div className="flex flex-wrap justify-end gap-x-3">
                 {s.links.map((l, i) => (
-                  <Button key={i} variant="link" onClick={() => void openSectionLink(s.id, i).catch(() => {})}>
+                  <Button key={i} variant="link" onClick={() => openLink(s.id, i)}>
                     {l.label}
                   </Button>
                 ))}
               </div>
             </div>
+            {linkError?.section === s.id && (
+              <div role="alert" className="px-4 mb-1 text-xs text-danger-text">
+                {linkError.message}
+              </div>
+            )}
             {rows.map((r) => {
               const run = runs.find((x) => x.routineId === r.id);
               const session = run?.agentShortId ? agents.find((a) => a.shortId === run.agentShortId) : undefined;
