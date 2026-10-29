@@ -13,7 +13,8 @@ use rusqlite::{
     params, params_from_iter, Connection, OptionalExtension, Transaction, TransactionBehavior,
 };
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 type R<T> = Result<T, String>;
 
@@ -185,6 +186,19 @@ pub const DATES: &str = "Dates use YYYY-MM-DD.";
 pub const FULL_PATH: &str = "Use a full folder path.";
 pub const LANGUAGE: &str = "Language must be FR or EN.";
 pub const NOTHING: &str = "Nothing to update.";
+pub const FOLDER_MISSING: &str = "No folder at that path.";
+pub const FOLDER_OUTSIDE: &str =
+    "Link the project's own folder, inside Documents, Desktop, Downloads or ~/Library/CloudStorage.";
+pub const FOLDER_BUNDLE: &str = "That is an app or a bundle, not a project folder.";
+
+/// Largest title, name, notes or article an agent may write.
+pub const MAX_TEXT: usize = 1024 * 1024;
+
+/// Folder extensions macOS opens as a package (an app, a plug-in…).
+const BUNDLE_EXTENSIONS: [&str; 15] = [
+    "app", "appex", "bundle", "component", "framework", "kext", "mdimporter", "mpkg", "pkg",
+    "plugin", "prefpane", "qlgenerator", "saver", "workflow", "xpc",
+];
 
 fn task_status(s: &str) -> R<&'static str> {
     match s.trim() {
@@ -239,8 +253,16 @@ fn date_value(s: &str) -> R<Value> {
     }
 }
 
+fn capped<'a>(s: &'a str, what: &str) -> R<&'a str> {
+    if s.len() > MAX_TEXT {
+        Err(format!("{what} too long (over 1 MB)."))
+    } else {
+        Ok(s)
+    }
+}
+
 fn required(s: &str, what: &str) -> R<String> {
-    let t = s.trim();
+    let t = capped(s, what)?.trim();
     if t.is_empty() {
         Err(format!("{what} can't be empty."))
     } else {
@@ -248,14 +270,49 @@ fn required(s: &str, what: &str) -> R<String> {
     }
 }
 
-/// Absolute path, stored as given minus trailing slashes.
-fn folder_path(s: &str) -> R<String> {
-    let t = s.trim().trim_end_matches('/');
-    if t.starts_with('/') {
-        Ok(t.to_string())
-    } else {
-        Err(FULL_PATH.to_string())
+/// Where a project folder may be: the places the app reads project files
+/// from (the app's `doc_roots.rs`, compiled in here). Tests add the temp
+/// dir, where their fixtures live.
+fn allowed_roots() -> Vec<PathBuf> {
+    let mut roots = crate::doc_roots::allowed_roots();
+    if cfg!(test) {
+        roots.extend(std::fs::canonicalize(std::env::temp_dir()).ok());
     }
+    roots
+}
+
+fn is_bundle(path: &Path) -> bool {
+    path.components().any(|c| {
+        Path::new(c.as_os_str())
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| BUNDLE_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
+    })
+}
+
+/// An existing folder inside one of the allowed places (not the place
+/// itself, which would claim every folder in it) and not an app bundle.
+/// Stored as given minus trailing slashes.
+fn folder_path(s: &str) -> R<String> {
+    let t = s.trim();
+    if !t.starts_with('/') {
+        return Err(FULL_PATH.to_string());
+    }
+    let t = match t.trim_end_matches('/') {
+        "" => "/",
+        t => t,
+    };
+    let real = std::fs::canonicalize(t)
+        .ok()
+        .filter(|p| p.is_dir())
+        .ok_or_else(|| FOLDER_MISSING.to_string())?;
+    if is_bundle(Path::new(t)) || is_bundle(&real) {
+        return Err(FOLDER_BUNDLE.to_string());
+    }
+    if !crate::doc_roots::inside_root(&real, &allowed_roots()) {
+        return Err(FOLDER_OUTSIDE.to_string());
+    }
+    Ok(t.to_string())
 }
 
 fn escape_html(s: &str) -> String {
@@ -301,7 +358,7 @@ pub fn create_project(
     let name = required(name, "Name")?;
     let status = project_status(status.unwrap_or("active"))?;
     let deadline = optional_date(deadline)?;
-    let notes = notes.unwrap_or("").to_string();
+    let notes = capped(notes.unwrap_or(""), "Notes")?.to_string();
     write(dir, org, "create_project", |tx| {
         let client_id = read::resolve_client(tx, client)?;
         let mut stmt = db(tx.prepare("SELECT id, name FROM projects WHERE client_id = ?1"))?;
@@ -342,7 +399,7 @@ pub fn update_project(
         sets.push(("deadline", date_value(d)?));
     }
     if let Some(n) = &changes.notes {
-        sets.push(("notes", Value::Text(n.clone())));
+        sets.push(("notes", Value::Text(capped(n, "Notes")?.to_string())));
     }
     if let Some(f) = &changes.folder_path {
         let v = if f.trim().is_empty() {
@@ -427,7 +484,7 @@ pub fn create_task(
     let title = required(title, "Title")?;
     let due = optional_date(due_date)?;
     let prio = parse_priority(priority.unwrap_or("medium"))?;
-    let notes = notes.unwrap_or("").to_string();
+    let notes = capped(notes.unwrap_or(""), "Notes")?.to_string();
     write(dir, org, "create_task", |tx| {
         let pid = read::resolve_project(tx, project)?;
         let order = next_sort_order(tx, "tasks", "project_id", pid)?;
@@ -460,7 +517,7 @@ pub fn update_task(dir: &Path, org: &Org, task_id: i64, changes: &TaskChanges) -
         sets.push(("priority", Value::Text(parse_priority(p)?.to_string())));
     }
     if let Some(n) = &changes.notes {
-        sets.push(("notes", Value::Text(n.clone())));
+        sets.push(("notes", Value::Text(capped(n, "Notes")?.to_string())));
     }
     if sets.is_empty() {
         return Err(NOTHING.to_string());
@@ -546,7 +603,7 @@ pub fn create_client(
     language: Option<&str>,
 ) -> R<ClientResult> {
     let name = required(name, "Name")?;
-    let email = email.unwrap_or("").trim().to_string();
+    let email = capped(email.unwrap_or(""), "Email")?.trim().to_string();
     let language = match language.unwrap_or("FR").trim().to_uppercase().as_str() {
         "FR" => "FR",
         "EN" => "EN",
@@ -587,6 +644,10 @@ pub fn create_client(
 
 // ── Wiki ─────────────────────────────────────────────────────
 
+fn article_content(conn: &Connection, id: i64) -> R<String> {
+    db(conn.query_row("SELECT content FROM wiki_articles WHERE id = ?1", [id], |r| r.get(0)))
+}
+
 fn project_name(conn: &Connection, id: i64) -> R<String> {
     db(
         conn.query_row("SELECT name FROM projects WHERE id = ?1", [id], |r| {
@@ -617,23 +678,19 @@ fn wiki_folder(conn: &Connection, project: &str) -> R<i64> {
     Ok(conn.last_insert_rowid())
 }
 
-/// The project's article with this title (accent/case-folded); several
-/// matches are listed, never picked.
-fn find_article(
-    conn: &Connection,
-    project_id: i64,
-    title: &str,
-) -> R<Option<(i64, String, String)>> {
-    let mut stmt = db(conn.prepare(
-        "SELECT id, title, content FROM wiki_articles WHERE project_id = ?1 ORDER BY id",
-    ))?;
-    let rows: Vec<(i64, String, String)> = db(stmt
-        .query_map([project_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+/// The project's article with this title (accent/case-folded), as id and
+/// stored title; several matches are listed, never picked. Titles only:
+/// contents stay on disk.
+fn find_article(conn: &Connection, project_id: i64, title: &str) -> R<Option<(i64, String)>> {
+    let mut stmt =
+        db(conn.prepare("SELECT id, title FROM wiki_articles WHERE project_id = ?1 ORDER BY id"))?;
+    let rows: Vec<(i64, String)> = db(stmt
+        .query_map([project_id], |r| Ok((r.get(0)?, r.get(1)?)))
         .and_then(|rows| rows.collect()))?;
     let wanted = fold(title.trim());
-    let hits: Vec<&(i64, String, String)> = rows
+    let hits: Vec<&(i64, String)> = rows
         .iter()
-        .filter(|(_, t, _)| fold(t.trim()) == wanted)
+        .filter(|(_, t)| fold(t.trim()) == wanted)
         .collect();
     match hits.as_slice() {
         [] => Ok(None),
@@ -641,7 +698,7 @@ fn find_article(
         many => {
             let list: Vec<String> = many
                 .iter()
-                .map(|(id, t, _)| format!("{t} (id {id})"))
+                .map(|(id, t)| format!("{t} (id {id})"))
                 .collect();
             Err(format!(
                 "Several articles match \"{title}\": {}. Rename one in StudioManager first.",
@@ -705,14 +762,22 @@ fn find_link_target(articles: &[(i64, String, Option<i64>, String)], pid: i64, t
     (hits.len() == 1).then(|| hits[0])
 }
 
+/// Whether a file exists; `Path::is_file` outside tests.
+type Exists<'a> = &'a dyn Fn(&Path) -> bool;
+
 /// A Markdown file of a project's folder: `[[docs/guide.md]]` in this
 /// project, or `[[Project/docs/guide.md]]`. Only files that exist count.
-fn find_file_target(folders: &[(i64, String, String)], pid: i64, target: &str) -> Option<(i64, String)> {
+fn find_file_target(
+    folders: &[(i64, String, String)],
+    pid: i64,
+    target: &str,
+    is_file: Exists,
+) -> Option<(i64, String)> {
     let target = target.trim().trim_start_matches("./");
     if !target.to_ascii_lowercase().ends_with(".md") || target.split('/').any(|p| p == ".." || p.is_empty()) {
         return None;
     }
-    let exists = |folder: &str, rel: &str| Path::new(folder).join(rel).is_file();
+    let exists = |folder: &str, rel: &str| is_file(&Path::new(folder).join(rel));
     if let Some((_, _, folder)) = folders.iter().find(|(id, _, _)| *id == pid) {
         if exists(folder, target) {
             return Some((pid, target.to_string()));
@@ -725,48 +790,10 @@ fn find_file_target(folders: &[(i64, String, String)], pid: i64, target: &str) -
         .map(|(id, _, _)| (*id, rel.to_string()))
 }
 
-/// Replaces `[[Target]]` and `[[Target|text]]` with Markdown links to the
-/// article (`/wiki?article=<id>`), outside code. Targets that match nothing
-/// stay as written and are reported in `unresolved`.
-pub(crate) fn resolve_wiki_links(tx: &Connection, pid: i64, md: &str, unresolved: &mut Vec<String>) -> R<String> {
-    if !md.contains("[[") {
-        return Ok(md.to_string());
-    }
-    let mut stmt = db(tx.prepare(
-        "SELECT a.id, a.title, a.project_id, COALESCE(p.name, '') FROM wiki_articles a \
-         LEFT JOIN projects p ON p.id = a.project_id",
-    ))?;
-    let articles: Vec<(i64, String, Option<i64>, String)> = db(stmt
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
-        .and_then(|rows| rows.collect()))?;
-    let mut stmt = db(tx.prepare("SELECT id, name, folder_path FROM projects WHERE folder_path IS NOT NULL"))?;
-    let folders: Vec<(i64, String, String)> = db(stmt
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
-        .and_then(|rows| rows.collect()))?;
-
-    let link = |inner: &str, unresolved: &mut Vec<String>| -> String {
-        let (target, text) = match inner.split_once('|') {
-            Some((t, x)) => (t, x.trim().to_string()),
-            None => (inner, inner.rsplit_once('/').map_or(inner, |(_, t)| t).trim().to_string()),
-        };
-        if let Some((fpid, rel)) = find_file_target(&folders, pid, target) {
-            let file_text = match inner.split_once('|') {
-                Some((_, x)) => x.trim().to_string(),
-                None => rel.rsplit('/').next().unwrap_or(&rel).to_string(),
-            };
-            if !file_text.contains(']') {
-                return format!("[{file_text}](/wiki?file={fpid}:{})", rel.replace(' ', "%20"));
-            }
-        }
-        match find_link_target(&articles, pid, target) {
-            Some(id) if !text.contains(']') => format!("[{text}](/wiki?article={id})"),
-            _ => {
-                unresolved.push(target.trim().to_string());
-                format!("[[{inner}]]")
-            }
-        }
-    };
-    let links_in = |text: &str, unresolved: &mut Vec<String>| -> String {
+/// `[[...]]` links in Markdown, outside fenced blocks and `code spans`:
+/// each one's inside goes through `f`, which returns its replacement.
+fn map_links(md: &str, f: &mut dyn FnMut(&str) -> String) -> String {
+    fn links_in(text: &str, f: &mut dyn FnMut(&str) -> String) -> String {
         let mut out = String::new();
         let mut rest = text;
         while let Some(start) = rest.find("[[") {
@@ -774,7 +801,7 @@ pub(crate) fn resolve_wiki_links(tx: &Connection, pid: i64, md: &str, unresolved
             match after.find("]]") {
                 Some(end) if !after[..end].contains(['[', '\n']) && !after[..end].trim().is_empty() => {
                     out.push_str(&rest[..start]);
-                    out.push_str(&link(&after[..end], unresolved));
+                    out.push_str(&f(&after[..end]));
                     rest = &after[end + 2..];
                 }
                 _ => {
@@ -785,7 +812,7 @@ pub(crate) fn resolve_wiki_links(tx: &Connection, pid: i64, md: &str, unresolved
         }
         out.push_str(rest);
         out
-    };
+    }
 
     // Walk line by line, leaving fenced blocks and `code spans` untouched.
     let mut out = String::with_capacity(md.len());
@@ -803,7 +830,7 @@ pub(crate) fn resolve_wiki_links(tx: &Connection, pid: i64, md: &str, unresolved
         }
         let mut rest = line;
         while let Some(tick) = rest.find('`') {
-            out.push_str(&links_in(&rest[..tick], unresolved));
+            out.push_str(&links_in(&rest[..tick], f));
             let run = rest[tick..].chars().take_while(|&c| c == '`').count();
             let fence = &rest[tick..tick + run];
             match rest[tick + run..].find(fence) {
@@ -818,9 +845,94 @@ pub(crate) fn resolve_wiki_links(tx: &Connection, pid: i64, md: &str, unresolved
                 }
             }
         }
-        out.push_str(&links_in(rest, unresolved));
+        out.push_str(&links_in(rest, f));
     }
-    Ok(out)
+    out
+}
+
+/// The link's target: what comes before `|`, or all of it.
+fn link_target(inner: &str) -> &str {
+    inner.split_once('|').map_or(inner, |(t, _)| t)
+}
+
+/// File links found on disk, by link target. Run on a read connection
+/// before the write transaction: looking files up in a slow or offline
+/// project folder must never hold the database's write lock.
+fn file_links(
+    conn: &Connection,
+    pid: i64,
+    md: &str,
+    is_file: Exists,
+) -> R<HashMap<String, (i64, String)>> {
+    let mut found = HashMap::new();
+    if !md.contains("[[") {
+        return Ok(found);
+    }
+    let mut stmt = db(conn.prepare("SELECT id, name, folder_path FROM projects WHERE folder_path IS NOT NULL"))?;
+    let folders: Vec<(i64, String, String)> = db(stmt
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .and_then(|rows| rows.collect()))?;
+    let mut targets = Vec::new();
+    map_links(md, &mut |inner| {
+        targets.push(link_target(inner).to_string());
+        String::new()
+    });
+    for target in targets {
+        if found.contains_key(&target) {
+            continue;
+        }
+        if let Some(hit) = find_file_target(&folders, pid, &target, is_file) {
+            found.insert(target, hit);
+        }
+    }
+    Ok(found)
+}
+
+/// Replaces `[[Target]]` and `[[Target|text]]` with Markdown links to the
+/// article (`/wiki?article=<id>`), or to a project file found beforehand
+/// by `file_links`, outside code. Targets that match nothing stay as
+/// written and are reported in `unresolved`.
+pub(crate) fn resolve_wiki_links(
+    tx: &Connection,
+    pid: i64,
+    md: &str,
+    files: &HashMap<String, (i64, String)>,
+    unresolved: &mut Vec<String>,
+) -> R<String> {
+    if !md.contains("[[") {
+        return Ok(md.to_string());
+    }
+    let mut stmt = db(tx.prepare(
+        "SELECT a.id, a.title, a.project_id, COALESCE(p.name, '') FROM wiki_articles a \
+         LEFT JOIN projects p ON p.id = a.project_id",
+    ))?;
+    let articles: Vec<(i64, String, Option<i64>, String)> = db(stmt
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+        .and_then(|rows| rows.collect()))?;
+
+    Ok(map_links(md, &mut |inner| {
+        let target = link_target(inner);
+        let text = match inner.split_once('|') {
+            Some((_, x)) => x.trim().to_string(),
+            None => inner.rsplit_once('/').map_or(inner, |(_, t)| t).trim().to_string(),
+        };
+        if let Some((fpid, rel)) = files.get(target) {
+            let file_text = match inner.split_once('|') {
+                Some((_, x)) => x.trim().to_string(),
+                None => rel.rsplit('/').next().unwrap_or(rel).to_string(),
+            };
+            if !file_text.contains(']') {
+                return format!("[{file_text}](/wiki?file={fpid}:{})", rel.replace(' ', "%20"));
+            }
+        }
+        match find_link_target(&articles, pid, target) {
+            Some(id) if !text.contains(']') => format!("[{text}](/wiki?article={id})"),
+            _ => {
+                unresolved.push(target.trim().to_string());
+                format!("[[{inner}]]")
+            }
+        }
+    }))
 }
 
 pub fn put_wiki_article(
@@ -830,14 +942,34 @@ pub fn put_wiki_article(
     title: &str,
     markdown: &str,
 ) -> R<ArticleResult> {
+    put_wiki_article_with(dir, org, project, title, markdown, &|p: &Path| p.is_file())
+}
+
+fn put_wiki_article_with(
+    dir: &Path,
+    org: &Org,
+    project: &str,
+    title: &str,
+    markdown: &str,
+    is_file: Exists,
+) -> R<ArticleResult> {
     let title = required(title, "Title")?;
+    capped(markdown, "Content")?;
+    // Project files first, on a read connection (see `file_links`).
+    let (pid, files) = {
+        let conn = guard::open_read(org)?;
+        let pid = read::resolve_project(&conn, project)?;
+        (pid, file_links(&conn, pid, markdown, is_file)?)
+    };
     write(dir, org, "put_wiki_article", |tx| {
-        let pid = read::resolve_project(tx, project)?;
+        // By id: the project resolved above (it can't be deleted meanwhile
+        // through these tools, but the app could).
+        let pid = read::resolve_project(tx, &pid.to_string())?;
         let pname = project_name(tx, pid)?;
         let mut unresolved = Vec::new();
-        let html = markdown::to_html(&resolve_wiki_links(tx, pid, markdown, &mut unresolved)?);
+        let html = markdown::to_html(&resolve_wiki_links(tx, pid, markdown, &files, &mut unresolved)?);
         let (id, stored_title, created) = match find_article(tx, pid, &title)? {
-            Some((id, t, _)) => {
+            Some((id, t)) => {
                 update_row(
                     tx,
                     "wiki_articles",
@@ -880,23 +1012,43 @@ pub fn add_decision(
 ) -> R<DecisionResult> {
     let day = parse_date(date)?;
     let text = required(text, "Text")?;
-    let li = format!(
-        "<li><p><strong>{day}</strong> {}</p></li>",
-        escape_html(&text)
-    );
+    let head = format!("<strong>{day}</strong> {}", escape_html(&text));
+    // Already recorded: as written here or in the editor (`<li><p>…</p>`),
+    // or after a get→put round trip (tight `<li>…</li>`, quotes as &quot;).
+    let heads = [head.clone(), head.replace('"', "&quot;")];
+    let recorded = |content: &str| {
+        heads.iter().any(|h| {
+            content.contains(&format!("{h}</p>")) || content.contains(&format!("{h}</li>"))
+        })
+    };
     write(dir, org, "add_decision", |tx| {
         let pid = read::resolve_project(tx, project)?;
         let pname = project_name(tx, pid)?;
-        let (article_id, added) = match find_article(tx, pid, "Decisions")? {
+        let found = match find_article(tx, pid, "Decisions")? {
+            Some((id, _)) => Some((id, article_content(tx, id)?)),
+            None => None,
+        };
+        let (article_id, added) = match found {
             None => (
-                insert_article(tx, pid, &pname, "Decisions", &format!("<ul>{li}</ul>"))?,
+                insert_article(tx, pid, &pname, "Decisions", &format!("<ul><li><p>{head}</p></li></ul>"))?,
                 true,
             ),
-            Some((id, _, content)) if content.contains(&li) => (id, false),
-            Some((id, _, content)) => {
+            Some((id, content)) if recorded(&content) => (id, false),
+            Some((id, content)) => {
                 let new = match content.rfind("</ul>") {
-                    Some(i) => format!("{}{li}{}", &content[..i], &content[i..]),
-                    None => format!("{content}<ul>{li}</ul>"),
+                    Some(i) => {
+                        // Same form as the list's last item.
+                        let tight = content[..i]
+                            .rfind("<li")
+                            .is_some_and(|li| !content[li..].starts_with("<li><p>"));
+                        let li = if tight {
+                            format!("<li>{head}</li>\n")
+                        } else {
+                            format!("<li><p>{head}</p></li>")
+                        };
+                        format!("{}{li}{}", &content[..i], &content[i..])
+                    }
+                    None => format!("{content}<ul><li><p>{head}</p></li></ul>"),
                 };
                 update_row(tx, "wiki_articles", id, vec![("content", Value::Text(new))])?;
                 (id, true)
@@ -928,6 +1080,8 @@ pub fn link_tool(
 ) -> R<ToolResult> {
     let name = required(name, "Name")?;
     let url = url
+        .map(|u| capped(u, "URL"))
+        .transpose()?
         .map(str::trim)
         .filter(|u| !u.is_empty())
         .map(str::to_string);
@@ -1028,6 +1182,13 @@ mod tests {
         (dir, org, conn)
     }
 
+    /// A folder that exists, inside the test's allowed place (the temp dir).
+    fn real_folder(dir: &Path, name: &str) -> String {
+        let f = dir.join("work").join(name);
+        std::fs::create_dir_all(&f).unwrap();
+        f.to_string_lossy().into_owned()
+    }
+
     fn one<T: rusqlite::types::FromSql>(conn: &Connection, sql: &str) -> T {
         conn.query_row(sql, [], |r| r.get(0)).unwrap()
     }
@@ -1045,15 +1206,15 @@ mod tests {
     #[test]
     fn link_folder_happy_path() {
         let (dir, org, conn) = fixture();
-        let r = link_folder(&dir, &org, "identite visuelle", "/work/lumen/identity//").unwrap();
+        let folder = dir.join("work").join("lumen").join("identity");
+        std::fs::create_dir_all(&folder).unwrap();
+        let folder = folder.to_string_lossy().into_owned();
+        let r = link_folder(&dir, &org, "identite visuelle", &format!("{folder}//")).unwrap();
         assert_eq!(r.org, "Studio");
         assert_eq!(r.project.id, 1);
-        assert_eq!(
-            r.project.folder_path.as_deref(),
-            Some("/work/lumen/identity")
-        );
+        assert_eq!(r.project.folder_path.as_deref(), Some(folder.as_str()));
         let fp: String = one(&conn, "SELECT folder_path FROM projects WHERE id = 1");
-        assert_eq!(fp, "/work/lumen/identity");
+        assert_eq!(fp, folder);
         assert_eq!(
             link_folder(&dir, &org, "1", "work/lumen").unwrap_err(),
             "Use a full folder path."
@@ -1128,20 +1289,23 @@ mod tests {
         // Untouched fields keep their values.
         let notes: String = one(&conn, "SELECT notes FROM projects WHERE id = 1");
         assert_eq!(notes, "Brand notes");
+        let folder = dir.join("work").join("lumen");
+        std::fs::create_dir_all(&folder).unwrap();
+        let folder = folder.to_string_lossy().into_owned();
         let r = update_project(
             &dir,
             &org,
             "1",
             &ProjectChanges {
                 notes: Some("New notes".into()),
-                folder_path: Some("/work/lumen/".into()),
+                folder_path: Some(format!("{folder}/")),
                 ..Default::default()
             },
         )
         .unwrap();
         assert_eq!(r.project.status, "active");
         assert_eq!(r.project.deadline.as_deref(), Some("2026-11-05"));
-        assert_eq!(r.project.folder_path.as_deref(), Some("/work/lumen"));
+        assert_eq!(r.project.folder_path.as_deref(), Some(folder.as_str()));
         let r = update_project(
             &dir,
             &org,
@@ -1387,11 +1551,11 @@ mod tests {
                 status: Some("on_hold".into()),
                 deadline: Some("2026-12-24".into()),
                 notes: Some("x".into()),
-                folder_path: Some("/work/x".into()),
+                folder_path: Some(real_folder(&dir, "x")),
             },
         )
         .unwrap();
-        link_folder(&dir, &org, "1", "/work/y").unwrap();
+        link_folder(&dir, &org, "1", &real_folder(&dir, "y")).unwrap();
         update_task(
             &dir,
             &org,
@@ -1438,7 +1602,7 @@ mod tests {
             },
         )
         .unwrap();
-        link_folder(&dir, &org, "3", "/work/c").unwrap();
+        link_folder(&dir, &org, "3", &real_folder(&dir, "c")).unwrap();
         update_task(
             &dir,
             &org,
@@ -1786,6 +1950,110 @@ mod tests {
         assert_eq!(log_lines(&dir).len(), logged, "a no-op is not logged");
         let n: i64 = one(&conn, "SELECT COUNT(*) FROM wiki_articles");
         assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn decision_dedup_survives_a_round_trip() {
+        let (dir, org, conn) = fixture();
+        add_decision(&dir, &org, "1", "2026-10-01", "Use \"blue\" & grey").unwrap();
+        add_decision(&dir, &org, "1", "2026-10-02", "Keep it short").unwrap();
+        // An agent reads the article and writes it back unchanged: the
+        // list comes back in its tight form, quotes as &quot;.
+        let a = read::get_wiki_article(&guard::open_read(&org).unwrap(), "1", "Decisions").unwrap();
+        put_wiki_article(&dir, &org, "1", "Decisions", &a.markdown).unwrap();
+        let html: String = one(&conn, "SELECT content FROM wiki_articles");
+        assert!(!html.contains("<li><p>"), "{html}");
+
+        let r = add_decision(&dir, &org, "1", "2026-10-01", "Use \"blue\" & grey").unwrap();
+        assert!(!r.added, "already recorded");
+        assert!(!add_decision(&dir, &org, "1", "2026-10-02", "Keep it short").unwrap().added);
+        // Same opening words, different decision.
+        assert!(add_decision(&dir, &org, "1", "2026-10-02", "Keep it short and sweet").unwrap().added);
+        let html: String = one(&conn, "SELECT content FROM wiki_articles");
+        assert_eq!(html.matches("2026-10-01").count(), 1, "{html}");
+        // The new item takes the list's form.
+        assert!(!html.contains("<li><p>"), "{html}");
+        assert!(
+            html.contains("<li><strong>2026-10-02</strong> Keep it short and sweet</li>\n</ul>"),
+            "{html}"
+        );
+    }
+
+    #[test]
+    fn file_links_resolved_outside_the_write_lock() {
+        let (dir, org, conn) = fixture();
+        let folder = dir.join("site-folder");
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("RELEASING.md"), "# Releasing").unwrap();
+        conn.execute("UPDATE projects SET folder_path = ?1 WHERE id = 2", [folder.to_string_lossy()])
+            .unwrap();
+        let db = org.db.clone();
+        let probes = std::cell::Cell::new(0);
+        // A slow or offline folder must not hold the database: while a file
+        // is looked up, another connection can still start a write.
+        let exists = |p: &Path| {
+            let other = Connection::open(&db).unwrap();
+            other.busy_timeout(std::time::Duration::ZERO).unwrap();
+            other.execute_batch("BEGIN IMMEDIATE; ROLLBACK;").expect("write lock free during file lookup");
+            probes.set(probes.get() + 1);
+            p.is_file()
+        };
+        let r = put_wiki_article_with(&dir, &org, "2", "Run", "See [[RELEASING.md]] and [[gone.md]].", &exists)
+            .unwrap();
+        assert!(probes.get() >= 2);
+        assert_eq!(r.unresolved_links, vec!["gone.md".to_string()]);
+        let html: String = one(&conn, &format!("SELECT content FROM wiki_articles WHERE id = {}", r.id));
+        assert!(html.contains(r#"<a href="/wiki?file=2:RELEASING.md">RELEASING.md</a>"#), "{html}");
+    }
+
+    #[test]
+    fn oversized_text_refused() {
+        let (dir, org, conn) = fixture();
+        let big = "x".repeat(MAX_TEXT + 1);
+        assert_eq!(
+            put_wiki_article(&dir, &org, "1", "Notes", &big).unwrap_err(),
+            "Content too long (over 1 MB)."
+        );
+        assert_eq!(
+            create_task(&dir, &org, "1", &big, None, None, None).unwrap_err(),
+            "Title too long (over 1 MB)."
+        );
+        assert_eq!(
+            create_task(&dir, &org, "1", "ok", None, None, Some(&big)).unwrap_err(),
+            "Notes too long (over 1 MB)."
+        );
+        let notes = ProjectChanges { notes: Some(big.clone()), ..Default::default() };
+        assert!(update_project(&dir, &org, "1", &notes).is_err());
+        assert!(add_decision(&dir, &org, "1", "2026-10-01", &big).is_err());
+        let n: i64 = one(&conn, "SELECT COUNT(*) FROM wiki_articles");
+        assert_eq!(n, 0);
+        // Just under the cap is fine.
+        put_wiki_article(&dir, &org, "1", "Notes", &"x".repeat(MAX_TEXT)).unwrap();
+    }
+
+    #[test]
+    fn folder_must_be_an_existing_folder_in_the_allowed_places() {
+        let (dir, org, conn) = fixture();
+        let bundle = dir.join("Tool.app").join("Contents");
+        std::fs::create_dir_all(&bundle).unwrap();
+        std::fs::write(dir.join("file.txt"), "x").unwrap();
+        let missing = dir.join("nowhere");
+        let refused = [
+            ("/Users".to_string(), FOLDER_OUTSIDE),
+            ("/".to_string(), FOLDER_OUTSIDE),
+            (std::env::temp_dir().to_string_lossy().into_owned(), FOLDER_OUTSIDE),
+            (missing.to_string_lossy().into_owned(), FOLDER_MISSING),
+            (dir.join("file.txt").to_string_lossy().into_owned(), FOLDER_MISSING),
+            (dir.join("Tool.app").to_string_lossy().into_owned(), FOLDER_BUNDLE),
+            (bundle.to_string_lossy().into_owned(), FOLDER_BUNDLE),
+        ];
+        for (path, err) in &refused {
+            assert_eq!(link_folder(&dir, &org, "1", path).unwrap_err(), *err, "{path}");
+            let change = ProjectChanges { folder_path: Some(path.clone()), ..Default::default() };
+            assert_eq!(update_project(&dir, &org, "1", &change).unwrap_err(), *err, "{path}");
+        }
+        let fp: Option<String> = one(&conn, "SELECT folder_path FROM projects WHERE id = 1");
+        assert_eq!(fp, None);
     }
 
     // ── Tools ────────────────────────────────────────────────

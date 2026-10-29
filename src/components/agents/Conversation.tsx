@@ -5,6 +5,7 @@ import { ChevronRight } from "lucide-react";
 import { conversation, type Item } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
 import { EmptyState, ICONS, ICON_SIZE } from "../ui";
+import { ExternalLink } from "./ExternalLink";
 
 const REFRESH_MS = 3000;
 
@@ -66,7 +67,7 @@ export function Conversation({ sessionId, working }: ConversationProps) {
           </div>
         ) : g.item.kind === "assistant" ? (
           <div key={i} className="agent-markdown text-sm leading-relaxed break-words">
-            <Markdown remarkPlugins={[remarkGfm]}>{g.item.text}</Markdown>
+            <Markdown remarkPlugins={[remarkGfm]} components={{ a: ExternalLink }}>{g.item.text}</Markdown>
           </div>
         ) : null,
       )}

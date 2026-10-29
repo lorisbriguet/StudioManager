@@ -60,3 +60,10 @@ sha2 = "0.10"
 [dev-dependencies]
 # Self-signed certificates for the pinning verifier's tests (no network).
 rcgen = "0.13"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Menu bar panel as a non-activating NSPanel: opening it doesn't activate the app
+# or bring the main window forward. Pinned to the v2.1.1 release commit of the
+# v2.1 branch (the Tauri 2 line; same code as crates.io 2.1.1), never a branch.
+# It turns on tauri's `macos-private-api` feature (no Mac App Store build here).
+tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", rev = "ef6e3090a6083c653955ca0b6e7f6c6ae1453d40" }

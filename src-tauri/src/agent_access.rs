@@ -1,11 +1,11 @@
 //! Agent access, app side: the settings file the MCP server reads
 //! (`agent-access.json`), its change log (`agent-log.jsonl`), installing the
-//! server into Claude Desktop, and a `PRAGMA data_version` poller that emits
-//! `db-changed` when another process (the agent) writes to the active
-//! database.
+//! server into Claude Desktop, and a poller that emits `db-changed` when the
+//! agent wrote: the server appends a log line for every write it commits, so
+//! the log's size and modification time move with agent writes and never
+//! with the app's own (`PRAGMA data_version` moved on both, and every edit
+//! in the app refetched every query).
 
-use crate::ActiveOrgState;
-use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -247,13 +247,13 @@ pub fn generic_config(name: &str, mcp_path: &str) -> String {
 }
 
 /// A change since the last read; the first read only records the value.
-pub fn changed(prev: Option<i64>, now: i64) -> bool {
+pub fn changed<T: PartialEq>(prev: Option<T>, now: T) -> bool {
     matches!(prev, Some(p) if p != now)
 }
 
-/// Emit when the value moved, or once after reconnecting following an error
-/// (changes made while the database was unreadable would otherwise be missed).
-pub fn should_emit(prev: Option<i64>, now: i64, resync: bool) -> bool {
+/// Emit when the value moved, or once after a read error (changes made
+/// while the log was unreadable would otherwise be missed).
+pub fn should_emit<T: PartialEq>(prev: Option<T>, now: T, resync: bool) -> bool {
     resync || changed(prev, now)
 }
 
@@ -366,11 +366,14 @@ pub fn recent_agent_changes(app: tauri::AppHandle, limit: u32) -> Result<Vec<Log
 
 const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 
+/// The change log's size and modification time; `None` while there is no
+/// log yet (the first agent write creates it, which counts as a change).
+type LogStamp = Option<(u64, std::time::SystemTime)>;
+
 #[derive(Default)]
 struct PollState {
     path: Option<PathBuf>,
-    conn: Option<Connection>,
-    prev: Option<i64>,
+    prev: Option<LogStamp>,
     /// Set after a read error; the next good read emits once.
     resync: bool,
     last_error: Option<String>,
@@ -401,9 +404,9 @@ pub enum Trigger {
     Focus,
 }
 
-/// One poll: read `data_version` on the active database and emit
-/// `db-changed` when it moved and the main window is visible. A change seen
-/// while hidden is kept pending until the window shows. Never panics.
+/// One poll: look at the change log and emit `db-changed` when it moved and
+/// the main window is visible. A change seen while hidden is kept pending
+/// until the window shows. Never panics.
 ///
 /// Locking: no lock is ever held across a window call or `emit` (those can
 /// wait on the main thread). The focus path runs on the main thread, so it
@@ -414,20 +417,10 @@ pub fn check_for_changes(app: &tauri::AppHandle, trigger: Trigger) {
     let Some(poller) = app.try_state::<ChangePoller>() else {
         return;
     };
-    let Some(org_state) = app.try_state::<ActiveOrgState>() else {
+    let Ok(dir) = crate::app_data_dir(app) else {
         return;
     };
-    let path = {
-        let org = if focus {
-            org_state.0.try_lock().ok()
-        } else {
-            org_state.0.lock().ok()
-        };
-        match org {
-            Some(org) => org.db_path(),
-            None => return,
-        }
-    };
+    let path = dir.join(LOG_FILE);
 
     // Phase 1, under the state lock: read the value and decide.
     let now = {
@@ -437,7 +430,7 @@ pub fn check_for_changes(app: &tauri::AppHandle, trigger: Trigger) {
             poller.0.lock().ok()
         };
         let Some(mut state) = state else { return };
-        let Some(now) = read_version(&mut state, &path) else {
+        let Some(now) = read_stamp(&mut state, &path) else {
             return;
         };
         if !should_emit(state.prev, now, state.resync) {
@@ -475,10 +468,9 @@ pub fn check_for_changes(app: &tauri::AppHandle, trigger: Trigger) {
     }
 }
 
-/// Read `PRAGMA data_version` through the long-lived read-only connection,
-/// (re)opening it when the active path changed or after an error. `None` on
-/// error (logged once per distinct message; the next good read resyncs).
-fn read_version(state: &mut PollState, path: &Path) -> Option<i64> {
+/// Stat the change log. `None` on error (logged once per distinct message;
+/// the next good read resyncs).
+fn read_stamp(state: &mut PollState, path: &Path) -> Option<LogStamp> {
     if state.path.as_deref() != Some(path) {
         *state = PollState {
             path: Some(path.to_path_buf()),
@@ -487,26 +479,20 @@ fn read_version(state: &mut PollState, path: &Path) -> Option<i64> {
             ..Default::default()
         };
     }
-    let read = (|| -> Result<i64, String> {
-        if state.conn.is_none() {
-            let conn = Connection::open_with_flags(
-                path,
-                OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-            )
-            .map_err(|e| format!("open {}: {e}", path.display()))?;
-            state.conn = Some(conn);
-        }
-        let conn = state.conn.as_ref().ok_or("no connection")?;
-        conn.query_row("PRAGMA data_version", [], |r| r.get::<_, i64>(0))
-            .map_err(|e| format!("data_version: {e}"))
-    })();
+    let read = match std::fs::metadata(path) {
+        Ok(meta) => meta
+            .modified()
+            .map(|at| Some((meta.len(), at)))
+            .map_err(|e| format!("{}: {e}", path.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("{}: {e}", path.display())),
+    };
     match read {
-        Ok(v) => {
+        Ok(stamp) => {
             state.last_error = None;
-            Some(v)
+            Some(stamp)
         }
         Err(e) => {
-            state.conn = None;
             state.prev = None;
             state.resync = true;
             if state.last_error.as_deref() != Some(e.as_str()) {
@@ -668,6 +654,59 @@ mod tests {
                 "claude_desktop_config.json.studiomanager-backup-20261027-120000-3",
             ]
         );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn app_commits_are_not_agent_changes() {
+        use std::io::Write;
+        let dir = tmp_dir("poll");
+        let db = dir.join("org.db");
+        let log = dir.join(LOG_FILE);
+        let app_conn = rusqlite::Connection::open(&db).unwrap();
+        app_conn
+            .execute_batch("CREATE TABLE t (x INTEGER); INSERT INTO t VALUES (1);")
+            .unwrap();
+        let mut state = PollState::default();
+        let first = read_stamp(&mut state, &log).unwrap();
+        assert_eq!(first, None, "no log yet");
+        // The app's own connection commits, as does a second in-process
+        // connection: neither is an agent write.
+        app_conn.execute("INSERT INTO t VALUES (2)", []).unwrap();
+        let other = rusqlite::Connection::open(&db).unwrap();
+        other.execute("INSERT INTO t VALUES (3)", []).unwrap();
+        let now = read_stamp(&mut state, &log).unwrap();
+        assert!(!should_emit(Some(first), now, state.resync));
+        // The server commits, then appends its log line.
+        other.execute("INSERT INTO t VALUES (4)", []).unwrap();
+        let line = r#"{"at":"2026-10-29T10:00:00Z","org":"aaa111","tool":"create_task","summary":"x"}"#;
+        let append = || {
+            let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&log).unwrap();
+            writeln!(f, "{line}").unwrap();
+        };
+        append();
+        let created = read_stamp(&mut state, &log).unwrap();
+        assert!(should_emit(Some(now), created, state.resync), "the first agent write creates the log");
+        append();
+        let next = read_stamp(&mut state, &log).unwrap();
+        assert!(should_emit(Some(created), next, state.resync));
+        assert!(!should_emit(Some(next), read_stamp(&mut state, &log).unwrap(), state.resync));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn unreadable_log_resyncs_once() {
+        let dir = tmp_dir("poll-err");
+        // A folder where the log should be: metadata works, but make the
+        // path itself unreachable through a file used as a directory.
+        std::fs::write(dir.join("file"), "x").unwrap();
+        let bad = dir.join("file").join(LOG_FILE);
+        let mut state = PollState::default();
+        assert!(read_stamp(&mut state, &bad).is_none());
+        assert!(state.resync);
+        let good = dir.join(LOG_FILE);
+        let stamp = read_stamp(&mut state, &good).unwrap();
+        assert!(should_emit(None, stamp, state.resync), "emits once after the error");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

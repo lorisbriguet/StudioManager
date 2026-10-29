@@ -185,7 +185,7 @@ Three-lens audit (correctness/data, security/platform, UI/a11y/perf/tests) after
 - [ ] `pragma_table_info('${table}')` interpolation in `db/index.ts` + `lib/backup.ts` — currently allowlisted/hardcoded (not exploitable), escape or validate as defense-in-depth
 - [ ] Perf: memoize row components + `getTagColor`/`statusClasses` in Invoices/Expenses/NamedTable; consider lazy-loading Settings/Finances routes
 - [ ] Unify receipt-filename sanitization with backup's stronger `safeName()` (shared `lib/pathSafety.ts`)
-- [ ] CSP `connect-src https://github.com` breadth — verify the in-app update check's fetch path before narrowing (naive pinning can break updates)
+- [x] CSP `connect-src https://github.com` breadth — removed (2026-10-29): the update check runs in Rust, the frontend never fetched github.com
 - [ ] Invoice PDF recomputes discount from `subtotal * discount_rate` at render — consider storing `discount_amount`
 
 ## Audit — round 4, exhaustive (2026-08-31)

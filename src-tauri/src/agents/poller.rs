@@ -190,12 +190,18 @@ fn label_and_quiet(
         a.project = index.label_for(&a.cwd);
     }
     let claude_dir = home_dir().join(".claude");
-    let mtime = |a: &Agent| locate(&claude_dir, &a.session_id).and_then(|p| last_change_ms(&p));
-    let read = |a: &Agent| locate(&claude_dir, &a.session_id).and_then(|p| last_model(&p));
+    // One transcript lookup per agent per pass.
+    let paths: HashMap<String, Option<std::path::PathBuf>> = agents
+        .iter()
+        .map(|a| (a.session_id.clone(), locate(&claude_dir, &a.session_id)))
+        .collect();
+    let path = |a: &Agent| paths.get(&a.session_id).cloned().flatten();
+    let mtime = |a: &Agent| path(a).and_then(|p| last_change_ms(&p));
+    let read = |a: &Agent| path(a).and_then(|p| last_model(&p));
     fill_models(agents, models, &mtime, &read);
     let copies = read_state(app_dir).copies;
-    settle_copies(agents, &copies, &|a| locate(&claude_dir, &a.session_id).is_some());
-    let last = |a: &Agent| locate(&claude_dir, &a.session_id).and_then(|p| last_change_ms(&p));
+    settle_copies(agents, &copies, &|a| path(a).is_some());
+    let last = |a: &Agent| path(a).and_then(|p| last_change_ms(&p));
     quiet_pass(agents, app_dir, now_ms(), &last);
 }
 
