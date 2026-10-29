@@ -16,7 +16,7 @@ vi.mock("../db/queries/connections", () => ({
   getConnection: (id: number) => Promise.resolve({ id, kind: "synology" }),
 }));
 vi.mock("../lib/upkeep/connections", () => ({
-  testConnection: (c: unknown) => testConnection(c),
+  testConnection: (c: unknown, opts?: unknown) => testConnection(c, opts),
   saveConnectionSecret: (id: number, s: string) => saveConnectionSecret(id, s),
 }));
 vi.mock("../hooks/useUnsavedChangesWarning", () => ({ useUnsavedChangesWarning: () => {} }));
@@ -25,6 +25,9 @@ import { SynologyForm } from "../components/upkeep/SynologyForm";
 
 const t = uiLabels.EN;
 const FP = "ab".repeat(32);
+/** The secret the form stores: the password bound to the NAS it is for. */
+const blob = (password: string, cert: string | null, otp?: string, host = "nas.local", port = 5001) =>
+  JSON.stringify({ password, host, port, cert_fingerprint: cert, ...(otp ? { otp_code: otp } : {}) });
 
 function fill() {
   fireEvent.change(screen.getByLabelText(/^NAS address/), { target: { value: "https://nas.local:5001/" } });
@@ -58,7 +61,7 @@ describe("SynologyForm", () => {
     const { data, secret } = create.mock.calls[0][0];
     expect(data).toMatchObject({ kind: "synology", host: "nas.local", port: 5001, account: "studio" });
     expect(JSON.stringify(data)).not.toContain("pw");
-    expect(JSON.parse(secret)).toEqual({ password: "pw" });
+    expect(secret).toBe(blob("pw", null));
   });
 
   it("shows an untrusted certificate and pins it on confirm", async () => {
@@ -67,9 +70,12 @@ describe("SynologyForm", () => {
     render(<SynologyForm onDone={onDone} onCancel={vi.fn()} />);
     fill();
     expect(await screen.findByText(/^AB:AB:AB/)).toBeInTheDocument();
+    // Where to compare it, before trusting.
+    expect(screen.getByText(t.upkeep_syno_cert_compare)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_syno_cert_trust }));
     await waitFor(() => expect(onDone).toHaveBeenCalled());
-    expect(update).toHaveBeenCalledWith({ id: 7, data: { cert_fingerprint: FP } });
+    // The pin goes into the row and, with the password, into the secret.
+    expect(update).toHaveBeenCalledWith({ id: 7, data: { cert_fingerprint: FP }, secret: blob("pw", FP) });
   });
 
   it("asks for the 2-step code and retries with it", async () => {
@@ -81,7 +87,7 @@ describe("SynologyForm", () => {
     fireEvent.change(code, { target: { value: "123 456" } });
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_syno_connect }));
     await waitFor(() => expect(onDone).toHaveBeenCalled());
-    expect(saveConnectionSecret).toHaveBeenCalledWith(7, JSON.stringify({ password: "pw", otp_code: "123456" }));
+    expect(saveConnectionSecret).toHaveBeenCalledWith(7, blob("pw", null, "123456"));
   });
 
   it("a retry keeps the stored secret (and its device token) when the password didn't change", async () => {
@@ -110,19 +116,71 @@ describe("SynologyForm", () => {
       last_error: "otp_required", failing_since: null, failing_notified: 0, created_at: "", updated_at: "",
     };
 
-    it("re-pins a changed certificate on the same connection, keeping the stored password", async () => {
-      testConnection.mockRejectedValueOnce(`untrusted_cert:${FP}`).mockResolvedValueOnce([]);
+    const OLD = "cd".repeat(32);
+
+    it("shows the certificate again, and an unchanged one is confirmed without the password", async () => {
+      testConnection.mockRejectedValueOnce(`untrusted_cert:${OLD}`).mockResolvedValueOnce([]);
       const onDone = vi.fn();
       const { unmount } = render(<SynologyForm connection={existing} onDone={onDone} onCancel={vi.fn()} />);
       expect(screen.getByDisplayValue("nas.local")).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: t.upkeep_syno_connect }));
-      fireEvent.click(await screen.findByRole("button", { name: t.upkeep_syno_cert_trust }));
+      expect(await screen.findByText(t.upkeep_syno_cert_same)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: t.upkeep_syno_cert_trust }));
       await waitFor(() => expect(onDone).toHaveBeenCalled());
+      // First test sets the old pin aside; the second uses it.
+      expect(testConnection.mock.calls.map((c) => c[1])).toEqual([{ recheckCert: true }, { recheckCert: false }]);
       expect(create).not.toHaveBeenCalled();
+      expect(update).toHaveBeenCalledTimes(1);
       expect(update.mock.calls[0][0]).toMatchObject({ id: 4, secret: undefined });
-      expect(update).toHaveBeenCalledWith({ id: 4, data: { cert_fingerprint: FP } });
       unmount();
       expect(remove).not.toHaveBeenCalled();
+    });
+
+    it("a changed certificate is flagged and needs the password to be trusted", async () => {
+      testConnection.mockRejectedValueOnce(`untrusted_cert:${FP}`).mockResolvedValueOnce([]);
+      const onDone = vi.fn();
+      render(<SynologyForm connection={existing} onDone={onDone} onCancel={vi.fn()} />);
+      fireEvent.click(screen.getByRole("button", { name: t.upkeep_syno_connect }));
+      expect(await screen.findByText(t.upkeep_syno_cert_changed)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: t.upkeep_syno_cert_trust }));
+      expect(screen.getByText(t.upkeep_syno_reenter_password)).toBeInTheDocument();
+      expect(update).toHaveBeenCalledTimes(1);
+      fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: "pw2" } });
+      fireEvent.click(screen.getByRole("button", { name: t.upkeep_syno_cert_trust }));
+      await waitFor(() => expect(onDone).toHaveBeenCalled());
+      expect(update).toHaveBeenLastCalledWith({ id: 4, data: { cert_fingerprint: FP }, secret: blob("pw2", FP) });
+    });
+
+    it("a new address needs the password again", () => {
+      render(<SynologyForm connection={existing} onDone={vi.fn()} onCancel={vi.fn()} />);
+      fireEvent.change(screen.getByLabelText(/^NAS address/), { target: { value: "other.local" } });
+      fireEvent.click(screen.getByRole("button", { name: t.upkeep_syno_connect }));
+      expect(screen.getByText(t.upkeep_syno_reenter_password)).toBeInTheDocument();
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it("asks for the password again when Rust refuses to send the stored one", async () => {
+      testConnection.mockRejectedValueOnce("reenter_password").mockResolvedValueOnce([]);
+      const onDone = vi.fn();
+      render(<SynologyForm connection={existing} onDone={onDone} onCancel={vi.fn()} />);
+      fireEvent.click(screen.getByRole("button", { name: t.upkeep_syno_connect }));
+      expect(await screen.findByText(t.upkeep_syno_reenter_password)).toBeInTheDocument();
+      // An empty password no longer means "keep the stored one".
+      fireEvent.click(screen.getByRole("button", { name: t.upkeep_syno_connect }));
+      expect(update).toHaveBeenCalledTimes(1);
+      fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: "pw2" } });
+      fireEvent.click(screen.getByRole("button", { name: t.upkeep_syno_connect }));
+      await waitFor(() => expect(onDone).toHaveBeenCalled());
+      expect(update.mock.calls[1][0].secret).toBe(blob("pw2", OLD));
+    });
+
+    it("opened on a 'type the password again' error, the password is required", () => {
+      render(
+        <SynologyForm connection={{ ...existing, last_error: "reenter_password" }} onDone={vi.fn()} onCancel={vi.fn()} />
+      );
+      fireEvent.click(screen.getByRole("button", { name: t.upkeep_syno_connect }));
+      expect(screen.getByText(t.upkeep_syno_reenter_password)).toBeInTheDocument();
+      expect(update).not.toHaveBeenCalled();
     });
 
     it("asks for the code, and the password when none was typed", async () => {
@@ -134,7 +192,7 @@ describe("SynologyForm", () => {
       fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: "pw2" } });
       fireEvent.click(screen.getByRole("button", { name: t.upkeep_syno_connect }));
       await waitFor(() => expect(onDone).toHaveBeenCalled());
-      expect(saveConnectionSecret).toHaveBeenCalledWith(4, JSON.stringify({ password: "pw2", otp_code: "222333" }));
+      expect(saveConnectionSecret).toHaveBeenCalledWith(4, blob("pw2", OLD, "222333"));
     });
 
     it("closing it never removes the connection", () => {
@@ -142,6 +200,14 @@ describe("SynologyForm", () => {
       unmount();
       expect(remove).not.toHaveBeenCalled();
     });
+  });
+
+  it("refuses a port outside 1 to 65535", () => {
+    render(<SynologyForm onDone={vi.fn()} onCancel={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText(/^HTTPS port/), { target: { value: "70000" } });
+    expect(screen.getByText(t.upkeep_syno_port_invalid)).toBeInTheDocument();
+    fill();
+    expect(create).not.toHaveBeenCalled();
   });
 
   it("removes the half-made connection when closed before it works", async () => {

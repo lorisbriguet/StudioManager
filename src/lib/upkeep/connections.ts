@@ -30,7 +30,12 @@ export const SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 const DEFAULT_METRIC = "print_hours";
 
-/** What Rust gets to reach the device. Never the secret: Rust reads it from the Keychain. */
+/**
+ * What Rust gets to reach the device. Never the secret: Rust reads it from the
+ * Keychain. These come from the (backed-up, editable) SQLite row, so Rust
+ * sends a Synology password only when host, port and pin match the ones
+ * stored with it (`reenter_password` otherwise).
+ */
 export function connectionConfig(c: Connection): Record<string, unknown> {
   return {
     host: c.host,
@@ -51,11 +56,12 @@ type ErrorLabels = {
   upkeep_err_bambu_password: string;
   upkeep_err_bambu_tfa: string;
   upkeep_err_bambu_history: string;
+  upkeep_err_syno_reenter: string;
 };
 
 /**
  * A connector error as the user reads it: the codes that need the user
- * (`untrusted_cert:…`, `otp_required`, `otp_invalid`, Bambu's `code_required`,
+ * (`untrusted_cert:…`, `otp_required`, `otp_invalid`, `reenter_password`, Bambu's `code_required`,
  * `code_invalid`, `token_expired`, `password_invalid`, `tfa_unsupported`,
  * `history_too_long`) become a translated pointer to Reconnect;
  * other (already redacted) messages pass through.
@@ -70,6 +76,7 @@ export function connectionErrorText(e: unknown, t: ErrorLabels): string {
   const r = parseSynologyError(e);
   if (r.kind === "cert") return t.upkeep_err_untrusted_cert;
   if (r.kind === "otp") return t.upkeep_err_otp;
+  if (r.kind === "password") return t.upkeep_err_syno_reenter;
   return r.message;
 }
 
@@ -90,10 +97,15 @@ export async function saveConnectionSecret(id: number, secret: string): Promise<
   await invoke("connection_save_secret", { org, id, secret });
 }
 
-/** Devices the connection can see, for linking a machine. Errors come back redacted. */
-export async function testConnection(c: Connection): Promise<DeviceInfo[]> {
+/**
+ * Devices the connection can see, for linking a machine. Errors come back
+ * redacted. `recheckCert` (Reconnect): the pinned certificate is set aside for
+ * this call, so the one the NAS shows now is reported and confirmed again.
+ */
+export async function testConnection(c: Connection, opts: { recheckCert?: boolean } = {}): Promise<DeviceInfo[]> {
   const org = useOrgStore.getState().activeId;
-  return invoke<DeviceInfo[]>("connection_test", { org, id: c.id, kind: c.kind, config: connectionConfig(c) });
+  const config = opts.recheckCert ? { ...connectionConfig(c), recheck_cert: true } : connectionConfig(c);
+  return invoke<DeviceInfo[]>("connection_test", { org, id: c.id, kind: c.kind, config });
 }
 
 /** Local `YYYY-MM-DD HH:MM:SS`: sorts as text and starts with the local date. */

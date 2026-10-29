@@ -78,13 +78,13 @@ export function useConnectionSetup(connection: Connection | undefined, onDone: (
    * `onError`. When the connector never ran (the connection is gone, the app
    * refused the call, the test threw first), a one-time secret is wiped.
    */
-  const test = async (id: number, onError: (e: unknown) => void) => {
+  const test = async (id: number, onError: (e: unknown) => void, opts: { recheckCert?: boolean } = {}) => {
     let ran = false;
     try {
       const conn = await getConnection(id);
       if (!conn) return;
       try {
-        const devices = await testConnection(conn);
+        const devices = await testConnection(conn, opts);
         ran = true;
         doneRef.current = true;
         notify.success(t.upkeep_connection_test_ok.replace("{count}", String(devices.length)));

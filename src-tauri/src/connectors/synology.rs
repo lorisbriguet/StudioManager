@@ -11,18 +11,28 @@
 //! - `untrusted_cert:<sha256 hex>`: the system doesn't trust the NAS certificate;
 //! - `otp_required`: the account has 2-step verification and no code (or the
 //!   remembered device token was refused);
-//! - `otp_invalid`: the code was wrong.
+//! - `otp_invalid`: the code was wrong;
+//! - `reenter_password`: the connection's address or certificate pin is not the
+//!   one the password was saved for (see below). Nothing was sent.
 //!
-//! Secret (Keychain): JSON `{password, device_token?, otp_code?}`. The form
-//! puts a one-time code there for one login; the connector then hands back the
-//! secret without it and with DSM's device token, so the code isn't asked again.
+//! Secret (Keychain): JSON `{password, host, port, cert_fingerprint?,
+//! device_token?, otp_code?}`. The form puts a one-time code there for one
+//! login; the connector then hands back the secret without it and with DSM's
+//! device token, so the code isn't asked again.
+//!
+//! `host`, `port` and `cert_fingerprint` bind the password to the NAS it was
+//! typed for. The connection row (SQLite: backed up, restorable, editable)
+//! says where to connect; when it names another host or port, or a pin the
+//! secret doesn't hold, the password is not sent and the user is asked to type
+//! it again (Reconnect). A row without a pin is accepted with a pinned secret:
+//! the request then trusts only what the system trusts, which is stricter.
 
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
-use super::tls::SeenCert;
+use super::tls::{normalize_fingerprint, SeenCert};
 use super::{describe, percent_encode, read_limited, Connector, MAX_RESPONSE_BYTES, DeviceInfo, DeviceList, DeviceReading, DiskReading, SyncResult};
 
 /// One HTTP round trip to `https://<nas>/webapi/<path>`: form body in, JSON out.
@@ -220,6 +230,54 @@ pub(crate) struct Secret {
     pub device_token: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub otp_code: Option<String>,
+    /// The NAS the password was saved for (see the module doc). `None` only
+    /// in a secret saved before the binding existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub port: Option<u16>,
+    /// The certificate pin the password was saved with; `None`: system trust.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cert_fingerprint: Option<String>,
+}
+
+/// Error when the connection row and the secret's binding differ.
+pub(crate) const REENTER_PASSWORD: &str = "reenter_password";
+
+const DEFAULT_PORT: u16 = 5001;
+
+fn same_host(a: &str, b: &str) -> bool {
+    let norm = |h: &str| h.trim().trim_start_matches('[').trim_end_matches(']').to_ascii_lowercase();
+    norm(a) == norm(b)
+}
+
+/// May the password of `secret` go to `host:port` with certificate `pin`?
+/// `Ok(None)`: yes. `Ok(Some(adopted))`: a legacy secret (no `host`), bound
+/// now to the row's values and to be written back. `Err(reenter_password)`:
+/// no, nothing may be sent.
+///
+/// Legacy secrets: a secret saved before the binding existed holds no host.
+/// It adopts the row's current host, port and pin once, so existing
+/// connections keep syncing without asking every user for the password again.
+/// The trade-off: a row tampered with *before* this first adoption is trusted.
+/// Any change after it needs the password.
+pub(crate) fn check_binding(secret: &Secret, host: &str, port: u16, pin: Option<&str>) -> Result<Option<Secret>, String> {
+    let pin = pin.and_then(normalize_fingerprint);
+    let Some(bound_host) = secret.host.as_deref() else {
+        return Ok(Some(Secret {
+            host: Some(host.trim().to_string()),
+            port: Some(port),
+            cert_fingerprint: pin,
+            ..secret.clone()
+        }));
+    };
+    let bound_pin = secret.cert_fingerprint.as_deref().and_then(normalize_fingerprint);
+    let pin_ok = pin.is_none() || pin == bound_pin;
+    if same_host(bound_host, host) && secret.port.unwrap_or(DEFAULT_PORT) == port && pin_ok {
+        Ok(None)
+    } else {
+        Err(REENTER_PASSWORD.into())
+    }
 }
 
 impl Secret {
@@ -312,9 +370,9 @@ impl Synology {
         let token = text(&data, "device_id").or_else(|| text(&data, "did"));
         if spent_code || (token.is_some() && token != self.secret.device_token) {
             self.keep(Secret {
-                password: self.secret.password.clone(),
                 device_token: token.or_else(|| self.secret.device_token.clone()),
                 otp_code: None,
+                ..self.secret.clone()
             });
         }
         let sid = text(&data, "sid").ok_or("DSM signed in without a session id")?;
@@ -417,13 +475,19 @@ impl Transport for Https {
 #[derive(Deserialize)]
 struct Config {
     host: String,
-    port: Option<u16>,
+    /// Wider than `u16` so 70000 is "invalid port", not "needs an address".
+    port: Option<i64>,
     account: String,
     cert_fingerprint: Option<String>,
+    /// Reconnect: ignore the pin for this call, so the certificate the NAS
+    /// shows now is reported (`untrusted_cert:…`) and confirmed again.
+    #[serde(default)]
+    recheck_cert: bool,
 }
 
-/// Build from the connection config `{host, port, account, cert_fingerprint?}`
-/// and the Keychain secret. Makes no request.
+/// Build from the connection config `{host, port, account, cert_fingerprint?,
+/// recheck_cert?}` and the Keychain secret. Makes no request; refuses
+/// (`reenter_password`) when the config isn't the NAS the secret is bound to.
 pub(crate) fn build(config: &JsonValue, secret: Option<String>) -> Result<Box<dyn Connector>, String> {
     let cfg: Config = serde_json::from_value(config.clone())
         .map_err(|_| "the Synology connection needs an address and an account".to_string())?;
@@ -435,8 +499,20 @@ pub(crate) fn build(config: &JsonValue, secret: Option<String>) -> Result<Box<dy
     if account.is_empty() {
         return Err("the Synology connection needs an account".into());
     }
-    let secret = Secret::parse(secret.as_deref().unwrap_or(""))?;
-    let (builder, seen) = super::tls::pinned_http_client(cfg.cert_fingerprint.as_deref())?;
+    let port = match cfg.port {
+        None => DEFAULT_PORT,
+        Some(p) => u16::try_from(p)
+            .ok()
+            .filter(|p| *p > 0)
+            .ok_or("invalid NAS port: use a number from 1 to 65535")?,
+    };
+    let mut secret = Secret::parse(secret.as_deref().unwrap_or(""))?;
+    let adopted = check_binding(&secret, host, port, cfg.cert_fingerprint.as_deref())?;
+    if let Some(a) = &adopted {
+        secret = a.clone();
+    }
+    let pin = if cfg.recheck_cert { None } else { cfg.cert_fingerprint.as_deref() };
+    let (builder, seen) = super::tls::pinned_http_client(pin)?;
     let client = builder
         .timeout(std::time::Duration::from_secs(30))
         .connect_timeout(std::time::Duration::from_secs(10))
@@ -444,8 +520,13 @@ pub(crate) fn build(config: &JsonValue, secret: Option<String>) -> Result<Box<dy
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|e| format!("HTTP setup failed: {}", describe(e)))?;
-    let transport = Https { client, base: base_url(host, cfg.port.unwrap_or(5001)), seen };
-    Ok(Box::new(Synology::new(account.to_string(), secret, Box::new(transport))))
+    let transport = Https { client, base: base_url(host, port), seen };
+    let nas = Synology::new(account.to_string(), secret, Box::new(transport));
+    if let Some(a) = adopted {
+        // Written back by `with_connector` (only if the secret is unchanged).
+        nas.keep(a);
+    }
+    Ok(Box::new(nas))
 }
 
 #[cfg(test)]
@@ -633,7 +714,12 @@ mod tests {
         let stored: Secret = serde_json::from_str(&c.updated_secret().unwrap()).unwrap();
         assert_eq!(
             stored,
-            Secret { password: "pw-1234".into(), device_token: Some("SCRUBBED-DEVICE-TOKEN".into()), otp_code: None }
+            Secret {
+                password: "pw-1234".into(),
+                device_token: Some("SCRUBBED-DEVICE-TOKEN".into()),
+                otp_code: None,
+                ..Default::default()
+            }
         );
     }
 
@@ -684,6 +770,113 @@ mod tests {
         }
         let no_account = serde_json::json!({ "host": "nas.local", "port": 5001, "account": "" });
         assert!(build(&no_account, Some("x".into())).is_err());
+    }
+
+    const FP_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const FP_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    fn bound(host: &str, port: u16, pin: Option<&str>) -> Secret {
+        Secret { host: Some(host.into()), port: Some(port), cert_fingerprint: pin.map(String::from), ..pw() }
+    }
+
+    #[test]
+    fn binding_matches_the_nas_the_password_was_saved_for() {
+        let s = bound("nas.local", 5001, Some(FP_A));
+        assert_eq!(check_binding(&s, "nas.local", 5001, Some(FP_A)), Ok(None));
+        // Case, spaces and fingerprint formatting don't matter.
+        let colons = FP_A.as_bytes().chunks(2).map(|c| std::str::from_utf8(c).unwrap().to_uppercase()).collect::<Vec<_>>().join(":");
+        assert_eq!(check_binding(&s, " NAS.local ", 5001, Some(&colons)), Ok(None));
+        assert_eq!(check_binding(&bound("fe80::1", 5001, None), "[fe80::1]", 5001, None), Ok(None));
+    }
+
+    #[test]
+    fn binding_refuses_another_host_or_port() {
+        let s = bound("nas.local", 5001, Some(FP_A));
+        assert_eq!(check_binding(&s, "evil.example", 5001, Some(FP_A)).unwrap_err(), REENTER_PASSWORD);
+        assert_eq!(check_binding(&s, "nas.local", 5443, Some(FP_A)).unwrap_err(), REENTER_PASSWORD);
+        // A secret without a port was saved for DSM's default.
+        let no_port = Secret { port: None, ..s };
+        assert_eq!(check_binding(&no_port, "nas.local", 5001, Some(FP_A)), Ok(None));
+        assert!(check_binding(&no_port, "nas.local", 5000, Some(FP_A)).is_err());
+    }
+
+    #[test]
+    fn binding_refuses_a_pin_the_secret_does_not_hold() {
+        // A tampered row pins the attacker's certificate.
+        let s = bound("nas.local", 5001, Some(FP_A));
+        assert_eq!(check_binding(&s, "nas.local", 5001, Some(FP_B)).unwrap_err(), REENTER_PASSWORD);
+        // Saved without a pin (system trust): any pin in the row is refused.
+        let unpinned = bound("nas.local", 5001, None);
+        assert_eq!(check_binding(&unpinned, "nas.local", 5001, Some(FP_A)).unwrap_err(), REENTER_PASSWORD);
+        // A row without a pin is fine: the request then trusts only the system store.
+        assert_eq!(check_binding(&s, "nas.local", 5001, None), Ok(None));
+    }
+
+    #[test]
+    fn a_legacy_secret_adopts_the_rows_values_once() {
+        let adopted = check_binding(&pw(), " nas.local ", 5443, Some(FP_A)).unwrap().unwrap();
+        assert_eq!(adopted, bound("nas.local", 5443, Some(FP_A)));
+        // From then on it is bound like any other.
+        assert_eq!(check_binding(&adopted, "nas.local", 5443, Some(FP_A)), Ok(None));
+        assert!(check_binding(&adopted, "evil.example", 5443, Some(FP_A)).is_err());
+        // Adopted through `build`, and written back as the updated secret.
+        let cfg = serde_json::json!({ "host": "nas.local", "port": 5443, "account": "studio", "cert_fingerprint": FP_A });
+        let c = build(&cfg, Some(r#"{"password":"pw-1234","device_token":"tok"}"#.into())).unwrap();
+        let stored: Secret = serde_json::from_str(&c.updated_secret().unwrap()).unwrap();
+        assert_eq!(stored, Secret { device_token: Some("tok".into()), ..bound("nas.local", 5443, Some(FP_A)) });
+    }
+
+    #[test]
+    fn build_refuses_a_row_that_differs_from_the_secret() {
+        let secret = serde_json::to_string(&bound("nas.local", 5001, Some(FP_A))).unwrap();
+        let tampered = serde_json::json!({ "host": "evil.example", "port": 5001, "account": "studio", "cert_fingerprint": FP_B });
+        assert_eq!(build(&tampered, Some(secret.clone())).err().unwrap(), REENTER_PASSWORD);
+        let same = serde_json::json!({ "host": "nas.local", "port": 5001, "account": "studio", "cert_fingerprint": FP_A });
+        let c = build(&same, Some(secret)).unwrap();
+        assert_eq!(c.updated_secret(), None, "a bound secret is not rewritten");
+    }
+
+    #[test]
+    fn the_binding_survives_a_device_token_renewal() {
+        let (c, _) = nas(LOGIN_DEVICE_TOKEN, Secret { otp_code: Some("654321".into()), ..bound("nas.local", 5001, Some(FP_A)) });
+        c.test().unwrap();
+        let stored: Secret = serde_json::from_str(&c.updated_secret().unwrap()).unwrap();
+        assert_eq!(stored.host.as_deref(), Some("nas.local"));
+        assert_eq!(stored.port, Some(5001));
+        assert_eq!(stored.cert_fingerprint.as_deref(), Some(FP_A));
+        assert_eq!(stored.otp_code, None);
+    }
+
+    #[test]
+    fn reconnect_rechecks_the_pinned_certificate() {
+        use super::super::tls::tests::{certified, serve};
+        use super::super::tls::fingerprint;
+        let cert = certified("nas.local");
+        let fp = fingerprint(cert.cert.der());
+        let port = serve(cert);
+        let secret = serde_json::to_string(&bound("127.0.0.1", port, Some(&fp))).unwrap();
+        let cfg = |recheck: bool| {
+            serde_json::json!({
+                "host": "127.0.0.1", "port": port, "account": "studio", "cert_fingerprint": fp, "recheck_cert": recheck,
+            })
+        };
+        // Pinned: the TLS handshake passes (the test server's "ok" isn't DSM JSON).
+        let e = build(&cfg(false), Some(secret.clone())).unwrap().test().unwrap_err();
+        assert!(e.contains("not JSON"), "{e}");
+        // Reconnect: the pin is set aside, so the certificate is shown again.
+        let e = build(&cfg(true), Some(secret)).unwrap().test().unwrap_err();
+        assert_eq!(e, format!("untrusted_cert:{fp}"));
+    }
+
+    #[test]
+    fn build_refuses_a_port_outside_1_to_65535() {
+        for port in [0, 65536, 70000, -1] {
+            let cfg = serde_json::json!({ "host": "nas.local", "port": port, "account": "studio" });
+            let e = build(&cfg, Some("x".into())).err().unwrap();
+            assert!(e.contains("port"), "{port}: {e}");
+        }
+        let cfg = serde_json::json!({ "host": "nas.local", "port": 65535, "account": "studio" });
+        assert!(build(&cfg, Some("x".into())).is_ok());
     }
 
     #[test]

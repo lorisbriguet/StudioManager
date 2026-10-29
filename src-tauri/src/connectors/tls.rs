@@ -266,6 +266,90 @@ pub(crate) mod tests {
         assert_eq!(s.lock().unwrap().clone(), None);
     }
 
+    /// A local HTTPS server presenting `cert`, answering "ok" to every
+    /// request. Returns its port.
+    pub(crate) fn serve(cert: rcgen::CertifiedKey) -> u16 {
+        use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(cert.key_pair.serialize_der()));
+        let config = Arc::new(
+            rustls::ServerConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
+                .with_safe_default_protocol_versions()
+                .unwrap()
+                .with_no_client_auth()
+                .with_single_cert(vec![cert.cert.der().clone()], key)
+                .unwrap(),
+        );
+        std::thread::spawn(move || {
+            for tcp in listener.incoming() {
+                let Ok(tcp) = tcp else { break };
+                let conn = rustls::ServerConnection::new(config.clone()).unwrap();
+                let mut tls = rustls::StreamOwned::new(conn, tcp);
+                let mut req = Vec::new();
+                let mut buf = [0u8; 4096];
+                // A refused handshake ends here with an error: next connection.
+                while let Ok(n @ 1..) = tls.read(&mut buf) {
+                    req.extend_from_slice(&buf[..n]);
+                    if req.windows(4).any(|w| w == b"\r\n\r\n") {
+                        break;
+                    }
+                }
+                if req.is_empty() {
+                    continue;
+                }
+                let _ = tls.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\nconnection: close\r\n\r\nok");
+                tls.conn.send_close_notify();
+                let _ = tls.flush();
+            }
+        });
+        port
+    }
+
+    /// GET the local server through `pinned_http_client(pin)`: the body, or
+    /// the error the Synology connector would report.
+    fn get(port: u16, pin: Option<&str>) -> Result<String, String> {
+        let (builder, seen) = pinned_http_client(pin)?;
+        let client = builder.timeout(std::time::Duration::from_secs(10)).build().map_err(super::super::describe)?;
+        client
+            .get(format!("https://127.0.0.1:{port}/"))
+            .send()
+            .and_then(|r| r.text())
+            .map_err(|e| super::super::synology::transport_error(&seen, super::super::describe(e)))
+    }
+
+    pub(crate) fn certified(name: &str) -> rcgen::CertifiedKey {
+        rcgen::generate_simple_self_signed(vec![name.to_string()]).unwrap()
+    }
+
+    #[test]
+    fn end_to_end_an_unpinned_self_signed_nas_reports_its_fingerprint() {
+        let cert = certified("nas.local");
+        let fp = fingerprint(cert.cert.der());
+        let port = serve(cert);
+        assert_eq!(get(port, None).unwrap_err(), format!("untrusted_cert:{fp}"));
+    }
+
+    #[test]
+    fn end_to_end_the_pinned_certificate_is_accepted() {
+        let cert = certified("nas.local");
+        let fp = fingerprint(cert.cert.der());
+        let port = serve(cert);
+        // The certificate names nas.local and is reached as 127.0.0.1: the pin alone decides.
+        assert_eq!(get(port, Some(&fp)).unwrap(), "ok");
+    }
+
+    #[test]
+    fn end_to_end_another_certificate_is_refused_whatever_the_pin() {
+        let trusted = certified("nas.local");
+        let other = certified("nas.local");
+        let other_fp = fingerprint(other.cert.der());
+        let port = serve(other);
+        let e = get(port, Some(&fingerprint(trusted.cert.der()))).unwrap_err();
+        assert_eq!(e, format!("untrusted_cert:{other_fp}"));
+    }
+
     #[test]
     fn a_malformed_pin_pins_nothing() {
         let cert = self_signed("nas.local");
