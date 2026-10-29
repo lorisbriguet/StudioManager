@@ -38,4 +38,4 @@ The terminal attaches to the agent only. You can use `!` commands inside Claude,
 
 ## Notifications
 
-You get a Mac notification when an agent starts waiting for you. It only works while StudioManager is open.
+You get a Mac notification when an agent has been waiting for you for a few seconds, so a prompt that resolves at once stays silent. Each agent notifies at most once every three minutes, however often it goes back to waiting. It only works while StudioManager is open.
