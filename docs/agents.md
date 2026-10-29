@@ -32,7 +32,11 @@ Starting an agent (or the new agent of a model switch) can take a while: the app
 
 ## New agent
 
-Pick a folder, write the task, choose a model (haiku, sonnet, opus or fable) and optionally give it a name. Only folders you already trusted in Claude are offered, linked project folders first. StudioManager never accepts Claude's trust question for you.
+Pick a folder, write the task, choose a model (haiku, sonnet, opus or fable) and optionally give it a name.
+
+The folder list shows the folders you already trusted in Claude first (linked project folders first), then folders you may want that Claude does not trust yet: your home folder, your linked project folders, and the folders that hold them (where a code folder such as `~/Documents/GitHub` sits). **Choose…** opens any other folder.
+
+Trust follows Claude Code's own rule: a trusted folder covers every folder inside it. Starting an agent in a folder that is not trusted yet asks first ("Trust … for Claude Code?"). On **Trust and start**, StudioManager sets `hasTrustDialogAccepted` for that folder in `~/.claude.json`, the same thing answering Yes to Claude's own question does: it takes Claude's lock (`~/.claude.json.lock`), changes only that flag and keeps the file private. The home folder gets a stronger warning, since trusting it trusts everything in it. Nothing is trusted without that yes.
 
 ## Answer buttons
 

@@ -743,6 +743,7 @@ pub fn run() {
             agents::usage::agents_usage_limits,
             agents::usage::activity::agents_usage_activity,
             agents::projects::agents_start_folders,
+            agents::projects::agents_trust_folder,
             agents::actions::agents_start,
             agents::actions::agents_stop,
             agents::actions::agents_delete,

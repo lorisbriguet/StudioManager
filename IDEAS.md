@@ -89,6 +89,7 @@ All 12 checklist items pass after three fixes found by the pass:
 
 - [x] Shared equipment: an organisation can use another organisation's machines, upkeep and consumables (Settings › Upkeep › Equipment); project links and calendar events stay with the owner ([spec](docs/superpowers/specs/2026-10-28-studio-upkeep-design.md))
 - [x] Wiki dashboard widgets: recently edited articles, article count
+- [x] New agent: any folder, not only trusted ones (home, linked project folders and the folders holding them, **Choose…**); an untrusted folder asks before Claude trusts it ([docs](docs/agents.md#new-agent))
 - [x] Agents: messages you sent show greyed out until they reach the transcript; the working dots stop once the reply has settled; the conversation holds your place when the window slides; the terminal fits the panel (Claude's footer line no longer cut off)
 - [x] Menu bar: one notification badge, rounded panel, no scroll pull-down
 - [x] Popovers open in place and only fade (no jump from the corner)
