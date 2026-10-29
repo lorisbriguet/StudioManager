@@ -264,8 +264,22 @@ fn write_json<T: Serialize>(dir: &Path, file: &str, v: &T) -> Result<(), String>
     write_atomic(&dir.join(file), &format!("{json}\n"))
 }
 
-/// Validates everything, gives new sections and routines (id "") an id, and writes the file.
-pub fn save_routines(dir: &Path, mut all: Routines) -> Result<Routines, String> {
+/// Validates everything, gives new sections and routines (id "") an id, and writes the file
+/// (`routines_save` does the same with a confirmation in between).
+#[cfg(test)]
+pub fn save_routines(dir: &Path, all: Routines) -> Result<Routines, String> {
+    let all = prepare(all)?;
+    write_routines(dir, &all)?;
+    Ok(all)
+}
+
+/// Writes `routines.json` (already through `prepare`).
+pub fn write_routines(dir: &Path, all: &Routines) -> Result<(), String> {
+    write_json(dir, ROUTINES_FILE, all)
+}
+
+/// Validates everything and gives new sections and routines (id "") an id; writes nothing.
+pub fn prepare(mut all: Routines) -> Result<Routines, String> {
     let mut seen = HashSet::new();
     for s in &mut all.sections {
         assign_id(&mut s.id, &mut seen)?;
@@ -285,7 +299,6 @@ pub fn save_routines(dir: &Path, mut all: Routines) -> Result<Routines, String> 
         }
         validate(r).map_err(|e| format!("\"{}\": {e}", r.title))?;
     }
-    write_json(dir, ROUTINES_FILE, &all)?;
     Ok(all)
 }
 
