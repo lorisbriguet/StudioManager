@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAppStore } from "../stores/app-store";
 import { uiLabels } from "../i18n/ui";
 import { useOrgStore } from "../stores/org-store";
@@ -46,6 +47,8 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+const renderCard = () =>
+  render(<QueryClientProvider client={new QueryClient()}><UpkeepSettingsCard /></QueryClientProvider>);
 const wrap = (ui: React.ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>);
 
 describe("UpkeepWidget", () => {
@@ -92,7 +95,7 @@ describe("UpkeepWidget", () => {
 describe("UpkeepSettingsCard", () => {
   it("writes upkeepAlertDefault and re-syncs existing calendar events", () => {
     useAppStore.setState({ upkeepAlertDefault: "day_9am" });
-    render(<UpkeepSettingsCard />);
+    renderCard();
     pickOption(screen.getByLabelText("Calendar alert"), uiLabels.EN.upkeep_alert_week_before);
     expect(useAppStore.getState().upkeepAlertDefault).toBe("week_before");
     expect(syncAll).toHaveBeenCalledTimes(1);
@@ -101,7 +104,7 @@ describe("UpkeepSettingsCard", () => {
 
   it("lets the days field be cleared and retyped", () => {
     useAppStore.setState({ renewalWindowDays: 14 });
-    render(<UpkeepSettingsCard />);
+    renderCard();
     const input = screen.getByLabelText("Renewal window (days)") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "" } });
     expect(input.value).toBe("");
@@ -112,7 +115,7 @@ describe("UpkeepSettingsCard", () => {
   });
 
   it("writes the look-ahead windows", () => {
-    render(<UpkeepSettingsCard />);
+    renderCard();
     fireEvent.change(screen.getByLabelText("Renewal window (days)"), { target: { value: "30" } });
     expect(useAppStore.getState().renewalWindowDays).toBe(30);
   });

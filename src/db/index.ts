@@ -36,7 +36,11 @@ export class TransactionBatch {
    * `expectedOrg`: Rust refuses the batch unless that organisation is still
    * the active one, so a write started before a switch can't land in the next.
    */
-  constructor(private readonly expectedOrg?: string) {}
+  constructor(
+    private readonly expectedOrg?: string,
+    /** Organisation whose database takes the batch (borrowed equipment); absent = the open one. */
+    private readonly targetOrg?: string | null,
+  ) {}
 
   /** Queue a SQL statement. Use $LAST_INSERT_ID to reference the last insert rowid. */
   add(sql: string, params: unknown[] = []): void {
@@ -48,6 +52,7 @@ export class TransactionBatch {
     return invoke<{ lastInsertId: number }>("execute_batch", {
       statements: this.statements,
       expectedOrg: this.expectedOrg,
+      targetOrg: this.targetOrg ?? undefined,
     });
   }
 }
@@ -108,6 +113,42 @@ export function dbUrlFor(name: string): string {
   return id ? `sqlite:orgs/${id}/${name}` : `sqlite:${name}`;
 }
 
+/**
+ * The organisation whose machines and consumables the open one uses, or null
+ * when it keeps its own. Never set in test or presentation mode, which stay
+ * on their own copy.
+ */
+export function equipmentOrgId(): string | null {
+  if (currentDbName !== "studiomanager.db") return null;
+  const org = useOrgStore.getState();
+  const from = org.activePrefs()?.equipmentFrom;
+  if (!from || from === org.activeId) return null;
+  return org.organisations.some((o) => o.id === from) ? from : null;
+}
+
+let equipmentDb: { orgId: string; promise: Promise<Database> } | null = null;
+
+/** Database holding the machines, upkeep and consumables for the open organisation. */
+export async function getEquipmentDb(): Promise<Database> {
+  const orgId = equipmentOrgId();
+  if (!orgId) return getDb();
+  if (equipmentDb?.orgId !== orgId) {
+    equipmentDb = { orgId, promise: Database.load(`sqlite:orgs/${orgId}/studiomanager.db`) };
+    equipmentDb.promise.catch(() => { equipmentDb = null; });
+  }
+  return equipmentDb.promise;
+}
+
+/** Drop the borrowed connection (organisation switch, or the setting changed). */
+export async function closeEquipmentDb(): Promise<void> {
+  const current = equipmentDb;
+  equipmentDb = null;
+  if (!current) return;
+  try {
+    await (await current.promise).close();
+  } catch { /* ignore close errors */ }
+}
+
 export async function getDb(): Promise<Database> {
   if (!dbPromise) {
     dbPromise = (async () => {
@@ -164,6 +205,7 @@ export async function switchDb(dbName: string): Promise<void> {
  * once the new organisation is live.
  */
 export async function closeDb(): Promise<void> {
+  await closeEquipmentDb();
   if (!dbPromise) return;
   try {
     const db = await dbPromise;
