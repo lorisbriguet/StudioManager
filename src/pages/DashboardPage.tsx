@@ -7,11 +7,12 @@ import { useClients } from "../db/hooks/useClients";
 import { useDashboardStore, WIDGET_CATALOG, type WidgetType, type DashboardWidget } from "../stores/dashboard-store";
 import type { LayoutItem } from "react-grid-layout";
 import { renderWidget } from "../components/dashboard/widgets";
+import { ErrorBoundary } from "react-error-boundary";
+import { WidgetErrorFallback } from "../components/ErrorFallback";
 import { DashboardYearContext } from "../components/dashboard/DashboardYearContext";
-import { PageHeader, Button, EmptyState, Select, Popover, IconButton, SectionLabel, Input, Card } from "../components/ui";
+import { PageHeader, Button, EmptyState, Select, Popover, IconButton, SectionLabel, AddRow, Card } from "../components/ui";
 import { MENU_ITEM, MENU_DIVIDER } from "../components/ui/Dropdown";
 import { useT } from "../i18n/useT";
-import { toast } from "sonner";
 import { deleteWithUndo } from "../lib/undo";
 import { useDashboardPresets, useCreateDashboardPreset, useUpdateDashboardPreset, useDeleteDashboardPreset } from "../db/hooks/useDashboardPresets";
 import "react-grid-layout/css/styles.css";
@@ -35,20 +36,13 @@ function PresetDropdown() {
   const deletePreset = useDeleteDashboardPreset();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saveName, setSaveName] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const closeMenu = (returnFocus: boolean) => {
     setOpen(false);
     setSaving(false);
     if (returnFocus) dropdownRef.current?.querySelector("button")?.focus({ preventScroll: true });
   };
-
-  // Focus input when saving
-  useEffect(() => {
-    if (saving) inputRef.current?.focus();
-  }, [saving]);
 
   const builtinPresets = presets?.filter((p) => p.is_builtin === 1) ?? [];
   const userPresets = presets?.filter((p) => p.is_builtin === 0) ?? [];
@@ -62,12 +56,10 @@ function PresetDropdown() {
     setSaving(false);
   };
 
-  const handleSave = async () => {
-    if (!saveName.trim()) return;
+  const handleSave = async (name: string) => {
     const layoutJson = JSON.stringify({ widgets, layout });
-    const newId = await createPreset.mutateAsync({ name: saveName.trim(), layoutJson });
-    setActivePreset(newId, saveName.trim(), widgets, layout);
-    setSaveName("");
+    const newId = await createPreset.mutateAsync({ name, layoutJson });
+    setActivePreset(newId, name, widgets, layout);
     setSaving(false);
     setOpen(false);
   };
@@ -75,9 +67,13 @@ function PresetDropdown() {
   const handleUpdate = async () => {
     if (activePresetId === null) return;
     const layoutJson = JSON.stringify({ widgets, layout });
-    await updatePreset.mutateAsync({ id: activePresetId, data: { layout_json: layoutJson } });
+    try {
+      await updatePreset.mutateAsync({ id: activePresetId, data: { layout_json: layoutJson } });
+    } catch {
+      return; // reported by the mutation; keep the menu open
+    }
+    // No toast: saving the layout is routine.
     setOpen(false);
-    toast.success(t.layout_updated);
   };
 
   const handleDelete = (e: React.MouseEvent, id: number) => {
@@ -178,28 +174,17 @@ function PresetDropdown() {
 
           {/* Save current layout */}
           {saving ? (
-            <div className="px-2 py-1 flex items-center gap-2">
-              <Input
-                ref={inputRef}
-                type="text"
-                value={saveName}
-                onChange={(e) => setSaveName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSave();
-                  // preventDefault: Esc cancels the name field, not the whole menu
-                  if (e.key === "Escape") { e.preventDefault(); setSaving(false); setSaveName(""); }
-                }}
-                placeholder={t.preset_name}
-                size="sm" fullWidth={false} className="flex-1"
-              />
-              <IconButton
-                icon={Save}
-                label={t.save}
-                color="accent"
-                onClick={handleSave}
-                disabled={!saveName.trim()}
-              />
-            </div>
+            <AddRow
+              className="px-2 py-1"
+              placeholder={t.preset_name}
+              buttonLabel={t.save}
+              autoFocus
+              onAdd={handleSave}
+              onKeyDown={(e) => {
+                // preventDefault: Esc cancels the name field, not the whole menu
+                if (e.key === "Escape") { e.preventDefault(); setSaving(false); }
+              }}
+            />
           ) : (
             <button
               type="button"
@@ -281,11 +266,8 @@ export function DashboardPage() {
       {showWidgetPanel && (() => {
         const categories = [...new Set(WIDGET_CATALOG.map((e) => e.category))];
         return (
-          <Card padding={false} className="mb-4 p-4 max-h-[60vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-medium">{t.add}</h2>
-              <IconButton icon={X} label={t.close} onClick={() => setShowWidgetPanel(false)} />
-            </div>
+          <Card className="mb-4 max-h-[60vh] overflow-y-auto">
+            <Card.Header title={t.add} onClose={() => setShowWidgetPanel(false)} />
             {categories.map((cat) => (
               <div key={cat} className="mb-3">
                 <SectionLabel className="mb-1.5">{cat}</SectionLabel>
@@ -320,7 +302,7 @@ export function DashboardPage() {
       {isFirstRun && (
         <EmptyState
           message={t.first_run_dashboard}
-          icon={<Users size={32} />}
+          icon={Users}
           action={
             <Button icon={<Plus size={12} />} onClick={() => navigate("/clients")}>
               {t.add_first_client}
@@ -344,11 +326,11 @@ export function DashboardPage() {
           onResizeStop={unlockSelection}
           resizeConfig={{ enabled: true, handles: ["s", "w", "e", "n", "sw", "nw", "se", "ne"] }}
           compactor={verticalCompactor}
-          margin={[12, 12] as [number, number]}
+          margin={[16, 16] as [number, number]}
           autoSize
         >
           {sortedWidgets.map((widget, idx) => (
-            <div key={widget.id} className="stagger-in bg-[var(--color-surface)] rounded-xl overflow-hidden relative group cursor-grab active:cursor-grabbing" style={{ animationDelay: `${idx * 50}ms` }}>
+            <Card key={widget.id} padding="none" className="stagger-in overflow-hidden relative group cursor-grab active:cursor-grabbing" style={{ animationDelay: `${idx * 50}ms` }}>
               {/* Remove button */}
               <IconButton
                 icon={X}
@@ -359,8 +341,8 @@ export function DashboardPage() {
                 onClick={() => removeWidget(widget.id)}
                 className="absolute top-1 right-1 z-10"
               />
-              {renderWidget(widget.type)}
-            </div>
+              <ErrorBoundary FallbackComponent={WidgetErrorFallback}>{renderWidget(widget.type)}</ErrorBoundary>
+            </Card>
           ))}
         </ResponsiveGridLayout>
       )}

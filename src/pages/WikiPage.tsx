@@ -6,7 +6,6 @@ import Link from "@tiptap/extension-link";
 import { useSearchParams } from "react-router-dom";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
 import { isAllowedWikiLink, parseWikiArticleId, parseWikiFileKey, wikiFileHref } from "../lib/wikiLinks";
-import { logError } from "../lib/log";
 import {
   Plus,
   BookOpen,
@@ -27,10 +26,10 @@ import {
   File,
 } from "lucide-react";
 import { deleteWithUndo } from "../lib/undo";
-import { toast } from "sonner";
 import { useT } from "../i18n/useT";
-import { notifyError, getLabels } from "../lib/notifyError";
-import { Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem, Popover, IconButton, Tag, SectionLabel, Input } from "../components/ui";
+import { notify } from "../lib/notify";
+import { Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem, Popover, IconButton, SectionLabel, Input, HEADING_1 } from "../components/ui";
+import { TagInput } from "../components/shared/TagInput";
 import { MENU_ITEM } from "../components/ui/Dropdown";
 import { Select } from "../components/ui/Select";
 import {
@@ -396,7 +395,6 @@ export function ArticleEditor({
 
   const [title, setTitle] = useState("");
   const [projectId, setProjectId] = useState<number | null>(null);
-  const [tagInput, setTagInput] = useState("");
   const [slashMenu, setSlashMenu] = useState<{ top: number; left: number } | null>(null);
   const [slashFilter, setSlashFilter] = useState("");
   // `bracketFrom` is set when the picker was opened by typing [[: that text
@@ -440,7 +438,6 @@ export function ArticleEditor({
         if (articleIdRef.current !== scheduledFor) return;
         updateArticle.mutate(
           { id: scheduledFor, data: { content } },
-          { onError: (e) => notifyError(getLabels().operation_failed, e) }
         );
       }, 2000);
     },
@@ -519,25 +516,9 @@ export function ArticleEditor({
     [editor]
   );
 
-  const handleAddTag = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter" && tagInput.trim()) {
-        e.preventDefault();
-        const newTag = tagInput.trim().toLowerCase();
-        if (!articleTags.includes(newTag)) {
-          setTags.mutate({ articleId, tags: [...articleTags, newTag] });
-        }
-        setTagInput("");
-      }
-    },
-    [tagInput, articleTags, articleId, setTags]
-  );
-
-  const handleRemoveTag = useCallback(
-    (tag: string) => {
-      setTags.mutate({ articleId, tags: articleTags.filter((t) => t !== tag) });
-    },
-    [articleTags, articleId, setTags]
+  const handleTagsChange = useCallback(
+    (tags: string[]) => setTags.mutate({ articleId, tags }),
+    [articleId, setTags]
   );
 
   const handleProjectChange = useCallback(
@@ -575,7 +556,6 @@ export function ArticleEditor({
         if (ed && pendingId !== null && pendingId === articleIdRef.current) {
           updateArticle.mutate(
             { id: pendingId, data: { content: ed.getHTML() } },
-            { onError: (e) => notifyError(getLabels().operation_failed, e) }
           );
         }
       }
@@ -654,7 +634,6 @@ export function ArticleEditor({
         { title: newTitle, folder_id: article?.folder_id ?? null, project_id: article?.project_id ?? null },
         {
           onSuccess: (newId: number) => handleLinkInsert(`/wiki?article=${newId}`, newTitle),
-          onError: (e) => notifyError(getLabels().operation_failed, e),
         }
       );
     },
@@ -691,8 +670,7 @@ export function ArticleEditor({
       }
       if (/^https?:\/\//i.test(href)) {
         openUrl(href).catch((err) => {
-          logError("Open URL failed:", err);
-          toast.error(t.failed_to_open_url);
+          notify.error(t.failed_to_open_url, err);
         });
       }
     },
@@ -734,43 +712,31 @@ export function ArticleEditor({
 
       <div className="flex-1 overflow-y-auto px-8 py-8">
         <div className="max-w-[720px] mx-auto">
-          {/* Title */}
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={handleTitleBlur}
-            onKeyDown={handleTitleKeyDown}
-            readOnly={reading}
-            placeholder={t.untitled}
-            className="w-full text-xl font-semibold tracking-tight bg-transparent border-none outline-none mb-3 text-[var(--color-text)] placeholder:text-muted"
-          />
+          {/* Title: the page h1, editable in place */}
+          <h1 className={`${HEADING_1} mb-3`}>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={handleTitleBlur}
+              onKeyDown={handleTitleKeyDown}
+              readOnly={reading}
+              placeholder={t.untitled}
+              aria-label={t.wiki_article_title}
+              className={`w-full ${HEADING_1} block bg-transparent border-none outline-none text-[var(--color-text)] placeholder:text-muted`}
+            />
+          </h1>
 
           {/* Metadata row */}
           <div className="flex items-center gap-3 mb-6 flex-wrap">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {articleTags.map((tag) => (
-                <Tag key={tag} name={tag} onRemove={reading ? undefined : () => handleRemoveTag(tag)} />
-              ))}
-              {!reading && (
-                <div className="relative">
-                  <input
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={handleAddTag}
-                    list="wiki-tags-datalist"
-                    placeholder={t.add_tag}
-                    className="w-24 bg-transparent border-none outline-none text-xs text-muted placeholder:text-muted"
-                  />
-                  <datalist id="wiki-tags-datalist">
-                    {allTags
-                      .filter((tg) => !articleTags.includes(tg))
-                      .map((tg) => (
-                        <option key={tg} value={tg} />
-                      ))}
-                  </datalist>
-                </div>
-              )}
-            </div>
+            <TagInput
+              value={articleTags}
+              onChange={handleTagsChange}
+              suggestions={allTags}
+              lowercase
+              readOnly={reading}
+              variant="bare"
+              width="sm"
+            />
 
             {reading ? (
               article.project_name && (
@@ -912,7 +878,7 @@ export function WikiPage() {
   const openArticle = useCallback(
     (id: number, newTab = false) => {
       if (!byId.has(id)) {
-        toast.error(t.wiki_article_not_found);
+        notify.error(t.wiki_article_not_found);
         return;
       }
       setTabsState((s) => openInTabs(s, id, newTab));
@@ -995,7 +961,6 @@ export function WikiPage() {
       if (html) {
         updateArticle.mutate(
           { id: sourceId, data: { content: html } },
-          { onError: (e) => notifyError(getLabels().operation_failed, e) }
         );
       }
     },
@@ -1033,6 +998,7 @@ export function WikiPage() {
           onNewArticle={handleNewArticle}
           onOpenGraph={openGraph}
           onDeleteArticle={handleDeleteArticle}
+          pageHeading={!(activeTab?.kind === "article" && (activeDoc || activeArticle))}
         />
       )}
 
@@ -1159,17 +1125,28 @@ export function WikiPage() {
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center">
-            <EmptyState
-              message={allArticles.length === 0 ? t.first_run_wiki : t.wiki_nothing_open}
-              icon={<BookOpen size={32} />}
-              action={
-                allArticles.length > 0 ? (
+            {!articlesLoaded ? null : allArticles.length === 0 ? (
+              <EmptyState
+                message={t.no_articles_yet}
+                hint={t.first_run_wiki}
+                icon={BookOpen}
+                action={
+                  <Button icon={<Plus size={12} />} onClick={() => handleNewArticle(null)}>
+                    {t.new_article}
+                  </Button>
+                }
+              />
+            ) : (
+              <EmptyState
+                message={t.wiki_nothing_open}
+                icon={BookOpen}
+                action={
                   <Button variant="secondary" icon={<Waypoints size={12} />} onClick={openGraph}>
                     {t.wiki_open_graph}
                   </Button>
-                ) : undefined
-              }
-            />
+                }
+              />
+            )}
           </div>
         )}
       </div>

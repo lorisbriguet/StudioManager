@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { toast } from "sonner";
+import { notify } from "../../lib/notify";
+import { undoableFromStore } from "../../lib/undo";
 import { useT } from "../../i18n/useT";
 import { useAppStore } from "../../stores/app-store";
 import { useExpenseCategories, useCreateExpenseCategory, useUpdateExpenseCategory, useDeleteExpenseCategory, isDefaultCategory } from "../../db/hooks/useExpenses";
@@ -44,11 +45,11 @@ export function ExpenseCategoryManager() {
     if (!form.code || !form.name_fr || !form.name_en) return;
     try {
       await createCategory.mutateAsync(form);
-      toast.success(t.toast_category_created);
+      notify.success(t.toast_category_created);
       setAdding(false);
       setForm({ code: "", name_fr: "", name_en: "", pl_section: "operating", color: null });
-    } catch (e) {
-      toast.error(String(e));
+    } catch {
+      // reported by the mutation
     }
   };
 
@@ -57,25 +58,28 @@ export function ExpenseCategoryManager() {
     try {
       const { code: _, ...data } = form;
       await updateCategory.mutateAsync({ code: editingCode, data });
-      toast.success(t.toast_category_updated);
+      notify.success(t.toast_category_updated);
       setEditingCode(null);
-    } catch (e) {
-      toast.error(String(e));
+    } catch {
+      // reported by the mutation
     }
   };
 
   const handleDelete = async (code: string) => {
     if (isDefaultCategory(code)) {
-      toast.error(t.toast_category_default);
+      notify.error(t.toast_category_default);
+      return;
+    }
+    // Checked first so the user gets the reason, not a generic failure
+    if (await isCategoryInUse(code)) {
+      notify.error(t.toast_category_in_use);
       return;
     }
     try {
       await deleteCategory.mutateAsync(code);
-      toast.success(t.toast_category_deleted);
-    } catch (e) {
-      const msg = String(e);
-      if (msg.includes("in use")) toast.error(t.toast_category_in_use);
-      else toast.error(msg);
+      undoableFromStore(t.toast_category_deleted);
+    } catch {
+      // reported by the mutation
     }
   };
 
@@ -104,18 +108,21 @@ export function ExpenseCategoryManager() {
                   <Table.Td muted>{cat.code}</Table.Td>
                   <Table.Td>
                     <Input
+                      aria-label={t.category_name_fr}
                       value={form.name_fr}
                       onChange={(e) => setForm({ ...form, name_fr: e.target.value })}
                     />
                   </Table.Td>
                   <Table.Td>
                     <Input
+                      aria-label={t.category_name_en}
                       value={form.name_en}
                       onChange={(e) => setForm({ ...form, name_en: e.target.value })}
                     />
                   </Table.Td>
                   <Table.Td>
                     <Select
+                      aria-label={t.category_pl_section}
                       value={form.pl_section}
                       onChange={(e) => setForm({ ...form, pl_section: e.target.value as ExpenseCategory["pl_section"] })}
                     >
@@ -173,8 +180,8 @@ export function ExpenseCategoryManager() {
             <Table.Row>
               <Table.Td>
                 <Input
-                  fullWidth={false}
-                  className="w-16"
+                  width="xs"
+                  aria-label={t.category_code}
                   placeholder="XX"
                   maxLength={4}
                   value={form.code}
@@ -182,13 +189,14 @@ export function ExpenseCategoryManager() {
                 />
               </Table.Td>
               <Table.Td>
-                <Input value={form.name_fr} onChange={(e) => setForm({ ...form, name_fr: e.target.value })} />
+                <Input aria-label={t.category_name_fr} value={form.name_fr} onChange={(e) => setForm({ ...form, name_fr: e.target.value })} />
               </Table.Td>
               <Table.Td>
-                <Input value={form.name_en} onChange={(e) => setForm({ ...form, name_en: e.target.value })} />
+                <Input aria-label={t.category_name_en} value={form.name_en} onChange={(e) => setForm({ ...form, name_en: e.target.value })} />
               </Table.Td>
               <Table.Td>
                 <Select
+                  aria-label={t.category_pl_section}
                   value={form.pl_section}
                   onChange={(e) => setForm({ ...form, pl_section: e.target.value as ExpenseCategory["pl_section"] })}
                 >

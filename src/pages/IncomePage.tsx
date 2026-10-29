@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Plus, Paperclip, Eye, Trash2, Upload, Wallet, Pencil, Settings2 } from "lucide-react";
-import { PageHeader, SearchBar, Button, DatePicker, EmptyState, FormField, FormGrid, FormModal, Input, Select, Table, TableSkeleton, IconButton, Tag } from "../components/ui";
+import { PageHeader, SearchBar, Button, DatePicker, EmptyState, QueryState, NoResults, FormField, FormGrid, FormModal, Input, Select, Table, TableSkeleton, IconButton, Tag } from "../components/ui";
 import * as v from "../lib/validate";
 import { deleteWithUndo } from "../lib/undo";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { format } from "date-fns";
 import { formatDisplayDate } from "../utils/formatDate";
 import { copyFile, mkdir, exists } from "@tauri-apps/plugin-fs";
@@ -53,7 +53,8 @@ function incomeCategoryLabel(t: ReturnType<typeof useT>, code: string): string {
 
 export function IncomePage() {
   const t = useT();
-  const { data: incomes, isLoading } = useIncomes();
+  const incomesQuery = useIncomes();
+  const { data: incomes } = incomesQuery;
   const createIncome = useCreateIncome();
   const updateIncome = useUpdateIncome();
   const deleteIncome = useDeleteIncome();
@@ -154,21 +155,16 @@ export function IncomePage() {
       (destPath) =>
         updateIncome.mutate(
           { id: incomeId, data: { receipt_path: destPath } },
-          { onSuccess: () => toast.success(t.receipt_attached) }
+          { onSuccess: () => notify.success(t.receipt_attached) }
         ),
-      () => toast.error(t.failed_to_attach_receipt)
+      (err) => notify.error(t.attach_failed, err)
     );
 
-  if (isLoading) return (
-    <div className="relative">
-      <PageHeader title={t.income}>
-        <Button icon={<Plus size={12} />} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
-          {t.new_income}
-        </Button>
-      </PageHeader>
-      <TableSkeleton columns={8} />
-    </div>
-  );
+  const clearFilters = () => {
+    setSearch("");
+    setFilterConditions([]);
+    setActiveFilterId(null);
+  };
 
   return (
     <div className="relative">
@@ -212,7 +208,7 @@ export function IncomePage() {
                 { id: editing.id, data: fields },
                 {
                   onSuccess: () => {
-                    toast.success(t.toast_income_updated);
+                    notify.success(t.toast_income_updated);
                     setEditing(null);
                   },
                 }
@@ -243,7 +239,7 @@ export function IncomePage() {
               { ...data, reference, receipt_path: receiptPath },
               {
                 onSuccess: () => {
-                  toast.success(t.toast_created);
+                  notify.success(t.toast_created);
                   setShowForm(false);
                   setDroppedReceiptPath(null);
                 },
@@ -254,6 +250,8 @@ export function IncomePage() {
         />
       )}
 
+      <QueryState query={incomesQuery} skeleton={<TableSkeleton columns={8} />} errorMessage={t.load_error_incomes}>
+      {(all) => (
       <Table>
         <Table.Head>
           <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} />
@@ -338,21 +336,27 @@ export function IncomePage() {
               </React.Fragment>
             );
           })}
-          {filtered.length === 0 && !isLoading && (
+          {filtered.length === 0 && (
             <Table.Empty colSpan={8}>
-              <EmptyState
-                message={(incomes?.length ?? 0) === 0 ? t.no_incomes_yet : t.no_matching_incomes}
-                icon={<Wallet size={32} />}
-                action={(incomes?.length ?? 0) === 0 ? (
-                  <Button icon={<Plus size={12} />} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
-                    {t.new_income}
-                  </Button>
-                ) : undefined}
-              />
+              {all.length === 0 ? (
+                <EmptyState
+                  message={t.no_incomes_yet}
+                  icon={Wallet}
+                  action={
+                    <Button icon={<Plus size={12} />} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
+                      {t.new_income}
+                    </Button>
+                  }
+                />
+              ) : (
+                <NoResults message={t.no_matching_incomes} onClear={clearFilters} />
+              )}
             </Table.Empty>
           )}
         </Table.Body>
       </Table>
+      )}
+      </QueryState>
 
       {preview && (
         <ReceiptPreview
@@ -442,7 +446,7 @@ export function NewIncomeForm({
     notes: initial?.notes ?? "",
   });
   const [errors, setErrors] = useState<Partial<Record<IncomeFormField, string>>>({});
-  const { undetect, resetDetected, detectedBadge, detectedClass } =
+  const { undetect, resetDetected, detectedBadge, isDetected } =
     useDetectedFields<DetectableIncomeField>(() => detectedIncomeFields(prefill));
 
   const setFieldError = (field: IncomeFormField, msg: string | null) =>
@@ -517,7 +521,7 @@ export function NewIncomeForm({
               undetect("source");
             }}
             onBlur={() => validateOnBlur("source")}
-            className={detectedClass("source")}
+            detected={isDetected("source")}
           />
         </FormField>
         <FormField label={t.category}>
@@ -552,7 +556,7 @@ export function NewIncomeForm({
               undetect("date");
             }}
             onBlur={() => validateOnBlur("date")}
-            inputClassName={detectedClass("date")}
+            detected={isDetected("date")}
           />
         </FormField>
         <FormField
@@ -562,8 +566,9 @@ export function NewIncomeForm({
           badge={detectedBadge("amount", () => setForm((f) => ({ ...f, amount: 0 })))}
         >
           <Input
-            type="number"
+            numeric
             step="0.01"
+            unit="CHF"
             value={form.amount || ""}
             onChange={(e) => {
               setForm({ ...form, amount: Number(e.target.value) });
@@ -571,7 +576,7 @@ export function NewIncomeForm({
               undetect("amount");
             }}
             onBlur={() => validateOnBlur("amount")}
-            className={detectedClass("amount")}
+            detected={isDetected("amount")}
           />
         </FormField>
       </FormGrid>

@@ -18,6 +18,19 @@ describe("SectionLabel", () => {
     expect(screen.getByRole("heading", { level: 2, name: "Backlinks" })).toBeInTheDocument();
   });
 
+  it("shows a count after the label, with or without an action", () => {
+    const { rerender } = render(<SectionLabel as="h2" count={12}>Projects</SectionLabel>);
+    const heading = screen.getByRole("heading", { level: 2 });
+    expect(heading).toContainElement(screen.getByText("12"));
+    expect(heading.textContent).toBe("Projects12");
+    rerender(
+      <SectionLabel as="h2" count={4} action={<button type="button">Add</button>}>
+        Contacts
+      </SectionLabel>
+    );
+    expect(screen.getByRole("heading", { level: 2 })).toContainElement(screen.getByText("4"));
+  });
+
   it("puts an action on the same row", () => {
     render(
       <SectionLabel as="h3" action={<button type="button">Add</button>}>

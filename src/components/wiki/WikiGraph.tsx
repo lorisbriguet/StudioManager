@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { SearchBar, IconButton, SectionLabel } from "../ui";
+import { Card, SearchBar, IconButton, SectionLabel, POPOVER_SURFACE } from "../ui";
 import { Toggle } from "../ui/Toggle";
 import { useT } from "../../i18n/useT";
 import type { WikiArticleWithTags, WikiFolder } from "../../types/wiki";
@@ -119,17 +119,20 @@ export function WikiGraph({
 
       <section
         aria-label={t.wiki_graph_settings}
-        className="absolute top-4 right-4 w-64 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-menu p-3 space-y-3"
+        className={`${POPOVER_SURFACE} absolute top-4 right-4 w-64 p-3 space-y-3`}
       >
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold tracking-tight">{t.wiki_graph_settings}</span>
-          <IconButton
-            icon={settingsOpen ? ChevronUp : ChevronDown}
-            label={t.wiki_graph_settings}
-            aria-expanded={settingsOpen}
-            onClick={() => setSettingsOpen((o) => !o)}
-          />
-        </div>
+        <Card.Header
+          className=""
+          title={t.wiki_graph_settings}
+          action={
+            <IconButton
+              icon={settingsOpen ? ChevronUp : ChevronDown}
+              label={t.wiki_graph_settings}
+              aria-expanded={settingsOpen}
+              onClick={() => setSettingsOpen((o) => !o)}
+            />
+          }
+        />
 
         {settingsOpen && (
           <>

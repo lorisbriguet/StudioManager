@@ -12,7 +12,7 @@ import {
 } from "react";
 import { Check, ChevronDown, Plus, Search } from "lucide-react";
 import { useT } from "../../i18n/useT";
-import { fieldClass } from "./Input";
+import { Input } from "./Input";
 import { Kbd } from "./Kbd";
 import { Popover } from "./Popover";
 import { SECTION_LABEL } from "./SectionLabel";
@@ -193,11 +193,12 @@ function MenuPanel({
       className="flex flex-col max-w-80"
     >
       {search && (
-        <div className="flex items-center gap-2 -mx-1 -mt-1 mb-1 px-3 py-2 border-b border-[var(--color-border-divider)] text-muted">
-          <Search size={14} className="shrink-0" />
-          <input
+        <div className="-mx-1 -mt-1 mb-1 p-1 border-b border-[var(--color-border-divider)]">
+          <Input
             ref={searchRef}
             type="text"
+            variant="bare"
+            icon={Search}
             value={search.value}
             onChange={(e) => search.onChange(e.target.value)}
             placeholder={search.placeholder}
@@ -206,7 +207,6 @@ function MenuPanel({
             aria-activedescendant={activeId}
             aria-autocomplete="list"
             autoComplete="off"
-            className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm text-[var(--color-text)] placeholder:text-muted"
           />
         </div>
       )}
@@ -219,7 +219,7 @@ function MenuPanel({
         tabIndex={-1}
         className="max-h-72 overflow-y-auto flex flex-col outline-none"
       >
-        {rows.length === 0 && <div className="px-2 py-3 text-xs text-muted text-center">{emptyText}</div>}
+        {rows.length === 0 && emptyText && <div className="px-2 py-3 text-xs text-muted text-center">{emptyText}</div>}
         {rows.map((r, i) => {
           if (r.kind === "divider") return <div key={r.key} role="separator" className={MENU_DIVIDER} />;
           if (r.kind === "group")
@@ -343,8 +343,8 @@ const TRIGGER_BASE =
 const TRIGGER_SIZE = {
   // 26px, the shared control box (tokens.ts), filled instead of framed.
   sm: `gap-1.5 rounded-md ${CONTROL_BOX} border-transparent bg-[var(--color-input-bg)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] aria-expanded:bg-[var(--color-hover-row)]`,
-  // The md field (Input size="md"), so a md trigger and a md Input match.
-  md: `gap-2 text-[var(--color-text)] ${fieldClass({ size: "md", fullWidth: false })}`,
+  // A taller framed trigger (opt-in, rare). Inputs have one size; this keeps its own box.
+  md: "gap-2 text-[var(--color-text)] px-3 py-2 text-sm rounded-lg bg-[var(--color-input-bg)] border border-[var(--color-input-border)] aria-[invalid=true]:border-danger-text placeholder:text-muted",
   // No colour of its own: a bare trigger takes its parent's, or a status pill's classes.
   bare: "gap-1 text-xs bg-transparent border-0 p-0",
 };

@@ -19,11 +19,11 @@ describe("Input", () => {
     expect(onChange).toHaveBeenCalled();
   });
 
-  it("sm, bare and inline variants", () => {
+  it("default, bare and inline variants", () => {
     render(
       <>
-        <Input aria-label="Hours" size="sm" fullWidth={false} />
-        <Input aria-label="Cell" variant="bare" size="sm" />
+        <Input aria-label="Hours" fullWidth={false} />
+        <Input aria-label="Cell" variant="bare" />
         <Input aria-label="Rename" variant="inline" />
       </>
     );
@@ -36,9 +36,9 @@ describe("Input", () => {
     expect(inline).not.toContain("text-sm");
   });
 
-  it("does not leak the size prop onto the element", () => {
-    render(<Input aria-label="Qty" size="sm" />);
-    expect(screen.getByRole("textbox", { name: "Qty" })).not.toHaveAttribute("size");
+  it("does not leak the width prop onto the element", () => {
+    render(<Input aria-label="Qty" width="sm" />);
+    expect(screen.getByRole("textbox", { name: "Qty" })).not.toHaveAttribute("width");
   });
 });
 
@@ -50,5 +50,37 @@ describe("Textarea", () => {
     expect(ref.current).toBe(el);
     expect(el).toHaveAttribute("rows", "3");
     expect(el.className).toContain(fieldClass());
+  });
+
+  it("starts at 3 rows, grows to 12, then scrolls", () => {
+    render(<Textarea aria-label="Notes" />);
+    const el = screen.getByRole("textbox", { name: "Notes" }) as HTMLTextAreaElement;
+    // 3 and 12 lines of leading-relaxed (1.625em) + padding and border
+    expect(el.style.minHeight).toBe("calc(4.875em + 10px)");
+    expect(el.style.maxHeight).toBe("calc(19.5em + 10px)");
+    expect(el.className).toContain("[field-sizing:content]");
+    expect(el.className).toContain("overflow-y-auto");
+  });
+
+  it("follows its content where field-sizing is missing (JS fallback)", () => {
+    vi.stubGlobal("CSS", { supports: () => false });
+    const { rerender } = render(<Textarea aria-label="Notes" value="a" onChange={() => {}} />);
+    const el = screen.getByRole("textbox", { name: "Notes" }) as HTMLTextAreaElement;
+    Object.defineProperty(el, "scrollHeight", { configurable: true, get: () => 120 });
+    rerender(<Textarea aria-label="Notes" value={"a\nb\nc\nd\ne"} onChange={() => {}} />);
+    expect(el.style.height).toBe("122px");
+    Object.defineProperty(el, "scrollHeight", { configurable: true, get: () => 60 });
+    fireEvent.input(el);
+    expect(el.style.height).toBe("62px");
+    vi.unstubAllGlobals();
+  });
+
+  it("fill takes the parent's height and doesn't grow or resize", () => {
+    render(<Textarea aria-label="Note" fill />);
+    const el = screen.getByRole("textbox", { name: "Note" }) as HTMLTextAreaElement;
+    expect(el.className).toContain("h-full");
+    expect(el.className).toContain("resize-none");
+    expect(el.className).not.toContain("field-sizing");
+    expect(el.style.minHeight).toBe("");
   });
 });

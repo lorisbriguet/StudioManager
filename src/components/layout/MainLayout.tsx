@@ -8,6 +8,8 @@ import { useOrgStore } from "../../stores/org-store";
 import { useT } from "../../i18n/useT";
 import { useExitMode } from "../../hooks/useExitMode";
 import { X } from "lucide-react";
+import { ErrorBoundary } from "react-error-boundary";
+import { ErrorFallback } from "../ErrorFallback";
 
 export function MainLayout() {
   const testMode = useAppStore((s) => s.testMode);
@@ -56,7 +58,10 @@ export function MainLayout() {
         )}
         <TabBar />
         <div key={location.pathname} className="page-transition p-8 w-full flex-1 overflow-y-auto flex flex-col min-h-0 bg-[var(--color-bg)]">
-          <Outlet />
+          {/* Per page: a crash keeps the sidebar and tabs; navigating away resets it. */}
+          <ErrorBoundary FallbackComponent={ErrorFallback} resetKeys={[location.pathname]}>
+            <Outlet />
+          </ErrorBoundary>
         </div>
       </main>
     </div>

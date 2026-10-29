@@ -16,7 +16,7 @@ import { createElement } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile, mkdir, copyFile } from "@tauri-apps/plugin-fs";
 import { pdf } from "@react-pdf/renderer";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { usePLData, useMonthlyData } from "../db/hooks/useFinance";
 import { useInvoices } from "../db/hooks/useInvoices";
 import { useExpenses } from "../db/hooks/useExpenses";
@@ -24,7 +24,7 @@ import { useClients } from "../db/hooks/useClients";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
-import { PageHeader, PageSpinner, Button, Card, EmptyState, Select, SectionLabel, Callout } from "../components/ui";
+import { PageHeader, QueryError, DetailSkeleton, Button, Card, EmptyState, Select, SectionLabel, Callout, CARD_GAP } from "../components/ui";
 import { useNavigate } from "react-router-dom";
 import { useChartTheme } from "../hooks/useChartTheme";
 import { getTagColor } from "../lib/tagColors";
@@ -47,7 +47,8 @@ export function FinancesPage() {
   const t = useT();
   const [year, setYear] = useState(new Date().getFullYear());
   const navigate = useNavigate();
-  const { data: pl, isLoading } = usePLData(year);
+  const plQuery = usePLData(year);
+  const { data: pl } = plQuery;
   const { data: monthly } = useMonthlyData(year);
   const { data: invoices } = useInvoices();
   const { data: expenses } = useExpenses();
@@ -121,7 +122,7 @@ export function FinancesPage() {
         }
       }
       if (invoicePdfsFailed > 0) {
-        toast.warning(t.export_invoices_failed.replace("{count}", String(invoicePdfsFailed)));
+        notify.warning(t.export_invoices_failed.replace("{count}", String(invoicePdfsFailed)));
       }
 
       // Export expenses list PDF + copy receipts
@@ -146,18 +147,29 @@ export function FinancesPage() {
         }
       }
       if (receiptsSkipped > 0) {
-        toast.warning(t.export_receipts_skipped.replace("{count}", String(receiptsSkipped)));
+        notify.warning(t.export_receipts_skipped.replace("{count}", String(receiptsSkipped)));
       }
 
-      toast.success(t.exported_to.replace("{path}", basePath));
-    } catch {
-      toast.error(t.export_failed);
+      notify.success(t.exported_to.replace("{path}", basePath));
+    } catch (e) {
+      notify.error(t.export_failed, e);
     } finally {
       setExporting(false);
     }
   };
 
-  if (isLoading) return <PageSpinner />;
+  if (pl === undefined) {
+    return (
+      <div>
+        <PageHeader title={t.finances} />
+        {plQuery.isError ? (
+          <QueryError message={t.load_error_finances} onRetry={plQuery.refetch} retrying={plQuery.isFetching} />
+        ) : (
+          <DetailSkeleton />
+        )}
+      </div>
+    );
+  }
 
   // First run: no financial data at all — guide instead of empty charts.
   if (invoices !== undefined && expenses !== undefined && invoices.length === 0 && expenses.length === 0) {
@@ -222,8 +234,8 @@ export function FinancesPage() {
 
       {/* Monthly revenue vs expenses chart */}
       <SectionLabel className="mb-2">{t.finances_overview}</SectionLabel>
-      <Card className="mb-6">
-        <h2 className="text-sm font-medium mb-4">{t.revenue_vs_expenses}</h2>
+      <Card className="mb-4">
+        <Card.Header title={t.revenue_vs_expenses} />
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={chartData} barGap={2}>
             <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} />
@@ -241,11 +253,11 @@ export function FinancesPage() {
       </Card>
 
       <SectionLabel className="mb-2">{t.finances_breakdown}</SectionLabel>
-      <div className="grid grid-cols-2 gap-6">
+      <div className={`grid grid-cols-2 ${CARD_GAP}`}>
         {/* Expense breakdown pie chart */}
         {pieData.length > 0 && (
           <Card>
-            <h2 className="text-sm font-medium mb-4">{t.expense_breakdown}</h2>
+            <Card.Header title={t.expense_breakdown} />
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
                 <Pie
@@ -288,7 +300,7 @@ export function FinancesPage() {
         {/* P&L statement */}
         {pl && (
           <Card>
-            <h2 className="text-sm font-medium mb-4">{t.profit_loss}</h2>
+            <Card.Header title={t.profit_loss} />
             <div className="space-y-1">
               <PLLine label={t.revenue} value={pl.revenue} bold />
               {pl.other_income > 0 && (

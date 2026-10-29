@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Timer } from "lucide-react";
-import { toast } from "sonner";
-import { Button, Input, Kbd, Modal, FormField, FormGrid, FormGroup } from "./ui";
+import { Button, Input, Modal, FormField, FormGrid, FormGroup, EmptyState } from "./ui";
 import { useAppStore } from "../stores/app-store";
 import { useProjects } from "../db/hooks/useProjects";
 import { useTasksByProject } from "../db/hooks/useTasks";
@@ -56,7 +55,6 @@ export function QuickTimerModal() {
       if (useAppStore.getState().activeTimer) return;
     }
     startTimer(selectedTaskId, selectedProjectId, selectedProject.name);
-    toast.success(t.start_timer);
     close();
   };
 
@@ -66,8 +64,7 @@ export function QuickTimerModal() {
       onClose={close}
       position="top"
       size="md"
-      padding={false}
-      aria-label={t.quick_timer}
+      title={t.quick_timer}
       footer={
         <Button
           type="button"
@@ -79,15 +76,7 @@ export function QuickTimerModal() {
         </Button>
       }
     >
-      {/* Header */}
-      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[var(--color-border)]">
-        <Timer size={16} className="text-[var(--color-accent)] shrink-0" />
-        <span className="text-sm font-medium">{t.quick_timer}</span>
-        <Kbd className="ml-auto">Esc</Kbd>
-      </div>
-
-      {/* Body */}
-      <FormGrid cols={1} className="p-4">
+      <FormGrid cols={1}>
         {/* Project picker */}
         <div>
           <FormField label={t.select_project}>
@@ -134,7 +123,7 @@ export function QuickTimerModal() {
         {selectedProjectId && (
           <FormGroup label={t.select_task}>
             {todoTasks.length === 0 ? (
-              <p className="text-sm text-muted px-1">{t.no_results}</p>
+              <EmptyState size="sm" message={t.no_open_tasks_in_project} />
             ) : (
               <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden max-h-44 overflow-y-auto">
                 {todoTasks.map((task) => (

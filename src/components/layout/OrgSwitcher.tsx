@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, ChevronsUpDown, Plus, Settings2 } from "lucide-react";
-import { toast } from "sonner";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { useOrgStore } from "../../stores/org-store";
 import { useTimerActions } from "../../hooks/useTimerActions";
 import { switchOrganisation, defaultSwitchDeps } from "../../lib/switchOrganisation";
-import { notifyError } from "../../lib/notifyError";
+import { notify } from "../../lib/notify";
 import { useT } from "../../i18n/useT";
 
 export function OrgSwitcher({ collapsed, onCreate }: { collapsed: boolean; onCreate: () => void }) {
@@ -36,10 +35,10 @@ export function OrgSwitcher({ collapsed, onCreate }: { collapsed: boolean; onCre
       const ok = await switchOrganisation(id, defaultSwitchDeps(navigate, stopAndSave));
       if (ok) {
         const name = organisations.find((o) => o.id === id)?.name ?? "";
-        toast.success(t.organisation_switched.replace("{name}", name));
+        notify.success(t.organisation_switched.replace("{name}", name));
       }
     } catch (e) {
-      notifyError(t.organisation_switch_failed, e);
+      notify.error(t.organisation_switch_failed, e);
     }
   };
 

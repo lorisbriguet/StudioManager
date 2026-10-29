@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { Plus, Search, ExternalLink, Trash2, X, Check } from "lucide-react";
-import { PageHeader, Button, EmptyState, FormField, Select, IconButton, Tag, FilterChip, Input, Callout, FormGrid, FormGridItem, FormModal, Table, TableSkeleton } from "../components/ui";
+import { Plus, ExternalLink, Trash2, X, Check, Link2 } from "lucide-react";
+import { PageHeader, Button, EmptyState, QueryState, NoResults, FormField, Select, IconButton, Tag, FilterChip, Input, Callout, FormGrid, FormModal, Table, TableSkeleton, SearchBar } from "../components/ui";
+import { TagInput } from "../components/shared/TagInput";
 import * as v from "../lib/validate";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
 import {
   useResources,
@@ -19,7 +20,6 @@ import { BulkActionBar } from "../components/ui/BulkActionBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useBulkDelete } from "../hooks/useBulkDelete";
 import { useT } from "../i18n/useT";
-import { logError } from "../lib/log";
 import { undoableFromStore } from "../lib/undo";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
@@ -36,7 +36,8 @@ interface ResourceRow {
 
 export function ResourcesPage() {
   const t = useT();
-  const { data: resources, isLoading } = useResources();
+  const resourcesQuery = useResources();
+  const { data: resources } = resourcesQuery;
   const { data: allTags } = useAllTags();
   const createResource = useCreateResource();
   const updateResource = useUpdateResource();
@@ -108,9 +109,8 @@ export function ResourcesPage() {
     try {
       await deleteResource.mutateAsync(id);
       undoableFromStore(t.toast_resource_deleted);
-    } catch (err) {
-      logError("Delete resource failed:", err);
-      toast.error(t.delete_failed);
+    } catch {
+      // reported by the mutation
     }
   };
 
@@ -120,19 +120,16 @@ export function ResourcesPage() {
       u = "https://" + u;
     }
     openUrl(u).catch((err) => {
-      logError("Open URL failed:", err);
-      toast.error(t.failed_to_open_url);
+      notify.error(t.failed_to_open_url, err);
     });
   };
 
-  if (isLoading) return (
-    <div>
-      <PageHeader title={t.resources}>
-        <Button icon={<Plus size={12} />} onClick={() => {}}>{t.new_resource}</Button>
-      </PageHeader>
-      <TableSkeleton columns={6} />
-    </div>
-  );
+  const clearFilters = () => {
+    setSearch("");
+    setTagFilter(null);
+    setFilterConditions([]);
+    setActiveFilterId(null);
+  };
 
   return (
     <div>
@@ -151,10 +148,9 @@ export function ResourcesPage() {
             try {
               await createResource.mutateAsync(data);
               setShowForm(false);
-              toast.success(t.save);
-            } catch (err) {
-              logError("Create resource failed:", err);
-              toast.error(t.create_failed);
+              notify.success(t.resource_saved);
+            } catch {
+              // reported by the mutation
             }
           }}
           onCancel={() => setShowForm(false)}
@@ -163,16 +159,12 @@ export function ResourcesPage() {
 
       {/* Search + tag filter */}
       <div className="flex items-center gap-3 mb-4">
-        <div className="relative flex-1 max-w-xs">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
-          <Input
-            type="text"
-            placeholder={t.search_resources}
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setActiveFilterId(null); }}
-            size="sm" className="pl-8"
-          />
-        </div>
+        <SearchBar
+          placeholder={t.search_resources}
+          value={search}
+          onChange={(v) => { setSearch(v); setActiveFilterId(null); }}
+          className="flex-1 max-w-xs"
+        />
         {(allTags ?? []).length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">
             {(allTags ?? []).map((tag) => {
@@ -200,6 +192,8 @@ export function ResourcesPage() {
         fields={resourceFields}
       />
 
+      <QueryState query={resourcesQuery} skeleton={<TableSkeleton columns={6} />} errorMessage={t.load_error_resources}>
+      {() => (
       <Table>
         <Table.Head>
           <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} />
@@ -224,10 +218,9 @@ export function ResourcesPage() {
                 try {
                   await updateResource.mutateAsync({ id: r.id, data, tags });
                   setEditingId(null);
-                  toast.success(t.save);
-                } catch (err) {
-                  logError("Update resource failed:", err);
-                  toast.error(t.update_failed);
+                  notify.success(t.resource_saved);
+                } catch {
+                  // reported by the mutation
                 }
               }}
               onDelete={() => handleDelete(r.id)}
@@ -237,18 +230,25 @@ export function ResourcesPage() {
           ))}
           {filtered.length === 0 && (
             <Table.Empty colSpan={6}>
-              <EmptyState
-                message={rows.length === 0 ? t.no_resources_yet : t.no_matching_resources}
-                action={rows.length === 0 ? (
-                  <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>
-                    {t.new_resource}
-                  </Button>
-                ) : undefined}
-              />
+              {rows.length === 0 ? (
+                <EmptyState
+                  icon={Link2}
+                  message={t.no_resources_yet}
+                  action={
+                    <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>
+                      {t.new_resource}
+                    </Button>
+                  }
+                />
+              ) : (
+                <NoResults message={t.no_matching_resources} onClear={clearFilters} />
+              )}
             </Table.Empty>
           )}
         </Table.Body>
       </Table>
+      )}
+      </QueryState>
 
       <div className="text-xs text-muted mt-3">
         {filtered.length} {filtered.length === 1 ? t.resources_count_singular : t.resources_count_plural}
@@ -310,7 +310,6 @@ function NewResourceForm({
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [price, setPrice] = useState("");
-  const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [errors, setErrors] = useState<Partial<Record<ResourceFormField, string>>>({});
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
@@ -344,14 +343,6 @@ function NewResourceForm({
     return false;
   };
 
-  const addTag = (tag: string) => {
-    const trimmed = tag.trim();
-    if (trimmed && !tags.includes(trimmed)) {
-      setTags([...tags, trimmed]);
-    }
-    setTagInput("");
-  };
-
   const submit = () => {
     const errs = v.validateForm({ name, url }, resourceSchema);
     setErrors(errs);
@@ -376,7 +367,7 @@ function NewResourceForm({
         </FormField>
         <FormField label={t.url_label} required error={errors.url}>
           <Input
-            type="text"
+            type="url"
             value={url}
             onChange={(e) => { setUrl(e.target.value); clearError("url"); }}
             onBlur={() => validateOnBlur("url")}
@@ -393,31 +384,8 @@ function NewResourceForm({
           </Select>
         </FormField>
         <FormField label={t.tags}>
-          <Input
-            type="text"
-            placeholder={t.add_tag}
-            value={tagInput}
-            onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={(e) => {
-              // Enter adds the tag instead of submitting the form.
-              if (e.key === "Enter" || e.key === ",") {
-                e.preventDefault();
-                addTag(tagInput);
-              }
-            }}
-            list="tag-suggestions"
-          />
+          <TagInput value={tags} onChange={setTags} suggestions={allTags} />
         </FormField>
-        {tags.length > 0 && (
-          <FormGridItem>
-            <TagChips tags={tags} onRemove={(tag) => setTags(tags.filter((t) => t !== tag))} />
-          </FormGridItem>
-        )}
-        <datalist id="tag-suggestions">
-          {allTags.filter((t) => !tags.includes(t)).map((t) => (
-            <option key={t} value={t} />
-          ))}
-        </datalist>
       </FormGrid>
       {duplicateWarning && (
         <Callout
@@ -443,17 +411,6 @@ function NewResourceForm({
   );
 }
 
-/** A resource's tags as pills; removable when `onRemove` is given. `children` follow the pills (the add-tag input). */
-function TagChips({ tags, onRemove, children }: { tags: string[]; onRemove?: (tag: string) => void; children?: React.ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-center gap-1">
-      {tags.map((tag) => (
-        <Tag key={tag} name={tag} onRemove={onRemove && (() => onRemove(tag))} />
-      ))}
-      {children}
-    </div>
-  );
-}
 
 function ResourceTableRow({
   resource,
@@ -485,7 +442,6 @@ function ResourceTableRow({
   const [url, setUrl] = useState(resource.url);
   const [price, setPrice] = useState(resource.price);
   const [tags, setTags] = useState(resource.tags);
-  const [tagInput, setTagInput] = useState("");
   const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingRef = useRef(false);
 
@@ -541,40 +497,15 @@ function ResourceTableRow({
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            size="sm"
+            aria-label={t.name}
             autoFocus
           />
         </Table.Td>
         <Table.Td>
-          <TagChips tags={tags} onRemove={(tag) => setTags(tags.filter((t) => t !== tag))}>
-            <Input
-              variant="bare"
-              size="sm"
-              fullWidth={false}
-              type="text"
-              placeholder={t.add_tag}
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === ",") {
-                  e.preventDefault();
-                  const trimmed = tagInput.trim();
-                  if (trimmed && !tags.includes(trimmed)) setTags([...tags, trimmed]);
-                  setTagInput("");
-                }
-              }}
-              list={`edit-tag-suggestions-${resource.id}`}
-              className="w-16"
-            />
-            <datalist id={`edit-tag-suggestions-${resource.id}`}>
-              {allTags.filter((t) => !tags.includes(t)).map((t) => (
-                <option key={t} value={t} />
-              ))}
-            </datalist>
-          </TagChips>
+          <TagInput value={tags} onChange={setTags} suggestions={allTags} variant="bare" width="xs" />
         </Table.Td>
         <Table.Td>
-          <Select value={price} onChange={(e) => setPrice(e.target.value)} fullWidth={false}>
+          <Select value={price} onChange={(e) => setPrice(e.target.value)} fullWidth={false} aria-label={t.price_label}>
             <option value="">—</option>
             <option value="free">{t.price_free}</option>
             <option value="paid">{t.price_paid}</option>
@@ -582,9 +513,10 @@ function ResourceTableRow({
         </Table.Td>
         <Table.Td>
           <Input
+            type="url"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            size="sm"
+            aria-label={t.url_label}
           />
         </Table.Td>
         <Table.Actions always>
@@ -604,7 +536,7 @@ function ResourceTableRow({
       <Table.Select checked={isSelected} onToggle={onToggleSelect} />
       <Table.Td className="font-medium">{resource.name}</Table.Td>
       <Table.Td>
-        <TagChips tags={resource.tags} />
+        <TagInput value={resource.tags} onChange={() => {}} readOnly />
       </Table.Td>
       <Table.Td>
         {resource.price && (

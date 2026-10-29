@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { Link, Plus, Trash2, Unlink, X } from "lucide-react";
-import { Badge, Button, Dropdown, FormGroup, IconButton, Input, Select, Tag, FORM_GAP } from "../ui";
+import { Link, Trash2, Unlink, X } from "lucide-react";
+import { AddRow, Badge, Button, Dropdown, FormGroup, IconButton, Input, Select, Tag, FORM_GAP } from "../ui";
 import { normalizeTagColorName, TAG_COLOR_NAMES } from "../../lib/tagColors";
 import { useT } from "../../i18n/useT";
 
@@ -69,7 +69,6 @@ export function OptionsEditor({
   const linked = linkedListId !== undefined;
   const addText = addLabel ?? t.new_option;
 
-  const [newValue, setNewValue] = useState("");
   const [newColor, setNewColor] = useState("gray");
   const [savingAsList, setSavingAsList] = useState(false);
   const [listName, setListName] = useState("");
@@ -81,11 +80,10 @@ export function OptionsEditor({
     onChange(next);
   };
 
-  const add = () => {
-    const value = newValue.trim();
-    if (!value || options.some((o) => o.value === value)) return;
+  /** A duplicate name is ignored and stays in the field. */
+  const add = (value: string) => {
+    if (options.some((o) => o.value === value)) return false;
     onChange([...options, colors ? { value, color: newColor } : { value }]);
-    setNewValue("");
   };
 
   const saveAsList = async () => {
@@ -141,7 +139,7 @@ export function OptionsEditor({
                 <Input
                   value={opt.value}
                   onChange={(e) => update(i, { value: e.target.value })}
-                  disabled={linked}
+                  readOnly={linked}
                   aria-label={`${t.options} ${i + 1}`}
                   className="flex-1"
                 />
@@ -160,25 +158,10 @@ export function OptionsEditor({
         </div>
       )}
       {!linked && (
-        <div className="flex items-center gap-2">
-          <Input
-            fullWidth={false}
-            value={newValue}
-            onChange={(e) => setNewValue(e.target.value)}
-            onKeyDown={(e) => {
-              // The editor sits inside forms: Enter adds, it doesn't submit.
-              if (e.key === "Enter") {
-                e.preventDefault();
-                add();
-              }
-            }}
-            placeholder={addText}
-            aria-label={addText}
-            className="flex-1"
-          />
+        // The editor sits inside forms: AddRow's Enter adds, it doesn't submit.
+        <AddRow placeholder={addText} size="xs" onAdd={add}>
           {colors && <TagColorSelect value={newColor} onChange={setNewColor} />}
-          <IconButton icon={Plus} label={addText} size="xs" tone="accent" onClick={add} />
-        </div>
+        </AddRow>
       )}
       {!linked && onSaveAsList && (
         savingAsList ? (

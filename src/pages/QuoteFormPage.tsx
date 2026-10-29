@@ -1,16 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Eye } from "lucide-react";
-import { Button, DatePicker, Input, Select, FormField, FieldError, FormLayout, FormGrid, FormActions, Textarea } from "../components/ui";
+import { Eye } from "lucide-react";
+import { Button, DatePicker, Input, PageHeader, Select, FormField, FieldError, FormLayout, FormGrid, FormActions, Textarea } from "../components/ui";
 import * as v from "../lib/validate";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { addDays, format } from "date-fns";
 import { useQuote, useCreateQuote, useUpdateQuote } from "../db/hooks/useQuotes";
 import { useInvoiceTemplates, useDefaultTemplate } from "../db/hooks/useInvoiceTemplates";
 import { useClients, useClientAddresses } from "../db/hooks/useClients";
 import { useProjects } from "../db/hooks/useProjects";
 import { getQuoteLineItems } from "../db/queries/quotes";
-import { logError } from "../lib/log";
 import { useT } from "../i18n/useT";
 import { useActivities } from "../db/hooks/useActivities";
 import type { Activity } from "../types/activity";
@@ -135,8 +134,7 @@ export function QuoteFormPage() {
           );
         }
       }).catch((e) => {
-        logError("Failed to load line items:", e);
-        toast.error(t.failed_load_line_items);
+        notify.error(t.failed_load_line_items, e);
       }).finally(() => {
         setTimeout(() => { formLoadedRef.current = true; }, 0);
       });
@@ -248,10 +246,9 @@ export function QuoteFormPage() {
           {
             onSuccess: () => {
               setFormDirty(false);
-              toast.success(t.quote_updated);
+              notify.success(t.quote_updated);
               navigate("/quotes");
             },
-            onError: (e) => toast.error(String(e)),
           }
         );
       } else {
@@ -289,26 +286,23 @@ export function QuoteFormPage() {
           {
             onSuccess: () => {
               setFormDirty(false);
-              toast.success(t.quote_created);
+              notify.success(t.quote_created);
               navigate("/quotes");
             },
-            onError: (e) => toast.error(String(e)),
           }
         );
       }
     } catch (e) {
-      toast.error(String(e));
+      notify.error(t.error_save_quote, e);
     }
   };
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <Button variant="outline" onClick={async () => { if (await confirmIfDirty("/quotes")) navigate("/quotes"); }} icon={<ArrowLeft size={18} />} aria-label={t.back} />
-        <h1 className="text-xl font-semibold">
-          {isEdit ? t.edit_quote : t.new_quote}
-        </h1>
-      </div>
+      <PageHeader
+        title={isEdit ? t.edit_quote : t.new_quote}
+        back={async () => { if (await confirmIfDirty("/quotes")) navigate("/quotes"); }}
+      />
 
       {/* Dirty tracking: text fields bubble their change events up to this div.
           Select is a custom dropdown that sends no DOM event, so each Select's
@@ -452,7 +446,6 @@ export function QuoteFormPage() {
           <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            rows={2}
           />
         </FormField>
 

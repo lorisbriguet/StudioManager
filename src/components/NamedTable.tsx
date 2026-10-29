@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Plus, Trash2, ChevronDown, ChevronRight, Pencil } from "lucide-react";
-import { Button, Card, DragHandle, Dropdown, Input } from "./ui";
+import { Button, Card, DragHandle, Dropdown, InlineRename } from "./ui";
 import { TableCell } from "./named-table/TableCell";
 import { ColumnEditorPopover } from "./named-table/ColumnEditorPopover";
 import {
@@ -13,7 +13,7 @@ import {
 } from "../db/hooks/useProjectTables";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useSetCustomListItems } from "../db/hooks/useCustomLists";
 import { useT } from "../i18n/useT";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { deleteWithUndo, pushUndoable } from "../lib/undo";
 import type { ProjectTable, TableColumnDef, ProjectTableRow } from "../types/project-table";
 import { IconButton } from "./ui/IconButton";
@@ -35,7 +35,6 @@ export function NamedTable({ table, projectId }: Props) {
 
   const [collapsed, setCollapsed] = useState(false);
   const [editingName, setEditingName] = useState(false);
-  const [tableName, setTableName] = useState(table.name);
   const [editingCell, setEditingCell] = useState<{ rowId: number; colId: string } | null>(null);
   const [editValue, setEditValue] = useState("");
   const [editingCol, setEditingCol] = useState<string | null>(null);
@@ -43,7 +42,6 @@ export function NamedTable({ table, projectId }: Props) {
   const [colName, setColName] = useState("");
   const [colOptions, setColOptions] = useState<string[]>([]);
   const [colLinkedListId, setColLinkedListId] = useState<number | undefined>(undefined);
-  const nameInputRef = useRef<HTMLInputElement>(null);
   const cellInputRef = useRef<HTMLInputElement>(null);
 
   const cols = table.column_config;
@@ -55,20 +53,11 @@ export function NamedTable({ table, projectId }: Props) {
   const setCustomListItems = useSetCustomListItems();
 
   useEffect(() => {
-    if (editingName) nameInputRef.current?.focus();
-  }, [editingName]);
-
-  useEffect(() => {
     if (editingCell) cellInputRef.current?.focus();
   }, [editingCell]);
 
-  const commitName = () => {
-    const name = tableName.trim();
-    if (name && name !== table.name) {
-      updateTable.mutate({ id: table.id, data: { name } });
-    } else {
-      setTableName(table.name);
-    }
+  const commitName = (name: string) => {
+    updateTable.mutate({ id: table.id, data: { name } });
     setEditingName(false);
   };
 
@@ -105,7 +94,7 @@ export function NamedTable({ table, projectId }: Props) {
   const handleSaveAsList = async (name: string) => {
     const id = await createCustomList.mutateAsync(name);
     await setCustomListItems.mutateAsync({ listId: id, items: colOptions.map((v) => ({ value: v })) });
-    toast.success(t.list_created);
+    notify.success(t.list_created);
   };
 
   const openColEditor = (col: TableColumnDef, e?: React.MouseEvent) => {
@@ -171,47 +160,44 @@ export function NamedTable({ table, projectId }: Props) {
   };
 
   return (
-    <Card padding={false} className="overflow-visible">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-[var(--color-surface)]">
-        <IconButton
-          icon={collapsed ? ChevronRight : ChevronDown}
-          label={collapsed ? t.expand : t.collapse}
-          onClick={() => setCollapsed(!collapsed)}
-        />
-        {editingName ? (
-          <Input
-            variant="inline"
-            fullWidth={false}
-            ref={nameInputRef}
-            value={tableName}
-            onChange={(e) => setTableName(e.target.value)}
-            onBlur={commitName}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitName();
-              if (e.key === "Escape") { setTableName(table.name); setEditingName(false); }
-            }}
+    <Card tone="inset" padding="none" className="overflow-visible">
+      <Card.Header
+        as="h3"
+        className="px-3 py-2"
+        icon={
+          <IconButton
+            icon={collapsed ? ChevronRight : ChevronDown}
+            label={collapsed ? t.expand : t.collapse}
+            onClick={() => setCollapsed(!collapsed)}
+          />
+        }
+        count={rows?.length ?? 0}
+        action={
+          <>
+            <IconButton icon={Pencil} label={t.rename} size="xs" tone="accent" reveal onClick={() => setEditingName(true)} />
+            <IconButton
+              icon={Trash2}
+              label={t.delete}
+              size="xs"
+              tone="danger"
+              onClick={() => deleteWithUndo(deleteTable, table.id, t.table_deleted)}
+            />
+          </>
+        }
+        title={editingName ? (
+          <InlineRename
+            value={table.name}
+            label={t.rename}
+            onSave={commitName}
+            onCancel={() => setEditingName(false)}
             className="text-sm font-medium"
           />
         ) : (
-          <span
-            className="text-sm font-medium cursor-pointer hover:text-accent"
-            onDoubleClick={() => setEditingName(true)}
-          >
+          <span className="cursor-pointer hover:text-accent" onDoubleClick={() => setEditingName(true)}>
             {table.name}
           </span>
         )}
-        <span className="text-xs text-muted ml-1">({rows?.length ?? 0})</span>
-        <div className="flex-1" />
-        <IconButton icon={Pencil} label={t.rename} size="xs" tone="accent" reveal onClick={() => setEditingName(true)} />
-        <IconButton
-          icon={Trash2}
-          label={t.delete}
-          size="xs"
-          tone="danger"
-          onClick={() => deleteWithUndo(deleteTable, table.id, t.table_deleted)}
-        />
-      </div>
+      />
 
       {!collapsed && (
         <>

@@ -1,6 +1,6 @@
 import { Bell, Check, CheckCheck, Trash2, AlertTriangle, Info, AlertCircle, Copy } from "lucide-react";
-import { PageHeader, Button, EmptyState, IconButton } from "../components/ui";
-import { toast } from "sonner";
+import { PageHeader, Button, Card, EmptyState, IconButton, QueryState, ListSkeleton } from "../components/ui";
+import { notify } from "../lib/notify";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -25,7 +25,8 @@ const typeConfig: Record<string, { icon: typeof Bell; color: string }> = {
 
 export function NotificationsPage() {
   const t = useT();
-  const { data: notifications = [], isLoading } = useNotifications();
+  const notificationsQuery = useNotifications();
+  const notifications = notificationsQuery.data ?? [];
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
   const deleteNotif = useDeleteNotification();
@@ -45,21 +46,21 @@ export function NotificationsPage() {
     if (isFilePath(n.link)) {
       // File system path (e.g., backup folder) — open in Finder
       invoke("open_in_finder", { path: n.link }).catch((err) => {
-        toast.error(t.could_not_open_path ?? `Could not open path: ${String(err)}`);
+        notify.error(t.could_not_open_path, err);
       });
     } else if (n.link.startsWith("/")) {
       navigate(n.link);
     } else {
       // Fallback for any other external path
       invoke("open_in_finder", { path: n.link }).catch((err) => {
-        toast.error(t.could_not_open_path ?? `Could not open path: ${String(err)}`);
+        notify.error(t.could_not_open_path, err);
       });
     }
   }
 
   return (
     <div>
-      <PageHeader title={`${t.notifications}${unreadCount > 0 ? ` (${unreadCount} ${t.unread})` : ""}`}>
+      <PageHeader title={t.notifications} meta={unreadCount > 0 && `${unreadCount} ${t.unread}`}>
         {unreadCount > 0 && (
           <Button variant="secondary" icon={<CheckCheck size={12} />} onClick={() => markAllRead.mutate()}>
             {t.mark_all_read}
@@ -72,23 +73,25 @@ export function NotificationsPage() {
         )}
       </PageHeader>
 
-      {isLoading ? (
-        <p className="text-muted text-sm">{t.loading}</p>
-      ) : notifications.length === 0 ? (
-        <EmptyState message={t.no_notifications} icon={<Bell size={32} />} />
-      ) : (
-        <div className="space-y-1">
+      <QueryState
+        query={notificationsQuery}
+        skeleton={<ListSkeleton rows={6} />}
+        errorMessage={t.load_error_notifications}
+        empty={<EmptyState message={t.no_notifications} icon={Bell} />}
+      >
+      {() => (
+        <div className="space-y-2">
           {notifications.map((n) => {
             const cfg = typeConfig[n.type] ?? typeConfig.info;
             const Icon = cfg.icon;
             return (
-              <div
+              <Card
                 key={n.id}
+                interactive
+                padding="sm"
                 onClick={() => handleClick(n)}
-                className={`flex items-start gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer group ${
-                  n.read
-                    ? "bg-transparent hover:bg-[var(--color-hover-row)]"
-                    : "bg-accent-light/50 hover:bg-accent-light"
+                className={`flex items-start gap-3 group ${
+                  n.read ? "" : "bg-accent-light/50! hover:bg-accent-light!"
                 }`}
               >
                 <div className={`mt-0.5 ${cfg.color}`}>
@@ -110,14 +113,17 @@ export function NotificationsPage() {
                     {formatDisplayDateTime(n.created_at)}
                   </p>
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                   <IconButton size="xs"
                     icon={Copy}
                     label={t.copy}
                     onClick={(e) => {
                       e.stopPropagation();
                       const text = `${n.title}${n.message ? ` — ${n.message}` : ""}`;
-                      navigator.clipboard.writeText(text).then(() => toast.success(t.copied));
+                      navigator.clipboard.writeText(text).then(
+                        () => notify.success(t.copied),
+                        (err) => notify.error(t.error_copy, err)
+                      );
                     }}
                   />
                   {!n.read && (
@@ -140,11 +146,12 @@ export function NotificationsPage() {
                     }}
                   />
                 </div>
-              </div>
+              </Card>
             );
           })}
         </div>
       )}
+      </QueryState>
     </div>
   );
 }

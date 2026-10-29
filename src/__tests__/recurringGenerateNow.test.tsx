@@ -7,21 +7,15 @@ import { useAppStore } from "../stores/app-store";
 import { getDb } from "../db";
 import { setSelectHandler } from "../__mocks__/tauri-sql";
 import { runRecurringCheck } from "../hooks/useRecurringCheck";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 
 vi.mock("../hooks/useRecurringCheck", () => ({
   useRecurringCheck: vi.fn(),
   runRecurringCheck: vi.fn(),
 }));
-vi.mock("sonner", () => ({
-  toast: {
-    info: vi.fn(),
-    warning: vi.fn(),
-    error: vi.fn(),
-    success: vi.fn(),
-    loading: vi.fn(),
-    dismiss: vi.fn(),
-  },
+vi.mock("../lib/notify", async (orig) => ({
+  ...(await orig<typeof import("../lib/notify")>()),
+  ...(await import("../__mocks__/notify")).notifyMockModule(),
 }));
 
 // "Generate now" in the recurring panel runs the same check as startup /
@@ -98,7 +92,7 @@ describe("recurring generate now button", () => {
 
     await waitFor(() => expect(runRecurringCheck).toHaveBeenCalledTimes(1));
     await waitFor(() =>
-      expect(toast.info).toHaveBeenCalledWith("No recurring invoices due")
+      expect(notify.info).toHaveBeenCalledWith("No recurring invoices due")
     );
   });
 
@@ -109,6 +103,6 @@ describe("recurring generate now button", () => {
     fireEvent.click(screen.getByRole("button", { name: /generate now/i }));
 
     await waitFor(() => expect(runRecurringCheck).toHaveBeenCalledTimes(1));
-    expect(toast.info).not.toHaveBeenCalled();
+    expect(notify.info).not.toHaveBeenCalled();
   });
 });

@@ -1,9 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import * as q from "../queries/clients";
 import type { Client, ClientContact, ClientAddress } from "../../types/client";
 import { useUndoStore } from "../../stores/undo-store";
-import { getLabels } from "../../lib/notifyError";
+import { getLabels } from "../../lib/notify";
 
 // Every query family the deleteClient cascade touches — invalidated after
 // delete, undo (restore) and redo so no stale rows linger anywhere.
@@ -50,6 +49,7 @@ export function useClientContacts(clientId: string) {
 export function useCreateClient() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_client" },
     mutationFn: async (data: Omit<Client, "created_at" | "updated_at">) => {
       await q.createClient(data);
       useUndoStore.getState().push({
@@ -65,13 +65,13 @@ export function useCreateClient() {
       });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["clients"] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useUpdateClient() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_client" },
     mutationFn: async ({
       id,
       data,
@@ -100,7 +100,6 @@ export function useUpdateClient() {
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["clients"] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -112,6 +111,7 @@ export function useDeleteClient() {
     }
   };
   return useMutation({
+    meta: { errorLabel: "error_delete_client" },
     mutationFn: async (id: string) => {
       // Snapshot the FULL graph before the cascade destroys it, so undo
       // restores every project/task/invoice/quote/etc. with original IDs.
@@ -136,13 +136,13 @@ export function useDeleteClient() {
       }
     },
     onSuccess: invalidateGraph,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useCreateClientContact() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_contact" },
     mutationFn: async (data: Omit<ClientContact, "id">) => {
       await q.createClientContact(data);
       // Find newly created contact to get its ID for undo
@@ -166,13 +166,13 @@ export function useCreateClientContact() {
     },
     onSuccess: (_d, vars) =>
       qc.invalidateQueries({ queryKey: ["client-contacts", vars.client_id] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useUpdateClientContact() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_contact" },
     mutationFn: async (vars: {
       id: number;
       clientId: string;
@@ -200,13 +200,13 @@ export function useUpdateClientContact() {
     },
     onSuccess: (_d, vars) =>
       qc.invalidateQueries({ queryKey: ["client-contacts", vars.clientId] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useDeleteClientContact() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_delete_contact" },
     mutationFn: async (vars: { id: number; clientId: string }) => {
       const prev = await q.getClientContact(vars.id);
       await q.deleteClientContact(vars.id);
@@ -232,7 +232,6 @@ export function useDeleteClientContact() {
     },
     onSuccess: (_d, vars) =>
       qc.invalidateQueries({ queryKey: ["client-contacts", vars.clientId] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -249,6 +248,7 @@ export function useClientAddresses(clientId: string) {
 export function useCreateClientAddress() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_address" },
     mutationFn: async (data: Omit<ClientAddress, "id">) => {
       const newId = await q.createClientAddress(data);
       useUndoStore.getState().push({
@@ -265,13 +265,13 @@ export function useCreateClientAddress() {
     },
     onSuccess: (_d, vars) =>
       qc.invalidateQueries({ queryKey: ["client-addresses", vars.client_id] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useUpdateClientAddress() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_address" },
     mutationFn: async (vars: {
       id: number;
       clientId: string;
@@ -299,13 +299,13 @@ export function useUpdateClientAddress() {
     },
     onSuccess: (_d, vars) =>
       qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useDeleteClientAddress() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_delete_address" },
     mutationFn: async (vars: { id: number; clientId: string }) => {
       const prev = await q.getClientAddress(vars.id);
       await q.deleteClientAddress(vars.id);
@@ -331,7 +331,6 @@ export function useDeleteClientAddress() {
     },
     onSuccess: (_d, vars) =>
       qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 

@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { toast } from "sonner";
+import { notify } from "../../lib/notify";
 import { undoableFromStore } from "../../lib/undo";
-import { Trash2, Check, Plus } from "lucide-react";
+import { Trash2, Plus, ListChecks } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useUpdateCustomList, useDeleteCustomList, useSetCustomListItems } from "../../db/hooks/useCustomLists";
-import { Button, IconButton, Input, FormActions, FORM_GAP } from "../ui";
+import { AddRow, Button, IconButton, InlineRename, FormActions, FORM_GAP, EmptyState } from "../ui";
 import { navItemClass } from "../ui/NavItem";
 import { OptionsEditor } from "../shared/OptionsEditor";
 
@@ -20,8 +20,6 @@ export function CustomListsManager() {
   const { data: items } = useCustomListItems(selectedId);
 
   const [renamingId, setRenamingId] = useState<number | null>(null);
-  const [renameValue, setRenameValue] = useState("");
-  const [newListName, setNewListName] = useState("");
   const [addingList, setAddingList] = useState(false);
 
   // Local editable items for the selected list
@@ -34,14 +32,11 @@ export function CustomListsManager() {
     setDirty(false);
   }, [items, selectedId]);
 
-  const handleCreateList = async () => {
-    const name = newListName.trim();
-    if (!name) return;
+  const handleCreateList = async (name: string) => {
     const id = await createList.mutateAsync(name);
-    setNewListName("");
     setAddingList(false);
     setSelectedId(id);
-    toast.success(t.list_created);
+    notify.success(t.list_created);
   };
 
   // No question: Undo puts the list and its items back.
@@ -51,10 +46,8 @@ export function CustomListsManager() {
     undoableFromStore(t.list_deleted);
   };
 
-  const commitRename = async () => {
-    if (renamingId === null) return;
-    const name = renameValue.trim();
-    if (name) await updateList.mutateAsync({ id: renamingId, name });
+  const commitRename = async (id: number, name: string) => {
+    await updateList.mutateAsync({ id, name });
     setRenamingId(null);
   };
 
@@ -62,7 +55,7 @@ export function CustomListsManager() {
     if (selectedId === null) return;
     await setItems.mutateAsync({ listId: selectedId, items: localItems });
     setDirty(false);
-    toast.success(t.list_saved);
+    notify.success(t.list_saved);
   };
 
   const allLists = lists ?? [];
@@ -73,24 +66,23 @@ export function CustomListsManager() {
       <div className="w-48 shrink-0 border-r border-[var(--color-border-divider)] pr-4">
         <div className="space-y-px">
           {allLists.length === 0 && !addingList && (
-            <p className="text-xs text-muted py-2">{t.no_lists}</p>
+            <EmptyState size="sm" message={t.no_lists} />
           )}
           {allLists.map((list) => (
             <div key={list.id} className={`${navItemClass({ active: selectedId === list.id })} group cursor-pointer`}>
               {renamingId === list.id ? (
-                <Input variant="inline" fullWidth={false}
-                  value={renameValue}
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  onBlur={commitRename}
-                  onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenamingId(null); }}
-                  className="flex-1"
-                  autoFocus
+                <InlineRename
+                  value={list.name}
+                  label={t.rename}
+                  onSave={(name) => commitRename(list.id, name)}
+                  onCancel={() => setRenamingId(null)}
+                  className="flex-1 text-xs"
                 />
               ) : (
                 <span
                   className="flex-1 text-xs truncate"
                   onClick={() => setSelectedId(list.id)}
-                  onDoubleClick={() => { setRenamingId(list.id); setRenameValue(list.name); }}
+                  onDoubleClick={() => setRenamingId(list.id)}
                 >
                   {list.name}
                 </span>
@@ -100,17 +92,14 @@ export function CustomListsManager() {
           ))}
         </div>
         {addingList ? (
-          <div className="mt-2 flex gap-2">
-            <Input size="sm" fullWidth={false}
-              value={newListName}
-              onChange={(e) => setNewListName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleCreateList(); if (e.key === "Escape") setAddingList(false); }}
-              placeholder={t.list_name}
-              className="flex-1"
-              autoFocus
-            />
-            <Button icon={<Check size={12} />} onClick={handleCreateList}>{t.create}</Button>
-          </div>
+          <AddRow
+            className="mt-2"
+            placeholder={t.list_name}
+            buttonLabel={t.create}
+            onAdd={handleCreateList}
+            onKeyDown={(e) => { if (e.key === "Escape") setAddingList(false); }}
+            autoFocus
+          />
         ) : (
           <Button
             type="button"
@@ -127,7 +116,7 @@ export function CustomListsManager() {
       {/* Right: items for selected list */}
       <div className="flex-1">
         {selectedId === null ? (
-          <p className="text-xs text-muted py-2">{allLists.length > 0 ? t.select_list_to_edit : ""}</p>
+          allLists.length > 0 && <EmptyState size="sm" icon={ListChecks} message={t.select_list_to_edit} />
         ) : (
           <div className={`flex flex-col ${FORM_GAP}`}>
             <OptionsEditor

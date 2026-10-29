@@ -53,7 +53,7 @@ export function ColumnEditorPopover({
       className="min-w-[200px]"
     >
       <FormField label={t.rename} className="mb-3">
-        <Input size="sm"
+        <Input
           value={colName}
           onChange={(e) => setColName(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") onCommit(); }}

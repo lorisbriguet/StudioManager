@@ -17,7 +17,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useUpdateProject } from "../db/hooks/useProjects";
 import { useT } from "../i18n/useT";
-import { Card, DragHandle, Dropdown, IconButton } from "./ui";
+import { Card, CARD_GAP, CARD_STACK, DragHandle, Dropdown, IconButton } from "./ui";
 import type { LayoutConfig, LayoutBlock, BlockType, Project } from "../types/project";
 import { STANDARD_LAYOUT } from "../types/project";
 
@@ -63,19 +63,24 @@ function SortableBlock({ block, renderBlock, onToggleCollapse, onRemove, onToggl
 
   return (
     <div ref={setNodeRef} style={style} className="group">
-      <Card padding={false} className="p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <DragHandle {...attributes} {...listeners} reveal />
-        <IconButton icon={isCollapsed ? ChevronRight : ChevronDown} label={isCollapsed ? t.expand : t.collapse} onClick={() => onToggleCollapse(block.type)} />
-        <h3 className="text-xs font-semibold tracking-tight">
-          {t[block.type] ?? BLOCK_LABELS[block.type]}
-        </h3>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
-          <IconButton icon={isHalf ? Maximize2 : Columns2} label={t.width} size="xs" onClick={() => onToggleWidth(block.type)} />
-          <IconButton icon={X} label={t.delete} size="xs" tone="danger" onClick={() => onRemove(block.type)} />
-        </div>
-      </div>
-      {!isCollapsed && renderBlock(block.type)}
+      <Card>
+        <Card.Header
+          className={isCollapsed ? "" : "mb-3"}
+          title={t[block.type] ?? BLOCK_LABELS[block.type]}
+          icon={
+            <>
+              <DragHandle {...attributes} {...listeners} reveal />
+              <IconButton icon={isCollapsed ? ChevronRight : ChevronDown} label={isCollapsed ? t.expand : t.collapse} onClick={() => onToggleCollapse(block.type)} />
+            </>
+          }
+          action={
+            <span className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+              <IconButton icon={isHalf ? Maximize2 : Columns2} label={t.width} size="xs" onClick={() => onToggleWidth(block.type)} />
+              <IconButton icon={X} label={t.delete} size="xs" tone="danger" onClick={() => onRemove(block.type)} />
+            </span>
+          }
+        />
+        {!isCollapsed && renderBlock(block.type)}
       </Card>
     </div>
   );
@@ -170,13 +175,13 @@ export function ProjectBlockLayout({ project, projectId, renderBlock }: Props) {
   const rows = groupBlocksIntoRows(layout);
 
   return (
-    <div className="space-y-4">
+    <div className={CARD_STACK}>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={layout.map((b) => b.type)} strategy={verticalListSortingStrategy}>
           {rows.map((row) => {
             if (row.isGrid) {
               return (
-                <div key={row.blocks.map((b) => b.type).join("-")} className="grid grid-cols-2 gap-4">
+                <div key={row.blocks.map((b) => b.type).join("-")} className={`grid grid-cols-2 ${CARD_GAP}`}>
                   {row.blocks.map((block) => (
                     <SortableBlock
                       key={block.type}
@@ -211,11 +216,14 @@ export function ProjectBlockLayout({ project, projectId, renderBlock }: Props) {
         <Dropdown
           className="w-full"
           trigger={
-            <button
-              className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-accent transition-colors w-full justify-center py-2 rounded-xl border border-dashed border-[var(--color-input-border)]"
+            <Card
+              as="button"
+              tone="dashed"
+              padding="sm"
+              className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-accent transition-colors w-full justify-center"
             >
               <Plus size={14} /> {t.add_block}
-            </button>
+            </Card>
           }
           items={availableBlocks.map((type) => ({ label: BLOCK_LABELS[type], onSelect: () => addBlock(type) }))}
         />

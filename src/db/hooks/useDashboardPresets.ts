@@ -6,7 +6,7 @@ import {
   deleteDashboardPreset,
 } from "../queries/dashboardPresets";
 import { snapshotRows, pushRestore } from "../undoRestore";
-import { getLabels } from "../../lib/notifyError";
+import { getLabels } from "../../lib/notify";
 
 export function useDashboardPresets() {
   return useQuery({
@@ -18,6 +18,7 @@ export function useDashboardPresets() {
 export function useCreateDashboardPreset() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_preset" },
     mutationFn: ({ name, layoutJson }: { name: string; layoutJson: string }) =>
       createDashboardPreset(name, layoutJson),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["dashboard-presets"] }),
@@ -27,6 +28,7 @@ export function useCreateDashboardPreset() {
 export function useUpdateDashboardPreset() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_preset" },
     mutationFn: ({ id, data }: { id: number; data: { name?: string; layout_json?: string } }) =>
       updateDashboardPreset(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["dashboard-presets"] }),
@@ -37,6 +39,7 @@ export function useDeleteDashboardPreset() {
   const qc = useQueryClient();
   const invalidate = () => qc.invalidateQueries({ queryKey: ["dashboard-presets"] });
   return useMutation({
+    meta: { errorLabel: "error_delete_preset" },
     mutationFn: async (id: number) => {
       // Built-in presets are never deleted, so never restored either.
       const snap = await snapshotRows([{ table: "dashboard_presets", where: "id = $1 AND is_builtin = 0", params: [id] }]);

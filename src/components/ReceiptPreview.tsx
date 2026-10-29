@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useT } from "../i18n/useT";
-import { notifyError } from "../lib/notifyError";
-import { Modal } from "./ui";
+import { notify } from "../lib/notify";
+import { AlertTriangle } from "lucide-react";
+import { EmptyState, Modal, Spinner } from "./ui";
 
 /**
  * Large preview of an attached receipt (image or PDF), shared by the
@@ -21,6 +22,7 @@ export function ReceiptPreview({
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
   const isImage = ["png", "jpg", "jpeg", "webp"].includes(ext);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let url: string | null = null;
@@ -35,7 +37,8 @@ export function ReceiptPreview({
       })
       .catch((err) => {
         setBlobUrl(null);
-        notifyError(t.receipt_load_failed, err);
+        setFailed(true);
+        notify.error(t.receipt_load_failed, err);
       });
     return () => {
       if (url) URL.revokeObjectURL(url);
@@ -45,8 +48,10 @@ export function ReceiptPreview({
   return (
     <Modal open onClose={onClose} title={reference} size="full" padding={false}>
         <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center">
-          {!blobUrl ? (
-            <span className="text-sm text-muted">{t.loading}</span>
+          {failed ? (
+            <EmptyState tone="danger" icon={AlertTriangle} message={t.receipt_load_failed} />
+          ) : !blobUrl ? (
+            <Spinner size={20} />
           ) : isImage ? (
             <img
               src={blobUrl}

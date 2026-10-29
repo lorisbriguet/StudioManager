@@ -1,11 +1,10 @@
 import { useEffect, useRef } from "react";
-import { toast } from "sonner";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { getDueTemplates, updateRecurringTemplate } from "../db/queries/recurring";
 import { getInvoice, getInvoiceLineItems, createInvoiceWithLineItems } from "../db/queries/invoices";
 import { createNotification } from "../db/queries/notifications";
 import { sendNativeNotification } from "../lib/nativeNotification";
-import { notifyError, getLabels } from "../lib/notifyError";
+import { getLabels, notify } from "../lib/notify";
 import { logWarn } from "../lib/log";
 import { todayLocalISO, parseLocalDate } from "../utils/localDate";
 import { advanceDate } from "../utils/recurringDates";
@@ -53,7 +52,7 @@ export async function runRecurringCheck(qc: QueryClient): Promise<number> {
         // A corrupt next_due would silently skip (or spin) the catch-up
         // loop — surface it instead of guessing.
         if (!/^\d{4}-\d{2}-\d{2}$/.test(tmpl.next_due)) {
-          notifyError(
+          notify.error(
             getLabels().recurring_invalid_next_due,
             new Error(`template ${tmpl.id}: next_due "${tmpl.next_due}"`)
           );
@@ -143,7 +142,7 @@ export async function runRecurringCheck(qc: QueryClient): Promise<number> {
             "{count}",
             String(MAX_CATCHUP_PER_TEMPLATE)
           );
-          toast.warning(capMsg, { duration: 8000 });
+          notify.warning(capMsg);
           await createNotification({
             type: "warning",
             title: getLabels().recurring_invoices,
@@ -154,7 +153,7 @@ export async function runRecurringCheck(qc: QueryClient): Promise<number> {
           qc.invalidateQueries({ queryKey: ["notifications"] });
         }
       } catch (e) {
-        notifyError(getLabels().recurring_generation_failed, e);
+        notify.error(getLabels().recurring_generation_failed, e);
       }
     }
 
@@ -165,7 +164,7 @@ export async function runRecurringCheck(qc: QueryClient): Promise<number> {
 
       const labels = getLabels();
       const msg = labels.recurring_drafts_generated.replace("{count}", String(generated));
-      toast.info(msg, { duration: 6000 });
+      notify.info(msg);
 
       await createNotification({
         type: "info",
@@ -179,8 +178,8 @@ export async function runRecurringCheck(qc: QueryClient): Promise<number> {
       sendNativeNotification(labels.recurring_invoices, msg);
     }
   } catch (e) {
-    // notifyError logs AND toasts; no separate logError needed
-    notifyError(getLabels().recurring_generation_failed, e);
+    // notify.error logs AND toasts; no separate logError needed
+    notify.error(getLabels().recurring_generation_failed, e);
   } finally {
     inFlight = false;
   }

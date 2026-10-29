@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { IconButton } from "../components/ui/IconButton";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, Plus, Trash2, Eye, Pencil } from "lucide-react";
-import { toast } from "sonner";
-import { Checkbox, Button, Input, PageSpinner, Card, Select, SectionLabel, Textarea, ConfirmButton, Tooltip, FormField, FormGrid, FormActions, FormLayout } from "../components/ui";
+import { Save, Plus, Trash2, Eye, Pencil, FolderOpen, FileText, UserRound, Users } from "lucide-react";
+import { notify } from "../lib/notify";
+import { Checkbox, Button, Input, PageHeader, EmptyState, QueryError, DetailSkeleton, ListSkeleton, Card, Select, SectionLabel, Textarea, ConfirmButton, Tooltip, FormField, FormGrid, FormActions, FormLayout, CARD_GAP, CARD_STACK } from "../components/ui";
 import { useTabStore } from "../stores/tab-store";
 import {
   useClient,
@@ -29,7 +29,8 @@ import type { Client, ClientContact, ClientAddress } from "../types/client";
 
 export function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { data: client, isLoading } = useClient(id!);
+  const clientQuery = useClient(id!);
+  const { data: client } = clientQuery;
   const { data: projects } = useProjectsByClient(id!);
   const { data: invoices } = useInvoicesByClient(id!);
   const { data: contacts } = useClientContacts(id!);
@@ -77,22 +78,37 @@ export function ClientDetailPage() {
       { id, data },
       {
         onSuccess: () => {
-          toast.success(t.client_updated);
+          notify.success(t.client_updated);
           setDirty(false);
         },
       }
     );
   };
 
-  if (isLoading) return <PageSpinner />;
-  if (!client) return <div className="text-muted text-sm">{t.client_not_found}</div>;
+  if (client === undefined && id) {
+    return clientQuery.isError ? (
+      <QueryError message={t.load_error_client} onRetry={clientQuery.refetch} retrying={clientQuery.isFetching} />
+    ) : (
+      <DetailSkeleton />
+    );
+  }
+  if (!client) {
+    return (
+      <EmptyState
+        icon={Users}
+        message={t.client_not_found}
+        hint={t.not_found_hint}
+        action={<Button variant="secondary" onClick={() => navigate("/clients")}>{t.back_to_clients}</Button>}
+      />
+    );
+  }
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <IconButton icon={ArrowLeft} label={t.back} onClick={() => navigate(-1)} />
-        <h1 className="text-xl font-semibold">{client.name}</h1>
-        <div className="ml-auto flex items-center gap-2">
+      <PageHeader
+        title={client.name}
+        back={() => navigate(-1)}
+        actions={<>
           {dirty && (
             <Button icon={<Save size={12} />} onClick={save}>
               {t.save}
@@ -105,11 +121,11 @@ export function ClientDetailPage() {
             variant="danger"
             onConfirm={() => deleteWithUndo(deleteClient, id!, t.toast_client_deleted, () => navigate("/clients"))}
           />
-        </div>
-      </div>
+        </>}
+      />
 
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-2 space-y-4">
+      <div className={`grid grid-cols-3 ${CARD_GAP}`}>
+        <div className={`col-span-2 ${CARD_STACK}`}>
           <Section title={t.details}>
             <FormGrid cols={2}>
               <Field label={t.display_name} value={form.name ?? ""} onBlur={(v) => saveField("name", v)} />
@@ -138,20 +154,18 @@ export function ClientDetailPage() {
                 }}
               />
               {!!form.has_discount && (
-                <div className="flex items-center gap-1">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={Math.round((form.discount_rate ?? 0.1) * 100)}
-                    onChange={(e) => update("discount_rate", Number(e.target.value) / 100)}
-                    onBlur={(e) => saveField("discount_rate", Number(e.target.value) / 100)}
-                    fullWidth={false}
-                    className="w-16 text-center"
-                  />
-                  <span className="text-sm text-muted">%</span>
-                </div>
+                <Input
+                  numeric
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={Math.round((form.discount_rate ?? 0.1) * 100)}
+                  onChange={(e) => update("discount_rate", Number(e.target.value) / 100)}
+                  onBlur={(e) => saveField("discount_rate", Number(e.target.value) / 100)}
+                  unit="%"
+                  width="sm"
+                  aria-label={t.cultural_discount}
+                />
               )}
             </div>
           </Section>
@@ -165,13 +179,13 @@ export function ClientDetailPage() {
               value={form.notes ?? ""}
               onChange={(e) => update("notes", e.target.value)}
               onBlur={(e) => saveField("notes", e.target.value)}
-              rows={3}
+              aria-label={t.notes}
             />
           </Section>
         </div>
 
-        <div className="space-y-4">
-          <Section title={`${t.projects} (${projects?.length ?? 0})`}>
+        <div className={CARD_STACK}>
+          <Section title={t.projects} count={projects?.length ?? 0}>
             {projects?.map((p) => (
               <Link
                 key={p.id}
@@ -182,12 +196,11 @@ export function ClientDetailPage() {
                 <span className="ml-2 text-xs text-muted">{p.status}</span>
               </Link>
             ))}
-            {(!projects || projects.length === 0) && (
-              <div className="text-sm text-muted">{t.no_projects}</div>
-            )}
+            {projects === undefined && <ListSkeleton size="sm" rows={2} />}
+            {projects?.length === 0 && <EmptyState size="sm" icon={FolderOpen} message={t.no_projects_for_client} />}
           </Section>
 
-          <Section title={`${t.invoices} (${invoices?.length ?? 0})`}>
+          <Section title={t.invoices} count={invoices?.length ?? 0}>
             {invoices?.map((inv) => (
               <div key={inv.id} className="flex items-center justify-between py-1.5 text-sm group">
                 <span>{inv.reference}</span>
@@ -214,9 +227,8 @@ export function ClientDetailPage() {
                 </div>
               </div>
             ))}
-            {(!invoices || invoices.length === 0) && (
-              <div className="text-sm text-muted">{t.no_invoices}</div>
-            )}
+            {invoices === undefined && <ListSkeleton size="sm" rows={2} />}
+            {invoices?.length === 0 && <EmptyState size="sm" icon={FileText} message={t.no_invoices_for_client} />}
           </Section>
 
           <Section title={t.client_activity}>
@@ -270,7 +282,7 @@ function ContactsSection({
       { client_id: clientId, ...d },
       {
         onSuccess: () => {
-          toast.success(t.contact_added);
+          notify.success(t.contact_added);
           setDrafts((prev) => prev.filter((_, i) => i !== idx));
         },
       }
@@ -330,30 +342,30 @@ function ContactsSection({
 
   return (
     <Card>
-      <SectionLabel
-        as="h2"
-        className="mb-3"
+      <Card.Header
+        title={t.contacts}
+        count={contacts.length}
+        variant="label"
         action={
           <Button variant="link" icon={<Plus size={12} />} onClick={addDraft} className="hover:text-accent-hover">
             {t.add}
           </Button>
         }
-      >
-        {t.contacts}
-      </SectionLabel>
+      />
 
       {contacts.length === 0 && drafts.length === 0 && (
-        <div className="text-sm text-muted">{t.no_contacts}</div>
+        <EmptyState
+          size="sm"
+          icon={UserRound}
+          message={t.no_contacts}
+          action={<Button variant="secondary" icon={<Plus size={12} />} onClick={addDraft}>{t.add_contact}</Button>}
+        />
       )}
 
       <div className="space-y-2">
         {contacts.map((c) => (
           editingId === c.id ? (
-            <Card
-              key={c.id}
-              padding={false}
-              className="border border-[var(--color-input-border)] p-3"
-            >
+            <Card key={c.id} tone="inset" padding="sm">
               <FormLayout dense capped={false}>
                 <FormGrid cols={3}>
                   <MiniField
@@ -421,9 +433,11 @@ function ContactsSection({
               </FormLayout>
             </Card>
           ) : (
-            <Card padding={false}
+            <Card
               key={c.id}
-              className="relative border border-[var(--color-border-divider)] px-3 py-2.5 group cursor-default"
+              tone="inset"
+              padding="sm"
+              className="relative group cursor-default"
               onContextMenu={(e) => {
                 e.preventDefault();
                 setContextMenu({ x: e.clientX, y: e.clientY, contactId: c.id });
@@ -447,7 +461,7 @@ function ContactsSection({
                 icon={Pencil}
                 label={t.edit}
                 onClick={() => startEditing(c)}
-                className="absolute top-2.5 right-2.5 opacity-60 hover:opacity-100"
+                className="absolute top-3 right-3 opacity-60 hover:opacity-100"
               />
             </Card>
           )
@@ -483,10 +497,7 @@ function ContactsSection({
         )}
 
         {drafts.map((d, idx) => (
-          <div
-            key={`draft-${idx}`}
-            className="border border-dashed border-[var(--color-input-border)] rounded-xl p-3"
-          >
+          <Card key={`draft-${idx}`} tone="dashed" padding="sm">
             <FormLayout dense capped={false}>
               <FormGrid cols={3}>
                 <MiniField
@@ -542,7 +553,7 @@ function ContactsSection({
                 <Button onClick={() => saveDraft(idx)}>{t.save}</Button>
               </FormActions>
             </FormLayout>
-          </div>
+          </Card>
         ))}
       </div>
     </Card>
@@ -601,7 +612,7 @@ function AddressCard({
 
   if (editing) {
     return (
-      <Card padding={false} className="p-3">
+      <Card tone="inset" padding="sm">
         <FormLayout dense capped={false}>
           <FormGrid cols={2}>
             <MiniField label={t.label} value={form.label} onChange={(v) => setForm({ ...form, label: v })} onKeyDown={fieldKeys} />
@@ -620,8 +631,10 @@ function AddressCard({
   }
 
   return (
-    <Card padding={false}
-      className="p-3 group relative"
+    <Card
+      tone="inset"
+      padding="sm"
+      className="group relative"
       onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); }}
     >
       <div className="flex items-start justify-between">
@@ -680,7 +693,7 @@ function AddressesSection({
       { client_id: clientId, ...d },
       {
         onSuccess: () => {
-          toast.success(t.address_added);
+          notify.success(t.address_added);
           setDrafts((prev) => prev.filter((_, i) => i !== idx));
         },
       }
@@ -711,22 +724,20 @@ function AddressesSection({
 
   return (
     <Card>
-      <SectionLabel
-        as="h2"
-        className="mb-3"
+      <Card.Header
+        title={t.billing_addresses}
+        variant="label"
         action={
           <Button variant="link" icon={<Plus size={12} />} onClick={addDraft} className="hover:text-accent-hover">
             {t.add}
           </Button>
         }
-      >
-        {t.billing_addresses}
-      </SectionLabel>
+      />
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {/* Main address — read-only card from client fields */}
         {(client.address_line1 || client.postal_city) && (
-          <Card padding={false} className="border border-[var(--color-border-divider)] p-3 opacity-80">
+          <Card tone="inset" padding="sm" className="opacity-80">
             <SectionLabel as="span">{t.main_address}</SectionLabel>
             <div className="mt-1 text-sm">
               {(client.billing_name || client.name) && (
@@ -750,10 +761,7 @@ function AddressesSection({
         ))}
 
         {drafts.map((d, idx) => (
-          <div
-            key={`draft-addr-${idx}`}
-            className="border border-dashed border-[var(--color-input-border)] rounded-xl p-3"
-          >
+          <Card key={`draft-addr-${idx}`} tone="dashed" padding="sm">
             <FormLayout dense capped={false}>
               <FormGrid cols={2}>
                 <MiniField
@@ -807,7 +815,7 @@ function AddressesSection({
                 <Button onClick={() => saveDraft(idx)}>{t.save}</Button>
               </FormActions>
             </FormLayout>
-          </div>
+          </Card>
         ))}
       </div>
     </Card>
@@ -816,10 +824,10 @@ function AddressesSection({
 
 /* ── Shared UI ── */
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
   return (
     <Card>
-      <SectionLabel as="h2" className="mb-3">{title}</SectionLabel>
+      <Card.Header title={title} count={count} variant="label" />
       {children}
     </Card>
   );

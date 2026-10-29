@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { PanelTitle } from "./PanelTitle";
+import { HEADING_COUNT } from "./tokens";
 
 /**
  * SectionLabel — the small uppercase label above a group of content
@@ -19,19 +20,22 @@ interface SectionLabelProps {
   children: ReactNode;
   /** Use a heading tag when the label names a section (h2/h3). */
   as?: "div" | "span" | "p" | "h1" | "h2" | "h3" | "h4";
-  /** Right-aligned content on the same row (a count, an icon button). */
+  /** A count after the label, plain weight ("2026 · 12"). Never bake it into the label string. */
+  count?: ReactNode;
+  /** Right-aligned content on the same row (an icon button). */
   action?: ReactNode;
   id?: string;
   className?: string;
 }
 
-export function SectionLabel({ children, as: Tag = "div", action, id, className = "" }: SectionLabelProps) {
+export function SectionLabel({ children, as: Tag = "div", count, action, id, className = "" }: SectionLabelProps) {
   if (!action) {
     return (
       <Tag id={id} className={`${SECTION_LABEL} ${className}`}>
         {children}
+        {count != null && count !== false && <span className={HEADING_COUNT}>{count}</span>}
       </Tag>
     );
   }
-  return <PanelTitle as={Tag} id={id} title={children} action={action} variant="label" className={className} />;
+  return <PanelTitle as={Tag} id={id} title={children} count={count} action={action} variant="label" className={className} />;
 }

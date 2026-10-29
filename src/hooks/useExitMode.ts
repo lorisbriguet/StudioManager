@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { useT } from "../i18n/useT";
 import { useConfirm } from "../lib/confirm";
-import { logError } from "../lib/log";
 import { exitPresentationMode, exitTestMode } from "../lib/modes";
 
 export type AppMode = "test" | "presentation";
@@ -32,11 +31,10 @@ export function useExitMode() {
     setExiting(mode);
     try {
       await (test ? exitTestMode() : exitPresentationMode());
-      toast.success(test ? t.toast_test_mode_exited : t.toast_presentation_exited);
+      notify.success(test ? t.toast_test_mode_exited : t.toast_presentation_exited);
       setTimeout(() => window.location.reload(), 500);
     } catch (e) {
-      logError(`Exit ${mode} mode failed:`, e);
-      toast.error(`${test ? t.toast_test_mode_failed : t.toast_presentation_failed}: ${String(e)}`);
+      notify.error(test ? t.toast_test_mode_failed : t.toast_presentation_failed, e);
     } finally {
       setExiting(null);
     }

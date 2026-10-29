@@ -5,7 +5,7 @@ import { useAppStore, type DateFormatOption } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
 import { IconButton } from "./IconButton";
 import { Popover } from "./Popover";
-import { Input, type FieldSize } from "./Input";
+import { Input } from "./Input";
 import { Button } from "./Button";
 
 /**
@@ -170,9 +170,10 @@ interface DatePickerProps {
    */
   onChange: (value: string | null) => void;
   placeholder?: string;
-  size?: FieldSize;
   /** bare: table cells. */
   variant?: "default" | "bare";
+  /** Accent border: a date filled in from a receipt scan, not yet touched. */
+  detected?: boolean;
   fullWidth?: boolean;
   disabled?: boolean;
   autoFocus?: boolean;
@@ -180,7 +181,7 @@ interface DatePickerProps {
   name?: string;
   /** On the wrapper (layout: width, margins). */
   className?: string;
-  /** On the text field itself (border highlights such as detected values). */
+  /** On the text field itself. */
   inputClassName?: string;
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
   onBlur?: () => void;
@@ -195,8 +196,8 @@ export function DatePicker({
   value,
   onChange,
   placeholder,
-  size = "sm",
   variant = "default",
+  detected = false,
   fullWidth = true,
   disabled,
   autoFocus,
@@ -275,8 +276,8 @@ export function DatePicker({
         type="text"
         inputMode="numeric"
         autoComplete="off"
-        size={size}
         variant={variant}
+        detected={detected}
         disabled={disabled}
         autoFocus={autoFocus}
         value={text}
@@ -308,17 +309,18 @@ export function DatePicker({
         aria-describedby={aria["aria-describedby"]}
         aria-required={aria["aria-required"]}
         data-testid={aria["data-testid"]}
-        className={`pr-8 tabular-nums ${inputClassName}`}
-      />
-      <IconButton
-        icon={CalendarIcon}
-        label={t.pick_date}
-        size="xs"
-        disabled={disabled}
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        onClick={() => setOpen((o) => !o)}
-        className="absolute right-1 top-1/2 -translate-y-1/2"
+        inputClassName={`tabular-nums ${inputClassName}`}
+        trailing={
+          <IconButton
+            icon={CalendarIcon}
+            label={t.pick_date}
+            size="xs"
+            disabled={disabled}
+            aria-expanded={open}
+            aria-haspopup="dialog"
+            onClick={() => setOpen((o) => !o)}
+          />
+        }
       />
       {open && (
         <Popover

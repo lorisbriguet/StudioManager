@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useRef, useEffect, type RefObject } fro
 import { Plus, Trash2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Settings2, Copy, Download, Sigma, Pin, Play, Square } from "lucide-react";
 import { Button, DragHandle, Select, Popover, Input, FormModal, FormField } from "../ui";
 import { MENU_ITEM, MENU_DIVIDER } from "../ui/Dropdown";
-import { toast } from "sonner";
+import { notify } from "../../lib/notify";
 import {
   DndContext,
   closestCenter,
@@ -96,6 +96,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
   // Collapse is now handled by ProjectBlockLayout
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveTemplateName, setSaveTemplateName] = useState("");
+  const [saveTemplateError, setSaveTemplateError] = useState<string | undefined>();
   const [headerMenu, setHeaderMenu] = useState<{ ci: number; isSystem?: boolean } | null>(null);
   // The header cell the open column menu hangs from.
   const headerMenuAnchorRef = useRef<HTMLElement | null>(null);
@@ -119,7 +120,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
       if (tpl) {
         setConfig.mutate(
           { templateId: tpl.id, columns: tpl.columns },
-          { onSuccess: () => toast.success(t.toast_status_updated) }
+          { onSuccess: () => notify.success(t.template_applied) }
         );
       }
     },
@@ -154,6 +155,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
   const handleSaveAsTemplate = useCallback(() => {
     if (columns.length === 0) return;
     setSaveTemplateName("");
+    setSaveTemplateError(undefined);
     setShowSaveModal(true);
   }, [columns]);
 
@@ -173,12 +175,12 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
     const name = saveTemplateName.trim();
     if (!name) return;
     if (templates?.some((tpl) => tpl.name.toLowerCase() === name.toLowerCase())) {
-      toast.error(t.template_name_exists);
+      setSaveTemplateError(t.template_name_exists);
       return;
     }
     createTemplate.mutate(
       { name, columns },
-      { onSuccess: () => toast.success(t.toast_created) }
+      { onSuccess: () => notify.success(t.template_saved) }
     );
     setShowSaveModal(false);
   }, [saveTemplateName, columns, createTemplate, templates, t]);
@@ -187,7 +189,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
     if (!templateId || columns.length === 0) return;
     updateTemplate.mutate(
       { id: templateId, columns },
-      { onSuccess: () => toast.success(t.toast_status_updated) }
+      { onSuccess: () => notify.success(t.template_updated) }
     );
   }, [templateId, columns, updateTemplate, t]);
 
@@ -395,7 +397,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
     a.download = `workload-${projectId}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success(t.export_csv);
+    notify.success(t.csv_exported);
   }, [sortedRows, columns, projectId, t]);
 
   // Compute summary row (sum of number & formula columns + system duration/planned)
@@ -690,10 +692,10 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
           onSubmit={confirmSaveTemplate}
           submitDisabled={!saveTemplateName.trim()}
         >
-          <FormField label={t.template_name_prompt}>
+          <FormField label={t.template_name_prompt} error={saveTemplateError}>
             <Input
               value={saveTemplateName}
-              onChange={(e) => setSaveTemplateName(e.target.value)}
+              onChange={(e) => { setSaveTemplateName(e.target.value); setSaveTemplateError(undefined); }}
               autoFocus
             />
           </FormField>
@@ -891,6 +893,7 @@ function SortableRow({
 // ── Inline Title Editor ────────────────────────────────────
 
 function InlineTitle({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const t = useT();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
 
@@ -906,8 +909,9 @@ function InlineTitle({ value, onChange }: { value: string; onChange: (v: string)
   }
 
   return (
-    <Input variant="bare" size="sm"
+    <Input variant="bare"
       className="flex-1 min-w-0"
+      aria-label={t.task_name}
       value={draft}
       autoFocus
       onChange={(e) => setDraft(e.target.value)}
@@ -938,6 +942,7 @@ function InlineDuration({
   timerStartedAt?: number;
 }) {
   const [editing, setEditing] = useState(false);
+  const t = useT();
   const [draft, setDraft] = useState("");
   const [liveElapsed, setLiveElapsed] = useState(0);
 
@@ -957,8 +962,10 @@ function InlineDuration({
 
   if (editing) {
     return (
-      <Input variant="bare" size="sm"
-        className="text-right"
+      <Input variant="bare"
+        numeric
+        type="text"
+        aria-label={t.duration}
         value={draft}
         autoFocus
         onChange={(e) => setDraft(e.target.value)}

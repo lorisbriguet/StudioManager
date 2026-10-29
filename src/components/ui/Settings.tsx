@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { Card } from "./Card";
-import { SectionLabel } from "./SectionLabel";
 
 /**
  * Settings building blocks (see DESIGN-SYSTEM.md, "Settings").
@@ -55,19 +54,14 @@ export function SettingsCard({
   children: ReactNode;
 }) {
   return (
-    <Card as="section" padding={false} className="border border-[var(--color-border-divider)] px-4 pt-3 pb-1">
+    <Card as="section" tone="inset" padding="none" className="px-4 pt-3 pb-1">
       {title && <SectionHeader title={title} desc={desc} />}
       {children}
     </Card>
   );
 }
 
-/** Section label with an optional description and a divider under it. */
+/** Section label with an optional description and a divider under it: Card.Header variant="label" divider. */
 export function SectionHeader({ title, desc }: { title: string; desc?: ReactNode }) {
-  return (
-    <div className="border-b border-[var(--color-border-divider)] pb-2 mb-3">
-      <SectionLabel as="h2">{title}</SectionLabel>
-      {desc && <p className="text-xs text-muted mt-1">{desc}</p>}
-    </div>
-  );
+  return <Card.Header title={title} subtitle={desc} variant="label" divider />;
 }

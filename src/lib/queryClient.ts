@@ -1,15 +1,31 @@
 import { QueryClient, MutationCache } from "@tanstack/react-query";
-import { notifyError, getLabels } from "./notifyError";
+import { notify, getLabels } from "./notify";
+import type { UIKey } from "../i18n/ui";
+
+declare module "@tanstack/react-query" {
+  interface Register {
+    mutationMeta: {
+      /**
+       * The ui.ts key of the label shown when this mutation fails, e.g.
+       * "error_save_invoice" ("Couldn't save the invoice"). Resolved when it
+       * fails, so a language switch applies.
+       */
+      errorLabel?: UIKey;
+    };
+  }
+}
 
 export const queryClient = new QueryClient({
-  // Backstop for mutations without their own onError: a failed write must
-  // never be silent (audit round 4 — calendar drag/drop, inline field saves
-  // and wiki auto-save all swallowed errors). Hook-level onError opts out.
+  // Every failed write is reported HERE, once: the mutation's
+  // `meta.errorLabel` ("Couldn't save the invoice", generic label otherwise),
+  // raw error logged with a "Details" copy. Hooks and call sites don't toast
+  // the failure again. A hook-level onError opts out (it reports itself).
   mutationCache: new MutationCache({
     onError: (error, _variables, _context, mutation) => {
-      if (!mutation.options.onError) {
-        notifyError(getLabels().operation_failed, error);
-      }
+      if (mutation.options.onError) return;
+      const t = getLabels();
+      const key = mutation.meta?.errorLabel;
+      notify.error(key ? t[key] : t.operation_failed, error);
     },
   }),
   defaultOptions: {

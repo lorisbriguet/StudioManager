@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { X, Trash2, Calendar } from "lucide-react";
 import { Checkbox, Button, Select, Input, FormModal, Tooltip, FormField, FormGrid, FormGroup } from "../ui";
-import { toast } from "sonner";
+import { notify } from "../../lib/notify";
 import type { WorkloadColumn, WorkloadColumnType, SelectOption } from "../../types/workload";
 import { COLUMN_ICONS, COLUMN_ICON_NAMES } from "./columnIcons";
 import { evaluateFormula } from "../../lib/formulaEval";
@@ -111,7 +111,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
   const handleSaveAsList = async (listName: string) => {
     const id = await createCustomList.mutateAsync(listName);
     await setCustomListItems.mutateAsync({ listId: id, items: options.map((o) => ({ value: o.value, color: o.color })) });
-    toast.success(t.list_created);
+    notify.success(t.list_created);
   };
 
   return (

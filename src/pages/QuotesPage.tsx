@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Eye, Pencil, FileOutput, Trash2, Send, ExternalLink, FolderPlus, FileText, Settings2, Download, Mail } from "lucide-react";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { pdf } from "@react-pdf/renderer";
 import { invoke } from "@tauri-apps/api/core";
 import { writeFile } from "@tauri-apps/plugin-fs";
@@ -28,7 +28,7 @@ import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { QuoteToProjectWizard } from "../components/QuoteToProjectWizard";
 import { useTabStore } from "../stores/tab-store";
-import { PageHeader, SearchBar, Table, TableSkeleton, Button, EmptyState, Select, IconButton } from "../components/ui";
+import { PageHeader, SearchBar, Table, TableSkeleton, Button, EmptyState, QueryState, NoResults, Select, IconButton } from "../components/ui";
 import { quoteStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Quote, QuoteStatus, QuoteLineItem } from "../types/quote";
 import type { Client } from "../types/client";
@@ -80,7 +80,8 @@ async function generateQuotePdfBytes(
 }
 
 export function QuotesPage() {
-  const { data: quotes, isLoading } = useQuotes();
+  const quotesQuery = useQuotes();
+  const { data: quotes } = quotesQuery;
   const { data: clients } = useClients();
   const updateQuote = useUpdateQuote();
 
@@ -138,24 +139,21 @@ export function QuotesPage() {
 
   const doDownloadPdf = async (q: Quote & { client_name: string }) => {
     if (!(await settleDraft(q))) return;
-    const toastId = toast.loading(t.generating_pdf);
-    try {
-      const result = await generateQuotePdfBytes(q.id, q.client_id);
-      if (!result) {
-        toast.error(t.quote_not_found, { id: toastId });
-        return;
-      }
-      const blob = new Blob([result.bytes], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = pdfFileName(result.reference, result.client.name);
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast.success(t.download_pdf, { id: toastId });
-    } catch (err) {
-      toast.error(String(err), { id: toastId });
-    }
+    await notify.progress(
+      t.generating_pdf,
+      (async () => {
+        const result = await generateQuotePdfBytes(q.id, q.client_id);
+        if (!result) throw new Error(t.quote_not_found);
+        const blob = new Blob([result.bytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = pdfFileName(result.reference, result.client.name);
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      })(),
+      { success: t.pdf_downloaded, error: t.failed_to_generate_pdf }
+    );
   };
 
   const handleEmailPdf = async (q: Quote & { client_name: string }) => {
@@ -170,31 +168,28 @@ export function QuotesPage() {
 
   const doEmailPdf = async (q: Quote & { client_name: string }) => {
     if (!(await settleDraft(q))) return;
-    const toastId = toast.loading(t.generating_pdf);
-    try {
-      const result = await generateQuotePdfBytes(q.id, q.client_id);
-      if (!result) {
-        toast.error(t.quote_not_found, { id: toastId });
-        return;
-      }
-      const { root } = await orgPaths();
-      const tempPath = `${root}/temp_${pdfFileName(result.reference, result.client.name)}`;
-      await writeFile(tempPath, result.bytes);
+    await notify.progress(
+      t.generating_pdf,
+      (async () => {
+        const result = await generateQuotePdfBytes(q.id, q.client_id);
+        if (!result) throw new Error(t.quote_not_found);
+        const { root } = await orgPaths();
+        const tempPath = `${root}/temp_${pdfFileName(result.reference, result.client.name)}`;
+        await writeFile(tempPath, result.bytes);
 
-      await invoke("share_pdf_via_mail", {
-        path: tempPath,
-        to: result.client.email ?? "",
-        subject: result.reference,
-      });
-      toast.dismiss(toastId);
-    } catch (err) {
-      toast.error(String(err), { id: toastId });
-    }
+        await invoke("share_pdf_via_mail", {
+          path: tempPath,
+          to: result.client.email ?? "",
+          subject: result.reference,
+        });
+      })(),
+      { success: null, error: t.error_email_pdf }
+    );
   };
 
   const openWizard = async (quote: Quote & { client_name: string }) => {
     if (quote.converted_to_project_id) {
-      toast.info(t.project_already_generated);
+      notify.info(t.project_already_generated);
       return;
     }
     const items = await getQuoteLineItems(quote.id);
@@ -270,16 +265,11 @@ export function QuotesPage() {
     });
   };
 
-  if (isLoading) return (
-    <div>
-      <PageHeader title={t.quotes}>
-        <Button icon={<Plus size={12} />} onClick={() => navigate("/quotes/new")}>
-          {t.new_quote}
-        </Button>
-      </PageHeader>
-      <TableSkeleton columns={7} />
-    </div>
-  );
+  const clearFilters = () => {
+    setSearch("");
+    setFilterConditions([]);
+    setActiveFilterId(null);
+  };
 
   return (
     <div>
@@ -299,6 +289,8 @@ export function QuotesPage() {
         fields={quoteFields}
       />
 
+      <QueryState query={quotesQuery} skeleton={<TableSkeleton columns={7} />} errorMessage={t.load_error_quotes}>
+      {(all) => (
       <Table>
         <Table.Head>
           <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} />
@@ -358,19 +350,25 @@ export function QuotesPage() {
           ))}
           {filtered.length === 0 && (
             <Table.Empty colSpan={7}>
-              <EmptyState
-                message={(quotes?.length ?? 0) === 0 ? t.no_quotes_yet : t.no_matching_quotes}
-                icon={<FileText size={32} />}
-                action={(quotes?.length ?? 0) === 0 ? (
-                  <Button icon={<Plus size={12} />} onClick={() => navigate("/quotes/new")}>
-                    {t.new_quote}
-                  </Button>
-                ) : undefined}
-              />
+              {all.length === 0 ? (
+                <EmptyState
+                  message={t.no_quotes_yet}
+                  icon={FileText}
+                  action={
+                    <Button icon={<Plus size={12} />} onClick={() => navigate("/quotes/new")}>
+                      {t.new_quote}
+                    </Button>
+                  }
+                />
+              ) : (
+                <NoResults message={t.no_matching_quotes} onClear={clearFilters} />
+              )}
             </Table.Empty>
           )}
         </Table.Body>
       </Table>
+      )}
+      </QueryState>
       {ctxMenu && (
         <ContextMenu
           x={ctxMenu.x}

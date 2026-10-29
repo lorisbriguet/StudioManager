@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
-import { toast } from "sonner";
+import { getLabels, notify } from "../lib/notify";
+import { plural } from "../i18n/plural";
 import { useQueryClient } from "@tanstack/react-query";
 import { markOverdueInvoices } from "../db/queries/invoices";
 import { createNotification } from "../db/queries/notifications";
@@ -25,21 +26,23 @@ export function useOverdueCheck() {
         qc.invalidateQueries({ queryKey: ["invoices"] });
         qc.invalidateQueries({ queryKey: ["finance"] });
 
-        const msg = `${overdue.length} invoice${overdue.length > 1 ? "s" : ""} marked as overdue: ${overdue.map((i) => i.reference).join(", ")}`;
+        const t = getLabels();
+        const title = plural(overdue.length, t.overdue_marked_one, t.overdue_marked_other);
+        const refs = overdue.map((i) => i.reference).join(", ");
 
-        toast.warning(msg, { duration: 8000 });
+        notify.warning(title, { description: refs });
 
         await createNotification({
           type: "overdue",
-          title: "Invoices overdue",
-          message: msg,
+          title,
+          message: refs,
           read: 0,
           link: "/invoices",
         });
 
         qc.invalidateQueries({ queryKey: ["notifications"] });
 
-        sendNativeNotification("Invoices overdue", msg);
+        sendNativeNotification(title, refs);
       }
     }).catch((e) => {
       logError("Overdue check failed:", e);

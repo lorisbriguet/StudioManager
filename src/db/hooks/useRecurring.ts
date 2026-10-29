@@ -1,9 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { useUndoStore } from "../../stores/undo-store";
 import * as q from "../queries/recurring";
 import type { RecurringInvoiceTemplate } from "../../types/recurring";
-import { getLabels } from "../../lib/notifyError";
+import { getLabels } from "../../lib/notify";
 
 export function useRecurringTemplates() {
   return useQuery({
@@ -16,6 +15,7 @@ export function useCreateRecurringTemplate() {
   const qc = useQueryClient();
   const push = useUndoStore((s) => s.push);
   return useMutation({
+    meta: { errorLabel: "error_save_recurring" },
     mutationFn: (data: Omit<RecurringInvoiceTemplate, "id" | "created_at" | "updated_at">) =>
       q.createRecurringTemplate(data),
     onSuccess: (id, data) => {
@@ -34,13 +34,13 @@ export function useCreateRecurringTemplate() {
         },
       });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useUpdateRecurringTemplate() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_recurring" },
     mutationFn: async ({
       id,
       data,
@@ -71,7 +71,6 @@ export function useUpdateRecurringTemplate() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["recurring_templates"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -79,6 +78,7 @@ export function useDeleteRecurringTemplate() {
   const qc = useQueryClient();
   const push = useUndoStore((s) => s.push);
   return useMutation({
+    meta: { errorLabel: "error_delete_recurring" },
     mutationFn: async (id: number) => {
       const prev = await q.getRecurringTemplate(id);
       await q.deleteRecurringTemplate(id);
@@ -107,6 +107,5 @@ export function useDeleteRecurringTemplate() {
         });
       }
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }

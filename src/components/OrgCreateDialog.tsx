@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 import { Input } from "./ui/Input";
 import { FormField } from "./ui/FormField";
 import { FormGrid, FormModal } from "./ui/Form";
@@ -9,7 +8,7 @@ import { createOrganisation, DEFAULT_ORG_PREFS, type Organisation } from "../lib
 import { useOrgStore } from "../stores/org-store";
 import { useTimerActions } from "../hooks/useTimerActions";
 import { switchOrganisation, defaultSwitchDeps } from "../lib/switchOrganisation";
-import { notifyError } from "../lib/notifyError";
+import { notify } from "../lib/notify";
 import { useT } from "../i18n/useT";
 
 export function OrgCreateDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -42,9 +41,9 @@ export function OrgCreateDialog({ open, onClose }: { open: boolean; onClose: () 
       const reg = await createOrganisation(trimmed, seed, { ...DEFAULT_ORG_PREFS });
       useOrgStore.setState({ organisations: reg.organisations });
       created = reg.organisations.find((o) => o.name === trimmed);
-      toast.success(t.organisation_created);
+      notify.success(t.organisation_created);
     } catch (e) {
-      notifyError(t.organisation_create_failed, e);
+      notify.error(t.organisation_create_failed, e);
       setBusy(false);
       return;
     }
@@ -52,10 +51,10 @@ export function OrgCreateDialog({ open, onClose }: { open: boolean; onClose: () 
     try {
       if (created) {
         const ok = await switchOrganisation(created.id, defaultSwitchDeps(navigate, stopAndSave));
-        if (ok) toast.success(t.organisation_switched.replace("{name}", trimmed));
+        if (ok) notify.success(t.organisation_switched.replace("{name}", trimmed));
       }
     } catch (e) {
-      notifyError(t.organisation_switch_failed, e);
+      notify.error(t.organisation_switch_failed, e);
     } finally {
       setBusy(false);
     }

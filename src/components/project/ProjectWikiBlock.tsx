@@ -2,13 +2,14 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, BookOpen } from "lucide-react";
 import { useWikiArticlesByProject, useWikiArticles, useUpdateWikiArticle } from "../../db/hooks/useWiki";
-import { Button, Tag } from "../ui";
+import { Button, EmptyState, ListSkeleton, Tag } from "../ui";
 import { useT } from "../../i18n/useT";
+import { LinkPicker } from "./LinkPicker";
 
 export function ProjectWikiBlock({ projectId }: { projectId: number }) {
   const t = useT();
   const navigate = useNavigate();
-  const { data: wikiArticles } = useWikiArticlesByProject(projectId);
+  const { data: wikiArticles, isPending } = useWikiArticlesByProject(projectId);
   const { data: allArticles = [] } = useWikiArticles();
   const updateWikiArticle = useUpdateWikiArticle();
   const [showPicker, setShowPicker] = useState(false);
@@ -18,8 +19,9 @@ export function ProjectWikiBlock({ projectId }: { projectId: number }) {
 
   return (
     <div className="text-sm">
-      {(!wikiArticles || wikiArticles.length === 0) && !showPicker && (
-        <div className="text-muted">{t.no_wiki_articles_linked}</div>
+      {isPending && <ListSkeleton size="sm" rows={2} />}
+      {wikiArticles?.length === 0 && !showPicker && (
+        <EmptyState size="sm" icon={BookOpen} message={t.no_wiki_articles_linked} />
       )}
       {wikiArticles && wikiArticles.length > 0 && (
         <div className="divide-y divide-[var(--color-border-divider)]">
@@ -41,37 +43,26 @@ export function ProjectWikiBlock({ projectId }: { projectId: number }) {
         </div>
       )}
       {showPicker ? (
-        <div className="mt-2 border border-[var(--color-border-divider)] rounded-xl p-2">
-          {unlinked.length === 0 ? (
-            <div className="text-xs text-muted">{t.no_articles_yet}</div>
-          ) : (
-            <div className="max-h-32 overflow-y-auto space-y-1">
-              {unlinked.map((a) => (
-                <button
-                  key={a.id}
-                  onClick={() => {
-                    updateWikiArticle.mutate({ id: a.id, data: { project_id: projectId } });
-                    setShowPicker(false);
-                  }}
-                  className="w-full text-left px-2 py-1 text-sm hover:bg-[var(--color-hover-row)] rounded-md flex items-center gap-2"
-                >
-                  <BookOpen size={12} className="text-muted" />
-                  {a.title}
-                  {a.tags && a.tags.length > 0 && (
-                    <div className="flex items-center gap-1 ml-auto shrink-0">
-                      {a.tags.map((tag: string) => (
-                        <Tag key={tag} name={tag} size="xs" />
-                      ))}
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-          <button onClick={() => setShowPicker(false)} className="text-xs text-muted mt-1 hover:text-[var(--color-text)]">
-            {t.cancel}
-          </button>
-        </div>
+        <LinkPicker
+          emptyMessage={t.no_articles_to_link}
+          onCancel={() => setShowPicker(false)}
+          items={unlinked.map((a) => ({
+            id: a.id,
+            icon: <BookOpen size={12} className="text-muted" />,
+            label: a.title,
+            trailing: a.tags && a.tags.length > 0 && (
+              <span className="flex items-center gap-1 ml-auto shrink-0">
+                {a.tags.map((tag: string) => (
+                  <Tag key={tag} name={tag} size="xs" />
+                ))}
+              </span>
+            ),
+            onPick: () => {
+              updateWikiArticle.mutate({ id: a.id, data: { project_id: projectId } });
+              setShowPicker(false);
+            },
+          }))}
+        />
       ) : (
         <Button variant="link" icon={<Plus size={12} />} onClick={() => setShowPicker(true)} className="mt-1">
           {t.link_article}

@@ -1,6 +1,6 @@
 import { useState, useMemo, useId } from "react";
 import { useT } from "../../i18n/useT";
-import { Checkbox, Select, Button, FIELD_LABEL } from "../ui";
+import { Checkbox, Select, Button, FIELD_LABEL, EmptyState, PanelTitle } from "../ui";
 import { useSupplierCounts, useMergeSuppliers } from "../../db/hooks/useExpenses";
 import { suggestSupplierGroups, type SupplierCount } from "../../lib/supplierMerge";
 import { undoableFromStore } from "../../lib/undo";
@@ -83,9 +83,9 @@ export function SuppliersManager() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-sm font-medium mb-2">{t.suggested_merges}</h3>
+        <PanelTitle as="h3" title={t.suggested_merges} className="mb-2" />
         {groups.length === 0 ? (
-          <p className="text-sm text-muted">{t.no_merge_suggestions}</p>
+          <EmptyState size="sm" message={t.no_merge_suggestions} />
         ) : (
           <div className="space-y-2">
             {groups.map((g) => (
@@ -100,7 +100,7 @@ export function SuppliersManager() {
         )}
       </div>
       <div>
-        <h3 className="text-sm font-medium mb-2">{t.all_suppliers}</h3>
+        <PanelTitle as="h3" title={t.all_suppliers} className="mb-2" />
         {selected.size >= 2 && (
           <div className="flex items-center gap-2 mb-2">
             <label htmlFor={manualSelectId} className={`${FIELD_LABEL} shrink-0`}>{t.merge_into}</label>

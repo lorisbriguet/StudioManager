@@ -3,30 +3,20 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { OrgCreateDialog } from "../components/OrgCreateDialog";
 import { useOrgStore } from "../stores/org-store";
 import { useAppStore } from "../stores/app-store";
 import { uiLabels } from "../i18n/ui";
-import { notifyError } from "../lib/notifyError";
 import { confirmIfDirty } from "../lib/dirty-guard";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 
-vi.mock("sonner", () => ({
-  toast: {
-    info: vi.fn(),
-    loading: vi.fn(),
-    success: vi.fn(),
-    warning: vi.fn(),
-    error: vi.fn(),
-    dismiss: vi.fn(),
-  },
+vi.mock("../lib/notify", async (orig) => ({
+  ...(await orig<typeof import("../lib/notify")>()),
+  ...(await import("../__mocks__/notify")).notifyMockModule(),
 }));
 
-vi.mock("../lib/notifyError", () => ({
-  notifyError: vi.fn(),
-  getLabels: () => new Proxy({}, { get: (_t, k) => String(k) }),
-}));
+
 
 // Only confirmIfDirty is exercised through OrgCreateDialog -> switchOrganisation;
 // defaults to accepting so the happy-path tests behave like a clean app state.
@@ -40,8 +30,8 @@ const base = { version: 1, activeId: "o1", organisations: [{ id: "o1", name: "St
 
 beforeEach(() => {
   clearInvokedCommands();
-  vi.mocked(toast.success).mockClear();
-  vi.mocked(notifyError).mockClear();
+  vi.mocked(notify.success).mockClear();
+  vi.mocked(notify.error).mockClear();
   vi.mocked(confirmIfDirty).mockClear();
   vi.mocked(confirmIfDirty).mockResolvedValue(true);
   useAppStore.setState({ language: "EN", testMode: false, presentationMode: false, activeTimer: null });
@@ -84,12 +74,12 @@ describe("OrgCreateDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: /create organisation/i }));
     // The organisation is still created...
     await waitFor(() => expect(invokedCommands.some((c) => c.cmd === "create_organisation")).toBe(true));
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith(uiLabels.EN.organisation_created));
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith(uiLabels.EN.organisation_created));
     // ...but the decline short-circuits switchOrganisation before it calls switch_organisation,
     // and the dialog still closes (the org exists and is selectable from the switcher).
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(invokedCommands.some((c) => c.cmd === "switch_organisation")).toBe(false);
-    expect(toast.success).not.toHaveBeenCalledWith(uiLabels.EN.organisation_switched.replace("{name}", "Label"));
+    expect(notify.success).not.toHaveBeenCalledWith(uiLabels.EN.organisation_switched.replace("{name}", "Label"));
   });
 
   it("keeps the dialog open with the typed name when creation fails", async () => {
@@ -100,7 +90,7 @@ describe("OrgCreateDialog", () => {
     mount();
     fireEvent.change(screen.getByLabelText(/organisation name/i), { target: { value: "Label" } });
     fireEvent.click(screen.getByRole("button", { name: /create organisation/i }));
-    await waitFor(() => expect(notifyError).toHaveBeenCalledWith(uiLabels.EN.organisation_create_failed, expect.any(Error)));
+    await waitFor(() => expect(notify.error).toHaveBeenCalledWith(uiLabels.EN.organisation_create_failed, expect.any(Error)));
     expect(screen.getByLabelText(/organisation name/i)).toHaveValue("Label");
     expect(invokedCommands.some((c) => c.cmd === "switch_organisation")).toBe(false);
     // Still open and usable: the Create button is present and not stuck busy.

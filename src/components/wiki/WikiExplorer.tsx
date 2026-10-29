@@ -84,7 +84,13 @@ export function WikiExplorer({
   onNewArticle,
   onOpenGraph,
   onDeleteArticle,
+  pageHeading = false,
 }: {
+  /**
+   * Nothing open that has its own h1 (graph, empty state): the "Wiki" label is
+   * the page h1. With an article or file open, its title is the h1 and this is an h2.
+   */
+  pageHeading?: boolean;
   articles: WikiArticleWithTags[];
   docs?: ProjectDoc[];
   /** The open article's id or file's key. */
@@ -158,7 +164,7 @@ export function WikiExplorer({
       className="w-60 shrink-0 flex flex-col min-h-0 border-r border-[var(--color-border-divider)]"
     >
       <div className="px-3 pt-5 pb-2 space-y-3">
-        <SectionLabel as="h1" className="px-2">{t.wiki}</SectionLabel>
+        <SectionLabel as={pageHeading ? "h1" : "h2"} className="px-2">{t.wiki}</SectionLabel>
         <SearchBar value={search} onChange={setSearch} placeholder={t.search_articles} className="w-full" />
         <div className="flex items-center gap-1 px-1">
           <IconButton icon={FilePlus} label={t.new_article} onClick={() => onNewArticle(null)} disabled={creating} />

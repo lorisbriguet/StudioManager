@@ -8,6 +8,7 @@ import { Button } from "../ui/Button";
 import { SectionLabel } from "../ui/SectionLabel";
 import { Checkbox } from "../ui/Checkbox";
 import { FormActions } from "../ui/Form";
+import { EmptyState } from "../ui/EmptyState";
 import { useOrgStore } from "../../stores/org-store";
 import { useT } from "../../i18n/useT";
 
@@ -189,7 +190,7 @@ export function AgentAccessCard() {
           <div className="py-2.5 border-b border-[var(--color-border-divider)]">
             <SectionLabel className="mb-1">{t.agent_access_recent}</SectionLabel>
             {log.length === 0 ? (
-              <p className="text-xs text-muted">{t.agent_access_none}</p>
+              <EmptyState size="sm" message={t.agent_access_none} />
             ) : (
               <ul className="space-y-1">
                 {log.map((l, i) => (

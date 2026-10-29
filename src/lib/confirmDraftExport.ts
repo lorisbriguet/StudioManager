@@ -1,5 +1,5 @@
 import { confirm } from "./confirm";
-import { getLabels } from "./notifyError";
+import { getLabels } from "./notify";
 
 export type DraftExportChoice = "cancel" | "draft" | "sent";
 

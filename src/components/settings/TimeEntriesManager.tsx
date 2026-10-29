@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { X, Pencil, Trash2, Check } from "lucide-react";
+import { X, Pencil, Trash2, Check, Clock } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useTimeEntriesWithDetails, useUpdateTimeEntry, useDeleteTimeEntry } from "../../db/hooks/useTimeEntries";
 import { useProjects } from "../../db/hooks/useProjects";
 import { deleteWithUndo } from "../../lib/undo";
-import { Button, DatePicker, Select, IconButton, Input, Table, TableSkeleton, FormField, FORM_GAP } from "../ui";
+import { Button, DatePicker, Select, IconButton, Input, Table, TableSkeleton, FormField, FORM_GAP, EmptyState, NoResults, QueryError } from "../ui";
 import { SectionHeader } from "../ui/Settings";
 
 function formatDuration(minutes: number): string {
@@ -29,7 +29,7 @@ export function TimeEntriesManager() {
     description: "",
   });
 
-  const { data: entries, isLoading } = useTimeEntriesWithDetails(
+  const { data: entries, isError, isFetching, refetch } = useTimeEntriesWithDetails(
     startDate || undefined,
     endDate || undefined,
     projectFilter
@@ -68,13 +68,13 @@ export function TimeEntriesManager() {
       {/* Filters */}
       <div className={`flex flex-wrap items-end ${FORM_GAP} mb-4`}>
         <FormField label={t.start}>
-          <DatePicker size="sm" fullWidth={false}
+          <DatePicker fullWidth={false}
             value={startDate || null}
             onChange={(v) => setStartDate(v ?? "")}
           />
         </FormField>
         <FormField label={t.end_date}>
-          <DatePicker size="sm" fullWidth={false}
+          <DatePicker fullWidth={false}
             value={endDate || null}
             onChange={(v) => setEndDate(v ?? "")}
           />
@@ -105,7 +105,9 @@ export function TimeEntriesManager() {
       </div>
 
       {/* Table */}
-      {isLoading ? (
+      {entries === undefined && isError ? (
+        <QueryError message={t.load_error_time_entries} onRetry={refetch} retrying={isFetching} />
+      ) : entries === undefined ? (
         <TableSkeleton columns={5} rows={6} density="compact" />
       ) : (
           <Table density="compact">
@@ -123,7 +125,8 @@ export function TimeEntriesManager() {
                   {editingId === entry.id ? (
                     <>
                       <Table.Td>
-                        <DatePicker size="sm"
+                        <DatePicker
+                          aria-label={t.date}
                           value={editForm.date || null}
                           onChange={(v) => setEditForm({ ...editForm, date: v ?? "" })}
                           className="min-w-[110px]"
@@ -133,33 +136,36 @@ export function TimeEntriesManager() {
                       <Table.Td muted>{entry.task_title ?? "—"}</Table.Td>
                       <Table.Td numeric>
                         <div className="flex items-center justify-end gap-1">
-                          <Input size="sm" fullWidth={false}
-                            type="number"
+                          <Input
+                            numeric
                             min={0}
                             max={23}
                             value={editForm.hours}
                             onChange={(e) => setEditForm({ ...editForm, hours: Math.max(0, Number(e.target.value)) })}
-                            className="w-14"
+                            unit="h"
+                            width="xs"
+                            aria-label={`${t.duration}, ${t.hours}`}
                           />
-                          <span className="text-muted">h</span>
-                          <Input size="sm" fullWidth={false}
-                            type="number"
+                          <Input
+                            numeric
                             min={0}
                             max={59}
                             value={editForm.minutes}
                             onChange={(e) => setEditForm({ ...editForm, minutes: Math.max(0, Math.min(59, Number(e.target.value))) })}
-                            className="w-14"
+                            unit="m"
+                            width="xs"
+                            aria-label={`${t.duration}, ${t.minutes}`}
                           />
-                          <span className="text-muted">m</span>
                         </div>
                       </Table.Td>
                       <Table.Td>
-                        <Input size="sm"
+                        <Input
                           type="text"
                           value={editForm.description}
                           onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                           className="min-w-[200px]"
                           placeholder={t.description}
+                          aria-label={t.description}
                         />
                       </Table.Td>
                       <Table.Actions always>
@@ -197,7 +203,11 @@ export function TimeEntriesManager() {
               ))}
               {rows.length === 0 && (
                 <Table.Empty colSpan={6}>
-                  <p className="text-xs text-muted py-4">{t.no_entries_found}</p>
+                  {startDate || endDate || projectFilter ? (
+                    <NoResults size="sm" message={t.no_entries_found} onClear={() => { setStartDate(""); setEndDate(""); setProjectFilter(undefined); }} />
+                  ) : (
+                    <EmptyState size="sm" icon={Clock} message={t.no_time_entries_yet} />
+                  )}
                 </Table.Empty>
               )}
             </Table.Body>

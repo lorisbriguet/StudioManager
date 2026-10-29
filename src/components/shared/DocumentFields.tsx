@@ -45,7 +45,10 @@ export function GlobalRateControl({
   onEnabledChange,
   onRateChange,
   onUnitChange,
+  currency = "CHF",
 }: {
+  /** The document's currency, shown inside the rate field. */
+  currency?: string;
   enabled: boolean;
   rate: number;
   unit: string;
@@ -60,14 +63,16 @@ export function GlobalRateControl({
       {enabled && (
         <>
           <Input
-            type="number"
+            numeric
+            step="0.01"
             value={rate || ""}
             onChange={(e) => onRateChange(e.target.value ? Number(e.target.value) : 0)}
             placeholder={t.global_rate}
-            fullWidth={false}
-            className="w-28 text-right"
+            aria-label={t.global_rate}
+            unit={currency}
+            width="md"
           />
-          <Select value={unit} onChange={(e) => onUnitChange(e.target.value)} fullWidth={false}>
+          <Select value={unit} onChange={(e) => onUnitChange(e.target.value)} fullWidth={false} aria-label={t.unit}>
             <option value="hours">{t.hours}</option>
             <option value="days">{t.days}</option>
             <option value="units">{t.units}</option>

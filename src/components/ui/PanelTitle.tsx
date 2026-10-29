@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { SECTION_LABEL } from "./SectionLabel";
+import { HEADING_2, HEADING_COUNT } from "./tokens";
 
 /**
  * PanelTitle — a panel's title row: the title on the left, an optional action
@@ -20,16 +21,18 @@ const TONE = {
 };
 
 /**
- * title: text-sm medium (modal, widget and section titles).
+ * title: level 2, 14px semibold (modal, widget, card and section titles).
  * label: the uppercase SectionLabel, truncated to leave room for the action.
  * Read at render time: SectionLabel imports this file, so SECTION_LABEL is
  * not yet defined when this module first evaluates.
  */
 const variantClass = (variant: "title" | "label") =>
-  variant === "label" ? `${SECTION_LABEL} truncate` : "text-sm font-medium";
+  variant === "label" ? `${SECTION_LABEL} truncate` : HEADING_2;
 
 export interface PanelTitleProps {
   title: ReactNode;
+  /** A count after the title, muted ("Projects 3"). Never bake it into the title string. */
+  count?: ReactNode;
   /** Right-aligned content on the same row. */
   action?: ReactNode;
   as?: "div" | "span" | "p" | "h1" | "h2" | "h3" | "h4";
@@ -43,6 +46,7 @@ export interface PanelTitleProps {
 
 export function PanelTitle({
   title,
+  count,
   action,
   as: Tag = "h2",
   tone = "default",
@@ -54,6 +58,7 @@ export function PanelTitle({
     <div className={`flex items-center justify-between gap-2 ${className}`}>
       <Tag id={id} className={`min-w-0 ${variantClass(variant)} ${TONE[tone]}`}>
         {title}
+        {count != null && count !== false && <span className={HEADING_COUNT}>{count}</span>}
       </Tag>
       {action != null && action !== false && <div className="flex items-center gap-1 shrink-0">{action}</div>}
     </div>

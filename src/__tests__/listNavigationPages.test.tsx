@@ -150,8 +150,8 @@ describe("ProjectsPage arrow-key navigation", () => {
     const cardA = (await screen.findByText("Website Revamp")).closest("[data-list-row]") as HTMLElement;
     fireEvent.click(cardA);
 
-    // Peek panel open — its "open full page" link only renders inside it.
-    await screen.findByRole("link", { name: "Open full page" });
+    // Peek panel open — its "open full page" button only renders inside it.
+    await screen.findByRole("button", { name: "Open full page" });
     expect(cardA.className).not.toContain("ring-2");
 
     fireEvent.keyDown(window, { key: "ArrowDown" });

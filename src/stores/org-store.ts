@@ -3,7 +3,7 @@ import { useAppStore } from "./app-store";
 import { listOrganisations, setOrganisationPrefs, type Organisation, type OrgPrefs, type Registry } from "../lib/orgs";
 import type { AppLanguage } from "../i18n/ui";
 import { logWarn } from "../lib/log";
-import { notifyError, getLabels } from "../lib/notifyError";
+import { getLabels, notify } from "../lib/notify";
 
 /** localStorage keys that used to hold what is now per-organisation. */
 const LEGACY_PREF_KEYS = ["showIncome", "showTasksPage", "showTimeOverview", "calendarSync", "calendarName", "backupPath", "exportLanguage"] as const;
@@ -153,7 +153,7 @@ export const useOrgStore = create<OrgState>((set, get) => ({
       // still reflects the pre-change registry value. Falling back to it on
       // the next call would drop this change from that call's merge and
       // re-send the stale value to the backend on the next successful save.
-      notifyError(getLabels().operation_failed, e);
+      notify.error(getLabels().operation_failed, e);
     }
   },
 }));

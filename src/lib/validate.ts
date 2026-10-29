@@ -27,7 +27,7 @@
  * NOTE: deliberately named validateForm/validateField — there is an unrelated
  * validateFields() (SQL identifier guard) in src/db/index.ts.
  */
-import { getLabels } from "./notifyError";
+import { getLabels } from "./notify";
 
 /** Returns an i18n'd error message, or null when the value is valid. */
 export type Rule = (value: string) => string | null;

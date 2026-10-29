@@ -3,7 +3,7 @@ import { IconButton } from "../components/ui/IconButton";
 import { useForm } from "react-hook-form";
 import { Plus, X, Palette, Trash2, Building2, Landmark, FileText, AlertTriangle } from "lucide-react";
 import { isUntranslatedActivity } from "../lib/activityNudge";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { deleteWithUndo } from "../lib/undo";
 import {
   useBusinessProfile,
@@ -14,7 +14,7 @@ import { useActivities, useCreateActivity, useUpdateActivity, useDeleteActivity 
 import type { Activity } from "../types/activity";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Button, FormField, FormLayout, FormSection, FormGrid, FormGroup, FormActions, Input, PageSpinner, SectionLabel, FORM_GAP, FORM_WIDTH, FIELD_LABEL } from "../components/ui";
+import { Button, FormField, FormLayout, FormSection, FormGrid, FormGroup, FormActions, Input, DetailSkeleton, EmptyState, QueryError, SectionLabel, SidebarTitle, FORM_GAP, FORM_WIDTH, FIELD_LABEL } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { TemplateEditor } from "../components/invoice/TemplateEditor";
 import {
@@ -50,7 +50,7 @@ const bankFields: { key: keyof FormData; labelKey: UIKey }[] = [
 ];
 
 export function ProfilePage() {
-  const { data: profile, isLoading } = useBusinessProfile();
+  const { data: profile, isLoading, isError: profileError, isFetching: profileFetching, refetch: refetchProfile } = useBusinessProfile();
   const updateProfile = useUpdateBusinessProfile();
   // Phase 2 E3: this stays a react-hook-form form — FormField is wired
   // presentationally around register (label/id association, error passthrough).
@@ -99,8 +99,7 @@ export function ProfilePage() {
         vat_exempt: data.vat_exempt ? 1 : 0,
       },
       {
-        onSuccess: () => toast.success(t.toast_profile_saved),
-        onError: (err) => toast.error(`${t.failed_save_profile}: ${String(err)}`),
+        onSuccess: () => notify.success(t.toast_profile_saved),
       }
     );
   };
@@ -139,13 +138,14 @@ export function ProfilePage() {
     return () => window.removeEventListener("keydown", handleProfileKeyDown);
   }, [handleProfileKeyDown]);
 
-  if (isLoading) return <PageSpinner />;
+  if (isLoading) return <DetailSkeleton blocks={4} />;
+  if (profileError && profile === undefined) return <QueryError message={t.load_error_profile} onRetry={refetchProfile} retrying={profileFetching} />;
 
   return (
     <div className="flex gap-0 -m-8" style={{ height: "calc(100vh - 80px)" }}>
       {/* Category sidebar */}
       <div className="w-56 shrink-0 border-r border-[var(--color-border-divider)] py-6">
-        <h1 className="text-xl font-semibold px-6 mb-6">{t.profile}</h1>
+        <SidebarTitle className="px-6 mb-6">{t.profile}</SidebarTitle>
         <nav className="space-y-0.5 px-3">
           {categories.map((cat) => (
             <NavItem
@@ -218,7 +218,7 @@ export function ProfilePage() {
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-muted">{t.no_templates}</p>
+                  <EmptyState size="sm" message={t.no_invoice_templates} />
                 )}
               </div>
             </div>
@@ -288,12 +288,14 @@ export function ProfilePage() {
                       onChange={(e) => setNewFr(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addNewActivity(); } }}
                       placeholder={t.activity_name_fr}
+                      aria-label={t.activity_name_fr}
                     />
                     <Input
                       value={newEn}
                       onChange={(e) => setNewEn(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addNewActivity(); } }}
                       placeholder={t.activity_name_en}
+                      aria-label={t.activity_name_en}
                     />
                     <IconButton icon={Plus} label={t.add_activity} tone="accent" onClick={addNewActivity} />
                   </div>
@@ -307,7 +309,7 @@ export function ProfilePage() {
                   >
                     <Input
                       {...register("default_payment_terms_days", { valueAsNumber: true })}
-                      type="number"
+                      numeric
                     />
                   </FormField>
                 </FormGrid>
@@ -364,8 +366,8 @@ export function ActivityRow({
 
   return (
     <div className={`grid grid-cols-[1fr_1fr_auto] ${FORM_GAP} items-center`}>
-      <Input value={fr} onChange={(e) => setFr(e.target.value)} onBlur={commit} />
-      <Input value={en} onChange={(e) => setEn(e.target.value)} onBlur={commit} />
+      <Input value={fr} onChange={(e) => setFr(e.target.value)} onBlur={commit} aria-label={t.activity_name_fr} />
+      <Input value={en} onChange={(e) => setEn(e.target.value)} onBlur={commit} aria-label={t.activity_name_en} />
       <div className="flex items-center gap-1">
         {untranslated && (
           <span

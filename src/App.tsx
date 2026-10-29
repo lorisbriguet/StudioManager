@@ -3,7 +3,6 @@ import { useEffect, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "react-error-boundary";
-import { Toaster, toast } from "sonner";
 import { ErrorFallback } from "./components/ErrorFallback";
 import { MainLayout } from "./components/layout/MainLayout";
 import { GlobalShortcuts } from "./components/GlobalShortcuts";
@@ -38,7 +37,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { ConfirmHost } from "./components/ui/ConfirmDialog";
 import { QuickTimerModal } from "./components/QuickTimerModal";
 import { OrgGate } from "./components/OrgGate";
-import { PageSpinner } from "./components/ui";
+import { PageSpinner, Toaster } from "./components/ui";
 import { useOverdueCheck } from "./hooks/useOverdueCheck";
 import { useRecurringCheck } from "./hooks/useRecurringCheck";
 import { useAutoBackup } from "./hooks/useAutoBackup";
@@ -48,7 +47,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useUndoStore } from "./stores/undo-store";
 import { useAppStore } from "./stores/app-store";
 import { useOrgStore } from "./stores/org-store";
-import { getLabels, notifyError } from "./lib/notifyError";
+import { getLabels, notify } from "./lib/notify";
 import { requestNotificationPermission } from "./lib/nativeNotification";
 
 import { queryClient } from "./lib/queryClient";
@@ -108,10 +107,10 @@ function StartupChecks() {
           if (action.redo) {
             store.insertUndo({ label: action.label, execute: action.redo, redo: action.execute }, 0);
           }
-          toast.success(`${t.redo_prefix} ${action.label}`);
+          notify.success(t.redone_named.replace("{label}", action.label));
         }).catch((err) => {
           store.pushRedo(action);
-          notifyError(t.redo_failed, err);
+          notify.error(t.redo_failed, err);
         });
       } else {
         // Undo: Cmd+Z
@@ -129,10 +128,10 @@ function StartupChecks() {
             window.history.pushState({}, "", action.redirectTo);
             window.dispatchEvent(new PopStateEvent("popstate"));
           }
-          toast.success(`${t.undo_prefix} ${action.label}`);
+          notify.success(t.undone_named.replace("{label}", action.label));
         }).catch((err) => {
           store.insertUndo(action, 0);
-          notifyError(t.undo_failed, err);
+          notify.error(t.undo_failed, err);
         });
       }
     };
@@ -201,7 +200,7 @@ export default function App() {
         </BrowserRouter>
       </OrgGate>
       <ConfirmHost />
-      <Toaster position="bottom-right" />
+      <Toaster />
       <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
     </QueryClientProvider>
   );

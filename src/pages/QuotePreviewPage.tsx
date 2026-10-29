@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Download, FolderPlus } from "lucide-react";
-import { Button, PageSpinner, IconButton } from "../components/ui";
+import { Download, FileText, FolderPlus } from "lucide-react";
+import { Button, PageHeader, EmptyState, QueryError, DetailSkeleton } from "../components/ui";
 import { confirmDraftExport } from "../lib/confirmDraftExport";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { useQuote, useUpdateQuote } from "../db/hooks/useQuotes";
@@ -15,7 +15,7 @@ import { useProject } from "../db/hooks/useProjects";
 import { QuotePDF } from "../components/quote/QuotePDF";
 import { useInvoiceTemplate } from "../db/hooks/useInvoiceTemplates";
 import { QuoteToProjectWizard } from "../components/QuoteToProjectWizard";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { useT } from "../i18n/useT";
 
 export function QuotePreviewPage() {
@@ -23,8 +23,9 @@ export function QuotePreviewPage() {
   const quoteId = Number(id);
   const navigate = useNavigate();
 
-  const { data: quote, isLoading: loadingQuote } = useQuote(quoteId);
-  const { data: lineItems, isLoading: loadingItems } = useQuoteLineItems(quoteId);
+  const quoteQuery = useQuote(quoteId);
+  const { data: quote } = quoteQuery;
+  const { data: lineItems } = useQuoteLineItems(quoteId);
   const { data: client } = useClient(quote?.client_id ?? "");
   const { data: addresses } = useClientAddresses(quote?.client_id ?? "");
   const { data: profile } = useBusinessProfile();
@@ -38,11 +39,21 @@ export function QuotePreviewPage() {
   const updateQuote = useUpdateQuote();
   const t = useT();
 
-  const isLoading = loadingQuote || loadingItems;
+  // Loading until the quote and everything the PDF needs is in: "not found" must not flash while the client loads.
+  const isLoading = !!quoteId && (quote === undefined || (!!quote && (lineItems === undefined || (!!quote.client_id && client === undefined) || profile === undefined)));
 
-  if (isLoading) return <PageSpinner />;
+  if (quoteQuery.isError && quote === undefined)
+    return <QueryError message={t.load_error_quote} onRetry={quoteQuery.refetch} retrying={quoteQuery.isFetching} />;
+  if (isLoading) return <DetailSkeleton />;
   if (!quote || !lineItems || !client || !profile)
-    return <div className="text-muted text-sm">{t.quote_not_found}</div>;
+    return (
+      <EmptyState
+        icon={FileText}
+        message={t.quote_not_found}
+        hint={t.not_found_hint}
+        action={<Button variant="secondary" onClick={() => navigate("/quotes")}>{t.back_to_quotes}</Button>}
+      />
+    );
 
   const billingAddress = quote.billing_address_id
     ? addresses?.find((a) => a.id === quote.billing_address_id) ?? null
@@ -79,9 +90,9 @@ export function QuotePreviewPage() {
       );
       a.click();
       URL.revokeObjectURL(url);
-      toast.success(t.pdf_downloaded);
-    } catch {
-      toast.error(t.failed_to_generate_pdf);
+      notify.success(t.pdf_downloaded);
+    } catch (e) {
+      notify.error(t.failed_to_generate_pdf, e);
     } finally {
       setExporting(false);
     }
@@ -102,27 +113,27 @@ export function QuotePreviewPage() {
           const fresh = await getQuote(quoteId);
           await doDownload(fresh ?? quote);
         },
-        onError: (e) => toast.error(String(e)),
       }
     );
   };
 
   return (
     <div className="flex flex-col -m-8 h-screen">
-      <div className="flex items-center gap-3 px-6 py-3 border-b border-[var(--color-border-divider)] bg-[var(--color-surface)]">
-        <IconButton icon={ArrowLeft} label={t.back} onClick={() => navigate(-1)} />
-        <h1 className="text-sm font-semibold flex-1">
-          {quote.reference.startsWith("DRAFT") ? t.draft : quote.reference} — {client.name}
-        </h1>
-        {quote.status === "accepted" && !quote.converted_to_project_id && (
-          <Button variant="secondary" icon={<FolderPlus size={12} />} onClick={() => setShowWizard(true)}>
-            {t.generate_project}
+      <PageHeader
+        compact
+        title={`${quote.reference.startsWith("DRAFT") ? t.draft : quote.reference} — ${client.name}`}
+        back={() => navigate(-1)}
+        actions={<>
+          {quote.status === "accepted" && !quote.converted_to_project_id && (
+            <Button variant="secondary" icon={<FolderPlus size={12} />} onClick={() => setShowWizard(true)}>
+              {t.generate_project}
+            </Button>
+          )}
+          <Button icon={<Download size={12} />} loading={exporting || updateQuote.isPending} onClick={downloadPdf}>
+            {t.download_pdf}
           </Button>
-        )}
-        <Button icon={<Download size={12} />} loading={exporting || updateQuote.isPending} onClick={downloadPdf}>
-          {t.download_pdf}
-        </Button>
-      </div>
+        </>}
+      />
       <div className="flex-1 bg-[var(--color-bg)]">
         <PDFViewer
           width="100%"

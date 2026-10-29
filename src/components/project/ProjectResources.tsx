@@ -7,13 +7,14 @@ import {
   useUnlinkResourceFromProject,
 } from "../../db/hooks/useResources";
 import { getResources } from "../../db/queries/resources";
-import { Button, IconButton } from "../ui";
+import { Button, EmptyState, IconButton, ListSkeleton } from "../ui";
 import { useT } from "../../i18n/useT";
 import { deleteWithUndo } from "../../lib/undo";
+import { LinkPicker } from "./LinkPicker";
 
 export function ProjectResources({ projectId }: { projectId: number }) {
   const t = useT();
-  const { data: linked } = useResourcesByProject(projectId);
+  const { data: linked, isPending } = useResourcesByProject(projectId);
   const linkResource = useLinkResourceToProject();
   const unlinkResource = useUnlinkResourceFromProject();
   const [showPicker, setShowPicker] = useState(false);
@@ -30,8 +31,9 @@ export function ProjectResources({ projectId }: { projectId: number }) {
 
   return (
     <div>
-      {(linked ?? []).length === 0 && !showPicker && (
-        <div className="text-xs text-muted mb-2">{t.no_resources_yet}</div>
+      {isPending && <ListSkeleton size="sm" rows={2} />}
+      {linked?.length === 0 && !showPicker && (
+        <EmptyState size="sm" icon={Bookmark} message={t.no_resources_linked} />
       )}
       {(linked ?? []).map((r) => (
         <div key={r.id} className="flex items-center gap-2 py-1 group text-sm">
@@ -54,33 +56,24 @@ export function ProjectResources({ projectId }: { projectId: number }) {
         </div>
       ))}
       {showPicker ? (
-        <div className="mt-2 border border-[var(--color-border-divider)] rounded-xl p-2">
-          {unlinked.length === 0 ? (
-            <div className="text-xs text-muted">{t.no_matching_resources}</div>
-          ) : (
-            <div className="max-h-32 overflow-y-auto space-y-1">
-              {unlinked.map((r) => (
-                <button
-                  key={r.id}
-                  onClick={() => {
-                    linkResource.mutate({ resourceId: r.id, projectId });
-                    setShowPicker(false);
-                  }}
-                  className="w-full text-left px-2 py-1 text-sm hover:bg-[var(--color-hover-row)] rounded-md flex items-center gap-2"
-                >
-                  <Bookmark size={12} className="text-muted" />
-                  {r.name}
-                  <span className="text-xs text-muted ml-auto truncate max-w-[150px]">
-                    {r.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-          <button onClick={() => setShowPicker(false)} className="text-xs text-muted mt-1 hover:text-[var(--color-text)]">
-            {t.cancel}
-          </button>
-        </div>
+        <LinkPicker
+          emptyMessage={t.no_resources_to_link}
+          onCancel={() => setShowPicker(false)}
+          items={unlinked.map((r) => ({
+            id: r.id,
+            icon: <Bookmark size={12} className="text-muted" />,
+            label: r.name,
+            trailing: (
+              <span className="text-xs text-muted ml-auto truncate max-w-[150px]">
+                {r.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+              </span>
+            ),
+            onPick: () => {
+              linkResource.mutate({ resourceId: r.id, projectId });
+              setShowPicker(false);
+            },
+          }))}
+        />
       ) : (
         <Button variant="link" icon={<Plus size={12} />} onClick={() => setShowPicker(true)} className="mt-1">
           {t.add}

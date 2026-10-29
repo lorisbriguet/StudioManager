@@ -1,6 +1,5 @@
 import { useState, useCallback } from "react";
-import { ChevronRight, Trash2, Play, Square, Plus } from "lucide-react";
-import { toast } from "sonner";
+import { ChevronRight, Trash2, Play, Square, CheckCircle } from "lucide-react";
 import { deleteWithUndo } from "../../lib/undo";
 import {
   DndContext,
@@ -31,7 +30,7 @@ import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
 import { PriorityBadge } from "./PriorityBadge";
 import { SortableSubtaskRow } from "./SortableSubtaskRow";
-import { Checkbox, IconButton, FilterChip, Input } from "../ui";
+import { AddRow, Checkbox, IconButton, FilterChip, InlineRename, EmptyState } from "../ui";
 
 export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
   projectId: number;
@@ -56,21 +55,17 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
   );
 
   const [taskFilter, setTaskFilter] = useState<"todo" | "done" | "all">("todo");
-  const [newTask, setNewTask] = useState("");
   const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
-  const [newSubtaskText, setNewSubtaskText] = useState<Record<number, string>>({});
   const [editingTask, setEditingTask] = useState<number | null>(null);
   const [editingSubtask, setEditingSubtask] = useState<number | null>(null);
   const [hoveredSubtask, setHoveredSubtask] = useState<number | null>(null);
 
   const totalCount = tasks.length;
 
-  const addTask = () => {
-    if (!newTask.trim()) return;
-    createTask.mutate(
-      {
+  const addTask = (title: string) =>
+    createTask.mutateAsync({
         project_id: projectId,
-        title: newTask.trim(),
+        title,
         description: "",
         status: "todo",
         priority: "low",
@@ -83,10 +78,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
         scheduled_end: null,
         notes: "",
         sort_order: totalCount,
-      },
-      { onSuccess: () => setNewTask("") }
-    );
-  };
+      });
 
   const handleTimerToggle = useCallback(async (taskId: number) => {
     await toggleTimer(taskId, projectId, project.name);
@@ -104,17 +96,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
         </div>
       </div>
 
-      <div className="flex gap-2 mb-3">
-        <Input
-          fullWidth={false}
-          placeholder={t.new_task}
-          value={newTask}
-          onChange={(e) => setNewTask(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") addTask(); }}
-          className="flex-1"
-        />
-        <IconButton icon={Plus} label={t.new_task} tone="accent" onClick={addTask} />
-      </div>
+      <AddRow className="mb-3" placeholder={t.new_task} onAdd={addTask} />
 
       <div className="space-y-0.5">
         {tasks.filter((tk) => taskFilter === "all" ? true : taskFilter === "done" ? tk.status === "done" : tk.status !== "done").map((tk) => {
@@ -147,21 +129,15 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                   onAnimationEnd={(e) => (e.target as HTMLElement).classList.remove("check-pop")}
                 />
                 {editingTask === tk.id ? (
-                  <Input
-                    variant="inline"
-                    fullWidth={false}
-                    autoFocus
-                    defaultValue={tk.title}
-                    onBlur={(e) => {
-                      const val = e.target.value.trim();
-                      if (val && val !== tk.title) updateTask.mutate({ id: tk.id, data: { title: val } });
+                  <InlineRename
+                    value={tk.title}
+                    label={t.rename}
+                    onSave={(title) => {
+                      updateTask.mutate({ id: tk.id, data: { title } });
                       setEditingTask(null);
                     }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                      if (e.key === "Escape") setEditingTask(null);
-                    }}
-                    className="flex-1"
+                    onCancel={() => setEditingTask(null)}
+                    className="flex-1 text-sm"
                   />
                 ) : (
                   <span
@@ -234,21 +210,15 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                         onAnimationEnd={(e) => (e.target as HTMLElement).classList.remove("check-pop")}
                       />
                       {editingSubtask === s.id ? (
-                        <Input
-                          variant="inline"
-                          fullWidth={false}
-                          autoFocus
-                          defaultValue={s.title}
-                          onBlur={(e) => {
-                            const val = e.target.value.trim();
-                            if (val && val !== s.title) updateSubtask.mutate({ id: s.id, data: { title: val } });
+                        <InlineRename
+                          value={s.title}
+                          label={t.rename}
+                          onSave={(title) => {
+                            updateSubtask.mutate({ id: s.id, data: { title } });
                             setEditingSubtask(null);
                           }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                            if (e.key === "Escape") setEditingSubtask(null);
-                          }}
-                          className="flex-1"
+                          onCancel={() => setEditingSubtask(null)}
+                          className="flex-1 text-xs"
                         />
                       ) : (
                         <span
@@ -274,46 +244,22 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                   ))}
                   </SortableContext>
                   </DndContext>
-                  <div className="flex gap-1.5 mt-1">
-                    <Input
-                      size="sm"
-                      fullWidth={false}
-                      placeholder={t.new_subtask}
-                      value={newSubtaskText[tk.id] ?? ""}
-                      onChange={(e) => setNewSubtaskText({ ...newSubtaskText, [tk.id]: e.target.value })}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          const text = (newSubtaskText[tk.id] ?? "").trim();
-                          if (!text) return;
-                          createSubtask.mutate(
-                            { task_id: tk.id, title: text, status: "todo", due_date: null, end_date: null, start_time: null, end_time: null, reminder: null, sort_order: subtasks.length },
-                            { onSuccess: () => setNewSubtaskText({ ...newSubtaskText, [tk.id]: "" }), onError: (err) => toast.error(t.subtask_create_failed.replace("{error}", String(err))) }
-                          );
-                        }
-                      }}
-                      className="flex-1"
-                    />
-                    <IconButton
-                      icon={Plus}
-                      label={t.new_subtask}
-                      tone="accent"
-                      onClick={() => {
-                        const text = (newSubtaskText[tk.id] ?? "").trim();
-                        if (!text) return;
-                        createSubtask.mutate(
-                          { task_id: tk.id, title: text, status: "todo", due_date: null, end_date: null, start_time: null, end_time: null, reminder: null, sort_order: subtasks.length },
-                          { onSuccess: () => setNewSubtaskText({ ...newSubtaskText, [tk.id]: "" }), onError: (err) => toast.error(t.subtask_create_failed.replace("{error}", String(err))) }
-                        );
-                      }}
-                    />
-                  </div>
+                  <AddRow
+                    className="mt-1"
+                    placeholder={t.new_subtask}
+                    onAdd={(title) =>
+                      createSubtask.mutateAsync({ task_id: tk.id, title, status: "todo", due_date: null, end_date: null, start_time: null, end_time: null, reminder: null, sort_order: subtasks.length })
+                    }
+                  />
                 </div>
               )}
             </div>
           );
         })}
-        {tasks.length === 0 && (
-          <div className="text-sm text-muted py-4 text-center">{t.no_tasks_yet}</div>
+        {tasks.length === 0 ? (
+          <EmptyState size="sm" icon={CheckCircle} message={t.no_tasks_yet} />
+        ) : taskFilter !== "all" && tasks.every((tk) => (tk.status === "done") !== (taskFilter === "done")) && (
+          <EmptyState size="sm" message={taskFilter === "todo" ? t.project_tasks_all_done : t.project_tasks_none_done} />
         )}
       </div>
     </div>

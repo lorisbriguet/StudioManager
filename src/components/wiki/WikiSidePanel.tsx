@@ -12,7 +12,7 @@ import {
 } from "../../lib/wikiGraph";
 import { GraphView } from "./GraphView";
 import { colorFor } from "./wikiColors";
-import { PANEL_TOP_BAR, TabItem, IconButton, SectionLabel, Tooltip } from "../ui";
+import { PANEL_TOP_BAR, TabItem, IconButton, SectionLabel, Tooltip, EmptyState, Card } from "../ui";
 import { useProjectDoc, type ProjectDoc } from "../../db/hooks/useProjectDocs";
 
 function SnippetText({ s }: { s: Snippet }) {
@@ -91,7 +91,7 @@ export function WikiSidePanel({
         <div className="flex-1 overflow-y-auto p-3">
           <SectionLabel className="mb-2">{t.wiki_outline}</SectionLabel>
           {outline.length === 0 ? (
-            <p className="text-xs text-muted">{t.wiki_no_headings}</p>
+            <EmptyState size="sm" message={t.wiki_no_headings} />
           ) : (
             outline.map((h) => (
               <button
@@ -133,7 +133,7 @@ export function WikiSidePanel({
               {t.wiki_backlinks} · {backlinks.length}
             </SectionLabel>
             {backlinks.length === 0 ? (
-              <p className="text-xs text-muted">{t.wiki_no_backlinks}</p>
+              <EmptyState size="sm" message={t.wiki_no_backlinks} />
             ) : (
               <div className="space-y-1.5">
                 {backlinks.map((b) => {
@@ -141,9 +141,13 @@ export function WikiSidePanel({
                   if (!src) return null;
                   return (
                     <Tooltip key={b.sourceId} content={t.wiki_new_tab_hint}>
-                    <button
+                    <Card
+                      as="button"
+                      tone="inset"
+                      padding="sm"
+                      interactive
                       onClick={open(b.sourceId)}
-                      className="w-full text-left p-2.5 rounded-lg border border-[var(--color-border-divider)] bg-[var(--color-surface)] hover:bg-[var(--color-hover-row)]"
+                      className="w-full text-left"
                     >
                       <span className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-text)]">
                         <span aria-hidden="true" className="dot-sm shrink-0" style={{ background: colorFor(colors, src.project_id) }} />
@@ -155,7 +159,7 @@ export function WikiSidePanel({
                       {b.snippets.slice(0, 2).map((s, i) => (
                         <SnippetText key={i} s={s} />
                       ))}
-                    </button>
+                    </Card>
                     </Tooltip>
                   );
                 })}
@@ -179,7 +183,7 @@ export function WikiSidePanel({
               </button>
             ))}
             {outgoing.length + outgoingFiles.length === 0 ? (
-              <p className="text-xs text-muted">{t.wiki_no_outgoing}</p>
+              <EmptyState size="sm" message={t.wiki_no_outgoing} />
             ) : (
               outgoing.map(([id, count]) => {
                 const dst = byId.get(id);
@@ -212,7 +216,7 @@ export function WikiSidePanel({
                   const src = byId.get(u.sourceId);
                   if (!src) return null;
                   return (
-                    <div key={u.sourceId} className="p-2.5 rounded-lg border border-dashed border-[var(--color-input-border)]">
+                    <Card key={u.sourceId} tone="dashed" padding="sm">
                       <button onClick={open(u.sourceId)} className="text-sm font-medium text-[var(--color-text)] hover:underline">
                         {src.title}
                       </button>
@@ -220,7 +224,7 @@ export function WikiSidePanel({
                       <button onClick={() => onLinkIt(u.sourceId)} className="mt-1.5 text-xs text-accent hover:underline">
                         {t.wiki_link_it}
                       </button>
-                    </div>
+                    </Card>
                   );
                 })}
               </div>
@@ -278,7 +282,7 @@ export function DocSidePanel({
           <>
             <SectionLabel className="mb-2">{t.wiki_outline}</SectionLabel>
             {outline.length === 0 ? (
-              <p className="text-xs text-muted">{t.wiki_no_headings}</p>
+              <EmptyState size="sm" message={t.wiki_no_headings} />
             ) : (
               outline.map((h) => (
                 <button
@@ -322,18 +326,21 @@ export function DocSidePanel({
               {t.wiki_linked_from} · {linkedFrom.length}
             </SectionLabel>
             {linkedFrom.length === 0 ? (
-              <p className="text-xs text-muted">{t.wiki_no_file_links}</p>
+              <EmptyState size="sm" message={t.wiki_no_file_links} />
             ) : (
               <div className="space-y-1.5">
                 {linkedFrom.map((b) => {
                   const src = byId.get(b.sourceId);
                   if (!src) return null;
                   return (
-                    <button
+                    <Card
                       key={b.sourceId}
-                      type="button"
+                      as="button"
+                      tone="inset"
+                      padding="sm"
+                      interactive
                       onClick={(e) => onOpen(b.sourceId, e.metaKey || e.ctrlKey)}
-                      className="w-full text-left p-2.5 rounded-lg border border-[var(--color-border-divider)] bg-[var(--color-surface)] hover:bg-[var(--color-hover-row)]"
+                      className="w-full text-left"
                     >
                       <span className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-text)]">
                         <span aria-hidden="true" className="dot-sm shrink-0" style={{ background: colorFor(colors, src.project_id) }} />
@@ -342,7 +349,7 @@ export function DocSidePanel({
                       {b.snippets.slice(0, 2).map((s, i) => (
                         <SnippetText key={i} s={s} />
                       ))}
-                    </button>
+                    </Card>
                   );
                 })}
               </div>

@@ -1,18 +1,55 @@
+import { useEffect } from "react";
 import type { FallbackProps } from "react-error-boundary";
+import { AlertTriangle } from "lucide-react";
 import { useT } from "../i18n/useT";
+import { logError } from "../lib/log";
 import { Button } from "./ui/Button";
+import { EmptyState } from "./ui/EmptyState";
+
+/**
+ * What an error boundary shows. The error goes to the log, never on screen.
+ * See DESIGN-SYSTEM.md, "Empty, loading and error states".
+ *
+ *   <ErrorBoundary FallbackComponent={ErrorFallback} resetKeys={[pathname]}>   a page (MainLayout)
+ *   <ErrorBoundary FallbackComponent={WidgetErrorFallback}>                     a dashboard widget
+ */
+function useLogged(error: unknown, where: string) {
+  useEffect(() => {
+    const e = error as Error | undefined;
+    void logError(`[${where}] ${e?.message ?? String(error)}`, e?.stack ?? "");
+  }, [error, where]);
+}
 
 export function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
   const t = useT();
+  useLogged(error, "page");
   return (
-    <div className="flex flex-col items-center justify-center min-h-[200px] p-8 text-center">
-      <h2 className="text-sm font-medium mb-2">{t.page_error_title}</h2>
-      <p className="text-xs text-muted mb-4 max-w-md">
-        {(error as Error)?.message || t.page_error_description}
-      </p>
-      <Button variant="primary" onClick={resetErrorBoundary}>
-        {t.retry}
-      </Button>
-    </div>
+    <EmptyState
+      tone="danger"
+      icon={AlertTriangle}
+      message={t.page_error_title}
+      hint={t.page_error_description}
+      action={<Button onClick={resetErrorBoundary}>{t.retry}</Button>}
+      className="flex-1 min-h-[200px]"
+    />
+  );
+}
+
+export function WidgetErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
+  const t = useT();
+  useLogged(error, "widget");
+  return (
+    <EmptyState
+      size="sm"
+      tone="danger"
+      icon={AlertTriangle}
+      message={t.widget_error}
+      action={
+        <Button variant="secondary" onClick={resetErrorBoundary}>
+          {t.retry}
+        </Button>
+      }
+      className="h-full"
+    />
   );
 }

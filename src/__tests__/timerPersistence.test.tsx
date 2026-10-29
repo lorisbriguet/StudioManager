@@ -8,14 +8,17 @@ import { useTimerActions } from "../hooks/useTimerActions";
 import { createTimeEntry } from "../db/queries/timeEntries";
 import { getTaskById } from "../db/queries/tasks";
 import { getProject } from "../db/queries/projects";
-import { notifyError } from "../lib/notifyError";
+import { notify } from "../lib/notify";
 import type { Task } from "../types/task";
 import type { Project } from "../types/project";
 
 vi.mock("../db/queries/timeEntries", () => ({ createTimeEntry: vi.fn() }));
 vi.mock("../db/queries/tasks", () => ({ getTaskById: vi.fn() }));
 vi.mock("../db/queries/projects", () => ({ getProject: vi.fn() }));
-vi.mock("../lib/notifyError", () => ({ notifyError: vi.fn() }));
+vi.mock("../lib/notify", async (orig) => ({
+  ...(await orig<typeof import("../lib/notify")>()),
+  ...(await import("../__mocks__/notify")).notifyMockModule(),
+}));
 
 const mockTask = { id: 1, tracked_minutes: 15 } as unknown as Task;
 const mockProject = { id: 2, name: "Proj" } as unknown as Project;
@@ -132,7 +135,7 @@ describe("stopAndSave", () => {
     expect(saved).toBe(false);
     expect(useAppStore.getState().activeTimer).not.toBeNull();
     expect(localStorage.getItem("activeTimer:t1")).not.toBeNull();
-    expect(notifyError).toHaveBeenCalledTimes(1);
+    expect(notify.error).toHaveBeenCalledTimes(1);
   });
 
   it("saves with a null task_id when the task was deleted meanwhile", async () => {
@@ -168,7 +171,7 @@ describe("stopAndSave", () => {
 
     expect(saved).toBe(false);
     expect(createTimeEntry).not.toHaveBeenCalled();
-    expect(notifyError).toHaveBeenCalledTimes(1);
+    expect(notify.error).toHaveBeenCalledTimes(1);
     expect(useAppStore.getState().activeTimer).toBeNull();
     expect(localStorage.getItem("activeTimer:t1")).toBeNull();
   });
@@ -186,6 +189,6 @@ describe("stopAndSave", () => {
 
     const timer = useAppStore.getState().activeTimer;
     expect(timer?.taskId).toBe(1);
-    expect(notifyError).toHaveBeenCalledTimes(1);
+    expect(notify.error).toHaveBeenCalledTimes(1);
   });
 });

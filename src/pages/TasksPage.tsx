@@ -1,8 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { IconButton } from "../components/ui/IconButton";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ChevronRight, Plus, Trash2, ExternalLink, Play, Square, CheckCircle } from "lucide-react";
-import { toast } from "sonner";
 import { deleteWithUndo, undoable } from "../lib/undo";
 import {
   DndContext,
@@ -36,7 +35,7 @@ import { useTabStore } from "../stores/tab-store";
 import { useOrgStore } from "../stores/org-store";
 import { useTimerActions } from "../hooks/useTimerActions";
 import { useT } from "../i18n/useT";
-import { Checkbox, PageHeader, SearchBar, TableSkeleton, EmptyState, Select, FilterChip, Input, DragHandle } from "../components/ui";
+import { Checkbox, Button, Dropdown, PageHeader, SearchBar, EmptyState, QueryError, NoResults, ListSkeleton, Select, FilterChip, AddRow, InlineRename, DragHandle } from "../components/ui";
 import { taskStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Task, Subtask, TaskStatus } from "../types/task";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
@@ -51,7 +50,11 @@ export function TasksPage() {
   // EmptyState below reads this filtered source: if every task in the DB
   // belongs to a cancelled/completed project, the page shows "no tasks yet" —
   // sensible, since nothing actionable exists and no groups render.
-  const { data: tasks, isLoading } = useVisibleTasks();
+  const tasksQuery = useVisibleTasks();
+  const navigate = useNavigate();
+  const { data: tasks } = tasksQuery;
+  // First run: the project picked from the empty state's "New task" gets an empty group (its add-task row).
+  const [startProjectId, setStartProjectId] = useState<number | null>(null);
   const { data: projects } = useProjects();
   const { data: clients } = useClients();
   const { data: subtasks } = useQuery({ queryKey: ["subtasks"], queryFn: getAllSubtasks });
@@ -66,8 +69,6 @@ export function TasksPage() {
   const [search, setSearch] = useState("");
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
-  const [newSubtaskText, setNewSubtaskText] = useState<Record<number, string>>({});
-  const [newTaskText, setNewTaskText] = useState<Record<number, string>>({});
   const [editingTask, setEditingTask] = useState<number | null>(null);
   const [editingSubtask, setEditingSubtask] = useState<number | null>(null);
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState<Task> | null>(null);
@@ -144,6 +145,7 @@ export function TasksPage() {
       arr.push(tk);
       groups.set(tk.project_id, arr);
     }
+    if (startProjectId != null && !groups.has(startProjectId)) groups.set(startProjectId, []);
     const result = Array.from(groups.entries()).map(([projectId, items]) => ({
       projectId,
       projectName: projectName(projectId),
@@ -158,7 +160,7 @@ export function TasksPage() {
       });
     }
     return result;
-  }, [tasks, projectName, clientForProject, filter, search, projectOrder, filterConditions, filterLogic]);
+  }, [tasks, projectName, clientForProject, filter, search, projectOrder, filterConditions, filterLogic, startProjectId]);
 
   const flatTasks = useMemo(() => grouped.flatMap((g) => g.tasks), [grouped]);
   const bulk = useBulkSelect(flatTasks);
@@ -240,12 +242,24 @@ export function TasksPage() {
     { value: "done", label: t.done },
   ];
 
-  if (isLoading) return (
+  if (tasks === undefined) return (
     <div>
       <PageHeader title={t.tasks} />
-      <TableSkeleton columns={5} />
+      {tasksQuery.isError ? (
+        <QueryError message={t.load_error_tasks} onRetry={tasksQuery.refetch} retrying={tasksQuery.isFetching} />
+      ) : (
+        <ListSkeleton rows={8} />
+      )}
     </div>
   );
+
+  const clearFilters = () => {
+    setSearch("");
+    setFilter("all");
+    setFilterConditions([]);
+    setActiveFilterId(null);
+  };
+  const activeProjects = (projects ?? []).filter((p) => p.status === "active");
 
   return (
     <div>
@@ -365,21 +379,15 @@ export function TasksPage() {
                         onAnimationEnd={(e) => (e.target as HTMLElement).classList.remove("check-pop")}
                       />
                       {editingTask === tk.id ? (
-                        <Input
-                          autoFocus
-                          defaultValue={tk.title}
-                          onBlur={(e) => {
-                            const val = e.target.value.trim();
-                            if (val && val !== tk.title) {
-                              updateTask.mutate({ id: tk.id, data: { title: val } });
-                            }
+                        <InlineRename
+                          value={tk.title}
+                          label={t.rename}
+                          onSave={(title) => {
+                            updateTask.mutate({ id: tk.id, data: { title } });
                             setEditingTask(null);
                           }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                            if (e.key === "Escape") setEditingTask(null);
-                          }}
-                          variant="inline" fullWidth={false} className="flex-1"
+                          onCancel={() => setEditingTask(null)}
+                          className="flex-1 text-sm"
                         />
                       ) : (
                         <span
@@ -465,21 +473,15 @@ export function TasksPage() {
                               onAnimationEnd={(e) => (e.target as HTMLElement).classList.remove("check-pop")}
                             />
                             {editingSubtask === s.id ? (
-                              <Input
-                                autoFocus
-                                defaultValue={s.title}
-                                onBlur={(e) => {
-                                  const val = e.target.value.trim();
-                                  if (val && val !== s.title) {
-                                    updateSubtask.mutate({ id: s.id, data: { title: val } });
-                                  }
+                              <InlineRename
+                                value={s.title}
+                                label={t.rename}
+                                onSave={(title) => {
+                                  updateSubtask.mutate({ id: s.id, data: { title } });
                                   setEditingSubtask(null);
                                 }}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                                  if (e.key === "Escape") setEditingSubtask(null);
-                                }}
-                                variant="inline" fullWidth={false} className="flex-1"
+                                onCancel={() => setEditingSubtask(null)}
+                                className="flex-1 text-xs"
                               />
                             ) : (
                               <span
@@ -508,153 +510,77 @@ export function TasksPage() {
                             />
                           </div>
                         ))}
-                        <div className="flex gap-1.5 mt-1">
-                          <Input
-                            placeholder={t.new_subtask}
-                            value={newSubtaskText[tk.id] ?? ""}
-                            onChange={(e) =>
-                              setNewSubtaskText({ ...newSubtaskText, [tk.id]: e.target.value })
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                const text = (newSubtaskText[tk.id] ?? "").trim();
-                                if (!text) return;
-                                createSubtask.mutate(
-                                  {
-                                    task_id: tk.id,
-                                    title: text,
-                                    status: "todo",
-                                    due_date: null,
-                                    end_date: null,
-                                    start_time: null,
-                                    end_time: null,
-                                    reminder: null,
-                                    sort_order: taskSubs.length,
-                                  },
-                                  {
-                                    onSuccess: () =>
-                                      setNewSubtaskText({ ...newSubtaskText, [tk.id]: "" }),
-                                    onError: (err) =>
-                                      toast.error(t.subtask_create_failed.replace("{error}", String(err))),
-                                  }
-                                );
-                              }
-                            }}
-                            size="sm" fullWidth={false} className="flex-1"
-                          />
-                          <IconButton
-                            onClick={() => {
-                              const text = (newSubtaskText[tk.id] ?? "").trim();
-                              if (!text) return;
-                              createSubtask.mutate(
-                                {
-                                  task_id: tk.id,
-                                  title: text,
-                                  status: "todo",
-                                  due_date: null,
-                                  end_date: null,
-                                  start_time: null,
-                                  end_time: null,
-                                  reminder: null,
-                                  sort_order: taskSubs.length,
-                                },
-                                {
-                                  onSuccess: () =>
-                                    setNewSubtaskText({ ...newSubtaskText, [tk.id]: "" }),
-                                  onError: (err) =>
-                                    toast.error(t.subtask_create_failed.replace("{error}", String(err))),
-                                }
-                              );
-                            }}
-                            icon={Plus}
-                            label={t.new_subtask}
-                            tone="accent"
-                          />
-                        </div>
+                        <AddRow
+                          className="mt-1"
+                          placeholder={t.new_subtask}
+                          onAdd={(title) =>
+                            createSubtask.mutateAsync({
+                              task_id: tk.id,
+                              title,
+                              status: "todo",
+                              due_date: null,
+                              end_date: null,
+                              start_time: null,
+                              end_time: null,
+                              reminder: null,
+                              sort_order: taskSubs.length,
+                            })
+                          }
+                        />
                       </div>
                     )}
                   </div>
                 );
               })}
             </div>}
-            {!collapsedProjects.has(g.projectId) && <div className="flex gap-2 px-4 py-2 border-t border-[var(--color-border-divider)]">
-              <Input
+            {!collapsedProjects.has(g.projectId) && (
+              <AddRow
+                className="px-4 py-2 border-t border-[var(--color-border-divider)]"
                 placeholder={t.new_task}
-                value={newTaskText[g.projectId] ?? ""}
-                onChange={(e) =>
-                  setNewTaskText({ ...newTaskText, [g.projectId]: e.target.value })
-                }
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    if (createTask.isPending) return;
-                    const text = (newTaskText[g.projectId] ?? "").trim();
-                    if (!text) return;
-                    createTask.mutate(
-                      {
-                        project_id: g.projectId,
-                        title: text,
-                        description: "",
-                        status: "todo",
-                        priority: "low",
-                        due_date: null,
-                        end_date: null,
-                        start_time: null,
-                        end_time: null,
-                        reminder: null,
-                        scheduled_start: null,
-                        scheduled_end: null,
-
-                        notes: "",
-                        sort_order: g.tasks.length,
-                      },
-                      {
-                        onSuccess: () =>
-                          setNewTaskText({ ...newTaskText, [g.projectId]: "" }),
-                      }
-                    );
-                  }
+                onAdd={(title) => {
+                  // A second Enter while the first create is in flight adds nothing.
+                  if (createTask.isPending) return false;
+                  return createTask.mutateAsync({
+                    project_id: g.projectId,
+                    title,
+                    description: "",
+                    status: "todo",
+                    priority: "low",
+                    due_date: null,
+                    end_date: null,
+                    start_time: null,
+                    end_time: null,
+                    reminder: null,
+                    scheduled_start: null,
+                    scheduled_end: null,
+                    notes: "",
+                    sort_order: g.tasks.length,
+                  });
                 }}
-                size="sm" fullWidth={false} className="flex-1"
               />
-              <IconButton
-                onClick={() => {
-                  const text = (newTaskText[g.projectId] ?? "").trim();
-                  if (!text) return;
-                  createTask.mutate(
-                    {
-                      project_id: g.projectId,
-                      title: text,
-                      description: "",
-                      status: "todo",
-                      priority: "low",
-                      due_date: null,
-                      end_date: null,
-                      start_time: null,
-                      end_time: null,
-                      reminder: null,
-                      scheduled_start: null,
-                      scheduled_end: null,
-
-                      notes: "",
-                      sort_order: g.tasks.length,
-                    },
-                    {
-                      onSuccess: () =>
-                        setNewTaskText({ ...newTaskText, [g.projectId]: "" }),
-                    }
-                  );
-                }}
-                icon={Plus}
-                label={t.new_task}
-                tone="accent"
-              />
-            </div>}
+            )}
             </>)}
           </SortableProjectGroup>
         ))}
-        {grouped.length === 0 && !isLoading && (
-          <EmptyState message={(tasks?.length ?? 0) === 0 ? t.no_tasks_yet : t.no_matching_tasks} icon={<CheckCircle size={32} />} />
-        )}
+        {grouped.length === 0 && (tasks.length === 0 ? (
+          <EmptyState
+            icon={CheckCircle}
+            message={t.no_tasks_yet}
+            hint={t.no_tasks_yet_hint}
+            action={
+              activeProjects.length > 0 ? (
+                <Dropdown
+                  trigger={<Button icon={<Plus size={12} />}>{t.new_task}</Button>}
+                  items={activeProjects.map((p) => ({ label: p.name, onSelect: () => setStartProjectId(p.id) }))}
+                />
+              ) : (
+                <Button icon={<Plus size={12} />} onClick={() => navigate("/projects")}>{t.new_project}</Button>
+              )
+            }
+          />
+        ) : (
+          <NoResults message={t.no_matching_tasks} onClear={clearFilters} />
+        ))}
       </div>
       </SortableContext>
       </DndContext>

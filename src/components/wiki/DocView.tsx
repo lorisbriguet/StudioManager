@@ -1,9 +1,8 @@
 import { ChevronLeft, ChevronRight, FolderOpen } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
-import { toast } from "sonner";
+import { notify } from "../../lib/notify";
 import { useT } from "../../i18n/useT";
-import { logError } from "../../lib/log";
 import { parseWikiArticleId, parseWikiFileKey } from "../../lib/wikiLinks";
 import { useProjectDoc, type ProjectDoc } from "../../db/hooks/useProjectDocs";
 import type { WikiRef } from "../../lib/wikiTabs";
@@ -40,8 +39,7 @@ export function DocView({
     if (id !== null) return onOpenRef(id, newTab);
     if (/^https?:\/\//i.test(href)) {
       openUrl(href).catch((err) => {
-        logError("Open URL failed:", err);
-        toast.error(t.failed_to_open_url);
+        notify.error(t.failed_to_open_url, err);
       });
     }
   };
@@ -59,8 +57,7 @@ export function DocView({
           label={t.wiki_show_in_finder}
           onClick={() =>
             invoke("open_in_finder", { path }).catch((err) => {
-              logError("Show in Finder failed:", err);
-              toast.error(t.failed_open_folder);
+              notify.error(t.failed_open_folder, err);
             })
           }
         />

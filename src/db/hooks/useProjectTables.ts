@@ -1,9 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import * as q from "../queries/projectTables";
 import { useUndoStore } from "../../stores/undo-store";
 import type { TableColumnDef } from "../../types/project-table";
-import { getLabels } from "../../lib/notifyError";
+import { getLabels } from "../../lib/notify";
 import { snapshotRows, pushRestore } from "../undoRestore";
 
 export function useProjectTables(projectId: number) {
@@ -17,6 +16,7 @@ export function useProjectTables(projectId: number) {
 export function useCreateProjectTable(projectId: number) {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_table" },
     mutationFn: ({ name, columns }: { name: string; columns?: TableColumnDef[] }) =>
       q.createProjectTable(projectId, name, columns),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["project-tables", projectId] }),
@@ -26,6 +26,7 @@ export function useCreateProjectTable(projectId: number) {
 export function useUpdateProjectTable(projectId: number) {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_table" },
     mutationFn: ({ id, data }: { id: number; data: { name?: string; column_config?: TableColumnDef[] } }) =>
       q.updateProjectTable(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["project-tables", projectId] }),
@@ -35,6 +36,7 @@ export function useUpdateProjectTable(projectId: number) {
 export function useDeleteProjectTable(projectId: number) {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_delete_table" },
     mutationFn: async (id: number) => {
       // Snapshot table + rows before deleting for undo
       const tables = await q.getProjectTables(projectId);
@@ -62,7 +64,6 @@ export function useDeleteProjectTable(projectId: number) {
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["project-tables", projectId] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -79,6 +80,7 @@ export function useProjectTableRows(tableId: number) {
 export function useCreateProjectTableRow(tableId: number) {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_row" },
     mutationFn: (data?: Record<string, unknown>) => q.createProjectTableRow(tableId, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["project-table-rows", tableId] }),
   });
@@ -87,6 +89,7 @@ export function useCreateProjectTableRow(tableId: number) {
 export function useUpdateProjectTableRow(tableId: number) {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_row" },
     mutationFn: ({ id, data }: { id: number; data: Record<string, unknown> }) =>
       q.updateProjectTableRow(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["project-table-rows", tableId] }),
@@ -97,6 +100,7 @@ export function useDeleteProjectTableRow(tableId: number) {
   const qc = useQueryClient();
   const invalidate = () => qc.invalidateQueries({ queryKey: ["project-table-rows", tableId] });
   return useMutation({
+    meta: { errorLabel: "error_delete_row" },
     mutationFn: async (id: number) => {
       const snap = await snapshotRows([{ table: "project_table_rows", where: "id = $1", params: [id] }]);
       await q.deleteProjectTableRow(id);

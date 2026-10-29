@@ -1,17 +1,12 @@
 import { useCallback } from "react";
-import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../stores/app-store";
 import { getTaskById } from "../db/queries/tasks";
 import { getProject } from "../db/queries/projects";
 import { createTimeEntry } from "../db/queries/timeEntries";
-import { notifyError } from "../lib/notifyError";
+import { notify } from "../lib/notify";
 import { todayLocalISO } from "../utils/localDate";
 import { useT } from "../i18n/useT";
-
-function fmtDuration(mins: number) {
-  return `${Math.floor(mins / 60)}h${String(mins % 60).padStart(2, "0")}`;
-}
 
 /**
  * Shared timer actions: stopAndSave creates a time_entry and updates tasks.tracked_minutes.
@@ -21,7 +16,7 @@ function fmtDuration(mins: number) {
  *
  * stopAndSave writes the time entry FIRST and only clears the timer state on
  * success — if the DB write fails the timer keeps running so no time is lost.
- * It never rejects; failures are surfaced via notifyError.
+ * It never rejects; failures are surfaced via notify.error.
  */
 export function useTimerActions() {
   const activeTimer = useAppStore((s) => s.activeTimer);
@@ -48,7 +43,7 @@ export function useTimerActions() {
         // Surface the loss and discard the timer instead of leaving it
         // running against a target that can never be saved.
         clearTimer();
-        notifyError(
+        notify.error(
           t.time_entry_project_deleted,
           new Error(`project ${timer.projectId} deleted while timer was running`)
         );
@@ -65,23 +60,12 @@ export function useTimerActions() {
       });
     } catch (err) {
       // Keep the timer running — clearing it here would lose the tracked time.
-      notifyError(t.time_entry_save_failed, err);
+      notify.error(t.time_entry_save_failed, err);
       return false;
     }
 
     // Entry is safely in the DB — now the timer state can go.
     clearTimer();
-
-    // Get the new total for the toast (non-critical; fall back to the entry's duration)
-    let newTotal = durationMinutes;
-    if (taskExists) {
-      try {
-        const task = await getTaskById(timer.taskId);
-        newTotal = task?.tracked_minutes ?? durationMinutes;
-      } catch {
-        // Entry already saved; the toast just shows the session duration.
-      }
-    }
 
     // Invalidate workload, task, and time-entries queries
     qc.invalidateQueries({ queryKey: ["workload-rows", timer.projectId] });
@@ -92,7 +76,7 @@ export function useTimerActions() {
     qc.invalidateQueries({ queryKey: ["top-time-consumers"] });
     qc.invalidateQueries({ queryKey: ["project-time-distribution"] });
 
-    toast.success(`${t.stop_timer}: +${fmtDuration(durationMinutes)} → ${fmtDuration(newTotal)}`);
+    // No toast: the timer bar disappearing is the feedback (routine work).
     return true;
   }, [clearTimer, qc, t]);
 
@@ -112,10 +96,9 @@ export function useTimerActions() {
           if (useAppStore.getState().activeTimer) return;
         }
         startTimer(taskId, projectId, projectName);
-        toast.success(t.start_timer);
       }
     },
-    [stopAndSave, startTimer, t]
+    [stopAndSave, startTimer]
   );
 
   return { activeTimer, startTimer, stopAndSave, toggleTimer };

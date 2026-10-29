@@ -1,13 +1,11 @@
-import { useId, useState } from "react";
+import { useState } from "react";
 import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "../ui/Button";
-import { Input } from "../ui/Input";
-import { FieldError } from "../ui/FormField";
+import { InlineRename } from "../ui/InlineRename";
 import { Tooltip } from "../ui/Tooltip";
 import { useOrgStore } from "../../stores/org-store";
 import { renameOrganisation, reorderOrganisations, deleteOrganisation } from "../../lib/orgs";
-import { notifyError } from "../../lib/notifyError";
+import { notify } from "../../lib/notify";
 import { useConfirm } from "../../lib/confirm";
 import { useT } from "../../i18n/useT";
 import { SettingsCard } from "../ui/Settings";
@@ -17,40 +15,24 @@ export function OrganisationsCard() {
   const organisations = useOrgStore((s) => s.organisations);
   const activeId = useOrgStore((s) => s.activeId);
   const [editing, setEditing] = useState<{ id: string; name: string } | null>(null);
-  const [renameError, setRenameError] = useState<string | null>(null);
   const confirm = useConfirm();
-  const renameErrorId = useId();
 
-  const startEditing = (o: { id: string; name: string }) => {
-    setEditing({ id: o.id, name: o.name });
-    setRenameError(null);
+  const startEditing = (o: { id: string; name: string }) => setEditing({ id: o.id, name: o.name });
+
+  // Checked on Enter and blur; an error keeps the field open. An unchanged
+  // name just closes it (InlineRename), no backend call.
+  const validateName = (id: string, name: string) => {
+    if (name === "") return t.organisation_name_required;
+    const taken = organisations.some((o) => o.id !== id && o.name.toLowerCase() === name.toLowerCase());
+    return taken ? t.organisation_name_taken : null;
   };
 
-  const commitRename = async () => {
-    if (!editing) return;
-    const trimmed = editing.name.trim();
-    if (trimmed === "") {
-      setRenameError(t.organisation_name_required);
-      return;
-    }
-    const original = organisations.find((o) => o.id === editing.id);
-    if (original && trimmed === original.name) {
-      // No actual change: just close the edit, no backend call needed.
-      setEditing(null);
-      setRenameError(null);
-      return;
-    }
-    const taken = organisations.some((o) => o.id !== editing.id && o.name.toLowerCase() === trimmed.toLowerCase());
-    if (taken) {
-      setRenameError(t.organisation_name_taken);
-      return;
-    }
+  const commitRename = async (id: string, name: string) => {
     try {
-      useOrgStore.getState().applyRegistry(await renameOrganisation(editing.id, trimmed));
+      useOrgStore.getState().applyRegistry(await renameOrganisation(id, name));
       setEditing(null);
-      setRenameError(null);
     } catch (e) {
-      notifyError(t.operation_failed, e);
+      notify.error(t.error_rename_organisation, e);
       // Keep the edit open so the user can retry.
     }
   };
@@ -63,7 +45,7 @@ export function OrganisationsCard() {
     try {
       useOrgStore.getState().applyRegistry(await reorderOrganisations(ids));
     } catch (e) {
-      notifyError(t.operation_failed, e);
+      notify.error(t.error_reorder_organisations, e);
     }
   };
 
@@ -79,9 +61,9 @@ export function OrganisationsCard() {
     if (!ok) return;
     try {
       useOrgStore.getState().applyRegistry(await deleteOrganisation(o.id));
-      toast.success(t.organisation_deleted);
+      notify.success(t.organisation_deleted);
     } catch (e) {
-      notifyError(t.operation_failed, e);
+      notify.error(t.error_delete_organisation, e);
     }
   };
 
@@ -94,31 +76,14 @@ export function OrganisationsCard() {
           return (
             <li key={o.id} className="flex items-center gap-2 py-2 border-b border-[var(--color-border-divider)] last:border-b-0">
               {editing?.id === o.id ? (
-                <div className="flex-1 min-w-0">
-                  <Input
-                    value={editing.name}
-                    onChange={(e) => {
-                      setEditing({ id: o.id, name: e.target.value });
-                      setRenameError(null);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") void commitRename();
-                      if (e.key === "Escape") {
-                        setEditing(null);
-                        setRenameError(null);
-                      }
-                    }}
-                    autoFocus
-                    aria-label={t.rename_organisation}
-                    aria-invalid={renameError ? true : undefined}
-                    aria-describedby={renameError ? renameErrorId : undefined}
-                  />
-                  {renameError && (
-                    <FieldError id={renameErrorId}>
-                      {renameError}
-                    </FieldError>
-                  )}
-                </div>
+                <InlineRename
+                  value={o.name}
+                  label={t.rename_organisation}
+                  validate={(name) => validateName(o.id, name)}
+                  onSave={(name) => commitRename(o.id, name)}
+                  onCancel={() => setEditing(null)}
+                  className="flex-1 text-sm"
+                />
               ) : (
                 <span className="flex-1 text-sm truncate">
                   {o.name}

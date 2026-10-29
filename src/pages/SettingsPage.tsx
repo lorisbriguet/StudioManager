@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { FolderOpen, HardDrive, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield, X, Clock, Store, Building2, Database as DatabaseIcon, Bot } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -17,7 +17,7 @@ import { useT } from "../i18n/useT";
 import type { AppLanguage } from "../i18n/ui";
 import { UpdateChecker } from "../components/UpdateChecker";
 import { WorkloadTemplateManager } from "../components/workload/WorkloadTemplateManager";
-import { Input, Select, Button, IconButton, SectionLabel, SettingRow, SettingsCard, NavItem, Tooltip } from "../components/ui";
+import { Input, Select, Button, IconButton, SectionLabel, SidebarTitle, SettingRow, SettingsCard, NavItem, Tooltip, FieldError, Spinner } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
 import { AgentAccessCard } from "../components/settings/AgentAccessCard";
@@ -73,6 +73,9 @@ export function SettingsPage() {
   const [syncing, setSyncing] = useState(false);
   const [backing, setBacking] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  // Inline errors for the backup folders and the target calendar
+  const [backupDirError, setBackupDirError] = useState<{ which: "primary" | "secondary"; message: string } | null>(null);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
   const [availableBackups, setAvailableBackups] = useState<string[]>([]);
   const [selectedBackup, setSelectedBackup] = useState("");
   const [loadingBackups, setLoadingBackups] = useState(false);
@@ -122,10 +125,9 @@ export function SettingsPage() {
     setTogglingTestMode(true);
     try {
       await enterTestMode();
-      toast.success(t.toast_test_mode_entered);
+      notify.success(t.toast_test_mode_entered);
     } catch (e) {
-      logError("Enter test mode failed:", e);
-      toast.error(`${t.toast_test_mode_failed}: ${String(e)}`);
+      notify.error(t.toast_test_mode_failed, e);
     } finally {
       setTogglingTestMode(false);
     }
@@ -136,11 +138,10 @@ export function SettingsPage() {
     setTogglingPresentation(true);
     try {
       await enterPresentationMode();
-      toast.success(t.toast_presentation_entered);
+      notify.success(t.toast_presentation_entered);
       setTimeout(() => window.location.reload(), 500);
     } catch (e) {
-      logError("Enter presentation mode failed:", e);
-      toast.error(`${t.toast_presentation_failed}: ${String(e)}`);
+      notify.error(t.toast_presentation_failed, e);
     } finally {
       setTogglingPresentation(false);
     }
@@ -152,10 +153,9 @@ export function SettingsPage() {
     try {
       await invoke<string>("snapshot_db");
       setHasSnapshotFile(true);
-      toast.success(t.toast_snapshot_created);
+      notify.success(t.toast_snapshot_created);
     } catch (e) {
-      logError("Snapshot failed:", e);
-      toast.error(`${t.toast_snapshot_failed}: ${String(e)}`);
+      notify.error(t.toast_snapshot_failed, e);
     } finally {
       setSnapshotting(false);
     }
@@ -173,11 +173,10 @@ export function SettingsPage() {
     try {
       await invoke("restore_snapshot");
       await resetDb();
-      toast.success(t.toast_snapshot_restored);
+      notify.success(t.toast_snapshot_restored);
       setTimeout(() => window.location.reload(), 1500);
     } catch (e) {
-      logError("Restore snapshot failed:", e);
-      toast.error(`${t.toast_snapshot_failed}: ${String(e)}`);
+      notify.error(t.toast_snapshot_restore_failed, e);
     } finally {
       setRestoringSnapshot(false);
     }
@@ -191,10 +190,9 @@ export function SettingsPage() {
       try {
         await purgeAllCalendarEvents();
         const count = await syncAllExisting();
-        if (count > 0) toast.success(t.synced_events.replace("{count}", String(count)));
+        if (count > 0) notify.success(t.synced_events.replace("{count}", String(count)));
       } catch (e) {
-        logError("Sync failed:", e);
-        toast.error(t.toast_failed_sync);
+        notify.error(t.toast_failed_sync, e);
       } finally {
         setSyncing(false);
       }
@@ -208,22 +206,21 @@ export function SettingsPage() {
     const dir = await open({ directory: true, recursive: true, title: t.backup_directory });
     if (typeof dir === "string") {
       const writable = await validateBackupPath(dir);
+      const which = secondary ? "secondary" : "primary";
       if (!writable) {
-        toast.error(t.backup_path_not_writable);
+        setBackupDirError({ which, message: t.backup_path_not_writable });
         return;
       }
+      setBackupDirError(null);
       if (secondary) setBackupPath2(dir);
       else setBackupPath(dir);
     }
   };
 
   const runBackup = async () => {
-    if (!backupPath) {
-      toast.error(t.toast_backup_dir_first);
-      return;
-    }
+    if (!backupPath) return; // the button is disabled without a folder
     if (isBackupRunning()) {
-      toast.error(t.backup_already_running);
+      notify.info(t.backup_already_running);
       return;
     }
     setBacking(true);
@@ -233,13 +230,9 @@ export function SettingsPage() {
       if (backupPath2) {
         await createBackup(backupPath2, maxBackups);
       }
-      toast.success(t.backup_created.replace("{name}", path.split("/").pop() ?? ""));
+      notify.success(t.backup_created.replace("{name}", path.split("/").pop() ?? ""));
     } catch (e) {
-      toast.error(
-        isScopeDenied(e)
-          ? t.backup_path_not_allowed
-          : t.backup_failed.replace("{error}", String(e))
-      );
+      notify.error(isScopeDenied(e) ? t.backup_path_not_allowed : t.backup_failed, e);
     } finally {
       setBacking(false);
       setBackupRunning(false);
@@ -254,7 +247,7 @@ export function SettingsPage() {
       setAvailableBackups(backups);
       setSelectedBackup(backups[0] ?? "");
     } catch (e) {
-      if (isScopeDenied(e)) toast.error(t.backup_path_not_allowed);
+      if (isScopeDenied(e)) notify.error(t.backup_path_not_allowed, e);
       setAvailableBackups([]);
     } finally {
       setLoadingBackups(false);
@@ -262,10 +255,7 @@ export function SettingsPage() {
   };
 
   const runRestore = async () => {
-    if (!backupPath || !selectedBackup) {
-      toast.error(t.toast_set_backup_dir);
-      return;
-    }
+    if (!backupPath || !selectedBackup) return; // the button is disabled until both are set
     const confirmed = await confirm({
       title: t.restore_backup_title.replace("{name}", selectedBackup),
       message: t.restore_confirm,
@@ -277,23 +267,23 @@ export function SettingsPage() {
     try {
       const { warnings, valuesDefaulted, safetyBackup } = await restoreFromBackup(`${backupPath}/${selectedBackup}`);
       if (warnings.length > 0) {
-        toast.warning(`${t.restore_warnings} ${warnings.join(", ")}`, { duration: 8000 });
+        notify.warning(t.restore_warnings, { description: warnings.join(", ") });
       }
-      let successMsg = valuesDefaulted > 0
-        ? `${t.toast_restore_success} ${t.restore_values_defaulted.replace("{count}", String(valuesDefaulted))}`
-        : t.toast_restore_success;
-      successMsg += ` ${t.restore_safety_created.replace("{name}", safetyBackup)}`;
-      toast.success(successMsg);
+      const details = [
+        valuesDefaulted > 0 ? t.restore_values_defaulted.replace("{count}", String(valuesDefaulted)) : null,
+        t.restore_safety_created.replace("{name}", safetyBackup),
+      ];
+      notify.success(t.toast_restore_success, { description: details.filter(Boolean).join(" ") });
       setTimeout(() => window.location.reload(), 1500);
     } catch (e) {
       // Restore runs in a single transaction — on failure it rolled back
+      // (the raw cause, e.g. RestoreError.detail, is in the log and behind "Details")
       if (e instanceof RestoreError) {
-        const base = e.code === "backup_empty" ? t.restore_backup_empty : t.restore_safety_backup_failed;
-        toast.error(e.detail ? `${base} (${e.detail})` : base, { duration: 10000 });
+        notify.error(e.code === "backup_empty" ? t.restore_backup_empty : t.restore_safety_backup_failed, e.detail ?? e);
       } else if (isScopeDenied(e)) {
-        toast.error(`${t.backup_path_not_allowed} ${t.restore_no_changes}`, { duration: 10000 });
+        notify.error(t.backup_path_not_allowed, e);
       } else {
-        toast.error(`${t.toast_restore_failed}: ${String(e)}. ${t.restore_no_changes}`, { duration: 10000 });
+        notify.error(t.toast_restore_failed, e);
       }
     } finally {
       setRestoring(false);
@@ -370,7 +360,7 @@ export function SettingsPage() {
     <div className="flex gap-0 h-full -m-8">
       {/* Category sidebar */}
       <div className="w-48 shrink-0 border-r border-[var(--color-border-divider)] py-5">
-        <SectionLabel as="h1" className="px-5 mb-4">{t.settings}</SectionLabel>
+        <SidebarTitle className="px-5 mb-4">{t.settings}</SidebarTitle>
         <nav className="space-y-3 px-1">
           {categorySections.map((section) => (
             <div key={section.label}>
@@ -451,9 +441,9 @@ export function SettingsPage() {
                       const db = await import("../db").then((m) => m.getDb());
                       const { resetUserGuide } = await import("../db/seeds/user-guide");
                       await resetUserGuide(db);
-                      toast.success(t.reset_user_guide_done);
+                      notify.success(t.reset_user_guide_done);
                     } catch (e) {
-                      toast.error(String(e));
+                      notify.error(t.error_reset_user_guide, e);
                     }
                   }}
                 >
@@ -545,13 +535,15 @@ export function SettingsPage() {
                 <div className="flex items-center gap-2">
                   <Select
                     value={calendarName}
-                    onChange={(e) => setCalendarName(e.target.value)}
+                    onChange={(e) => { setCalendarName(e.target.value); setCalendarError(null); }}
+                    aria-invalid={calendarError ? true : undefined}
+                    aria-describedby={calendarError ? "calendar-error" : undefined}
                     onFocus={() => {
                       if (availableCalendars.length === 0 && !loadingCalendars) {
                         setLoadingCalendars(true);
                         listWritableCalendars()
                           .then(setAvailableCalendars)
-                          .catch(() => toast.error(t.toast_failed_calendars))
+                          .catch((e) => notify.error(t.toast_failed_calendars, e))
                           .finally(() => setLoadingCalendars(false));
                       }
                     }}
@@ -565,8 +557,9 @@ export function SettingsPage() {
                       <option value={calendarName}>{calendarName}</option>
                     )}
                   </Select>
-                  {loadingCalendars && <span className="text-xs text-muted">{t.loading}</span>}
+                  {loadingCalendars && <Spinner size={12} />}
                 </div>
+                {calendarError && <FieldError id="calendar-error" className="text-right">{calendarError}</FieldError>}
               </SettingRow>
               <SettingRow label={t.sync_to_apple} desc={t.calendar_hint}>
                 <Toggle
@@ -575,7 +568,7 @@ export function SettingsPage() {
                   ariaLabel={t.sync_to_apple}
                   onChange={(_v: boolean) => {
                     if (!calendarName && !calendarSync) {
-                      toast.error(t.toast_select_calendar);
+                      setCalendarError(t.toast_select_calendar);
                       return;
                     }
                     handleCalendarToggle();
@@ -641,8 +634,8 @@ export function SettingsPage() {
                   </div>
                 ) : (
                   <button type="button" onClick={handleEnterTestMode} disabled={togglingTestMode} className="flex items-center gap-1 px-2.5 py-1 bg-[var(--color-warning-text)] text-white text-xs rounded-md hover:opacity-90 disabled:opacity-50">
-                    <FlaskConical size={12} />
-                    {togglingTestMode ? t.loading : t.enter_test_mode}
+                    {togglingTestMode ? <Spinner size={12} tone="current" /> : <FlaskConical size={12} />}
+                    {t.enter_test_mode}
                   </button>
                 )}
               </SettingRow>
@@ -659,7 +652,8 @@ export function SettingsPage() {
                   </div>
                 ) : (
                   <button type="button" onClick={handleEnterPresentation} disabled={togglingPresentation || testMode} className="flex items-center gap-1 px-2.5 py-1 bg-[var(--color-indigo-text)] text-white text-xs rounded-md hover:opacity-90 disabled:opacity-50">
-                    {togglingPresentation ? t.loading : t.enter_presentation_mode}
+                    {togglingPresentation && <Spinner size={12} tone="current" />}
+                    {t.enter_presentation_mode}
                   </button>
                 )}
               </SettingRow>
@@ -677,6 +671,7 @@ export function SettingsPage() {
                     {t.browse}
                   </Button>
                 </div>
+                {backupDirError?.which === "primary" && <FieldError className="text-right">{backupDirError.message}</FieldError>}
               </SettingRow>
               <SettingRow label={t.backup_directory_2}>
                 <div className="flex items-center gap-1.5">
@@ -688,16 +683,17 @@ export function SettingsPage() {
                     <IconButton icon={X} label={t.remove} size="xs" onClick={() => setBackupPath2("")} />
                   )}
                 </div>
+                {backupDirError?.which === "secondary" && <FieldError className="text-right">{backupDirError.message}</FieldError>}
               </SettingRow>
               <SettingRow label={t.keep_last_n}>
                 <Input
-                  type="number"
+                  numeric
                   min={1}
                   max={50}
                   value={maxBackups}
                   onChange={(e) => setMaxBackups(Math.max(1, Number(e.target.value) || 5))}
-                  fullWidth={false}
-                  className="w-16"
+                  width="xs"
+                  aria-label={t.keep_last_n}
                 />
               </SettingRow>
               <SettingRow label={t.auto_backup_interval}>
@@ -743,11 +739,12 @@ export function SettingsPage() {
                     {availableBackups.length === 0 && !loadingBackups && (
                       <option value="">{backupPath ? t.select_backup : t.toast_set_backup_dir}</option>
                     )}
-                    {loadingBackups && <option value="">{t.loading}</option>}
+                    {loadingBackups && <option value="">{t.select_backup}</option>}
                     {availableBackups.map((name) => (
                       <option key={name} value={name}>{name.replace("backup-", "")}</option>
                     ))}
                   </Select>
+                  {loadingBackups && <Spinner size={12} />}
                   <Button variant="danger" icon={<RotateCcw size={12} />} onClick={runRestore} disabled={restoring || !selectedBackup || !backupPath}>
                     {restoring ? t.restoring : t.restore}
                   </Button>
@@ -758,11 +755,11 @@ export function SettingsPage() {
               <SettingsCard title={t.snapshot} desc={t.snapshot_desc}>
               <SettingRow label={t.snapshot}>
                 <div className="flex items-center gap-2">
-                  <Button type="button" icon={<Camera size={12} />} onClick={handleCreateSnapshot} disabled={snapshotting || testMode}>
-                    {snapshotting ? t.loading : t.create_snapshot}
+                  <Button type="button" icon={<Camera size={12} />} onClick={handleCreateSnapshot} loading={snapshotting} disabled={testMode}>
+                    {t.create_snapshot}
                   </Button>
-                  <Button variant="danger" icon={<RotateCcw size={12} />} onClick={handleRestoreSnapshot} disabled={restoringSnapshot || !hasSnapshotFile || testMode}>
-                    {restoringSnapshot ? t.loading : t.restore_snapshot}
+                  <Button variant="danger" icon={<RotateCcw size={12} />} onClick={handleRestoreSnapshot} loading={restoringSnapshot} disabled={!hasSnapshotFile || testMode}>
+                    {t.restore_snapshot}
                   </Button>
                   {!hasSnapshotFile && <span className="text-xs text-muted">{t.no_snapshot_available}</span>}
                 </div>

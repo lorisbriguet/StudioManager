@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useConfirm } from "../../lib/confirm";
-import { toast } from "sonner";
 import { Database as DatabaseIcon } from "lucide-react";
 import { Button } from "../ui/Button";
 import { Select } from "../ui/Select";
@@ -10,7 +9,7 @@ import { getDb } from "../../db";
 import { PERSONAS, PERSONA_IDS, seedPersona, type PersonaId } from "../../db/seeds/personas";
 import { useAppStore } from "../../stores/app-store";
 import { useOrgStore } from "../../stores/org-store";
-import { notifyError } from "../../lib/notifyError";
+import { notify } from "../../lib/notify";
 import { useT } from "../../i18n/useT";
 import { SettingRow, SettingsCard } from "../ui/Settings";
 
@@ -44,9 +43,9 @@ export function DemoDataCard() {
       useAppStore.getState().setShowTasksPage(prefs.showTasksPage);
       queryClient.clear();
       navigate("/");
-      toast.success(t.demo_data_loaded.replace("{name}", orgName));
+      notify.success(t.demo_data_loaded.replace("{name}", orgName));
     } catch (e) {
-      notifyError(t.operation_failed, e);
+      notify.error(t.error_load_demo_data, e);
     } finally {
       setLoading(false);
     }

@@ -1,8 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import * as q from "../queries/timeEntries";
 import { snapshotRows, pushRestore } from "../undoRestore";
-import { getLabels } from "../../lib/notifyError";
+import { getLabels } from "../../lib/notify";
 
 export function useDeleteTimeEntry() {
   const qc = useQueryClient();
@@ -16,6 +15,7 @@ export function useDeleteTimeEntry() {
     qc.invalidateQueries({ queryKey: ["workload-rows"] });
   };
   return useMutation({
+    meta: { errorLabel: "error_delete_time_entry" },
     mutationFn: async (id: number) => {
       const snap = await snapshotRows([{ table: "time_entries", where: "id = $1", params: [id] }]);
       await q.deleteTimeEntry(id);
@@ -27,9 +27,6 @@ export function useDeleteTimeEntry() {
       pushRestore(getLabels().undo_delete_time_entry, snap, { redo: () => q.deleteTimeEntry(id), invalidate, extra });
     },
     onSuccess: invalidate,
-    onError: (e) => {
-      toast.error(String(e));
-    },
   });
 }
 
@@ -43,6 +40,7 @@ export function useTimeEntriesWithDetails(startDate?: string, endDate?: string, 
 export function useUpdateTimeEntry() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_time_entry" },
     mutationFn: (args: { id: number; data: { date?: string; duration_minutes?: number; description?: string } }) =>
       q.updateTimeEntry(args.id, args.data),
     onSuccess: () => {
@@ -51,6 +49,5 @@ export function useUpdateTimeEntry() {
       qc.invalidateQueries({ queryKey: ["time-this-week"] });
       qc.invalidateQueries({ queryKey: ["weekly-trend"] });
     },
-    onError: (e) => toast.error(String(e)),
   });
 }

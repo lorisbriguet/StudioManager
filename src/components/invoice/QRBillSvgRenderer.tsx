@@ -1,7 +1,7 @@
 import { Canvas } from "@react-pdf/renderer";
 import { SwissQRBill } from "swissqrbill/pdf";
 import type { Data } from "swissqrbill/types";
-import { notifyError, getLabels } from "../../lib/notifyError";
+import { getLabels, notify } from "../../lib/notify";
 
 interface QRBillCanvasProps {
   data: Data;
@@ -117,7 +117,7 @@ export function QRBillCanvas({ data, language }: QRBillCanvasProps) {
           const doc = createDocWrapper(painter);
           qrBill.attachTo(doc as never, 0, 0);
         } catch (e) {
-          notifyError(getLabels().qr_bill_render_failed, e);
+          notify.error(getLabels().qr_bill_render_failed, e);
         } finally {
           // Always restore, even if attachTo threw — otherwise the patched
           // isSpaceSufficient leaks into every later render in this session

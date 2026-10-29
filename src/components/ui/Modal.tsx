@@ -146,7 +146,7 @@ export function Modal({ open, onClose, title, children, footer, size = "sm", pos
       >
         {title && (
           <PanelTitle
-            as="h3"
+            as="h2"
             id={titleId}
             title={title}
             action={<IconButton icon={X} label={t.close} onClick={onClose} />}

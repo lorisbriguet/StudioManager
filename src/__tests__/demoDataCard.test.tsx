@@ -7,13 +7,16 @@ import { DemoDataCard } from "../components/settings/DemoDataCard";
 import { useAppStore } from "../stores/app-store";
 import { useOrgStore } from "../stores/org-store";
 import { setInvokeHandler } from "../__mocks__/tauri-api";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { ConfirmHost } from "../components/ui/ConfirmDialog";
 
 const seedPersona = vi.fn<(...args: unknown[]) => Promise<void>>(async () => {});
 vi.mock("../db/seeds/personas", async (orig) => ({ ...(await orig<object>()), seedPersona: (...a: unknown[]) => seedPersona(...a) }));
-vi.mock("../lib/notifyError", () => ({ notifyError: vi.fn(), getLabels: () => new Proxy({}, { get: (_t, k) => String(k) }) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+
+vi.mock("../lib/notify", async (orig) => ({
+  ...(await orig<typeof import("../lib/notify")>()),
+  ...(await import("../__mocks__/notify")).notifyMockModule(),
+}));
 
 const reg = { version: 1, activeId: "o2", organisations: [
   { id: "o1", name: "Atelier", createdAt: "", prefs: null },
@@ -70,6 +73,6 @@ describe("DemoDataCard", () => {
     expect(seedPersona.mock.calls[0][2]).toEqual({ withConfig: true });
     await waitFor(() => expect(useAppStore.getState().showIncome).toBe(true));
     expect(useAppStore.getState().showTasksPage).toBe(true);
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith(expect.stringContaining("Aurore")));
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith(expect.stringContaining("Aurore")));
   });
 });

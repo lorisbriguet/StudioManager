@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Trash2 } from "lucide-react";
-import { ConfirmButton, IconButton } from "../components/ui";
+import { Trash2 } from "lucide-react";
+import { ConfirmButton } from "../components/ui";
 import { deleteWithUndo } from "../lib/undo";
 import { ProjectDetailContent } from "../components/ProjectDetailContent";
 import { useProject, useDeleteProject } from "../db/hooks/useProjects";
@@ -25,20 +25,18 @@ export function ProjectDetailPage() {
   }, [project?.name, projectId, updateActiveTab]);
 
   return (
-    <div>
-      <div className="flex items-center gap-3 mb-6">
-        <IconButton icon={ArrowLeft} label={t.back} onClick={() => navigate(-1)} />
-        <div className="ml-auto flex items-center gap-2">
-          <ConfirmButton
-            label={t.delete}
-            question={t.confirm_delete_project}
-            icon={<Trash2 size={14} />}
-            variant="danger"
-            onConfirm={() => deleteWithUndo(deleteProject, projectId, t.toast_project_deleted, () => navigate("/projects"))}
-          />
-        </div>
-      </div>
-      <ProjectDetailContent projectId={projectId} />
-    </div>
+    <ProjectDetailContent
+      projectId={projectId}
+      onBack={() => navigate(-1)}
+      actions={
+        <ConfirmButton
+          label={t.delete}
+          question={t.confirm_delete_project}
+          icon={<Trash2 size={14} />}
+          variant="danger"
+          onConfirm={() => deleteWithUndo(deleteProject, projectId, t.toast_project_deleted, () => navigate("/projects"))}
+        />
+      }
+    />
   );
 }

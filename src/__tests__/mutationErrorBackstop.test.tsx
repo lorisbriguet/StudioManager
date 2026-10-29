@@ -3,15 +3,16 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClientProvider, useMutation } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { queryClient } from "../lib/queryClient";
-import { notifyError } from "../lib/notifyError";
+import { notify } from "../lib/notify";
+import { useAppStore } from "../stores/app-store";
 
 // Audit round 4: mutations without an onError handler failed silently
 // (calendar drag/drop, client field saves, wiki auto-save...). The query
 // client's MutationCache now backstops them with a user-visible error.
 
-vi.mock("../lib/notifyError", () => ({
-  notifyError: vi.fn(),
-  getLabels: () => new Proxy({}, { get: (_t, k) => String(k) }),
+vi.mock("../lib/notify", async (orig) => ({
+  ...(await orig<typeof import("../lib/notify")>()),
+  ...(await import("../__mocks__/notify")).notifyMockModule(),
 }));
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -19,7 +20,8 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 beforeEach(() => {
-  vi.mocked(notifyError).mockClear();
+  vi.mocked(notify.error).mockClear();
+  useAppStore.setState({ language: "EN" });
 });
 
 describe("mutation error backstop", () => {
@@ -30,7 +32,7 @@ describe("mutation error backstop", () => {
     );
     result.current.mutate(undefined);
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(notifyError).toHaveBeenCalledTimes(1);
+    expect(notify.error).toHaveBeenCalledTimes(1);
   });
 
   it("stays silent when the mutation brings its own onError", async () => {
@@ -46,6 +48,17 @@ describe("mutation error backstop", () => {
     result.current.mutate(undefined);
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(local).toHaveBeenCalled();
-    expect(notifyError).not.toHaveBeenCalled();
+    expect(notify.error).not.toHaveBeenCalled();
+  });
+
+  it("shows the mutation's errorLabel, with the raw error as the cause", async () => {
+    const err = new Error("SQLITE_CONSTRAINT");
+    const { result } = renderHook(
+      () => useMutation({ meta: { errorLabel: "error_save_invoice" }, mutationFn: async () => { throw err; } }),
+      { wrapper }
+    );
+    result.current.mutate(undefined);
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(notify.error).toHaveBeenCalledWith("Couldn't save the invoice", err);
   });
 });

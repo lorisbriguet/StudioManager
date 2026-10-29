@@ -1,6 +1,6 @@
 import { useMemo, useCallback, useState, useRef, useEffect } from "react";
 import { IconButton } from "../components/ui/IconButton";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -8,7 +8,7 @@ import interactionPlugin from "@fullcalendar/interaction";
 import type { EventInput, EventContentArg, EventDropArg } from "@fullcalendar/core";
 import type { DateClickArg, EventResizeDoneArg } from "@fullcalendar/interaction";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
-import { Button, Select, Popover, Input, FormActions } from "../components/ui";
+import { Button, Select, Popover, Input, FormActions, PageHeader, PeekHeader, Callout } from "../components/ui";
 import { useT } from "../i18n/useT";
 import { useTasksWithDueDate, useUpdateTask, useUpdateSubtask, useCreateTask, useCreateSubtask, useTasksByProject } from "../db/hooks/useTasks";
 import { useProjects, useUpdateProject } from "../db/hooks/useProjects";
@@ -434,29 +434,32 @@ export function CalendarPage() {
     <div ref={calContainerRef} className="flex h-full -m-8">
       <div className="min-w-0 flex-1 p-8">
         {/* Custom toolbar */}
-        <div className="flex items-center gap-3 mb-4">
-          <IconButton icon={ChevronLeft} label={t.previous} onClick={calPrev} />
-          <IconButton icon={ChevronRight} label={t.next} onClick={calNext} />
-          <Button variant="outline" onClick={calToday}>
-            {t.today}
-          </Button>
-          <h1 className="text-xl font-semibold tracking-tight">{calTitle}</h1>
-          <SegmentedControl
-            className="ml-auto"
-            aria-label={t.calendar}
-            value={calView === "timeGridWeek" ? "timeGridWeek" : "dayGridMonth"}
-            onChange={calSetView}
-            options={[
-              { value: "dayGridMonth", label: t.month },
-              { value: "timeGridWeek", label: t.week },
-            ]}
-          />
-        </div>
+        <PageHeader
+          title={calTitle}
+          leading={<>
+            <IconButton icon={ChevronLeft} label={t.previous} onClick={calPrev} />
+            <IconButton icon={ChevronRight} label={t.next} onClick={calNext} />
+            <Button variant="outline" onClick={calToday}>
+              {t.today}
+            </Button>
+          </>}
+          actions={
+            <SegmentedControl
+              aria-label={t.calendar}
+              value={calView === "timeGridWeek" ? "timeGridWeek" : "dayGridMonth"}
+              onChange={calSetView}
+              options={[
+                { value: "dayGridMonth", label: t.month },
+                { value: "timeGridWeek", label: t.week },
+              ]}
+            />
+          }
+        />
         {/* First-run hint: the calendar feeds off dated tasks/subtasks */}
         {tasks !== undefined && subtasks !== undefined && tasks.length === 0 && subtasks.length === 0 && (
-          <div className="mb-3 px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border-divider)] text-xs text-muted text-center">
+          <Callout tone="info" className="mb-3">
             {t.first_run_calendar}
-          </div>
+          </Callout>
         )}
         <div className="fc-studio">
           <FullCalendar
@@ -512,17 +515,9 @@ export function CalendarPage() {
           style={closingPeek ? undefined : { width: `${peekWidth}%`, minWidth: 0 }}
           onAnimationEnd={() => { if (closingPeek) { setPeekId(null); setClosingPeek(false); } }}
         >
+          <PeekHeader onClose={handleClosePeek} onOpenFull={() => navigate(`/projects/${peekId}`)} />
           <div className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <Link
-              to={`/projects/${peekId}`}
-              className="text-xs text-accent hover:underline"
-            >
-              {t.open_full_page}
-            </Link>
-            <IconButton icon={X} label={t.close} onClick={handleClosePeek} />
-          </div>
-          <ProjectDetailContent projectId={peekId} compact />
+            <ProjectDetailContent projectId={peekId} compact />
           </div>
         </div>
         </>
@@ -649,7 +644,7 @@ export function QuickCreatePopup({
               }
             }}
             placeholder={t.new_task}
-            size="sm"
+            aria-label={t.new_task}
           />
         )}
         {!selectedTask && showSuggestions && suggestions.length > 0 && (
@@ -693,7 +688,8 @@ export function QuickCreatePopup({
             if (e.key === "Enter") handleSubmit();
           }}
           placeholder={t.new_subtask}
-          size="sm" className="mb-2"
+          aria-label={t.new_subtask}
+          className="mb-2"
         />
       )}
 

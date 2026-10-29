@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus, Eye, Trash2, ExternalLink, Users } from "lucide-react";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { useClients, useCreateClient, useDeleteClient, getNextClientId } from "../db/hooks/useClients";
 import { useProjects } from "../db/hooks/useProjects";
 import { SortHeader, sortRows, type SortState } from "../components/ui/SortHeader";
@@ -13,7 +13,7 @@ import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { Checkbox, Button, Badge, Input, Select, FormField, FormGrid, FormGridItem, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState } from "../components/ui";
+import { Checkbox, Button, Badge, Input, Select, FormField, FormGrid, FormGridItem, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, QueryState, NoResults } from "../components/ui";
 import * as v from "../lib/validate";
 import { deleteWithUndo } from "../lib/undo";
 import { confirmDelete } from "../lib/confirm";
@@ -27,7 +27,8 @@ type SortKey = "id" | "name" | "language" | "discount_rate" | "status";
 
 export function ClientsPage() {
   const t = useT();
-  const { data: clients, isLoading } = useClients();
+  const clientsQuery = useClients();
+  const { data: clients } = clientsQuery;
   const { data: projects } = useProjects();
   const navigate = useNavigate();
   const openTab = useTabStore((s) => s.openTab);
@@ -120,16 +121,11 @@ export function ClientsPage() {
   });
   const bulkDelete = () => void deleteSelection([...bulk.selected] as string[], bulk.clearSelection);
 
-  if (isLoading) return (
-    <div>
-      <PageHeader title={t.clients}>
-        <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>
-          {t.new_client}
-        </Button>
-      </PageHeader>
-      <TableSkeleton columns={6} />
-    </div>
-  );
+  const clearFilters = () => {
+    setSearch("");
+    setFilterConditions([]);
+    setActiveFilterId(null);
+  };
 
   return (
     <div>
@@ -161,7 +157,7 @@ export function ClientsPage() {
                 { ...data, id },
                 {
                   onSuccess: () => {
-                    toast.success(t.toast_client_created);
+                    notify.success(t.toast_client_created);
                     setShowForm(false);
                   },
                   onSettled: () => {
@@ -177,6 +173,8 @@ export function ClientsPage() {
         />
       )}
 
+      <QueryState query={clientsQuery} skeleton={<TableSkeleton columns={6} />} errorMessage={t.load_error_clients}>
+      {(all) => (
       <Table>
         <Table.Head>
           <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} />
@@ -214,21 +212,27 @@ export function ClientsPage() {
               </Table.Td>
             </Table.Row>
           ))}
-          {filtered.length === 0 && !isLoading && (
+          {filtered.length === 0 && (
             <Table.Empty colSpan={6}>
-              <EmptyState
-                message={(clients?.length ?? 0) === 0 ? t.no_clients : t.no_matching_clients}
-                icon={<Users size={32} />}
-                action={(clients?.length ?? 0) === 0 ? (
-                  <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>
-                    {t.new_client}
-                  </Button>
-                ) : undefined}
-              />
+              {all.length === 0 ? (
+                <EmptyState
+                  message={t.no_clients}
+                  icon={Users}
+                  action={
+                    <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>
+                      {t.new_client}
+                    </Button>
+                  }
+                />
+              ) : (
+                <NoResults message={t.no_matching_clients} onClear={clearFilters} />
+              )}
             </Table.Empty>
           )}
         </Table.Body>
       </Table>
+      )}
+      </QueryState>
       {ctxMenu && (
         <ContextMenu
           x={ctxMenu.x}

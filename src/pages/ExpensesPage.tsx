@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Plus, Paperclip, Eye, Upload, Trash2, CheckCircle, CalendarCheck, Receipt, Settings2, XCircle, Pencil } from "lucide-react";
-import { Button, DatePicker, Input, Select, FormField, FormGrid, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, Popover, IconButton, Tag, Callout, Tooltip } from "../components/ui";
+import { Button, DatePicker, Input, Select, FormField, FormGrid, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, QueryState, NoResults, Spinner, Popover, IconButton, Tag, Callout, Tooltip } from "../components/ui";
 import * as v from "../lib/validate";
 import { deleteWithUndo } from "../lib/undo";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { ReceiptNote } from "../components/shared/ReceiptNote";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { format } from "date-fns";
 import { formatDisplayDate } from "../utils/formatDate";
 import { todayLocalISO } from "../utils/localDate";
@@ -44,7 +44,8 @@ type SortKey = "reference" | "supplier" | "category_code" | "invoice_date" | "am
 
 export function ExpensesPage() {
   const t = useT();
-  const { data: expenses, isLoading } = useExpenses();
+  const expensesQuery = useExpenses();
+  const { data: expenses } = expensesQuery;
   const { data: categories } = useExpenseCategories();
   const { data: pastSuppliers } = useDistinctSuppliers();
   const createExpense = useCreateExpense();
@@ -147,7 +148,7 @@ export function ExpensesPage() {
     if (!editDateExpense) return;
     updateExpense.mutate(
       { id: editDateExpense.id, data: { paid_date: editDateValue || null } },
-      { onSuccess: () => { toast.success(editDateValue ? t.paid_date_updated : t.marked_as_unpaid); setEditDateExpense(null); } }
+      { onSuccess: () => { notify.success(editDateValue ? t.paid_date_updated : t.marked_as_unpaid); setEditDateExpense(null); } }
     );
   };
 
@@ -174,19 +175,16 @@ export function ExpensesPage() {
       (destPath) =>
         updateExpense.mutate(
           { id: expenseId, data: { receipt_path: destPath } },
-          { onSuccess: () => toast.success(t.receipt_attached) }
+          { onSuccess: () => notify.success(t.receipt_attached) }
         ),
-      () => toast.error(t.attach_failed)
+      (err) => notify.error(t.attach_failed, err)
     );
 
-  if (isLoading) return (
-    <div className="relative">
-      <PageHeader title={t.expenses}>
-        <Button icon={<Plus size={12} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
-      </PageHeader>
-      <TableSkeleton columns={9} />
-    </div>
-  );
+  const clearFilters = () => {
+    setSearch("");
+    setFilterConditions([]);
+    setActiveFilterId(null);
+  };
 
   return (
     <div className="relative">
@@ -202,8 +200,8 @@ export function ExpensesPage() {
       {parsing && (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-[var(--color-surface)]/60 backdrop-blur-sm rounded-lg">
           <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-input-border)] shadow-sm">
-            <div className="h-4 w-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-muted">{t.analyzing_receipt}</span>
+            <Spinner label={t.analyzing_receipt} />
+            <span className="text-sm text-muted" aria-hidden="true">{t.analyzing_receipt}</span>
           </div>
         </div>
       )}
@@ -253,7 +251,7 @@ export function ExpensesPage() {
               { ...data, reference, receipt_path: receiptPath },
               {
                 onSuccess: () => {
-                  toast.success(t.expense_created);
+                  notify.success(t.expense_created);
                   setShowForm(false);
                   setPrefill(null);
                 },
@@ -264,6 +262,8 @@ export function ExpensesPage() {
         />
       )}
 
+      <QueryState query={expensesQuery} skeleton={<TableSkeleton columns={9} />} errorMessage={t.load_error_expenses}>
+      {(all) => (
       <Table>
         <Table.Head>
           <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} />
@@ -352,19 +352,23 @@ export function ExpensesPage() {
               </React.Fragment>
             );
           })}
-          {filtered.length === 0 && !isLoading && (
+          {filtered.length === 0 && (
             <Table.Empty colSpan={9}>
-              <EmptyState
-                message={(expenses?.length ?? 0) === 0 ? (t.no_expenses_yet) : (t.no_matching_expenses)}
-                icon={<Receipt size={32} />}
-                action={(expenses?.length ?? 0) === 0 ? (
-                  <Button icon={<Plus size={12} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
-                ) : undefined}
-              />
+              {all.length === 0 ? (
+                <EmptyState
+                  message={t.no_expenses_yet}
+                  icon={Receipt}
+                  action={<Button icon={<Plus size={12} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>}
+                />
+              ) : (
+                <NoResults message={t.no_matching_expenses} onClear={clearFilters} />
+              )}
             </Table.Empty>
           )}
         </Table.Body>
       </Table>
+      )}
+      </QueryState>
 
       {preview && (
         <ReceiptPreview
@@ -381,10 +385,10 @@ export function ExpensesPage() {
           items={[
             ...(!ctxMenu.item.paid_date
               ? [
-                  { label: t.mark_as_paid_today, icon: <CheckCircle size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: todayLocalISO() } }, { onSuccess: () => toast.success(t.marked_as_paid) }) },
-                  { label: t.mark_as_paid_at_invoice_date, icon: <CalendarCheck size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: ctxMenu.item.invoice_date } }, { onSuccess: () => toast.success(t.marked_as_paid) }) },
+                  { label: t.mark_as_paid_today, icon: <CheckCircle size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: todayLocalISO() } }, { onSuccess: () => notify.success(t.marked_as_paid) }) },
+                  { label: t.mark_as_paid_at_invoice_date, icon: <CalendarCheck size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: ctxMenu.item.invoice_date } }, { onSuccess: () => notify.success(t.marked_as_paid) }) },
                 ]
-              : [{ label: t.mark_as_unpaid, icon: <XCircle size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: null } }, { onSuccess: () => toast.success(t.marked_as_unpaid) }) }]),
+              : [{ label: t.mark_as_unpaid, icon: <XCircle size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: null } }, { onSuccess: () => notify.success(t.marked_as_unpaid) }) }]),
             { label: t.edit_paid_date, icon: <Pencil size={14} />, onClick: () => { setEditDateValue(ctxMenu.item.paid_date ?? format(new Date(), "yyyy-MM-dd")); setEditDateExpense(ctxMenu.item); } },
             { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteWithUndo(deleteExpense, ctxMenu.item.id, t.toast_expense_deleted) },
           ]}
@@ -487,7 +491,7 @@ export function NewExpenseForm({
     };
   });
   const [errors, setErrors] = useState<Partial<Record<ExpenseFormField, string>>>({});
-  const { undetect, resetDetected, detectedBadge, detectedClass } =
+  const { undetect, resetDetected, detectedBadge, isDetected } =
     useDetectedFields<DetectableExpenseField>(() => detectedFields(prefill));
 
   const setFieldError = (field: ExpenseFormField, msg: string | null) =>
@@ -634,7 +638,7 @@ export function NewExpenseForm({
                 if (!pickingSuggestionRef.current) validateOnBlur("supplier");
                 pickingSuggestionRef.current = false;
               }}
-              className={detectedClass("supplier")}
+              detected={isDetected("supplier")}
               autoComplete="off"
             />
           </FormField>
@@ -694,7 +698,7 @@ export function NewExpenseForm({
               undetect("invoice_date");
             }}
             onBlur={() => validateOnBlur("invoice_date")}
-            inputClassName={detectedClass("invoice_date")}
+            detected={isDetected("invoice_date")}
           />
         </FormField>
         <FormField
@@ -704,8 +708,9 @@ export function NewExpenseForm({
           badge={detectedBadge("amount", () => setForm((f) => ({ ...f, amount: 0 })))}
         >
           <Input
-            type="number"
+            numeric
             step="0.01"
+            unit="CHF"
             value={form.amount || ""}
             onChange={(e) => {
               setForm({ ...form, amount: Number(e.target.value) });
@@ -716,7 +721,7 @@ export function NewExpenseForm({
               checkForDuplicates();
               validateOnBlur("amount");
             }}
-            className={detectedClass("amount")}
+            detected={isDetected("amount")}
           />
         </FormField>
       </FormGrid>

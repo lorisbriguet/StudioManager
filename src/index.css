@@ -84,14 +84,6 @@ body {
   width: 100vw;
 }
 
-[cmdk-group-heading] {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-muted);
-  padding: 6px 8px;
-}
-
 /* ─── Dark mode ─── */
 .dark {
   color-scheme: dark;
@@ -147,16 +139,20 @@ body {
   --shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
-.dark input,
-.dark select:not(.appearance-none),
-.dark textarea {
-  background-color: #1a1a1a;
-  color: #e5e5e5;
-}
+/* Defaults for native fields in dark mode. In the base layer, so the field
+   tokens (bg-transparent on bare/inline fields, placeholder:text-muted) win. */
+@layer base {
+  .dark input,
+  .dark select:not(.appearance-none),
+  .dark textarea {
+    background-color: #1a1a1a;
+    color: #e5e5e5;
+  }
 
-.dark input::placeholder,
-.dark textarea::placeholder {
-  color: #525252;
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    color: #525252;
+  }
 }
 
 /* ─── Indicator dots (status, priority, legend) ─── */
@@ -352,13 +348,6 @@ button:focus-visible:not(.focus-accent),
   border-radius: 0;
 }
 
-/* Title left-aligned with spacing after nav buttons */
-.fc-studio .fc .fc-toolbar-title {
-  font-size: 16px;
-  font-weight: 600;
-  margin-left: 8px !important;
-}
-
 .fc-studio .fc .fc-daygrid-more-link {
   font-size: 10px;
   color: var(--color-muted);
@@ -506,12 +495,6 @@ button, a, select, [role="button"] {
   transition: background-color var(--duration-normal) ease, color var(--duration-normal) ease;
 }
 
-/* Toast slide-in */
-@keyframes toast-in {
-  from { opacity: 0; transform: translateX(100%); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
 /* Modal open */
 @keyframes modal-open {
   from { opacity: 0; transform: scale(0.97); }
@@ -612,9 +595,11 @@ button, a, select, [role="button"] {
   line-height: 1.7;
   color: var(--color-text);
 }
-.tiptap-editor .ProseMirror h1 { font-size: 1.5em; font-weight: 600; margin: 1em 0 0.5em; }
-.tiptap-editor .ProseMirror h2 { font-size: 1.25em; font-weight: 600; margin: 0.8em 0 0.4em; }
-.tiptap-editor .ProseMirror h3 { font-size: 1.1em; font-weight: 600; margin: 0.6em 0 0.3em; }
+/* Prose headings sit below the article title (20px, the page h1): content, not
+   app chrome, so they step down 15 / 14 / 13px. Also used by DocView (.wiki-doc). */
+.tiptap-editor .ProseMirror h1 { font-size: 15px; line-height: 1.4; font-weight: 600; margin: 1.4em 0 0.5em; }
+.tiptap-editor .ProseMirror h2 { font-size: 14px; line-height: 1.4; font-weight: 600; margin: 1.2em 0 0.4em; }
+.tiptap-editor .ProseMirror h3 { font-size: 13px; line-height: 1.4; font-weight: 600; margin: 1em 0 0.3em; }
 .tiptap-editor .ProseMirror ul { list-style: disc; padding-left: 1.5em; margin: 0.5em 0; }
 .tiptap-editor .ProseMirror ol { list-style: decimal; padding-left: 1.5em; margin: 0.5em 0; }
 .tiptap-editor .ProseMirror a {

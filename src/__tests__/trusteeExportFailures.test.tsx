@@ -3,7 +3,7 @@ import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/re
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile, mkdir, copyFile } from "@tauri-apps/plugin-fs";
 import { FinancesPage } from "../pages/FinancesPage";
@@ -33,15 +33,9 @@ vi.mock("../lib/log", () => ({
   logDebug: vi.fn(),
 }));
 
-vi.mock("sonner", () => ({
-  toast: {
-    info: vi.fn(),
-    loading: vi.fn(),
-    success: vi.fn(),
-    warning: vi.fn(),
-    error: vi.fn(),
-    dismiss: vi.fn(),
-  },
+vi.mock("../lib/notify", async (orig) => ({
+  ...(await orig<typeof import("../lib/notify")>()),
+  ...(await import("../__mocks__/notify")).notifyMockModule(),
 }));
 
 // plugin-dialog and plugin-fs both alias to the same catch-all mock module
@@ -151,8 +145,8 @@ beforeEach(() => {
   vi.mocked(writeFile).mockReset().mockResolvedValue(undefined);
   vi.mocked(mkdir).mockReset().mockResolvedValue(undefined);
   vi.mocked(copyFile).mockReset().mockResolvedValue(undefined);
-  vi.mocked(toast.warning).mockReset();
-  vi.mocked(toast.success).mockReset();
+  vi.mocked(notify.warning).mockReset();
+  vi.mocked(notify.success).mockReset();
 });
 
 afterEach(() => {
@@ -166,8 +160,8 @@ describe("exportForTrustee", () => {
     fireEvent.click(await screen.findByRole("button", { name: /export for trustee/i }));
 
     await waitFor(() => {
-      expect(toast.warning).toHaveBeenCalledWith(
-        "1 invoice PDFs could not be generated and are missing from the export."
+      expect(notify.warning).toHaveBeenCalledWith(
+        "1 invoice PDFs couldn't be generated and are missing from the export"
       );
     });
 
@@ -176,6 +170,6 @@ describe("exportForTrustee", () => {
     const writtenPaths = vi.mocked(writeFile).mock.calls.map((c: unknown[]) => String(c[0]));
     expect(writtenPaths.some((p: string) => p.includes("2026-0001_ACME.pdf"))).toBe(true);
     expect(writtenPaths.some((p: string) => p.includes("2026-0002_ACME.pdf"))).toBe(false);
-    expect(toast.success).toHaveBeenCalled();
+    expect(notify.success).toHaveBeenCalled();
   });
 });

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import type { SelectOption } from "../../types/workload";
 import { TAG_COLOR_NAMES } from "../../lib/tagColors";
 import { useT } from "../../i18n/useT";
@@ -58,8 +58,10 @@ export function SelectTagPicker({
   return (
     <Popover anchor={anchorRef} onClose={onClose} padding="none" className="w-52 overflow-hidden">
       <div className="p-1.5">
-        <Input size="sm"
+        <Input
           data-autofocus
+          icon={Search}
+          aria-label={t.search_or_create}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => {

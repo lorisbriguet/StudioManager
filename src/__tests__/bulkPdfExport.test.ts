@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { open } from "@tauri-apps/plugin-dialog";
 import { confirm } from "../lib/confirm";
 import { writeFile } from "@tauri-apps/plugin-fs";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { runBulkPdfExport } from "../lib/bulkPdfExport";
 
 // plugin-dialog and plugin-fs both alias to the same catch-all mock module,
@@ -21,15 +21,9 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 }));
 // The draft warning is the app's ConfirmDialog; answer it from the test.
 vi.mock("../lib/confirm", () => ({ confirm: vi.fn() }));
-vi.mock("sonner", () => ({
-  toast: {
-    info: vi.fn(),
-    loading: vi.fn(),
-    success: vi.fn(),
-    warning: vi.fn(),
-    error: vi.fn(),
-    dismiss: vi.fn(),
-  },
+vi.mock("../lib/notify", async (orig) => ({
+  ...(await orig<typeof import("../lib/notify")>()),
+  ...(await import("../__mocks__/notify")).notifyMockModule(),
 }));
 
 const LABELS = {
@@ -40,6 +34,7 @@ const LABELS = {
   bulk_export_progress: "{n}/{total}",
   bulk_export_done: "Done {n}",
   bulk_export_partial: "Partial {n}/{total}",
+  failed_to_generate_pdf: "PDF failed",
   cancel: "Cancel",
 };
 
@@ -50,9 +45,9 @@ beforeEach(() => {
   vi.mocked(confirm).mockReset().mockResolvedValue(true);
   vi.mocked(open).mockReset().mockResolvedValue("/out");
   vi.mocked(writeFile).mockReset().mockResolvedValue(undefined);
-  vi.mocked(toast.info).mockReset();
-  vi.mocked(toast.success).mockReset();
-  vi.mocked(toast.warning).mockReset();
+  vi.mocked(notify.info).mockReset();
+  vi.mocked(notify.success).mockReset();
+  vi.mocked(notify.warning).mockReset();
 });
 
 describe("runBulkPdfExport", () => {
@@ -73,7 +68,7 @@ describe("runBulkPdfExport", () => {
     });
     const paths = vi.mocked(writeFile).mock.calls.map((c) => c[0]);
     expect(paths).toEqual(["/out/DRAFT_ACME.pdf", "/out/DRAFT_ACME_2.pdf"]);
-    expect(toast.success).toHaveBeenCalled();
+    expect(notify.success).toHaveBeenCalled();
     expect(busyIds.size).toBe(0);
     expect(onDone).toHaveBeenCalled();
   });
@@ -89,7 +84,7 @@ describe("runBulkPdfExport", () => {
       logLabel: "invoice",
       onDone: vi.fn(),
     });
-    expect(toast.info).toHaveBeenCalled();
+    expect(notify.info).toHaveBeenCalled();
     expect(confirm).not.toHaveBeenCalled();
     expect(writeFile).not.toHaveBeenCalled();
   });
@@ -143,7 +138,7 @@ describe("runBulkPdfExport", () => {
       onDone: vi.fn(),
     });
     expect(vi.mocked(writeFile).mock.calls).toHaveLength(1);
-    expect(toast.warning).toHaveBeenCalled();
+    expect(notify.warning).toHaveBeenCalled();
     expect(busyIds.size).toBe(0);
   });
 });

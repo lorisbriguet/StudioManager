@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Eye, Pencil, Trash2, CheckCircle, Send, Repeat, RefreshCw, X, AlertTriangle, ExternalLink, FileText, Settings2, Download, Mail } from "lucide-react";
-import { toast } from "sonner";
+import { Plus, Eye, Pencil, Trash2, CheckCircle, Send, Repeat, RefreshCw, AlertTriangle, ExternalLink, FileText, Settings2, Download, Mail } from "lucide-react";
+import { notify } from "../lib/notify";
 import { useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { writeFile } from "@tauri-apps/plugin-fs";
@@ -35,7 +35,7 @@ import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { PageHeader, SearchBar, Table, TableSkeleton, Button, EmptyState, Card, FormModal, FormField, FormGrid, DatePicker, Select, IconButton, CountBadge, Toggle } from "../components/ui";
+import { PageHeader, SearchBar, Table, TableSkeleton, Button, EmptyState, QueryState, NoResults, ListSkeleton, Card, FormModal, FormField, FormGrid, DatePicker, Select, IconButton, CountBadge, Toggle } from "../components/ui";
 import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
 import { isDraftReference } from "../types/invoice";
 import type { Invoice, InvoiceStatus } from "../types/invoice";
@@ -103,7 +103,8 @@ async function generateInvoicePdfBytes(
 
 export function InvoicesPage() {
   const t = useT();
-  const { data: invoices, isLoading } = useInvoices();
+  const invoicesQuery = useInvoices();
+  const { data: invoices } = invoicesQuery;
   const { data: clients } = useClients();
   const { data: templates } = useRecurringTemplates();
   const navigate = useNavigate();
@@ -126,7 +127,7 @@ export function InvoicesPage() {
       // runRecurringCheck toasts and refetches by itself when it generates;
       // only the "nothing due" case needs feedback here.
       const generated = await runRecurringCheck(qc);
-      if (generated === 0) toast.info(t.recurring_none_due);
+      if (generated === 0) notify.info(t.recurring_none_due);
     } finally {
       setGeneratingNow(false);
     }
@@ -230,7 +231,7 @@ export function InvoicesPage() {
   const deleteSelection = useBulkDelete("invoices", (id: number) => deleteInvoice.mutateAsync(id));
   const bulkDelete = () => {
     if (selectionHasNonDraft) {
-      toast.error(t.invoice_delete_only_drafts);
+      notify.error(t.invoice_delete_only_drafts);
       return;
     }
     void deleteSelection([...bulk.selected] as number[], bulk.clearSelection);
@@ -277,24 +278,21 @@ export function InvoicesPage() {
 
   const doDownloadPdf = async (inv: Invoice & { client_name: string }) => {
     if (!(await settleDraft(inv))) return;
-    const toastId = toast.loading(t.generating_pdf);
-    try {
-      const result = await generateInvoicePdfBytes(inv.id, inv.client_id);
-      if (!result) {
-        toast.error(t.invoice_not_found, { id: toastId });
-        return;
-      }
-      const processedBlob = new Blob([result.bytes], { type: "application/pdf" });
-      const url = URL.createObjectURL(processedBlob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = pdfFileName(result.reference, result.client.name);
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast.success(t.download_pdf, { id: toastId });
-    } catch (err) {
-      toast.error(String(err), { id: toastId });
-    }
+    await notify.progress(
+      t.generating_pdf,
+      (async () => {
+        const result = await generateInvoicePdfBytes(inv.id, inv.client_id);
+        if (!result) throw new Error(t.invoice_not_found);
+        const processedBlob = new Blob([result.bytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(processedBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = pdfFileName(result.reference, result.client.name);
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      })(),
+      { success: t.pdf_downloaded, error: t.failed_to_generate_pdf }
+    );
   };
 
   const handleEmailPdf = async (inv: Invoice & { client_name: string }) => {
@@ -309,26 +307,23 @@ export function InvoicesPage() {
 
   const doEmailPdf = async (inv: Invoice & { client_name: string }) => {
     if (!(await settleDraft(inv))) return;
-    const toastId = toast.loading(t.generating_pdf);
-    try {
-      const result = await generateInvoicePdfBytes(inv.id, inv.client_id);
-      if (!result) {
-        toast.error(t.invoice_not_found, { id: toastId });
-        return;
-      }
-      const { root } = await orgPaths();
-      const tempPath = `${root}/temp_${pdfFileName(result.reference, result.client.name)}`;
-      await writeFile(tempPath, result.bytes);
+    await notify.progress(
+      t.generating_pdf,
+      (async () => {
+        const result = await generateInvoicePdfBytes(inv.id, inv.client_id);
+        if (!result) throw new Error(t.invoice_not_found);
+        const { root } = await orgPaths();
+        const tempPath = `${root}/temp_${pdfFileName(result.reference, result.client.name)}`;
+        await writeFile(tempPath, result.bytes);
 
-      await invoke("share_pdf_via_mail", {
-        path: tempPath,
-        to: result.client.email ?? "",
-        subject: result.reference,
-      });
-      toast.dismiss(toastId);
-    } catch (err) {
-      toast.error(String(err), { id: toastId });
-    }
+        await invoke("share_pdf_via_mail", {
+          path: tempPath,
+          to: result.client.email ?? "",
+          subject: result.reference,
+        });
+      })(),
+      { success: null, error: t.error_email_pdf }
+    );
   };
 
   const bulkExportPdfs = async () => {
@@ -403,7 +398,7 @@ export function InvoicesPage() {
       },
       {
         onSuccess: () => {
-          toast.success(t.template_created);
+          notify.success(t.template_created);
           setRecurringInv(null);
           setShowRecurring(true);
         },
@@ -441,10 +436,9 @@ export function InvoicesPage() {
       { id: inv.id, data: { reminder_count: newCount, last_reminder_date: today } },
       {
         onSuccess: () => {
-          toast.success(t.reminder_generated);
+          notify.success(t.reminder_generated);
           navigate(`/invoices/${inv.id}/preview`);
         },
-        onError: (e) => toast.error(String(e)),
       }
     );
   };
@@ -468,12 +462,11 @@ export function InvoicesPage() {
     </PageHeader>
   );
 
-  if (isLoading) return (
-    <div>
-      {header}
-      <TableSkeleton columns={7} />
-    </div>
-  );
+  const clearFilters = () => {
+    setSearch("");
+    setFilterConditions([]);
+    setActiveFilterId(null);
+  };
 
   return (
     <div>
@@ -481,10 +474,11 @@ export function InvoicesPage() {
 
       {/* Recurring templates panel */}
       {showRecurring && (
-        <Card className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-medium">{t.recurring_invoices}</h2>
-            <div className="flex items-center gap-3">
+        <Card className="mb-4">
+          <Card.Header
+            title={t.recurring_invoices}
+            onClose={() => setShowRecurring(false)}
+            action={
               <Button
                 variant="secondary"
                 icon={<RefreshCw size={12} />}
@@ -493,14 +487,12 @@ export function InvoicesPage() {
               >
                 {t.generate_now}
               </Button>
-              <IconButton icon={X} label={t.close} onClick={() => setShowRecurring(false)} />
-            </div>
-          </div>
-          {(!templates || templates.length === 0) ? (
-            <div>
-              <p className="text-sm text-muted">{t.no_recurring_templates}</p>
-              <p className="text-sm text-muted mt-1">{t.recurring_empty_hint}</p>
-            </div>
+            }
+          />
+          {templates === undefined ? (
+            <ListSkeleton size="sm" rows={2} />
+          ) : templates.length === 0 ? (
+            <EmptyState size="sm" icon={Repeat} message={t.no_recurring_templates} hint={t.recurring_empty_hint} />
           ) : (
             <Table>
               <Table.Head>
@@ -579,6 +571,8 @@ export function InvoicesPage() {
         fields={invoiceFields}
       />
 
+      <QueryState query={invoicesQuery} skeleton={<TableSkeleton columns={7} />} errorMessage={t.load_error_invoices}>
+      {(all) => (
       <Table>
         <Table.Head>
           <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} />
@@ -678,19 +672,25 @@ export function InvoicesPage() {
             })}
             {filtered.length === 0 && (
               <Table.Empty colSpan={7}>
-                <EmptyState
-                  message={(invoices?.length ?? 0) === 0 ? t.no_invoices_yet : t.no_matching_invoices}
-                  icon={<FileText size={32} />}
-                  action={(invoices?.length ?? 0) === 0 ? (
-                    <Button icon={<Plus size={12} />} onClick={() => navigate("/invoices/new")}>
-                      {t.new_invoice}
-                    </Button>
-                  ) : undefined}
-                />
+                {all.length === 0 ? (
+                  <EmptyState
+                    message={t.no_invoices_yet}
+                    icon={FileText}
+                    action={
+                      <Button icon={<Plus size={12} />} onClick={() => navigate("/invoices/new")}>
+                        {t.new_invoice}
+                      </Button>
+                    }
+                  />
+                ) : (
+                  <NoResults message={t.no_matching_invoices} onClear={clearFilters} />
+                )}
               </Table.Empty>
             )}
         </Table.Body>
       </Table>
+      )}
+      </QueryState>
       {ctxMenu && (
         <ContextMenu
           x={ctxMenu.x}

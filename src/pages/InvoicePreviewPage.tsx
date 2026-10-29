@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Download } from "lucide-react";
-import { Button, PageSpinner, IconButton } from "../components/ui";
+import { Download, FileText } from "lucide-react";
+import { Button, PageHeader, EmptyState, QueryError, DetailSkeleton } from "../components/ui";
 import { confirmDraftExport } from "../lib/confirmDraftExport";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { readFile } from "@tauri-apps/plugin-fs";
@@ -15,7 +15,7 @@ import { useProject } from "../db/hooks/useProjects";
 import { InvoicePDF } from "../components/invoice/InvoicePDF";
 import { useInvoiceTemplate } from "../db/hooks/useInvoiceTemplates";
 import { postProcessInvoicePdf } from "../lib/pdfPostProcess";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { useT } from "../i18n/useT";
 
 export function InvoicePreviewPage() {
@@ -23,8 +23,9 @@ export function InvoicePreviewPage() {
   const invoiceId = Number(id);
   const navigate = useNavigate();
 
-  const { data: invoice, isLoading: loadingInvoice } = useInvoice(invoiceId);
-  const { data: lineItems, isLoading: loadingItems } = useInvoiceLineItems(invoiceId);
+  const invoiceQuery = useInvoice(invoiceId);
+  const { data: invoice } = invoiceQuery;
+  const { data: lineItems } = useInvoiceLineItems(invoiceId);
   const { data: client } = useClient(invoice?.client_id ?? "");
   const { data: contacts } = useClientContacts(invoice?.client_id ?? "");
   const { data: addresses } = useClientAddresses(invoice?.client_id ?? "");
@@ -46,7 +47,8 @@ export function InvoicePreviewPage() {
   const updateInvoice = useUpdateInvoice();
   const t = useT();
 
-  const isLoading = loadingInvoice || loadingItems;
+  // Loading until the invoice and everything the PDF needs is in: "not found" must not flash while the client loads.
+  const isLoading = !!invoiceId && (invoice === undefined || (!!invoice && (lineItems === undefined || (!!invoice.client_id && client === undefined) || profile === undefined)));
   const needsPostProcess = invoice?.status === "cancelled";
 
   // Load stored PDF if available
@@ -105,9 +107,18 @@ export function InvoicePreviewPage() {
     };
   }, [invoice, lineItems, client, profile, contactName, addresses, project, needsPostProcess, invoiceTemplate]);
 
-  if (isLoading) return <PageSpinner />;
+  if (invoiceQuery.isError && invoice === undefined)
+    return <QueryError message={t.load_error_invoice} onRetry={invoiceQuery.refetch} retrying={invoiceQuery.isFetching} />;
+  if (isLoading) return <DetailSkeleton />;
   if (!invoice || !lineItems || !client || !profile)
-    return <div className="text-muted text-sm">{t.invoice_not_found}</div>;
+    return (
+      <EmptyState
+        icon={FileText}
+        message={t.invoice_not_found}
+        hint={t.not_found_hint}
+        action={<Button variant="secondary" onClick={() => navigate("/invoices")}>{t.back_to_invoices}</Button>}
+      />
+    );
 
   const buildPdfDoc = (inv: Invoice) => (
     <InvoicePDF
@@ -148,7 +159,7 @@ export function InvoicePreviewPage() {
         try {
           const bytes = await readFile(inv.pdf_path);
           triggerDownload(new Blob([bytes], { type: "application/pdf" }), filename);
-          toast.success(t.pdf_downloaded);
+          notify.success(t.pdf_downloaded);
           return;
         } catch {
           // stored file unreadable — fall through to client-side render
@@ -160,9 +171,9 @@ export function InvoicePreviewPage() {
         isCancelled: inv.status === "cancelled",
       });
       triggerDownload(new Blob([new Uint8Array(processed)], { type: "application/pdf" }), filename);
-      toast.success(t.pdf_downloaded);
-    } catch {
-      toast.error(t.failed_to_generate_pdf);
+      notify.success(t.pdf_downloaded);
+    } catch (e) {
+      notify.error(t.failed_to_generate_pdf, e);
     } finally {
       setExporting(false);
     }
@@ -183,22 +194,22 @@ export function InvoicePreviewPage() {
           const fresh = await getInvoice(invoiceId);
           await doDownload(fresh ?? invoice);
         },
-        onError: (e) => toast.error(String(e)),
       }
     );
   };
 
   return (
     <div className="flex flex-col -m-8 h-screen">
-      <div className="flex items-center gap-3 px-6 py-3 border-b border-[var(--color-border-divider)] bg-[var(--color-surface)]">
-        <IconButton icon={ArrowLeft} label={t.back} onClick={() => navigate(-1)} />
-        <h1 className="text-sm font-semibold flex-1">
-          {invoice.reference} — {client.name}
-        </h1>
-        <Button icon={<Download size={12} />} loading={exporting || updateInvoice.isPending} onClick={downloadPdf}>
-          {t.download_pdf}
-        </Button>
-      </div>
+      <PageHeader
+        compact
+        title={`${invoice.reference} — ${client.name}`}
+        back={() => navigate(-1)}
+        actions={
+          <Button icon={<Download size={12} />} loading={exporting || updateInvoice.isPending} onClick={downloadPdf}>
+            {t.download_pdf}
+          </Button>
+        }
+      />
       <div className="flex-1 bg-[var(--color-bg)]">
         {storedPdfUrl ? (
           <iframe

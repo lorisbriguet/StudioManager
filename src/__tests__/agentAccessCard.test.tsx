@@ -171,7 +171,7 @@ describe("AgentAccessCard", () => {
   it("lists recent changes with org name, empty state, and refreshes on db-changed", async () => {
     state.enabled = true;
     renderCard();
-    expect(await screen.findByText("No changes yet.")).toBeTruthy();
+    expect(await screen.findByText("No changes by an agent yet")).toBeTruthy();
     log = [{ at: "2026-10-27T10:00:00Z", org: "o2", tool: "add_task", summary: "Added task Foo" }];
     listeners.forEach((l) => l());
     expect(await screen.findByText("Added task Foo")).toBeTruthy();

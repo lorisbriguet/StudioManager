@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, renderHook, screen, fireEvent, cleanup, act } from "@testing-library/react";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { ConfirmHost } from "../components/ui/ConfirmDialog";
 import { useBulkDelete } from "../hooks/useBulkDelete";
 import { useAppStore } from "../stores/app-store";
 import { useUndoStore } from "../stores/undo-store";
 
-vi.mock("sonner", () => {
-  const toast = Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() });
-  return { toast };
-});
+vi.mock("../lib/notify", async (orig) => ({
+  ...(await orig<typeof import("../lib/notify")>()),
+  ...(await import("../__mocks__/notify")).notifyMockModule(),
+}));
 
 // A fake table: deleting pushes its own undo entry, like the db delete hooks.
 let rows: Set<number>;
@@ -27,7 +27,8 @@ beforeEach(() => {
   rows = new Set([1, 2, 3, 99]);
   useAppStore.setState({ language: "EN" });
   useUndoStore.setState({ stack: [], redoStack: [] });
-  vi.mocked(toast).mockClear();
+  vi.mocked(notify.undo).mockClear();
+  vi.mocked(notify.success).mockClear();
 });
 afterEach(cleanup);
 
@@ -54,12 +55,13 @@ describe("useBulkDelete", () => {
     expect(onDone).toHaveBeenCalledTimes(1);
     // one undo entry for the whole selection
     expect(useUndoStore.getState().stack).toHaveLength(1);
-    expect(toast).toHaveBeenCalledTimes(1);
-    const [message, options] = vi.mocked(toast).mock.calls[0] as unknown as [string, { action: { onClick: () => Promise<void> }; duration: number }];
+    expect(notify.undo).toHaveBeenCalledTimes(1);
+    const [message, onUndo] = vi.mocked(notify.undo).mock.calls[0];
     expect(message).toBe("3 expenses deleted");
-    expect(options.duration).toBe(8000);
 
-    await act(() => options.action.onClick());
+    await act(async () => {
+      await onUndo();
+    });
     expect([...rows].sort()).toEqual([1, 2, 3, 99]);
     expect(useUndoStore.getState().stack).toHaveLength(0);
     // and redo deletes them all again
@@ -83,7 +85,7 @@ describe("useBulkDelete", () => {
     });
     expect(rows.size).toBe(4);
     expect(onDone).not.toHaveBeenCalled();
-    expect(toast).not.toHaveBeenCalled();
+    expect(notify.undo).not.toHaveBeenCalled();
   });
 
   it("keeps going past a failed delete and counts only what was deleted", async () => {
@@ -97,6 +99,6 @@ describe("useBulkDelete", () => {
       await done;
     });
     expect([...rows]).toEqual([2, 3, 99]);
-    expect(vi.mocked(toast).mock.calls[0][0]).toBe("1 expense deleted");
+    expect(vi.mocked(notify.undo).mock.calls[0][0]).toBe("1 expense deleted");
   });
 });

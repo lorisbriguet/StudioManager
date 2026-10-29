@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Plus, X, Eye, Trash2, ExternalLink, Maximize2, FolderOpen, Play, Pause, CheckCircle } from "lucide-react";
-import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
+import { Plus, Eye, Trash2, ExternalLink, FolderOpen, Play, Pause, CheckCircle } from "lucide-react";
+import { notify } from "../lib/notify";
 import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from "../db/hooks/useProjects";
 import { useClients } from "../db/hooks/useClients";
 import { useAllTasks } from "../db/hooks/useTasks";
@@ -21,7 +21,7 @@ import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Checkbox, Button, Badge, PageHeader, SearchBar, TableSkeleton, DatePicker, Input, FormField, FormGrid, FormModal, EmptyState, Select, IconButton, FilterChip, ProgressBar, Tooltip } from "../components/ui";
+import { Checkbox, Button, Badge, PageHeader, SearchBar, DatePicker, Input, FormField, FormGrid, FormModal, EmptyState, QueryState, CardGridSkeleton, Select, FilterChip, ProgressBar, PeekHeader, HEADING_2, Card, CARD_GAP } from "../components/ui";
 import { undoable, deleteWithUndo } from "../lib/undo";
 import { confirmDelete } from "../lib/confirm";
 import { useBulkDelete } from "../hooks/useBulkDelete";
@@ -40,7 +40,8 @@ const statusKeys: Record<ProjectStatus, UIKey> = {
 const priorityRank: Record<TaskPriority, number> = { low: 0, medium: 1, high: 2 };
 
 export function ProjectsPage() {
-  const { data: projects, isLoading } = useProjects();
+  const projectsQuery = useProjects();
+  const { data: projects } = projectsQuery;
   const { data: clients } = useClients();
   const { data: allTasks } = useAllTasks();
   const { data: allSubtasks } = useQuery({ queryKey: ["subtasks"], queryFn: getAllSubtasks });
@@ -249,16 +250,12 @@ export function ProjectsPage() {
     cancelled: t.cancelled,
   };
 
-  if (isLoading) return (
-    <div className="flex flex-1 min-h-0 -m-8">
-      <div className="min-w-0 overflow-y-auto flex-1 p-8">
-        <PageHeader title={t.projects}>
-          <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>{t.new_project}</Button>
-        </PageHeader>
-        <TableSkeleton columns={4} />
-      </div>
-    </div>
-  );
+  const clearFilters = () => {
+    setSearch("");
+    setFilter("all");
+    setFilterConditions([]);
+    setActiveFilterId(null);
+  };
 
   return (
     <div ref={containerRef} className="flex flex-1 min-h-0 -m-8">
@@ -302,7 +299,7 @@ export function ProjectsPage() {
             onSave={(data) => {
               createProject.mutate(data, {
                 onSuccess: () => {
-                  toast.success(t.toast_project_created);
+                  notify.success(t.toast_project_created);
                   setShowForm(false);
                 },
               });
@@ -311,24 +308,34 @@ export function ProjectsPage() {
           />
         )}
 
-        <div className="grid gap-4 p-px" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+        <QueryState
+          query={projectsQuery}
+          skeleton={<CardGridSkeleton />}
+          errorMessage={t.load_error_projects}
+          empty={
+            <EmptyState
+              icon={FolderOpen}
+              message={t.no_projects}
+              action={<Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>{t.new_project}</Button>}
+            />
+          }
+          noResults={filtered.length === 0 ? { message: t.no_matching_projects, onClear: clearFilters } : undefined}
+        >
+        {() => (
+        <div className={`grid ${CARD_GAP} p-px`} style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
           {filtered.map((p, pi) => {
             const stats = taskStats[p.id] ?? { total: 0, pct: 0, maxPriority: "low" as TaskPriority };
             const pct = stats.pct;
 
             return (
-              <div
+              <Card
                 key={p.id}
                 data-list-row
+                interactive
+                selected={peekId === p.id || bulk.selected.has(p.id)}
                 onClick={() => handleProjectClick(p.id)}
                 onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: { id: p.id, name: p.name } }); }}
-                className={`group block rounded-xl p-4 transition-all cursor-pointer ${
-                  peekId === p.id
-                    ? "bg-[var(--color-hover-row)] outline outline-1 outline-accent"
-                    : bulk.selected.has(p.id)
-                      ? "bg-[var(--color-hover-row)] outline outline-1 outline-accent"
-                      : "bg-[var(--color-surface)] hover:bg-[var(--color-hover-row)]"
-                }${pi === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
+                className={`group${pi === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2 min-w-0">
@@ -340,7 +347,7 @@ export function ProjectsPage() {
                         bulk.selected.has(p.id) || bulk.count > 0 ? "opacity-100" : "opacity-0 group-hover:opacity-100"
                       }`}
                     />
-                    <h3 className="text-sm font-medium leading-tight truncate">{p.name}</h3>
+                    <h2 className={`${HEADING_2} leading-tight truncate`}>{p.name}</h2>
                   </div>
                   <Badge variant={projectStatusVariant(p.status)} className="shrink-0 ml-2">
                     {t[statusKeys[p.status]]}
@@ -369,21 +376,12 @@ export function ProjectsPage() {
                     }`} />
                   )}
                 </div>
-              </div>
+              </Card>
             );
           })}
-          {filtered.length === 0 && (
-            <div className="col-span-full">
-              <EmptyState
-                icon={<FolderOpen size={32} />}
-                message={(projects?.length ?? 0) === 0 ? t.no_projects : t.no_matching_projects}
-                action={(projects?.length ?? 0) === 0 ? (
-                  <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>{t.new_project}</Button>
-                ) : undefined}
-              />
-            </div>
-          )}
         </div>
+        )}
+        </QueryState>
       </div>
 
       {ctxMenu && (
@@ -422,19 +420,7 @@ export function ProjectsPage() {
           onClick={(e) => e.stopPropagation()}
           onAnimationEnd={() => { if (closingPeek) { setPeekId(null); setClosingPeek(false); } }}
         >
-          <div className="flex items-center gap-1 p-2 border-b border-[var(--color-border-header)]">
-            <IconButton icon={X} label={t.close} onClick={handleClosePeek} />
-            <div className="flex-1" />
-            <Tooltip content={t.open_full_page}>
-              <Link
-                to={`/projects/${peekId}`}
-                className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
-                aria-label={t.open_full_page}
-              >
-                <Maximize2 size={14} />
-              </Link>
-            </Tooltip>
-          </div>
+          <PeekHeader onClose={handleClosePeek} onOpenFull={() => navigate(`/projects/${peekId}`)} />
           <div className="p-4">
             <ProjectDetailContent key={peekId} projectId={peekId} compact />
           </div>
@@ -485,11 +471,16 @@ function NewProjectForm({
     notes: "",
   });
   const t = useT();
+  const [errors, setErrors] = useState<{ name?: string; client_id?: string }>({});
 
-  // No validate schema here: the two required checks report by toast.
+  // No validate schema here: two required checks, shown under their fields.
   const submit = () => {
-    if (!form.name.trim()) return toast.error(t.toast_name_required);
-    if (!form.client_id) return toast.error(t.toast_select_client);
+    const next = {
+      name: form.name.trim() ? undefined : t.toast_name_required,
+      client_id: form.client_id ? undefined : t.toast_select_client,
+    };
+    setErrors(next);
+    if (next.name || next.client_id) return;
     onSave({
       ...form,
       start_date: form.start_date || null,
@@ -502,17 +493,17 @@ function NewProjectForm({
   return (
     <FormModal open onClose={onCancel} title={t.new_project} submitLabel={t.save} onSubmit={submit}>
       <FormGrid cols={2}>
-        <FormField label={t.project_name} required>
+        <FormField label={t.project_name} required error={errors.name}>
           <Input
             autoFocus
             value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            onChange={(e) => { setForm({ ...form, name: e.target.value }); setErrors((er) => ({ ...er, name: undefined })); }}
           />
         </FormField>
-        <FormField label={t.client} required>
+        <FormField label={t.client} required error={errors.client_id}>
           <Select
             value={form.client_id}
-            onChange={(e) => setForm({ ...form, client_id: e.target.value })}
+            onChange={(e) => { setForm({ ...form, client_id: e.target.value }); setErrors((er) => ({ ...er, client_id: undefined })); }}
           >
             {clients.map((c) => (
               <option key={c.id} value={c.id}>

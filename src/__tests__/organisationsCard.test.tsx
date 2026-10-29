@@ -5,12 +5,12 @@ import { ConfirmHost } from "../components/ui/ConfirmDialog";
 import { useOrgStore } from "../stores/org-store";
 import { useAppStore } from "../stores/app-store";
 import { uiLabels } from "../i18n/ui";
-import { notifyError } from "../lib/notifyError";
+import { notify } from "../lib/notify";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 
-vi.mock("../lib/notifyError", () => ({
-  notifyError: vi.fn(),
-  getLabels: () => new Proxy({}, { get: (_t, k) => String(k) }),
+vi.mock("../lib/notify", async (orig) => ({
+  ...(await orig<typeof import("../lib/notify")>()),
+  ...(await import("../__mocks__/notify")).notifyMockModule(),
 }));
 
 const reg = { version: 1, activeId: "o1", organisations: [
@@ -20,7 +20,7 @@ const reg = { version: 1, activeId: "o1", organisations: [
 
 beforeEach(() => {
   clearInvokedCommands();
-  vi.mocked(notifyError).mockClear();
+  vi.mocked(notify.error).mockClear();
   useAppStore.setState({ language: "EN" });
   useOrgStore.getState().applyRegistry(reg);
   setInvokeHandler((cmd, args) => {
@@ -77,7 +77,7 @@ describe("OrganisationsCard", () => {
     expect(invokedCommands.some((c) => c.cmd === "rename_organisation")).toBe(false);
   });
 
-  it("calls notifyError and keeps the edit open when the rename is rejected", async () => {
+  it("calls notify.error and keeps the edit open when the rename is rejected", async () => {
     setInvokeHandler((cmd) => {
       if (cmd === "rename_organisation") throw new Error("boom");
       return null;
@@ -87,7 +87,7 @@ describe("OrganisationsCard", () => {
     const input = screen.getByDisplayValue("Label");
     fireEvent.change(input, { target: { value: "Music Label" } });
     fireEvent.keyDown(input, { key: "Enter" });
-    await waitFor(() => expect(notifyError).toHaveBeenCalledWith(uiLabels.EN.operation_failed, expect.any(Error)));
+    await waitFor(() => expect(notify.error).toHaveBeenCalledWith(uiLabels.EN.error_rename_organisation, expect.any(Error)));
     expect(screen.getByDisplayValue("Music Label")).toBeInTheDocument();
   });
 });

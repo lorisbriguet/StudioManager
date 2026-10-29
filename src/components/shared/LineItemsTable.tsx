@@ -10,8 +10,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Button, DragHandle, Select, IconButton, Input, Table } from "../ui";
-import { PanelTitle } from "../ui/PanelTitle";
+import { Button, Card, DragHandle, Select, IconButton, Input, Table } from "../ui";
 import type { LineItem } from "../../lib/lineItems";
 import { useT } from "../../i18n/useT";
 
@@ -79,9 +78,8 @@ export function LineItemsTable({
 
   return (
     <div>
-      <PanelTitle
+      <Card.Header
         title={t.line_items}
-        className="mb-3"
         action={
           <div className="flex items-center gap-3">
             {headerActions}
@@ -126,17 +124,19 @@ export function LineItemsTable({
                         value={item.designation}
                         onChange={(e) => onUpdate(i, "designation", e.target.value)}
                         placeholder={t.description}
+                        aria-label={t.designation}
                       />
                     )}
                   </Table.Td>
                   {!hideRate && (
                     <Table.Td numeric>
                       <Input
-                        type="number"
+                        numeric
+                        step="0.01"
                         value={item.rate ?? ""}
                         onChange={(e) => onUpdate(i, "rate", e.target.value ? Number(e.target.value) : null)}
-                        className="text-right"
                         placeholder="0"
+                        aria-label={t.rate}
                       />
                     </Table.Td>
                   )}
@@ -145,6 +145,7 @@ export function LineItemsTable({
                       <Select
                         value={item.unit ?? ""}
                         onChange={(e) => onUpdate(i, "unit", e.target.value || null)}
+                        aria-label={t.unit}
                       >
                         <option value="">—</option>
                         <option value="hours">{t.hours}</option>
@@ -156,18 +157,19 @@ export function LineItemsTable({
                   )}
                   <Table.Td numeric>
                     <Input
-                      type="number"
+                      numeric
                       value={item.quantity}
                       onChange={(e) => onUpdate(i, "quantity", Number(e.target.value))}
-                      className="text-right"
+                      aria-label={t.qty}
                     />
                   </Table.Td>
                   <Table.Td numeric>
                     <Input
-                      type="number"
+                      numeric
+                      step="0.01"
                       value={item.amount}
                       onChange={(e) => onUpdate(i, "amount", Number(e.target.value))}
-                      className="text-right"
+                      aria-label={t.amount}
                     />
                   </Table.Td>
                   <Table.Actions>

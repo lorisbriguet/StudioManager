@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, addMonths } from "date-fns";
 import { Check } from "lucide-react";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { Checkbox, Button, DatePicker, FormField, FormGrid, Input, Modal, Textarea } from "./ui";
 import * as v from "../lib/validate";
 import { useT } from "../i18n/useT";
@@ -95,7 +95,7 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
       tasks: included,
     });
 
-    toast.success(t.project_generated);
+    notify.success(t.project_generated);
     onClose();
     navigate(`/projects/${projectId}`);
   };
@@ -182,24 +182,24 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
               <Checkbox
                 checked={task.included}
                 onChange={(e) => updateTask(i, { included: e.target.checked })}
+                aria-label={`${t.include}: ${task.title}`}
               />
               <Input
-                size="sm"
                 type="text"
                 value={task.title}
                 onChange={(e) => updateTask(i, { title: e.target.value })}
+                aria-label={t.task_name}
               />
               <Input
-                size="sm"
-                type="number"
+                numeric
                 value={task.plannedMinutes ?? ""}
                 onChange={(e) =>
                   updateTask(i, {
                     plannedMinutes: e.target.value ? Number(e.target.value) : null,
                   })
                 }
-                placeholder={t.minutes_short}
-                className="text-right"
+                unit={t.minutes_short}
+                aria-label={t.planned_time}
               />
             </div>
           ))}
@@ -228,7 +228,6 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              rows={2}
             />
           </FormField>
         </FormGrid>

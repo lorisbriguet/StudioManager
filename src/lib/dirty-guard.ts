@@ -1,5 +1,5 @@
 import { confirm } from "./confirm";
-import { getLabels } from "./notifyError";
+import { getLabels } from "./notify";
 
 /**
  * Central registry of "unsaved changes" guards.

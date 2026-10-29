@@ -1,5 +1,5 @@
 import { confirm } from "../stores/confirm-store";
-import { getLabels } from "./notifyError";
+import { getLabels } from "./notify";
 
 /**
  * Ask before an action, with the app's ConfirmDialog (never the native

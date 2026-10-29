@@ -1,10 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import * as q from "../queries/quotes";
 import { getNextQuoteReference } from "../queries/quotes";
 import type { Quote, QuoteLineItem } from "../../types/quote";
 import { useUndoStore } from "../../stores/undo-store";
-import { getLabels } from "../../lib/notifyError";
+import { getLabels } from "../../lib/notify";
 
 export function useQuotes() {
   return useQuery({ queryKey: ["quotes"], queryFn: q.getQuotes });
@@ -29,6 +28,7 @@ export function useQuotesByProject(projectId: number) {
 export function useCreateQuote() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_quote" },
     mutationFn: async ({ data, lineItems }: {
       data: Omit<Quote, "id" | "created_at" | "updated_at">;
       lineItems: Omit<QuoteLineItem, "id" | "quote_id">[];
@@ -53,13 +53,13 @@ export function useCreateQuote() {
       qc.invalidateQueries({ queryKey: ["quotes"] });
       qc.invalidateQueries({ queryKey: ["finance"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useUpdateQuote() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_quote" },
     mutationFn: async ({
       id,
       data,
@@ -118,13 +118,13 @@ export function useUpdateQuote() {
       qc.invalidateQueries({ queryKey: ["quote-line-items", id] });
       qc.invalidateQueries({ queryKey: ["finance"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useDeleteQuote() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_delete_quote" },
     mutationFn: async (id: number) => {
       const prev = await q.getQuote(id);
       const prevItems = await q.getQuoteLineItems(id);
@@ -159,6 +159,5 @@ export function useDeleteQuote() {
       qc.invalidateQueries({ queryKey: ["quotes"] });
       qc.invalidateQueries({ queryKey: ["finance"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }

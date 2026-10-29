@@ -164,11 +164,13 @@ export function TaskDatePicker({
           {showTime && (
             <div className="flex items-center gap-2 ml-6 mb-2">
               <TimeInput
+                label={t.start_time}
                 value={startTime ?? ""}
                 onCommit={(v) => onChange({ start_time: v || null })}
               />
               <ArrowRight size={12} className="text-muted shrink-0" />
               <TimeInput
+                label={t.end_time}
                 value={endTime ?? ""}
                 onCommit={(v) => onChange({ end_time: v || null })}
               />
@@ -235,18 +237,17 @@ function ToggleRow({
 }
 
 // Time input with local state — only commits on blur to avoid mid-typing resets
-function TimeInput({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
+function TimeInput({ label, value, onCommit }: { label: string; value: string; onCommit: (v: string) => void }) {
   const [local, setLocal] = useState(value);
   useEffect(() => { setLocal(value); }, [value]);
   return (
     <Input
-      size="sm"
-      fullWidth={false}
+      width="sm"
       type="time"
+      aria-label={label}
       value={local}
       onChange={(e) => setLocal(e.target.value)}
       onBlur={() => { if (local !== value) onCommit(local); }}
-      className="w-24"
     />
   );
 }

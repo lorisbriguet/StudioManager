@@ -1,33 +1,18 @@
-import { toast } from "sonner";
 import { useUndoStore, type UndoAction } from "../stores/undo-store";
-import { getLabels } from "./notifyError";
+import { notify, TOAST_DURATION } from "./notify";
 
 /** How long an Undo toast stays up. */
-export const UNDO_DURATION = 8000;
+export const UNDO_DURATION = TOAST_DURATION.undo;
 
 /**
- * Show a toast with an undo action. If the user clicks "Undo" within
- * the toast duration, the rollback function is called.
+ * Show a toast with an undo action (`notify.undo`). If the user clicks
+ * "Undo" within the toast duration, the rollback function is called.
  *
  * Usage:
  *   undoable("Client deleted", async () => { await restoreClient(id, data); });
  */
 export function undoable(message: string, rollback: () => Promise<void> | void) {
-  const t = getLabels();
-  toast(message, {
-    action: {
-      label: t.undo,
-      onClick: async () => {
-        try {
-          await rollback();
-          toast.success(t.action_undone);
-        } catch {
-          toast.error(t.failed_to_undo);
-        }
-      },
-    },
-    duration: UNDO_DURATION,
-  });
+  notify.undo(message, rollback);
 }
 
 /**
@@ -40,10 +25,10 @@ export function undoable(message: string, rollback: () => Promise<void> | void) 
  */
 export function undoableAction(message: string, action: UndoAction | undefined): void {
   if (!action) {
-    toast.success(message);
+    notify.success(message);
     return;
   }
-  undoable(message, async () => {
+  notify.undo(message, async () => {
     const store = useUndoStore.getState();
     const idx = store.stack.indexOf(action);
     if (idx === -1) return; // already undone

@@ -20,6 +20,7 @@ import { useAppStore } from "../stores/app-store";
 import { confirmIfDirty } from "../lib/dirty-guard";
 import { useT } from "../i18n/useT";
 import { Modal, Kbd } from "./ui";
+import { MENU_GROUP_LABEL } from "./ui/Dropdown";
 import { useClients } from "../db/hooks/useClients";
 import { useProjects } from "../db/hooks/useProjects";
 import { useInvoices } from "../db/hooks/useInvoices";
@@ -79,7 +80,7 @@ export function CommandPalette() {
           </Command.Empty>
 
           {/* Quick actions */}
-          <Command.Group heading={t.quick_actions} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
+          <Command.Group heading={<GroupHeading>{t.quick_actions}</GroupHeading>}>
             <PaletteItem icon={Plus} label={t.new_client} onSelect={() => go("/clients")} />
             <PaletteItem icon={Plus} label={t.new_project} onSelect={() => go("/projects")} />
             <PaletteItem icon={Plus} label={t.new_invoice} onSelect={() => go("/invoices/new")} />
@@ -87,7 +88,7 @@ export function CommandPalette() {
           </Command.Group>
 
           {/* Navigation */}
-          <Command.Group heading={t.navigate} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
+          <Command.Group heading={<GroupHeading>{t.navigate}</GroupHeading>}>
             <PaletteItem icon={LayoutDashboard} label={t.dashboard} onSelect={() => go("/")} />
             <PaletteItem icon={Users} label={t.clients} onSelect={() => go("/clients")} />
             <PaletteItem icon={FolderKanban} label={t.projects} onSelect={() => go("/projects")} />
@@ -103,7 +104,7 @@ export function CommandPalette() {
 
           {/* Clients search */}
           {clients && clients.length > 0 && (
-            <Command.Group heading={t.clients} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
+            <Command.Group heading={<GroupHeading>{t.clients}</GroupHeading>}>
               {clients.map((c) => (
                 <PaletteItem
                   key={c.id}
@@ -118,7 +119,7 @@ export function CommandPalette() {
 
           {/* Projects search */}
           {projects && projects.length > 0 && (
-            <Command.Group heading={t.projects} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
+            <Command.Group heading={<GroupHeading>{t.projects}</GroupHeading>}>
               {projects.map((p) => (
                 <PaletteItem
                   key={p.id}
@@ -133,7 +134,7 @@ export function CommandPalette() {
 
           {/* Invoices search */}
           {invoices && invoices.length > 0 && (
-            <Command.Group heading={t.invoices} className="[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
+            <Command.Group heading={<GroupHeading>{t.invoices}</GroupHeading>}>
               {invoices.map((inv) => (
                 <PaletteItem
                   key={inv.id}
@@ -164,6 +165,11 @@ export function CommandPalette() {
       </Command>
     </Modal>
   );
+}
+
+/** A group heading: the menu group label (SECTION_LABEL), as in every other menu. */
+function GroupHeading({ children }: { children: string }) {
+  return <span className={`block ${MENU_GROUP_LABEL}`}>{children}</span>;
 }
 
 function PaletteItem({

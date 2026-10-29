@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Plus, Trash2, Copy, Pencil } from "lucide-react";
-import { toast } from "sonner";
-import { Button, Tag, Input } from "../ui";
+import { notify } from "../../lib/notify";
+import { Button, Card, Tag, InlineRename, EmptyState } from "../ui";
 import {
   useWorkloadTemplates,
   useCreateWorkloadTemplate,
@@ -25,7 +25,6 @@ export function WorkloadTemplateManager() {
 
   const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
   const [renamingId, setRenamingId] = useState<number | null>(null);
-  const [renameValue, setRenameValue] = useState("");
   const [editingColumn, setEditingColumn] = useState<{
     column: WorkloadColumn | null;
     index: number;
@@ -38,7 +37,7 @@ export function WorkloadTemplateManager() {
       { name: t.new_template, columns: DEFAULT_WORKLOAD_COLUMNS },
       {
         onSuccess: (id) => {
-          toast.success(t.toast_created);
+          notify.success(t.workload_template_created);
           setEditingTemplateId(id);
         },
       }
@@ -48,8 +47,8 @@ export function WorkloadTemplateManager() {
   const handleDuplicate = (tpl: typeof templates extends (infer T)[] | undefined ? T : never) => {
     if (!tpl) return;
     createTemplate.mutate(
-      { name: `${tpl.name} (copy)`, columns: tpl.columns },
-      { onSuccess: () => toast.success(t.toast_created) }
+      { name: t.copy_of_name.replace("{name}", tpl.name), columns: tpl.columns },
+      { onSuccess: () => notify.success(t.template_duplicated) }
     );
   };
 
@@ -68,11 +67,8 @@ export function WorkloadTemplateManager() {
     });
   };
 
-  const handleRenameCommit = (id: number) => {
-    const val = renameValue.trim();
-    if (val) {
-      updateTemplate.mutate({ id, name: val });
-    }
+  const handleRenameCommit = (id: number, name: string) => {
+    updateTemplate.mutate({ id, name });
     setRenamingId(null);
   };
 
@@ -126,53 +122,50 @@ export function WorkloadTemplateManager() {
       {/* Template list */}
       <div className="space-y-2">
         {templates?.map((tpl) => (
-          <div
+          <Card
             key={tpl.id}
-            className={`border rounded-lg overflow-hidden transition-colors ${
-              editingTemplateId === tpl.id
-                ? "border-accent"
-                : "border-[var(--color-border-divider)]"
-            }`}
+            tone="inset"
+            padding="none"
+            selected={editingTemplateId === tpl.id}
+            className="overflow-hidden"
           >
-            {/* Template header */}
-            <div className="flex items-center gap-2 px-3 py-2 bg-[var(--color-surface)]">
-              {renamingId === tpl.id ? (
-                <Input size="sm" fullWidth={false}
-                  autoFocus
-                  value={renameValue}
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  onBlur={() => handleRenameCommit(tpl.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleRenameCommit(tpl.id);
-                    if (e.key === "Escape") setRenamingId(null);
-                  }}
+            <Card.Header
+              as="h3"
+              className="px-3 py-2"
+              count={tpl.columns.length}
+              action={
+                <>
+                  <IconButton size="xs"
+                    icon={Pencil}
+                    label={t.rename}
+                    tone="accent"
+                    onClick={() => setRenamingId(tpl.id)}
+                  />
+                  <IconButton size="xs" icon={Copy} label={t.duplicate} tone="accent" onClick={() => handleDuplicate(tpl)} />
+                  <IconButton size="xs" icon={Trash2} label={t.delete} tone="danger" onClick={() => handleDelete(tpl)} />
+                </>
+              }
+              title={renamingId === tpl.id ? (
+                <InlineRename
+                  value={tpl.name}
+                  label={t.rename}
+                  onSave={(name) => handleRenameCommit(tpl.id, name)}
+                  onCancel={() => setRenamingId(null)}
                   className="flex-1"
                 />
               ) : (
                 <button
+                  type="button"
+                  aria-expanded={editingTemplateId === tpl.id}
                   onClick={() => setEditingTemplateId(
                     editingTemplateId === tpl.id ? null : tpl.id
                   )}
-                  className="flex-1 text-left text-sm font-medium hover:text-accent"
+                  className="text-left hover:text-accent"
                 >
                   {tpl.name}
-                  <span className="ml-2 text-xs text-muted font-normal">
-                    ({tpl.columns.length} {t.columns})
-                  </span>
                 </button>
               )}
-              <IconButton size="xs"
-                icon={Pencil}
-                label={t.rename}
-                tone="accent"
-                onClick={() => {
-                  setRenamingId(tpl.id);
-                  setRenameValue(tpl.name);
-                }}
-              />
-              <IconButton size="xs" icon={Copy} label={t.duplicate} tone="accent" onClick={() => handleDuplicate(tpl)} />
-              <IconButton size="xs" icon={Trash2} label={t.delete} tone="danger" onClick={() => handleDelete(tpl)} />
-            </div>
+            />
 
             {/* Expanded column list */}
             {editingTemplateId === tpl.id && (
@@ -223,13 +216,11 @@ export function WorkloadTemplateManager() {
                 </Button>
               </div>
             )}
-          </div>
+          </Card>
         ))}
 
         {(!templates || templates.length === 0) && (
-          <p className="text-xs text-muted py-4 text-center">
-            {t.no_templates}
-          </p>
+          <EmptyState size="sm" message={t.no_workload_templates} />
         )}
       </div>
 

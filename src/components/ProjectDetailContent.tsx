@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ExternalLink, FolderOpen } from "lucide-react";
-import { toast } from "sonner";
+import { ExternalLink, FileText, FolderOpen } from "lucide-react";
+import { notify } from "../lib/notify";
 import { useProject, useUpdateProject } from "../db/hooks/useProjects";
 import { useClient } from "../db/hooks/useClients";
 import { useTasksByProject, useSubtasksByProject } from "../db/hooks/useTasks";
@@ -19,7 +19,7 @@ import type { ProjectStatus } from "../types/project";
 import { ContextMenu, type ContextMenuState } from "./ui/ContextMenu";
 import { useInvoices, useInvoicesByProject, useUpdateInvoice } from "../db/hooks/useInvoices";
 import { useQuotes, useQuotesByProject, useUpdateQuote } from "../db/hooks/useQuotes";
-import { Badge, Button, DatePicker, PageSpinner, Select, Textarea } from "./ui";
+import { Badge, Button, DatePicker, PageHeader, Select, Textarea, EmptyState, QueryError, DetailSkeleton, ListSkeleton } from "./ui";
 import { ProgressBar } from "./ui/Feedback";
 import { invoiceStatusVariant, quoteStatusVariant } from "../lib/statusColors";
 import { useTabStore } from "../stores/tab-store";
@@ -34,11 +34,17 @@ import { ProjectNamedTables } from "./project/ProjectNamedTables";
 
 interface Props {
   projectId: number;
+  /** In a peek panel: the title is a level-2 h2 (the host page owns the h1). */
   compact?: boolean;
+  /** Full page: the header's back button. */
+  onBack?: () => void;
+  /** Full page: extra header actions after the status (delete). */
+  actions?: ReactNode;
 }
 
-export function ProjectDetailContent({ projectId, compact }: Props) {
-  const { data: project, isLoading } = useProject(projectId);
+export function ProjectDetailContent({ projectId, compact, onBack, actions }: Props) {
+  const projectQuery = useProject(projectId);
+  const { data: project } = projectQuery;
   const { data: client } = useClient(project?.client_id ?? "");
   const { data: tasks } = useTasksByProject(projectId);
   const updateProject = useUpdateProject();
@@ -111,8 +117,25 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
     if (project) setStatus(project.status);
   }, [project]);
 
-  if (isLoading) return <PageSpinner />;
-  if (!project) return <div className="text-muted text-sm">{t.no_projects}</div>;
+  // A bad id never runs the query: straight to "not found".
+  if (project === undefined && projectId) {
+    return projectQuery.isError ? (
+      <QueryError message={t.load_error_project} onRetry={projectQuery.refetch} retrying={projectQuery.isFetching} />
+    ) : (
+      <DetailSkeleton />
+    );
+  }
+  if (!project) {
+    return (
+      <EmptyState
+        size={compact ? "sm" : "lg"}
+        icon={FolderOpen}
+        message={t.project_not_found}
+        hint={t.not_found_hint}
+        action={compact ? undefined : <Button variant="secondary" onClick={onBack ?? (() => navigate("/projects"))}>{t.back_to_projects}</Button>}
+      />
+    );
+  }
 
   const totalCount = tasks?.length ?? 0;
   // Weighted progress: each task = 1/totalTasks weight, subdivided by subtasks
@@ -139,6 +162,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
           <div>
             <Textarea
               placeholder={t.notes}
+              aria-label={t.notes}
               defaultValue={project.notes ?? ""}
               onBlur={(e) => {
                 const val = e.target.value;
@@ -146,8 +170,6 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                   updateProject.mutate({ id: projectId, data: { notes: val } });
                 }
               }}
-              className="min-h-[60px] max-h-[60vh]"
-              style={{ fieldSizing: "content" } as React.CSSProperties}
             />
           </div>
         );
@@ -178,8 +200,10 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
       case "invoices":
         return (
           <div className="text-sm">
-            {(!projectInvoices || projectInvoices.length === 0) ? (
-              <div className="text-muted">{t.no_invoices_yet}</div>
+            {projectInvoices === undefined ? (
+              <ListSkeleton size="sm" rows={2} />
+            ) : projectInvoices.length === 0 ? (
+              <EmptyState size="sm" icon={FileText} message={t.no_invoices_yet} />
             ) : (
               <div className="divide-y divide-[var(--color-border-divider)]">
                 {projectInvoices.map((inv) => (
@@ -218,8 +242,10 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
       case "quotes":
         return (
           <div className="text-sm">
-            {(!projectQuotes || projectQuotes.length === 0) ? (
-              <div className="text-muted">{t.no_quotes_yet}</div>
+            {projectQuotes === undefined ? (
+              <ListSkeleton size="sm" rows={2} />
+            ) : projectQuotes.length === 0 ? (
+              <EmptyState size="sm" icon={FileText} message={t.no_quotes_yet} />
             ) : (
               <div className="divide-y divide-[var(--color-border-divider)]">
                 {projectQuotes.map((qt) => (
@@ -264,17 +290,16 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
 
   return (
       <div>
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex-1 min-w-0">
-            <h2 className={compact ? "text-base font-semibold tracking-tight" : "text-xl font-semibold tracking-tight"}>
-              {project.name}
-            </h2>
-            {client && (
-              <Link to={`/clients/${client.id}`} className="text-xs text-muted hover:text-accent">
-                {client.name}
-              </Link>
-            )}
-          </div>
+        <PageHeader
+          as={compact ? "h2" : "h1"}
+          title={project.name}
+          back={onBack}
+          meta={client && (
+            <Link to={`/clients/${client.id}`} className="hover:text-accent">
+              {client.name}
+            </Link>
+          )}
+          actions={<>
           <Select
             value={status}
             onChange={(e) => {
@@ -282,7 +307,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
               setStatus(v);
               updateProject.mutate(
                 { id: projectId, data: { status: v } },
-                { onSuccess: () => toast.success(t.toast_status_updated) }
+                { onSuccess: () => notify.success(t.status_updated) }
               );
             }}
             fullWidth={false}
@@ -292,14 +317,15 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
             <option value="on_hold">{t.on_hold}</option>
             <option value="cancelled">{t.cancelled}</option>
           </Select>
-        </div>
+          {actions}
+          </>}
+        />
 
         <div className="flex items-center gap-4 mb-4 text-xs">
           <div className="flex items-center gap-2">
             <span className="text-muted">{t.start}</span>
             <DatePicker
               variant="bare"
-              size="sm"
               fullWidth={false}
               value={project.start_date || null}
               onChange={(v) =>
@@ -315,7 +341,6 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
             <span className="text-muted">{t.deadline}</span>
             <DatePicker
               variant="bare"
-              size="sm"
               fullWidth={false}
               value={project.deadline || null}
               onChange={(v) =>
@@ -331,7 +356,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
             <Button
               variant="link"
               icon={<FolderOpen size={12} />}
-              onClick={() => invoke("open_in_finder", { path: project.folder_path! }).catch(() => toast.error(t.failed_open_folder))}
+              onClick={() => invoke("open_in_finder", { path: project.folder_path! }).catch((e) => notify.error(t.failed_open_folder, e))}
               className="text-muted hover:text-[var(--color-text-secondary)] cursor-pointer"
             >
               {t.folder}

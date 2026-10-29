@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { PDFViewer } from "@react-pdf/renderer";
 import { ChevronUp, ChevronDown } from "lucide-react";
-import { toast } from "sonner";
+import { notify } from "../../lib/notify";
 import { Checkbox, Button, Input, Select, IconButton, FormField, FormLayout, FormSection, FormGrid, FormGroup, FormActions } from "../ui";
 import { InvoicePDF } from "./InvoicePDF";
 import { useT } from "../../i18n/useT";
@@ -194,6 +194,7 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
       };
 
   const [name, setName] = useState(initial.name);
+  const [nameError, setNameError] = useState<string | undefined>();
   const [accentColor, setAccentColor] = useState(initial.accent_color);
   const [fontFamily, setFontFamily] = useState<FontFamily>(initial.font_family);
   const [logoPosition, setLogoPosition] = useState<LogoPosition>(initial.logo_position);
@@ -254,7 +255,7 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
 
   const handleSave = () => {
     if (!name.trim()) {
-      toast.error(t.toast_name_required);
+      setNameError(t.toast_name_required);
       return;
     }
     const data = { ...currentTemplateState };
@@ -264,19 +265,17 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
         { id: template.id, data },
         {
           onSuccess: () => {
-            toast.success(t.template_saved);
+            notify.success(t.template_saved);
             onSaved?.({ ...template, ...data });
           },
-          onError: (e) => toast.error(String(e)),
         }
       );
     } else {
       createTemplate.mutate(data, {
         onSuccess: (newId) => {
-          toast.success(t.template_saved);
+          notify.success(t.template_saved);
           onSaved?.({ ...data, id: newId, created_at: "", updated_at: "" } as InvoiceTemplate);
         },
-        onError: (e) => toast.error(String(e)),
       });
     }
   };
@@ -284,8 +283,7 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
   const handleSetDefault = () => {
     if (!template?.id) return;
     setDefault.mutate(template.id, {
-      onSuccess: () => toast.success(t.template_saved),
-      onError: (e) => toast.error(String(e)),
+      onSuccess: () => notify.success(t.default_template_set),
     });
   };
 
@@ -299,8 +297,8 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
           <FormSection title={t.template_editor}>
             <FormGrid cols={1}>
               {/* Name */}
-              <FormField label={t.name}>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.new_invoice_template} />
+              <FormField label={t.name} required error={nameError}>
+                <Input value={name} onChange={(e) => { setName(e.target.value); setNameError(undefined); }} placeholder={t.new_invoice_template} />
               </FormField>
 
               {/* Accent color */}
@@ -317,8 +315,8 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
                     value={accentColor}
                     onChange={(e) => setAccentColor(e.target.value)}
                     aria-label={t.invoice_template_accent_color}
-                    fullWidth={false}
-                    className="w-28 font-mono"
+                    width="sm"
+                    className="font-mono"
                   />
                 </div>
               </FormGroup>
@@ -360,7 +358,7 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
                     { label: t.margin_left, value: marginLeft, set: setMarginLeft },
                   ] as { label: string; value: number; set: (v: number) => void }[]).map(({ label, value, set }) => (
                     <FormField key={label} label={label}>
-                      <Input type="number" value={value} onChange={(e) => set(Number(e.target.value))} className="text-right" />
+                      <Input numeric value={value} onChange={(e) => set(Number(e.target.value))} width="sm" />
                     </FormField>
                   ))}
                 </FormGrid>

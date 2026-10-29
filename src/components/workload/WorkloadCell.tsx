@@ -25,13 +25,14 @@ export const WorkloadCell = memo(function WorkloadCell({
     case "link": // "link" is now just a text column (row IS the task)
       return (
         <TextCell
+          label={column.name}
           value={(value as string) ?? ""}
           onChange={onChange}
         />
       );
     case "number":
       return (
-        <NumberCell value={value as number | undefined} onChange={onChange} />
+        <NumberCell label={column.name} value={value as number | undefined} onChange={onChange} />
       );
     case "checkbox":
       return (
@@ -65,9 +66,11 @@ function normalizeSelectValue(value: unknown, multi: boolean): string[] {
 // ── Text Cell ──────────────────────────────────────────────
 
 function TextCell({
+  label,
   value,
   onChange,
 }: {
+  label: string;
   value: string;
   onChange: (v: string) => void;
 }) {
@@ -90,8 +93,9 @@ function TextCell({
 
   if (editing) {
     return (
-      <Input size="sm"
+      <Input
         ref={inputRef}
+        aria-label={label}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
@@ -116,9 +120,11 @@ function TextCell({
 // ── Number Cell ────────────────────────────────────────────
 
 function NumberCell({
+  label,
   value,
   onChange,
 }: {
+  label: string;
   value: number | undefined;
   onChange: (v: number) => void;
 }) {
@@ -143,9 +149,10 @@ function NumberCell({
 
   if (editing) {
     return (
-      <Input size="sm"
+      <Input
         ref={inputRef}
-        type="number"
+        numeric
+        aria-label={label}
         step="any"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
@@ -154,7 +161,6 @@ function NumberCell({
           if (e.key === "Enter") commit();
           if (e.key === "Escape") setEditing(false);
         }}
-        className="text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
       />
     );
   }

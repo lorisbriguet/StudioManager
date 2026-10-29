@@ -1,7 +1,7 @@
 import Database from "@tauri-apps/plugin-sql";
 import { invoke } from "@tauri-apps/api/core";
 import { logError } from "../lib/log";
-import { getLabels } from "../lib/notifyError";
+import { getLabels } from "../lib/notify";
 import { todayLocalISO } from "../utils/localDate";
 import { seedUserGuide } from "./seeds/user-guide";
 import { seedPersona } from "./seeds/personas";

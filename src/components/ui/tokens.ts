@@ -55,3 +55,23 @@ export const FIELD_LABEL = "block text-xs text-muted";
 /** Columns a grid item takes in a FormGrid. */
 export const FORM_SPAN = { 2: "col-span-2", 3: "col-span-3", 4: "col-span-4", full: "col-span-full" } as const;
 export type FormSpan = keyof typeof FORM_SPAN;
+
+/**
+ * Cards. 16px between cards everywhere: CARD_GAP in a grid or flex row,
+ * CARD_STACK for a vertical stack. Nested cards (tone="inset") sit 8px apart.
+ */
+export const CARD_GAP = "gap-4";
+export const CARD_STACK = "space-y-4";
+
+/**
+ * Headings. Two title levels and the 10px SectionLabel; no 12/16/18px titles.
+ * Level 1: the page title, one per page, always an h1 (PageHeader, SidebarTitle,
+ * the wiki article title). Level 2: cards, widgets, modals, peek panels and
+ * project blocks (PanelTitle, Card.Header).
+ */
+export const HEADING_1 = "text-xl font-semibold tracking-tight";
+export const HEADING_2 = "text-sm font-semibold";
+/** A count after a title ("Projects 3"): muted, plain weight, equal-width digits. */
+export const HEADING_COUNT = "ml-1.5 font-normal text-muted tabular-nums";
+/** A stat value (StatTile, KPI widgets): 20px semibold, equal-width digits. */
+export const STAT_VALUE = "text-xl font-semibold tabular-nums";

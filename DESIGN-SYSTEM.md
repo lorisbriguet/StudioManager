@@ -73,9 +73,10 @@ Tokens handle dark mode automatically. **Never use `dark:` prefix** for colors t
 
 | Element | Classes |
 |---------|---------|
-| Page title | `text-xl font-semibold tracking-tight` |
-| Section label (year groups, categories) | `<SectionLabel>` (`text-[10px] font-medium uppercase tracking-widest text-muted`) |
-| Card/block title | `text-sm font-semibold tracking-tight` |
+| Level 1: page title, one per page, always an `h1` | `HEADING_1` = `text-xl font-semibold tracking-tight` (`PageHeader`, `SidebarTitle`, wiki article title) |
+| Level 2: card, widget, modal, peek panel, project block | `HEADING_2` = `text-sm font-semibold` (`PanelTitle`, `Card.Header`, `Modal` title) |
+| Label (year groups, categories, stat captions) | `<SectionLabel>` (`text-[10px] font-medium uppercase tracking-widest text-muted`) |
+| Stat value | `STAT_VALUE` = `text-xl font-semibold tabular-nums` (`StatTile`) |
 | Table column header | `text-xs text-muted` (lowercase, not uppercase) |
 | Body/row text | `text-sm` |
 | Fine print (timestamps, hints, chart legends) | `text-xs text-muted` |
@@ -84,6 +85,35 @@ Tokens handle dark mode automatically. **Never use `dark:` prefix** for colors t
 **Scale rule:** the only permitted sizes are `text-xl`, `text-sm`, `text-xs`,
 and the 10px section label (`text-[10px]`). No other `text-[Npx]` arbitrary
 sizes — 9px/11px/13px were folded into this scale (2026-08, audit item 345).
+
+### Headings
+
+- **Two title levels and a label.** No 12px, 16px or 18px titles (`text-xs`/`text-base`/`text-lg` headings). Use the `HEADING_1` / `HEADING_2` tokens (`ui/tokens.ts`) or the components built on them, never retyped classes.
+- **Tags follow the page:** the `h1` page title, `h2` for its sections and cards, `h3` inside them. A modal title is an `h2` (the dialog is its own context). A page shown inside another (a peek panel) starts at `h2`.
+- **Counts are a prop, never part of the string:** `<PanelTitle title={t.projects} count={n} />`, `<SectionLabel count={n}>`, `<Card.Header count={n}>`. The count is muted, plain weight, after the title (`HEADING_COUNT`). Not `` `${t.projects} (${n})` ``.
+- **Stat values** are 20px: `StatTile` (label is a `SectionLabel`, value `STAT_VALUE`).
+
+### PageHeader
+
+Every page's title row is `ui/PageHeader`: the page's one `h1`.
+
+```tsx
+<PageHeader title={t.clients}><Button …>{t.new_client}</Button></PageHeader>
+<PageHeader title={client.name} back={() => navigate(-1)} actions={…} />
+<PageHeader title={t.edit_invoice} back={async () => { if (await confirmIfDirty("/invoices")) navigate("/invoices"); }} />
+<PageHeader title={t.notifications} meta={`${n} ${t.unread}`} />
+<PageHeader title={calTitle} leading={<>‹ › Today</>} actions={<SegmentedControl …/>} />
+<PageHeader compact title={`${ref} — ${client}`} back={…} actions={…} />
+```
+
+- `back`: one `IconButton` (ArrowLeft, `t.back`). Put an unsaved-changes check in the callback.
+- `meta`: a muted line under the title (client link, unread count). `leading`: before the title (calendar arrows).
+- `actions` (or `children`): right-aligned.
+- `compact`: preview pages. The `h1` at level 2 in a full-bleed bar with a bottom border on the surface fill.
+- `as="h2"`: a page inside another page. `ProjectDetailContent` uses it in peek panels and is the `h1` on the project page.
+- **Peek panels** (Projects, Calendar) open with `ui/PeekHeader`: close on the left, open the full page on the right, then the project's `PageHeader as="h2"`.
+- **Sidebar pages** (Settings, Profile) put the title at the top of their sidebar with `ui/SidebarTitle` (level 1 `h1`).
+- **Wiki:** an open article's title is the page `h1` (an editable field inside an `h1`, level 1). The explorer's "Wiki" label is the `h1` only when nothing with its own title is open. Prose headings are content and sit below the article title: `h1` 15px, `h2` 14px, `h3` 13px, all semibold (`src/index.css`, `.tiptap-editor .ProseMirror`, also used by DocView).
 
 ### Section labels
 
@@ -95,7 +125,8 @@ Every small uppercase label uses `src/components/ui/SectionLabel.tsx`. There is 
 ```
 
 - **Heading tag:** use `as="h2"`/`"h3"` when the label names a section.
-- **Action:** `action` puts a count or button on the right of the same row.
+- **Count:** `count` puts a muted number after the label.
+- **Action:** `action` puts a button on the right of the same row.
 - **Spacing:** it sets no margin, so the caller adds it.
 - **Class string:** for a `<th>` or a third-party heading, use the `SECTION_LABEL` class string. `MENU_GROUP_LABEL` and `SectionHeader` (`ui/Settings`) are built on it.
 
@@ -109,7 +140,8 @@ Every small uppercase label uses `src/components/ui/SectionLabel.tsx`. There is 
 | Context | Classes |
 |---------|---------|
 | Table cells | `Table` sets them: 16px sides (12px compact), see [Tables](#tables) |
-| Card padding | `p-4` (compact: `px-3 py-2.5`) |
+| Card padding | `Card padding`: `md` 16px (default), `sm` 12px (nested and compact cards), `none` (the content pads itself), see [Card](#card) |
+| Between cards | 16px everywhere: `CARD_GAP` (`gap-4`) in a grid or row, `CARD_STACK` (`space-y-4`) in a stack; cards nested in a card sit 8px apart (`space-y-2`) |
 | Form field grid | `FormGrid` (12px both ways), see [Forms](#forms) |
 | Button row | `FormActions` / Modal `footer`: right-aligned, primary last, destructive on the far left |
 | Sidebar nav item | `px-3.5 py-1.5 mx-2` |
@@ -222,9 +254,36 @@ Always use shared components from `src/components/ui/`. Never write raw HTML equ
 ### Card
 ```tsx
 import { Card } from "../components/ui";
-<Card>Content</Card>
-// Renders: rounded-xl, surface bg, p-5, no border
+
+<Card>Content</Card>                                  // rounded-xl, surface fill, 16px, no border
+<Card tone="inset" padding="sm">…</Card>              // a card inside a card
+<Card tone="dashed" padding="sm">…</Card>             // an add / draft box
+<Card interactive selected={open} onClick={…}>…</Card> // a clickable card
+
+<Card>
+  <Card.Header title={t.contacts} count={contacts.length} variant="label" action={<Button variant="link" …>{t.add}</Button>} />
+  …
+</Card>
 ```
+
+- **`padding`:** `md` 16px (default), `sm` 12px (nested and compact cards), `none` (rows that touch the edges bring their own padding: SettingsCard, NamedTable, the dashboard widget frame). There is no 20px card.
+- **`tone`:**
+  - `surface` (default): the surface fill, no border.
+  - `inset`: surface plus a 1px `border-divider` border. A card inside a card is **always** bordered (ClientDetail contacts and addresses, NamedTable in a project block, wiki backlink cards, the link pickers of project blocks).
+  - `dashed`: transparent with a dashed `input-border` border, for add and draft boxes (contact and address drafts, "Add block", an unlinked wiki mention).
+- **`interactive`:** hover tint (`hover-row`), pointer and the accent focus ring. On a div with `onClick` it adds `role="button"`, `tabIndex=0`, and Enter / Space click it (the key stops there, so a page-level list shortcut doesn't act twice). Use `as="button"` when the whole card is one action (wiki backlinks). Projects grid, notifications and wiki backlink cards use it.
+- **`selected`:** the accent outline on a `hover-row` fill (the open or bulk-selected project, the expanded workload template).
+- **`as`:** `div` (default), `section` / `article` for a landmark, `li`, `button`. Other props (`onContextMenu`, `style`, `ref`, `aria-*`, `data-*`) pass through.
+- **`cardClass({ padding, tone, interactive, selected })`:** the class string, for an element that can't be a Card.
+- **`Card.Header`:** the card's title row. `title` is the level-2 title (14px, PanelTitle underneath, so title weight lives in one place), 12px below it (`className` replaces that margin, e.g. `px-3 py-2` for a header row in a `padding="none"` card).
+  - `count`: a muted number after the title. Never write "(3)" into the title.
+  - `action`: right-aligned slot, several controls are fine. `onClose` adds the close IconButton after it.
+  - `icon`: leading content (an icon, a drag handle, a collapse chevron).
+  - `variant="label"`: the 10px uppercase SectionLabel instead of the title.
+  - `divider`: a rule under the header (SettingsCard, SectionHeader). `subtitle`: one muted line under the title.
+  - There is no 16px card title.
+- **Built on Card:** SettingsCard (`tone="inset" padding="none"` + `Card.Header variant="label" divider`), the dashboard widget frame (`padding="none"` + the drag classes; WidgetShell is the 16px content and WidgetTitle is a `Card.Header`), project blocks, the Finances and Client pages, the recurring-invoices and widget-store panels.
+- **`StatTile`** (`ui/StatTile.tsx`): a SectionLabel, the value (`STAT_VALUE`: 20px semibold, tabular) and an optional muted `caption`, with a `tone` for the value. The dashboard KPI widgets use it with `h-full justify-center p-4`.
 
 ### Button
 ```tsx
@@ -305,27 +364,71 @@ Always `rounded-full`.
 Text fields use `Input` and `Textarea` from `src/components/ui/Input.tsx`, and pickers use `Select` (see Dropdown). Never use a raw `<input>`/`<textarea>` for text, numbers, dates or search.
 
 ```tsx
-import { Input, Textarea } from "../components/ui";
+import { Input, Textarea, InlineRename, AddRow } from "../components/ui";
 
-<Input value={v} onChange={…} />                                  // sm by default, everywhere
-<Input type="number" fullWidth={false} className="w-20 text-right" />
-<Input variant="bare" size="sm" />                                // table cells: frame shows on hover/focus
-<Input variant="inline" autoFocus onBlur={commit} />              // rename in place: accent underline only
-<Textarea rows={4} value={notes} onChange={…} />
+<Input value={v} onChange={…} />                                  // 26px, like every control
+<Input numeric step="0.01" unit={currency} width="md" />         // amounts
+<Input numeric unit="h" width="xs" aria-label={t.hours} />       // short numbers
+<Input icon={Search} onClear={() => setQ("")} />                  // SearchBar is this
+<Input variant="bare" aria-label={col.name} />                    // table cells: frame shows on hover/focus
+<Input readOnly value={linked} />                                 // shown, not editable here
+<Input detected={isDetected("amount")} />                         // filled from a receipt scan
+<Textarea value={notes} onChange={…} />                           // 3 rows, grows to 12, then scrolls
+<Textarea fill value={note} onChange={…} />                       // fills its parent (dashboard note)
+<InlineRename value={name} label={t.rename} onSave={save} onCancel={close} />
+<AddRow placeholder={t.new_task} onAdd={createTask} />
 ```
 
-| | Classes |
-|--|--|
-| `size="sm"` (default) | `px-2.5 py-1 text-xs rounded-md`, the same height as the Select trigger |
-| `size="md"` | `px-3 py-2 text-sm rounded-lg`, opt-in (rare) |
-| `variant="default"` | `bg-[var(--color-input-bg)] border-[var(--color-input-border)]`, `focus-accent` |
-| `variant="bare"` | transparent; border and fill appear on hover/focus |
-| `variant="inline"` | transparent, `border-b border-accent`, inherits the font size |
+One size: `CONTROL_BOX` (`px-2.5 py-1 text-xs leading-4 border`) and `rounded-md`, the height of Button and the Select trigger. There is no `size` prop.
 
-- **Number fields:** align them right with `className="text-right"`.
-- **Width:** `fullWidth` defaults to `true`.
-- **Class string:** for the rare control that can't be one of these, use `fieldClass({ size, variant })`.
+| | Look |
+|--|--|
+| `variant="default"` | `bg-[var(--color-input-bg)] border-[var(--color-input-border)]`, `focus-accent` |
+| `variant="bare"` | transparent; border and fill appear on hover/focus (table cells) |
+| `variant="inline"` | transparent, `border-b border-accent`, `focus-accent`, inherits the font (use `InlineRename`) |
+| `readOnly` | no fill, dashed border, muted text |
+| `detected` | accent border. An error border (`aria-invalid`) still wins |
+| `aria-invalid` | red border. FormField sets it from `error` |
+
+- **Numbers:** `numeric` aligns right with tabular digits (`NUMERIC`), hides the spinner arrows and defaults `type` to `"number"`. Money fields take `step="0.01"`.
+- **Units:** `unit` is a muted suffix inside the box (`CHF`, `%`, `h`, `m`), read out with the field. Never a span next to the field. An amount shows its record's currency (the invoice's or quote's, CHF elsewhere).
+- **Icon and clear:** `icon` is a leading 12px icon. `onClear` adds a trailing `xs` clear `IconButton` while there is a value (`clearLabel` names it). `trailing` takes your own control (DatePicker's calendar button).
+- **Width:** full width by default. Short fields take `width`: `xs` 64px (hours, minutes), `sm` 96px (rates, %), `md` 144px (amounts with a unit). Never `w-16`/`w-24`/… on a field.
+- **Wrapper:** with `icon`, `unit`, `onClear` or `trailing`, the field sits in a wrapper: `className` goes on the wrapper (layout) and `inputClassName` on the field.
+- **Textarea:** `rows` (3) is the starting height. It grows with its content up to `maxRows` (12), then scrolls: CSS `field-sizing: content`, with a height that follows the content where the engine lacks it. Notes use the default 3 rows. `fill` fills the parent's height, without growing or a resize handle.
+- **Names:** every field has one: a `FormField` label, or `aria-label` (table cells: the column name).
+- **Dark mode:** the native-field defaults in `src/index.css` sit in `@layer base`, so these classes win over them.
+- **Class string:** for the rare control that can't be one of these, use `fieldClass({ variant, width, readOnly, detected, numeric })`.
 - **Not text fields:** checkboxes, radios, colour and file inputs stay native.
+
+#### InlineRename
+
+`src/components/ui/InlineRename.tsx`, for a row's name edited in place (table, list, task, filter, organisation). It opens focused with the text selected and inherits the row's font (pass the text size in `className`, with `flex-1` to fill the row).
+
+- Enter and blur call `onSave(name)` with the trimmed name; the caller saves and closes the field. Enter doesn't submit a surrounding form.
+- Esc, or an empty or unchanged name, calls `onCancel`. Esc doesn't reach the dialog.
+- `validate(name)` returns an error to show under the field (`FieldError`), and the field stays open. `error` shows one from outside (a failed save).
+- `label` is the field's accessible name.
+
+#### AddRow
+
+`src/components/ui/AddRow.tsx`, the field and "+" under a list that add an item (tasks, subtasks, list items, options, presets).
+
+- Enter or "+" calls `onAdd(text)` with the trimmed text, never empty. Enter doesn't submit a surrounding form.
+- The field clears after the add, or once a returned promise resolves. Return `false` to keep the text (a duplicate).
+- `placeholder` names the field and the button. `size` is the button's: `sm` beside form fields, `xs` in dense lists. Extra controls (a colour select) go in `children`, before the "+". `onKeyDown` runs after Enter (Esc to close).
+
+#### TagInput
+
+`src/components/shared/TagInput.tsx`, tag entry on wiki articles and resources: the tags as `Tag` pills with a remove button, then a field.
+
+- Enter or comma adds the trimmed text (never empty, never a duplicate) and doesn't submit a surrounding form.
+- `suggestions` (minus the tags already set) show as the field's autocomplete. `lowercase` stores tags in lower case (wiki).
+- `readOnly` shows the pills only. `variant="bare"` and `width` as for Input. Inside a `FormField` the field gets the label.
+
+#### SearchBar
+
+`SearchBar` is `Input` with `icon={Search}` and `onClear`, 256px wide by default (`className` sets the width). See [SearchBar](#searchbar).
 
 ### Dates
 
@@ -333,7 +436,7 @@ Every date field uses `DatePicker` from `src/components/ui/DatePicker.tsx`. Neve
 
 ```tsx
 <DatePicker value={due} onChange={setDue} />                        // "yyyy-MM-dd" | null
-<DatePicker size="sm" variant="bare" value={d} onChange={…} />      // table cells, inline metadata
+<DatePicker variant="bare" value={d} onChange={…} />                // table cells, inline metadata
 <Calendar selected={d} selectedEnd={end} onSelect={pick} month={m} onMonthChange={setM} />
 ```
 
@@ -345,7 +448,7 @@ Every date field uses `DatePicker` from `src/components/ui/DatePicker.tsx`. Neve
 - **Calendar:**
   - The calendar button (or Alt+↓) opens the calendar with Today/Tomorrow shortcuts.
   - Weeks start on Monday, and the month and weekday names follow the app language.
-- **Sizes and looks:** `size` `sm`/`md` and `variant` `default`/`bare`, as for Input. `className` goes on the wrapper (layout). `inputClassName` goes on the field (border highlights).
+- **Looks:** `variant` `default`/`bare` and `detected`, as for Input. The calendar button is the Input's `trailing`. `className` goes on the wrapper (layout). `inputClassName` goes on the field.
 - **`TaskDatePicker`** (end date, times, reminder) is built on `Calendar`, `DateShortcuts` and `Toggle size="sm"`.
 
 ### Checkbox
@@ -409,7 +512,7 @@ Use for boolean settings. Don't use checkboxes for settings toggles.
 import { Skeleton } from "../components/ui/Skeleton";
 <Skeleton width="60%" height={14} rounded="md" />
 ```
-Use while data is loading. Match the shape of what will appear.
+Use while data is loading. Match the shape of what will appear: `ListSkeleton`, `CardGridSkeleton`, `DetailSkeleton` and `TableSkeleton` are ready-made; see [Empty, loading and error states](#empty-loading-and-error-states).
 
 ### SearchBar
 ```tsx
@@ -610,6 +713,126 @@ From `src/components/ui/Feedback.tsx` and `Tooltip.tsx`:
 
 - **Hints:** never use the native `title` attribute for a hint on a button or link. Use `Tooltip`, or `IconButton`, which shows its `label` as a tooltip. `title` stays only on truncated plain text, where it reveals the full text.
 - **Asking before an action:** see [Confirmations](#confirmations).
+- **Telling the user what happened:** see [Toasts](#toasts).
+- **Nothing to show, still loading, failed to load:** see [Empty, loading and error states](#empty-loading-and-error-states).
+
+---
+
+## Empty, loading and error states
+
+Every surface that reads data goes through the same five states, in this order. From `QueryState.tsx`, `EmptyState.tsx`, `Skeleton.tsx`, `TableSkeleton.tsx` and `components/ErrorFallback.tsx`.
+
+| State | Shows | Never |
+|---|---|---|
+| Loading (no data yet) | A skeleton the shape of the content | The empty text, "Loading..." text, a page spinner |
+| Failed (no data to show) | Danger `Callout`: "Couldn't load {thing}" (`t.load_error_*`) + **Retry** (`refetch`) | "No X yet" + a create button; the raw `error.message` |
+| Empty | `EmptyState`: specific wording + the "New …" action | "No data" |
+| No results (search / filters match nothing) | `NoResults`: "No results" + **Clear filters** | A create button |
+| Not found (bad id) | `EmptyState` with a hint and a "Back to …" button | The list's empty text |
+
+```tsx
+<QueryState
+  query={projectsQuery}                     // a TanStack Query result
+  skeleton={<CardGridSkeleton />}
+  errorMessage={t.load_error_projects}
+  empty={<EmptyState icon={FolderOpen} message={t.no_projects} action={newButton} />}
+  noResults={filtered.length === 0 ? { message: t.no_matching_projects, onClear: clearFilters } : undefined}
+>
+  {(projects) => <Grid rows={filtered} />}
+</QueryState>
+```
+
+- **`isEmpty`** defaults to "an empty array"; pass your own for other shapes. A refetch that fails while data is cached keeps the data on screen.
+- **Tables:** wrap the `Table` in `QueryState` with only `skeleton` and `errorMessage`. Empty and no-results go in `Table.Empty`, so the header stays: `all.length === 0 ? <EmptyState …/> : <NoResults onClear={clearFilters} />`.
+- **Surfaces without a whole query** (a detail page, a block reading two queries): `QueryError` and the skeletons work alone. Test `data === undefined` for "loading", not `isLoading`: a disabled query (bad id) is not loading, it is not found.
+- **Clear filters** resets the page's search, its status chip / tag filter and the saved-filter conditions (and the active saved filter). Palettes, pickers and dropdowns say "No results" with no Clear button.
+
+### EmptyState
+
+```tsx
+<EmptyState icon={CheckCircle} message={t.no_tasks_yet} hint={t.no_tasks_yet_hint} action={<Button …>{t.new_task}</Button>} />
+<EmptyState size="sm" icon={CheckCircle2} message={t.nothing_overdue} />
+<EmptyState tone="danger" icon={AlertTriangle} message={t.page_error_title} action={retry} />
+```
+
+| Size | Where | Icon | Text | Padding |
+|---|---|---|---|---|
+| `lg` (default) | Pages, a page's table | 32px | `text-sm` message, `text-xs` hint | `py-12` |
+| `sm` | Dashboard widgets, project and client blocks, side panels, popovers | 20px | `text-xs` | `py-4` |
+
+- `icon` takes the Lucide component (`icon={FolderOpen}`) so the size follows `size`; an element is kept as is.
+- **Wording:** say what is empty: "Nothing overdue", "No unpaid invoices", "No projects for this client yet". Short labels take no trailing period ("No results").
+- Every entity list's empty state offers its "New …" action.
+
+### Skeletons
+
+| Component | For |
+|---|---|
+| `TableSkeleton columns density` | Tables. Pass the table's `density` (compact tables) so nothing jumps. |
+| `ListSkeleton rows size` | Grouped lists (Tasks), Notifications, timelines; `size="sm"` in widgets, blocks and side panels |
+| `CardGridSkeleton cards` | Card grids (Projects) |
+| `DetailSkeleton blocks` | A record's page or peek panel (client, project, invoice / quote preview, profile, finances) |
+
+`Spinner` stays for work in progress that isn't a load (analysing a receipt, a busy button: `Button loading`). A button never swaps its label for "Loading...".
+
+### Error boundaries
+
+- **Per page:** `MainLayout` wraps the route `<Outlet />` in an `ErrorBoundary` keyed on the path. A crash keeps the sidebar and tabs, and navigating away resets it.
+- **Per dashboard widget:** each widget has its own boundary with `WidgetErrorFallback`; one broken widget doesn't take the dashboard down.
+- The fallbacks (`ErrorFallback`, `WidgetErrorFallback`) are a danger `EmptyState` with **Retry** (resets the boundary). The error goes to the log (`logError`), never on screen.
+
+---
+
+## Toasts
+
+Every toast goes through `notify` (`src/lib/notify.ts`). It works from React and from plain modules. Nothing else imports `sonner`: ESLint `no-restricted-imports` blocks it everywhere except `src/lib/notify.ts` and `src/components/ui/Toaster.tsx`.
+
+```ts
+import { notify } from "../lib/notify";
+
+notify.success(t.invoice_updated);                         // 4 s
+notify.info(t.recurring_none_due);                         // 4 s
+notify.warning(t.restore_warnings, { description: list }); // 8 s
+notify.error(t.failed_open_folder, err);                   // 10 s, "Copy details"
+notify.undo(t.toast_expense_deleted, () => restore());     // 8 s, Undo
+await notify.progress(t.generating_pdf, work(), {          // spinner, then the outcome in place
+  success: t.pdf_downloaded,                               // or null (just close), or { warning }
+  error: t.failed_to_generate_pdf,
+});
+```
+
+| Kind | Stays | Dot | For |
+|--|--|--|--|
+| `success` | 4 s (`TOAST_DURATION.success`) | green | Something the user did worked |
+| `info` | 4 s | accent | Neutral news ("No recurring invoices due") |
+| `warning` | 8 s | amber | It worked, but something needs a look ("2 receipts couldn't be copied") |
+| `error` | 10 s | red | It failed |
+| `undo` | 8 s | — | A reversible change, with Undo (see [Confirmations](#confirmations)) |
+| `progress` | while it runs | spinner | A task of more than a moment (a PDF, an export) |
+
+- **Errors show the label, never the raw error.** `notify.error(label, err)` shows the translated label, writes the raw error to the log and puts a "Copy details" action on the toast that copies it. The same label shows at most once in 30 s (it is still logged each time). Never pass `String(e)` or `e.message` as the message.
+- **A failed save is reported once, by the query client.** Each mutation in `src/db/hooks` names its label with `meta: { errorLabel: "error_save_invoice" }` (a `ui.ts` key, checked by TypeScript); the `MutationCache` in `src/lib/queryClient.ts` calls `notify.error` with it (`operation_failed` when there is none). Hooks and call sites don't add an `onError` toast for the same failure: a `try/catch` around `mutateAsync` only stops the flow (`// reported by the mutation`). A hook-level `onError` opts out of the backstop.
+- **`notify.progress`** replaces hand-made loading toasts (`toast.loading` + ids). `work` can take `update(label)` to change the running text ("Exporting 3 of 10…"). It resolves to the result, or `undefined` when it failed (already reported).
+- **Undo:** the undo store helpers (`deleteWithUndo`, `undoableFromStore`, `pushUndoable`, `undoable` in `src/lib/undo.ts`) all show `notify.undo`. Clicking Undo runs the rollback and then says "Action undone"; Cmd+Z says "Undone: {label}".
+- **Validation is not a toast.** A missing name or a bad folder shows under its field with `FormField error` or `FieldError` (see [Forms](#forms)).
+
+### Words
+
+- **Success:** the thing, then a past verb: "Invoice saved", "Client deleted", "PDF downloaded", "CSV exported". No "successfully", no full stop.
+- **Error:** "Couldn't {verb} the {thing}": "Couldn't save the invoice", "Couldn't open the folder". A reason may follow a dash: "Couldn't delete the category — expenses use it".
+- **Never a button label as a message** (`t.save`, `t.download_pdf`): add a key for what happened.
+- **No glued strings:** a template with placeholders (`"Undone: {label}"`, `"Switched to {name}"`), counts with `plural()` from `src/i18n/plural.ts`; extra lines go in `description`.
+- French with its accents: "Projet supprimé", "Reçu attaché".
+
+### When not to toast
+
+- Routine background work: an automatic backup that worked (the notification centre records it), saving the dashboard layout, starting or stopping a timer (the timer bar is the feedback). Their failures still show.
+- Copying to the clipboard next to its button: show "Copied" in place when the component already has that state (AgentAccessCard); otherwise `notify.success(t.copied)` and `notify.error(t.error_copy, err)` when it fails.
+- Anything already visible on screen as the result.
+
+### Toaster
+
+`<Toaster/>` (`src/components/ui/Toaster.tsx`), mounted once in `App`, bottom right: a `SURFACE` card (surface fill, header border, `rounded-xl`) with `shadow-menu`, 14px text, a `dot` in the kind's colour (a `Spinner` while loading), the description muted, the action (Undo, Copy details) as an accent link. It follows the app's light/dark setting.
 
 ---
 
@@ -648,7 +871,7 @@ const choice = await confirm({ …, extra: { label: t.export_as_draft, value: "d
 | No undo possible: a whole organisation, restoring a backup or snapshot, demo data, resetting the guide, leaving test or presentation mode | Yes (an organisation: type its name) | — |
 
 - **Where it asks:** in place with `ConfirmButton` for a single delete behind its own visible button (a client or project page, the invoice form: "Delete {reference}?"); a `ConfirmDialog` for bulk deletes, a context-menu delete, a whole organisation or the database.
-- **Undo:** a delete mutation pushes its own undo entry (`src/db/hooks`); the page then shows the toast with `deleteWithUndo(mutation, id, t.x_deleted)` (or `undoableFromStore` after a `mutateAsync`). A delete with no hook of its own pushes one with `pushUndoable`. Rows with no restore query are copied before the delete and put back as they were, same ids, with `snapshotRows` / `pushRestore` (`src/db/undoRestore.ts`). The toast stays 8 seconds (`UNDO_DURATION` in `src/lib/undo.ts`).
+- **Undo:** a delete mutation pushes its own undo entry (`src/db/hooks`); the page then shows the toast with `deleteWithUndo(mutation, id, t.x_deleted)` (or `undoableFromStore` after a `mutateAsync`). A delete with no hook of its own pushes one with `pushUndoable`. Rows with no restore query are copied before the delete and put back as they were, same ids, with `snapshotRows` / `pushRestore` (`src/db/undoRestore.ts`). The toast is `notify.undo` and stays 8 seconds (`TOAST_DURATION.undo`, see [Toasts](#toasts)).
 - **Bulk:** `useBulkDelete(entity, id => mutation.mutateAsync(id), { message })` (`src/hooks/useBulkDelete.ts`): one question with the count, the deletes in turn (a failed one is reported by its mutation, the rest go on), then one toast; `batchUndo` folds their undo entries into one, so Undo or Cmd+Z brings the whole selection back.
 - **Test and presentation mode:** leave through `useExitMode()` (`src/hooks/useExitMode.ts`), from the banner and from Settings.
 

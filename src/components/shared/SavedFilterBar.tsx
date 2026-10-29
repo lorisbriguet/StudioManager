@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, type RefObject } from "react";
 import { Bookmark, Plus, X, Pencil, Trash2, Filter } from "lucide-react";
-import { toast } from "sonner";
+import { notify } from "../../lib/notify";
 import { deleteWithUndo } from "../../lib/undo";
-import { Button, Select, FilterChip, Input } from "../ui";
+import { Button, Select, FilterChip, Input, InlineRename } from "../ui";
 import { SegmentedControl, type SegmentedOption } from "../ui/SegmentedControl";
 import { ContextMenu } from "../ui/ContextMenu";
 import {
@@ -74,6 +74,7 @@ function NewFilterRow({
           if (e.key === "Escape") onCancel();
         }}
         placeholder={t.filter_name}
+        aria-label={t.filter_name}
         className={inputClassName}
       />
       {conditions && (
@@ -163,11 +164,11 @@ function ConditionRow({
           ))}
         </Select>
       ) : (
-        <Input fullWidth={false}
+        <Input width="sm"
           value={condition.value}
           onChange={(e) => onChange({ ...condition, value: e.target.value })}
           placeholder={t.value}
-          className="w-24"
+          aria-label={t.value}
         />
       )}
       <IconButton icon={X} label={t.remove} size="xs" tone="danger" onClick={onRemove} />
@@ -185,22 +186,16 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
   const [naming, setNaming] = useState(false);
   const [nameInput, setNameInput] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editName, setEditName] = useState("");
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; filter: SavedFilter } | null>(null);
   const [conditions, setConditions] = useState<FilterCondition[]>([]);
   const [conditionLogic, setConditionLogic] = useState<ConditionLogic>("and");
   const [showConditions, setShowConditions] = useState(false);
   const [editingFilterId, setEditingFilterId] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const editInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (naming) inputRef.current?.focus();
   }, [naming]);
-
-  useEffect(() => {
-    if (editingId != null) editInputRef.current?.focus();
-  }, [editingId]);
 
   // Sync internal conditions state when parent filters change (e.g. saved filter loaded)
   useEffect(() => {
@@ -227,7 +222,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
       { name, filters: filtersToSave },
       {
         onSuccess: (id) => {
-          toast.success(t.filter_saved);
+          notify.success(t.filter_saved);
           onActiveChange(id);
           onApply(filtersToSave);
           setNaming(false);
@@ -239,17 +234,9 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
     );
   };
 
-  const handleRename = () => {
-    if (editingId == null) return;
-    const name = editName.trim();
-    if (!name) return;
-    renameFilter.mutate({ id: editingId, name }, {
-      onSuccess: () => {
-        setEditingId(null);
-        setEditName("");
-      },
-    });
-  };
+  // Closes once saved; a failed save leaves the field open to retry.
+  const handleRename = (id: number, name: string) =>
+    renameFilter.mutateAsync({ id, name }).then(() => setEditingId(null));
 
   const handleDelete = (id: number) => {
     deleteWithUndo(deleteFilter, id, t.filter_deleted, () => {
@@ -285,7 +272,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
       { id: editingFilterId, filters: updatedFilters },
       {
         onSuccess: () => {
-          toast.success(t.filter_updated);
+          notify.success(t.filter_updated);
           onApply(updatedFilters);
           setEditingFilterId(null);
           setShowConditions(false);
@@ -420,19 +407,13 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
           // Renaming: the field takes the chip's place (an input can't sit inside the chip's <button>).
           if (editingId === f.id) {
             return (
-              <Input
+              <InlineRename
                 key={f.id}
-                fullWidth={false}
-                ref={editInputRef}
-                aria-label={t.rename}
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleRename();
-                  if (e.key === "Escape") { setEditingId(null); setEditName(""); }
-                }}
-                onBlur={handleRename}
-                className="w-28"
+                value={f.name}
+                label={t.rename}
+                onSave={(name) => handleRename(f.id, name)}
+                onCancel={() => setEditingId(null)}
+                className="w-28 text-xs"
               />
             );
           }
@@ -485,7 +466,6 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
                 icon: <Pencil size={12} />,
                 onClick: () => {
                   setEditingId(ctxMenu.filter.id);
-                  setEditName(ctxMenu.filter.name);
                 },
               },
               ...(fields && fields.length > 0

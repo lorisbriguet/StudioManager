@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getDb } from "../db/index";
 import { useAppStore } from "../stores/app-store";
 import { logError, logInfo, logWarn } from "../lib/log";
-import { notifyError, getLabels } from "../lib/notifyError";
+import { getLabels, notify } from "../lib/notify";
 
 function getCalendarName(): string {
   return useAppStore.getState().calendarName || "StudioManager";
@@ -216,7 +216,7 @@ export async function syncAllExisting(): Promise<number> {
   }
 
   if (failed > 0) {
-    notifyError(getLabels().calendar_sync_failed, firstError);
+    notify.error(getLabels().calendar_sync_failed, firstError);
   }
 
   return count;

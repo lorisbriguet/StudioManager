@@ -1,8 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import * as q from "../queries/resources";
 import { useUndoStore } from "../../stores/undo-store";
-import { getLabels } from "../../lib/notifyError";
+import { getLabels } from "../../lib/notify";
 
 export function useResources() {
   return useQuery({ queryKey: ["resources"], queryFn: q.getResources });
@@ -26,6 +25,7 @@ export function useCreateResource() {
     qc.invalidateQueries({ queryKey: ["resource-tags"] });
   };
   return useMutation({
+    meta: { errorLabel: "error_save_resource" },
     mutationFn: async (data: { name: string; url: string; price: string; tags: string[] }) => {
       const id = await q.createResource(data);
       useUndoStore.getState().push({
@@ -42,7 +42,6 @@ export function useCreateResource() {
       return id;
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -53,6 +52,7 @@ export function useUpdateResource() {
     qc.invalidateQueries({ queryKey: ["resource-tags"] });
   };
   return useMutation({
+    meta: { errorLabel: "error_save_resource" },
     mutationFn: async ({
       id,
       data,
@@ -93,7 +93,6 @@ export function useUpdateResource() {
       }
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -104,6 +103,7 @@ export function useDeleteResource() {
     qc.invalidateQueries({ queryKey: ["resource-tags"] });
   };
   return useMutation({
+    meta: { errorLabel: "error_delete_resource" },
     mutationFn: async (id: number) => {
       const prev = await q.getResourceById(id);
       const prevTags = await q.getResourceTags(id);
@@ -133,26 +133,26 @@ export function useDeleteResource() {
       }
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useLinkResourceToProject() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_link_resource" },
     mutationFn: async ({ resourceId, projectId }: { resourceId: number; projectId: number }) => {
       await q.linkResourceToProject(resourceId, projectId);
     },
     onSuccess: (_, { projectId }) => {
       qc.invalidateQueries({ queryKey: ["resources", "project", projectId] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useUnlinkResourceFromProject() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_unlink_resource" },
     mutationFn: async ({ resourceId, projectId }: { resourceId: number; projectId: number }) => {
       await q.unlinkResourceFromProject(resourceId, projectId);
       useUndoStore.getState().push({
@@ -170,6 +170,5 @@ export function useUnlinkResourceFromProject() {
     onSuccess: (_, { projectId }) => {
       qc.invalidateQueries({ queryKey: ["resources", "project", projectId] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { FileText, Receipt, FolderOpen } from "lucide-react";
+import { FileText, Receipt, FolderOpen, History } from "lucide-react";
+import { EmptyState, ListSkeleton, QueryState } from "./ui";
 import { useClientActivity } from "../db/hooks/useClients";
 import { formatDisplayDate } from "../utils/formatDate";
 import { useT } from "../i18n/useT";
@@ -44,14 +45,21 @@ interface Props {
 
 export function ClientTimeline({ clientId }: Props) {
   const t = useT();
-  const { data: events, isLoading } = useClientActivity(clientId);
+  const query = useClientActivity(clientId);
 
-  if (isLoading) return <div className="text-sm text-muted py-2">{t.loading}</div>;
+  return (
+    <QueryState
+      query={query}
+      skeleton={<ListSkeleton size="sm" rows={4} />}
+      errorMessage={t.load_error_activity}
+      empty={<EmptyState size="sm" icon={History} message={t.no_activity} />}
+    >
+      {(events) => <EventList events={events} />}
+    </QueryState>
+  );
+}
 
-  if (!events || events.length === 0) {
-    return <div className="text-sm text-muted py-2">{t.no_activity}</div>;
-  }
-
+function EventList({ events }: { events: ClientActivityEvent[] }) {
   return (
     <div className="space-y-0.5">
       {events.map((event, i) => (

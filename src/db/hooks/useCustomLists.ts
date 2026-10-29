@@ -1,8 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import * as q from "../queries/customLists";
 import { snapshotRows, pushRestore } from "../undoRestore";
-import { getLabels } from "../../lib/notifyError";
+import { getLabels } from "../../lib/notify";
 
 export function useCustomLists() {
   return useQuery({
@@ -22,19 +21,19 @@ export function useCustomListItems(listId: number | null) {
 export function useCreateCustomList() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_list" },
     mutationFn: (name: string) => q.createCustomList(name),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["custom-lists"] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useUpdateCustomList() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_list" },
     mutationFn: ({ id, name }: { id: number; name: string }) =>
       q.updateCustomList(id, name),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["custom-lists"] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -45,6 +44,7 @@ export function useDeleteCustomList() {
     qc.invalidateQueries({ queryKey: ["custom-list-items"] });
   };
   return useMutation({
+    meta: { errorLabel: "error_delete_list" },
     mutationFn: async (id: number) => {
       const snap = await snapshotRows([
         { table: "custom_lists", where: "id = $1", params: [id] },
@@ -55,13 +55,13 @@ export function useDeleteCustomList() {
       pushRestore(`${getLabels().undo_delete_list} "${name}"`, snap, { redo: () => q.deleteCustomList(id), invalidate });
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useSetCustomListItems() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_list" },
     mutationFn: ({
       listId,
       items,
@@ -73,6 +73,5 @@ export function useSetCustomListItems() {
       qc.invalidateQueries({ queryKey: ["custom-list-items", variables.listId] });
       qc.invalidateQueries({ queryKey: ["custom-lists"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }

@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ListTodo, Trash2, ArrowLeft, AlertTriangle, Eye } from "lucide-react";
+import { ListTodo, Trash2, AlertTriangle, Eye } from "lucide-react";
 import { isUntranslatedActivity } from "../lib/activityNudge";
-import { Button, ConfirmButton, DatePicker, Input, Select, FormField, FieldError, FormLayout, FormGrid, FormActions, Popover, Textarea } from "../components/ui";
+import { Button, ConfirmButton, DatePicker, Input, PageHeader, Select, FormField, FieldError, FormLayout, FormGrid, FormActions, Popover, Textarea } from "../components/ui";
 import { deleteWithUndo } from "../lib/undo";
 import { MENU_ITEM } from "../components/ui/Dropdown";
 import * as v from "../lib/validate";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { addDays, format } from "date-fns";
 import { useT } from "../i18n/useT";
 import { useInvoice, useCreateInvoice, useUpdateInvoice, useDeleteInvoice } from "../db/hooks/useInvoices";
@@ -20,7 +20,6 @@ import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { getQuote, getQuoteLineItems, updateQuote } from "../db/queries/quotes";
 import { useActivities } from "../db/hooks/useActivities";
 import type { Activity } from "../types/activity";
-import { logError } from "../lib/log";
 import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel, round2 } from "../lib/lineItems";
 import { LineItemsTable } from "../components/shared/LineItemsTable";
 import { GlobalRateControl, TemplateField } from "../components/shared/DocumentFields";
@@ -183,8 +182,7 @@ export function InvoiceFormPage() {
           );
         }
       }).catch((e) => {
-        logError("Failed to load line items:", e);
-        toast.error(t.failed_load_line_items);
+        notify.error(t.failed_load_line_items, e);
       }).finally(() => {
         // Allow a tick for React to settle before arming dirty tracking
         setTimeout(() => { formLoadedRef.current = true; }, 0);
@@ -260,8 +258,7 @@ export function InvoiceFormPage() {
       }
       setTimeout(() => { formLoadedRef.current = true; }, 0);
     })().catch((e) => {
-      logError("Failed to load quote:", e);
-      toast.error(t.failed_load_line_items);
+      notify.error(t.failed_load_line_items, e);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-fill once per source quote; adding t.* would re-run the pre-fill (and clobber edits) on locale switch. setItems is a stable setState.
   }, [fromQuoteId, isEdit]);
@@ -310,7 +307,7 @@ export function InvoiceFormPage() {
         // as loud as the UI (it could otherwise hold 1 or a stale
         // different-currency rate); safe because override is on, so the
         // auto-calc effect never divides by it.
-        toast.error(t.exchange_rate_unavailable);
+        notify.warning(t.exchange_rate_unavailable);
         setExchangeRate(0);
         setChfEquivalent(0);
         setChfManualOverride(true);
@@ -424,10 +421,9 @@ export function InvoiceFormPage() {
           {
             onSuccess: () => {
               setFormDirty(false);
-              toast.success(t.invoice_updated);
+              notify.success(t.invoice_updated);
               navigate(dest === "preview" ? `/invoices/${invoiceId}/preview` : "/invoices");
             },
-            onError: (e) => toast.error(String(e)),
           }
         );
       } else {
@@ -479,26 +475,23 @@ export function InvoiceFormPage() {
                 queryClient.invalidateQueries({ queryKey: ["quotes"] });
               }
               setFormDirty(false);
-              toast.success(fromQuoteId ? t.quote_converted : t.invoice_created);
+              notify.success(fromQuoteId ? t.quote_converted : t.invoice_created);
               navigate(dest === "preview" ? `/invoices/${invoiceId}/preview` : "/invoices");
             },
-            onError: (e) => toast.error(String(e)),
           }
         );
       }
     } catch (e) {
-      toast.error(String(e));
+      notify.error(t.error_save_invoice, e);
     }
   };
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <Button variant="outline" onClick={async () => { if (await confirmIfDirty("/invoices")) navigate("/invoices"); }} icon={<ArrowLeft size={18} />} aria-label={t.back} />
-        <h1 className="text-xl font-semibold">
-          {isEdit ? t.edit_invoice : t.new_invoice}
-        </h1>
-      </div>
+      <PageHeader
+        title={isEdit ? t.edit_invoice : t.new_invoice}
+        back={async () => { if (await confirmIfDirty("/invoices")) navigate("/invoices"); }}
+      />
 
       {/* Dirty tracking: text fields bubble their change events up to this div.
           Select is a custom dropdown that sends no DOM event, so each Select's
@@ -640,8 +633,9 @@ export function InvoiceFormPage() {
           {currency !== "CHF" && (
             <FormField label={t.chf_equivalent} error={errors.chf_equivalent}>
               <Input
-                type="number"
+                numeric
                 step="0.01"
+                unit="CHF"
                 value={chfEquivalent}
                 onChange={(e) => {
                   setChfEquivalent(Number(e.target.value));
@@ -656,6 +650,7 @@ export function InvoiceFormPage() {
 
         {/* Global rate toggle */}
         <GlobalRateControl
+          currency={currency}
           enabled={useGlobalRate}
           rate={globalRate}
           unit={globalUnit}
@@ -702,7 +697,7 @@ export function InvoiceFormPage() {
                       (tk) => !existingDesignations.has(tk.title)
                     );
                     if (newTasks.length === 0) {
-                      toast.info(t.all_tasks_added);
+                      notify.info(t.all_tasks_added);
                       return;
                     }
                     const newItems = newTasks.map((tk) => makeLineItem({
@@ -740,7 +735,6 @@ export function InvoiceFormPage() {
           <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            rows={2}
           />
         </FormField>
 
@@ -814,8 +808,8 @@ function DesignationInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => setOpen(true)}
-        size="sm"
         placeholder={t.description}
+        aria-label={t.designation}
       />
       {open && filtered.length > 0 && (
         <Popover

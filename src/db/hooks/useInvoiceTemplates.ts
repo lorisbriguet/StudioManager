@@ -1,8 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import * as q from "../queries/invoiceTemplates";
 import { snapshotRows, pushRestore } from "../undoRestore";
-import { getLabels } from "../../lib/notifyError";
+import { getLabels } from "../../lib/notify";
 import type { InvoiceTemplate } from "../../types/invoice-template";
 
 export function useInvoiceTemplates() {
@@ -30,16 +29,17 @@ export function useDefaultTemplate() {
 export function useCreateInvoiceTemplate() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_template" },
     mutationFn: (data: Omit<InvoiceTemplate, "id" | "created_at" | "updated_at">) =>
       q.createInvoiceTemplate(data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["invoice-templates"] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useUpdateInvoiceTemplate() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_template" },
     mutationFn: ({
       id,
       data,
@@ -48,7 +48,6 @@ export function useUpdateInvoiceTemplate() {
       data: Partial<Omit<InvoiceTemplate, "id" | "created_at" | "updated_at">>;
     }) => q.updateInvoiceTemplate(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["invoice-templates"] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -56,6 +55,7 @@ export function useDeleteInvoiceTemplate() {
   const qc = useQueryClient();
   const invalidate = () => qc.invalidateQueries({ queryKey: ["invoice-templates"] });
   return useMutation({
+    meta: { errorLabel: "error_delete_template" },
     mutationFn: async (id: number) => {
       const snap = await snapshotRows([{ table: "invoice_templates", where: "id = $1", params: [id] }]);
       await q.deleteInvoiceTemplate(id);
@@ -63,15 +63,14 @@ export function useDeleteInvoiceTemplate() {
       pushRestore(`${getLabels().undo_delete_invoice_template} "${name}"`, snap, { redo: () => q.deleteInvoiceTemplate(id), invalidate });
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useSetDefaultTemplate() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_template" },
     mutationFn: (id: number) => q.setDefaultTemplate(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["invoice-templates"] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }

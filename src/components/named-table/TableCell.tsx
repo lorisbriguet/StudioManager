@@ -50,6 +50,7 @@ export function TableCell({
           onChange={(e) => onChange({ ...row.data, [col.id]: e.target.value })}
           variant="bare"
           fullWidth={false}
+          aria-label={col.name}
         >
           <option value="">—</option>
           {(col.options ?? []).map((opt) => (
@@ -86,7 +87,7 @@ export function TableCell({
     }
     case "date":
       return (
-        <DatePicker variant="bare" size="sm" fullWidth={false}
+        <DatePicker variant="bare" fullWidth={false}
           value={(row.data[col.id] as string) || null}
           onChange={(v) => onChange({ ...row.data, [col.id]: v ?? "" })}
           aria-label={col.name}
@@ -98,6 +99,8 @@ export function TableCell({
           <Input variant="inline"
             ref={cellInputRef}
             type={col.type === "number" ? "number" : "text"}
+            numeric={col.type === "number"}
+            aria-label={col.name}
             value={editValue}
             onChange={(e) => onEditValueChange(e.target.value)}
             onBlur={onCommitEdit}
