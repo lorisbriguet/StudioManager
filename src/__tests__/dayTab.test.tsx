@@ -1,8 +1,11 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { DayTab } from "../menubar/DayTab";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 import type { Routine, Routines, Run } from "../lib/routines";
+import { logError } from "../lib/log";
+
+vi.mock("../lib/log", () => ({ logError: vi.fn(() => Promise.resolve()) }));
 
 function routine(id: string, title: string, over: Partial<Routine> = {}): Routine {
   return {
@@ -91,7 +94,11 @@ describe("Day tab", () => {
     });
     render(<DayTab />);
     fireEvent.click(await screen.findByRole("button", { name: "Run" }));
-    expect(await screen.findByText("Agents are switched off")).toBeInTheDocument();
+    // A translated label in a danger Callout; the raw error only goes to the log.
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Couldn't complete this action");
+    expect(alert).not.toHaveTextContent("Agents are switched off");
+    expect(vi.mocked(logError)).toHaveBeenCalledWith(expect.stringContaining("r1"), "Agents are switched off");
   });
 
   it("a done routine with a result link offers Open result", async () => {

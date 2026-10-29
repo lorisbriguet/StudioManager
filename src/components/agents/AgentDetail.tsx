@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import { ArrowUp, ImagePlus } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { dismissAgent, deleteAgent, saveImage, sendMessage, stopAgent, switchModel, type Agent } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
-import { Badge, Button, HEADING_2, ICONS, IconButton, PANEL_TOP_BAR, Textarea } from "../ui";
+import { Badge, Button, Callout, HEADING_2, ICONS, IconButton, PANEL_TOP_BAR, Textarea } from "../ui";
 import { useConfirm } from "../../lib/confirm";
-import { agentLabel, GROUP_LABEL_KEYS, GROUP_STYLE } from "./AgentList";
-import { agentGroupVariant } from "../../lib/statusColors";
+import { agentLabel, GROUP_LABEL_KEYS } from "./AgentList";
+import { agentGroupDotClass, agentGroupVariant } from "../../lib/statusColors";
+import { logError } from "../../lib/log";
 import { Conversation } from "./Conversation";
 import { PromptAnswer } from "./PromptAnswer";
 import { MODELS, ModelMenu } from "./ModelMenu";
@@ -57,9 +57,11 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
   const confirm = useConfirm();
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  /** What went wrong, shown translated; raw errors go to the log, never on screen. */
+  const [error, setError] = useState<"image_type" | "image_size" | "send" | "action" | null>(null);
   const [images, setImages] = useState<Attachment[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
+  const reasonId = useId();
   const background = agent.kind === "background";
   const canSend = background && agent.status !== "waiting";
   const imagesRef = useRef(images);
@@ -75,11 +77,11 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
     const next: Attachment[] = [];
     for (const file of files) {
       if (!IMAGE_TYPES.includes(file.type)) {
-        setError(t.agents_image_type);
+        setError("image_type");
         continue;
       }
       if (file.size > MAX_IMAGE_BYTES) {
-        setError(t.agents_image_size);
+        setError("image_size");
         continue;
       }
       next.push({ file, url: URL.createObjectURL(file) });
@@ -151,7 +153,8 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
     try {
       await action();
     } catch (e) {
-      setError(String(e));
+      setError("action");
+      void logError(`Agent ${agent.sessionId}: action failed:`, e);
     }
   };
 
@@ -168,7 +171,8 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
       images.forEach((a) => URL.revokeObjectURL(a.url));
       setImages([]);
     } catch (e) {
-      setError(String(e));
+      setError("send");
+      void logError(`Agent ${agent.sessionId}: send failed:`, e);
     } finally {
       setSending(false);
     }
@@ -198,7 +202,7 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
       <div className={`${PANEL_TOP_BAR} gap-2 px-5 border-[var(--color-border)]`}>
         <h2 className={`${HEADING_2} truncate`}>{agent.name}</h2>
         <Badge variant={agentGroupVariant(agent.group)} className="shrink-0 gap-1.5">
-          <span className={`dot ${GROUP_STYLE[agent.group].dot}`} aria-hidden />
+          <span className={`dot ${agentGroupDotClass(agent.group)}`} aria-hidden />
           {t[GROUP_LABEL_KEYS[agent.group]]}
         </Badge>
         <div className="ml-auto flex items-center gap-2">
@@ -236,9 +240,17 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
       <div className="px-5 pt-3 text-xs text-muted">{agentLabel(agent)}</div>
 
       {error && (
-        <p role="alert" className="px-5 pt-3 text-sm text-[var(--color-danger-text)]">
-          {error}
-        </p>
+        <div className="px-5 pt-3">
+          <Callout tone="danger">
+            {error === "image_type"
+              ? t.agents_image_type
+              : error === "image_size"
+                ? t.agents_image_size
+                : error === "send"
+                  ? t.agents_send_failed
+                  : t.agents_action_failed}
+          </Callout>
+        </div>
       )}
 
       {agent.group === "needs-you" && background && shortId && (
@@ -252,83 +264,72 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
       </div>
 
       <div className="max-w-3xl w-full mx-auto space-y-1.5 px-5 pb-5">
-        <div
-          className={`rounded-xl border bg-[var(--color-input-bg)] px-2 py-2 focus-within:border-[var(--color-accent)] ${
-            dragging ? "border-[var(--color-accent)]" : "border-[var(--color-input-border)]"
-          }`}
-        >
-          {images.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-2 pb-2">
-              {images.map((a) => (
-                <div key={a.url} className="relative group">
-                  <img src={a.url} alt={a.file.name} className="size-14 rounded-lg object-cover border border-[var(--color-input-border)]" />
-                  <IconButton
-                    icon={ICONS.close}
-                    label={t.agents_remove_image}
-                    size="xs"
-                    onClick={() => removeImage(a.url)}
-                    className="absolute! -top-1.5 -right-1.5 rounded-full! bg-[var(--color-surface)] border border-[var(--color-input-border)]"
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="flex items-end gap-1.5">
-          <IconButton
-            icon={ImagePlus}
-            label={t.agents_attach_image}
-            disabled={!canSend}
-            onClick={() => fileInput.current?.click()}
-            className="shrink-0 mb-0.5"
-          />
-          <input
-            ref={fileInput}
-            type="file"
-            accept={IMAGE_TYPES.join(",")}
-            multiple
-            hidden
-            onChange={(e) => {
-              if (e.target.files) addImages(e.target.files);
-              e.target.value = "";
-            }}
-          />
-          <Textarea
-            variant="bare"
-            value={text}
-            rows={1}
-            maxRows={8}
-            maxLength={20000}
-            disabled={!canSend}
-            placeholder={t.agents_message_placeholder}
-            onChange={(e) => setText(e.target.value)}
-            onPaste={(e) => {
-              const files = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/"));
-              if (files.length) {
-                e.preventDefault();
-                addImages(files);
-              }
-            }}
-            onKeyDown={(e) => {
-              // Enter sends, Shift+Enter adds a line (IME composition left alone).
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                void send();
-              }
-            }}
-            fullWidth={false}
-            className="flex-1 border-0! bg-transparent! disabled:cursor-not-allowed"
-          />
-          <Button
-            className="shrink-0 justify-center"
-            aria-label={t.agents_send}
-            icon={ArrowUp}
-            loading={sending}
-            disabled={!canSend || (text.trim() === "" && images.length === 0)}
-            onClick={() => void send()}
-          />
-          </div>
-        </div>
-        {disabledReason && <p className="text-xs text-muted text-center">{disabledReason}</p>}
+        <input
+          ref={fileInput}
+          type="file"
+          accept={IMAGE_TYPES.join(",")}
+          multiple
+          hidden
+          onChange={(e) => {
+            if (e.target.files) addImages(e.target.files);
+            e.target.value = "";
+          }}
+        />
+        <Textarea
+          variant="composer"
+          highlight={dragging}
+          attachments={
+            images.length > 0 &&
+            images.map((a) => (
+              <div key={a.url} className="relative">
+                <img src={a.url} alt={a.file.name} className="size-14 rounded-lg object-cover border border-[var(--color-input-border)]" />
+                <IconButton icon={ICONS.close} label={t.agents_remove_image} size="xs" floating onClick={() => removeImage(a.url)} />
+              </div>
+            ))
+          }
+          leading={
+            <IconButton
+              icon={ICONS.attachImage}
+              label={t.agents_attach_image}
+              disabled={!canSend}
+              onClick={() => fileInput.current?.click()}
+            />
+          }
+          trailing={
+            <IconButton
+              icon={ICONS.send}
+              label={t.agents_send}
+              color="accent"
+              aria-busy={sending || undefined}
+              disabled={sending || !canSend || (text.trim() === "" && images.length === 0)}
+              onClick={() => void send()}
+            />
+          }
+          value={text}
+          rows={1}
+          maxRows={8}
+          maxLength={20000}
+          disabled={!canSend}
+          aria-label={t.agents_message_placeholder}
+          aria-describedby={disabledReason ? reasonId : undefined}
+          placeholder={t.agents_message_placeholder}
+          onChange={(e) => setText(e.target.value)}
+          onPaste={(e) => {
+            const files = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/"));
+            if (files.length) {
+              e.preventDefault();
+              addImages(files);
+            }
+          }}
+          onKeyDown={(e) => {
+            // Enter sends, Shift+Enter adds a line (IME composition left alone).
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              void send();
+            }
+          }}
+        />
+        {disabledReason && <p id={reasonId} className="text-xs text-muted text-center">{disabledReason}</p>}
       </div>
     </div>
   );
