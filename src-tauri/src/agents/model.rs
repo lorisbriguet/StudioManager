@@ -106,7 +106,26 @@ pub fn parse_agents(json: &str) -> Result<Vec<Agent>, String> {
             model_label: None,
         });
     }
-    Ok(out)
+    Ok(dedupe_by_session(out))
+}
+
+/// A resumed conversation keeps its session id, so the CLI can list it twice: the live process
+/// and the background job it left behind (often "blocked"). One row per session id, in the place
+/// of the first: the entry with a live pid wins, then the newest start.
+fn dedupe_by_session(agents: Vec<Agent>) -> Vec<Agent> {
+    let mut out: Vec<Agent> = Vec::with_capacity(agents.len());
+    for a in agents {
+        match out.iter().position(|o| o.session_id == a.session_id) {
+            None => out.push(a),
+            Some(i) => {
+                let live = |x: &Agent| x.pid.is_some();
+                if (live(&a), a.started_at) > (live(&out[i]), out[i].started_at) {
+                    out[i] = a;
+                }
+            }
+        }
+    }
+    out
 }
 
 /// Moves needs-you agents to idle when dismissed or untouched for `QUIET_AFTER_MS`.
@@ -155,6 +174,17 @@ mod tests {
         assert_eq!(a[0].kind, Kind::Interactive);
         assert_eq!(a[0].model.as_deref(), Some("opus"));
         assert!(parse_agents("nope").is_err());
+    }
+
+    #[test]
+    fn a_resumed_session_listed_twice_shows_once_as_the_live_one() {
+        let stale = r#"{"id":"3bec7f97","cwd":"/x","kind":"background","startedAt":1,"sessionId":"s","name":"dropdown","state":"blocked"}"#;
+        let live = r#"{"pid":8601,"cwd":"/x/wt","kind":"interactive","startedAt":2,"sessionId":"s","name":"dropdown","status":"busy"}"#;
+        for j in [format!("[{stale},{live}]"), format!("[{live},{stale}]")] {
+            let a = parse_agents(&j).unwrap();
+            assert_eq!(a.len(), 1);
+            assert_eq!((a[0].pid, a[0].group), (Some(8601), Group::Working));
+        }
     }
 
     #[test]
