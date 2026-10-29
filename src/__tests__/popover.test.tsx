@@ -146,6 +146,28 @@ describe("Popover", () => {
     expect(placed.style.opacity).toBe("");
   });
 
+  it("is placed on the element itself, parked off screen (not at 0,0) until then", () => {
+    const { unmount } = render(
+      <Popover onClose={vi.fn()} padding="content" aria-label="Unplaced">
+        x
+      </Popover>
+    );
+    const unplaced = screen.getByRole("dialog", { name: "Unplaced" });
+    expect(unplaced.style.top).toBe("-9999px");
+    expect(unplaced.style.left).toBe("-9999px");
+    unmount();
+    render(
+      <Popover at={{ x: 120, y: 80 }} onClose={vi.fn()} padding="content" aria-label="Placed">
+        x
+      </Popover>
+    );
+    const placed = screen.getByRole("dialog", { name: "Placed" });
+    // Right-click gap is 2 px; the window is 1024 wide in jsdom, so nothing is clamped.
+    expect(placed.style.left).toBe("120px");
+    expect(placed.style.top).toBe("82px");
+    expect(placed.style.pointerEvents).toBe("");
+  });
+
   it("can open at a point (right-click)", () => {
     const onClose = vi.fn();
     render(

@@ -118,7 +118,9 @@ export function Popover({
   const [seq] = useState(() => ++openSeq);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  // Placed straight on the element, not through state: a state update means a second render,
+  // and WebKit can paint the first one (where the panel was mounted) before it.
+  const placedRef = useRef(false);
   const atX = at?.x;
   const atY = at?.y;
 
@@ -148,7 +150,15 @@ export function Popover({
     const up = side === "top" ? fitsAbove || !fitsBelow : !fitsBelow && fitsAbove;
     let top = up ? above : below;
     top = Math.max(m, Math.min(top, window.innerHeight - ph - m));
-    setPos((cur) => (cur && cur.top === top && cur.left === left ? cur : { top, left }));
+    p.style.top = `${top}px`;
+    p.style.left = `${left}px`;
+    if (!placedRef.current) {
+      placedRef.current = true;
+      // The fade-in starts only once placed: a running animation overrides the inline opacity.
+      p.style.opacity = "";
+      p.style.pointerEvents = "";
+      p.classList.add("animate-in", "fade-in", "duration-100");
+    }
     // `at` is read through atX/atY so a new object with the same point does not re-place.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anchor, atX, atY, align, side, matchWidth]);
@@ -164,9 +174,14 @@ export function Popover({
     };
     window.addEventListener("resize", place);
     window.addEventListener("scroll", onScroll, true);
+    // Content that grows or shrinks after opening (a list that loads, a filter) moves the
+    // flip point and the clamp: place again.
+    const ro = typeof ResizeObserver !== "undefined" && panelRef.current ? new ResizeObserver(() => place()) : null;
+    if (ro && panelRef.current) ro.observe(panelRef.current);
     return () => {
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", onScroll, true);
+      ro?.disconnect();
     };
   }, [place]);
 
@@ -221,19 +236,11 @@ export function Popover({
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.stopPropagation()}
-      // The fade-in starts only once placed: a running animation overrides the
-      // inline opacity, and WebKit paints its first frame where the panel was
-      // mounted (top left), so the panel flashed in the corner and slid in.
-      className={`fixed z-[60] ${POPOVER_SURFACE} ${PADDING[padding]} ${pos ? "animate-in fade-in duration-100" : ""} ${className}`}
-      // Until placed: transparent, not visibility:hidden. A hidden element
-      // cannot take focus, and focus moves in before the placement re-render.
-      style={{
-        ...style,
-        top: pos?.top ?? 0,
-        left: pos?.left ?? 0,
-        opacity: pos ? undefined : 0,
-        pointerEvents: pos ? undefined : "none",
-      }}
+      className={`fixed z-[60] ${POPOVER_SURFACE} ${PADDING[padding]} ${className}`}
+      // Until `place` runs (before the first paint): far off screen and transparent, never at
+      // the top left corner. Not visibility:hidden: a hidden element cannot take focus.
+      // `place` then sets top, left, opacity and pointer events on the element itself.
+      style={{ top: -9999, left: -9999, opacity: 0, pointerEvents: "none", ...style }}
     >
       {children}
     </div>,
