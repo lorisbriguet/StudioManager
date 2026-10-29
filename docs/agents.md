@@ -11,6 +11,12 @@ Design and reasons: [the design spec](superpowers/specs/2026-10-28-agents-window
 
 Turning the switch off hides the page and closes any open terminals.
 
+### How the app finds and runs `claude`
+
+The app asks your login shell (zsh, or bash if that is your shell) where `claude` is, so it finds it even when StudioManager was opened from the Finder. If `claude` is not found, the app looks again at most every 30 seconds: install Claude Code, then reopen the settings card.
+
+`claude` runs with a clean environment: `PATH` from your login shell, `HOME`, `USER`, `LANG` and `TERM`, plus the variables from your login shell that change how Claude Code works: every `CLAUDE_…` and `ANTHROPIC_…` variable (such as `CLAUDE_CONFIG_DIR` or `ANTHROPIC_BASE_URL`) and the proxy variables (`HTTPS_PROXY`, `NO_PROXY` and the like). Agents then use the same settings and sign-in as in your terminal. Nothing else is passed on.
+
 ## The page
 
 Agents are grouped as **Needs you**, **Working**, **Idle** and **Done**. Each one is labelled Organisation > Client > Project when its folder is linked to a project, across all organisations. Otherwise it shows the folder name.

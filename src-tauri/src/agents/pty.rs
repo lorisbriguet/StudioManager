@@ -820,7 +820,7 @@ pub(super) mod tests {
         let resolve = || {
             calls.fetch_add(1, Ordering::SeqCst);
             let claude = found.get().then(|| std::path::PathBuf::from("/opt/x/claude"));
-            LoginEnv { claude, path: "/usr/bin".into() }
+            LoginEnv { claude, path: "/usr/bin".into(), vars: vec![] }
         };
         assert_eq!(refresh_login_env(&cache, &resolve).claude, None);
         assert_eq!(refresh_login_env(&cache, &resolve).claude, None);

@@ -11,9 +11,12 @@ use std::time::{Duration, Instant};
 const READER_GRACE: Duration = Duration::from_millis(500);
 const CLAUDE_MARK: &str = "__SM_CLAUDE__=";
 const PATH_MARK: &str = "__SM_PATH__=";
-/// Fixed lookup script; marker lines survive rc-file noise around them.
-const LOOKUP_SCRIPT: &str =
-    r#"printf "__SM_CLAUDE__=%s\n__SM_PATH__=%s\n" "$(command -v claude)" "$PATH""#;
+const ENV_MARK: &str = "__SM_ENV__\n";
+const ENV_END: &str = "\n__SM_ENV_END__";
+/// Fixed lookup script; marker lines survive rc-file noise around them. The environment
+/// comes last, NUL-separated (`env -0`) so values with newlines stay whole; only the
+/// variables `passes_through` allows are kept from it.
+const LOOKUP_SCRIPT: &str = r#"printf "__SM_CLAUDE__=%s\n__SM_PATH__=%s\n" "$(command -v claude)" "$PATH"; printf "__SM_ENV__\n"; env -0; printf "\n__SM_ENV_END__\n""#;
 
 pub const SETTINGS_FILE: &str = "agents.json";
 const CLI_TIMEOUT: Duration = Duration::from_secs(10);
@@ -88,21 +91,65 @@ pub fn write_settings(dir: &Path, s: &AgentsSettings) -> Result<(), String> {
 pub struct LoginEnv {
     pub claude: Option<PathBuf>,
     pub path: String,
+    /// Claude Code's own settings, API and proxy variables (`passes_through`), from the login
+    /// shell: the app started from Finder does not have the user's exports.
+    pub vars: Vec<(String, String)>,
 }
 
-/// Parse the two lines printed by the lookup script: `command -v claude`,
-/// then `$PATH`. An empty first line means claude was not found.
+/// Variables of a Claude Code session that started StudioManager (in development, from a
+/// Claude Code terminal): they belong to that session, not to the agents the app runs.
+/// `CLAUDE_CODE_CHILD_SESSION`, for one, turns transcript saving off.
+const SESSION_VARS: &[&str] = &[
+    "CLAUDE_PID",
+    "CLAUDE_JOB_DIR",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_EXECPATH",
+    "CLAUDE_CODE_SSE_PORT",
+];
+const SESSION_PREFIXES: &[&str] =
+    &["CLAUDE_CODE_SESSION_", "CLAUDE_CODE_MESSAGING_", "CLAUDE_CODE_BRIDGE_"];
+
+/// Kept besides `PATH`, `HOME`, `USER`, `LANG` and `TERM`: `CLAUDE_*` (`CLAUDE_CONFIG_DIR`, …)
+/// and `ANTHROPIC_*`, so the agents see the same config and auth as in a terminal, and the
+/// proxy variables (`HTTPS_PROXY`, `no_proxy`, …). Session markers excepted.
+pub fn passes_through(key: &str) -> bool {
+    let ours = key.starts_with("CLAUDE_") || key.starts_with("ANTHROPIC_");
+    let proxy = key.ends_with("_PROXY") || key.ends_with("_proxy");
+    let session =
+        SESSION_VARS.contains(&key) || SESSION_PREFIXES.iter().any(|p| key.starts_with(p));
+    (ours || proxy) && !session
+}
+
+/// The allowed variables of a `env -0` dump.
+fn parse_env_dump(dump: &str) -> Vec<(String, String)> {
+    dump.split('\0')
+        .filter_map(|entry| entry.split_once('='))
+        .filter(|(k, _)| passes_through(k))
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect()
+}
+
+/// Parse what the lookup script prints: `command -v claude`, then `$PATH`, then the
+/// environment. An empty first line means claude was not found.
 pub fn parse_login_output(out: &str) -> LoginEnv {
+    let (lines, vars) = match out.split_once(ENV_MARK) {
+        Some((head, rest)) => {
+            let dump = rest.split_once(ENV_END).map_or(rest, |(d, _)| d);
+            (head, parse_env_dump(dump))
+        }
+        None => (out, Vec::new()),
+    };
     let mut claude = None;
     let mut path = "";
-    for line in out.lines() {
+    for line in lines.lines() {
         if let Some(v) = line.strip_prefix(CLAUDE_MARK) {
             claude = Some(v.trim()).filter(|v| !v.is_empty());
         } else if let Some(v) = line.strip_prefix(PATH_MARK) {
             path = v.trim();
         }
     }
-    LoginEnv { claude: claude.map(PathBuf::from), path: path.to_string() }
+    LoginEnv { claude: claude.map(PathBuf::from), path: path.to_string(), vars }
 }
 
 /// First existing well-known install location.
@@ -142,6 +189,9 @@ pub fn resolve_login_env() -> LoginEnv {
     if env.path.is_empty() {
         env.path = std::env::var("PATH").unwrap_or_default();
     }
+    if env.vars.is_empty() {
+        env.vars = std::env::vars().filter(|(k, _)| passes_through(k)).collect();
+    }
     if env.claude.as_deref().map_or(true, |p| !p.is_file()) {
         let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
         env.claude = fallback_claude(&home, &|p| p.is_file());
@@ -149,16 +199,19 @@ pub fn resolve_login_env() -> LoginEnv {
     env
 }
 
-/// `PATH` from the login shell, plus a minimal set of other variables.
+/// `PATH` from the login shell, a minimal set of other variables, and the login shell's
+/// Claude, Anthropic and proxy variables (`passes_through`). Everything else is cleared.
 pub fn spawn_env(env: &LoginEnv) -> Vec<(String, String)> {
     let var = |k: &str| std::env::var(k).unwrap_or_default();
-    vec![
+    let mut vars: Vec<(String, String)> = vec![
         ("PATH".into(), env.path.clone()),
         ("HOME".into(), var("HOME")),
         ("USER".into(), var("USER")),
         ("LANG".into(), std::env::var("LANG").unwrap_or_else(|_| "en_US.UTF-8".into())),
         ("TERM".into(), "xterm-256color".into()),
-    ]
+    ];
+    vars.extend(env.vars.iter().filter(|(k, _)| passes_through(k)).cloned());
+    vars
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -175,11 +228,17 @@ pub trait Cli: Send + Sync {
 pub struct RealCli {
     pub claude: PathBuf,
     pub path_env: String,
+    /// The login shell's passed-through variables (`LoginEnv::vars`).
+    pub vars: Vec<(String, String)>,
 }
 
 impl Cli for RealCli {
     fn run(&self, args: &[String], cwd: &Path) -> CliOutput {
-        let env = LoginEnv { claude: Some(self.claude.clone()), path: self.path_env.clone() };
+        let env = LoginEnv {
+            claude: Some(self.claude.clone()),
+            path: self.path_env.clone(),
+            vars: self.vars.clone(),
+        };
         let mut cmd = Command::new(&self.claude);
         cmd.args(args)
             .current_dir(cwd)
@@ -267,7 +326,7 @@ pub struct AgentsInfo {
 pub fn real_cli(login: &super::pty::LoginCache) -> Option<RealCli> {
     let env = super::pty::cached_login_env(login);
     let claude = env.claude.clone()?;
-    Some(RealCli { claude, path_env: env.path.clone() })
+    Some(RealCli { claude, path_env: env.path.clone(), vars: env.vars.clone() })
 }
 
 /// Runs the login-shell lookup (again, if `claude` was not found before): call it on a
@@ -506,8 +565,57 @@ mod tests {
     }
 
     #[test]
+    fn parse_login_output_keeps_only_allowed_env() {
+        let out = "noise\n__SM_CLAUDE__=/opt/x/claude\n__SM_PATH__=/usr/bin\n__SM_ENV__\n\
+            HOME=/h\0CLAUDE_CONFIG_DIR=/h/.claude-work\0ANTHROPIC_BASE_URL=https://gw\0\
+            SECRET_TOKEN=x\0HTTPS_PROXY=http://p:3128\0no_proxy=localhost\0\
+            MULTI=a\n__SM_PATH__=/evil\0CLAUDE_CODE_CHILD_SESSION=1\0\
+            \n__SM_ENV_END__\nbye\n";
+        let e = parse_login_output(out);
+        assert_eq!(e.claude, Some(PathBuf::from("/opt/x/claude")));
+        assert_eq!(e.path, "/usr/bin", "a value in the dump cannot pass for a marker line");
+        let keys: Vec<&str> = e.vars.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, ["CLAUDE_CONFIG_DIR", "ANTHROPIC_BASE_URL", "HTTPS_PROXY", "no_proxy"]);
+        assert_eq!(e.vars[0].1, "/h/.claude-work");
+    }
+
+    #[test]
+    fn env_allowlist() {
+        for k in ["CLAUDE_CONFIG_DIR", "CLAUDE_CODE_USE_BEDROCK", "ANTHROPIC_API_KEY", "HTTP_PROXY",
+            "https_proxy", "ALL_PROXY", "NO_PROXY", "no_proxy"]
+        {
+            assert!(passes_through(k), "{k}");
+        }
+        for k in ["PATH", "SECRET", "CLAUDECODE", "CLAUDE_PID", "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_CODE_ENTRYPOINT",
+            "DYLD_INSERT_LIBRARIES", "PROXY"]
+        {
+            assert!(!passes_through(k), "{k}");
+        }
+    }
+
+    #[test]
+    fn spawn_env_adds_allowed_login_vars() {
+        let env = LoginEnv {
+            claude: None,
+            path: "/login/bin".into(),
+            vars: vec![
+                ("CLAUDE_CONFIG_DIR".into(), "/h/.c".into()),
+                ("HTTPS_PROXY".into(), "http://p".into()),
+                ("NODE_OPTIONS".into(), "--require /x".into()),
+            ],
+        };
+        let vars = spawn_env(&env);
+        let get = |k: &str| vars.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone());
+        assert_eq!(get("CLAUDE_CONFIG_DIR").as_deref(), Some("/h/.c"));
+        assert_eq!(get("HTTPS_PROXY").as_deref(), Some("http://p"));
+        assert_eq!(get("NODE_OPTIONS"), None, "only the allowlist");
+        assert_eq!(vars.len(), 7);
+    }
+
+    #[test]
     fn spawn_env_uses_login_path() {
-        let env = LoginEnv { claude: None, path: "/login/bin:/other".into() };
+        let env = LoginEnv { claude: None, path: "/login/bin:/other".into(), vars: vec![] };
         let vars = spawn_env(&env);
         let get = |k: &str| vars.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone());
         assert_eq!(get("PATH").as_deref(), Some("/login/bin:/other"));
