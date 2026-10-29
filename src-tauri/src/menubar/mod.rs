@@ -36,6 +36,27 @@ static ATTENTION: AtomicBool = AtomicBool::new(false);
 /// would open the panel again instead of closing it.
 static PANEL_BLURRED_AT: AtomicU64 = AtomicU64::new(0);
 const REOPEN_GUARD_MS: u64 = 300;
+/// When the panel was last shown (ms since epoch). Opening it while StudioManager is in the
+/// background brings the app forward, and macOS then hands the focus to the main window if it
+/// is open: a focus loss this soon after showing is that hand-over, not a click elsewhere.
+static PANEL_SHOWN_AT: AtomicU64 = AtomicU64::new(0);
+const ACTIVATION_GRACE_MS: u64 = 600;
+
+/// What the panel does when it loses focus: take it back during the app's activation,
+/// hide otherwise.
+#[derive(Debug, PartialEq)]
+pub enum BlurAction {
+    Refocus,
+    Hide,
+}
+
+pub fn blur_action(now: u64, shown_at: u64) -> BlurAction {
+    if now.saturating_sub(shown_at) < ACTIVATION_GRACE_MS {
+        BlurAction::Refocus
+    } else {
+        BlurAction::Hide
+    }
+}
 
 /// Whether the app stays alive with its window closed: Agents on and the menu bar on.
 pub fn keep_running(app: &AppHandle) -> bool {
@@ -165,7 +186,12 @@ fn ensure_panel(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
     let panel = w.clone();
     w.on_window_event(move |event| {
         if let tauri::WindowEvent::Focused(false) = event {
-            PANEL_BLURRED_AT.store(now_ms(), Ordering::Relaxed);
+            let now = now_ms();
+            if blur_action(now, PANEL_SHOWN_AT.load(Ordering::Relaxed)) == BlurAction::Refocus {
+                let _ = panel.set_focus();
+                return;
+            }
+            PANEL_BLURRED_AT.store(now, Ordering::Relaxed);
             let _ = panel.hide();
         }
     });
@@ -229,6 +255,7 @@ fn toggle_panel(app: &AppHandle, item: tauri::Rect) {
         let (x, y) = panel_origin(icon, screen, PANEL_WIDTH * scale, scale);
         let _ = panel.set_position(PhysicalPosition::new(x, y));
     }
+    PANEL_SHOWN_AT.store(now_ms(), Ordering::Relaxed);
     let _ = panel.show();
     let _ = panel.set_focus();
 }
@@ -277,6 +304,16 @@ pub fn menubar_open_main(app: AppHandle, agent: Option<String>, new_agent: bool,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn focus_lost_while_the_app_activates_is_taken_back() {
+        // The main window takes the focus right after the panel opens: keep the panel.
+        assert_eq!(blur_action(10_100, 10_000), BlurAction::Refocus);
+        assert_eq!(blur_action(10_599, 10_000), BlurAction::Refocus);
+        // A click elsewhere later closes it.
+        assert_eq!(blur_action(10_600, 10_000), BlurAction::Hide);
+        assert_eq!(blur_action(50_000, 10_000), BlurAction::Hide);
+    }
 
     #[test]
     fn panel_sits_under_the_icon_on_screen() {
