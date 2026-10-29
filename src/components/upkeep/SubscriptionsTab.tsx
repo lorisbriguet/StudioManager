@@ -131,6 +131,7 @@ export function SubscriptionsTab() {
         <PrefilledExpenseModal
           supplier={subs.find((s) => s.id === adding.subscription_id)?.vendor ?? adding.name}
           amount={adding.amount}
+          currency={adding.currency}
           date={adding.renewed_on}
           onCancel={() => setAdding(null)}
           onSaved={async (expenseId) => {

@@ -1,9 +1,10 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useT } from "../../i18n/useT";
 import { notify } from "../../lib/notify";
 import { useCreateExpense, useDistinctSuppliers, useExpenseCategories } from "../../db/hooks/useExpenses";
 import { getNextExpenseReference } from "../../db/queries/expenses";
 import { todayLocalISO } from "../../utils/localDate";
+import { conversionNote, conversionToast, refusalText, toBaseAmount } from "../../lib/upkeep/expenseAmount";
 
 // The expense form is the Expenses page's own (a FormModal); load it only when asked for.
 const NewExpenseForm = lazy(() =>
@@ -13,6 +14,8 @@ const NewExpenseForm = lazy(() =>
 interface Props {
   supplier?: string;
   amount?: number;
+  /** Currency of `amount`: converted to CHF (expenses have no currency), or refused without a rate. */
+  currency?: string | null;
   date?: string;
   /** Closing without saving: nothing was written. */
   onCancel: () => void;
@@ -21,24 +24,27 @@ interface Props {
 }
 
 /** The Expenses page's own new-expense dialog, prefilled; the user still saves it. */
-export function PrefilledExpenseModal({ supplier, amount, date, onCancel, onSaved }: Props) {
+export function PrefilledExpenseModal({ supplier, amount, currency, date, onCancel, onSaved }: Props) {
   const { data: categories = [] } = useExpenseCategories();
   const { data: suppliers = [] } = useDistinctSuppliers();
   const createExpense = useCreateExpense();
   const t = useT();
+  const base = useBaseAmount(amount, currency, onCancel);
+  if (!base) return null;
 
   return (
     <Suspense fallback={null}>
       <NewExpenseForm
         categories={categories}
         pastSuppliers={suppliers}
-        prefill={{ supplier, amount, invoice_date: date ?? todayLocalISO() }}
+        prefill={{ supplier, amount: base.amount, invoice_date: date ?? todayLocalISO() }}
         onCancel={onCancel}
         onSave={async (data) => {
           const reference = await getNextExpenseReference(
             Number((data.invoice_date || todayLocalISO()).slice(0, 4))
           );
-          const id = await createExpense.mutateAsync({ ...data, reference });
+          const notes = [data.notes, base.note].filter(Boolean).join("\n");
+          const id = await createExpense.mutateAsync({ ...data, notes, reference });
           try {
             await onSaved(id);
           } catch (e) {
@@ -50,4 +56,35 @@ export function PrefilledExpenseModal({ supplier, amount, date, onCancel, onSave
       />
     </Suspense>
   );
+}
+
+/**
+ * `amount` in CHF, with the note on what was converted; null until known.
+ * Another currency is converted at today's rate and said so in a toast; with
+ * no rate the dialog closes with the reason instead of booking the raw number.
+ */
+function useBaseAmount(amount: number | undefined, currency: string | null | undefined, onCancel: () => void) {
+  const t = useT();
+  const [base, setBase] = useState<{ amount?: number; note: string | null } | null>(
+    amount == null ? { amount, note: null } : null
+  );
+  const latest = useRef({ t, onCancel });
+  latest.current = { t, onCancel };
+  useEffect(() => {
+    if (amount == null) return;
+    let live = true;
+    void toBaseAmount(amount, currency).then((r) => {
+      if (!live) return;
+      const { t, onCancel } = latest.current;
+      if (!r.ok) {
+        notify.error(refusalText(r, t));
+        onCancel();
+        return;
+      }
+      if (r.converted) notify.info(conversionToast(r.converted, r.amount, t));
+      setBase({ amount: r.amount, note: r.converted ? conversionNote(r.converted, todayLocalISO(), t) : null });
+    });
+    return () => { live = false; };
+  }, [amount, currency]);
+  return base;
 }

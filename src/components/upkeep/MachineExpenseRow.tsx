@@ -67,6 +67,7 @@ export function MachineExpenseRow({ machine }: { machine: Machine }) {
         <PrefilledExpenseModal
           supplier={machine.supplier ?? undefined}
           amount={machine.price ?? undefined}
+          currency={machine.currency}
           date={machine.purchase_date ?? todayLocalISO()}
           onCancel={() => setCreating(false)}
           onSaved={(id) => {
