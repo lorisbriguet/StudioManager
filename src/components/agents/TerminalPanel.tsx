@@ -205,7 +205,11 @@ export function TerminalPanel({ shortId, onClose }: TerminalPanelProps) {
         </div>
       </div>
       {error && <p role="alert" className="p-3 text-sm text-[var(--color-danger-text)]">{error}</p>}
-      <div ref={host} className={error ? "hidden" : "flex-1 min-h-0 p-2 overflow-hidden"} />
+      {/* The padding sits here, not on the host: xterm's fit reads its parent's height with the
+          parent's own padding in it, and would count one row too many. */}
+      <div className={error ? "hidden" : "flex-1 min-h-0 p-2"}>
+        <div ref={host} className="h-full w-full overflow-hidden" />
+      </div>
     </Card>
   );
 }
