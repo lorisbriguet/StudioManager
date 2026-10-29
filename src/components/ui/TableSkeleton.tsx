@@ -18,7 +18,7 @@ const CYCLE_WIDTHS = ["60%", "40%", "70%"];
 export function TableSkeleton({ columns = 4, rows = 8, widths, density = "default", className = "" }: TableSkeletonProps) {
   return (
     <div aria-busy="true" className={className}>
-      <div className="h-8 border-b border-[var(--color-border-header)]" />
+      <div className="h-8 border-b border-[var(--color-border)]" />
       {Array.from({ length: rows }).map((_, r) => (
         <div key={r} className={`flex items-center border-b border-[var(--color-border-divider)] ${TABLE_ROW_H[density]}`}>
           {Array.from({ length: columns }).map((_, c) => (

@@ -1,4 +1,3 @@
-import { Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -10,7 +9,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Button, Card, DragHandle, Select, IconButton, Input, Table } from "../ui";
+import { Button, Card, DragHandle, ICONS, Select, IconButton, Input, Table } from "../ui";
 import type { LineItem } from "../../lib/lineItems";
 import { useT } from "../../i18n/useT";
 
@@ -83,7 +82,7 @@ export function LineItemsTable({
         action={
           <div className="flex items-center gap-3">
             {headerActions}
-            <Button variant="link" icon={<Plus size={12} />} onClick={onAdd}>
+            <Button variant="link" icon={ICONS.add} onClick={onAdd}>
               {t.add_line}
             </Button>
           </div>
@@ -111,8 +110,8 @@ export function LineItemsTable({
                     <div className="flex items-center">
                       <SortableLineItemHandle id={item._id} />
                       <div className="flex flex-col">
-                        <IconButton size="xs" icon={ChevronUp} label={t.move_up} onClick={() => moveRow(i, i - 1)} disabled={i === 0} />
-                        <IconButton size="xs" icon={ChevronDown} label={t.move_down} onClick={() => moveRow(i, i + 1)} disabled={i === items.length - 1} />
+                        <IconButton size="xs" icon={ICONS.moveUp} label={t.move_up} onClick={() => moveRow(i, i - 1)} disabled={i === 0} />
+                        <IconButton size="xs" icon={ICONS.moveDown} label={t.move_down} onClick={() => moveRow(i, i + 1)} disabled={i === items.length - 1} />
                       </div>
                     </div>
                   </Table.Td>
@@ -174,7 +173,7 @@ export function LineItemsTable({
                   </Table.Td>
                   <Table.Actions>
                     {items.length > 1 && (
-                      <IconButton size="xs" icon={Trash2} label={t.delete} tone="danger" onClick={() => onRemove(i)} />
+                      <IconButton size="xs" icon={ICONS.delete} label={t.delete} tone="danger" onClick={() => onRemove(i)} />
                     )}
                   </Table.Actions>
                 </SortableLineItemRow>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { addMonths, format, getDay, isSameDay, isToday, isValid, parse, startOfMonth, subMonths, addDays } from "date-fns";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { ICONS } from "./icons";
 import { useAppStore, type DateFormatOption } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
 import { IconButton } from "./IconButton";
@@ -73,11 +73,11 @@ export function Calendar({ selected, selectedEnd, onSelect, month: monthProp, on
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <IconButton icon={ChevronLeft} label={t.previous} onClick={() => setMonth(subMonths(month, 1))} />
+        <IconButton icon={ICONS.prev} label={t.previous} onClick={() => setMonth(subMonths(month, 1))} />
         <span className="text-xs font-medium first-letter:uppercase" aria-live="polite">
           {title}
         </span>
-        <IconButton icon={ChevronRight} label={t.next} onClick={() => setMonth(addMonths(month, 1))} />
+        <IconButton icon={ICONS.next} label={t.next} onClick={() => setMonth(addMonths(month, 1))} />
       </div>
       <div className="grid grid-cols-7 mb-1" aria-hidden="true">
         {weekdayNames(locale).map((d) => (
@@ -103,7 +103,7 @@ export function Calendar({ selected, selectedEnd, onSelect, month: monthProp, on
               aria-current={today ? "date" : undefined}
               className={`h-8 w-full text-xs rounded-md transition-colors relative focus-accent ${
                 isStart || isEnd
-                  ? "bg-accent text-white font-medium"
+                  ? "bg-accent text-on-accent font-medium"
                   : inRange
                     ? "bg-accent-tint-strong text-accent"
                     : today
@@ -312,7 +312,7 @@ export function DatePicker({
         inputClassName={`tabular-nums ${inputClassName}`}
         trailing={
           <IconButton
-            icon={CalendarIcon}
+            icon={ICONS.dateField}
             label={t.pick_date}
             size="xs"
             disabled={disabled}

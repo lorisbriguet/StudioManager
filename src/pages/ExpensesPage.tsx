@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { Plus, Paperclip, Eye, Upload, Trash2, CheckCircle, CalendarCheck, Receipt, Settings2, XCircle, Pencil } from "lucide-react";
-import { Button, DatePicker, Input, Select, FormField, FormGrid, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, QueryState, NoResults, Spinner, Popover, IconButton, Tag, Callout, Tooltip } from "../components/ui";
+import { Paperclip, CalendarCheck } from "lucide-react";
+import { ICONS, ICON_SIZE, Button, DatePicker, Input, Select, FormField, FormGrid, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, QueryState, NoResults, Spinner, Popover, IconButton, Tag, Callout, Tooltip } from "../components/ui";
 import * as v from "../lib/validate";
 import { deleteWithUndo } from "../lib/undo";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
@@ -189,9 +189,9 @@ export function ExpensesPage() {
   return (
     <div className="relative">
       {isDragging && (
-        <div className="absolute inset-0 z-40 flex items-center justify-center bg-accent/10 border-2 border-dashed border-accent rounded-lg pointer-events-none">
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-accent-tint-strong border-2 border-dashed border-accent rounded-lg pointer-events-none">
           <div className="flex flex-col items-center gap-2 text-accent">
-            <Upload size={32} />
+            <ICONS.upload size={ICON_SIZE.empty} />
             <span className="text-sm font-medium">{t.drop_pdf_hint}</span>
           </div>
         </div>
@@ -199,7 +199,7 @@ export function ExpensesPage() {
 
       {parsing && (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-[var(--color-surface)]/60 backdrop-blur-sm rounded-lg">
-          <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-input-border)] shadow-sm">
+          <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] shadow-menu">
             <Spinner label={t.analyzing_receipt} />
             <span className="text-sm text-muted" aria-hidden="true">{t.analyzing_receipt}</span>
           </div>
@@ -207,7 +207,7 @@ export function ExpensesPage() {
       )}
 
       <PageHeader title={t.expenses}>
-        <Button icon={<Plus size={12} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
+        <Button icon={ICONS.add} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
       </PageHeader>
 
       <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); setFilterConditions([]); }} placeholder={t.search_expenses} className="w-64 mb-4" />
@@ -317,20 +317,20 @@ export function ExpensesPage() {
                             <Tooltip content={t.preview_receipt}>
                               <Button
                                 variant="link"
-                                icon={<Eye size={12} />}
+                                icon={ICONS.preview}
                                 onClick={() => setPreview({ path: exp.receipt_path!, reference: exp.reference })}
                               >
                                 {t.view}
                               </Button>
                             </Tooltip>
                             <span className="text-xs text-success flex items-center gap-1">
-                              <Paperclip size={12} />
+                              <Paperclip size={ICON_SIZE.control} />
                             </span>
                           </div>
                         ) : (
                           <Button
                             variant="link"
-                            icon={<Paperclip size={12} />}
+                            icon={Paperclip}
                             onClick={() => attachReceipt(exp.id, exp.reference, exp.supplier)}
                           >
                             {t.attach}
@@ -342,7 +342,7 @@ export function ExpensesPage() {
                       </Table.Td>
                       <Table.Actions>
                         <IconButton size="xs"
-                          icon={Settings2}
+                          icon={ICONS.more}
                           label={t.more_actions}
                           onClick={(e) => setCtxMenu({ x: e.clientX, y: e.clientY, item: exp })}
                         />
@@ -357,8 +357,8 @@ export function ExpensesPage() {
               {all.length === 0 ? (
                 <EmptyState
                   message={t.no_expenses_yet}
-                  icon={Receipt}
-                  action={<Button icon={<Plus size={12} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>}
+                  icon={ICONS.expense}
+                  action={<Button icon={ICONS.add} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>}
                 />
               ) : (
                 <NoResults message={t.no_matching_expenses} onClear={clearFilters} />
@@ -385,12 +385,12 @@ export function ExpensesPage() {
           items={[
             ...(!ctxMenu.item.paid_date
               ? [
-                  { label: t.mark_as_paid_today, icon: <CheckCircle size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: todayLocalISO() } }, { onSuccess: () => notify.success(t.marked_as_paid) }) },
-                  { label: t.mark_as_paid_at_invoice_date, icon: <CalendarCheck size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: ctxMenu.item.invoice_date } }, { onSuccess: () => notify.success(t.marked_as_paid) }) },
+                  { label: t.mark_as_paid_today, icon: ICONS.markPaid, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: todayLocalISO() } }, { onSuccess: () => notify.success(t.marked_as_paid) }) },
+                  { label: t.mark_as_paid_at_invoice_date, icon: CalendarCheck, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: ctxMenu.item.invoice_date } }, { onSuccess: () => notify.success(t.marked_as_paid) }) },
                 ]
-              : [{ label: t.mark_as_unpaid, icon: <XCircle size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: null } }, { onSuccess: () => notify.success(t.marked_as_unpaid) }) }]),
-            { label: t.edit_paid_date, icon: <Pencil size={14} />, onClick: () => { setEditDateValue(ctxMenu.item.paid_date ?? format(new Date(), "yyyy-MM-dd")); setEditDateExpense(ctxMenu.item); } },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteWithUndo(deleteExpense, ctxMenu.item.id, t.toast_expense_deleted) },
+              : [{ label: t.mark_as_unpaid, icon: ICONS.markUnpaid, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: null } }, { onSuccess: () => notify.success(t.marked_as_unpaid) }) }]),
+            { label: t.edit_paid_date, icon: ICONS.edit, onClick: () => { setEditDateValue(ctxMenu.item.paid_date ?? format(new Date(), "yyyy-MM-dd")); setEditDateExpense(ctxMenu.item); } },
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => deleteWithUndo(deleteExpense, ctxMenu.item.id, t.toast_expense_deleted) },
           ]}
         />
       )}
@@ -416,7 +416,7 @@ export function ExpensesPage() {
         count={bulk.count}
         onClear={bulk.clearSelection}
         actions={[
-          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+          { label: t.delete, icon: ICONS.delete, onClick: bulkDelete, danger: true },
         ]}
       />
     </div>

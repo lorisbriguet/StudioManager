@@ -1,9 +1,8 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, addMonths } from "date-fns";
-import { Check } from "lucide-react";
 import { notify } from "../lib/notify";
-import { Checkbox, Button, DatePicker, FormField, FormGrid, Input, Modal, Textarea } from "./ui";
+import { Checkbox, Button, DatePicker, FormField, FormGrid, ICONS, ICON_SIZE, Input, Modal, Textarea } from "./ui";
 import * as v from "../lib/validate";
 import { useT } from "../i18n/useT";
 import { useCreateProjectFromQuote } from "../db/hooks/useProjects";
@@ -148,13 +147,13 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
             <div
               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
                 i < step
-                  ? "bg-accent text-white"
+                  ? "bg-accent text-on-accent"
                   : i === step
-                  ? "bg-accent text-white"
+                  ? "bg-accent text-on-accent"
                   : "bg-[var(--color-input-bg)] text-muted"
               }`}
             >
-              {i < step ? <Check size={12} /> : i + 1}
+              {i < step ? <ICONS.selected size={ICON_SIZE.control} /> : i + 1}
             </div>
             <span className={`text-xs ${i === step ? "font-medium" : "text-muted"}`}>
               {label}

@@ -1,7 +1,8 @@
-import { ScanLine, X } from "lucide-react";
+import { ScanLine } from "lucide-react";
 import { useT } from "../i18n/useT";
 import { Badge } from "./ui/Badge";
 import { IconButton } from "./ui/IconButton";
+import { ICONS, ICON_SIZE } from "./ui/icons";
 
 /**
  * "From receipt" chip shown next to a form label when the field value came
@@ -12,9 +13,9 @@ export function DetectedBadge({ onClear }: { onClear: () => void }) {
   const t = useT();
   return (
     <Badge variant="accent" size="xs" className="pr-0.5">
-      <ScanLine size={10} aria-hidden="true" />
+      <ScanLine size={ICON_SIZE.pill} />
       {t.from_receipt}
-      <IconButton icon={X} label={t.clear_detected_value} size="xs" tone="danger" onClick={onClear} className="p-0! rounded-full" />
+      <IconButton icon={ICONS.close} label={t.clear_detected_value} size="xs" tone="danger" onClick={onClear} className="p-0! rounded-full" />
     </Badge>
   );
 }

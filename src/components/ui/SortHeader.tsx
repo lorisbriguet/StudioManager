@@ -1,5 +1,5 @@
-import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { MUTED_INTERACTIVE, TABLE_TH, TABLE_X } from "./tokens";
+import { ICONS, ICON_SIZE } from "./icons";
 import { useTableDensity } from "./Table";
 
 export type SortDir = "asc" | "desc";
@@ -38,12 +38,12 @@ export function SortHeader<K extends string>({
         {label}
         {active ? (
           current.dir === "asc" ? (
-            <ArrowUp size={12} aria-hidden="true" />
+            <ICONS.sortAsc size={ICON_SIZE.control} />
           ) : (
-            <ArrowDown size={12} aria-hidden="true" />
+            <ICONS.sortDesc size={ICON_SIZE.control} />
           )
         ) : (
-          <ArrowUpDown size={12} className="opacity-30" aria-hidden="true" />
+          <ICONS.sortNone size={ICON_SIZE.control} className="opacity-30" />
         )}
       </button>
     </th>

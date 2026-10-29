@@ -1,4 +1,4 @@
-import { Maximize2, X } from "lucide-react";
+import { ICONS } from "./icons";
 import { useT } from "../../i18n/useT";
 import { IconButton } from "./IconButton";
 
@@ -12,9 +12,9 @@ import { IconButton } from "./IconButton";
 export function PeekHeader({ onClose, onOpenFull }: { onClose: () => void; onOpenFull: () => void }) {
   const t = useT();
   return (
-    <div className="flex items-center justify-between gap-1 p-2 border-b border-[var(--color-border-header)]">
-      <IconButton icon={X} label={t.close} onClick={onClose} />
-      <IconButton icon={Maximize2} label={t.open_full_page} onClick={onOpenFull} />
+    <div className="flex items-center justify-between gap-1 p-2 border-b border-[var(--color-border)]">
+      <IconButton icon={ICONS.close} label={t.close} onClick={onClose} />
+      <IconButton icon={ICONS.maximize} label={t.open_full_page} onClick={onOpenFull} />
     </div>
   );
 }

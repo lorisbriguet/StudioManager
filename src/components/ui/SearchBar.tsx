@@ -1,4 +1,4 @@
-import { Search } from "lucide-react";
+import { ICONS } from "./icons";
 import { useT } from "../../i18n/useT";
 import { Input } from "./Input";
 
@@ -15,7 +15,7 @@ export function SearchBar({ value, onChange, placeholder, className = "w-64" }: 
   const t = useT();
   return (
     <Input
-      icon={Search}
+      icon={ICONS.search}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       onClear={() => onChange("")}

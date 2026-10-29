@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { ArrowRight, Calendar as CalendarIcon, Clock, CalendarRange, Bell, X } from "lucide-react";
+import { ArrowRight, type LucideIcon } from "lucide-react";
 import { formatDisplayDate } from "../utils/formatDate";
-import { Button, Input, Select, Toggle } from "./ui";
+import { Button, ICONS, ICON_SIZE, Input, Select, Toggle } from "./ui";
 import { Calendar, DateShortcuts, parseLocalDate } from "./ui/DatePicker";
 import { Popover, usePopover } from "./ui/Popover";
 import { useT } from "../i18n/useT";
@@ -111,7 +111,7 @@ export function TaskDatePicker({
       <Button
         {...pop.triggerProps}
         variant="outline"
-        icon={<CalendarIcon size={12} className="shrink-0" />}
+        icon={ICONS.dateField}
         aria-label={dueDate ? undefined : t.no_date}
         className={dueDate ? "" : "border-dashed text-muted"}
       >
@@ -140,7 +140,7 @@ export function TaskDatePicker({
 
           {/* End date toggle */}
           <ToggleRow
-            icon={<CalendarRange size={14} />}
+            icon={ICONS.dateRange}
             label={t.end_date}
             checked={showEndDate}
             onChange={(v) => {
@@ -151,7 +151,7 @@ export function TaskDatePicker({
 
           {/* Include time toggle */}
           <ToggleRow
-            icon={<Clock size={14} />}
+            icon={ICONS.time}
             label={t.include_time}
             checked={showTime}
             onChange={(v) => {
@@ -168,7 +168,7 @@ export function TaskDatePicker({
                 value={startTime ?? ""}
                 onCommit={(v) => onChange({ start_time: v || null })}
               />
-              <ArrowRight size={12} className="text-muted shrink-0" />
+              <ArrowRight size={ICON_SIZE.control} className="text-muted shrink-0" />
               <TimeInput
                 label={t.end_time}
                 value={endTime ?? ""}
@@ -179,7 +179,7 @@ export function TaskDatePicker({
 
           {/* Reminder */}
           <div className="flex items-center gap-2 mb-2">
-            <Bell size={14} className="text-muted shrink-0" />
+            <ICONS.reminder size={ICON_SIZE.menu} className="text-muted shrink-0" />
             <span className="text-xs flex-1">{t.reminder}</span>
             <Select
               value={reminder ?? "none"}
@@ -203,7 +203,7 @@ export function TaskDatePicker({
             <Button
               type="button"
               variant="link"
-              icon={<X size={12} />}
+              icon={ICONS.close}
               onClick={handleClear}
               className="w-full justify-center py-1 text-danger-text"
             >
@@ -217,19 +217,19 @@ export function TaskDatePicker({
 }
 
 function ToggleRow({
-  icon,
+  icon: Icon,
   label,
   checked,
   onChange,
 }: {
-  icon: React.ReactNode;
+  icon: LucideIcon;
   label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
 }) {
   return (
     <div className="flex items-center gap-2 mb-2">
-      <span className="text-muted shrink-0">{icon}</span>
+      <Icon size={ICON_SIZE.menu} className="text-muted shrink-0" />
       <span className="text-xs flex-1">{label}</span>
       <Toggle size="sm" checked={checked} onChange={onChange} ariaLabel={label} />
     </div>

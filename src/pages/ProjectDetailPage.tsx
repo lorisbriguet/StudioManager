@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Trash2 } from "lucide-react";
-import { ConfirmButton } from "../components/ui";
+import { ConfirmButton, ICONS } from "../components/ui";
 import { deleteWithUndo } from "../lib/undo";
 import { ProjectDetailContent } from "../components/ProjectDetailContent";
 import { useProject, useDeleteProject } from "../db/hooks/useProjects";
@@ -32,7 +31,7 @@ export function ProjectDetailPage() {
         <ConfirmButton
           label={t.delete}
           question={t.confirm_delete_project}
-          icon={<Trash2 size={14} />}
+          icon={ICONS.delete}
           variant="danger"
           onConfirm={() => deleteWithUndo(deleteProject, projectId, t.toast_project_deleted, () => navigate("/projects"))}
         />

@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useT } from "../i18n/useT";
 import { notify } from "../lib/notify";
-import { AlertTriangle } from "lucide-react";
-import { EmptyState, Modal, Spinner } from "./ui";
+import { EmptyState, ICONS, Modal, Spinner } from "./ui";
 
 /**
  * Large preview of an attached receipt (image or PDF), shared by the
@@ -49,7 +48,7 @@ export function ReceiptPreview({
     <Modal open onClose={onClose} title={reference} size="full" padding={false}>
         <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center">
           {failed ? (
-            <EmptyState tone="danger" icon={AlertTriangle} message={t.receipt_load_failed} />
+            <EmptyState tone="danger" icon={ICONS.warning} message={t.receipt_load_failed} />
           ) : !blobUrl ? (
             <Spinner size={20} />
           ) : isImage ? (

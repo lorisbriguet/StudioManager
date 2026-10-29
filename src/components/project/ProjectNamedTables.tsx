@@ -1,8 +1,7 @@
-import { Plus } from "lucide-react";
 import { NamedTable } from "../NamedTable";
 import { useProjectTables, useCreateProjectTable } from "../../db/hooks/useProjectTables";
 import { useT } from "../../i18n/useT";
-import { Button, EmptyState, IconButton, ListSkeleton, QueryError } from "../ui";
+import { Button, EmptyState, ICONS, IconButton, ListSkeleton, QueryError } from "../ui";
 
 export function ProjectNamedTables({ projectId }: { projectId: number }) {
   const t = useT();
@@ -13,7 +12,7 @@ export function ProjectNamedTables({ projectId }: { projectId: number }) {
   return (
     <div>
       <div className="flex items-center gap-2 mb-2">
-        <IconButton icon={Plus} label={t.add_table} tone="accent" onClick={() => createTable.mutate({ name: t.untitled })} />
+        <IconButton icon={ICONS.add} label={t.add_table} tone="accent" onClick={() => createTable.mutate({ name: t.untitled })} />
       </div>
       <div className="space-y-3">
         {tables === undefined && (tablesQuery.isError
@@ -23,7 +22,7 @@ export function ProjectNamedTables({ projectId }: { projectId: number }) {
           <EmptyState
             size="sm"
             message={t.no_tables_yet}
-            action={<Button variant="link" icon={<Plus size={12} />} onClick={() => createTable.mutate({ name: t.untitled })}>{t.add_table}</Button>}
+            action={<Button variant="link" icon={ICONS.add} onClick={() => createTable.mutate({ name: t.untitled })}>{t.add_table}</Button>}
           />
         )}
         {(tables ?? []).map((tbl) => (

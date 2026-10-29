@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Plus, Trash2, Copy, Pencil } from "lucide-react";
 import { notify } from "../../lib/notify";
-import { Button, Card, Tag, InlineRename, EmptyState } from "../ui";
+import { Button, Card, Tag, InlineRename, EmptyState, ICONS } from "../ui";
 import {
   useWorkloadTemplates,
   useCreateWorkloadTemplate,
@@ -114,7 +113,7 @@ export function WorkloadTemplateManager() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted">{t.workload_templates_desc}</p>
-        <Button variant="primary" icon={<Plus size={12} />} onClick={handleCreate}>
+        <Button variant="primary" icon={ICONS.add} onClick={handleCreate}>
           {t.new_template}
         </Button>
       </div>
@@ -136,13 +135,13 @@ export function WorkloadTemplateManager() {
               action={
                 <>
                   <IconButton size="xs"
-                    icon={Pencil}
+                    icon={ICONS.edit}
                     label={t.rename}
                     tone="accent"
                     onClick={() => setRenamingId(tpl.id)}
                   />
-                  <IconButton size="xs" icon={Copy} label={t.duplicate} tone="accent" onClick={() => handleDuplicate(tpl)} />
-                  <IconButton size="xs" icon={Trash2} label={t.delete} tone="danger" onClick={() => handleDelete(tpl)} />
+                  <IconButton size="xs" icon={ICONS.duplicate} label={t.duplicate} tone="accent" onClick={() => handleDuplicate(tpl)} />
+                  <IconButton size="xs" icon={ICONS.delete} label={t.delete} tone="danger" onClick={() => handleDelete(tpl)} />
                 </>
               }
               title={renamingId === tpl.id ? (
@@ -195,18 +194,20 @@ export function WorkloadTemplateManager() {
                         {col.formula}
                       </span>
                     )}
-                    <button
+                    <IconButton
+                      size="xs"
+                      icon={ICONS.edit}
+                      label={t.edit}
+                      tone="accent"
+                      reveal="col"
                       onClick={() => setEditingColumn({ column: col, index: ci })}
-                      className="ml-auto opacity-0 group-hover/col:opacity-100 p-0.5 text-muted hover:text-accent"
-                      aria-label={t.edit}
-                    >
-                      <Pencil size={12} />
-                    </button>
+                      className="ml-auto"
+                    />
                   </div>
                 ))}
                 <Button
                   variant="link"
-                  icon={<Plus size={12} />}
+                  icon={ICONS.add}
                   onClick={() =>
                     setEditingColumn({ column: null, index: tpl.columns.length })
                   }

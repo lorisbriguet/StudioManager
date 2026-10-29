@@ -53,9 +53,10 @@ export function CountBadge({
 }) {
   const toneCls = {
     neutral: variantClasses.neutral,
-    danger: "bg-[var(--color-danger-text)] text-white",
-    accent: "bg-accent text-white",
-    inverse: "bg-white/25 text-current",
+    danger: "bg-[var(--color-danger-text)] text-on-danger",
+    accent: "bg-accent text-on-accent",
+    /* Sits on an accent fill: a 25% veil of the on-accent colour */
+    inverse: "bg-[color-mix(in_srgb,var(--color-on-accent)_25%,transparent)] text-current",
   }[tone];
   return (
     <span

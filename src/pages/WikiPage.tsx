@@ -7,28 +7,20 @@ import { useSearchParams } from "react-router-dom";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
 import { isAllowedWikiLink, parseWikiArticleId, parseWikiFileKey, wikiFileHref } from "../lib/wikiLinks";
 import {
-  Plus,
-  BookOpen,
-  Trash2,
   Heading1,
   Heading2,
   Heading3,
   List,
-  Link as LinkIcon,
   Minus,
-  ChevronLeft,
-  ChevronRight,
-  Eye,
-  Pencil,
   PanelLeft,
   PanelRight,
   Waypoints,
-  File,
+  type LucideIcon,
 } from "lucide-react";
 import { deleteWithUndo } from "../lib/undo";
 import { useT } from "../i18n/useT";
 import { notify } from "../lib/notify";
-import { Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem, Popover, IconButton, SectionLabel, Input, HEADING_1 } from "../components/ui";
+import { ICONS, ICON_SIZE, Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem, Popover, IconButton, SectionLabel, Input, HEADING_1 } from "../components/ui";
 import { TagInput } from "../components/shared/TagInput";
 import { MENU_ITEM } from "../components/ui/Dropdown";
 import { Select } from "../components/ui/Select";
@@ -58,7 +50,7 @@ import { DocView } from "../components/wiki/DocView";
 // ─── Slash Command Menu ───────────────────────────────────────────
 interface SlashMenuItem {
   label: string;
-  icon: typeof Heading1;
+  icon: LucideIcon;
   action: (editor: ReturnType<typeof useEditor>) => void;
   /** If true, the action is handled specially by the ArticleEditor */
   special?: string;
@@ -93,7 +85,7 @@ function getSlashCommands(t: ReturnType<typeof useT>): SlashMenuItem[] {
     },
     {
       label: t.wiki_link,
-      icon: LinkIcon,
+      icon: ICONS.link,
       action: () => { /* handled specially via LinkInsertPopup */ },
       special: "link",
     },
@@ -233,7 +225,7 @@ function LinkInsertPopup({
                 choose(i);
               }}
             >
-              {article.file ? <File size={14} className="text-muted shrink-0" /> : <BookOpen size={14} className="text-muted shrink-0" />}
+              {article.file ? <ICONS.file size={ICON_SIZE.menu} className="text-muted shrink-0" /> : <ICONS.wikiArticle size={ICON_SIZE.menu} className="text-muted shrink-0" />}
               <span className="truncate">{article.title}</span>
               <span className="ml-auto pl-2 text-xs text-muted truncate max-w-32">
                 {article.project_id != null && article.project_id === currentProjectId
@@ -251,7 +243,7 @@ function LinkInsertPopup({
                 choose(matchedArticles.length);
               }}
             >
-              <Plus size={14} className="text-muted shrink-0" />
+              <ICONS.add size={ICON_SIZE.menu} className="text-muted shrink-0" />
               <span className="truncate">{t.wiki_new_article_named.replace("{title}", query.trim())}</span>
             </button>
           )}
@@ -347,7 +339,7 @@ function SlashCommandMenu({
               onSelect(cmd);
             }}
           >
-            <Icon size={14} />
+            <Icon size={ICON_SIZE.menu} />
             {cmd.label}
           </button>
         );
@@ -686,8 +678,8 @@ export function ArticleEditor({
       <div className={`${PANEL_TOP_BAR} gap-1 px-3 border-[var(--color-border-divider)]`}>
         {nav && (
           <>
-            <IconButton icon={ChevronLeft} label={t.wiki_back} onClick={nav.onBack} disabled={!nav.canBack} />
-            <IconButton icon={ChevronRight} label={t.wiki_forward} onClick={nav.onForward} disabled={!nav.canForward} />
+            <IconButton icon={ICONS.prev} label={t.wiki_back} onClick={nav.onBack} disabled={!nav.canBack} />
+            <IconButton icon={ICONS.next} label={t.wiki_forward} onClick={nav.onForward} disabled={!nav.canForward} />
           </>
         )}
         <div className="flex-1 min-w-0 text-center text-xs text-muted truncate">
@@ -700,14 +692,14 @@ export function ArticleEditor({
         </div>
         {onModeChange && (
           <IconButton
-            icon={reading ? Pencil : Eye}
+            icon={reading ? ICONS.edit : ICONS.preview}
             label={reading ? t.wiki_switch_to_editing : t.wiki_switch_to_reading}
             active={!reading}
             aria-pressed={!reading}
             onClick={() => onModeChange(reading ? "editing" : "reading")}
           />
         )}
-        <IconButton icon={Trash2} label={t.delete} tone="danger" onClick={handleDeleteArticle} />
+        <IconButton icon={ICONS.delete} label={t.delete} tone="danger" onClick={handleDeleteArticle} />
       </div>
 
       <div className="flex-1 overflow-y-auto px-8 py-8">
@@ -1026,13 +1018,7 @@ export function WikiPage() {
                   key={tab.key}
                   role="tab"
                   label={label}
-                  icon={
-                    tab.kind === "graph" ? (
-                      <Waypoints size={14} className="shrink-0" />
-                    ) : typeof ref === "string" ? (
-                      <File size={14} className="shrink-0" />
-                    ) : undefined
-                  }
+                  icon={tab.kind === "graph" ? Waypoints : typeof ref === "string" ? ICONS.file : undefined}
                   active={tab.key === tabsState.active}
                   onActivate={() => setTabsState((s) => ({ ...s, active: tab.key }))}
                   onClose={() => setTabsState((s) => closeTab(s, tab.key))}
@@ -1085,7 +1071,7 @@ export function WikiPage() {
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center">
-              <EmptyState message={t.wiki_file_unreadable} icon={<File size={32} />} />
+              <EmptyState message={t.wiki_file_unreadable} icon={ICONS.file} />
             </div>
           )
         ) : activeTab?.kind === "article" && activeId != null && activeArticle ? (
@@ -1129,9 +1115,9 @@ export function WikiPage() {
               <EmptyState
                 message={t.no_articles_yet}
                 hint={t.first_run_wiki}
-                icon={BookOpen}
+                icon={ICONS.wikiArticle}
                 action={
-                  <Button icon={<Plus size={12} />} onClick={() => handleNewArticle(null)}>
+                  <Button icon={ICONS.add} onClick={() => handleNewArticle(null)}>
                     {t.new_article}
                   </Button>
                 }
@@ -1139,9 +1125,9 @@ export function WikiPage() {
             ) : (
               <EmptyState
                 message={t.wiki_nothing_open}
-                icon={BookOpen}
+                icon={ICONS.wikiArticle}
                 action={
-                  <Button variant="secondary" icon={<Waypoints size={12} />} onClick={openGraph}>
+                  <Button variant="secondary" icon={Waypoints} onClick={openGraph}>
                     {t.wiki_open_graph}
                   </Button>
                 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useId, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { ICONS } from "./icons";
 import { useT } from "../../i18n/useT";
 import { IconButton } from "./IconButton";
 import { PanelTitle } from "./PanelTitle";
@@ -128,7 +128,7 @@ export function Modal({ open, onClose, title, children, footer, size = "sm", pos
   // a transform from its enter animation) would otherwise be trapped and clipped.
   return createPortal(
     <div
-      className={`fixed inset-0 z-50 flex justify-center bg-black/40 animate-in fade-in ${
+      className={`fixed inset-0 z-50 flex justify-center bg-scrim animate-in fade-in ${
         position === "top" ? "items-start pt-[20vh]" : "items-center"
       }`}
       onClick={onClose}
@@ -140,7 +140,7 @@ export function Modal({ open, onClose, title, children, footer, size = "sm", pos
         aria-labelledby={title ? titleId : undefined}
         aria-label={title ? undefined : aria["aria-label"]}
         tabIndex={-1}
-        className={`${SURFACE} shadow-[0_16px_48px_rgba(0,0,0,0.5)] w-full ${sizeClasses[size]} mx-4 flex flex-col overflow-hidden modal-animate outline-none`}
+        className={`${SURFACE} shadow-modal w-full ${sizeClasses[size]} mx-4 flex flex-col overflow-hidden modal-animate outline-none`}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleTrapKeyDown}
       >
@@ -149,7 +149,7 @@ export function Modal({ open, onClose, title, children, footer, size = "sm", pos
             as="h2"
             id={titleId}
             title={title}
-            action={<IconButton icon={X} label={t.close} onClick={onClose} />}
+            action={<IconButton icon={ICONS.close} label={t.close} onClick={onClose} />}
             className="shrink-0 px-5 py-3 border-b border-[var(--color-border-divider)]"
           />
         )}

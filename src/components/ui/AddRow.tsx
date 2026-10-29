@@ -1,5 +1,5 @@
 import { useState, type KeyboardEvent, type ReactNode } from "react";
-import { Plus } from "lucide-react";
+import { ICONS } from "./icons";
 import { Input } from "./Input";
 import { IconButton } from "./IconButton";
 
@@ -84,7 +84,7 @@ export function AddRow({
       />
       {children}
       <IconButton
-        icon={Plus}
+        icon={ICONS.add}
         label={buttonLabel ?? placeholder}
         size={size}
         tone="accent"

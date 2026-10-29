@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 import type { FallbackProps } from "react-error-boundary";
-import { AlertTriangle } from "lucide-react";
 import { useT } from "../i18n/useT";
 import { logError } from "../lib/log";
 import { Button } from "./ui/Button";
+import { ICONS } from "./ui/icons";
 import { EmptyState } from "./ui/EmptyState";
 
 /**
@@ -26,7 +26,7 @@ export function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
   return (
     <EmptyState
       tone="danger"
-      icon={AlertTriangle}
+      icon={ICONS.warning}
       message={t.page_error_title}
       hint={t.page_error_description}
       action={<Button onClick={resetErrorBoundary}>{t.retry}</Button>}
@@ -42,7 +42,7 @@ export function WidgetErrorFallback({ error, resetErrorBoundary }: FallbackProps
     <EmptyState
       size="sm"
       tone="danger"
-      icon={AlertTriangle}
+      icon={ICONS.warning}
       message={t.widget_error}
       action={
         <Button variant="secondary" onClick={resetErrorBoundary}>

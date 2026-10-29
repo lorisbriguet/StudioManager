@@ -9,22 +9,18 @@ import { useAppStore } from "../stores/app-store";
 afterEach(cleanup);
 beforeEach(() => useAppStore.setState({ language: "EN", darkMode: false }));
 
-// The test DOM keeps hex as written; a browser would report rgb().
-const rgb = (hex: string) => hex;
-
 describe("Tag", () => {
-  it("colours itself from the name and follows dark mode", () => {
-    const { rerender } = render(<Tag name="typography" />);
+  it("colours itself from the name with CSS variables (dark mode is the stylesheet's job)", () => {
+    render(<Tag name="typography" />);
     const el = screen.getByText("typography").parentElement!;
-    expect(el.style.background).toBe(rgb(getTagColor("typography", false).bg));
-    useAppStore.setState({ darkMode: true });
-    rerender(<Tag name="typography" />);
-    expect(screen.getByText("typography").parentElement!.style.color).toBe(rgb(getTagColor("typography", true).text));
+    expect(el.style.background).toBe(getTagColor("typography").bg);
+    expect(el.style.color).toBe(getTagColor("typography").text);
+    expect(el.style.background).toMatch(/^var\(--color-tag-[a-z]+-bg\)$/);
   });
 
   it("uses a stored colour name when given, including legacy names", () => {
     render(<Tag name="Urgent" color="pink" />);
-    expect(screen.getByText("Urgent").parentElement!.style.background).toBe(rgb(getStoredTagColor("pink", false).bg));
+    expect(screen.getByText("Urgent").parentElement!.style.background).toBe(getStoredTagColor("pink").bg);
   });
 
   it("shows a labelled remove button that does not bubble", () => {
@@ -62,7 +58,7 @@ describe("FilterChip", () => {
   it("a tag filter uses the tag colour when on", () => {
     render(<FilterChip active tag="print" />);
     const chip = screen.getByRole("button", { name: "print" });
-    expect(chip.style.background).toBe(rgb(getTagColor("print", false).bg));
+    expect(chip.style.background).toBe(getTagColor("print").bg);
     expect(chip.className).not.toContain("bg-accent");
   });
 

@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, BookOpen } from "lucide-react";
 import { useWikiArticlesByProject, useWikiArticles, useUpdateWikiArticle } from "../../db/hooks/useWiki";
-import { Button, EmptyState, ListSkeleton, Tag } from "../ui";
+import { Button, EmptyState, ICONS, ICON_SIZE, ListSkeleton, Tag } from "../ui";
 import { useT } from "../../i18n/useT";
 import { LinkPicker } from "./LinkPicker";
 
@@ -21,7 +20,7 @@ export function ProjectWikiBlock({ projectId }: { projectId: number }) {
     <div className="text-sm">
       {isPending && <ListSkeleton size="sm" rows={2} />}
       {wikiArticles?.length === 0 && !showPicker && (
-        <EmptyState size="sm" icon={BookOpen} message={t.no_wiki_articles_linked} />
+        <EmptyState size="sm" icon={ICONS.wikiArticle} message={t.no_wiki_articles_linked} />
       )}
       {wikiArticles && wikiArticles.length > 0 && (
         <div className="divide-y divide-[var(--color-border-divider)]">
@@ -31,7 +30,7 @@ export function ProjectWikiBlock({ projectId }: { projectId: number }) {
               onClick={() => navigate(`/wiki?article=${article.id}`)}
               className="w-full flex items-center gap-2 py-1.5 text-left hover:bg-[var(--color-hover-row)] rounded-md px-1 transition-colors"
             >
-              <BookOpen size={14} className="text-muted shrink-0" />
+              <ICONS.wikiArticle size={ICON_SIZE.menu} className="text-muted shrink-0" />
               <span className="text-sm truncate">{article.title}</span>
               <div className="flex items-center gap-1 ml-auto shrink-0">
                 {(article.tags ?? []).map((tag: string) => (
@@ -48,7 +47,7 @@ export function ProjectWikiBlock({ projectId }: { projectId: number }) {
           onCancel={() => setShowPicker(false)}
           items={unlinked.map((a) => ({
             id: a.id,
-            icon: <BookOpen size={12} className="text-muted" />,
+            icon: ICONS.wikiArticle,
             label: a.title,
             trailing: a.tags && a.tags.length > 0 && (
               <span className="flex items-center gap-1 ml-auto shrink-0">
@@ -64,7 +63,7 @@ export function ProjectWikiBlock({ projectId }: { projectId: number }) {
           }))}
         />
       ) : (
-        <Button variant="link" icon={<Plus size={12} />} onClick={() => setShowPicker(true)} className="mt-1">
+        <Button variant="link" icon={ICONS.link} onClick={() => setShowPicker(true)} className="mt-1">
           {t.link_article}
         </Button>
       )}

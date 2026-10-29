@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Download, FileText, FolderPlus } from "lucide-react";
-import { Button, PageHeader, EmptyState, QueryError, DetailSkeleton } from "../components/ui";
+import { ICONS, Button, PageHeader, EmptyState, QueryError, DetailSkeleton } from "../components/ui";
 import { confirmDraftExport } from "../lib/confirmDraftExport";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { useQuote, useUpdateQuote } from "../db/hooks/useQuotes";
@@ -48,7 +47,7 @@ export function QuotePreviewPage() {
   if (!quote || !lineItems || !client || !profile)
     return (
       <EmptyState
-        icon={FileText}
+        icon={ICONS.quote}
         message={t.quote_not_found}
         hint={t.not_found_hint}
         action={<Button variant="secondary" onClick={() => navigate("/quotes")}>{t.back_to_quotes}</Button>}
@@ -125,11 +124,11 @@ export function QuotePreviewPage() {
         back={() => navigate(-1)}
         actions={<>
           {quote.status === "accepted" && !quote.converted_to_project_id && (
-            <Button variant="secondary" icon={<FolderPlus size={12} />} onClick={() => setShowWizard(true)}>
+            <Button variant="secondary" icon={ICONS.newProject} onClick={() => setShowWizard(true)}>
               {t.generate_project}
             </Button>
           )}
-          <Button icon={<Download size={12} />} loading={exporting || updateQuote.isPending} onClick={downloadPdf}>
+          <Button icon={ICONS.download} loading={exporting || updateQuote.isPending} onClick={downloadPdf}>
             {t.download_pdf}
           </Button>
         </>}

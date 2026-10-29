@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react";
-import { Button } from "../ui/Button";
+import { IconButton } from "../ui/IconButton";
+import { ICONS } from "../ui/icons";
 import { InlineRename } from "../ui/InlineRename";
 import { Tooltip } from "../ui/Tooltip";
 import { useOrgStore } from "../../stores/org-store";
@@ -90,16 +90,16 @@ export function OrganisationsCard() {
                   {isActive && <span className="ml-2 text-xs text-muted">({t.active})</span>}
                 </span>
               )}
-              <Button variant="outline" icon={<ArrowUp size={12} />} aria-label={t.move_up} disabled={idx === 0} onClick={() => void move(idx, -1)} />
-              <Button variant="outline" icon={<ArrowDown size={12} />} aria-label={t.move_down} disabled={idx === organisations.length - 1} onClick={() => void move(idx, 1)} />
-              <Button variant="outline" icon={<Pencil size={12} />} aria-label={t.rename_organisation} onClick={() => startEditing(o)} />
+              <IconButton icon={ICONS.moveUp} label={t.move_up} disabled={idx === 0} onClick={() => void move(idx, -1)} />
+              <IconButton icon={ICONS.moveDown} label={t.move_down} disabled={idx === organisations.length - 1} onClick={() => void move(idx, 1)} />
+              <IconButton icon={ICONS.edit} label={t.rename_organisation} onClick={() => startEditing(o)} />
               {/* span: a disabled button gets no mouse events, and the hint explains why it is disabled */}
               <Tooltip content={isActive ? t.delete_organisation_active : isLast ? t.delete_organisation_last : undefined}>
                 <span className="inline-flex">
-                  <Button
-                    variant="outline"
-                    icon={<Trash2 size={12} />}
-                    aria-label={t.delete_organisation}
+                  <IconButton
+                    icon={ICONS.delete}
+                    label={t.delete_organisation}
+                    tone="danger"
                     disabled={isActive || isLast}
                     onClick={() => void remove(o)}
                   />

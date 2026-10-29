@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect, type RefObject } from "react";
-import { Plus, Trash2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Settings2, Copy, Download, Sigma, Pin, Play, Square } from "lucide-react";
-import { Button, DragHandle, Select, Popover, Input, FormModal, FormField } from "../ui";
-import { MENU_ITEM, MENU_DIVIDER } from "../ui/Dropdown";
+import { Sigma } from "lucide-react";
+import { Button, DragHandle, Select, Popover, Input, FormModal, FormField, MenuItem, ICONS, ICON_SIZE } from "../ui";
+import { MENU_DIVIDER } from "../ui/Dropdown";
 import { notify } from "../../lib/notify";
 import {
   DndContext,
@@ -456,7 +456,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
           )}
         </Select>
         <div className="flex-1" />
-        <IconButton icon={Plus} label={t.add_column} tone="accent" onClick={() => onEditColumn?.(null, columns.length)} />
+        <IconButton icon={ICONS.add} label={t.add_column} tone="accent" onClick={() => onEditColumn?.(null, columns.length)} />
       </div>
 
       {/* Table */}
@@ -479,12 +479,12 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                 >
                   <div className="flex items-center gap-1">
                     <span className="truncate">{t.tasks}</span>
-                    {sortKey === "__title" && <span className="ml-auto">{sortDir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />}</span>}
+                    {sortKey === "__title" && <span className="ml-auto">{sortDir === "asc" ? <ICONS.sortAsc size={ICON_SIZE.control} /> : <ICONS.sortDesc size={ICON_SIZE.control} />}</span>}
                   </div>
                   {/* Resize handle */}
                   <div
                     onPointerDown={(e) => { e.stopPropagation(); onTaskColResizeStart(e); }}
-                    className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-accent/30 active:bg-accent/50"
+                    className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-accent-handle active:bg-accent"
                   />
                 </Table.Th>
                 {/* System: Duration */}
@@ -500,7 +500,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                   }}
                 >
                   <div className="flex items-center justify-end gap-1">
-                    {sortKey === "__duration" && (sortDir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
+                    {sortKey === "__duration" && (sortDir === "asc" ? <ICONS.sortAsc size={ICON_SIZE.control} /> : <ICONS.sortDesc size={ICON_SIZE.control} />)}
                     <span className="truncate">{t.duration}</span>
                   </div>
                 </Table.Th>
@@ -517,7 +517,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                   }}
                 >
                   <div className="flex items-center justify-end gap-1">
-                    {sortKey === "__planned" && (sortDir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
+                    {sortKey === "__planned" && (sortDir === "asc" ? <ICONS.sortAsc size={ICON_SIZE.control} /> : <ICONS.sortDesc size={ICON_SIZE.control} />)}
                     <span className="truncate">{t.planned}</span>
                   </div>
                 </Table.Th>
@@ -539,14 +539,14 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                       <div className="flex items-center gap-1">
                         {col.icon && COLUMN_ICONS[col.icon] && (() => {
                           const Icon = COLUMN_ICONS[col.icon!];
-                          return <Icon size={14} className="shrink-0" />;
+                          return <Icon size={ICON_SIZE.menu} className="shrink-0" />;
                         })()}
                         {!col.iconOnly && (
                           <span className="truncate">{col.name}</span>
                         )}
                         {sortKey === col.key && (
                           <span className="ml-auto">
-                            {sortDir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />}
+                            {sortDir === "asc" ? <ICONS.sortAsc size={ICON_SIZE.control} /> : <ICONS.sortDesc size={ICON_SIZE.control} />}
                           </span>
                         )}
                       </div>
@@ -556,7 +556,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                           e.stopPropagation();
                           onResizeStart(e, ci);
                         }}
-                        className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-accent/30 active:bg-accent/50"
+                        className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-accent-handle active:bg-accent"
                       />
                     </Table.Th>
                   );
@@ -614,7 +614,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
         {/* Add row button */}
         <Button
           variant="link"
-          icon={<Plus size={12} />}
+          icon={ICONS.add}
           onClick={handleAddRow}
           className={`w-full ${TABLE_X.compact} py-2 text-muted hover:text-accent hover:no-underline! hover:bg-[var(--color-hover-row)] border-t border-[var(--color-border-divider)]`}
         >
@@ -747,21 +747,13 @@ function SectionContextMenu({
 }) {
   return (
     <Popover at={{ x, y }} onClose={onClose} className="w-48">
-      <button
-        onClick={onTogglePin}
-        className={`${MENU_ITEM} ${stickyFirstCol ? "text-accent font-medium bg-accent-tint" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"}`}
-      >
-        <Pin size={14} />
+      <MenuItem icon={ICONS.pin} selected={stickyFirstCol} onClick={onTogglePin}>
         {t.pin_first_column}
-      </button>
+      </MenuItem>
       {hasRows && (
-        <button
-          onClick={onExportCsv}
-          className={`${MENU_ITEM} text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]`}
-        >
-          <Download size={14} />
+        <MenuItem icon={ICONS.export} onClick={onExportCsv}>
           {t.export_csv}
-        </button>
+        </MenuItem>
       )}
     </Popover>
   );
@@ -829,7 +821,7 @@ function SortableRow({
       <Table.Td className={stickyFirstCol ? "sticky left-8 z-10 bg-inherit" : ""} style={{ width: taskColWidth }}>
         <div className="flex items-center gap-1">
           <IconButton
-            icon={isTimerActive ? Square : Play}
+            icon={isTimerActive ? ICONS.stopTimer : ICONS.startTimer}
             label={isTimerActive ? t.stop_timer : t.start_timer}
             size="xs"
             color={isTimerActive ? "danger" : undefined}
@@ -883,8 +875,8 @@ function SortableRow({
       ))}
 
       <Table.Actions>
-        <IconButton icon={Copy} label={t.duplicate_row} size="xs" tone="accent" onClick={() => handleDuplicateRow(row)} />
-        <IconButton icon={Trash2} label={t.delete} size="xs" tone="danger" onClick={() => deleteRow.mutate(row.id)} />
+        <IconButton icon={ICONS.duplicate} label={t.duplicate_row} size="xs" tone="accent" onClick={() => handleDuplicateRow(row)} />
+        <IconButton icon={ICONS.delete} label={t.delete} size="xs" tone="danger" onClick={() => deleteRow.mutate(row.id)} />
       </Table.Actions>
     </Table.Row>
   );
@@ -1015,20 +1007,12 @@ function SystemHeaderMenu({
 }) {
   return (
     <Popover anchor={anchor} onClose={onClose} className="w-48">
-      <button
-        onClick={() => onSort("asc")}
-        className={`${MENU_ITEM} ${isAsc ? "text-accent font-medium bg-accent-tint" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"}`}
-      >
-        <ArrowUp size={14} />
+      <MenuItem icon={ICONS.sortAsc} selected={isAsc} onClick={() => onSort("asc")}>
         {t.sort_ascending}
-      </button>
-      <button
-        onClick={() => onSort("desc")}
-        className={`${MENU_ITEM} ${isDesc ? "text-accent font-medium bg-accent-tint" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"}`}
-      >
-        <ArrowDown size={14} />
+      </MenuItem>
+      <MenuItem icon={ICONS.sortDesc} selected={isDesc} onClick={() => onSort("desc")}>
         {t.sort_descending}
-      </button>
+      </MenuItem>
     </Popover>
   );
 }
@@ -1073,61 +1057,37 @@ function ColumnHeaderMenu({
     <Popover anchor={anchor} onClose={onClose} className="w-48">
       {col.type !== "formula" && (
         <>
-          <button
-            onClick={() => onSort(col.key, "asc")}
-            className={`${MENU_ITEM} ${isAsc ? "text-accent font-medium bg-accent-tint" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"}`}
-          >
-            <ArrowUp size={14} />
+          <MenuItem icon={ICONS.sortAsc} selected={isAsc} onClick={() => onSort(col.key, "asc")}>
             {t.sort_ascending}
-          </button>
-          <button
-            onClick={() => onSort(col.key, "desc")}
-            className={`${MENU_ITEM} ${isDesc ? "text-accent font-medium bg-accent-tint" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"}`}
-          >
-            <ArrowDown size={14} />
+          </MenuItem>
+          <MenuItem icon={ICONS.sortDesc} selected={isDesc} onClick={() => onSort(col.key, "desc")}>
             {t.sort_descending}
-          </button>
+          </MenuItem>
           <div className={MENU_DIVIDER} />
         </>
       )}
       {colIndex > 0 && (
-        <button
-          onClick={onMoveLeft}
-          className={`${MENU_ITEM} text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]`}
-        >
-          <ArrowLeft size={14} />
+        <MenuItem icon={ICONS.moveLeft} onClick={onMoveLeft}>
           {t.move_left}
-        </button>
+        </MenuItem>
       )}
       {colIndex < colCount - 1 && (
-        <button
-          onClick={onMoveRight}
-          className={`${MENU_ITEM} text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]`}
-        >
-          <ArrowRight size={14} />
+        <MenuItem icon={ICONS.moveRight} onClick={onMoveRight}>
           {t.move_right}
-        </button>
+        </MenuItem>
       )}
       {isSummable && (
         <>
           <div className={MENU_DIVIDER} />
-          <button
-            onClick={onToggleSum}
-            className={`${MENU_ITEM} hover:bg-[var(--color-hover-row)] ${sumVisible ? "text-[var(--color-text-secondary)]" : "text-muted"}`}
-          >
-            <Sigma size={14} />
+          <MenuItem icon={Sigma} onClick={onToggleSum}>
             {sumVisible ? t.hide_sum : t.show_sum}
-          </button>
+          </MenuItem>
         </>
       )}
       <div className={MENU_DIVIDER} />
-      <button
-        onClick={onEdit}
-        className={`${MENU_ITEM} text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]`}
-      >
-        <Settings2 size={14} />
+      <MenuItem icon={ICONS.edit} onClick={onEdit}>
         {t.edit_column}
-      </button>
+      </MenuItem>
     </Popover>
   );
 }

@@ -16,8 +16,8 @@ export const MUTED_INTERACTIVE = "text-muted hover:text-[var(--color-text-second
 /** A raised surface without a border: floating bars. Add the shadow per use. */
 export const SURFACE_FILL = "bg-[var(--color-surface)] rounded-xl";
 
-/** A raised surface: popovers, menus, dialogs. Add the shadow per use. */
-export const SURFACE = `${SURFACE_FILL} border border-[var(--color-border-header)]`;
+/** A raised surface: popovers, menus, dialogs. Add the shadow per use. The surface-edge border. */
+export const SURFACE = `${SURFACE_FILL} border border-[var(--color-border)]`;
 
 /**
  * Label pills (they label, they don't act): Tag, Badge, status pills.

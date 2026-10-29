@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Link, Trash2, Unlink, X } from "lucide-react";
-import { AddRow, Badge, Button, Dropdown, FormGroup, IconButton, Input, Select, Tag, FORM_GAP } from "../ui";
+import { AddRow, Badge, Button, Dropdown, FormGroup, ICONS, ICON_SIZE, IconButton, Input, Select, Tag, FORM_GAP } from "../ui";
 import { normalizeTagColorName, TAG_COLOR_NAMES } from "../../lib/tagColors";
 import { useT } from "../../i18n/useT";
 
@@ -97,11 +96,11 @@ export function OptionsEditor({
   const action = linked ? (
     <div className="flex items-center gap-1.5">
       <Badge variant="accent" size="xs">
-        <Link size={10} aria-hidden="true" />
+        <ICONS.link size={ICON_SIZE.pill} />
         {lists.find((l) => l.id === linkedListId)?.name ?? ""}
       </Badge>
       {onUnlink && (
-        <Button variant="link" icon={<Unlink size={12} />} onClick={onUnlink} className="text-muted hover:text-accent">
+        <Button variant="link" icon={ICONS.unlink} onClick={onUnlink} className="text-muted hover:text-accent">
           {t.unlink_list}
         </Button>
       )}
@@ -109,7 +108,7 @@ export function OptionsEditor({
   ) : onLink ? (
     <Dropdown
       align="end"
-      trigger={<Button variant="link" icon={<Link size={12} />}>{t.import_from_list}</Button>}
+      trigger={<Button variant="link" icon={ICONS.link}>{t.import_from_list}</Button>}
       items={
         lists.length === 0
           ? [{ label: t.no_lists, disabled: true, onSelect: () => {} }]
@@ -146,7 +145,7 @@ export function OptionsEditor({
               )}
               {!linked && (
                 <IconButton
-                  icon={Trash2}
+                  icon={ICONS.delete}
                   label={t.delete}
                   size="xs"
                   tone="danger"
@@ -188,11 +187,11 @@ export function OptionsEditor({
               autoFocus
             />
             <Button onClick={saveAsList}>{t.save}</Button>
-            <IconButton icon={X} label={t.cancel} size="xs" onClick={() => setSavingAsList(false)} />
+            <IconButton icon={ICONS.close} label={t.cancel} size="xs" onClick={() => setSavingAsList(false)} />
           </div>
         ) : (
           <div>
-            <Button variant="link" icon={<Link size={12} />} onClick={() => setSavingAsList(true)} className="text-muted hover:text-accent">
+            <Button variant="link" icon={ICONS.link} onClick={() => setSavingAsList(true)} className="text-muted hover:text-accent">
               {t.save_as_list}
             </Button>
           </div>

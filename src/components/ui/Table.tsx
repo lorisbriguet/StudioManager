@@ -1,5 +1,6 @@
 import { createContext, useContext, type HTMLAttributes, type MouseEvent, type ReactNode, type Ref, type TdHTMLAttributes, type ThHTMLAttributes } from "react";
 import { ChevronRight } from "lucide-react";
+import { ICON_SIZE } from "./icons";
 import { Checkbox } from "./Checkbox";
 import { SectionLabel } from "./SectionLabel";
 import { REVEAL_CLASSES } from "./IconButton";
@@ -48,7 +49,7 @@ function TableRoot({ density = "default", className = "", children, ...rest }: T
 function Head({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <thead>
-      <tr className={`border-b border-[var(--color-border-header)] ${className}`}>{children}</tr>
+      <tr className={`border-b border-[var(--color-border)] ${className}`}>{children}</tr>
     </thead>
   );
 }
@@ -102,7 +103,7 @@ function Row({ onOpen, selected, focused, className = "", onClick, children, ref
       ref={ref}
       className={`group/row border-b border-[var(--color-border-divider)] transition-colors ${
         selected ? "bg-accent-tint" : "hover:bg-[var(--color-hover-row)]"
-      } ${onOpen ? "cursor-pointer" : ""} ${focused ? "ring-2 ring-accent/40 ring-inset" : ""} ${className}`}
+      } ${onOpen ? "cursor-pointer" : ""} ${focused ? "focus-row" : ""} ${className}`}
       onClick={onOpen || onClick ? handleClick : undefined}
       {...rest}
     >
@@ -199,7 +200,7 @@ function Group({ colSpan, label, count, total, open, onToggle }: GroupProps) {
           onClick={onToggle}
           className="focus-accent flex w-full items-center gap-2 rounded text-left cursor-pointer"
         >
-          <ChevronRight size={12} aria-hidden="true" className={`text-muted transition-transform ${open ? "rotate-90" : ""}`} />
+          <ChevronRight size={ICON_SIZE.control} className={`text-muted transition-transform ${open ? "rotate-90" : ""}`} />
           <SectionLabel as="span">{label}</SectionLabel>
           {count != null && <span className="text-xs text-muted">{count}</span>}
           {total != null && <span className={`ml-auto text-xs font-medium ${NUMERIC}`}>{total}</span>}
@@ -222,7 +223,7 @@ function Empty({ colSpan, children }: { colSpan: number; children: ReactNode }) 
 function Foot({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <tfoot>
-      <tr className={`border-t border-[var(--color-border-header)] font-medium ${className}`}>{children}</tr>
+      <tr className={`border-t border-[var(--color-border)] font-medium ${className}`}>{children}</tr>
     </tfoot>
   );
 }

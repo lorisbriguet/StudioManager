@@ -1,5 +1,5 @@
-import { Bell, Check, CheckCheck, Trash2, AlertTriangle, Info, AlertCircle, Copy } from "lucide-react";
-import { PageHeader, Button, Card, EmptyState, IconButton, QueryState, ListSkeleton } from "../components/ui";
+import type { LucideIcon } from "lucide-react";
+import { ICONS, ICON_SIZE, PageHeader, Button, Card, EmptyState, IconButton, QueryState, ListSkeleton } from "../components/ui";
 import { notify } from "../lib/notify";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
@@ -16,11 +16,11 @@ import { useT } from "../i18n/useT";
 import { deleteWithUndo } from "../lib/undo";
 import type { AppNotification } from "../types/notification";
 
-const typeConfig: Record<string, { icon: typeof Bell; color: string }> = {
-  overdue: { icon: AlertTriangle, color: "text-[var(--color-warning-text)]" },
-  warning: { icon: AlertTriangle, color: "text-[var(--color-warning-text)]" },
-  error: { icon: AlertCircle, color: "text-[var(--color-danger-text)]" },
-  info: { icon: Info, color: "text-accent" },
+const typeConfig: Record<string, { icon: LucideIcon; color: string }> = {
+  overdue: { icon: ICONS.reminder, color: "text-[var(--color-warning-text)]" },
+  warning: { icon: ICONS.warning, color: "text-[var(--color-warning-text)]" },
+  error: { icon: ICONS.error, color: "text-[var(--color-danger-text)]" },
+  info: { icon: ICONS.info, color: "text-accent" },
 };
 
 export function NotificationsPage() {
@@ -62,12 +62,12 @@ export function NotificationsPage() {
     <div>
       <PageHeader title={t.notifications} meta={unreadCount > 0 && `${unreadCount} ${t.unread}`}>
         {unreadCount > 0 && (
-          <Button variant="secondary" icon={<CheckCheck size={12} />} onClick={() => markAllRead.mutate()}>
+          <Button variant="secondary" icon={ICONS.markAllRead} onClick={() => markAllRead.mutate()}>
             {t.mark_all_read}
           </Button>
         )}
         {notifications.length > 0 && (
-          <Button variant="danger" icon={<Trash2 size={12} />} onClick={() => deleteWithUndo(clearAll, undefined, t.notifications_cleared)}>
+          <Button variant="danger" icon={ICONS.delete} onClick={() => deleteWithUndo(clearAll, undefined, t.notifications_cleared)}>
             {t.clear_all}
           </Button>
         )}
@@ -77,7 +77,7 @@ export function NotificationsPage() {
         query={notificationsQuery}
         skeleton={<ListSkeleton rows={6} />}
         errorMessage={t.load_error_notifications}
-        empty={<EmptyState message={t.no_notifications} icon={Bell} />}
+        empty={<EmptyState message={t.no_notifications} icon={ICONS.notifications} />}
       >
       {() => (
         <div className="space-y-2">
@@ -91,11 +91,11 @@ export function NotificationsPage() {
                 padding="sm"
                 onClick={() => handleClick(n)}
                 className={`flex items-start gap-3 group ${
-                  n.read ? "" : "bg-accent-light/50! hover:bg-accent-light!"
+                  n.read ? "" : "bg-accent-tint-strong! hover:bg-accent-light!"
                 }`}
               >
                 <div className={`mt-0.5 ${cfg.color}`}>
-                  <Icon size={18} />
+                  <Icon size={ICON_SIZE.callout} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -109,13 +109,13 @@ export function NotificationsPage() {
                   {n.message && (
                     <p className="text-xs text-muted mt-0.5 truncate">{n.message}</p>
                   )}
-                  <p className="text-[10px] text-muted/60 mt-1">
+                  <p className="text-[10px] text-[var(--color-text-faint)] mt-1">
                     {formatDisplayDateTime(n.created_at)}
                   </p>
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                   <IconButton size="xs"
-                    icon={Copy}
+                    icon={ICONS.copy}
                     label={t.copy}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -128,7 +128,7 @@ export function NotificationsPage() {
                   />
                   {!n.read && (
                     <IconButton size="xs"
-                      icon={Check}
+                      icon={ICONS.markRead}
                       label={t.mark_read}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -137,7 +137,7 @@ export function NotificationsPage() {
                     />
                   )}
                   <IconButton size="xs"
-                    icon={Trash2}
+                    icon={ICONS.delete}
                     label={t.delete}
                     tone="danger"
                     onClick={(e) => {

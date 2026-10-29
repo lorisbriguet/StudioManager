@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Eye, Pencil, Trash2, CheckCircle, Send, Repeat, RefreshCw, AlertTriangle, ExternalLink, FileText, Settings2, Download, Mail } from "lucide-react";
 import { notify } from "../lib/notify";
 import { useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
@@ -35,7 +34,7 @@ import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { PageHeader, SearchBar, Table, TableSkeleton, Button, EmptyState, QueryState, NoResults, ListSkeleton, Card, FormModal, FormField, FormGrid, DatePicker, Select, IconButton, CountBadge, Toggle } from "../components/ui";
+import { ICONS, PageHeader, SearchBar, Table, TableSkeleton, Button, EmptyState, QueryState, NoResults, ListSkeleton, Card, FormModal, FormField, FormGrid, DatePicker, Select, IconButton, CountBadge, Toggle } from "../components/ui";
 import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
 import { isDraftReference } from "../types/invoice";
 import type { Invoice, InvoiceStatus } from "../types/invoice";
@@ -447,7 +446,7 @@ export function InvoicesPage() {
     <PageHeader title={t.invoices}>
       <Button
         variant="secondary"
-        icon={<Repeat size={12} />}
+        icon={ICONS.recurring}
         onClick={() => setShowRecurring(!showRecurring)}
         className={showRecurring ? "border-accent text-accent bg-accent-light" : ""}
       >
@@ -456,7 +455,7 @@ export function InvoicesPage() {
           <CountBadge value={templates?.length ?? 0} className="ml-1" />
         )}
       </Button>
-      <Button icon={<Plus size={12} />} onClick={() => navigate("/invoices/new")}>
+      <Button icon={ICONS.add} onClick={() => navigate("/invoices/new")}>
         {t.new_invoice}
       </Button>
     </PageHeader>
@@ -481,7 +480,7 @@ export function InvoicesPage() {
             action={
               <Button
                 variant="secondary"
-                icon={<RefreshCw size={12} />}
+                icon={ICONS.generateNow}
                 loading={generatingNow}
                 onClick={handleGenerateNow}
               >
@@ -492,7 +491,7 @@ export function InvoicesPage() {
           {templates === undefined ? (
             <ListSkeleton size="sm" rows={2} />
           ) : templates.length === 0 ? (
-            <EmptyState size="sm" icon={Repeat} message={t.no_recurring_templates} hint={t.recurring_empty_hint} />
+            <EmptyState size="sm" icon={ICONS.recurring} message={t.no_recurring_templates} hint={t.recurring_empty_hint} />
           ) : (
             <Table>
               <Table.Head>
@@ -541,7 +540,7 @@ export function InvoicesPage() {
                     <Table.Actions>
                       <IconButton
                         size="xs"
-                        icon={Trash2}
+                        icon={ICONS.delete}
                         label={t.delete_template}
                         tone="danger"
                         onClick={() => deleteWithUndo(deleteTemplate, tmpl.id, t.template_deleted)}
@@ -660,7 +659,7 @@ export function InvoicesPage() {
                         <Table.Actions>
                           <IconButton
                             size="xs"
-                            icon={Settings2}
+                            icon={ICONS.more}
                             label={t.more_actions}
                             onClick={(e) => setCtxMenu({ x: e.clientX, y: e.clientY, item: inv })}
                           />
@@ -675,9 +674,9 @@ export function InvoicesPage() {
                 {all.length === 0 ? (
                   <EmptyState
                     message={t.no_invoices_yet}
-                    icon={FileText}
+                    icon={ICONS.invoice}
                     action={
-                      <Button icon={<Plus size={12} />} onClick={() => navigate("/invoices/new")}>
+                      <Button icon={ICONS.add} onClick={() => navigate("/invoices/new")}>
                         {t.new_invoice}
                       </Button>
                     }
@@ -697,19 +696,19 @@ export function InvoicesPage() {
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
-            { label: t.edit, icon: <Pencil size={14} />, onClick: () => navigate(`/invoices/${ctxMenu.item.id}/edit`) },
-            { label: t.preview_pdf, icon: <Eye size={14} />, onClick: () => navigate(`/invoices/${ctxMenu.item.id}/preview`) },
-            { label: t.download_pdf, icon: <Download size={14} />, onClick: () => handleDownloadPdf(ctxMenu.item) },
-            { label: t.email_pdf, icon: <Mail size={14} />, onClick: () => handleEmailPdf(ctxMenu.item) },
-            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/invoices/${ctxMenu.item.id}/edit`, ctxMenu.item.reference.startsWith("DRAFT") ? t.draft : ctxMenu.item.reference) },
+            { label: t.edit, icon: ICONS.edit, onClick: () => navigate(`/invoices/${ctxMenu.item.id}/edit`) },
+            { label: t.preview_pdf, icon: ICONS.preview, onClick: () => navigate(`/invoices/${ctxMenu.item.id}/preview`) },
+            { label: t.download_pdf, icon: ICONS.download, onClick: () => handleDownloadPdf(ctxMenu.item) },
+            { label: t.email_pdf, icon: ICONS.email, onClick: () => handleEmailPdf(ctxMenu.item) },
+            { label: t.open_in_new_tab, icon: ICONS.newTab, onClick: () => openTab(`/invoices/${ctxMenu.item.id}/edit`, ctxMenu.item.reference.startsWith("DRAFT") ? t.draft : ctxMenu.item.reference) },
             { label: "", divider: true, onClick: () => {} },
-            ...(ctxMenu.item.status === "draft" ? [{ label: t.mark_sent, icon: <Send size={14} />, onClick: () => updateInvoice.mutate({ id: ctxMenu.item.id, data: { status: "sent" } }) }] : []),
-            ...(ctxMenu.item.status !== "paid" && ctxMenu.item.status !== "cancelled" ? [{ label: t.mark_paid, icon: <CheckCircle size={14} />, onClick: () => markPaidToday(ctxMenu.item) }] : []),
-            ...(ctxMenu.item.status !== "draft" && ctxMenu.item.status !== "cancelled" ? [{ label: t.make_recurring, icon: <Repeat size={14} />, onClick: () => openMakeRecurring(ctxMenu.item) }] : []),
-            ...(ctxMenu.item.status === "overdue" ? [{ label: t.generate_reminder, icon: <AlertTriangle size={14} />, onClick: () => handleGenerateReminder(ctxMenu.item) }] : []),
+            ...(ctxMenu.item.status === "draft" ? [{ label: t.mark_sent, icon: ICONS.send, onClick: () => updateInvoice.mutate({ id: ctxMenu.item.id, data: { status: "sent" } }) }] : []),
+            ...(ctxMenu.item.status !== "paid" && ctxMenu.item.status !== "cancelled" ? [{ label: t.mark_paid, icon: ICONS.markPaid, onClick: () => markPaidToday(ctxMenu.item) }] : []),
+            ...(ctxMenu.item.status !== "draft" && ctxMenu.item.status !== "cancelled" ? [{ label: t.make_recurring, icon: ICONS.recurring, onClick: () => openMakeRecurring(ctxMenu.item) }] : []),
+            ...(ctxMenu.item.status === "overdue" ? [{ label: t.generate_reminder, icon: ICONS.reminder, onClick: () => handleGenerateReminder(ctxMenu.item) }] : []),
             ...(isDraftReference(ctxMenu.item.reference) ? [
               { label: "", divider: true, onClick: () => {} },
-              { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteWithUndo(deleteInvoice, ctxMenu.item.id, t.toast_invoice_deleted) },
+              { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => deleteWithUndo(deleteInvoice, ctxMenu.item.id, t.toast_invoice_deleted) },
             ] : []),
           ]}
         />
@@ -718,10 +717,10 @@ export function InvoicesPage() {
         count={bulk.count}
         onClear={bulk.clearSelection}
         actions={[
-          { label: t.mark_paid, icon: <CheckCircle size={14} />, onClick: bulkMarkPaid },
-          { label: t.mark_sent, icon: <Send size={14} />, onClick: bulkMarkSent },
-          { label: t.export_pdfs, icon: <Download size={14} />, onClick: bulkExportPdfs },
-          ...(selectionHasNonDraft ? [] : [{ label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true }]),
+          { label: t.mark_paid, icon: ICONS.markPaid, onClick: bulkMarkPaid },
+          { label: t.mark_sent, icon: ICONS.send, onClick: bulkMarkSent },
+          { label: t.export_pdfs, icon: ICONS.download, onClick: bulkExportPdfs },
+          ...(selectionHasNonDraft ? [] : [{ label: t.delete, icon: ICONS.delete, onClick: bulkDelete, danger: true }]),
         ]}
       />
       <FormModal

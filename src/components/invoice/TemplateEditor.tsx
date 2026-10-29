@@ -1,8 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { PDFViewer } from "@react-pdf/renderer";
-import { ChevronUp, ChevronDown } from "lucide-react";
 import { notify } from "../../lib/notify";
-import { Checkbox, Button, Input, Select, IconButton, FormField, FormLayout, FormSection, FormGrid, FormGroup, FormActions } from "../ui";
+import { Checkbox, Button, ICONS, Input, Select, IconButton, FormField, FormLayout, FormSection, FormGrid, FormGroup, FormActions } from "../ui";
 import { InvoicePDF } from "./InvoicePDF";
 import { useT } from "../../i18n/useT";
 import {
@@ -391,8 +390,8 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
                   {columnOrder.map((col, idx) => (
                     <div key={col} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--color-border-divider)] bg-[var(--color-bg)] text-sm">
                       <span className="flex-1">{columnLabels[col]}</span>
-                      <IconButton size="xs" icon={ChevronUp} label={t.move_up} onClick={() => moveColumn(idx, -1)} disabled={idx === 0} />
-                      <IconButton size="xs" icon={ChevronDown} label={t.move_down} onClick={() => moveColumn(idx, 1)} disabled={idx === columnOrder.length - 1} />
+                      <IconButton size="xs" icon={ICONS.moveUp} label={t.move_up} onClick={() => moveColumn(idx, -1)} disabled={idx === 0} />
+                      <IconButton size="xs" icon={ICONS.moveDown} label={t.move_down} onClick={() => moveColumn(idx, 1)} disabled={idx === columnOrder.length - 1} />
                     </div>
                   ))}
                 </div>

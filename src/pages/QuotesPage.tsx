@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Eye, Pencil, FileOutput, Trash2, Send, ExternalLink, FolderPlus, FileText, Settings2, Download, Mail } from "lucide-react";
 import { notify } from "../lib/notify";
 import { pdf } from "@react-pdf/renderer";
 import { invoke } from "@tauri-apps/api/core";
@@ -28,7 +27,7 @@ import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { QuoteToProjectWizard } from "../components/QuoteToProjectWizard";
 import { useTabStore } from "../stores/tab-store";
-import { PageHeader, SearchBar, Table, TableSkeleton, Button, EmptyState, QueryState, NoResults, Select, IconButton } from "../components/ui";
+import { ICONS, PageHeader, SearchBar, Table, TableSkeleton, Button, EmptyState, QueryState, NoResults, Select, IconButton } from "../components/ui";
 import { quoteStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Quote, QuoteStatus, QuoteLineItem } from "../types/quote";
 import type { Client } from "../types/client";
@@ -274,7 +273,7 @@ export function QuotesPage() {
   return (
     <div>
       <PageHeader title={t.quotes}>
-        <Button icon={<Plus size={12} />} onClick={() => navigate("/quotes/new")}>
+        <Button icon={ICONS.add} onClick={() => navigate("/quotes/new")}>
           {t.new_quote}
         </Button>
       </PageHeader>
@@ -341,7 +340,7 @@ export function QuotesPage() {
               <Table.Actions>
                 <IconButton
                   size="xs"
-                  icon={Settings2}
+                  icon={ICONS.more}
                   label={t.more_actions}
                   onClick={(e) => setCtxMenu({ x: e.clientX, y: e.clientY, item: q })}
                 />
@@ -353,9 +352,9 @@ export function QuotesPage() {
               {all.length === 0 ? (
                 <EmptyState
                   message={t.no_quotes_yet}
-                  icon={FileText}
+                  icon={ICONS.quote}
                   action={
-                    <Button icon={<Plus size={12} />} onClick={() => navigate("/quotes/new")}>
+                    <Button icon={ICONS.add} onClick={() => navigate("/quotes/new")}>
                       {t.new_quote}
                     </Button>
                   }
@@ -375,17 +374,17 @@ export function QuotesPage() {
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
-            { label: t.edit, icon: <Pencil size={14} />, onClick: () => navigate(`/quotes/${ctxMenu.item.id}/edit`) },
-            { label: t.preview_pdf, icon: <Eye size={14} />, onClick: () => navigate(`/quotes/${ctxMenu.item.id}/preview`) },
-            { label: t.download_pdf, icon: <Download size={14} />, onClick: () => handleDownloadPdf(ctxMenu.item) },
-            { label: t.email_pdf, icon: <Mail size={14} />, onClick: () => handleEmailPdf(ctxMenu.item) },
-            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/quotes/${ctxMenu.item.id}/edit`, ctxMenu.item.reference.startsWith("DRAFT") ? t.draft : ctxMenu.item.reference) },
+            { label: t.edit, icon: ICONS.edit, onClick: () => navigate(`/quotes/${ctxMenu.item.id}/edit`) },
+            { label: t.preview_pdf, icon: ICONS.preview, onClick: () => navigate(`/quotes/${ctxMenu.item.id}/preview`) },
+            { label: t.download_pdf, icon: ICONS.download, onClick: () => handleDownloadPdf(ctxMenu.item) },
+            { label: t.email_pdf, icon: ICONS.email, onClick: () => handleEmailPdf(ctxMenu.item) },
+            { label: t.open_in_new_tab, icon: ICONS.newTab, onClick: () => openTab(`/quotes/${ctxMenu.item.id}/edit`, ctxMenu.item.reference.startsWith("DRAFT") ? t.draft : ctxMenu.item.reference) },
             { label: "", divider: true, onClick: () => {} },
-            ...(ctxMenu.item.status === "draft" ? [{ label: t.mark_sent, icon: <Send size={14} />, onClick: () => updateQuote.mutate({ id: ctxMenu.item.id, data: { status: "sent" as QuoteStatus } }) }] : []),
-            ...(!ctxMenu.item.converted_to_invoice_id ? [{ label: t.convert_to_invoice, icon: <FileOutput size={14} />, onClick: () => navigate(`/invoices/new?from_quote=${ctxMenu.item.id}`) }] : []),
-            ...(ctxMenu.item.status === "accepted" && !ctxMenu.item.converted_to_project_id ? [{ label: t.generate_project, icon: <FolderPlus size={14} />, onClick: () => openWizard(ctxMenu.item) }] : []),
+            ...(ctxMenu.item.status === "draft" ? [{ label: t.mark_sent, icon: ICONS.send, onClick: () => updateQuote.mutate({ id: ctxMenu.item.id, data: { status: "sent" as QuoteStatus } }) }] : []),
+            ...(!ctxMenu.item.converted_to_invoice_id ? [{ label: t.convert_to_invoice, icon: ICONS.convertToInvoice, onClick: () => navigate(`/invoices/new?from_quote=${ctxMenu.item.id}`) }] : []),
+            ...(ctxMenu.item.status === "accepted" && !ctxMenu.item.converted_to_project_id ? [{ label: t.generate_project, icon: ICONS.newProject, onClick: () => openWizard(ctxMenu.item) }] : []),
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteWithUndo(deleteQuote, ctxMenu.item.id, t.toast_quote_deleted) },
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => deleteWithUndo(deleteQuote, ctxMenu.item.id, t.toast_quote_deleted) },
           ]}
         />
       )}
@@ -394,9 +393,9 @@ export function QuotesPage() {
         count={bulk.count}
         onClear={bulk.clearSelection}
         actions={[
-          { label: t.mark_sent, icon: <Send size={14} />, onClick: bulkMarkSent },
-          { label: t.export_pdfs, icon: <Download size={14} />, onClick: bulkExportPdfs },
-          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+          { label: t.mark_sent, icon: ICONS.send, onClick: bulkMarkSent },
+          { label: t.export_pdfs, icon: ICONS.download, onClick: bulkExportPdfs },
+          { label: t.delete, icon: ICONS.delete, onClick: bulkDelete, danger: true },
         ]}
       />
       {wizardQuote && (

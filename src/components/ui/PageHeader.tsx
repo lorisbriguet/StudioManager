@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ICONS } from "./icons";
 import { useT } from "../../i18n/useT";
 import { IconButton } from "./IconButton";
 import { HEADING_1, HEADING_2 } from "./tokens";
@@ -46,7 +46,7 @@ export function PageHeader({ title, back, meta, leading, actions, children, comp
       : "mb-6";
   return (
     <div className={`flex items-center gap-3 ${frame} ${className}`}>
-      {back && <IconButton icon={ArrowLeft} label={t.back} onClick={back} />}
+      {back && <IconButton icon={ICONS.back} label={t.back} onClick={back} />}
       {leading}
       <div className="min-w-0 flex-1">
         <Tag className={`${level2 ? HEADING_2 : HEADING_1} truncate`}>{title}</Tag>

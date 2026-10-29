@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { X, Trash2, Calendar } from "lucide-react";
-import { Checkbox, Button, Select, Input, FormModal, Tooltip, FormField, FormGrid, FormGroup } from "../ui";
+import { Ban } from "lucide-react";
+import { Checkbox, Button, Select, Input, FormModal, Tooltip, FormField, FormGrid, FormGroup, ICONS, ICON_SIZE } from "../ui";
 import { notify } from "../../lib/notify";
 import type { WorkloadColumn, WorkloadColumnType, SelectOption } from "../../types/workload";
 import { COLUMN_ICONS, COLUMN_ICON_NAMES } from "./columnIcons";
@@ -126,7 +126,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
         !isNew && onDelete ? (
           <Button
             variant="danger"
-            icon={<Trash2 size={12} />}
+            icon={ICONS.delete}
             onClick={() => {
               onDelete();
               onClose();
@@ -170,10 +170,10 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                   <button
                     type="button"
                     onClick={() => { setIcon(""); setIconOnly(false); }}
-                    className={`p-1 rounded-md ${!icon ? "bg-accent text-white" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
+                    className={`p-1 rounded-md ${!icon ? "bg-accent text-on-accent" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
                     aria-label={t.none}
                   >
-                    <X size={14} />
+                    <Ban size={ICON_SIZE.menu} />
                   </button>
                 </Tooltip>
                 {COLUMN_ICON_NAMES.map((name) => {
@@ -183,10 +183,10 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
                       <button
                         type="button"
                         onClick={() => setIcon(name)}
-                        className={`p-1 rounded-md ${icon === name ? "bg-accent text-white" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
+                        className={`p-1 rounded-md ${icon === name ? "bg-accent text-on-accent" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
                         aria-label={name}
                       >
-                        <Icon size={14} />
+                        <Icon size={ICON_SIZE.menu} />
                       </button>
                     </Tooltip>
                   );
@@ -209,7 +209,7 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
           <Checkbox
             label={
               <span className="inline-flex items-center gap-2">
-                <Calendar size={14} className="shrink-0" />
+                <ICONS.calendar size={ICON_SIZE.menu} className="shrink-0" />
                 {t.calendar_color_column}
               </span>
             }

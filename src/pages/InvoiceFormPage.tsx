@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ListTodo, Trash2, AlertTriangle, Eye } from "lucide-react";
+import { ListTodo } from "lucide-react";
 import { isUntranslatedActivity } from "../lib/activityNudge";
-import { Button, ConfirmButton, DatePicker, Input, PageHeader, Select, FormField, FieldError, FormLayout, FormGrid, FormActions, Popover, Textarea } from "../components/ui";
+import { ICONS, ICON_SIZE, Button, ConfirmButton, DatePicker, Input, PageHeader, Select, FormField, FieldError, FormLayout, FormGrid, FormActions, Popover, Textarea } from "../components/ui";
 import { deleteWithUndo } from "../lib/undo";
 import { MENU_ITEM } from "../components/ui/Dropdown";
 import * as v from "../lib/validate";
@@ -585,7 +585,7 @@ export function InvoiceFormPage() {
                 const selected = activityList?.find((a) => a.id === activityId);
                 return selected && isUntranslatedActivity(selected) ? (
                   <span className="text-[var(--color-warning-text)] inline-flex items-center gap-1">
-                    <AlertTriangle size={12} /> {t.activity_untranslated}
+                    <ICONS.warning size={ICON_SIZE.control} /> {t.activity_untranslated}
                   </span>
                 ) : null;
               })()
@@ -690,7 +690,7 @@ export function InvoiceFormPage() {
               {availableTasks.length > 0 && (
                 <Button
                   variant="outline"
-                  icon={<ListTodo size={12} />}
+                  icon={ListTodo}
                   onClick={() => {
                     const existingDesignations = new Set(items.map((i) => i.designation));
                     const newTasks = availableTasks.filter(
@@ -743,7 +743,7 @@ export function InvoiceFormPage() {
             isEdit && existingInvoice?.status === "draft" ? (
               <ConfirmButton
                 label={t.delete}
-                icon={<Trash2 size={12} />}
+                icon={ICONS.delete}
                 question={t.confirm_delete_named.replace("{name}", existingInvoice.reference)}
                 onConfirm={() =>
                   deleteWithUndo(deleteInvoice, invoiceId, t.toast_invoice_deleted, () => {
@@ -765,7 +765,7 @@ export function InvoiceFormPage() {
           </Button>
           <Button
             variant="secondary"
-            icon={<Eye size={12} />}
+            icon={ICONS.preview}
             onClick={() => save("preview")}
             disabled={createInvoice.isPending || updateInvoice.isPending}
           >

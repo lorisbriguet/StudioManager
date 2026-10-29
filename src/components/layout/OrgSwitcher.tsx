@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, ChevronsUpDown, Plus, Settings2 } from "lucide-react";
+import { ChevronsUpDown } from "lucide-react";
+import { ICONS, ICON_SIZE } from "../ui/icons";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { useOrgStore } from "../../stores/org-store";
 import { useTimerActions } from "../../hooks/useTimerActions";
@@ -45,12 +46,12 @@ export function OrgSwitcher({ collapsed, onCreate }: { collapsed: boolean; onCre
   const items: ContextMenuItem[] = [
     ...organisations.map((o) => ({
       label: o.name,
-      icon: o.id === activeId ? <Check size={14} /> : <span className="inline-block w-3.5" />,
+      icon: o.id === activeId ? ICONS.selected : <span className="inline-block w-3.5" />,
       onClick: () => void doSwitch(o.id),
     })),
     { label: "", divider: true, onClick: () => {} },
-    { label: t.new_organisation, icon: <Plus size={14} />, onClick: onCreate },
-    { label: t.manage_organisations, icon: <Settings2 size={14} />, onClick: () => navigate("/settings?category=organisations") },
+    { label: t.new_organisation, icon: ICONS.add, onClick: onCreate },
+    { label: t.manage_organisations, icon: ICONS.settings, onClick: () => navigate("/settings?category=organisations") },
   ];
 
   return (
@@ -69,7 +70,7 @@ export function OrgSwitcher({ collapsed, onCreate }: { collapsed: boolean; onCre
         {!collapsed && (
           <>
             <span className="truncate flex-1 text-left font-medium">{active?.name}</span>
-            <ChevronsUpDown size={14} className="text-muted shrink-0" />
+            <ChevronsUpDown size={ICON_SIZE.menu} className="text-muted shrink-0" />
           </>
         )}
       </button>

@@ -9,7 +9,8 @@ import {
   type ReactNode,
   type TextareaHTMLAttributes,
 } from "react";
-import { X, type LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { ICONS, ICON_SIZE } from "./icons";
 import { useT } from "../../i18n/useT";
 import { IconButton } from "./IconButton";
 import { CONTROL_BOX, NUMERIC } from "./tokens";
@@ -154,7 +155,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
 
     const hasValue = props.value !== undefined ? String(props.value) !== "" : true;
     const clear = onClear && hasValue && !props.disabled && !readOnly && (
-      <IconButton icon={X} label={clearLabel ?? t.clear} size="xs" onClick={onClear} />
+      <IconButton icon={ICONS.close} label={clearLabel ?? t.clear} size="xs" onClick={onClear} />
     );
     const end = trailing ?? clear;
     // Keep the typed text clear of the unit and the trailing button.
@@ -169,9 +170,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       >
         {Icon && (
           <Icon
-            size={12}
+            size={ICON_SIZE.control}
             className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
-            aria-hidden="true"
           />
         )}
         <input

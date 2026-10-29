@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { notify } from "../lib/notify";
-import { FolderOpen, HardDrive, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield, X, Clock, Store, Building2, Database as DatabaseIcon, Bot } from "lucide-react";
+import { HardDrive, RotateCcw, FlaskConical, Camera, LayoutList, Tags, Archive, Shield, Store, Bot, type LucideIcon } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { open } from "@tauri-apps/plugin-dialog";
 import { purgeAllCalendarEvents, syncAllExisting, listWritableCalendars } from "../lib/appleCalendar";
@@ -17,7 +17,7 @@ import { useT } from "../i18n/useT";
 import type { AppLanguage } from "../i18n/ui";
 import { UpdateChecker } from "../components/UpdateChecker";
 import { WorkloadTemplateManager } from "../components/workload/WorkloadTemplateManager";
-import { Input, Select, Button, IconButton, SectionLabel, SidebarTitle, SettingRow, SettingsCard, NavItem, Tooltip, FieldError, Spinner } from "../components/ui";
+import { ICONS, ICON_SIZE, Input, Select, Button, IconButton, SectionLabel, SidebarTitle, SettingRow, SettingsCard, NavItem, Tooltip, FieldError, Spinner } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
 import { AgentAccessCard } from "../components/settings/AgentAccessCard";
@@ -290,31 +290,31 @@ export function SettingsPage() {
     }
   };
 
-  const categorySections: { label: string; items: { key: SettingsCategory; label: string; icon: React.ReactNode }[] }[] = [
+  const categorySections: { label: string; items: { key: SettingsCategory; label: string; icon: LucideIcon }[] }[] = [
     {
       label: t.settings_group_preferences,
       items: [
-        { key: "general", label: t.general, icon: <Settings2 size={14} /> },
-        { key: "appearance", label: t.appearance, icon: <Palette size={14} /> },
-        { key: "behavior", label: t.behavior, icon: <SlidersHorizontal size={14} /> },
-        { key: "calendar", label: t.calendar_sync, icon: <CalendarDays size={14} /> },
-        { key: "agent_access", label: t.agent_access, icon: <Bot size={14} /> },
-        { key: "workload", label: t.workload_templates, icon: <LayoutList size={14} /> },
+        { key: "general", label: t.general, icon: ICONS.settings },
+        { key: "appearance", label: t.appearance, icon: ICONS.appearance },
+        { key: "behavior", label: t.behavior, icon: ICONS.behavior },
+        { key: "calendar", label: t.calendar_sync, icon: ICONS.calendar },
+        { key: "agent_access", label: t.agent_access, icon: Bot },
+        { key: "workload", label: t.workload_templates, icon: LayoutList },
       ],
     },
     {
       label: t.settings_group_data,
       items: [
-        { key: "organisations", label: t.organisations, icon: <Building2 size={14} /> },
-        { key: "categories", label: t.expense_categories, icon: <Tags size={14} /> },
-        { key: "suppliers", label: t.suppliers, icon: <Store size={14} /> },
-        { key: "lists", label: t.custom_lists, icon: <LayoutList size={14} /> },
-        { key: "time_entries", label: t.time_entries_management, icon: <Clock size={14} /> },
-        { key: "backup", label: t.backup, icon: <Archive size={14} /> },
+        { key: "organisations", label: t.organisations, icon: ICONS.organisation },
+        { key: "categories", label: t.expense_categories, icon: Tags },
+        { key: "suppliers", label: t.suppliers, icon: Store },
+        { key: "lists", label: t.custom_lists, icon: LayoutList },
+        { key: "time_entries", label: t.time_entries_management, icon: ICONS.time },
+        { key: "backup", label: t.backup, icon: Archive },
         ...(isDemoBuild()
           ? [
-              { key: "sandbox" as const, label: t.test_mode, icon: <Shield size={14} /> },
-              { key: "demo_data" as const, label: t.demo_data, icon: <DatabaseIcon size={14} /> },
+              { key: "sandbox" as const, label: t.test_mode, icon: Shield },
+              { key: "demo_data" as const, label: t.demo_data, icon: ICONS.demoData },
             ]
           : []),
       ],
@@ -322,7 +322,7 @@ export function SettingsPage() {
     {
       label: t.settings_group_app,
       items: [
-        { key: "updates", label: t.updates, icon: <Download size={14} /> },
+        { key: "updates", label: t.updates, icon: ICONS.updates },
       ],
     },
   ];
@@ -466,7 +466,7 @@ export function SettingsPage() {
                         onClick={() => setTheme(theme.id)}
                         className={`flex flex-col rounded-lg overflow-hidden border-2 transition-colors ${
                           themeId === theme.id
-                            ? "border-accent shadow-sm"
+                            ? "border-accent shadow-control"
                             : "border-[var(--color-border-divider)] hover:border-[var(--color-input-border)]"
                         }`}
                       >
@@ -627,14 +627,14 @@ export function SettingsPage() {
               <SettingRow label={t.test_mode}>
                 {testMode ? (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-[var(--color-warning-text)] font-medium flex items-center gap-1"><FlaskConical size={12} /> {t.test_mode_active}</span>
+                    <span className="text-xs text-[var(--color-warning-text)] font-medium flex items-center gap-1"><FlaskConical size={ICON_SIZE.control} /> {t.test_mode_active}</span>
                     <Button variant="danger" onClick={() => void exitMode("test")} disabled={togglingTestMode || exiting === "test"}>
                       {t.exit_test_mode}
                     </Button>
                   </div>
                 ) : (
-                  <button type="button" onClick={handleEnterTestMode} disabled={togglingTestMode} className="flex items-center gap-1 px-2.5 py-1 bg-[var(--color-warning-text)] text-white text-xs rounded-md hover:opacity-90 disabled:opacity-50">
-                    {togglingTestMode ? <Spinner size={12} tone="current" /> : <FlaskConical size={12} />}
+                  <button type="button" onClick={handleEnterTestMode} disabled={togglingTestMode} className="flex items-center gap-1 px-2.5 py-1 bg-[var(--color-banner-test)] text-on-danger text-xs rounded-md hover:opacity-90 disabled:opacity-50">
+                    {togglingTestMode ? <Spinner size={12} tone="current" /> : <FlaskConical size={ICON_SIZE.control} />}
                     {t.enter_test_mode}
                   </button>
                 )}
@@ -651,7 +651,7 @@ export function SettingsPage() {
                     </Button>
                   </div>
                 ) : (
-                  <button type="button" onClick={handleEnterPresentation} disabled={togglingPresentation || testMode} className="flex items-center gap-1 px-2.5 py-1 bg-[var(--color-indigo-text)] text-white text-xs rounded-md hover:opacity-90 disabled:opacity-50">
+                  <button type="button" onClick={handleEnterPresentation} disabled={togglingPresentation || testMode} className="flex items-center gap-1 px-2.5 py-1 bg-[var(--color-banner-presentation)] text-on-danger text-xs rounded-md hover:opacity-90 disabled:opacity-50">
                     {togglingPresentation && <Spinner size={12} tone="current" />}
                     {t.enter_presentation_mode}
                   </button>
@@ -667,7 +667,7 @@ export function SettingsPage() {
               <SettingRow label={t.backup_directory}>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-muted truncate max-w-[180px]" title={backupPath}>{backupPath || t.not_set}</span>
-                  <Button type="button" variant="outline" icon={<FolderOpen size={12} />} onClick={() => browseBackupDir()}>
+                  <Button type="button" variant="outline" icon={ICONS.openFolder} onClick={() => browseBackupDir()}>
                     {t.browse}
                   </Button>
                 </div>
@@ -676,11 +676,11 @@ export function SettingsPage() {
               <SettingRow label={t.backup_directory_2}>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-muted truncate max-w-[180px]" title={backupPath2}>{backupPath2 || t.not_set}</span>
-                  <Button type="button" variant="outline" icon={<FolderOpen size={12} />} onClick={() => browseBackupDir(true)}>
+                  <Button type="button" variant="outline" icon={ICONS.openFolder} onClick={() => browseBackupDir(true)}>
                     {t.browse}
                   </Button>
                   {backupPath2 && (
-                    <IconButton icon={X} label={t.remove} size="xs" onClick={() => setBackupPath2("")} />
+                    <IconButton icon={ICONS.close} label={t.remove} size="xs" onClick={() => setBackupPath2("")} />
                   )}
                 </div>
                 {backupDirError?.which === "secondary" && <FieldError className="text-right">{backupDirError.message}</FieldError>}
@@ -717,7 +717,7 @@ export function SettingsPage() {
                 </div>
               </SettingRow>
               <div className="py-3 flex items-center gap-2">
-                <Button type="button" icon={<HardDrive size={12} />} onClick={runBackup} disabled={backing || !backupPath}>
+                <Button type="button" icon={HardDrive} onClick={runBackup} disabled={backing || !backupPath}>
                   {backing ? t.backing_up : t.backup_now}
                 </Button>
               </div>
@@ -745,7 +745,7 @@ export function SettingsPage() {
                     ))}
                   </Select>
                   {loadingBackups && <Spinner size={12} />}
-                  <Button variant="danger" icon={<RotateCcw size={12} />} onClick={runRestore} disabled={restoring || !selectedBackup || !backupPath}>
+                  <Button variant="danger" icon={RotateCcw} onClick={runRestore} disabled={restoring || !selectedBackup || !backupPath}>
                     {restoring ? t.restoring : t.restore}
                   </Button>
                 </div>
@@ -755,10 +755,10 @@ export function SettingsPage() {
               <SettingsCard title={t.snapshot} desc={t.snapshot_desc}>
               <SettingRow label={t.snapshot}>
                 <div className="flex items-center gap-2">
-                  <Button type="button" icon={<Camera size={12} />} onClick={handleCreateSnapshot} loading={snapshotting} disabled={testMode}>
+                  <Button type="button" icon={Camera} onClick={handleCreateSnapshot} loading={snapshotting} disabled={testMode}>
                     {t.create_snapshot}
                   </Button>
-                  <Button variant="danger" icon={<RotateCcw size={12} />} onClick={handleRestoreSnapshot} loading={restoringSnapshot} disabled={!hasSnapshotFile || testMode}>
+                  <Button variant="danger" icon={RotateCcw} onClick={handleRestoreSnapshot} loading={restoringSnapshot} disabled={!hasSnapshotFile || testMode}>
                     {t.restore_snapshot}
                   </Button>
                   {!hasSnapshotFile && <span className="text-xs text-muted">{t.no_snapshot_available}</span>}

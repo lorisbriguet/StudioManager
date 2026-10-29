@@ -1,11 +1,15 @@
 import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 import { MUTED_INTERACTIVE } from "./tokens";
+import { ICON_SIZE, ICON_STROKE, renderIcon, type IconProp } from "./icons";
 
 /**
  * NavItem — a row in a navigation list (app sidebar, settings and profile
  * categories, wiki explorer, custom lists). See DESIGN-SYSTEM.md, "Navigation".
  *
- *   <NavItem active={cat === "general"} icon={<Settings2 size={14} />} onClick={…}>{t.general}</NavItem>
+ *   <NavItem active={cat === "general"} icon={ICONS.settings} onClick={…}>{t.general}</NavItem>
+ *
+ * A component icon is drawn at 14px (ICON_SIZE.menu); `navIcon(icon)` gives
+ * the app sidebar's 18px / stroke 1.5 for a NavLink row.
  *
  * For a router link or a row that holds other controls, use the class string:
  *   <NavLink className={({ isActive }) => navItemClass({ active: isActive, size: "md" })} />
@@ -37,9 +41,15 @@ export function navItemClass({
   }`;
 }
 
+/** The app sidebar's icon: 18px, stroke 1.5. */
+export function navIcon(icon: IconProp) {
+  return renderIcon(icon, ICON_SIZE.nav, { strokeWidth: ICON_STROKE.nav, className: "shrink-0" });
+}
+
 interface NavItemProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
   active: boolean;
-  icon?: ReactNode;
+  /** A lucide component (drawn at 14px) or an element. */
+  icon?: IconProp;
   size?: Size;
   children: ReactNode;
   ref?: Ref<HTMLButtonElement>;
@@ -53,7 +63,7 @@ export function NavItem({ active, icon, size = "sm", children, className = "", t
       className={`${navItemClass({ active, size })} ${className}`}
       {...props}
     >
-      {icon && <span className="shrink-0 flex items-center">{icon}</span>}
+      {icon != null && icon !== false && <span className="shrink-0 flex items-center">{renderIcon(icon, ICON_SIZE.menu)}</span>}
       <span className="min-w-0 truncate">{children}</span>
     </button>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useRef, type InputHTMLAttributes, type ReactNode, type Ref } from "react";
 import { Check, Minus } from "lucide-react";
+import { ICON_SIZE, ICON_STROKE } from "./icons";
 
 /**
  * Checkbox and Radio. See DESIGN-SYSTEM.md, "Checkbox".
@@ -76,16 +77,14 @@ export function Checkbox({
         className={`${BOX} rounded indeterminate:bg-accent indeterminate:border-accent`}
       />
       <Check
-        size={10}
-        strokeWidth={3}
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 m-auto text-white opacity-0 peer-checked:opacity-100 peer-indeterminate:opacity-0"
+        size={ICON_SIZE.pill}
+        strokeWidth={ICON_STROKE.check}
+        className="pointer-events-none absolute inset-0 m-auto text-on-accent opacity-0 peer-checked:opacity-100 peer-indeterminate:opacity-0"
       />
       <Minus
-        size={10}
-        strokeWidth={3}
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 m-auto text-white opacity-0 peer-indeterminate:opacity-100"
+        size={ICON_SIZE.pill}
+        strokeWidth={ICON_STROKE.check}
+        className="pointer-events-none absolute inset-0 m-auto text-on-accent opacity-0 peer-indeterminate:opacity-100"
       />
     </Labelled>
   );
@@ -97,7 +96,7 @@ export function Radio({ label, description, className = "", ref, ...props }: Bas
       <input {...props} ref={ref} type="radio" className={`${BOX} rounded-full`} />
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 m-auto w-1.5 h-1.5 rounded-full bg-white opacity-0 peer-checked:opacity-100"
+        className="pointer-events-none absolute inset-0 m-auto w-1.5 h-1.5 rounded-full bg-on-accent opacity-0 peer-checked:opacity-100"
       />
     </Labelled>
   );

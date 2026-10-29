@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Timer } from "lucide-react";
-import { Button, Input, Modal, FormField, FormGrid, FormGroup, EmptyState } from "./ui";
+import { Button, Input, Modal, FormField, FormGrid, FormGroup, EmptyState, ICONS } from "./ui";
 import { useAppStore } from "../stores/app-store";
 import { useProjects } from "../db/hooks/useProjects";
 import { useTasksByProject } from "../db/hooks/useTasks";
@@ -68,7 +67,7 @@ export function QuickTimerModal() {
       footer={
         <Button
           type="button"
-          icon={<Timer size={12} />}
+          icon={ICONS.timer}
           disabled={!selectedProjectId || !selectedTaskId}
           onClick={handleStart}
         >
@@ -100,7 +99,7 @@ export function QuickTimerModal() {
             />
           </FormField>
           {!selectedProjectId && projectSearch && filteredProjects.length > 0 && (
-            <div className="mt-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden max-h-44 overflow-y-auto shadow-md">
+            <div className="mt-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden max-h-44 overflow-y-auto shadow-menu">
               {filteredProjects.map((p) => (
                 <button
                   key={p.id}

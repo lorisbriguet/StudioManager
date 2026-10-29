@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { IconButton } from "../components/ui/IconButton";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { Save, Plus, Trash2, Eye, Pencil, FolderOpen, FileText, UserRound, Users } from "lucide-react";
 import { notify } from "../lib/notify";
-import { Checkbox, Button, Input, PageHeader, EmptyState, QueryError, DetailSkeleton, ListSkeleton, Card, Select, SectionLabel, Textarea, ConfirmButton, Tooltip, FormField, FormGrid, FormActions, FormLayout, CARD_GAP, CARD_STACK } from "../components/ui";
+import { ICONS, Checkbox, Button, Input, PageHeader, EmptyState, QueryError, DetailSkeleton, ListSkeleton, Card, Select, SectionLabel, Textarea, ConfirmButton, FormField, FormGrid, FormActions, FormLayout, CARD_GAP, CARD_STACK } from "../components/ui";
 import { useTabStore } from "../stores/tab-store";
 import {
   useClient,
@@ -95,7 +94,7 @@ export function ClientDetailPage() {
   if (!client) {
     return (
       <EmptyState
-        icon={Users}
+        icon={ICONS.client}
         message={t.client_not_found}
         hint={t.not_found_hint}
         action={<Button variant="secondary" onClick={() => navigate("/clients")}>{t.back_to_clients}</Button>}
@@ -110,14 +109,14 @@ export function ClientDetailPage() {
         back={() => navigate(-1)}
         actions={<>
           {dirty && (
-            <Button icon={<Save size={12} />} onClick={save}>
+            <Button icon={ICONS.save} onClick={save}>
               {t.save}
             </Button>
           )}
           <ConfirmButton
             label={t.delete}
             question={t.confirm_delete_client}
-            icon={<Trash2 size={14} />}
+            icon={ICONS.delete}
             variant="danger"
             onConfirm={() => deleteWithUndo(deleteClient, id!, t.toast_client_deleted, () => navigate("/clients"))}
           />
@@ -197,7 +196,7 @@ export function ClientDetailPage() {
               </Link>
             ))}
             {projects === undefined && <ListSkeleton size="sm" rows={2} />}
-            {projects?.length === 0 && <EmptyState size="sm" icon={FolderOpen} message={t.no_projects_for_client} />}
+            {projects?.length === 0 && <EmptyState size="sm" icon={ICONS.project} message={t.no_projects_for_client} />}
           </Section>
 
           <Section title={t.invoices} count={invoices?.length ?? 0}>
@@ -206,29 +205,13 @@ export function ClientDetailPage() {
                 <span>{inv.reference}</span>
                 <div className="flex items-center gap-2">
                   <span className="text-muted">CHF {inv.total.toFixed(2)}</span>
-                  <Tooltip content={t.preview}>
-                    <Link
-                      to={`/invoices/${inv.id}/preview`}
-                      className="opacity-0 group-hover:opacity-100 text-muted hover:text-accent transition-opacity"
-                      aria-label={t.preview}
-                    >
-                      <Eye size={14} />
-                    </Link>
-                  </Tooltip>
-                  <Tooltip content={t.edit}>
-                    <Link
-                      to={`/invoices/${inv.id}/edit`}
-                      className="opacity-0 group-hover:opacity-100 text-muted hover:text-accent transition-opacity"
-                      aria-label={t.edit}
-                    >
-                      <Pencil size={14} />
-                    </Link>
-                  </Tooltip>
+                  <IconButton to={`/invoices/${inv.id}/preview`} icon={ICONS.preview} label={t.preview} size="xs" tone="accent" reveal />
+                  <IconButton to={`/invoices/${inv.id}/edit`} icon={ICONS.edit} label={t.edit} size="xs" tone="accent" reveal />
                 </div>
               </div>
             ))}
             {invoices === undefined && <ListSkeleton size="sm" rows={2} />}
-            {invoices?.length === 0 && <EmptyState size="sm" icon={FileText} message={t.no_invoices_for_client} />}
+            {invoices?.length === 0 && <EmptyState size="sm" icon={ICONS.invoice} message={t.no_invoices_for_client} />}
           </Section>
 
           <Section title={t.client_activity}>
@@ -347,7 +330,7 @@ function ContactsSection({
         count={contacts.length}
         variant="label"
         action={
-          <Button variant="link" icon={<Plus size={12} />} onClick={addDraft} className="hover:text-accent-hover">
+          <Button variant="link" icon={ICONS.add} onClick={addDraft} className="hover:text-accent-hover">
             {t.add}
           </Button>
         }
@@ -356,9 +339,9 @@ function ContactsSection({
       {contacts.length === 0 && drafts.length === 0 && (
         <EmptyState
           size="sm"
-          icon={UserRound}
+          icon={ICONS.contact}
           message={t.no_contacts}
-          action={<Button variant="secondary" icon={<Plus size={12} />} onClick={addDraft}>{t.add_contact}</Button>}
+          action={<Button variant="secondary" icon={ICONS.add} onClick={addDraft}>{t.add_contact}</Button>}
         />
       )}
 
@@ -458,7 +441,7 @@ function ContactsSection({
                 </div>
               )}
               <IconButton size="xs"
-                icon={Pencil}
+                icon={ICONS.edit}
                 label={t.edit}
                 onClick={() => startEditing(c)}
                 className="absolute top-3 right-3 opacity-60 hover:opacity-100"
@@ -476,7 +459,7 @@ function ContactsSection({
             items={[
               {
                 label: t.edit,
-                icon: <Pencil size={14} />,
+                icon: ICONS.edit,
                 onClick: () => {
                   const contact = contacts.find((c) => c.id === contextMenu.contactId);
                   if (contact) startEditing(contact);
@@ -485,7 +468,7 @@ function ContactsSection({
               { label: "", divider: true, onClick: () => {} },
               {
                 label: t.delete,
-                icon: <Trash2 size={14} />,
+                icon: ICONS.delete,
                 danger: true,
                 onClick: () => {
                   const contact = contacts.find((c) => c.id === contextMenu.contactId);
@@ -647,7 +630,7 @@ function AddressCard({
             {a.postal_city && <div className="text-muted">{a.postal_city}</div>}
           </div>
         </div>
-        <IconButton icon={Pencil} label={t.edit} onClick={() => setEditing(true)} className="opacity-60 hover:opacity-100" />
+        <IconButton icon={ICONS.edit} label={t.edit} onClick={() => setEditing(true)} className="opacity-60 hover:opacity-100" />
       </div>
       {ctxMenu && (
         <ContextMenu
@@ -655,8 +638,8 @@ function AddressCard({
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
-            { label: t.edit, icon: <Pencil size={14} />, onClick: () => setEditing(true) },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: onDelete },
+            { label: t.edit, icon: ICONS.edit, onClick: () => setEditing(true) },
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: onDelete },
           ]}
         />
       )}
@@ -728,7 +711,7 @@ function AddressesSection({
         title={t.billing_addresses}
         variant="label"
         action={
-          <Button variant="link" icon={<Plus size={12} />} onClick={addDraft} className="hover:text-accent-hover">
+          <Button variant="link" icon={ICONS.add} onClick={addDraft} className="hover:text-accent-hover">
             {t.add}
           </Button>
         }

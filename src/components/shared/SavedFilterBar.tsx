@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, type RefObject } from "react";
-import { Bookmark, Plus, X, Pencil, Trash2, Filter } from "lucide-react";
+import { Filter } from "lucide-react";
 import { notify } from "../../lib/notify";
 import { deleteWithUndo } from "../../lib/undo";
-import { Button, Select, FilterChip, Input, InlineRename } from "../ui";
+import { Button, ICONS, Select, FilterChip, Input, InlineRename } from "../ui";
 import { SegmentedControl, type SegmentedOption } from "../ui/SegmentedControl";
 import { ContextMenu } from "../ui/ContextMenu";
 import {
@@ -83,7 +83,7 @@ function NewFilterRow({
       <Button variant="link" onClick={onSave}>
         {t.save}
       </Button>
-      <IconButton icon={X} label={t.cancel} size="xs" onClick={onCancel} />
+      <IconButton icon={ICONS.close}label={t.cancel} size="xs" onClick={onCancel} />
     </div>
   );
 }
@@ -171,7 +171,7 @@ function ConditionRow({
           aria-label={t.value}
         />
       )}
-      <IconButton icon={X} label={t.remove} size="xs" tone="danger" onClick={onRemove} />
+      <IconButton icon={ICONS.close}label={t.remove} size="xs" tone="danger" onClick={onRemove} />
     </div>
   );
 }
@@ -328,7 +328,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
       <div className="flex items-center gap-2 ml-26.5">
         <Button
           variant="link"
-          icon={<Plus size={12} />}
+          icon={ICONS.add}
           onClick={addCondition}
           className="text-muted hover:text-accent"
         >
@@ -339,7 +339,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
             <Button variant="link" onClick={handleUpdateFilter}>
               {t.save}
             </Button>
-            <IconButton icon={X} label={t.cancel} size="xs" onClick={() => { setEditingFilterId(null); setShowConditions(false); }} />
+            <IconButton icon={ICONS.close}label={t.cancel} size="xs" onClick={() => { setEditingFilterId(null); setShowConditions(false); }} />
           </>
         )}
       </div>
@@ -384,7 +384,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
           ) : (
             <Button
               variant="link"
-              icon={<Bookmark size={12} />}
+              icon={ICONS.savedFilter}
               onClick={handleStartNaming}
               className="text-muted hover:text-accent"
             >
@@ -452,7 +452,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
         {naming ? (
           <NewFilterRow {...newFilterRowProps} inputClassName="w-28" />
         ) : (
-          <IconButton icon={Plus} label={t.save_filter} size="xs" tone="accent" onClick={handleStartNaming} />
+          <IconButton icon={ICONS.add} label={t.save_filter} size="xs" tone="accent" onClick={handleStartNaming} />
         )}
 
         {ctxMenu && (
@@ -463,7 +463,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
             items={[
               {
                 label: t.rename,
-                icon: <Pencil size={12} />,
+                icon: ICONS.edit,
                 onClick: () => {
                   setEditingId(ctxMenu.filter.id);
                 },
@@ -472,14 +472,14 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
                 ? [
                     {
                       label: t.edit_conditions,
-                      icon: <Filter size={12} />,
+                      icon: Filter,
                       onClick: () => handleStartEditConditions(ctxMenu.filter),
                     },
                   ]
                 : []),
               {
                 label: t.delete,
-                icon: <Trash2 size={12} />,
+                icon: ICONS.delete,
                 danger: true,
                 onClick: () => handleDelete(ctxMenu.filter.id),
               },

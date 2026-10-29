@@ -4,6 +4,7 @@ import { useT } from "../../i18n/useT";
 import { IconButton } from "./IconButton";
 import { PanelTitle, type PanelTitleProps } from "./PanelTitle";
 import { HEADING_COUNT } from "./tokens";
+import { ICON_SIZE, renderIcon, type IconProp } from "./icons";
 
 /**
  * Card — the block surface. See DESIGN-SYSTEM.md, "Card".
@@ -114,8 +115,8 @@ interface CardHeaderProps {
   count?: number;
   /** One muted line under the title. */
   subtitle?: ReactNode;
-  /** Leading content: an icon, a drag handle, a collapse chevron. */
-  icon?: ReactNode;
+  /** Leading content: a lucide component (drawn at 14px), or an element (a drag handle, a collapse chevron). */
+  icon?: IconProp;
   /** Right-aligned controls (several are fine). */
   action?: ReactNode;
   /** Adds the close IconButton after `action`. */
@@ -165,7 +166,7 @@ function CardHeader({
     <div className={`${divider ? "border-b border-[var(--color-border-divider)] pb-2" : ""} ${className}`}>
       {icon != null && icon !== false ? (
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1 shrink-0">{icon}</span>
+          <span className="inline-flex items-center gap-1 shrink-0">{renderIcon(icon, ICON_SIZE.menu)}</span>
           {row}
         </div>
       ) : (

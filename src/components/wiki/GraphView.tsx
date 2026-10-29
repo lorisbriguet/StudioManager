@@ -377,7 +377,7 @@ export function GraphView({
       </svg>
 
       {!compact && (
-        <div className="absolute left-4 bottom-4 flex gap-0.5 p-0.5 rounded-lg border border-[var(--color-border-header)] bg-[var(--color-surface)]">
+        <div className="absolute left-4 bottom-4 flex gap-0.5 p-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
           <IconButton icon={ZoomIn} label={t.wiki_graph_zoom_in} onClick={() => zoomAt(0.8)} />
           <IconButton icon={ZoomOut} label={t.wiki_graph_zoom_out} onClick={() => zoomAt(1.25)} />
           <IconButton icon={Maximize2} label={t.wiki_graph_fit} onClick={() => setView(null)} />

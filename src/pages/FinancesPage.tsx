@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Download, BarChart3, Plus } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -24,7 +23,7 @@ import { useClients } from "../db/hooks/useClients";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
-import { PageHeader, QueryError, DetailSkeleton, Button, Card, EmptyState, Select, SectionLabel, Callout, CARD_GAP } from "../components/ui";
+import { ICONS, PageHeader, QueryError, DetailSkeleton, Button, Card, EmptyState, Select, SectionLabel, Callout, CARD_GAP } from "../components/ui";
 import { useNavigate } from "react-router-dom";
 import { useChartTheme } from "../hooks/useChartTheme";
 import { getTagColor } from "../lib/tagColors";
@@ -38,9 +37,9 @@ import { missingChfEquivalent } from "../lib/chfEquivalent";
 import { logError } from "../lib/log";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-/** Derive pie-chart fill color from category name using the tag color palette */
-function getPieColor(categoryName: string, dark: boolean): string {
-  return getTagColor(categoryName, dark).text;
+/** Pie-chart fill for a category: its tag colour, a CSS variable (Recharts passes it to SVG fill). */
+function getPieColor(categoryName: string): string {
+  return getTagColor(categoryName).text;
 }
 
 export function FinancesPage() {
@@ -56,7 +55,6 @@ export function FinancesPage() {
   const { data: profile } = useBusinessProfile();
   const chart = useChartTheme();
   const exportLang = useAppStore((s) => s.exportLanguage);
-  const darkMode = useAppStore((s) => s.darkMode);
   const [exporting, setExporting] = useState(false);
 
   const exportForTrustee = async () => {
@@ -178,9 +176,9 @@ export function FinancesPage() {
         <PageHeader title={t.finances} />
         <EmptyState
           message={t.first_run_finances}
-          icon={<BarChart3 size={32} />}
+          icon={ICONS.finances}
           action={
-            <Button icon={<Plus size={12} />} onClick={() => navigate("/invoices/new")}>
+            <Button icon={ICONS.add} onClick={() => navigate("/invoices/new")}>
               {t.new_invoice}
             </Button>
           }
@@ -223,7 +221,7 @@ export function FinancesPage() {
             <option key={y} value={y}>{y}</option>
           ))}
         </Select>
-        <Button icon={<Download size={12} />} loading={exporting} onClick={exportForTrustee}>{t.export_trustee}</Button>
+        <Button icon={ICONS.export} loading={exporting} onClick={exportForTrustee}>{t.export_trustee}</Button>
       </PageHeader>
 
       {missingChfCount > 0 && (
@@ -270,7 +268,7 @@ export function FinancesPage() {
                   stroke="none"
                 >
                   {pieData.map((d, i) => (
-                    <Cell key={i} fill={getPieColor(d.name, darkMode)} />
+                    <Cell key={i} fill={getPieColor(d.name)} />
                   ))}
                 </Pie>
                 <Tooltip
@@ -288,7 +286,7 @@ export function FinancesPage() {
                 <div key={d.name} className="flex items-center gap-1.5 text-xs">
                   <div
                     className="dot"
-                    style={{ backgroundColor: getPieColor(d.name, darkMode) }}
+                    style={{ backgroundColor: getPieColor(d.name) }}
                   />
                   <span className="text-muted">{d.name}</span>
                 </div>
@@ -328,7 +326,7 @@ export function FinancesPage() {
               <PLLine label={t.operating_net} value={pl.operating_net} bold />
               <PLLine label={t.social_charges} value={-pl.social_charges} negative />
 
-              <div className="border-t-2 border-[var(--color-border-header)] mt-2 pt-2">
+              <div className="border-t-2 border-[var(--color-border)] mt-2 pt-2">
                 <PLLine label={t.net_result} value={pl.net_result} bold large />
               </div>
             </div>

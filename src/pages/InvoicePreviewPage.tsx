@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Download, FileText } from "lucide-react";
-import { Button, PageHeader, EmptyState, QueryError, DetailSkeleton } from "../components/ui";
+import { ICONS, Button, PageHeader, EmptyState, QueryError, DetailSkeleton } from "../components/ui";
 import { confirmDraftExport } from "../lib/confirmDraftExport";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { readFile } from "@tauri-apps/plugin-fs";
@@ -113,7 +112,7 @@ export function InvoicePreviewPage() {
   if (!invoice || !lineItems || !client || !profile)
     return (
       <EmptyState
-        icon={FileText}
+        icon={ICONS.invoice}
         message={t.invoice_not_found}
         hint={t.not_found_hint}
         action={<Button variant="secondary" onClick={() => navigate("/invoices")}>{t.back_to_invoices}</Button>}
@@ -205,7 +204,7 @@ export function InvoicePreviewPage() {
         title={`${invoice.reference} — ${client.name}`}
         back={() => navigate(-1)}
         actions={
-          <Button icon={<Download size={12} />} loading={exporting || updateInvoice.isPending} onClick={downloadPdf}>
+          <Button icon={ICONS.download} loading={exporting || updateInvoice.isPending} onClick={downloadPdf}>
             {t.download_pdf}
           </Button>
         }

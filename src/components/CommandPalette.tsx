@@ -1,25 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Command } from "cmdk";
-import {
-  Users,
-  FolderKanban,
-  FileText,
-  Receipt,
-  Search,
-  LayoutDashboard,
-  CheckSquare,
-  CalendarDays,
-  BarChart3,
-  Settings,
-  UserCircle,
-  FilePlus2,
-  Plus,
-} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useAppStore } from "../stores/app-store";
 import { confirmIfDirty } from "../lib/dirty-guard";
 import { useT } from "../i18n/useT";
-import { Modal, Kbd } from "./ui";
+import { Modal, Kbd, ICONS, ICON_SIZE, ICON_STROKE } from "./ui";
 import { MENU_GROUP_LABEL } from "./ui/Dropdown";
 import { useClients } from "../db/hooks/useClients";
 import { useProjects } from "../db/hooks/useProjects";
@@ -63,7 +49,7 @@ export function CommandPalette() {
         shouldFilter={true}
       >
         <div className="flex items-center gap-2 px-4 border-b border-[var(--color-border-divider)]">
-          <Search size={16} className="text-muted shrink-0" />
+          <ICONS.search size={ICON_SIZE.callout} className="text-muted shrink-0" />
           <Command.Input
             value={search}
             onValueChange={setSearch}
@@ -81,25 +67,25 @@ export function CommandPalette() {
 
           {/* Quick actions */}
           <Command.Group heading={<GroupHeading>{t.quick_actions}</GroupHeading>}>
-            <PaletteItem icon={Plus} label={t.new_client} onSelect={() => go("/clients")} />
-            <PaletteItem icon={Plus} label={t.new_project} onSelect={() => go("/projects")} />
-            <PaletteItem icon={Plus} label={t.new_invoice} onSelect={() => go("/invoices/new")} />
-            <PaletteItem icon={Plus} label={t.new_expense} onSelect={() => go("/expenses")} />
+            <PaletteItem icon={ICONS.add} label={t.new_client} onSelect={() => go("/clients")} />
+            <PaletteItem icon={ICONS.add} label={t.new_project} onSelect={() => go("/projects")} />
+            <PaletteItem icon={ICONS.add} label={t.new_invoice} onSelect={() => go("/invoices/new")} />
+            <PaletteItem icon={ICONS.add} label={t.new_expense} onSelect={() => go("/expenses")} />
           </Command.Group>
 
           {/* Navigation */}
           <Command.Group heading={<GroupHeading>{t.navigate}</GroupHeading>}>
-            <PaletteItem icon={LayoutDashboard} label={t.dashboard} onSelect={() => go("/")} />
-            <PaletteItem icon={Users} label={t.clients} onSelect={() => go("/clients")} />
-            <PaletteItem icon={FolderKanban} label={t.projects} onSelect={() => go("/projects")} />
-            <PaletteItem icon={CheckSquare} label={t.tasks} onSelect={() => go("/tasks")} />
-            <PaletteItem icon={CalendarDays} label={t.calendar} onSelect={() => go("/calendar")} />
-            <PaletteItem icon={FileText} label={t.invoices} onSelect={() => go("/invoices")} />
-            <PaletteItem icon={FilePlus2} label={t.quotes} onSelect={() => go("/quotes")} />
-            <PaletteItem icon={Receipt} label={t.expenses} onSelect={() => go("/expenses")} />
-            <PaletteItem icon={BarChart3} label={t.finances} onSelect={() => go("/finances")} />
-            <PaletteItem icon={UserCircle} label={t.profile} onSelect={() => go("/profile")} />
-            <PaletteItem icon={Settings} label={t.settings} onSelect={() => go("/settings")} />
+            <PaletteItem icon={ICONS.dashboard} label={t.dashboard} onSelect={() => go("/")} />
+            <PaletteItem icon={ICONS.client} label={t.clients} onSelect={() => go("/clients")} />
+            <PaletteItem icon={ICONS.project} label={t.projects} onSelect={() => go("/projects")} />
+            <PaletteItem icon={ICONS.task} label={t.tasks} onSelect={() => go("/tasks")} />
+            <PaletteItem icon={ICONS.calendar} label={t.calendar} onSelect={() => go("/calendar")} />
+            <PaletteItem icon={ICONS.invoice} label={t.invoices} onSelect={() => go("/invoices")} />
+            <PaletteItem icon={ICONS.quote} label={t.quotes} onSelect={() => go("/quotes")} />
+            <PaletteItem icon={ICONS.expense} label={t.expenses} onSelect={() => go("/expenses")} />
+            <PaletteItem icon={ICONS.finances} label={t.finances} onSelect={() => go("/finances")} />
+            <PaletteItem icon={ICONS.profile} label={t.profile} onSelect={() => go("/profile")} />
+            <PaletteItem icon={ICONS.settings} label={t.settings} onSelect={() => go("/settings")} />
           </Command.Group>
 
           {/* Clients search */}
@@ -108,7 +94,7 @@ export function CommandPalette() {
               {clients.map((c) => (
                 <PaletteItem
                   key={c.id}
-                  icon={Users}
+                  icon={ICONS.client}
                   label={c.name}
                   subtitle={c.id}
                   onSelect={() => go(`/clients/${c.id}`)}
@@ -123,7 +109,7 @@ export function CommandPalette() {
               {projects.map((p) => (
                 <PaletteItem
                   key={p.id}
-                  icon={FolderKanban}
+                  icon={ICONS.project}
                   label={p.name}
                   subtitle={p.status}
                   onSelect={() => go(`/projects/${p.id}`)}
@@ -138,7 +124,7 @@ export function CommandPalette() {
               {invoices.map((inv) => (
                 <PaletteItem
                   key={inv.id}
-                  icon={FileText}
+                  icon={ICONS.invoice}
                   label={inv.reference}
                   subtitle={`CHF ${inv.total.toFixed(2)}`}
                   onSelect={() => go(`/invoices/${inv.id}/edit`)}
@@ -178,7 +164,7 @@ function PaletteItem({
   subtitle,
   onSelect,
 }: {
-  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  icon: LucideIcon;
   label: string;
   subtitle?: string;
   onSelect: () => void;
@@ -189,7 +175,7 @@ function PaletteItem({
       className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm cursor-pointer hover:bg-[var(--color-hover-row)] data-[selected=true]:bg-[var(--color-accent-light)] data-[selected=true]:text-accent"
     >
       <div className="w-7 h-7 rounded-md bg-[var(--color-input-bg)] flex items-center justify-center shrink-0">
-        <Icon size={16} strokeWidth={1.5} />
+        <Icon size={ICON_SIZE.callout} strokeWidth={ICON_STROKE.nav} />
       </div>
       <span className="flex-1">{label}</span>
       {subtitle && <span className="text-xs text-muted">{subtitle}</span>}

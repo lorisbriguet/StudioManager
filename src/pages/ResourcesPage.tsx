@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { Plus, ExternalLink, Trash2, X, Check, Link2 } from "lucide-react";
-import { PageHeader, Button, EmptyState, QueryState, NoResults, FormField, Select, IconButton, Tag, FilterChip, Input, Callout, FormGrid, FormModal, Table, TableSkeleton, SearchBar } from "../components/ui";
+import { ICONS, ICON_SIZE, PageHeader, Button, EmptyState, QueryState, NoResults, FormField, Select, IconButton, Tag, FilterChip, Input, Callout, FormGrid, FormModal, Table, TableSkeleton, SearchBar } from "../components/ui";
 import { TagInput } from "../components/shared/TagInput";
 import * as v from "../lib/validate";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
@@ -134,7 +133,7 @@ export function ResourcesPage() {
   return (
     <div>
       <PageHeader title={t.resources}>
-        <Button icon={<Plus size={12} />} onClick={() => setShowForm(!showForm)}>
+        <Button icon={ICONS.add} onClick={() => setShowForm(!showForm)}>
           {t.new_resource}
         </Button>
       </PageHeader>
@@ -174,7 +173,7 @@ export function ResourcesPage() {
                   key={tag}
                   tag={tag}
                   active={active}
-                  activeIcon={<X size={10} />}
+                  activeIcon={<ICONS.close size={ICON_SIZE.pill} />}
                   onClick={() => { setTagFilter(active ? null : tag); setActiveFilterId(null); }}
                 />
               );
@@ -232,10 +231,10 @@ export function ResourcesPage() {
             <Table.Empty colSpan={6}>
               {rows.length === 0 ? (
                 <EmptyState
-                  icon={Link2}
+                  icon={ICONS.resource}
                   message={t.no_resources_yet}
                   action={
-                    <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>
+                    <Button icon={ICONS.add} onClick={() => setShowForm(true)}>
                       {t.new_resource}
                     </Button>
                   }
@@ -259,10 +258,10 @@ export function ResourcesPage() {
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
-            ...(ctxMenu.item.url ? [{ label: t.open_link, icon: <ExternalLink size={14} />, onClick: () => handleOpenUrl(ctxMenu.item.url) }] : []),
+            ...(ctxMenu.item.url ? [{ label: t.open_link, icon: ICONS.openExternal, onClick: () => handleOpenUrl(ctxMenu.item.url) }] : []),
             { label: t.edit, onClick: () => setEditingId(ctxMenu.item.id) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => handleDelete(ctxMenu.item.id) },
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => handleDelete(ctxMenu.item.id) },
           ]}
         />
       )}
@@ -270,7 +269,7 @@ export function ResourcesPage() {
         count={bulk.count}
         onClear={bulk.clearSelection}
         actions={[
-          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+          { label: t.delete, icon: ICONS.delete, onClick: bulkDelete, danger: true },
         ]}
       />
     </div>
@@ -488,7 +487,7 @@ function ResourceTableRow({
     return (
       <Table.Row
         selected={isSelected}
-        className="bg-accent-light/30"
+        className="bg-accent-tint"
         onBlur={handleBlur}
         onFocus={handleFocus}
       >
@@ -520,8 +519,8 @@ function ResourceTableRow({
           />
         </Table.Td>
         <Table.Actions always>
-          <IconButton size="xs" icon={Check} label={t.save} color="accent" onClick={() => { if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current); doSave(); }} />
-          <IconButton size="xs" icon={X} label={t.cancel} onClick={() => { if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current); onCancelEdit(); }} />
+          <IconButton size="xs" icon={ICONS.save} label={t.save} color="accent" onClick={() => { if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current); doSave(); }} />
+          <IconButton size="xs" icon={ICONS.close} label={t.cancel} onClick={() => { if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current); onCancelEdit(); }} />
         </Table.Actions>
       </Table.Row>
     );
@@ -549,7 +548,7 @@ function ResourceTableRow({
         {resource.url && (
           <Button
             variant="link"
-            icon={<ExternalLink size={12} />}
+            icon={ICONS.openExternal}
             onClick={onOpenUrl}
             className="max-w-[300px] truncate"
           >
@@ -559,7 +558,7 @@ function ResourceTableRow({
       </Table.Td>
       <Table.Actions>
         <IconButton size="xs"
-          icon={Trash2}
+          icon={ICONS.delete}
           label={t.delete}
           tone="danger"
           onClick={onDelete}

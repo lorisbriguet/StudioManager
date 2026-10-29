@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { IconButton } from "../components/ui/IconButton";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronRight, Plus, Trash2, ExternalLink, Play, Square, CheckCircle } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { deleteWithUndo, undoable } from "../lib/undo";
 import {
   DndContext,
@@ -35,7 +35,7 @@ import { useTabStore } from "../stores/tab-store";
 import { useOrgStore } from "../stores/org-store";
 import { useTimerActions } from "../hooks/useTimerActions";
 import { useT } from "../i18n/useT";
-import { Checkbox, Button, Dropdown, PageHeader, SearchBar, EmptyState, QueryError, NoResults, ListSkeleton, Select, FilterChip, AddRow, InlineRename, DragHandle } from "../components/ui";
+import { ICONS, ICON_SIZE, Checkbox, Button, Dropdown, PageHeader, SearchBar, EmptyState, QueryError, NoResults, ListSkeleton, Select, FilterChip, AddRow, InlineRename, DragHandle } from "../components/ui";
 import { taskStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Task, Subtask, TaskStatus } from "../types/task";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
@@ -300,7 +300,7 @@ export function TasksPage() {
           <SortableProjectGroup key={g.projectId} id={g.projectId}>
             {({ attributes, listeners }) => (<>
             <div
-              className="px-4 py-2 border-b border-[var(--color-border-header)] flex items-center gap-2 select-none"
+              className="px-4 py-2 border-b border-[var(--color-border)] flex items-center gap-2 select-none"
               onContextMenu={(e) => { e.preventDefault(); setHeaderCtxMenu({ x: e.clientX, y: e.clientY, item: { projectId: g.projectId, projectName: g.projectName } }); }}
             >
               <DragHandle {...attributes} {...listeners} className="-my-1 p-0.5" />
@@ -315,7 +315,7 @@ export function TasksPage() {
                 className="flex items-center gap-2 flex-1 text-left"
               >
               <ChevronRight
-                size={14}
+                size={ICON_SIZE.menu}
                 className={`text-muted transition-transform shrink-0 ${collapsedProjects.has(g.projectId) ? "" : "rotate-90"}`}
               />
               <Link
@@ -342,7 +342,7 @@ export function TasksPage() {
                   <div key={tk.id} data-task-row>
                     <div
                       data-list-row
-                      className={`flex items-center gap-3 px-4 py-2.5 group/task${taskIdxById.get(tk.id) === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
+                      className={`flex items-center gap-3 px-4 py-2.5 group/task${taskIdxById.get(tk.id) === focusIdx ? " focus-row" : ""}`}
                       onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: tk }); }}
                     >
                       <Checkbox
@@ -428,7 +428,7 @@ export function TasksPage() {
                         onChange={(vals) => updateTask.mutate({ id: tk.id, data: vals })}
                       />
                       <IconButton
-                        icon={activeTimer?.taskId === tk.id ? Square : Play}
+                        icon={activeTimer?.taskId === tk.id ? ICONS.stopTimer : ICONS.startTimer}
                         label={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
                         size="xs"
                         tone="accent"
@@ -442,7 +442,7 @@ export function TasksPage() {
                       />
                       <IconButton size="xs"
                         onClick={() => deleteWithUndo(deleteTask, tk.id, t.toast_task_deleted)}
-                        icon={Trash2}
+                        icon={ICONS.delete}
                         label={t.delete}
                         tone="danger"
                         reveal="task"
@@ -503,7 +503,7 @@ export function TasksPage() {
                             />
                             <IconButton size="xs"
                               onClick={() => deleteWithUndo(deleteSubtask, s.id, t.toast_subtask_deleted)}
-                              icon={Trash2}
+                              icon={ICONS.delete}
                               label={t.delete}
                               tone="danger"
                               reveal="sub"
@@ -564,17 +564,17 @@ export function TasksPage() {
         ))}
         {grouped.length === 0 && (tasks.length === 0 ? (
           <EmptyState
-            icon={CheckCircle}
+            icon={ICONS.task}
             message={t.no_tasks_yet}
             hint={t.no_tasks_yet_hint}
             action={
               activeProjects.length > 0 ? (
                 <Dropdown
-                  trigger={<Button icon={<Plus size={12} />}>{t.new_task}</Button>}
+                  trigger={<Button icon={ICONS.add}>{t.new_task}</Button>}
                   items={activeProjects.map((p) => ({ label: p.name, onSelect: () => setStartProjectId(p.id) }))}
                 />
               ) : (
-                <Button icon={<Plus size={12} />} onClick={() => navigate("/projects")}>{t.new_project}</Button>
+                <Button icon={ICONS.add} onClick={() => navigate("/projects")}>{t.new_project}</Button>
               )
             }
           />
@@ -591,9 +591,9 @@ export function TasksPage() {
           onClose={() => setCtxMenu(null)}
           items={[
             { label: ctxMenu.item.status === "done" ? t.todo : t.done, onClick: () => updateTask.mutate({ id: ctxMenu.item.id, data: { status: ctxMenu.item.status === "done" ? "todo" : "done" } }) },
-            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/projects/${ctxMenu.item.project_id}`, projectName(ctxMenu.item.project_id)) },
+            { label: t.open_in_new_tab, icon: ICONS.newTab, onClick: () => openTab(`/projects/${ctxMenu.item.project_id}`, projectName(ctxMenu.item.project_id)) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteWithUndo(deleteTask, ctxMenu.item.id, t.toast_task_deleted) },
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => deleteWithUndo(deleteTask, ctxMenu.item.id, t.toast_task_deleted) },
           ]}
         />
       )}
@@ -605,7 +605,7 @@ export function TasksPage() {
           items={[
             { label: subCtxMenu.item.status === "done" ? t.todo : t.done, onClick: () => updateSubtask.mutate({ id: subCtxMenu.item.id, data: { status: subCtxMenu.item.status === "done" ? "todo" : "done" } }) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteWithUndo(deleteSubtask, subCtxMenu.item.id, t.toast_subtask_deleted) },
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => deleteWithUndo(deleteSubtask, subCtxMenu.item.id, t.toast_subtask_deleted) },
           ]}
         />
       )}
@@ -615,7 +615,7 @@ export function TasksPage() {
           y={headerCtxMenu.y}
           onClose={() => setHeaderCtxMenu(null)}
           items={[
-            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/projects/${headerCtxMenu.item.projectId}`, headerCtxMenu.item.projectName) },
+            { label: t.open_in_new_tab, icon: ICONS.newTab, onClick: () => openTab(`/projects/${headerCtxMenu.item.projectId}`, headerCtxMenu.item.projectName) },
           ]}
         />
       )}
@@ -623,8 +623,8 @@ export function TasksPage() {
         count={bulk.count}
         onClear={bulk.clearSelection}
         actions={[
-          { label: t.mark_done, icon: <CheckCircle size={14} />, onClick: bulkMarkDone },
-          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+          { label: t.mark_done, icon: ICONS.markDone, onClick: bulkMarkDone },
+          { label: t.delete, icon: ICONS.delete, onClick: bulkDelete, danger: true },
         ]}
       />
     </div>

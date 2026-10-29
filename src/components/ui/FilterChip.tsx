@@ -31,7 +31,7 @@ export function FilterChip({ active, children, count, tag, activeIcon, className
   const tone = active
     ? c
       ? "font-medium"
-      : "bg-accent text-white border-accent"
+      : "bg-accent text-on-accent border-accent"
     : `border-[var(--color-input-border)] hover:bg-[var(--color-hover-row)] ${MUTED_INTERACTIVE}`;
   return (
     <button

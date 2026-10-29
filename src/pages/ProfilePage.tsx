@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { IconButton } from "../components/ui/IconButton";
 import { useForm } from "react-hook-form";
-import { Plus, X, Palette, Trash2, Building2, Landmark, FileText, AlertTriangle } from "lucide-react";
+import { Landmark, type LucideIcon } from "lucide-react";
+import { ICONS, ICON_SIZE } from "../components/ui/icons";
 import { isUntranslatedActivity } from "../lib/activityNudge";
 import { notify } from "../lib/notify";
 import { deleteWithUndo } from "../lib/undo";
@@ -104,11 +105,11 @@ export function ProfilePage() {
     );
   };
 
-  const categories = useMemo<Array<{ key: ProfileCategory; label: string; icon?: React.ReactNode }>>(() => [
-    { key: "business", label: t.business_profile, icon: <Building2 size={14} /> },
-    { key: "bank", label: t.bank_details, icon: <Landmark size={14} /> },
-    { key: "invoicing", label: t.invoice_defaults, icon: <FileText size={14} /> },
-    { key: "templates", label: t.templates, icon: <Palette size={14} /> },
+  const categories = useMemo<Array<{ key: ProfileCategory; label: string; icon: LucideIcon }>>(() => [
+    { key: "business", label: t.business_profile, icon: ICONS.organisation },
+    { key: "bank", label: t.bank_details, icon: Landmark },
+    { key: "invoicing", label: t.invoice_defaults, icon: ICONS.invoice },
+    { key: "templates", label: t.templates, icon: ICONS.invoiceTemplates },
   ], [t]);
 
   // Keyboard navigation for profile sidebar
@@ -182,7 +183,7 @@ export function ProfilePage() {
                 action={
                   <Button
                     variant="secondary"
-                    icon={<Plus size={12} />}
+                    icon={ICONS.add}
                     onClick={() => setEditingTemplate("new")}
                   >
                     {t.new_invoice_template}
@@ -209,7 +210,7 @@ export function ProfilePage() {
                         )}
                       </button>
                       <IconButton size="xs"
-                        icon={Trash2}
+                        icon={ICONS.delete}
                         label={t.delete_template}
                         tone="danger"
                         disabled={!!tmpl.is_default}
@@ -297,7 +298,7 @@ export function ProfilePage() {
                       placeholder={t.activity_name_en}
                       aria-label={t.activity_name_en}
                     />
-                    <IconButton icon={Plus} label={t.add_activity} tone="accent" onClick={addNewActivity} />
+                    <IconButton icon={ICONS.add} label={t.add_activity} tone="accent" onClick={addNewActivity} />
                   </div>
                 </FormGroup>
 
@@ -375,10 +376,10 @@ export function ActivityRow({
             aria-label={t.activity_untranslated}
             className="text-[var(--color-warning-text)]"
           >
-            <AlertTriangle size={13} />
+            <ICONS.warning size={ICON_SIZE.control} />
           </span>
         )}
-        <IconButton icon={X} label={removeLabel} tone="danger" onClick={onDelete} />
+        <IconButton icon={ICONS.close} label={removeLabel} tone="danger" onClick={onDelete} />
       </div>
     </div>
   );

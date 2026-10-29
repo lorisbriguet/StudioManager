@@ -48,7 +48,7 @@ export function Toggle({ checked, onChange, disabled, ariaLabel, label, descript
       } ${label ? "" : className}`}
     >
       <span
-        className={`pointer-events-none inline-block ${sz.knob} rounded-full bg-white shadow-sm transition-transform duration-200 translate-y-0.5 ${
+        className={`pointer-events-none inline-block ${sz.knob} rounded-full bg-white shadow-control transition-transform duration-200 translate-y-0.5 ${
           checked ? sz.on : "translate-x-0.5"
         }`}
       />

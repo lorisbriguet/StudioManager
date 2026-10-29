@@ -1,5 +1,6 @@
 import { StyleSheet } from "@react-pdf/renderer";
 import type { InvoiceTemplate } from "../../types/invoice-template";
+import { PDF } from "./pdfPalette";
 
 // A4: 595.28 x 841.89pt — QR bill: 210x105mm = 595.28x297.64pt
 const QR_BILL_HEIGHT = 297.64;
@@ -18,7 +19,7 @@ const pdfStyles = StyleSheet.create({
   page: {
     fontFamily: "Helvetica",
     fontSize: 9,
-    color: "#1a1a1a",
+    color: PDF.ink,
     flexDirection: "column",
     height: "100%",
   },
@@ -82,7 +83,7 @@ const pdfStyles = StyleSheet.create({
   tableHeader: {
     flexDirection: "row",
     borderBottomWidth: 1,
-    borderBottomColor: "#1a1a1a",
+    borderBottomColor: PDF.ink,
     paddingBottom: 4,
     marginBottom: 4,
   },
@@ -90,7 +91,7 @@ const pdfStyles = StyleSheet.create({
     flexDirection: "row",
     paddingVertical: 3,
     borderBottomWidth: 0.5,
-    borderBottomColor: "#ddd",
+    borderBottomColor: PDF.rule,
   },
   colDesignation: { flex: 1 },
   colRate: { width: 70, textAlign: "right" },
@@ -109,7 +110,7 @@ const pdfStyles = StyleSheet.create({
   },
   vatNote: {
     fontSize: 7,
-    color: "#666",
+    color: PDF.muted,
     fontStyle: "italic",
     marginBottom: 4,
     textAlign: "right",
@@ -121,7 +122,7 @@ const pdfStyles = StyleSheet.create({
     paddingVertical: 2,
   },
   totalLabel: {
-    color: "#666",
+    color: PDF.muted,
   },
   grandTotalRow: {
     flexDirection: "row",
@@ -129,7 +130,7 @@ const pdfStyles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 4,
     borderTopWidth: 1.5,
-    borderTopColor: "#1a1a1a",
+    borderTopColor: PDF.ink,
     marginTop: 2,
   },
   grandTotalLabel: {
@@ -170,7 +171,7 @@ const pdfStyles = StyleSheet.create({
   },
   thankYou: {
     fontSize: 8,
-    color: "#666",
+    color: PDF.muted,
     textAlign: "right",
     alignSelf: "flex-start",
   },
@@ -185,7 +186,7 @@ const pdfStyles = StyleSheet.create({
   },
   notesText: {
     fontSize: 8,
-    color: "#444",
+    color: PDF.textSecondary,
     lineHeight: 1.4,
   },
   bankSection: {
@@ -202,11 +203,11 @@ const pdfStyles = StyleSheet.create({
     bottom: 12,
     right: 50,
     fontSize: 7,
-    color: "#999",
+    color: PDF.faint,
   },
   // ── Reminder banner (invoice-only) ──
   reminderBanner: {
-    backgroundColor: "#fee2e2",
+    backgroundColor: PDF.dangerBg,
     paddingVertical: 6,
     paddingHorizontal: 12,
     marginBottom: 10,
@@ -215,7 +216,7 @@ const pdfStyles = StyleSheet.create({
   reminderText: {
     fontFamily: "Helvetica-Bold",
     fontSize: 11,
-    color: "#b91c1c",
+    color: PDF.dangerText,
     textTransform: "uppercase" as const,
     textAlign: "center" as const,
   },
@@ -238,7 +239,7 @@ const pdfStyles = StyleSheet.create({
  */
 export function createDocumentStyles(template?: InvoiceTemplate) {
   const fontFamily = template?.font_family ?? "Helvetica";
-  const accentColor = template?.accent_color ?? "#1a1a1a";
+  const accentColor = template?.accent_color ?? PDF.ink;
   const paddingTop = template?.margins_top ?? 35;
   const paddingHorizontal = template?.margins_right ?? 50; // use right margin for horizontal
 
@@ -246,7 +247,7 @@ export function createDocumentStyles(template?: InvoiceTemplate) {
     ...pdfStyles,
     page: [
       pdfStyles.page,
-      { fontFamily, fontSize: 9, color: "#1a1a1a", flexDirection: "column" as const, height: "100%" },
+      { fontFamily, fontSize: 9, color: PDF.ink, flexDirection: "column" as const, height: "100%" },
     ],
     content: [pdfStyles.content, { paddingTop, paddingHorizontal, flex: 1 }],
     title: [pdfStyles.title, { color: accentColor }],

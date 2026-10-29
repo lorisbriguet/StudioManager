@@ -9,6 +9,7 @@ import type { Expense } from "../../types/expense";
 import type { BusinessProfile } from "../../types/business-profile";
 import type { AppLanguage } from "../../i18n/ui";
 import { getExportLabels } from "../../i18n/export-labels";
+import { PDF } from "../pdf/pdfPalette";
 
 export interface Props {
   year: number;
@@ -31,7 +32,7 @@ const s = StyleSheet.create({
     paddingTop: 40,
     paddingBottom: 40,
     paddingHorizontal: 40,
-    color: "#1a1a1a",
+    color: PDF.ink,
   },
   headerRow: {
     flexDirection: "row",
@@ -45,7 +46,7 @@ const s = StyleSheet.create({
   },
   businessInfo: {
     fontSize: 8,
-    color: "#666",
+    color: PDF.muted,
     lineHeight: 1.5,
   },
   title: {
@@ -56,13 +57,13 @@ const s = StyleSheet.create({
   tableHeader: {
     flexDirection: "row",
     borderBottomWidth: 1.5,
-    borderBottomColor: "#1a1a1a",
+    borderBottomColor: PDF.ink,
     paddingBottom: 5,
     marginBottom: 2,
   },
   thText: {
     fontSize: 7,
-    color: "#666",
+    color: PDF.muted,
     textTransform: "uppercase",
     letterSpacing: 0.5,
     fontFamily: "Helvetica-Bold",
@@ -71,10 +72,10 @@ const s = StyleSheet.create({
     flexDirection: "row",
     paddingVertical: 4,
     borderBottomWidth: 0.5,
-    borderBottomColor: "#e5e5e5",
+    borderBottomColor: PDF.ruleLight,
   },
   rowAlt: {
-    backgroundColor: "#f8f8f8",
+    backgroundColor: PDF.stripe,
   },
   cell: {
     fontSize: 8,
@@ -89,7 +90,7 @@ const s = StyleSheet.create({
   totalRow: {
     flexDirection: "row",
     borderTopWidth: 1.5,
-    borderTopColor: "#1a1a1a",
+    borderTopColor: PDF.ink,
     paddingTop: 6,
     marginTop: 4,
   },
@@ -127,7 +128,7 @@ const s = StyleSheet.create({
     left: 40,
     right: 40,
     fontSize: 7,
-    color: "#999",
+    color: PDF.faint,
     textAlign: "center",
   },
 });
@@ -195,12 +196,12 @@ export function ExpensesListPDF({ year, expenses, profile, lang = "FR" }: Props)
         <View style={s.subtotalSection}>
           <Text style={s.subtotalTitle}>{t.category_breakdown}</Text>
           {categoryTotals.map(([code, catTotal], i) => (
-            <View key={code} style={[s.subtotalRow, i % 2 === 1 ? { backgroundColor: "#f8f8f8" } : {}]}>
+            <View key={code} style={[s.subtotalRow, i % 2 === 1 ? { backgroundColor: PDF.stripe } : {}]}>
               <Text style={s.subtotalLabel}>{code}</Text>
               <Text style={s.subtotalValue}>{formatCHF(catTotal)}</Text>
             </View>
           ))}
-          <View style={{ borderTopWidth: 1, borderTopColor: "#ddd", marginTop: 4, paddingTop: 4 }}>
+          <View style={{ borderTopWidth: 1, borderTopColor: PDF.rule, marginTop: 4, paddingTop: 4 }}>
             <View style={s.subtotalRow}>
               <Text style={[s.subtotalLabel, { fontFamily: "Helvetica-Bold" }]}>{t.total}</Text>
               <Text style={[s.subtotalValue, { fontFamily: "Helvetica-Bold" }]}>{formatCHF(total)}</Text>

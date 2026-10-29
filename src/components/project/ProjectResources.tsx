@@ -1,13 +1,12 @@
 import { useState, useEffect } from "react";
 import { open as openExternalUrl } from "@tauri-apps/plugin-shell";
-import { Plus, ExternalLink, Bookmark, X } from "lucide-react";
 import {
   useResourcesByProject,
   useLinkResourceToProject,
   useUnlinkResourceFromProject,
 } from "../../db/hooks/useResources";
 import { getResources } from "../../db/queries/resources";
-import { Button, EmptyState, IconButton, ListSkeleton } from "../ui";
+import { Button, EmptyState, ICONS, IconButton, ListSkeleton } from "../ui";
 import { useT } from "../../i18n/useT";
 import { deleteWithUndo } from "../../lib/undo";
 import { LinkPicker } from "./LinkPicker";
@@ -33,13 +32,13 @@ export function ProjectResources({ projectId }: { projectId: number }) {
     <div>
       {isPending && <ListSkeleton size="sm" rows={2} />}
       {linked?.length === 0 && !showPicker && (
-        <EmptyState size="sm" icon={Bookmark} message={t.no_resources_linked} />
+        <EmptyState size="sm" icon={ICONS.resource} message={t.no_resources_linked} />
       )}
       {(linked ?? []).map((r) => (
         <div key={r.id} className="flex items-center gap-2 py-1 group text-sm">
           <Button
             variant="link"
-            icon={<ExternalLink size={12} />}
+            icon={ICONS.openExternal}
             onClick={() => {
               let u = r.url;
               if (u && !u.startsWith("http://") && !u.startsWith("https://")) u = "https://" + u;
@@ -52,7 +51,7 @@ export function ProjectResources({ projectId }: { projectId: number }) {
           <span className="text-xs text-muted truncate max-w-[200px]">
             {r.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
           </span>
-          <IconButton icon={X} label={t.remove} size="xs" tone="danger" reveal onClick={() => deleteWithUndo(unlinkResource, { resourceId: r.id, projectId }, t.resource_unlinked)} />
+          <IconButton icon={ICONS.unlink} label={t.remove} size="xs" tone="danger" reveal onClick={() => deleteWithUndo(unlinkResource, { resourceId: r.id, projectId }, t.resource_unlinked)} />
         </div>
       ))}
       {showPicker ? (
@@ -61,7 +60,7 @@ export function ProjectResources({ projectId }: { projectId: number }) {
           onCancel={() => setShowPicker(false)}
           items={unlinked.map((r) => ({
             id: r.id,
-            icon: <Bookmark size={12} className="text-muted" />,
+            icon: ICONS.resource,
             label: r.name,
             trailing: (
               <span className="text-xs text-muted ml-auto truncate max-w-[150px]">
@@ -75,7 +74,7 @@ export function ProjectResources({ projectId }: { projectId: number }) {
           }))}
         />
       ) : (
-        <Button variant="link" icon={<Plus size={12} />} onClick={() => setShowPicker(true)} className="mt-1">
+        <Button variant="link" icon={ICONS.add} onClick={() => setShowPicker(true)} className="mt-1">
           {t.add}
         </Button>
       )}

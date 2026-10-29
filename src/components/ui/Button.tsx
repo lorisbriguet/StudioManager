@@ -1,6 +1,7 @@
-import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
+import type { ButtonHTMLAttributes, Ref } from "react";
 import { Spinner } from "./Spinner";
 import { CONTROL_BOX } from "./tokens";
+import { ICON_SIZE, renderIcon, type IconProp } from "./icons";
 
 /**
  * Button — text buttons. See DESIGN-SYSTEM.md, "Button".
@@ -11,8 +12,8 @@ import { CONTROL_BOX } from "./tokens";
  *
  *   <Button onClick={save}>{t.save}</Button>
  *   <Button variant="secondary" onClick={close}>{t.cancel}</Button>
- *   <Button variant="outline" icon={<Download size={12} />}>{t.export}</Button>
- *   <Button variant="danger" icon={<Trash2 size={12} />}>{t.delete}</Button>
+ *   <Button variant="outline" icon={ICONS.download}>{t.export}</Button>
+ *   <Button variant="danger" icon={ICONS.delete}>{t.delete}</Button>
  *   <Button variant="link">{t.view_all}</Button>
  *
  * Icon-only: use IconButton.
@@ -21,15 +22,15 @@ export type ButtonVariant = "primary" | "secondary" | "outline" | "danger" | "li
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
-  /** Leading icon, 12px. */
-  icon?: ReactNode;
+  /** Leading icon: a lucide component, drawn at 12px (ICON_SIZE.control). An element is kept as is. */
+  icon?: IconProp;
   /** Busy state: replaces the icon with a spinner and disables the button. */
   loading?: boolean;
   ref?: Ref<HTMLButtonElement>;
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: "bg-accent text-white border-transparent hover:opacity-85",
+  primary: "bg-accent text-on-accent border-transparent hover:opacity-85",
   secondary:
     "bg-[var(--color-input-bg)] text-[var(--color-text-secondary)] border-transparent hover:bg-[var(--color-hover-row)]",
   outline:
@@ -70,7 +71,7 @@ export function Button({
         // (an accent spinner would vanish on the primary accent bg)
         <Spinner tone="current" size={12} />
       ) : (
-        icon
+        renderIcon(icon, ICON_SIZE.control, { className: "shrink-0" })
       )}
       {children}
     </button>

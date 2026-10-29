@@ -1,25 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
-import {
-  LayoutDashboard,
-  Users,
-  FolderKanban,
-  CheckSquare,
-  CalendarDays,
-  FileText,
-  FilePlus2,
-  Receipt,
-  TrendingUp,
-  BarChart3,
-  BookOpen,
-  Database,
-  Square,
-  Bell,
-  Settings,
-  UserCircle,
-  PanelLeftClose,
-  PanelLeftOpen,
-} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { BrandLogo, BrandMark } from "../BrandLogo";
 import { OrgSwitcher } from "./OrgSwitcher";
 import { OrgCreateDialog } from "../OrgCreateDialog";
@@ -30,31 +11,31 @@ import { useUnreadNotificationCount } from "../../db/hooks/useNotifications";
 import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
 import type { UIKey } from "../../i18n/ui";
-import { BOTTOM_BAR, CountBadge, IconButton, Tooltip } from "../ui";
-import { navItemClass } from "../ui/NavItem";
+import { BOTTOM_BAR, CountBadge, ICONS, IconButton } from "../ui";
+import { navIcon, navItemClass } from "../ui/NavItem";
 
-type NavItem = { to: string; icon: typeof LayoutDashboard; labelKey: UIKey };
+type NavItem = { to: string; icon: LucideIcon; labelKey: UIKey };
 type SidebarItem = NavItem | { divider: true };
 
 const navItems: SidebarItem[] = [
-  { to: "/", icon: LayoutDashboard, labelKey: "dashboard" },
-  { to: "/clients", icon: Users, labelKey: "clients" },
-  { to: "/projects", icon: FolderKanban, labelKey: "projects" },
-  { to: "/tasks", icon: CheckSquare, labelKey: "tasks" },
-  { to: "/calendar", icon: CalendarDays, labelKey: "calendar" },
+  { to: "/", icon: ICONS.dashboard, labelKey: "dashboard" },
+  { to: "/clients", icon: ICONS.client, labelKey: "clients" },
+  { to: "/projects", icon: ICONS.project, labelKey: "projects" },
+  { to: "/tasks", icon: ICONS.task, labelKey: "tasks" },
+  { to: "/calendar", icon: ICONS.calendar, labelKey: "calendar" },
   { divider: true },
-  { to: "/wiki", icon: BookOpen, labelKey: "wiki" },
-  { to: "/resources", icon: Database, labelKey: "resources" },
+  { to: "/wiki", icon: ICONS.wikiArticle, labelKey: "wiki" },
+  { to: "/resources", icon: ICONS.resource, labelKey: "resources" },
   { divider: true },
-  { to: "/invoices", icon: FileText, labelKey: "invoices" },
-  { to: "/quotes", icon: FilePlus2, labelKey: "quotes" },
-  { to: "/expenses", icon: Receipt, labelKey: "expenses" },
-  { to: "/income", icon: TrendingUp, labelKey: "income" },
-  { to: "/finances", icon: BarChart3, labelKey: "finances" },
+  { to: "/invoices", icon: ICONS.invoice, labelKey: "invoices" },
+  { to: "/quotes", icon: ICONS.quote, labelKey: "quotes" },
+  { to: "/expenses", icon: ICONS.expense, labelKey: "expenses" },
+  { to: "/income", icon: ICONS.income, labelKey: "income" },
+  { to: "/finances", icon: ICONS.finances, labelKey: "finances" },
   { divider: true },
-  { to: "/notifications", icon: Bell, labelKey: "notifications" },
-  { to: "/profile", icon: UserCircle, labelKey: "profile" },
-  { to: "/settings", icon: Settings, labelKey: "settings" },
+  { to: "/notifications", icon: ICONS.notifications, labelKey: "notifications" },
+  { to: "/profile", icon: ICONS.profile, labelKey: "profile" },
+  { to: "/settings", icon: ICONS.settings, labelKey: "settings" },
 ];
 
 export function Sidebar() {
@@ -219,7 +200,6 @@ export function Sidebar() {
             );
           }
           const currentLinkIdx = linkIndexMap.get(i) ?? -1;
-          const Icon = item.icon;
           const label = t[item.labelKey];
           const isNotifications = item.labelKey === "notifications";
           const isFocused = focusIdx === currentLinkIdx;
@@ -235,11 +215,11 @@ export function Sidebar() {
                 }
               }}
               className={({ isActive }) =>
-                `${navItemClass({ active: isActive, size: "md", fill: false })} mx-2${isFocused ? " ring-2 ring-accent/40 ring-inset" : ""}`
+                `${navItemClass({ active: isActive, size: "md", fill: false })} mx-2${isFocused ? " focus-row" : ""}`
               }
             >
               <span className="relative">
-                <Icon size={18} strokeWidth={1.5} />
+                {navIcon(item.icon)}
                 {isNotifications && unreadCount > 0 && (
                   <CountBadge value={unreadCount} tone="danger" max={9} className="absolute -top-1.5 -right-1.5" />
                 )}
@@ -258,15 +238,13 @@ export function Sidebar() {
       </nav>
       <TimerIndicator collapsed={collapsed} />
       <div className={`${BOTTOM_BAR} border-sidebar-border px-2`}>
-        <Tooltip content={`${collapsed ? t.expand_sidebar : t.collapse_sidebar} (⌘B)`}>
-          <button
-            onClick={toggleSidebar}
-            aria-label={collapsed ? t.expand_sidebar : t.collapse_sidebar}
-            className="flex items-center justify-center w-full py-1.5 rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors"
-          >
-            {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-          </button>
-        </Tooltip>
+        <IconButton
+          icon={collapsed ? ICONS.expandSidebar : ICONS.collapseSidebar}
+          label={collapsed ? t.expand_sidebar : t.collapse_sidebar}
+          title={`${collapsed ? t.expand_sidebar : t.collapse_sidebar} (⌘B)`}
+          onClick={toggleSidebar}
+          className="mx-auto"
+        />
       </div>
     </aside>
   );
@@ -297,7 +275,7 @@ function TimerIndicator({ collapsed }: { collapsed: boolean }) {
     <div className="px-3 py-2 border-t border-sidebar-border">
       <div className="flex items-center gap-2 text-xs">
         <span className="relative flex h-2 w-2 shrink-0">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--color-danger)]/60 opacity-75" />
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-45" />
           <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--color-danger)]" />
         </span>
         {!collapsed && (
@@ -309,7 +287,7 @@ function TimerIndicator({ collapsed }: { collapsed: boolean }) {
               )}
             </div>
             <IconButton
-              icon={Square}
+              icon={ICONS.stopTimer}
               label={t.stop_timer}
               color="danger"
               onClick={() => stopAndSave()}

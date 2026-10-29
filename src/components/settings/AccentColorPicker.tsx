@@ -21,7 +21,7 @@ export function AccentColorPicker({
               onClick={() => onChange(preset)}
               aria-label={preset.name}
               className={`w-6 h-6 rounded-full transition-transform hover:scale-110 ${
-                isActive ? "ring-2 ring-white ring-offset-2 ring-offset-[var(--color-bg)]" : ""
+                isActive ? "ring-2 ring-[var(--color-text)] ring-offset-2 ring-offset-[var(--color-bg)]" : ""
               }`}
               style={{ backgroundColor: preset.color }}
             />

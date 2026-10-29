@@ -17,7 +17,7 @@ import { createPortal } from "react-dom";
  * Tooltip — a short hint on hover or keyboard focus. See DESIGN-SYSTEM.md, "Tooltip".
  * Replaces the native `title` attribute (slow, unstyled, no dark mode).
  *
- *   <Tooltip content={t.open_full_page}><Link …><Maximize2 size={14} /></Link></Tooltip>
+ *   <Tooltip content={t.open_full_page}><span …>{truncatedText}</span></Tooltip>   (an icon link is IconButton `to`)
  *
  * IconButton shows its `label` this way already. No wrapper element: the
  * handlers go on the child, the bubble renders on <body>.

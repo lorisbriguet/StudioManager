@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { ArrowUpRight, File, Maximize2 } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import type { WikiArticleWithTags } from "../../types/wiki";
 import {
@@ -12,7 +11,7 @@ import {
 } from "../../lib/wikiGraph";
 import { GraphView } from "./GraphView";
 import { colorFor } from "./wikiColors";
-import { PANEL_TOP_BAR, TabItem, IconButton, SectionLabel, Tooltip, EmptyState, Card } from "../ui";
+import { PANEL_TOP_BAR, TabItem, IconButton, SectionLabel, Tooltip, EmptyState, Card, ICONS, ICON_SIZE } from "../ui";
 import { useProjectDoc, type ProjectDoc } from "../../db/hooks/useProjectDocs";
 
 function SnippetText({ s }: { s: Snippet }) {
@@ -108,7 +107,7 @@ export function WikiSidePanel({
       ) : (
         <div className="flex-1 overflow-y-auto p-3 space-y-5">
           <section aria-label={t.wiki_local_graph}>
-            <SectionLabel as="span" className="mb-2" action={<IconButton icon={Maximize2} label={t.wiki_open_graph} onClick={onOpenGraph} />}>
+            <SectionLabel as="span" className="mb-2" action={<IconButton icon={ICONS.maximize} label={t.wiki_open_graph} onClick={onOpenGraph} />}>
               {t.wiki_local_graph}
             </SectionLabel>
             <div className="h-44 rounded-xl border border-[var(--color-border-divider)] bg-[var(--color-bg)]">
@@ -178,7 +177,7 @@ export function WikiSidePanel({
                 onClick={(e) => onOpenFile?.(key, e.metaKey || e.ctrlKey)}
                 className="w-full flex items-center gap-1.5 py-1.5 px-3 rounded-md text-xs text-left text-muted hover:bg-[var(--color-hover-row)]"
               >
-                <File size={14} className="shrink-0" />
+                <ICONS.file size={ICON_SIZE.menu} className="shrink-0" />
                 <span className="flex-1 truncate">{docsByKey.get(key)?.rel ?? key.split(":").slice(2).join(":")}</span>
               </button>
             ))}
@@ -194,7 +193,7 @@ export function WikiSidePanel({
                     onClick={open(id)}
                     className="w-full flex items-center gap-1.5 h-7 px-2 rounded-md text-sm text-left text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
                   >
-                    <ArrowUpRight size={14} className="shrink-0 text-muted" />
+                    <ICONS.goToLinked size={ICON_SIZE.menu} className="shrink-0 text-muted" />
                     <span className="flex-1 truncate">{dst.title}</span>
                     {dst.project_id !== article.project_id && dst.project_name && (
                       <span className="text-xs text-muted truncate max-w-24">{dst.project_name}</span>
@@ -301,7 +300,7 @@ export function DocSidePanel({
           <div className="space-y-5">
           {local && (
             <section aria-label={t.wiki_local_graph}>
-              <SectionLabel as="span" className="mb-2" action={<IconButton icon={Maximize2} label={t.wiki_open_graph} onClick={onOpenGraph} />}>
+              <SectionLabel as="span" className="mb-2" action={<IconButton icon={ICONS.maximize} label={t.wiki_open_graph} onClick={onOpenGraph} />}>
                 {t.wiki_local_graph}
               </SectionLabel>
               <div className="h-44 rounded-xl border border-[var(--color-border-divider)] bg-[var(--color-bg)]">
@@ -367,7 +366,7 @@ export function DocSidePanel({
                   onClick={(e) => onOpenFile(d.key, e.metaKey || e.ctrlKey)}
                   className="w-full flex items-center gap-1.5 py-1.5 px-3 rounded-md text-xs text-left text-muted hover:bg-[var(--color-hover-row)]"
                 >
-                  <File size={14} className="shrink-0" />
+                  <ICONS.file size={ICON_SIZE.menu} className="shrink-0" />
                   <span className="flex-1 truncate">{d.rel}</span>
                 </button>
               ))}

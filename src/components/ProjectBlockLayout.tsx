@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ChevronDown, ChevronRight, Plus, X, Columns2, Maximize2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Columns2 } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -17,7 +17,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useUpdateProject } from "../db/hooks/useProjects";
 import { useT } from "../i18n/useT";
-import { Card, CARD_GAP, CARD_STACK, DragHandle, Dropdown, IconButton, type PanelTitleProps } from "./ui";
+import { Card, CARD_GAP, CARD_STACK, DragHandle, Dropdown, ICONS, ICON_SIZE, IconButton, type PanelTitleProps } from "./ui";
 import type { LayoutConfig, LayoutBlock, BlockType, Project } from "../types/project";
 import { STANDARD_LAYOUT } from "../types/project";
 
@@ -79,8 +79,8 @@ function SortableBlock({ block, renderBlock, onToggleCollapse, onRemove, onToggl
           }
           action={
             <span className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-              <IconButton icon={isHalf ? Maximize2 : Columns2} label={t.width} size="xs" onClick={() => onToggleWidth(block.type)} />
-              <IconButton icon={X} label={t.delete} size="xs" tone="danger" onClick={() => onRemove(block.type)} />
+              <IconButton icon={isHalf ? ICONS.maximize : Columns2} label={t.width} size="xs" onClick={() => onToggleWidth(block.type)} />
+              <IconButton icon={ICONS.close} label={t.delete} size="xs" tone="danger" onClick={() => onRemove(block.type)} />
             </span>
           }
         />
@@ -228,7 +228,7 @@ export function ProjectBlockLayout({ project, projectId, renderBlock, headingAs 
               padding="sm"
               className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-accent transition-colors w-full justify-center"
             >
-              <Plus size={14} /> {t.add_block}
+              <ICONS.add size={ICON_SIZE.menu} /> {t.add_block}
             </Card>
           }
           items={availableBlocks.map((type) => ({ label: BLOCK_LABELS[type], onSelect: () => addBlock(type) }))}

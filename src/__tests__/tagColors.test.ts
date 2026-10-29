@@ -33,42 +33,31 @@ describe("normalizeTagColorName", () => {
 });
 
 describe("getStoredTagColor", () => {
-  it("returns defined colors for legacy names in light mode", () => {
+  it("returns defined colors for legacy names", () => {
     for (const legacy of ["brown", "pink"]) {
-      const c = getStoredTagColor(legacy, false);
-      expect(c.bg).toBeTruthy();
-      expect(c.text).toBeTruthy();
-    }
-  });
-
-  it("returns defined colors for legacy names in dark mode", () => {
-    for (const legacy of ["brown", "pink"]) {
-      const c = getStoredTagColor(legacy, true);
+      const c = getStoredTagColor(legacy);
       expect(c.bg).toBeTruthy();
       expect(c.text).toBeTruthy();
     }
   });
 
   it("renders legacy names identically to their mapped canonical name", () => {
-    expect(getStoredTagColor("brown", false)).toEqual(getNamedTagColor("orange", false));
-    expect(getStoredTagColor("pink", true)).toEqual(getNamedTagColor("red", true));
+    expect(getStoredTagColor("brown")).toEqual(getNamedTagColor("orange"));
+    expect(getStoredTagColor("pink")).toEqual(getNamedTagColor("red"));
   });
 });
 
 describe("TAG_COLOR_NAMES / getNamedTagColor coverage", () => {
-  it("every canonical name yields a defined color in both modes", () => {
+  it("every canonical name yields its CSS variables", () => {
     for (const name of TAG_COLOR_NAMES) {
-      for (const dark of [false, true]) {
-        const c = getNamedTagColor(name, dark);
-        expect(c).toBeDefined();
-        expect(c.bg).toMatch(/^#/);
-        expect(c.text).toMatch(/^#/);
-      }
+      const c = getNamedTagColor(name);
+      expect(c.bg).toBe(`var(--color-tag-${name}-bg)`);
+      expect(c.text).toBe(`var(--color-tag-${name}-text)`);
     }
   });
 
   it("canonical names map to distinct colors", () => {
-    const bgs = TAG_COLOR_NAMES.map((n) => getNamedTagColor(n, false).bg);
+    const bgs = TAG_COLOR_NAMES.map((n) => getNamedTagColor(n).bg);
     expect(new Set(bgs).size).toBe(TAG_COLOR_NAMES.length);
   });
 });

@@ -1,20 +1,9 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import {
-  ChevronDown,
-  ChevronRight,
-  ChevronsDownUp,
-  FilePlus,
-  FileText,
-  File,
-  Plus,
-  Trash2,
-  Waypoints,
-  ArrowUpRight,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronsDownUp, FilePlus, Waypoints } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useOrgStore } from "../../stores/org-store";
 import { useWikiFolders } from "../../db/hooks/useWiki";
-import { BottomBar, SearchBar, IconButton, SectionLabel, Tooltip } from "../ui";
+import { BottomBar, SearchBar, IconButton, SectionLabel, Tooltip, ICONS, ICON_SIZE } from "../ui";
 import type { WikiArticleWithTags } from "../../types/wiki";
 import type { ProjectDoc } from "../../db/hooks/useProjectDocs";
 import type { WikiRef } from "../../lib/wikiTabs";
@@ -191,9 +180,9 @@ export function WikiExplorer({
                   className="flex-1 min-w-0 flex items-center gap-2 py-1.5 pl-3 pr-1 text-xs font-medium text-left text-[var(--color-text-secondary)]"
                 >
                   {isOpen ? (
-                    <ChevronDown size={14} className="shrink-0 text-muted" />
+                    <ChevronDown size={ICON_SIZE.menu} className="shrink-0 text-muted" />
                   ) : (
-                    <ChevronRight size={14} className="shrink-0 text-muted" />
+                    <ChevronRight size={ICON_SIZE.menu} className="shrink-0 text-muted" />
                   )}
                   <span aria-hidden="true" className="dot shrink-0" style={{ background: colorFor(colors, g.projectId) }} />
                   <span className="flex-1 truncate">{g.name}</span>
@@ -201,7 +190,7 @@ export function WikiExplorer({
                 </button>
                 {g.projectId != null && (
                   <IconButton size="xs"
-                    icon={Plus}
+                    icon={ICONS.add}
                     label={`${t.new_article}: ${g.name}`}
                     reveal
                     onClick={() => onNewArticle(g.projectId)}
@@ -229,7 +218,7 @@ export function WikiExplorer({
                         type="button"
                         className={rowClass(active)}
                       >
-                        <FileText size={14} className="shrink-0" />
+                        <ICONS.wikiArticle size={ICON_SIZE.menu} className="shrink-0" />
                         <span className="flex-1 truncate">{a.title}</span>
                       </button>
                     );
@@ -242,7 +231,7 @@ export function WikiExplorer({
                         aria-expanded={filesOpen}
                         className="w-full flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-md text-xs text-left text-muted hover:bg-[var(--color-hover-row)]"
                       >
-                        {filesOpen ? <ChevronDown size={14} className="shrink-0" /> : <ChevronRight size={14} className="shrink-0" />}
+                        {filesOpen ? <ChevronDown size={ICON_SIZE.menu} className="shrink-0" /> : <ChevronRight size={ICON_SIZE.menu} className="shrink-0" />}
                         <span className="flex-1">{t.wiki_files}</span>
                         <span>{files.length}</span>
                       </button>
@@ -259,7 +248,7 @@ export function WikiExplorer({
                               aria-current={d.key === activeRef ? "page" : undefined}
                               className={rowClass(d.key === activeRef)}
                             >
-                              <File size={14} className="shrink-0" />
+                              <ICONS.file size={ICON_SIZE.menu} className="shrink-0" />
                               <span className="flex-1 truncate">{d.rel}</span>
                             </button>
                             </Tooltip>
@@ -286,9 +275,9 @@ export function WikiExplorer({
           y={menu.y}
           onClose={() => setMenu(null)}
           items={[
-            { label: t.wiki_open_new_tab, icon: <ArrowUpRight size={14} />, onClick: () => onOpen(menu.id, true) },
+            { label: t.wiki_open_new_tab, icon: ICONS.newTab, onClick: () => onOpen(menu.id, true) },
             { label: "", onClick: () => {}, divider: true },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => onDeleteArticle(menu.id) },
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => onDeleteArticle(menu.id) },
           ]}
         />
       )}

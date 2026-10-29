@@ -1,11 +1,10 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { TabItem } from "../ui/TabItem";
 import { useTabStore, predictNextActiveTab, type Tab } from "../../stores/tab-store";
 import { confirmIfDirty } from "../../lib/dirty-guard";
 import { useT } from "../../i18n/useT";
-import { IconButton } from "../ui";
+import { ICONS, IconButton } from "../ui";
 
 export function TabBar() {
   const t = useT();
@@ -79,8 +78,8 @@ export function TabBar() {
     <div className="flex items-center border-b border-[var(--color-border-divider)] bg-[var(--color-bg)] shrink-0" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
       {/* Back / Forward navigation */}
       <div className="flex items-center shrink-0 ml-1.5 gap-0.5">
-        <IconButton icon={ChevronLeft} label={t.back} onClick={() => navigate(-1)} disabled={!canGoBack} />
-        <IconButton icon={ChevronRight} label={t.forward} onClick={() => navigate(1)} disabled={!canGoForward} />
+        <IconButton icon={ICONS.prev} label={t.back} onClick={() => navigate(-1)} disabled={!canGoBack} />
+        <IconButton icon={ICONS.next} label={t.forward} onClick={() => navigate(1)} disabled={!canGoForward} />
       </div>
       <div
         ref={scrollRef}
@@ -98,7 +97,7 @@ export function TabBar() {
           />
         ))}
       </div>
-      <IconButton icon={Plus} label={t.new_tab} onClick={handleNewTab} className="mx-1" />
+      <IconButton icon={ICONS.add} label={t.new_tab} onClick={handleNewTab} className="mx-1" />
     </div>
   );
 }

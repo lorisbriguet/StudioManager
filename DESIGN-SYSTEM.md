@@ -12,31 +12,80 @@ Reference guide for all UI patterns, tokens, and conventions. Every new componen
 
 ## CSS Tokens
 
-All colors are defined as CSS custom properties in `src/index.css`. **Never use hardcoded Tailwind gray classes** (`bg-gray-100`, `border-gray-200`, `text-gray-500`, etc.). Always use the tokens below.
+All colours are CSS custom properties in `src/index.css` (`@theme`, then `.dark`). Themes override them inline on `<html>` (see [Themes](#themes)).
+
+**Rules**
+- **No literal colours in components.** No hex, `rgb()`, `white`/`black`, Tailwind palette classes (`bg-gray-100`, `text-blue-500`, `text-white`, `bg-black/40`) or opacity-suffixed tokens (`bg-accent/20`, `text-muted/50`). Every colour is a token below. The exceptions: PDFs (they print on white, see [PDF palette](#pdf-palette)) and the Toggle knob (always white, it is a physical knob).
+- **Borders by role**, never by look: a row/section divider, a surface edge, or a control edge.
+- **Tints and the focus ring come from the accent at runtime**: use the utilities, never retype `color-mix`.
+- **Text on a coloured fill** is `text-on-accent` / `text-on-danger`, never `text-white`.
 
 ### Backgrounds
 | Token | Light | Dark | Usage |
 |-------|-------|------|-------|
-| `--color-bg` | `#ffffff` | `#111111` | Page background |
+| `--color-bg` | `#ffffff` | `#111111` | Page background (also `body`) |
 | `--color-surface` | `#ffffff` | `#161616` | Cards, panels, dropdowns |
 | `--color-input-bg` | `#f5f5f5` | `#1a1a1a` | Input fields, progress bar tracks, inactive elements |
 | `--color-hover-row` | `#f8f8f8` | `#1a1a1a` | Table row hover, button hover |
-| `--color-sidebar` | `#f8f8f8` | `#141414` | Sidebar background |
+| `--color-sidebar` | `#f8f8f8` | `#161616` | Sidebar background |
+| `--color-scrim` | black 40% | black 40% | Behind a modal (`bg-scrim`) |
+| `--color-overlay-hover` | black 10% | white 12% | Hover on something already coloured: the × in a Tag, chart cursors (`hover:bg-overlay-hover`) |
 
 ### Borders
-| Token | Light | Dark | Usage |
-|-------|-------|------|-------|
-| `--color-border-divider` | `#f7f7f7` | `#1f1f1f` | Table row dividers, section separators, faint lines |
-| `--color-border-header` | `#f0f0f0` | `#2a2a2a` | Table header bottom, stronger separators |
-| `--color-input-border` | `#e5e5e5` | `#2a2a2a` | Input/select borders, form element borders |
-| `--color-sidebar-border` | via theme | via theme | Sidebar right edge |
+Three roles, three distinct values, each step stronger:
+
+| Token | Light | Dark | Role |
+|-------|-------|------|------|
+| `--color-border-divider` | `#f3f3f3` | `#1e1e1e` | **Divider**: table rows, section separators, faint lines inside a surface |
+| `--color-border` | `#e8e8e8` | `#2a2a2a` | **Surface edge**: cards, menus, dialogs, popovers (`SURFACE`), the table header and footer, panel bars |
+| `--color-input-border` | `#d4d4d4` | `#3a3a3a` | **Control edge**: inputs, selects, outline buttons, filter chips |
+| `--color-sidebar-border` | `#e5e5e5` | `#333333` | Sidebar right edge |
+
+(`--color-border-header` is gone: it was merged into `--color-border`.)
 
 ### Text
 | Token | Light | Dark | Usage |
 |-------|-------|------|-------|
-| `--color-text` | `#111827` | `#e5e5e5` | Primary text |
+| `--color-text` | `#111827` | `#e5e5e5` | Primary text (also `body`) |
 | `--color-text-secondary` | `#374151` | `#d4d4d4` | Secondary text, hover states |
-| `--color-muted` | via theme | `#888888` | Muted text, labels, placeholders |
+| `--color-muted` | `#5d6570` | `#b0b0b0` | Muted text, labels |
+| `--color-text-faint` | muted 60% | muted 60% | Placeholders, disabled items, timestamps under muted text |
+| `--color-on-accent` | `#ffffff` | `#ffffff` | Text and glyphs on an accent fill (`text-on-accent`, `bg-on-accent` for the Radio dot). Recomputed from the accent: near-black `#111827` when the accent's relative luminance is above 0.4 (`lib/themeTokens.ts`, `onColorFor`) |
+| `--color-on-danger` | `#ffffff` | `#ffffff` | Text on danger, warning and banner fills (`text-on-danger`) |
+
+### Accent
+| Token / utility | Value | Usage |
+|-------|-------|-------|
+| `--color-accent` | `#2563eb` (preset or theme) | Primary buttons, links, selection |
+| `--color-accent-light` | preset light / dark tint | Selected task chip, unread notification hover |
+| `bg-accent-tint` | accent 5% | Selected menu row, editing table row, today in the calendar |
+| `bg-accent-tint-strong` | accent 10% | Hovered selected row, drop zones, unread notification, dashboard drop placeholder |
+| `bg-accent-handle` | accent 25% | Resize handles: panel resizers, column resize (`hover:bg-accent-handle active:bg-accent`) |
+| `--color-accent-border` | accent 30% | A border around an accent-tinted box (`border-accent-border`) |
+| `--color-focus-ring` | accent 50% | The one focus ring, see below |
+
+**Focus.** One colour, `--color-focus-ring`, two shapes: `.focus-accent` (and every raw `button`/`[role=button]`) draws a 1px surface gap then a 2px ring on `:focus-visible`; `focus-row` draws a 2px inset ring on the keyboard-focused row of a list (`Table.Row focused`, Sidebar, Projects, Tasks). Never `ring-accent/40`.
+
+### Status and tag colours
+The 9 tag colours are variables: `--color-tag-{blue,purple,green,red,yellow,cyan,orange,teal,gray}-{bg,text}`, light in `:root`, dark in `.dark`. `lib/tagColors.ts` returns them as `var(…)` strings (see [Tags](#tags)).
+
+Status colours alias them, so a status pill and a tag of the same colour are the same colour:
+
+| Status token | Alias | Light bg / text | Dark bg / text |
+|-------|-------|-------|-------|
+| `--color-success-bg` / `-text` | green | `#dcfce7` / `#15803d` | `#052e16` / `#4ade80` |
+| `--color-warning-bg` / `-text` | yellow | `#fef3c7` / `#92400e` | `#1c1917` / `#fbbf24` |
+| `--color-danger-bg` / `-text` | red | `#fee2e2` / `#b91c1c` | `#2a1215` / `#f87171` |
+| `--color-info-bg` / `-text` | blue | `#dbeafe` / `#1d4ed8` | `#1a2332` / `#60a5fa` |
+| `--color-indigo-bg` / `-text` | (own) | `#e0e7ff` / `#4338ca` | `#1a1a2e` / `#818cf8` |
+
+`--color-success`, `--color-warning`, `--color-danger` are the solid fills (dots, the now line, the Sidebar timer pulse). Calendar event kinds (`.fc-priority-high`, `.fc-deadline`, `.fc-invoice-overdue` → danger; `.fc-priority-medium`, `.fc-invoice-sent`, `.fc-quote-expiry` → warning; `.fc-done` → success) use the status tokens, so they follow dark mode and themes.
+
+### Charts
+`useChartTheme()` returns CSS variable strings (Recharts passes them to SVG): grid `--color-border-divider`, ticks `--color-muted`, cursor `--color-overlay-hover`, tooltip `--color-surface` / `--color-text` / `--shadow-menu`. Series use `--color-chart-1…8`, or a tag colour (`getTagColor(name).text`) when the series is a category.
+
+### PDF palette
+PDFs print on white and never follow the theme: `src/components/pdf/pdfPalette.ts` (`PDF.ink`, `muted`, `faint`, `rule`, `stripe`, status colours) is the one place their colours live. `documentStyles.ts`, `PdfDocumentLayout`, `InvoicesListPDF`, `ExpensesListPDF` and `PLPDF` all read it.
 
 ### Tailwind Usage
 ```tsx
@@ -46,15 +95,28 @@ className="border-[var(--color-border-divider)]"
 className="hover:bg-[var(--color-hover-row)]"
 className="text-[var(--color-text-secondary)]"
 
+className="bg-accent text-on-accent"
+className="bg-accent-tint-strong"
+className="text-[var(--color-text-faint)]"
+style={{ background: getTagColor(tag).bg }}
+
 // WRONG — never do this
 className="bg-gray-100"
 className="border-gray-200"
-className="hover:bg-gray-50 dark:hover:bg-gray-200"
-className="text-gray-600"
+className="text-white"
+className="bg-accent/20"
+className="text-muted/50"
+className="border-[var(--color-input-border)]"   // on a card: that's a surface edge, use --color-border
+style={{ color: dark ? "#888" : "#999" }}
 ```
 
 ### Dark Mode
-Tokens handle dark mode automatically. **Never use `dark:` prefix** for colors that have tokens. The only acceptable `dark:` usage is for semantic colors not covered by tokens (e.g., `dark:text-red-400` in rare cases).
+`.dark` on `<html>` redefines the tokens; components never branch on dark mode for a colour. There is no `dark:` variant (the custom variant was removed): if a colour differs between light and dark, it is a token. Tag colours, status colours, chart colours and FullCalendar colours are all variables, so none of them reads `darkMode` from the store.
+
+### Themes
+A theme (`src/lib/themes.ts`) gives its base colours: bg, surface, text, muted, border, sidebar, accent, status solids and charts. `applyThemeColors` (`stores/app-store.ts`) sets the full token set inline on `<html>` from `themeTokens()` (`src/lib/themeTokens.ts`), deriving what the theme leaves out with `color-mix`: text-secondary, input-bg, hover-row, border-divider (fainter than border), input-border (stronger than border), the status bg/text pairs, and on-accent from the accent's luminance. It sets `--color-bg` / `--color-text`, never `body.style`.
+
+The two default themes mirror `src/index.css` value for value (the `colourTokens` test checks it). Choosing one clears the inline overrides so the stylesheet applies and the dark-mode toggle keeps working.
 
 ---
 
@@ -165,45 +227,120 @@ Bottom bar text is `text-xs text-muted`. A column that has no footer simply ends
 
 ## Shadows
 
-| Element | Class |
-|---------|-------|
-| Modals | `shadow-[0_16px_48px_rgba(0,0,0,0.5)]` |
-| Dropdowns, context menus | `shadow-menu` (soft in light, `0 8px 24px rgba(0,0,0,0.4)` in dark) |
-| Cards (optional, for lift) | `shadow-[0_1px_3px_rgba(0,0,0,0.2)]` |
+Three shadows, as variables in `src/index.css` (`:root`, deeper in `.dark`), each with a utility. No Tailwind `shadow-sm/md/lg` and no arbitrary `shadow-[…]`.
+
+| Token / utility | Value (light) | Element |
+|---------|-------|-------|
+| `shadow-control` (`--shadow-control`) | `0 1px 2px rgba(0,0,0,0.08)` (dark 0.4) | Small lift on a control: Toggle knob, SegmentedControl thumb, the selected theme card |
+| `shadow-menu` (`--shadow-menu`) | `0 8px 24px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.06)` (dark `0 8px 24px rgba(0,0,0,0.4)`) | Anything floating: dropdowns, context menus, popovers, tooltips, chart tooltips, BulkActionBar, the import bar, dragged items |
+| `shadow-modal` (`--shadow-modal`) | `0 16px 48px rgba(0,0,0,0.5)` | Modals |
+
+Cards have no shadow: they separate by their border.
 
 ---
 
 ## Icon Sizes
 
-All icons use **lucide-react**. Never use unicode characters (no `✕`, `←`, `→`). Sizes are standardized:
+All icons use **lucide-react**, picked from `ICONS` and sized by `ICON_SIZE` (both in `src/components/ui/icons.ts`, exported from `ui`). Never use unicode characters (no `✓`, `✕`, `←`, `→`); ESLint flags `✓ ✔ ✕ ✖ ✗` in JSX text and off-scale sizes (`11`, `13`, `15`, `17`).
 
-| Context | Size | Example |
-|---------|------|---------|
-| Sidebar navigation | `18` | `<Home size={18} strokeWidth={1.5} />` |
-| Page header action buttons | `16` | `<Plus size={16} />` |
-| Modal/dialog close button | `16` | `<X size={16} />` |
-| Back navigation | `18` | `<ArrowLeft size={18} />` |
-| Table row action icons | `12` | `IconButton size="xs"` in `Table.Actions` |
-| Settings category nav | `14` | `<Palette size={14} />` |
-| Small inline icons (clear, tags) | `12` | `<X size={12} />` |
-| Tiny indicator icons | `10` | `<X size={10} />` (inside tag pills) |
-| Empty state illustrations | `32` | `<FileText size={32} />` |
+**Components size their own icons.** Pass the component, not an element, and no size:
+
+```tsx
+<Button icon={ICONS.download}>{t.export}</Button>              // 12
+<IconButton icon={ICONS.more} label={t.more_actions} />         // 14 (sm) / 12 (xs)
+<NavItem icon={ICONS.settings} …>{t.general}</NavItem>           // 14
+{ label: t.delete, icon: ICONS.delete, danger: true, onSelect } // menu row: 14
+<Card.Header icon={ICONS.file} title={…} />                      // 14
+<EmptyState icon={ICONS.project} message={…} />                  // 32 (lg) / 20 (sm)
+```
+
+`Button`, `IconButton`, `NavItem`, `TabItem`, `Card.Header`, `ContextMenu` / `Dropdown` / `DropdownSelect` items, `MenuItem`, `BulkActionBar` actions, `ConfirmButton` and `EmptyState` take a lucide component (`IconProp`). An element is kept as is: use one only when the icon needs its own class (a colour), and size it with `ICON_SIZE`. For an icon outside those slots, write `<ICONS.warning size={ICON_SIZE.control} />`; `renderIcon(icon, size)` does the same for a slot of your own.
+
+| `ICON_SIZE` | px | Where |
+|-------------|----|-------|
+| `pill` | `10` | Inside a tag or filter pill, the checkbox tick, a pinned tab's pin |
+| `control` | `12` | `Button`, `IconButton size="xs"` (table rows, lists), `Input` leading icon, `DropdownSelect` trigger, sort arrows, small inline icons |
+| `menu` | `14` | `IconButton size="sm"` (toolbars, headers, dialog close, back), menu rows, `NavItem`, `TabItem`, `Card.Header`, `DragHandle` |
+| `callout` | `16` | `Callout`, notification rows |
+| `nav` | `18` | App sidebar, with `ICON_STROKE.nav` (1.5): `navIcon(icon)` |
+| `emptySm` | `20` | `EmptyState size="sm"` |
+| `empty` | `32` | `EmptyState` (lg) |
+
+`ICON_STROKE`: `default` 2, `nav` 1.5 (app sidebar), `check` 3 (the checkbox and multi-select tick).
 
 ### Icon Choices (canonical)
-| Action | Icon | Notes |
-|--------|------|-------|
-| Delete | `Trash2` | Never `Trash`, `X`, or `Minus` |
-| Close/dismiss | `X` | Never unicode `✕` |
-| Edit | `Pencil` | Never `Edit`, `Edit2`, `PenLine` |
-| Add/create | `Plus` | |
-| Back | `ArrowLeft` | Prev/next in calendars use `ChevronLeft`/`ChevronRight` |
-| Search | `Search` | |
-| External link | `ExternalLink` | |
-| Download | `Download` | |
-| Settings | `Settings2` | |
-| Drag handle | `GripVertical` | |
-| Expand/maximize | `Maximize2` | |
-| Folder | `FolderOpen` | |
+
+One icon per concept, so the same thing always looks the same. Use the `ICONS` key, never the lucide name. An icon that names no concept (a chevron, a zoom glass, a column type from `workload/columnIcons.tsx`) is imported from lucide-react and passed the same way.
+
+| Concept | `ICONS.` | Icon | Notes |
+|---------|----------|------|-------|
+| Add / create | `add` | `Plus` | |
+| Edit | `edit` | `Pencil` | Never `Edit`, `Edit2`, `PenLine` |
+| Delete | `delete` | `Trash2` | Never `X` or `Minus` |
+| Close / dismiss | `close` | `X` | Never `✕` |
+| Search | `search` | `Search` | |
+| Row "more" menu | `more` | `Ellipsis` | Never `Settings2` (that's settings) |
+| Settings | `settings` | `Settings2` | |
+| Behaviour settings | `behavior` | `SlidersHorizontal` | |
+| Appearance | `appearance` | `Palette` | |
+| Save, selected, mark read | `save` · `selected` · `markRead` | `Check` | |
+| Mark all read | `markAllRead` | `CheckCheck` | |
+| Done, mark done / paid, success | `done` · `markDone` · `markPaid` · `success` | `CircleCheckBig` | |
+| Mark unpaid, undo done | `markUnpaid` · `undoDone` | `RotateCcw` | `CircleX` is only for danger |
+| Danger / failed | `danger` | `CircleX` | |
+| Mark active | `markActive` | `CircleDot` | |
+| On hold | `onHold` | `Pause` | |
+| Start / stop timer | `startTimer` · `stopTimer` | `Play` · `Square` | |
+| Warning | `warning` | `TriangleAlert` | |
+| Error | `error` | `CircleAlert` | |
+| Info | `info` | `Info` | |
+| Reminder | `reminder` | `BellRing` | `Bell` is notifications |
+| Notifications | `notifications` | `Bell` | |
+| Open externally, new tab | `openExternal` · `newTab` | `ExternalLink` | |
+| Go to linked record | `goToLinked` | `ArrowUpRight` | |
+| Preview | `preview` | `Eye` | |
+| Expand / maximize | `maximize` | `Maximize2` | |
+| Drag handle | `drag` | `GripVertical` | |
+| Copy | `copy` | `Copy` | |
+| Duplicate | `duplicate` | `CopyPlus` | |
+| Download, export | `download` · `export` | `Download` | |
+| Upload | `upload` | `Upload` | |
+| Send · email | `send` · `email` | `Send` · `Mail` | |
+| Link · unlink | `link` · `unlink` | `Link` · `Unlink` | |
+| Pin | `pin` | `Pin` | |
+| Saved filter | `savedFilter` | `Star` | `Bookmark` is a resource |
+| Recurring | `recurring` | `Repeat` | |
+| Updates | `updates` | `RefreshCw` | |
+| Save layout | `saveLayout` | `Save` | |
+| Dashboard | `dashboard` | `LayoutDashboard` | |
+| Client | `client` | `Users` | |
+| Contact | `contact` | `UserRound` | |
+| Profile | `profile` | `UserCircle` | |
+| Organisation | `organisation` | `Building2` | |
+| Project | `project` | `FolderKanban` | |
+| Open folder | `openFolder` | `FolderOpen` | |
+| New project | `newProject` | `FolderPlus` | |
+| Task | `task` | `SquareCheck` | |
+| Invoice | `invoice` | `Receipt` | |
+| Quote | `quote` | `FilePlus2` | |
+| Convert to invoice | `convertToInvoice` | `FileOutput` | |
+| Invoice templates | `invoiceTemplates` | `LayoutTemplate` | |
+| Expense | `expense` | `CreditCard` | |
+| Income | `income` | `TrendingUp` | |
+| Finances | `finances` | `BarChart3` | |
+| Wiki article | `wikiArticle` | `BookOpen` | |
+| File · document | `file` · `document` | `File` · `FileText` | |
+| Resource | `resource` | `Bookmark` | |
+| Demo data | `demoData` | `Database` | |
+| Time · timer | `time` · `timer` | `Clock` · `Timer` | |
+| Calendar | `calendar` | `CalendarDays` | |
+| Date field · date range | `dateField` · `dateRange` | `Calendar` · `CalendarRange` | |
+| Back | `back` | `ArrowLeft` | |
+| Previous / next | `prev` · `next` | `ChevronLeft` · `ChevronRight` | Calendars, carousels |
+| Reorder | `moveUp` · `moveDown` | `ChevronUp` · `ChevronDown` | |
+| Move a column | `moveLeft` · `moveRight` | `ArrowLeft` · `ArrowRight` | |
+| Sort | `sortAsc` · `sortDesc` · `sortNone` | `ArrowUp` · `ArrowDown` · `ArrowUpDown` | |
+| Collapse / expand sidebar | `collapseSidebar` · `expandSidebar` | `PanelLeftClose` · `PanelLeftOpen` | |
 
 ---
 
@@ -278,7 +415,7 @@ import { Card } from "../components/ui";
 - **`Card.Header`:** the card's title row. `title` is the level-2 title (14px, PanelTitle underneath, so title weight lives in one place), 12px below it (`className` replaces that margin, e.g. `px-3 py-2` for a header row in a `padding="none"` card).
   - `count`: a muted number after the title. Never write "(3)" into the title.
   - `action`: right-aligned slot, several controls are fine. `onClose` adds the close IconButton after it.
-  - `icon`: leading content (an icon, a drag handle, a collapse chevron).
+  - `icon`: leading content: a lucide component (drawn at 14px), or an element (a drag handle, a collapse chevron).
   - `variant="label"`: the 10px uppercase SectionLabel instead of the title.
   - `divider`: a rule under the header (SettingsCard, SectionHeader). `subtitle`: one muted line under the title.
   - There is no 16px card title.
@@ -288,7 +425,7 @@ import { Card } from "../components/ui";
 ### Button
 ```tsx
 import { Button } from "../components/ui";
-<Button icon={<Plus size={12} />}>Label</Button>
+<Button icon={ICONS.add}>Label</Button>
 ```
 **One size.** Every button is 26px tall, with 12px text and `rounded-md`. That is the same height as Input, Select, DatePicker and FilterChip, so every control in a row lines up. There is no `size` prop. The main action stands out by colour (primary), not by size.
 
@@ -302,7 +439,7 @@ import { Button } from "../components/ui";
 Deep dive, with the counts behind this choice: [StudioManager Button](https://claude.ai/artifact/1wWC1A5CxpM4qxsXjd6wbw). The IconButton one: [StudioManager IconButton](https://claude.ai/artifact/BMjCuNLsU3XthiC8Vjmewo).
 
 ### Button Icon Rules
-- **Icon + text**: always use `<Button icon={<Icon size={14} />}>Label</Button>` — never raw `<button>` with icon and text side by side
+- **Icon + text**: always use `<Button icon={ICONS.add}>Label</Button>` (Button draws it at 12px, see [Icon Sizes](#icon-sizes)) — never raw `<button>` with icon and text side by side
 - **Icon-only**: use `<IconButton icon={Pencil} label={t.edit} />` (see Icon Buttons below). Never use the shared `Button` for icon-only actions, and never a raw `<button>` with only an icon in it.
 - Never put a lucide icon inside a `<button>` alongside text without using the shared Button component
 
@@ -314,12 +451,15 @@ Deep dive, with the counts behind this choice: [StudioManager Button](https://cl
 <IconButton icon={Pencil} label={t.edit} onClick={edit} />
 <IconButton icon={Trash2} label={t.delete} size="xs" tone="danger" reveal onClick={remove} />   // row action
 <IconButton icon={X} label={t.remove} size="xs" reveal="task" />                              // row with group/task
-<IconButton icon={MoreHorizontal} label={t.more} {...pop.triggerProps} />
+<IconButton icon={ICONS.more} label={t.more} {...pop.triggerProps} />
+<IconButton to={`/invoices/${id}`} icon={ICONS.preview} label={t.preview} reveal />        // a router Link
+<IconButton href={url} target="_blank" icon={ICONS.openExternal} label={t.open} />          // an <a>
 ```
 
 | Prop | Values | |
 |------|--------|--|
-| `icon` | a lucide icon component | `Pencil`, not `<Pencil />` |
+| `icon` | a lucide icon component | `ICONS.edit`, not `<Pencil />` |
+| `to` · `href` | a route · a URL | Renders a router `Link` or an `<a>` with the same look, for an icon that navigates (open a record). Other anchor props (`target`, `rel`) pass through. |
 | `label` | string (required) | aria-label and hover title, from `useT()` |
 | `size` | `sm` (default) · `xs` | `sm`: a 26px square with a 14px icon (toolbars, headers, dialogs, next to fields). `xs`: a 20px square with a 12px icon (inside table rows, lists, tree rows). The box is fixed, so there's no padding to set. |
 | `tone` | `default` · `danger` · `accent` | Hover colour and tint: text + hover-row, danger-text + danger-bg, accent + hover-row |
@@ -343,7 +483,7 @@ These patterns keep raw `<button>` elements — do not convert them to the share
 
 ### Link Button Conventions
 
-- **Icon sizes**: `12` inside a Button. For icon-only controls, IconButton sets the size.
+- **Icon sizes**: Button draws its `icon` at `12`; IconButton at `14` (sm) or `12` (xs). Pass the component, never a size.
 - **Sanctioned className modifiers** on `variant="link"` (only these two):
   - `text-muted hover:text-accent` — quiet links (add-condition, save-filter, folder actions)
   - `text-danger-text` — danger links (clear date)
@@ -555,11 +695,11 @@ A toggle pill in a filter row (status filters, saved views, tag filters). It set
 ```tsx
 <FilterChip active={filter === s} onClick={() => setFilter(s)}>{labels[s]}</FilterChip>
 <FilterChip active={id === f.id} count={conditions.length} onClick={…}>{f.name}</FilterChip>
-<FilterChip tag={tag} active={tagFilter === tag} activeIcon={<X size={10} />} onClick={…} />
+<FilterChip tag={tag} active={tagFilter === tag} activeIcon={<ICONS.close size={ICON_SIZE.pill} />} onClick={…} />
 ```
 
 - **Off:** `border-[var(--color-input-border)] text-muted`, with a hover-row background on hover.
-- **On:** `bg-accent text-white`. With `tag`, it takes the tag's own colour instead.
+- **On:** `bg-accent text-on-accent`. With `tag`, it takes the tag's own colour instead.
 - **Size:** `px-2.5 py-1 text-xs rounded-full`.
 
 ### CountBadge
@@ -568,7 +708,7 @@ A toggle pill in a filter row (status filters, saved views, tag filters). It set
 
 ### Raw colours
 
-For charts and other cases where no pill is drawn, use `getTagColor(name, dark)`, `getStoredTagColor(colorName, dark)` and `getNamedTagColor("green", dark)` from `lib/tagColors`. Never hand-build a coloured pill from them.
+For charts and other cases where no pill is drawn, use `getTagColor(name)`, `getStoredTagColor(colorName)` and `getNamedTagColor("green")` from `lib/tagColors`. They return `var(--color-tag-…)` strings that follow dark mode by themselves, and work anywhere a CSS colour goes (inline styles, SVG fill, FullCalendar event colours). To tint one, mix it: `` `color-mix(in srgb, ${c.text} 25%, transparent)` ``, never append a hex alpha. Never hand-build a coloured pill from them.
 ---
 
 ## Status Colors
@@ -589,6 +729,8 @@ import { invoiceStatusVariant, quoteStatusVariant, taskStatusVariant, projectSta
 | draft, todo | `indigo` |
 | in_progress | `info` |
 | active | `accent` |
+
+The variants' colours are the status tokens, which alias the tag palette (green, yellow, red, blue; indigo has its own pair). See [Status and tag colours](#status-and-tag-colours). Danger text is one value (`#b91c1c` light, `#f87171` dark), warning one pair (`#fef3c7` / `#92400e` light). Dots use the solids: `invoiceStatusDotClass` and `priorityDotClass` return `bg-success` / `bg-warning` / `bg-danger`.
 
 ---
 
@@ -647,7 +789,7 @@ Every data table uses `Table` (`src/components/ui/Table.tsx`). Don't write `<tab
       <Table.Select checked={…} onToggle={(shift) => bulk.toggleItem(row.id, shift)} />
       <Table.Td muted>{date}</Table.Td>
       <Table.Td numeric>{amount}</Table.Td>
-      <Table.Actions><IconButton size="xs" icon={Settings2} label={t.more_actions} onClick={…} /></Table.Actions>
+      <Table.Actions><IconButton size="xs" icon={ICONS.more} label={t.more_actions} onClick={…} /></Table.Actions>
     </Table.Row>
     {rows.length === 0 && <Table.Empty colSpan={4}><EmptyState … /></Table.Empty>}
   </Table.Body>
@@ -708,7 +850,7 @@ From `src/components/ui/Feedback.tsx` and `Tooltip.tsx`:
 <Callout tone="warning" action={<Button>…</Button>}>{msg}</Callout>  // warning|info|danger|success
 <ConfirmButton label={t.delete} question={t.confirm_delete_named.replace("{name}", ref)} onConfirm={remove} />
 <DragHandle {...attributes} {...listeners} reveal />                // dnd-kit grip; reveal = group hover
-<Tooltip content={t.open_full_page}><Link …><Maximize2 size={14} /></Link></Tooltip>
+<IconButton to={path} icon={ICONS.maximize} label={t.open_full_page} />   // an icon link: IconButton `to`, not Tooltip + Link
 ```
 
 - **Hints:** never use the native `title` attribute for a hint on a button or link. Use `Tooltip`, or `IconButton`, which shows its `label` as a tooltip. `title` stays only on truncated plain text, where it reveals the full text.
@@ -750,9 +892,9 @@ Every surface that reads data goes through the same five states, in this order. 
 ### EmptyState
 
 ```tsx
-<EmptyState icon={CheckCircle} message={t.no_tasks_yet} hint={t.no_tasks_yet_hint} action={<Button …>{t.new_task}</Button>} />
-<EmptyState size="sm" icon={CheckCircle2} message={t.nothing_overdue} />
-<EmptyState tone="danger" icon={AlertTriangle} message={t.page_error_title} action={retry} />
+<EmptyState icon={ICONS.task} message={t.no_tasks_yet} hint={t.no_tasks_yet_hint} action={<Button …>{t.new_task}</Button>} />
+<EmptyState size="sm" icon={ICONS.done} message={t.nothing_overdue} />
+<EmptyState tone="danger" icon={ICONS.warning} message={t.page_error_title} action={retry} />
 ```
 
 | Size | Where | Icon | Text | Padding |
@@ -882,7 +1024,7 @@ const choice = await confirm({ …, extra: { label: t.export_as_draft, value: "d
 Rows in a navigation list use `src/components/ui/NavItem.tsx`: the app sidebar, settings and profile categories, the wiki explorer and custom lists.
 
 ```tsx
-<NavItem active={cat === key} icon={<Palette size={14} />} onClick={() => setCat(key)}>{t.appearance}</NavItem>
+<NavItem active={cat === key} icon={ICONS.appearance} onClick={() => setCat(key)}>{t.appearance}</NavItem>
 
 // router link, or a row that holds other controls
 <NavLink className={({ isActive }) => navItemClass({ active: isActive, size: "md", fill: false })} />
@@ -974,7 +1116,7 @@ const pop = usePopover();
 | `autoFocus` | `true` | Focuses `[data-autofocus]`, else the first focusable element, else the panel |
 
 **What it handles for you:**
-- It renders on `<body>`, at `z-[60]`, with the `POPOVER_SURFACE` look: surface, `border-header`, `rounded-xl`, `shadow-menu`. Tables and modals never clip it.
+- It renders on `<body>`, at `z-[60]`, with the `POPOVER_SURFACE` look: surface, `--color-border`, `rounded-xl`, `shadow-menu`. Tables and modals never clip it.
 - It follows its anchor when the page scrolls or the window resizes.
 - A click outside calls `onClose(false)`. Esc calls `onClose(true)`, and a surrounding Modal stays open.
 - Clicks and keys inside it don't reach the anchor's ancestors, such as table rows and forms.
@@ -1005,20 +1147,22 @@ Every menu and select in the app uses `src/components/ui/Dropdown.tsx`. Never us
   onCreate={(name) => createClient(name)}
   options={clients.map((c) => ({ value: c.id, label: c.name, description: c.city }))} />
 
-<Dropdown align="end" trigger={<IconButton icon={MoreHorizontal} label={t.more} />}
+<Dropdown align="end" trigger={<IconButton icon={ICONS.more} label={t.more} />}
   items={[
-    { label: t.edit, icon: <Pencil size={14} />, onSelect: edit },
+    { label: t.edit, icon: ICONS.edit, onSelect: edit },
     { divider: true },
-    { label: t.delete, icon: <Trash2 size={14} />, danger: true, onSelect: remove },
+    { label: t.delete, icon: ICONS.delete, danger: true, onSelect: remove },
   ]} />
 ```
+
+Item icons are components, drawn at 14px. A popover that holds more than commands (a preset list with delete buttons and a name field, a column header menu) builds its rows from `MenuItem` (`ui/MenuItem.tsx`: the same `MENU_ITEM` row, with `icon`, `selected` and `danger`), never raw `MENU_ITEM` buttons.
 
 **Trigger.** One size, thin everywhere, forms included: `bg-[var(--color-input-bg)]`, no border, `px-2.5 py-1 text-xs rounded-md`, chevron 12 (the same 26px as `Button` secondary). Options:
 - `prefix="Status:"`: a muted label inside the trigger, for toolbars and page headers.
 - `variant="bare"`: no fill, no padding, no colour of its own. For table cells and status pills.
 - `fullWidth`: defaults to `true`. Pass `false` inline.
 
-**Panel.** `bg-[var(--color-surface)] border-[var(--color-border-header)] rounded-xl shadow-menu p-1`, min 160px, max 320px wide, 288px tall then scrolls. It renders on `<body>`, 4px under the trigger, so tables, cards and modals never clip it. It flips up when there's no room below.
+**Panel.** `bg-[var(--color-surface)] border-[var(--color-border)] rounded-xl shadow-menu p-1`, min 160px, max 320px wide, 288px tall then scrolls. It renders on `<body>`, 4px under the trigger, so tables, cards and modals never clip it. It flips up when there's no room below.
 
 **Rows.** Inset: `px-2 py-1 rounded-md text-sm`, hover `bg-[var(--color-hover-row)]`. Selected: `text-accent font-medium bg-accent-tint` plus a check 14 on the right. Danger: `text-[var(--color-danger-text)]` on `bg-[var(--color-danger-bg)]`, always last, after a divider. Divider: `my-1 border-t border-[var(--color-border-divider)]`. Group label: the 10px uppercase section label. Use `MENU_PANEL`, `MENU_ITEM`, `MENU_DIVIDER` and `MENU_GROUP_LABEL` from `Dropdown.tsx` for any custom popover.
 
@@ -1103,7 +1247,7 @@ Before merging any new UI work, verify:
 - [ ] All badges use `rounded-full`
 - [ ] All cards use `rounded-xl` with `bg-[var(--color-surface)]`
 - [ ] Text fields use `Input` / `Textarea`, date fields use `DatePicker`, checkboxes and radios use `Checkbox` / `Radio` (no raw `<input>`/`<textarea>`)
-- [ ] Icons use lucide-react with correct canonical icon and standard size
+- [ ] Icons come from `ICONS` (or lucide-react for a non-concept icon), passed as components so the component sizes them; any other size is an `ICON_SIZE` constant
 - [ ] No unicode characters as icons
 - [ ] All user-visible text uses `useT()` i18n keys
 - [ ] Status colors come from `statusColors.ts`

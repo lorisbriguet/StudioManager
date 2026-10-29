@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, Eye, Trash2, ExternalLink, Users } from "lucide-react";
 import { notify } from "../lib/notify";
 import { useClients, useCreateClient, useDeleteClient, getNextClientId } from "../db/hooks/useClients";
 import { useProjects } from "../db/hooks/useProjects";
@@ -13,7 +12,7 @@ import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { Checkbox, Button, Badge, Input, Select, FormField, FormGrid, FormGridItem, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, QueryState, NoResults } from "../components/ui";
+import { ICONS, Checkbox, Button, Badge, Input, Select, FormField, FormGrid, FormGridItem, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, QueryState, NoResults } from "../components/ui";
 import * as v from "../lib/validate";
 import { deleteWithUndo } from "../lib/undo";
 import { confirmDelete } from "../lib/confirm";
@@ -130,7 +129,7 @@ export function ClientsPage() {
   return (
     <div>
       <PageHeader title={t.clients}>
-        <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>
+        <Button icon={ICONS.add} onClick={() => setShowForm(true)}>
           {t.new_client}
         </Button>
       </PageHeader>
@@ -217,9 +216,9 @@ export function ClientsPage() {
               {all.length === 0 ? (
                 <EmptyState
                   message={t.no_clients}
-                  icon={Users}
+                  icon={ICONS.client}
                   action={
-                    <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>
+                    <Button icon={ICONS.add} onClick={() => setShowForm(true)}>
                       {t.new_client}
                     </Button>
                   }
@@ -239,10 +238,10 @@ export function ClientsPage() {
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
-            { label: t.view_details, icon: <Eye size={14} />, onClick: () => navigate(`/clients/${ctxMenu.item.id}`) },
-            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/clients/${ctxMenu.item.id}`, ctxMenu.item.name) },
+            { label: t.view_details, icon: ICONS.preview, onClick: () => navigate(`/clients/${ctxMenu.item.id}`) },
+            { label: t.open_in_new_tab, icon: ICONS.newTab, onClick: () => openTab(`/clients/${ctxMenu.item.id}`, ctxMenu.item.name) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: async () => {
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: async () => {
               const client = ctxMenu.item;
               if (!(await confirmDelete(client.name, t.delete_client_cascade))) return;
               deleteWithUndo(deleteClient, client.id, t.toast_client_deleted);
@@ -254,7 +253,7 @@ export function ClientsPage() {
         count={bulk.count}
         onClear={bulk.clearSelection}
         actions={[
-          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+          { label: t.delete, icon: ICONS.delete, onClick: bulkDelete, danger: true },
         ]}
       />
     </div>

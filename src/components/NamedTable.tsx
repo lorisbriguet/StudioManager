@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Plus, Trash2, ChevronDown, ChevronRight, Pencil } from "lucide-react";
-import { Button, Card, DragHandle, Dropdown, InlineRename } from "./ui";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { Button, Card, DragHandle, Dropdown, ICONS, ICON_SIZE, InlineRename } from "./ui";
 import { TableCell } from "./named-table/TableCell";
 import { ColumnEditorPopover } from "./named-table/ColumnEditorPopover";
 import {
@@ -175,9 +175,9 @@ export function NamedTable({ table, projectId }: Props) {
         count={rows?.length ?? 0}
         action={
           <>
-            <IconButton icon={Pencil} label={t.rename} size="xs" tone="accent" reveal="item" onClick={() => setEditingName(true)} />
+            <IconButton icon={ICONS.edit} label={t.rename} size="xs" tone="accent" reveal="item" onClick={() => setEditingName(true)} />
             <IconButton
-              icon={Trash2}
+              icon={ICONS.delete}
               label={t.delete}
               size="xs"
               tone="danger"
@@ -243,7 +243,7 @@ export function NamedTable({ table, projectId }: Props) {
                   <Dropdown
                     align="end"
                     trigger={
-                      <IconButton icon={Plus} label={t.add_column} size="xs" tone="accent" />
+                      <IconButton icon={ICONS.add} label={t.add_column} size="xs" tone="accent" />
                     }
                     items={(["text", "number", "checkbox", "select", "tags", "date"] as const).map((type) => ({
                       label: type.charAt(0).toUpperCase() + type.slice(1),
@@ -256,7 +256,7 @@ export function NamedTable({ table, projectId }: Props) {
               {(rows ?? []).map((row) => (
                 <Table.Row key={row.id}>
                   <Table.Td narrow>
-                    <DragHandle size={12} />
+                    <DragHandle size={ICON_SIZE.control} />
                   </Table.Td>
                   {cols.map((col) => (
                     <Table.Td key={col.id} style={{ width: col.width ?? 150 }}>
@@ -275,7 +275,7 @@ export function NamedTable({ table, projectId }: Props) {
                     </Table.Td>
                   ))}
                   <Table.Actions>
-                    <IconButton icon={Trash2} label={t.delete} size="xs" tone="danger" onClick={() => deleteWithUndo(deleteRow, row.id, t.row_deleted)} />
+                    <IconButton icon={ICONS.delete} label={t.delete} size="xs" tone="danger" onClick={() => deleteWithUndo(deleteRow, row.id, t.row_deleted)} />
                   </Table.Actions>
                 </Table.Row>
               ))}
@@ -283,7 +283,7 @@ export function NamedTable({ table, projectId }: Props) {
           </Table>
           <Button
             variant="link"
-            icon={<Plus size={12} />}
+            icon={ICONS.add}
             onClick={() => createRow.mutate(undefined)}
             className="w-full px-3 py-2"
           >

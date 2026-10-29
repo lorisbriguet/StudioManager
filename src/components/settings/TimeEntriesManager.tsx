@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { X, Pencil, Trash2, Check, Clock } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useTimeEntriesWithDetails, useUpdateTimeEntry, useDeleteTimeEntry } from "../../db/hooks/useTimeEntries";
 import { useProjects } from "../../db/hooks/useProjects";
 import { deleteWithUndo } from "../../lib/undo";
-import { Button, DatePicker, Select, IconButton, Input, Table, TableSkeleton, FormField, FORM_GAP, EmptyState, NoResults, QueryError } from "../ui";
+import { Button, DatePicker, ICONS, Select, IconButton, Input, Table, TableSkeleton, FormField, FORM_GAP, EmptyState, NoResults, QueryError } from "../ui";
 import { SectionHeader } from "../ui/Settings";
 
 function formatDuration(minutes: number): string {
@@ -95,7 +94,7 @@ export function TimeEntriesManager() {
           <Button
             type="button"
             variant="link"
-            icon={<X size={12} />}
+            icon={ICONS.close}
             onClick={() => { setStartDate(""); setEndDate(""); setProjectFilter(undefined); }}
             className="self-end pb-1 text-muted hover:text-[var(--color-text)]"
           >
@@ -170,13 +169,13 @@ export function TimeEntriesManager() {
                       </Table.Td>
                       <Table.Actions always>
                         <IconButton size="xs"
-                          icon={Check}
+                          icon={ICONS.save}
                           label={t.save}
                           color="accent"
                           onClick={saveEdit}
                           disabled={updateEntry.isPending}
                         />
-                        <IconButton size="xs" icon={X} label={t.cancel} onClick={() => setEditingId(null)} />
+                        <IconButton size="xs" icon={ICONS.close} label={t.cancel} onClick={() => setEditingId(null)} />
                       </Table.Actions>
                     </>
                   ) : (
@@ -187,9 +186,9 @@ export function TimeEntriesManager() {
                       <Table.Td numeric>{formatDuration(entry.duration_minutes)}</Table.Td>
                       <Table.Td muted className="max-w-[320px] truncate" title={entry.description}>{entry.description || "—"}</Table.Td>
                       <Table.Actions>
-                        <IconButton icon={Pencil} label={t.edit_entry} size="xs" onClick={() => startEdit(entry)} />
+                        <IconButton icon={ICONS.edit} label={t.edit_entry} size="xs" onClick={() => startEdit(entry)} />
                         <IconButton
-                          icon={Trash2}
+                          icon={ICONS.delete}
                           label={t.delete}
                           size="xs"
                           tone="danger"
@@ -206,7 +205,7 @@ export function TimeEntriesManager() {
                   {startDate || endDate || projectFilter ? (
                     <NoResults size="sm" message={t.no_entries_found} onClear={() => { setStartDate(""); setEndDate(""); setProjectFilter(undefined); }} />
                   ) : (
-                    <EmptyState size="sm" icon={Clock} message={t.no_time_entries_yet} />
+                    <EmptyState size="sm" icon={ICONS.time} message={t.no_time_entries_yet} />
                   )}
                 </Table.Empty>
               )}

@@ -1,12 +1,11 @@
 import { useState } from "react";
-import { Search, X } from "lucide-react";
 import type { SelectOption } from "../../types/workload";
 import { TAG_COLOR_NAMES } from "../../lib/tagColors";
 import { useT } from "../../i18n/useT";
 import { Popover } from "../ui/Popover";
 import { Tag } from "../ui/Tag";
 
-import { Input } from "../ui";
+import { Input, ICONS, ICON_SIZE } from "../ui";
 interface Props {
   options: SelectOption[];
   value: string[];
@@ -60,7 +59,7 @@ export function SelectTagPicker({
       <div className="p-1.5">
         <Input
           data-autofocus
-          icon={Search}
+          icon={ICONS.search}
           aria-label={t.search_or_create}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -85,7 +84,7 @@ export function SelectTagPicker({
             >
               <Tag name={opt.value} color={opt.color} />
               {selected && (
-                <X size={12} className="ml-auto text-muted shrink-0" />
+                <ICONS.close size={ICON_SIZE.control} className="ml-auto text-muted shrink-0" />
               )}
             </button>
           );

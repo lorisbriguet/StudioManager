@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
-import { Plus, Paperclip, Eye, Trash2, Upload, Wallet, Pencil, Settings2 } from "lucide-react";
-import { PageHeader, SearchBar, Button, DatePicker, EmptyState, QueryState, NoResults, FormField, FormGrid, FormModal, Input, Select, Table, TableSkeleton, IconButton, Tag } from "../components/ui";
+import { Paperclip } from "lucide-react";
+import { ICONS, ICON_SIZE, PageHeader, SearchBar, Button, DatePicker, EmptyState, QueryState, NoResults, FormField, FormGrid, FormModal, Input, Select, Table, TableSkeleton, IconButton, Tag } from "../components/ui";
 import * as v from "../lib/validate";
 import { deleteWithUndo } from "../lib/undo";
 import { notify } from "../lib/notify";
@@ -169,16 +169,16 @@ export function IncomePage() {
   return (
     <div className="relative">
       {(isDragging || parsing) && (
-        <div className="absolute inset-0 z-40 flex items-center justify-center bg-accent/10 border-2 border-dashed border-accent rounded-lg pointer-events-none">
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-accent-tint-strong border-2 border-dashed border-accent rounded-lg pointer-events-none">
           <div className="flex flex-col items-center gap-2 text-accent">
-            <Upload size={32} />
+            <ICONS.upload size={ICON_SIZE.empty} />
             <span className="text-sm font-medium">{parsing ? t.parsing_receipt : t.drop_pdf_hint}</span>
           </div>
         </div>
       )}
 
       <PageHeader title={t.income}>
-        <Button icon={<Plus size={12} />} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
+        <Button icon={ICONS.add} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
           {t.new_income}
         </Button>
       </PageHeader>
@@ -305,19 +305,19 @@ export function IncomePage() {
                           <div className="flex items-center gap-2">
                             <Button
                               variant="link"
-                              icon={<Eye size={12} />}
+                              icon={ICONS.preview}
                               onClick={() => setPreview({ path: inc.receipt_path!, reference: inc.reference })}
                             >
                               {t.view}
                             </Button>
                             <span className="text-xs text-success flex items-center gap-1">
-                              <Paperclip size={12} />
+                              <Paperclip size={ICON_SIZE.control} />
                             </span>
                           </div>
                         ) : (
                           <Button
                             variant="link"
-                            icon={<Paperclip size={12} />}
+                            icon={Paperclip}
                             onClick={() => attachReceipt(inc.id, inc.reference, inc.source)}
                           >
                             {t.attach}
@@ -326,7 +326,7 @@ export function IncomePage() {
                       </Table.Td>
                       <Table.Actions>
                         <IconButton size="xs"
-                          icon={Settings2}
+                          icon={ICONS.more}
                           label={t.more_actions}
                           onClick={(e) => setCtxMenu({ x: e.clientX, y: e.clientY, item: inc })}
                         />
@@ -341,9 +341,9 @@ export function IncomePage() {
               {all.length === 0 ? (
                 <EmptyState
                   message={t.no_incomes_yet}
-                  icon={Wallet}
+                  icon={ICONS.income}
                   action={
-                    <Button icon={<Plus size={12} />} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
+                    <Button icon={ICONS.add} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
                       {t.new_income}
                     </Button>
                   }
@@ -371,12 +371,12 @@ export function IncomePage() {
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
-            { label: t.edit, icon: <Pencil size={14} />, onClick: () => { setShowForm(false); setEditing(ctxMenu.item); } },
+            { label: t.edit, icon: ICONS.edit, onClick: () => { setShowForm(false); setEditing(ctxMenu.item); } },
             ctxMenu.item.receipt_path
-              ? { label: t.view, icon: <Eye size={14} />, onClick: () => setPreview({ path: ctxMenu.item.receipt_path!, reference: ctxMenu.item.reference }) }
-              : { label: t.attach, icon: <Paperclip size={14} />, onClick: () => attachReceipt(ctxMenu.item.id, ctxMenu.item.reference, ctxMenu.item.source) },
+              ? { label: t.view, icon: ICONS.preview, onClick: () => setPreview({ path: ctxMenu.item.receipt_path!, reference: ctxMenu.item.reference }) }
+              : { label: t.attach, icon: Paperclip, onClick: () => attachReceipt(ctxMenu.item.id, ctxMenu.item.reference, ctxMenu.item.source) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteWithUndo(deleteIncome, ctxMenu.item.id, t.toast_income_deleted) },
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => deleteWithUndo(deleteIncome, ctxMenu.item.id, t.toast_income_deleted) },
           ]}
         />
       )}
@@ -384,7 +384,7 @@ export function IncomePage() {
         count={bulk.count}
         onClear={bulk.clearSelection}
         actions={[
-          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+          { label: t.delete, icon: ICONS.delete, onClick: bulkDelete, danger: true },
         ]}
       />
     </div>

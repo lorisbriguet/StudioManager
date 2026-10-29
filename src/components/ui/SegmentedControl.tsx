@@ -99,7 +99,7 @@ export function SegmentedControl<V extends string>({
               SIZE[size]
             } ${fullWidth ? "flex-1" : ""} ${
               on
-                ? "bg-[var(--color-surface)] text-[var(--color-text)] font-medium shadow-[0_1px_2px_rgba(0,0,0,0.08)]"
+                ? "bg-[var(--color-surface)] text-[var(--color-text)] font-medium shadow-control"
                 : MUTED_INTERACTIVE
             }`}
           >

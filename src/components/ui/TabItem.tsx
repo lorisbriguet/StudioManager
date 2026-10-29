@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
-import { X, Pin } from "lucide-react";
+import { X } from "lucide-react";
 import { IconButton } from "./IconButton";
 import { MUTED_INTERACTIVE } from "./tokens";
+import { ICONS, ICON_SIZE, renderIcon, type IconProp } from "./icons";
 
 /**
  * One tab, as in the app's tab bar: an accent underline on the active tab,
@@ -14,7 +14,8 @@ type TabItemProps = {
   active: boolean;
   onActivate: () => void;
   pinned?: boolean;
-  icon?: ReactNode;
+  /** A lucide component (drawn at 14px) or an element. */
+  icon?: IconProp;
   /** "tab" inside a role="tablist"; the app's page tabs are links to pages. */
   role?: "tab";
 } & (
@@ -47,8 +48,8 @@ export function TabItem({ label, active, onActivate, onClose, closeLabel, pinned
         aria-current={role === "tab" ? undefined : active ? "page" : undefined}
         className="flex items-center gap-1.5 cursor-pointer min-w-0 rounded focus-accent"
       >
-        {pinned && <Pin size={10} className="text-muted shrink-0" />}
-        {icon}
+        {pinned && <ICONS.pin size={ICON_SIZE.pill} className="text-muted shrink-0" />}
+        {renderIcon(icon, ICON_SIZE.menu, { className: "shrink-0" })}
         <span className="max-w-[160px] truncate">{label}</span>
       </button>
       {onClose && !pinned && (

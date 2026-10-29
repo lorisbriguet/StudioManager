@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { ChevronRight, Trash2, Play, Square, CheckCircle } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { deleteWithUndo } from "../../lib/undo";
 import {
   DndContext,
@@ -30,7 +30,7 @@ import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
 import { PriorityBadge } from "./PriorityBadge";
 import { SortableSubtaskRow } from "./SortableSubtaskRow";
-import { AddRow, Checkbox, IconButton, FilterChip, InlineRename, EmptyState } from "../ui";
+import { AddRow, Checkbox, ICONS, IconButton, FilterChip, InlineRename, EmptyState } from "../ui";
 
 export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
   projectId: number;
@@ -161,7 +161,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                   onChange={(vals) => updateTask.mutate({ id: tk.id, data: vals })}
                 />
                 <IconButton
-                  icon={activeTimer?.taskId === tk.id ? Square : Play}
+                  icon={activeTimer?.taskId === tk.id ? ICONS.stopTimer : ICONS.startTimer}
                   label={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
                   size="xs"
                   tone="accent"
@@ -174,7 +174,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                   }
                 />
                 <IconButton size="xs"
-                  icon={Trash2}
+                  icon={ICONS.delete}
                   label={t.delete}
                   tone="danger"
                   onClick={() => deleteWithUndo(deleteTask, tk.id, t.toast_task_deleted)}
@@ -234,7 +234,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                         onChange={(vals) => updateSubtask.mutate({ id: s.id, data: vals })}
                       />
                       <IconButton size="xs"
-                        icon={Trash2}
+                        icon={ICONS.delete}
                         label={t.delete}
                         tone="danger"
                         onClick={() => deleteWithUndo(deleteSubtask, s.id, t.toast_subtask_deleted)}
@@ -257,7 +257,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
           );
         })}
         {tasks.length === 0 ? (
-          <EmptyState size="sm" icon={CheckCircle} message={t.no_tasks_yet} />
+          <EmptyState size="sm" icon={ICONS.task} message={t.no_tasks_yet} />
         ) : taskFilter !== "all" && tasks.every((tk) => (tk.status === "done") !== (taskFilter === "done")) && (
           <EmptyState size="sm" message={taskFilter === "todo" ? t.project_tasks_all_done : t.project_tasks_none_done} />
         )}

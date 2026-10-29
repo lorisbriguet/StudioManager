@@ -1,5 +1,5 @@
-import { type ReactNode } from "react";
 import { X } from "lucide-react";
+import type { IconProp } from "./icons";
 import { useT } from "../../i18n/useT";
 import { IconButton } from "./IconButton";
 import { Button } from "./Button";
@@ -7,7 +7,8 @@ import { SURFACE_FILL } from "./tokens";
 
 interface BulkAction {
   label: string;
-  icon?: ReactNode;
+  /** A lucide component (Button draws it at 12px) or an element. */
+  icon?: IconProp;
   onClick: () => void;
   danger?: boolean;
 }
@@ -24,7 +25,7 @@ export function BulkActionBar({ count, actions, onClear }: Props) {
 
   return (
     // The surface without its border, as before: the shadow alone lifts the bar.
-    <div className={`${SURFACE_FILL} shadow-lg fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2.5 bulk-bar-animate`}>
+    <div className={`${SURFACE_FILL} shadow-menu fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2.5 bulk-bar-animate`}>
       <span className="text-sm font-medium whitespace-nowrap">
         {count} {t.selected}
       </span>

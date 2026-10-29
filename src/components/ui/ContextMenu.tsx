@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { MENU_DIVIDER, MENU_ITEM, MENU_TONE } from "./Dropdown";
 import { Popover } from "./Popover";
+import { ICON_SIZE, renderIcon, type IconProp } from "./icons";
 
 /**
  * ContextMenu — the right-click menu, at the cursor. See DESIGN-SYSTEM.md, "Dropdown".
@@ -13,7 +14,8 @@ import { Popover } from "./Popover";
  */
 export interface ContextMenuItem {
   label: string;
-  icon?: React.ReactNode;
+  /** A lucide component (drawn at 14px) or an element. */
+  icon?: IconProp;
   onClick: () => void;
   danger?: boolean;
   disabled?: boolean;
@@ -168,9 +170,9 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
               disabled={item.disabled}
               className={`${MENU_ITEM} ${tone}`}
             >
-              {item.icon && (
+              {item.icon != null && item.icon !== false && (
                 <span className={`w-4 h-4 flex items-center justify-center shrink-0 ${item.danger ? "" : "text-muted"}`}>
-                  {item.icon}
+                  {renderIcon(item.icon, ICON_SIZE.menu)}
                 </span>
               )}
               <span className="flex-1 min-w-0 truncate">{item.label}</span>

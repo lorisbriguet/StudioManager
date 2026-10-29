@@ -1,6 +1,8 @@
-import type { ButtonHTMLAttributes, Ref } from "react";
+import type { AnchorHTMLAttributes, ButtonHTMLAttributes, Ref } from "react";
+import { Link, type To } from "react-router-dom";
 import { Tooltip } from "./Tooltip";
 import type { LucideIcon } from "lucide-react";
+import { ICON_SIZE } from "./icons";
 
 /**
  * IconButton — a button that is only an icon (edit, delete, close, more).
@@ -11,6 +13,8 @@ import type { LucideIcon } from "lucide-react";
  *   <IconButton icon={X} label={t.remove} size="xs" reveal="task" />             named group: group/task
  *   <IconButton icon={ChevronRight} label={t.expand} size="xs"
  *     iconClassName={`transition-transform ${open ? "rotate-90" : ""}`} />
+ *   <IconButton to={`/invoices/${id}`} icon={ICONS.preview} label={t.preview} />   a router Link
+ *   <IconButton href={url} target="_blank" icon={ICONS.openExternal} label={t.open} />  an <a>
  *
  * Two sizes, each a fixed square with a fixed icon, so padding is never set
  * by hand: sm = 26px box (the height of every control) around a 14px icon;
@@ -26,7 +30,7 @@ type Size = "xs" | "sm";
 /** Named hover groups used by rows in the app (group/task, group/row…). */
 export type RevealGroup = true | "row" | "task" | "sub" | "item" | "col";
 
-interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
+interface IconButtonBase {
   icon: LucideIcon;
   label: string;
   tone?: Tone;
@@ -39,12 +43,22 @@ interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
   color?: "danger" | "accent";
   /** Classes on the icon itself, e.g. a rotating expand chevron. */
   iconClassName?: string;
-  ref?: Ref<HTMLButtonElement>;
 }
 
+type ButtonProps = IconButtonBase &
+  Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & { to?: undefined; href?: undefined; ref?: Ref<HTMLButtonElement> };
+/** A router link that looks like an IconButton (open a record). */
+type RouterLinkProps = IconButtonBase &
+  Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "children" | "href"> & { to: To; href?: undefined; replace?: boolean; state?: unknown; ref?: Ref<HTMLAnchorElement> };
+/** A plain <a> (an external URL). */
+type AnchorProps = IconButtonBase &
+  Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "children"> & { href: string; to?: undefined; ref?: Ref<HTMLAnchorElement> };
+
+type IconButtonProps = ButtonProps | RouterLinkProps | AnchorProps;
+
 const SIZE: Record<Size, { box: string; icon: number }> = {
-  sm: { box: "w-6.5 h-6.5 rounded-md", icon: 14 },
-  xs: { box: "w-5 h-5 rounded", icon: 12 },
+  sm: { box: "w-6.5 h-6.5 rounded-md", icon: ICON_SIZE.menu },
+  xs: { box: "w-5 h-5 rounded", icon: ICON_SIZE.control },
 };
 
 // Spelled out so Tailwind generates each one.
@@ -72,27 +86,21 @@ const TONE: Record<Tone, string> = {
   accent: "hover:text-accent hover:bg-[var(--color-hover-row)]",
 };
 
-export function IconButton({
-  icon: Icon,
-  label,
-  tone = "default",
-  size = "sm",
-  reveal = false,
-  active = false,
-  color,
-  iconClassName,
-  className = "",
-  type = "button",
-  title,
-  ...props
-}: IconButtonProps) {
-  // Tooltip adds its hover/focus handlers and aria-describedby, and still runs the caller's.
-  return (
-    <Tooltip content={title ?? label}>
-    <button
-      type={type}
-      aria-label={label}
-      className={`inline-flex items-center justify-center shrink-0 transition-colors focus-accent disabled:opacity-30 disabled:pointer-events-none ${
+export function IconButton(allProps: IconButtonProps) {
+  const {
+    icon: Icon,
+    label,
+    tone = "default",
+    size = "sm",
+    reveal = false,
+    active = false,
+    color,
+    iconClassName,
+    className = "",
+    title,
+    ...props
+  } = allProps;
+  const cls = `inline-flex items-center justify-center shrink-0 transition-colors focus-accent disabled:opacity-30 disabled:pointer-events-none ${
         SIZE[size].box
       } ${
         active
@@ -104,11 +112,36 @@ export function IconButton({
               : "text-muted"
       } ${TONE[color ?? tone]} ${
         reveal ? `${revealClass(reveal)} aria-expanded:opacity-100` : ""
-      } ${className}`}
-      {...props}
-    >
-      <Icon size={SIZE[size].icon} className={iconClassName} aria-hidden="true" />
-    </button>
+      } ${className}`;
+  const icon = <Icon size={SIZE[size].icon} className={iconClassName} />;
+
+  // Tooltip adds its hover/focus handlers and aria-describedby, and still runs the caller's.
+  if (props.to !== undefined) {
+    const { to, ...rest } = props as Omit<RouterLinkProps, keyof IconButtonBase>;
+    return (
+      <Tooltip content={title ?? label}>
+        <Link to={to} aria-label={label} className={cls} {...rest}>
+          {icon}
+        </Link>
+      </Tooltip>
+    );
+  }
+  if (props.href !== undefined) {
+    const rest = props as Omit<AnchorProps, keyof IconButtonBase>;
+    return (
+      <Tooltip content={title ?? label}>
+        <a aria-label={label} className={cls} {...rest}>
+          {icon}
+        </a>
+      </Tooltip>
+    );
+  }
+  const { type = "button", ...rest } = props as Omit<ButtonProps, keyof IconButtonBase>;
+  return (
+    <Tooltip content={title ?? label}>
+      <button type={type} aria-label={label} className={cls} {...rest}>
+        {icon}
+      </button>
     </Tooltip>
   );
 }

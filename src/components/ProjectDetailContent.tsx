@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ExternalLink, FileText, FolderOpen } from "lucide-react";
 import { notify } from "../lib/notify";
 import { useProject, useUpdateProject } from "../db/hooks/useProjects";
 import { useClient } from "../db/hooks/useClients";
@@ -19,7 +18,7 @@ import type { ProjectStatus } from "../types/project";
 import { ContextMenu, type ContextMenuState } from "./ui/ContextMenu";
 import { useInvoices, useInvoicesByProject, useUpdateInvoice } from "../db/hooks/useInvoices";
 import { useQuotes, useQuotesByProject, useUpdateQuote } from "../db/hooks/useQuotes";
-import { Badge, Button, DatePicker, PageHeader, Select, Textarea, EmptyState, QueryError, DetailSkeleton, ListSkeleton } from "./ui";
+import { Badge, Button, DatePicker, ICONS, PageHeader, Select, Textarea, EmptyState, QueryError, DetailSkeleton, ListSkeleton } from "./ui";
 import { ProgressBar } from "./ui/Feedback";
 import { invoiceStatusVariant, quoteStatusVariant } from "../lib/statusColors";
 import { useTabStore } from "../stores/tab-store";
@@ -129,7 +128,7 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
     return (
       <EmptyState
         size={compact ? "sm" : "lg"}
-        icon={FolderOpen}
+        icon={ICONS.project}
         message={t.project_not_found}
         hint={t.not_found_hint}
         action={compact ? undefined : <Button variant="secondary" onClick={onBack ?? (() => navigate("/projects"))}>{t.back_to_projects}</Button>}
@@ -203,7 +202,7 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
             {projectInvoices === undefined ? (
               <ListSkeleton size="sm" rows={2} />
             ) : projectInvoices.length === 0 ? (
-              <EmptyState size="sm" icon={FileText} message={t.no_invoices_yet} />
+              <EmptyState size="sm" icon={ICONS.invoice} message={t.no_invoices_yet} />
             ) : (
               <div className="divide-y divide-[var(--color-border-divider)]">
                 {projectInvoices.map((inv) => (
@@ -245,7 +244,7 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
             {projectQuotes === undefined ? (
               <ListSkeleton size="sm" rows={2} />
             ) : projectQuotes.length === 0 ? (
-              <EmptyState size="sm" icon={FileText} message={t.no_quotes_yet} />
+              <EmptyState size="sm" icon={ICONS.quote} message={t.no_quotes_yet} />
             ) : (
               <div className="divide-y divide-[var(--color-border-divider)]">
                 {projectQuotes.map((qt) => (
@@ -355,7 +354,7 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
           {project.folder_path ? (
             <Button
               variant="link"
-              icon={<FolderOpen size={12} />}
+              icon={ICONS.openFolder}
               onClick={() => invoke("open_in_finder", { path: project.folder_path! }).catch((e) => notify.error(t.failed_open_folder, e))}
               className="text-muted hover:text-[var(--color-text-secondary)] cursor-pointer"
             >
@@ -364,7 +363,7 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
           ) : (
             <Button
               variant="link"
-              icon={<FolderOpen size={12} />}
+              icon={ICONS.openFolder}
               onClick={async () => {
                 const dir = await openDirectory({ directory: true, title: t.set_folder });
                 if (typeof dir === "string") {
@@ -390,7 +389,7 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
             y={sectionCtxMenu.y}
             onClose={() => setSectionCtxMenu(null)}
             items={[
-              { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/projects/${projectId}`, project?.name ?? "") },
+              { label: t.open_in_new_tab, icon: ICONS.newTab, onClick: () => openTab(`/projects/${projectId}`, project?.name ?? "") },
             ]}
           />
         )}

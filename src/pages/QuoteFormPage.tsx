@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Eye } from "lucide-react";
-import { Button, DatePicker, Input, PageHeader, Select, FormField, FieldError, FormLayout, FormGrid, FormActions, Textarea } from "../components/ui";
+import { ICONS, Button, DatePicker, Input, PageHeader, Select, FormField, FieldError, FormLayout, FormGrid, FormActions, Textarea } from "../components/ui";
 import * as v from "../lib/validate";
 import { notify } from "../lib/notify";
 import { addDays, format } from "date-fns";
@@ -461,7 +460,7 @@ export function QuoteFormPage() {
           {isEdit && (
             <Button
               variant="secondary"
-              icon={<Eye size={12} />}
+              icon={ICONS.preview}
               // Preview renders the SAVED quote, so unsaved edits would be
               // silently dropped — prompt as a stopgap. Proper phase-2 fix:
               // save-then-preview.

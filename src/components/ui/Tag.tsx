@@ -1,5 +1,5 @@
 import type { MouseEvent, ReactNode } from "react";
-import { X } from "lucide-react";
+import { ICONS, ICON_SIZE } from "./icons";
 import { useT } from "../../i18n/useT";
 import { useTagColor } from "./tagColor";
 import { PILL, PILL_XS } from "./tokens";
@@ -31,9 +31,9 @@ export interface TagProps {
 
 const SIZE = {
   /** 20px */
-  sm: { box: PILL, x: 10 },
+  sm: { box: PILL, x: ICON_SIZE.pill },
   /** 16px: dense rows, table cells */
-  xs: { box: PILL_XS, x: 10 },
+  xs: { box: PILL_XS, x: ICON_SIZE.pill },
 };
 
 export function Tag({ name, color, children, size = "sm", onRemove, onClick, title, className = "" }: TagProps) {
@@ -68,9 +68,9 @@ export function Tag({ name, color, children, size = "sm", onRemove, onClick, tit
           }}
           aria-label={`${t.remove_tag} ${name}`}
           title={`${t.remove_tag} ${name}`}
-          className="shrink-0 -mr-1 w-4 h-4 grid place-items-center rounded-full opacity-60 hover:opacity-100 hover:bg-black/10 focus-accent transition"
+          className="shrink-0 -mr-1 w-4 h-4 grid place-items-center rounded-full opacity-60 hover:opacity-100 hover:bg-overlay-hover focus-accent transition"
         >
-          <X size={SIZE[size].x} aria-hidden="true" />
+          <ICONS.close size={SIZE[size].x} />
         </button>
       )}
     </span>

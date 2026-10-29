@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, FolderOpen } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
 import { notify } from "../../lib/notify";
@@ -6,7 +6,7 @@ import { useT } from "../../i18n/useT";
 import { parseWikiArticleId, parseWikiFileKey } from "../../lib/wikiLinks";
 import { useProjectDoc, type ProjectDoc } from "../../db/hooks/useProjectDocs";
 import type { WikiRef } from "../../lib/wikiTabs";
-import { EmptyState, PANEL_TOP_BAR, IconButton, HEADING_1 } from "../ui";
+import { EmptyState, PANEL_TOP_BAR, IconButton, HEADING_1, ICONS } from "../ui";
 import { Skeleton } from "../ui/Skeleton";
 
 /** True when the rendered Markdown opens with its own level-1 title (`# …`). */
@@ -59,7 +59,7 @@ export function DocView({
           {doc.projectName} <span className="opacity-50">/</span> <span className="text-[var(--color-text)]">{doc.rel}</span>
         </div>
         <IconButton
-          icon={FolderOpen}
+          icon={ICONS.openFolder}
           label={t.wiki_show_in_finder}
           onClick={() =>
             invoke("open_in_finder", { path }).catch((err) => {

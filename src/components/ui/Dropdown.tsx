@@ -17,6 +17,7 @@ import { Kbd } from "./Kbd";
 import { Popover } from "./Popover";
 import { SECTION_LABEL } from "./SectionLabel";
 import { CONTROL_BOX } from "./tokens";
+import { ICON_SIZE, ICON_STROKE, renderIcon, type IconProp } from "./icons";
 
 /**
  * Dropdown — the app's one menu component (see DESIGN-SYSTEM.md, "Dropdown").
@@ -56,7 +57,7 @@ type Row =
       key: string;
       label: string;
       description?: string;
-      icon?: ReactNode;
+      icon?: IconProp;
       meta?: ReactNode;
       shortcut?: string;
       danger?: boolean;
@@ -256,16 +257,16 @@ function MenuPanel({
                 <span
                   className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
                     r.checked
-                      ? "bg-accent border-accent text-white"
+                      ? "bg-accent border-accent text-on-accent"
                       : "bg-[var(--color-input-bg)] border-[var(--color-input-border)]"
                   }`}
                 >
-                  {r.checked && <Check size={10} strokeWidth={3} />}
+                  {r.checked && <Check size={ICON_SIZE.pill} strokeWidth={ICON_STROKE.check} />}
                 </span>
               )}
-              {r.icon && (
+              {r.icon != null && r.icon !== false && (
                 <span className={`w-4 h-4 flex items-center justify-center shrink-0 ${r.danger || r.create ? "" : "text-muted"}`}>
-                  {r.icon}
+                  {renderIcon(r.icon, ICON_SIZE.menu)}
                 </span>
               )}
               <span className="flex-1 min-w-0 flex flex-col">
@@ -275,7 +276,7 @@ function MenuPanel({
               {r.meta != null && <span className="text-xs text-muted tabular-nums shrink-0">{r.meta}</span>}
               {r.shortcut && <Kbd>{r.shortcut}</Kbd>}
               {role === "listbox" && r.checked === undefined && (
-                <Check size={14} className={`shrink-0 text-accent ${r.selected ? "" : "invisible"}`} aria-hidden="true" />
+                <Check size={ICON_SIZE.menu} className={`shrink-0 text-accent ${r.selected ? "" : "invisible"}`} />
               )}
             </div>
           );
@@ -291,7 +292,8 @@ export interface DropdownOption {
   value: string;
   label: string;
   description?: string;
-  icon?: ReactNode;
+  /** A lucide component (14px in the menu, 12px in the trigger) or an element. */
+  icon?: IconProp;
   meta?: ReactNode;
   disabled?: boolean;
   /** Options sharing a group are listed under a section label. Keep them adjacent. */
@@ -436,7 +438,7 @@ export function DropdownSelect(props: DropdownSelectProps) {
       kind: "item",
       key: "create",
       label: `${t.create} “${text}”`,
-      icon: <Plus size={14} />,
+      icon: Plus,
       create: true,
       onPick: () => onCreate(text),
     });
@@ -485,11 +487,10 @@ export function DropdownSelect(props: DropdownSelectProps) {
         className={`${TRIGGER_BASE} ${look} ${fullWidth ? "w-full" : ""} ${className}`}
       >
         {prefix && <span className="text-muted shrink-0">{prefix}</span>}
-        {icon && <span className="shrink-0 flex items-center">{icon}</span>}
+        {icon != null && icon !== false && <span className="shrink-0 flex items-center">{renderIcon(icon, ICON_SIZE.control)}</span>}
         <span className={`flex-1 min-w-0 truncate ${empty && !renderValue ? "text-muted" : ""}`}>{display}</span>
         <ChevronDown
-          size={12}
-          aria-hidden="true"
+          size={ICON_SIZE.control}
           className={`shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
@@ -518,7 +519,8 @@ export type DropdownItem =
   | {
       label: string;
       onSelect: () => void;
-      icon?: ReactNode;
+      /** A lucide component (drawn at 14px) or an element. */
+      icon?: IconProp;
       description?: string;
       shortcut?: string;
       danger?: boolean;

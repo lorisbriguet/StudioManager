@@ -7,7 +7,7 @@ import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import type { EventInput, EventContentArg, EventDropArg } from "@fullcalendar/core";
 import type { DateClickArg, EventResizeDoneArg } from "@fullcalendar/interaction";
-import { X, ChevronLeft, ChevronRight } from "lucide-react";
+import { ICONS, ICON_SIZE } from "../components/ui/icons";
 import { Button, Select, Popover, Input, FormActions, PageHeader, PeekHeader, Callout } from "../components/ui";
 import { useT } from "../i18n/useT";
 import { useTasksWithDueDate, useUpdateTask, useUpdateSubtask, useCreateTask, useCreateSubtask, useTasksByProject } from "../db/hooks/useTasks";
@@ -77,7 +77,6 @@ function getTaskEventColor(
   projectId: number,
   workloadCellsJson: string,
   wlConfigs: Map<number, WorkloadColumn[]> | undefined,
-  dark: boolean,
 ): { backgroundColor: string; textColor: string } | null {
   const columns = wlConfigs?.get(projectId) ?? DEFAULT_WORKLOAD_COLUMNS;
   const col = findCalendarColorColumn(columns);
@@ -97,7 +96,8 @@ function getTaskEventColor(
   const tagName = Array.isArray(value) ? value[0] : String(value);
   if (!tagName) return null;
 
-  const color = getTagColor(String(tagName), dark);
+  // CSS variable strings: FullCalendar puts them in the event's inline style
+  const color = getTagColor(String(tagName));
   return { backgroundColor: color.bg, textColor: color.text };
 }
 
@@ -114,7 +114,6 @@ export function CalendarPage() {
   const createTask = useCreateTask();
   const navigate = useNavigate();
   const projectOpenMode = useAppStore((s) => s.projectOpenMode);
-  const darkMode = useAppStore((s) => s.darkMode);
   const { data: wlConfigs } = useAllProjectWorkloadConfigs();
 
   const [quickCreate, setQuickCreate] = useState<QuickCreateState | null>(null);
@@ -156,7 +155,7 @@ export function CalendarPage() {
       const projectName = projects?.find((p) => p.id === t.project_id)?.name ?? "";
       const prio = effectivePriority(t.priority, t.due_date, t.end_date);
       const prioClass = `fc-priority-${prio}`;
-      const tagColor = getTaskEventColor(t.project_id, t.workload_cells, wlConfigs, darkMode);
+      const tagColor = getTaskEventColor(t.project_id, t.workload_cells, wlConfigs);
       if (t.start_time) {
         items.push({
           id: `t-${t.id}`,
@@ -256,7 +255,7 @@ export function CalendarPage() {
     }
 
     return items;
-  }, [tasks, subtasks, projects, invoices, quotes, t, wlConfigs, darkMode]);
+  }, [tasks, subtasks, projects, invoices, quotes, t, wlConfigs]);
 
   const handleEventChange = useCallback((event: EventDropArg["event"], revert?: () => void) => {
     const { type, itemId } = event.extendedProps;
@@ -380,7 +379,7 @@ export function CalendarPage() {
     return (
       <div className={`${wrap ? "whitespace-normal break-words" : "truncate"} text-xs leading-tight px-1 ${done ? "line-through opacity-60" : ""}`}>
         {isSubtask && <span className="opacity-60">↳ </span>}
-        {isDeadline && <span className="font-semibold">!</span>}
+        {isDeadline && <ICONS.warning size={ICON_SIZE.pill} className="inline align-[-1px] mr-0.5" />}
         {(isInvoice || isQuote) && <span className="font-semibold mr-0.5">$</span>}
         {arg.timeText && <span className="font-medium mr-1">{arg.timeText}</span>}
         <span>{arg.event.title}</span>
@@ -437,8 +436,8 @@ export function CalendarPage() {
         <PageHeader
           title={calTitle}
           leading={<>
-            <IconButton icon={ChevronLeft} label={t.previous} onClick={calPrev} />
-            <IconButton icon={ChevronRight} label={t.next} onClick={calNext} />
+            <IconButton icon={ICONS.prev} label={t.previous} onClick={calPrev} />
+            <IconButton icon={ICONS.next} label={t.next} onClick={calNext} />
             <Button variant="outline" onClick={calToday}>
               {t.today}
             </Button>
@@ -507,7 +506,7 @@ export function CalendarPage() {
           className="shrink-0 w-[5px] cursor-col-resize relative group"
         >
           <div className="absolute inset-y-0 left-1/2 w-px bg-[var(--color-border-divider)] -translate-x-1/2" />
-          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-accent/20 transition-opacity" />
+          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-accent-handle transition-opacity" />
         </div>
         <div
           ref={peekRef}
@@ -618,9 +617,9 @@ export function QuickCreatePopup({
       {/* Task name with autocomplete */}
       <div className="relative mb-2">
         {selectedTask ? (
-          <div className="flex items-center gap-1 border border-accent/30 bg-accent-light rounded-lg px-2 py-1.5">
+          <div className="flex items-center gap-1 border border-accent-border bg-accent-light rounded-lg px-2 py-1.5">
             <span className="text-xs flex-1 truncate">{selectedTask.title}</span>
-            <IconButton icon={X} label={t.remove} size="xs" onClick={handleClearTask} />
+            <IconButton icon={ICONS.close} label={t.remove} size="xs" onClick={handleClearTask} />
           </div>
         ) : (
           <Input

@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { notify } from "../../lib/notify";
 import { undoableFromStore } from "../../lib/undo";
-import { Trash2, Plus, ListChecks } from "lucide-react";
+import { ListChecks } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useUpdateCustomList, useDeleteCustomList, useSetCustomListItems } from "../../db/hooks/useCustomLists";
-import { AddRow, Button, IconButton, InlineRename, FormActions, FORM_GAP, EmptyState } from "../ui";
+import { AddRow, Button, ICONS, IconButton, InlineRename, FormActions, FORM_GAP, EmptyState } from "../ui";
 import { navItemClass } from "../ui/NavItem";
 import { OptionsEditor } from "../shared/OptionsEditor";
 
@@ -87,7 +87,7 @@ export function CustomListsManager() {
                   {list.name}
                 </span>
               )}
-              <IconButton icon={Trash2} label={t.delete} size="xs" tone="danger" reveal onClick={() => handleDeleteList(list.id)} />
+              <IconButton icon={ICONS.delete} label={t.delete} size="xs" tone="danger" reveal onClick={() => handleDeleteList(list.id)} />
             </div>
           ))}
         </div>
@@ -104,7 +104,7 @@ export function CustomListsManager() {
           <Button
             type="button"
             variant="link"
-            icon={<Plus size={12} />}
+            icon={ICONS.add}
             onClick={() => setAddingList(true)}
             className="mt-2 w-full px-2 py-1"
           >

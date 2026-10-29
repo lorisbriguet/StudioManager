@@ -2,18 +2,15 @@ import { useState, useEffect } from "react";
 import { notify } from "../../lib/notify";
 import { undoableFromStore } from "../../lib/undo";
 import { useT } from "../../i18n/useT";
-import { useAppStore } from "../../stores/app-store";
 import { useExpenseCategories, useCreateExpenseCategory, useUpdateExpenseCategory, useDeleteExpenseCategory, isDefaultCategory } from "../../db/hooks/useExpenses";
 import { isCategoryInUse } from "../../db/queries/expenses";
 import type { ExpenseCategory } from "../../types/expense";
 import { getNamedTagColor } from "../../lib/tagColors";
-import { Check, Pencil, Trash2, X } from "lucide-react";
-import { IconButton, Input, Select, Table } from "../ui";
+import { ICONS, IconButton, Input, Select, Table } from "../ui";
 import { ColorSwatchPicker } from "./ColorSwatchPicker";
 
 export function ExpenseCategoryManager() {
   const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
   const { data: categories } = useExpenseCategories();
   const cats = categories ?? [];
   const createCategory = useCreateExpenseCategory();
@@ -134,8 +131,8 @@ export function ExpenseCategoryManager() {
                     <ColorSwatchPicker value={form.color} onChange={(c) => setForm({ ...form, color: c })} />
                   </Table.Td>
                   <Table.Actions always>
-                    <IconButton icon={Check} label={t.save} size="xs" color="accent" onClick={handleSaveEdit} />
-                    <IconButton icon={X} label={t.cancel} size="xs" onClick={() => setEditingCode(null)} />
+                    <IconButton icon={ICONS.save} label={t.save} size="xs" color="accent" onClick={handleSaveEdit} />
+                    <IconButton icon={ICONS.close} label={t.cancel} size="xs" onClick={() => setEditingCode(null)} />
                   </Table.Actions>
                 </>
               ) : (
@@ -148,11 +145,11 @@ export function ExpenseCategoryManager() {
                   </Table.Td>
                   <Table.Td>
                     {cat.color ? (() => {
-                      const c = getNamedTagColor(cat.color, darkMode);
+                      const c = getNamedTagColor(cat.color);
                       return (
                         <span
                           className="inline-block w-5 h-5 rounded-full"
-                          style={{ background: c.bg, border: `2px solid ${c.text}40` }}
+                          style={{ background: c.bg, border: `2px solid color-mix(in srgb, ${c.text} 25%, transparent)` }}
                           title={cat.color}
                         />
                       );
@@ -167,9 +164,9 @@ export function ExpenseCategoryManager() {
                     ) : categoryUsage[cat.code] ? (
                       <span className="px-1 text-xs text-muted">{t.category_in_use}</span>
                     ) : null}
-                    <IconButton icon={Pencil} label={t.edit} size="xs" onClick={() => startEdit(cat)} />
+                    <IconButton icon={ICONS.edit} label={t.edit} size="xs" onClick={() => startEdit(cat)} />
                     {!isDefaultCategory(cat.code) && !categoryUsage[cat.code] && (
-                      <IconButton icon={Trash2} label={t.delete} size="xs" tone="danger" onClick={() => handleDelete(cat.code)} />
+                      <IconButton icon={ICONS.delete} label={t.delete} size="xs" tone="danger" onClick={() => handleDelete(cat.code)} />
                     )}
                   </Table.Actions>
                 </>
@@ -208,8 +205,8 @@ export function ExpenseCategoryManager() {
                 <ColorSwatchPicker value={form.color} onChange={(c) => setForm({ ...form, color: c })} />
               </Table.Td>
               <Table.Actions always>
-                <IconButton icon={Check} label={t.save} size="xs" color="accent" onClick={handleSaveNew} />
-                <IconButton icon={X} label={t.cancel} size="xs" onClick={() => setAdding(false)} />
+                <IconButton icon={ICONS.save} label={t.save} size="xs" color="accent" onClick={handleSaveNew} />
+                <IconButton icon={ICONS.close} label={t.cancel} size="xs" onClick={() => setAdding(false)} />
               </Table.Actions>
             </Table.Row>
           )}

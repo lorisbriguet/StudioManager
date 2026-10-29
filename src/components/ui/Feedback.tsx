@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type HTMLAttributes, type ReactNode, type Ref } from "react";
-import { AlertTriangle, CheckCircle2, GripVertical, Info, XCircle } from "lucide-react";
+import { ICONS, ICON_SIZE, type IconProp } from "./icons";
 import { useT } from "../../i18n/useT";
 import { Button } from "./Button";
 import { variantClasses } from "./Badge";
@@ -68,10 +68,10 @@ export function ProgressBar({
 
 /** Colours are Badge's: a warning callout and a warning badge are the same tone. */
 const CALLOUT = {
-  warning: { cls: variantClasses.warning, Icon: AlertTriangle },
-  info: { cls: variantClasses.info, Icon: Info },
-  danger: { cls: variantClasses.danger, Icon: XCircle },
-  success: { cls: variantClasses.success, Icon: CheckCircle2 },
+  warning: { cls: variantClasses.warning, Icon: ICONS.warning },
+  info: { cls: variantClasses.info, Icon: ICONS.info },
+  danger: { cls: variantClasses.danger, Icon: ICONS.danger },
+  success: { cls: variantClasses.success, Icon: ICONS.success },
 };
 
 /**
@@ -92,7 +92,7 @@ export function Callout({
   const { cls, Icon } = CALLOUT[tone];
   return (
     <div role={tone === "danger" ? "alert" : "status"} className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm ${cls} ${className}`}>
-      <Icon size={16} className="shrink-0" aria-hidden="true" />
+      <Icon size={ICON_SIZE.callout} className="shrink-0" />
       <div className="flex-1 min-w-0">{children}</div>
       {action && <div className="shrink-0 flex items-center gap-2">{action}</div>}
     </div>
@@ -123,7 +123,8 @@ export function ConfirmButton({
   /** Defaults to `label`. */
   confirmLabel?: ReactNode;
   onConfirm: () => void;
-  icon?: ReactNode;
+  /** A lucide component (Button draws it at 12px) or an element. */
+  icon?: IconProp;
   variant?: "danger" | "outline" | "secondary";
   disabled?: boolean;
 }) {
@@ -188,7 +189,7 @@ export function ConfirmButton({
  */
 export function DragHandle({
   reveal = false,
-  size = 14,
+  size = ICON_SIZE.menu,
   className = "",
   ref,
   ...props
@@ -208,7 +209,7 @@ export function DragHandle({
         reveal
       )} ${className}`}
     >
-      <GripVertical size={size} aria-hidden="true" />
+      <ICONS.drag size={size} />
     </div>
   );
 }

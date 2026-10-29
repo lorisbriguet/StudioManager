@@ -1,6 +1,5 @@
 import { useState, useMemo, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Eye, Trash2, ExternalLink, FolderOpen, Play, Pause, CheckCircle } from "lucide-react";
 import { notify } from "../lib/notify";
 import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from "../db/hooks/useProjects";
 import { useClients } from "../db/hooks/useClients";
@@ -21,7 +20,7 @@ import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Checkbox, Button, Badge, PageHeader, SearchBar, DatePicker, Input, FormField, FormGrid, FormModal, EmptyState, QueryState, CardGridSkeleton, Select, FilterChip, ProgressBar, PeekHeader, HEADING_2, Card, CARD_GAP } from "../components/ui";
+import { ICONS, Checkbox, Button, Badge, PageHeader, SearchBar, DatePicker, Input, FormField, FormGrid, FormModal, EmptyState, QueryState, CardGridSkeleton, Select, FilterChip, ProgressBar, PeekHeader, HEADING_2, Card, CARD_GAP } from "../components/ui";
 import { undoable, deleteWithUndo } from "../lib/undo";
 import { confirmDelete } from "../lib/confirm";
 import { useBulkDelete } from "../hooks/useBulkDelete";
@@ -261,7 +260,7 @@ export function ProjectsPage() {
     <div ref={containerRef} className="flex flex-1 min-h-0 -m-8">
       <div className="min-w-0 overflow-y-auto flex-1 p-8">
         <PageHeader title={t.projects}>
-          <Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>{t.new_project}</Button>
+          <Button icon={ICONS.add} onClick={() => setShowForm(true)}>{t.new_project}</Button>
         </PageHeader>
 
         <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -314,9 +313,9 @@ export function ProjectsPage() {
           errorMessage={t.load_error_projects}
           empty={
             <EmptyState
-              icon={FolderOpen}
+              icon={ICONS.project}
               message={t.no_projects}
-              action={<Button icon={<Plus size={12} />} onClick={() => setShowForm(true)}>{t.new_project}</Button>}
+              action={<Button icon={ICONS.add} onClick={() => setShowForm(true)}>{t.new_project}</Button>}
             />
           }
           noResults={filtered.length === 0 ? { message: t.no_matching_projects, onClear: clearFilters } : undefined}
@@ -335,7 +334,7 @@ export function ProjectsPage() {
                 selected={peekId === p.id || bulk.selected.has(p.id)}
                 onClick={() => handleProjectClick(p.id)}
                 onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: { id: p.id, name: p.name } }); }}
-                className={`group${pi === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
+                className={`group${pi === focusIdx ? " focus-row" : ""}`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2 min-w-0">
@@ -390,10 +389,10 @@ export function ProjectsPage() {
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
-            { label: t.view_details, icon: <Eye size={14} />, onClick: () => navigate(`/projects/${ctxMenu.item.id}`) },
-            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/projects/${ctxMenu.item.id}`, ctxMenu.item.name) },
+            { label: t.view_details, icon: ICONS.preview, onClick: () => navigate(`/projects/${ctxMenu.item.id}`) },
+            { label: t.open_in_new_tab, icon: ICONS.newTab, onClick: () => openTab(`/projects/${ctxMenu.item.id}`, ctxMenu.item.name) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: async () => {
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: async () => {
               const project = ctxMenu.item;
               if (!(await confirmDelete(project.name, t.delete_project_cascade))) return;
               deleteWithUndo(deleteProject, project.id, t.toast_project_deleted);
@@ -411,7 +410,7 @@ export function ProjectsPage() {
           className="shrink-0 w-[5px] cursor-col-resize relative group"
         >
           <div className="absolute inset-y-0 left-1/2 w-px bg-[var(--color-border-divider)] -translate-x-1/2" />
-          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-accent/20 transition-opacity" />
+          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-accent-handle transition-opacity" />
         </div>
         <div
           ref={peekRef}
@@ -432,10 +431,10 @@ export function ProjectsPage() {
         count={bulk.count}
         onClear={bulk.clearSelection}
         actions={[
-          { label: t.mark_active, icon: <Play size={14} />, onClick: () => bulkSetStatus("active") },
-          { label: t.mark_completed, icon: <CheckCircle size={14} />, onClick: () => bulkSetStatus("completed") },
-          { label: t.mark_on_hold, icon: <Pause size={14} />, onClick: () => bulkSetStatus("on_hold") },
-          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+          { label: t.mark_active, icon: ICONS.markActive, onClick: () => bulkSetStatus("active") },
+          { label: t.mark_completed, icon: ICONS.markDone, onClick: () => bulkSetStatus("completed") },
+          { label: t.mark_on_hold, icon: ICONS.onHold, onClick: () => bulkSetStatus("on_hold") },
+          { label: t.delete, icon: ICONS.delete, onClick: bulkDelete, danger: true },
         ]}
       />
     </div>

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useConfirm } from "../../lib/confirm";
-import { Database as DatabaseIcon } from "lucide-react";
+import { ICONS } from "../ui/icons";
 import { Button } from "../ui/Button";
 import { Select } from "../ui/Select";
 import { getDb } from "../../db";
@@ -61,7 +61,7 @@ export function DemoDataCard() {
         </Select>
       </SettingRow>
       <div className="pt-1 pb-2">
-        <Button type="button" icon={<DatabaseIcon size={12} />} onClick={() => void load()} disabled={blocked || loading} loading={loading} title={testMode ? t.demo_data_blocked_test : presentationMode ? t.demo_data_blocked_presentation : undefined}>
+        <Button type="button" icon={ICONS.demoData} onClick={() => void load()} disabled={blocked || loading} loading={loading} title={testMode ? t.demo_data_blocked_test : presentationMode ? t.demo_data_blocked_presentation : undefined}>
           {t.demo_data_load}
         </Button>
       </div>

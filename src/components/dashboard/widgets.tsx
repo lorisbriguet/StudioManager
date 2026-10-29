@@ -16,7 +16,7 @@ import {
   Legend,
 } from "recharts";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Receipt, ClipboardList, FolderPlus, Clock } from "lucide-react";
+import { ICONS, ICON_SIZE } from "../ui/icons";
 import { useCountUp } from "../../hooks/useCountUp";
 import { StatTile } from "../ui/StatTile";
 import { STAT_VALUE } from "../ui/tokens";
@@ -236,7 +236,7 @@ function RecentInvoices() {
           </Link>
         ))}
         {invoices === undefined ? <ListSkeleton size="sm" rows={3} /> : recentInvoices.length === 0 && (
-          <EmptyState size="sm" icon={FileText} message={t.no_invoices_yet} />
+          <EmptyState size="sm" icon={ICONS.invoice} message={t.no_invoices_yet} />
         )}
       </div>
     </WidgetShell>
@@ -650,7 +650,7 @@ function ExpenseBreakdown() {
         ) : expenses === undefined || categories === undefined ? (
           <ListSkeleton size="sm" rows={3} />
         ) : (
-          <EmptyState size="sm" icon={Receipt} message={t.no_expenses_in_year.replace("{year}", String(year))} className="h-full" />
+          <EmptyState size="sm" icon={ICONS.expense} message={t.no_expenses_in_year.replace("{year}", String(year))} className="h-full" />
         )}
       </div>
     </WidgetShell>
@@ -1009,7 +1009,7 @@ function RecentlyCompleted() {
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {completed.map((task) => (
           <Link key={task.id} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
-            <span className="text-success text-xs shrink-0">&#10003;</span>
+            <ICONS.done size={ICON_SIZE.control} className="text-success shrink-0" />
             <span className="text-muted text-xs shrink-0">{projectName(task.project_id)}</span>
             <span className="truncate">{task.title}</span>
           </Link>
@@ -1147,10 +1147,10 @@ function QuickCreate() {
   const t = useT();
 
   const items = [
-    { label: t.new_invoice, icon: <FileText size={16} />, to: "/invoices/new" },
-    { label: t.new_quote, icon: <ClipboardList size={16} />, to: "/quotes/new" },
-    { label: t.new_expense, icon: <Receipt size={16} />, to: "/expenses" },
-    { label: t.new_project, icon: <FolderPlus size={16} />, to: "/projects" },
+    { label: t.new_invoice, icon: ICONS.invoice, to: "/invoices/new" },
+    { label: t.new_quote, icon: ICONS.quote, to: "/quotes/new" },
+    { label: t.new_expense, icon: ICONS.expense, to: "/expenses" },
+    { label: t.new_project, icon: ICONS.newProject, to: "/projects" },
   ];
 
   return (
@@ -1164,7 +1164,7 @@ function QuickCreate() {
             onClick={() => navigate(item.to)}
             className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-[var(--color-input-bg)] hover:bg-[var(--color-hover-row)] transition-colors"
           >
-            <span className="text-muted">{item.icon}</span>
+            <item.icon size={ICON_SIZE.callout} className="text-muted shrink-0" />
             <span className="truncate">{item.label}</span>
           </button>
         ))}
@@ -1264,7 +1264,7 @@ function TimeWidgetState({ title, loading }: { title: string; loading: boolean }
   return (
     <WidgetShell>
       <WidgetTitle>{title}</WidgetTitle>
-      {loading ? <ListSkeleton size="sm" rows={3} /> : <EmptyState size="sm" icon={Clock} message={t.no_tracked_time} className="flex-1" />}
+      {loading ? <ListSkeleton size="sm" rows={3} /> : <EmptyState size="sm" icon={ICONS.time} message={t.no_tracked_time} className="flex-1" />}
     </WidgetShell>
   );
 }

@@ -1,31 +1,18 @@
+/**
+ * Tag colours as CSS variable strings: `var(--color-tag-blue-bg)` and so on.
+ * The values live in src/index.css (:root and .dark), so a tag follows dark
+ * mode and themes without callers knowing which is on. Use them anywhere a
+ * CSS colour goes: inline styles, SVG fill/stroke, FullCalendar event colours.
+ * To tint one, mix it: `color-mix(in srgb, ${c.text} 25%, transparent)`.
+ */
 export interface TagColor {
   bg: string;
   text: string;
 }
 
-const TAG_COLORS_DARK: TagColor[] = [
-  { bg: "#1a2332", text: "#60a5fa" }, // blue
-  { bg: "#1e1b2e", text: "#a78bfa" }, // purple
-  { bg: "#052e16", text: "#4ade80" }, // green
-  { bg: "#2a1215", text: "#f87171" }, // red
-  { bg: "#1c1917", text: "#fbbf24" }, // yellow
-  { bg: "#0c1a2e", text: "#38bdf8" }, // cyan
-  { bg: "#2a1a0e", text: "#fb923c" }, // orange
-  { bg: "#042f2e", text: "#2dd4bf" }, // teal
-  { bg: "#1a1a1a", text: "#a8a8a8" }, // gray
-];
-
-const TAG_COLORS_LIGHT: TagColor[] = [
-  { bg: "#dbeafe", text: "#1d4ed8" },
-  { bg: "#ede9fe", text: "#6d28d9" },
-  { bg: "#dcfce7", text: "#15803d" },
-  { bg: "#fee2e2", text: "#b91c1c" },
-  { bg: "#fef3c7", text: "#92400e" },
-  { bg: "#cffafe", text: "#0e7490" },
-  { bg: "#ffedd5", text: "#c2410c" },
-  { bg: "#ccfbf1", text: "#0f766e" },
-  { bg: "#f3f4f6", text: "#6b7280" },
-];
+function tagVars(name: TagColorName): TagColor {
+  return { bg: `var(--color-tag-${name}-bg)`, text: `var(--color-tag-${name}-text)` };
+}
 
 /** Deterministic 0-8 hash of a name — same string always maps to the same
  * palette slot. Also used to keep chart series colors stable across
@@ -39,9 +26,9 @@ export function tagHash(name: string): number {
   return Math.abs(hash) % 9;
 }
 
-export function getTagColor(name: string, dark: boolean): TagColor {
-  const index = tagHash(name);
-  return dark ? TAG_COLORS_DARK[index] : TAG_COLORS_LIGHT[index];
+/** A tag's colour from a hash of its name. */
+export function getTagColor(name: string): TagColor {
+  return tagVars(TAG_COLOR_NAMES[tagHash(name)]);
 }
 
 export type TagColorName = "blue" | "purple" | "green" | "red" | "yellow" | "cyan" | "orange" | "teal" | "gray";
@@ -50,9 +37,8 @@ export type TagColorName = "blue" | "purple" | "green" | "red" | "yellow" | "cya
 export const TAG_COLOR_NAMES: TagColorName[] = ["blue", "purple", "green", "red", "yellow", "cyan", "orange", "teal", "gray"];
 
 /** Named color access for fixed semantic uses (free/paid, etc.) */
-export function getNamedTagColor(colorName: TagColorName, dark: boolean): TagColor {
-  const idx = TAG_COLOR_NAMES.indexOf(colorName);
-  return dark ? TAG_COLORS_DARK[idx] : TAG_COLORS_LIGHT[idx];
+export function getNamedTagColor(colorName: TagColorName): TagColor {
+  return tagVars(colorName);
 }
 
 /**
@@ -72,6 +58,6 @@ export function normalizeTagColorName(name: string | null | undefined): TagColor
 }
 
 /** Color for a stored color name — use for workload select options and custom-list items. */
-export function getStoredTagColor(name: string | null | undefined, dark: boolean): TagColor {
-  return getNamedTagColor(normalizeTagColorName(name), dark);
+export function getStoredTagColor(name: string | null | undefined): TagColor {
+  return getNamedTagColor(normalizeTagColorName(name));
 }

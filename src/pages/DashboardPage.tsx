@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { ResponsiveGridLayout, useContainerWidth, verticalCompactor } from "react-grid-layout";
 import type { Layout, ResponsiveLayouts } from "react-grid-layout";
-import { Plus, X, ChevronDown, Lock, Save, Trash2, Users } from "lucide-react";
+import { ChevronDown, Lock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useClients } from "../db/hooks/useClients";
 import { useDashboardStore, WIDGET_CATALOG, type WidgetType, type DashboardWidget } from "../stores/dashboard-store";
@@ -10,7 +10,7 @@ import { renderWidget } from "../components/dashboard/widgets";
 import { ErrorBoundary } from "react-error-boundary";
 import { WidgetErrorFallback } from "../components/ErrorFallback";
 import { DashboardYearContext } from "../components/dashboard/DashboardYearContext";
-import { PageHeader, Button, EmptyState, Select, Popover, IconButton, SectionLabel, AddRow, Card } from "../components/ui";
+import { ICONS, ICON_SIZE, MenuItem, PageHeader, Button, EmptyState, Select, Popover, IconButton, SectionLabel, AddRow, Card } from "../components/ui";
 import { MENU_ITEM, MENU_DIVIDER } from "../components/ui/Dropdown";
 import { useT } from "../i18n/useT";
 import { deleteWithUndo } from "../lib/undo";
@@ -98,7 +98,7 @@ function PresetDropdown() {
         <span className="flex items-center gap-1.5">
           <span className="text-muted text-xs">{t.presets}:</span>
           <span>{displayName}</span>
-          <ChevronDown size={12} />
+          <ChevronDown size={ICON_SIZE.control} />
         </span>
       </Button>
 
@@ -106,19 +106,14 @@ function PresetDropdown() {
         <Popover anchor={dropdownRef} align="end" onClose={closeMenu} padding="none" className="p-1 min-w-[220px]">
           {/* Built-in presets */}
           {builtinPresets.map((preset) => (
-            <button
+            <MenuItem
               key={preset.id}
-              type="button"
+              icon={Lock}
+              selected={activePresetId === preset.id}
               onClick={() => handleLoadPreset(preset)}
-              className={`${MENU_ITEM} ${
-                activePresetId === preset.id
-                  ? "text-accent font-medium bg-accent-tint"
-                  : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
-              }`}
             >
-              <Lock size={12} className="text-muted shrink-0" />
-              <span className="truncate">{preset.name}</span>
-            </button>
+              {preset.name}
+            </MenuItem>
           ))}
 
           {/* Divider if user presets exist or for save option */}
@@ -146,7 +141,7 @@ function PresetDropdown() {
                 <span className="truncate">{preset.name}</span>
               </button>
               <IconButton
-                icon={Trash2}
+                icon={ICONS.delete}
                 label={t.delete_preset}
                 size="xs"
                 tone="danger"
@@ -162,14 +157,9 @@ function PresetDropdown() {
 
           {/* Update active user preset */}
           {activePresetId !== null && presets?.find((p) => p.id === activePresetId && p.is_builtin === 0) && (
-            <button
-              type="button"
-              onClick={handleUpdate}
-              className={`${MENU_ITEM} text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]`}
-            >
-              <Save size={14} className="text-accent" />
+            <MenuItem icon={ICONS.saveLayout} onClick={handleUpdate}>
               {t.update_preset}
-            </button>
+            </MenuItem>
           )}
 
           {/* Save current layout */}
@@ -186,14 +176,9 @@ function PresetDropdown() {
               }}
             />
           ) : (
-            <button
-              type="button"
-              onClick={() => setSaving(true)}
-              className={`${MENU_ITEM} text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]`}
-            >
-              <Save size={14} className="text-muted" />
+            <MenuItem icon={ICONS.saveLayout} onClick={() => setSaving(true)}>
               {t.save_layout}
-            </button>
+            </MenuItem>
           )}
         </Popover>
       )}
@@ -254,7 +239,7 @@ export function DashboardPage() {
         <PresetDropdown />
         <Button
           variant="secondary"
-          icon={<Plus size={12} />}
+          icon={ICONS.add}
           onClick={() => setShowWidgetPanel(!showWidgetPanel)}
           className={showWidgetPanel ? "border-accent text-accent bg-accent-light" : ""}
         >
@@ -283,7 +268,7 @@ export function DashboardPage() {
                         onClick={() => { addWidget(entry.type as WidgetType); setShowWidgetPanel(false); }}
                         className={`text-left px-3 py-2 text-sm rounded-lg transition-colors ${
                           alreadyUsed
-                            ? "text-muted/50 cursor-not-allowed opacity-40"
+                            ? "text-[var(--color-text-faint)] cursor-not-allowed opacity-40"
                             : "hover:bg-[var(--color-hover-row)] bg-[var(--color-input-bg)]"
                         }`}
                       >
@@ -302,9 +287,9 @@ export function DashboardPage() {
       {isFirstRun && (
         <EmptyState
           message={t.first_run_dashboard}
-          icon={Users}
+          icon={ICONS.client}
           action={
-            <Button icon={<Plus size={12} />} onClick={() => navigate("/clients")}>
+            <Button icon={ICONS.add} onClick={() => navigate("/clients")}>
               {t.add_first_client}
             </Button>
           }
@@ -333,7 +318,7 @@ export function DashboardPage() {
             <Card key={widget.id} padding="none" className="stagger-in overflow-hidden relative group cursor-grab active:cursor-grabbing" style={{ animationDelay: `${idx * 50}ms` }}>
               {/* Remove button */}
               <IconButton
-                icon={X}
+                icon={ICONS.close}
                 label={t.remove}
                 size="xs"
                 tone="danger"
