@@ -109,8 +109,7 @@ fn execute_batch(
     conn.busy_timeout(std::time::Duration::from_millis(5000))
         .map_err(|e| format!("Failed to set busy_timeout: {e}"))?;
 
-    conn.execute_batch("BEGIN")
-        .map_err(|e| format!("BEGIN failed: {e}"))?;
+    begin_batch(&conn)?;
 
     let mut last_insert_id: i64 = 0;
 
@@ -151,6 +150,17 @@ fn execute_batch(
     }
 
     Ok(serde_json::json!({ "lastInsertId": last_insert_id }))
+}
+
+/// Open the batch's transaction holding the write lock from the start.
+/// A deferred `BEGIN` takes a read snapshot at the first read and upgrades
+/// it at the first write; if another connection (the plugin pool, the MCP
+/// server) commits in between, that upgrade fails at once with
+/// `SQLITE_BUSY_SNAPSHOT`, which `busy_timeout` cannot retry. `IMMEDIATE`
+/// waits (up to the busy timeout) for the lock instead.
+fn begin_batch(conn: &rusqlite::Connection) -> Result<(), String> {
+    conn.execute_batch("BEGIN IMMEDIATE")
+        .map_err(|e| format!("BEGIN failed: {e}"))
 }
 
 /// Convert Tauri SQL plugin style $1, $2 placeholders to rusqlite ?1, ?2.
@@ -986,6 +996,29 @@ mod tests {
         std::fs::create_dir_all(disguised.join("Contents")).unwrap();
         std::fs::write(disguised.join("Contents").join("Info.plist"), b"<plist/>").unwrap();
         assert!(finder_open_args(&disguised).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_batch_holds_the_write_lock_from_begin() {
+        let dir = tmp_dir("begin-immediate");
+        let db = dir.join("t.db");
+        let setup = rusqlite::Connection::open(&db).unwrap();
+        setup.execute_batch("PRAGMA journal_mode=WAL; CREATE TABLE t (x INTEGER);").unwrap();
+        let batch = rusqlite::Connection::open(&db).unwrap();
+        begin_batch(&batch).unwrap();
+        // Another writer cannot slip a commit in between the batch's reads
+        // and writes (with a deferred BEGIN this insert would succeed and the
+        // batch's first write would then fail with BUSY_SNAPSHOT).
+        let other = rusqlite::Connection::open(&db).unwrap();
+        other.busy_timeout(std::time::Duration::ZERO).unwrap();
+        let err = other.execute("INSERT INTO t VALUES (1)", []).unwrap_err();
+        assert_eq!(err.sqlite_error_code(), Some(rusqlite::ErrorCode::DatabaseBusy), "{err}");
+        batch.execute("INSERT INTO t VALUES (2)", []).unwrap();
+        batch.execute_batch("COMMIT").unwrap();
+        let n: i64 = other.query_row("SELECT COUNT(*) FROM t", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 1);
+        drop((setup, batch, other));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
