@@ -271,18 +271,10 @@ fn required(s: &str, what: &str) -> R<String> {
 }
 
 /// Where a project folder may be: the places the app reads project files
-/// from (`allowed_roots` in the app's `project_docs.rs`). Tests add the
-/// temp dir, where their fixtures live.
+/// from (the app's `doc_roots.rs`, compiled in here). Tests add the temp
+/// dir, where their fixtures live.
 fn allowed_roots() -> Vec<PathBuf> {
-    let mut roots: Vec<PathBuf> = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .map(|home| {
-            ["Documents", "Desktop", "Downloads", "Library/CloudStorage"]
-                .iter()
-                .filter_map(|d| std::fs::canonicalize(home.join(d)).ok())
-                .collect()
-        })
-        .unwrap_or_default();
+    let mut roots = crate::doc_roots::allowed_roots();
     if cfg!(test) {
         roots.extend(std::fs::canonicalize(std::env::temp_dir()).ok());
     }
@@ -317,7 +309,7 @@ fn folder_path(s: &str) -> R<String> {
     if is_bundle(Path::new(t)) || is_bundle(&real) {
         return Err(FOLDER_BUNDLE.to_string());
     }
-    if !allowed_roots().iter().any(|r| real.starts_with(r) && real != *r) {
+    if !crate::doc_roots::inside_root(&real, &allowed_roots()) {
         return Err(FOLDER_OUTSIDE.to_string());
     }
     Ok(t.to_string())

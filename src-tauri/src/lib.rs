@@ -3,6 +3,7 @@ mod agents;
 mod apple;
 mod connectors;
 mod dbfiles;
+mod doc_roots;
 mod menubar;
 mod migrate;
 mod project_docs;

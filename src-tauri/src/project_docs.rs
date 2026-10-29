@@ -33,23 +33,13 @@ pub struct DocContent {
     pub html: String,
 }
 
-/// Folders the app may read (the same roots as its file-system scope).
-fn allowed_roots() -> Vec<PathBuf> {
-    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
-        return Vec::new();
-    };
-    ["Documents", "Desktop", "Downloads", "Library/CloudStorage"]
-        .iter()
-        .filter_map(|d| std::fs::canonicalize(home.join(d)).ok())
-        .collect()
-}
-
+/// A folder the app may read: one of the roots of `doc_roots` or inside one.
 fn checked_folder(folder: &str, roots: &[PathBuf]) -> Result<PathBuf, String> {
     let canonical = std::fs::canonicalize(folder).map_err(|e| format!("folder not found: {folder} ({e})"))?;
     if !canonical.is_dir() {
         return Err(format!("not a folder: {folder}"));
     }
-    if !roots.iter().any(|r| canonical.starts_with(r)) {
+    if !crate::doc_roots::under_root(&canonical, roots) {
         return Err(format!("folder outside the readable places: {folder}"));
     }
     Ok(canonical)
@@ -226,13 +216,13 @@ fn encode(rel: &str) -> String {
 
 #[tauri::command]
 pub async fn list_project_docs(folder: String) -> Result<Vec<DocEntry>, String> {
-    let folder = checked_folder(&folder, &allowed_roots())?;
+    let folder = checked_folder(&folder, &crate::doc_roots::allowed_roots())?;
     Ok(list_docs(&folder))
 }
 
 #[tauri::command]
 pub async fn read_project_doc(folder: String, rel: String, project_id: i64) -> Result<DocContent, String> {
-    let folder = checked_folder(&folder, &allowed_roots())?;
+    let folder = checked_folder(&folder, &crate::doc_roots::allowed_roots())?;
     let path = inside(&folder, &rel).filter(|p| is_markdown(p)).ok_or("not a Markdown file of this project")?;
     let canonical = std::fs::canonicalize(&path).map_err(|e| format!("file not found: {rel} ({e})"))?;
     if !canonical.starts_with(&folder) {
