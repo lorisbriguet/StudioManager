@@ -28,6 +28,8 @@ For each agent you can read the conversation. Agents started in the background (
 - **Send a message:** not while a prompt is open, and not for agents started in a terminal. The message always reaches the agent as text: it is pasted in one piece, then Enter is pressed. A message that starts with `!` or `/` gets a space in front, so it never runs a shell command or a slash command such as `/clear`: use the terminal for those. If a prompt opens while the message is being pasted, Enter is not pressed and the message stays in the agent's input.
 - **Switch model:** stops the agent and continues the same conversation as a new agent on the model you pick.
 
+Starting an agent (or the new agent of a model switch) can take a while: the app waits up to a minute for `claude`. If that is not enough, it looks for the agent in the list by its name and folder, so an agent that did start is not reported as failed and is not started twice. Other `claude` commands (list, stop, delete) are given 10 seconds.
+
 ## New agent
 
 Pick a folder, write the task, choose a model (haiku, sonnet, opus or fable) and optionally give it a name. Only folders you already trusted in Claude are offered, linked project folders first. StudioManager never accepts Claude's trust question for you.

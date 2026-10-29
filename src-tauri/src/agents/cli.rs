@@ -20,6 +20,11 @@ const LOOKUP_SCRIPT: &str = r#"printf "__SM_CLAUDE__=%s\n__SM_PATH__=%s\n" "$(co
 
 pub const SETTINGS_FILE: &str = "agents.json";
 const CLI_TIMEOUT: Duration = Duration::from_secs(10);
+/// `claude --bg` (start, or `--resume` for a model switch) returns once the agent is
+/// backgrounded, which can take far longer than a listing on a cold start.
+const START_TIMEOUT: Duration = Duration::from_secs(60);
+/// Appended to `stderr` when the CLI was killed for taking too long.
+const TIMED_OUT: &str = "timed out";
 
 /// `agents.json`: the app-wide switches. Missing or unreadable = everything off (limit
 /// alerts on, but they only matter once the menu bar is).
@@ -223,6 +228,15 @@ pub struct CliOutput {
 
 pub trait Cli: Send + Sync {
     fn run(&self, args: &[String], cwd: &Path) -> CliOutput;
+    /// `run` for `claude --bg`, with the longer start timeout.
+    fn run_start(&self, args: &[String], cwd: &Path) -> CliOutput {
+        self.run(args, cwd)
+    }
+}
+
+/// The CLI was killed at its timeout: what it was doing may still be happening.
+pub fn timed_out(o: &CliOutput) -> bool {
+    o.code == -1 && o.stderr.ends_with(TIMED_OUT)
 }
 
 pub struct RealCli {
@@ -234,6 +248,15 @@ pub struct RealCli {
 
 impl Cli for RealCli {
     fn run(&self, args: &[String], cwd: &Path) -> CliOutput {
+        self.run_for(args, cwd, CLI_TIMEOUT)
+    }
+    fn run_start(&self, args: &[String], cwd: &Path) -> CliOutput {
+        self.run_for(args, cwd, START_TIMEOUT)
+    }
+}
+
+impl RealCli {
+    fn run_for(&self, args: &[String], cwd: &Path, timeout: Duration) -> CliOutput {
         let env = LoginEnv {
             claude: Some(self.claude.clone()),
             path: self.path_env.clone(),
@@ -245,7 +268,7 @@ impl Cli for RealCli {
             .env_clear()
             .envs(spawn_env(&env))
             .stdin(Stdio::null());
-        run_with_timeout(&mut cmd, CLI_TIMEOUT).unwrap_or_else(|| CliOutput {
+        run_with_timeout(&mut cmd, timeout).unwrap_or_else(|| CliOutput {
             code: -1,
             stdout: String::new(),
             stderr: "failed to start claude".into(),
@@ -287,7 +310,7 @@ fn run_with_timeout(cmd: &mut Command, timeout: Duration) -> Option<CliOutput> {
     let stdout = text(&out_buf);
     let mut stderr = text(&err_buf);
     if timed_out {
-        stderr.push_str("timed out");
+        stderr.push_str(TIMED_OUT);
     }
     Some(CliOutput { code, stdout, stderr })
 }
@@ -652,7 +675,10 @@ mod tests {
         let t = Instant::now();
         let o = run_with_timeout(&mut c, Duration::from_millis(200)).unwrap();
         assert_eq!(o.code, -1);
-        assert!(o.stderr.contains("timed out"));
+        assert!(timed_out(&o));
+        let mut c = Command::new("/bin/sh");
+        c.args(["-c", "echo boom >&2; exit 1"]);
+        assert!(!timed_out(&run_with_timeout(&mut c, Duration::from_secs(5)).unwrap()));
         assert!(t.elapsed() < Duration::from_secs(3));
     }
 }

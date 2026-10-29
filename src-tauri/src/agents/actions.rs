@@ -1,6 +1,6 @@
 //! Start, stop, delete, switch model and dismiss: the write side of Agents.
 
-use super::cli::{read_settings, Cli, CliOutput};
+use super::cli::{read_settings, timed_out, Cli, CliOutput};
 use super::model::{parse_agents, Agent, Kind};
 use super::projects::read_trusted;
 use super::pty::blocking;
@@ -172,6 +172,61 @@ fn trim_slash(s: &str) -> &str {
     s.trim_end_matches('/')
 }
 
+const START_TIMED_OUT: &str = "Claude took too long to start the agent. It may still appear in \
+    the list in a moment: check there before starting it again.";
+/// Clock difference allowed between "the start was asked" and the agent's `startedAt`.
+const START_SLACK_MS: i64 = 5_000;
+
+fn now_ms() -> i64 {
+    chrono::Utc::now().timestamp_millis()
+}
+
+/// After `claude --bg` was killed at its timeout: the agent it started anyway, found in the list
+/// by name and folder among those started since `since_ms` (the newest, `not` excepted).
+fn started_meanwhile(
+    cli: &dyn Cli,
+    name: &str,
+    folder: &str,
+    since_ms: i64,
+    not: Option<&str>,
+) -> Option<String> {
+    fetch_agents(cli)
+        .ok()?
+        .into_iter()
+        .filter(|a| a.kind == Kind::Background && a.name == name)
+        .filter(|a| trim_slash(&a.cwd) == trim_slash(folder))
+        .filter(|a| a.started_at >= since_ms - START_SLACK_MS)
+        .filter_map(|a| {
+            let id = a.short_id.filter(|s| valid_short_id(s) && Some(s.as_str()) != not)?;
+            Some((a.started_at, id))
+        })
+        .max_by_key(|(at, _)| *at)
+        .map(|(_, id)| id)
+}
+
+/// The short id of the agent `claude --bg` started: the one it printed or, when it timed out
+/// while the agent was still being set up, the one that shows up in the list.
+fn backgrounded(
+    cli: &dyn Cli,
+    out: &CliOutput,
+    (name, folder): (&str, &str),
+    since_ms: i64,
+    not: Option<&str>,
+    fallback: &str,
+) -> Result<String, String> {
+    if let Some(l) = not_trusted_line(out) {
+        return Err(l);
+    }
+    if let Some(id) = last_backgrounded_id(&out.stdout) {
+        return Ok(id);
+    }
+    if timed_out(out) {
+        return started_meanwhile(cli, name, folder, since_ms, not)
+            .ok_or_else(|| START_TIMED_OUT.to_string());
+    }
+    Err(first_error_line(out, fallback))
+}
+
 pub fn start(
     cli: &dyn Cli,
     trusted: &[String],
@@ -192,12 +247,10 @@ pub fn start(
     if !trusted.iter().any(|t| trim_slash(t) == trim_slash(folder)) {
         return Err("Folder not trusted: open it once with Claude Code first".into());
     }
-    let out = cli.run(&args(&["--bg", "--model", model, "--name", name, task]), Path::new(folder));
-    if let Some(l) = not_trusted_line(&out) {
-        return Err(l);
-    }
-    last_backgrounded_id(&out.stdout)
-        .ok_or_else(|| first_error_line(&out, "Failed to start the agent"))
+    let since = now_ms();
+    let argv = args(&["--bg", "--model", model, "--name", name, task]);
+    let out = cli.run_start(&argv, Path::new(folder));
+    backgrounded(cli, &out, (name, folder), since, None, "Failed to start the agent")
 }
 
 pub fn stop(cli: &dyn Cli, home: &Path, short_id: &str) -> Result<(), String> {
@@ -248,16 +301,15 @@ pub fn switch_model(
     }
     let name = if valid_name(&agent.name) { agent.name.as_str() } else { short };
     stop(cli, home, short)?;
-    let out = cli.run(
+    let since = now_ms();
+    let out = cli.run_start(
         &args(&["--resume", &agent.session_id, "--bg", "--model", model, "--name", name]),
         Path::new(&agent.cwd),
     );
-    let new_id = match not_trusted_line(&out) {
-        Some(l) => Err(l),
-        None => last_backgrounded_id(&out.stdout)
-            .ok_or_else(|| first_error_line(&out, "unknown error")),
-    }
-    .map_err(|e| format!("Stopped the old agent; starting the copy failed: {e}"))?;
+    // On a timeout the copy is looked up by name, so it still gets its link and model below:
+    // otherwise it would show as blocked, and a retry would start a second copy.
+    let new_id = backgrounded(cli, &out, (name, &agent.cwd), since, Some(short), "unknown error")
+        .map_err(|e| format!("Stopped the old agent; starting the copy failed: {e}"))?;
     // Best effort: the copy already runs, so a bookkeeping failure is not a failed switch.
     let _ = update_state(state_dir, |st| {
         st.links.insert(agent.session_id.clone(), new_id.clone());
@@ -561,6 +613,80 @@ mod tests {
         assert_eq!(cli.calls().len(), 2);
         assert!(read_state(&dir).links.is_empty());
         assert!(!dir.join(STATE_FILE).exists());
+    }
+
+    fn timeout() -> CliOutput {
+        CliOutput { code: -1, stdout: String::new(), stderr: "timed out".into() }
+    }
+
+    /// A listing: (short id, name, cwd, startedAt).
+    fn listing(rows: &[(&str, &str, &str, i64)]) -> CliOutput {
+        let rows: Vec<String> = rows
+            .iter()
+            .map(|(id, name, cwd, at)| {
+                format!(
+                    r#"{{"id":"{id}","sessionId":"{id}-0000-0000-0000-000000000000","name":"{name}","cwd":"{cwd}","kind":"background","startedAt":{at}}}"#
+                )
+            })
+            .collect();
+        ok(&format!("[{}]", rows.join(",")))
+    }
+
+    #[test]
+    fn start_timeout_finds_the_agent_by_name() {
+        let now = now_ms();
+        let cli = FakeCli::new(vec![
+            timeout(),
+            listing(&[
+                ("11111111", "job", "/work/proj", now - 3_600_000), // an older one, same name
+                ("22222222", "other", "/work/proj", now + 500),
+                ("33333333", "job", "/elsewhere", now + 500),
+                ("44444444", "job", "/work/proj", now + 800),
+            ]),
+        ]);
+        assert_eq!(start(&cli, &trusted(), "/work/proj/", "t", "opus", "job").unwrap(), "44444444");
+        assert_eq!(cli.calls()[1].0, args(&["agents", "--json", "--all"]));
+    }
+
+    #[test]
+    fn start_timeout_without_the_agent_says_so() {
+        let now = now_ms();
+        let old = listing(&[("11111111", "job", "/work/proj", now - 60_000)]);
+        let cli = FakeCli::new(vec![timeout(), old]);
+        let err = start(&cli, &trusted(), "/work/proj", "t", "opus", "job").unwrap_err();
+        assert_eq!(err, START_TIMED_OUT);
+        // A plain failure is not looked up.
+        let cli = FakeCli::new(vec![fail("boom")]);
+        assert_eq!(start(&cli, &trusted(), "/work/proj", "t", "opus", "job").unwrap_err(), "boom");
+        assert_eq!(cli.calls().len(), 1);
+    }
+
+    #[test]
+    fn switch_model_timeout_still_records_the_copy() {
+        let dir = tmp("switch-timeout");
+        let now = now_ms();
+        let cli = FakeCli::new(vec![
+            ok("stopped 0a1b2c3d\n"),
+            timeout(),
+            listing(&[
+                ("0a1b2c3d", "worker", "/work/proj", now - 1_000),
+                ("99999999", "worker", "/work/proj", now + 900),
+            ]),
+        ]);
+        let id = switch_model(&cli, Path::new("/h"), &agent(Kind::Background), "haiku", &dir).unwrap();
+        assert_eq!(id, "99999999", "the old agent, even if listed as new, is never the copy");
+        assert_eq!(read_state(&dir).links.get(SID).map(String::as_str), Some("99999999"));
+        assert_eq!(
+            read_state(&dir).copies.get("99999999"),
+            Some(&CopyOf { session_id: SID.into(), model: "haiku".into() })
+        );
+        // Not found: the switch reports it, and records nothing.
+        let dir = tmp("switch-timeout-missing");
+        let cli = FakeCli::new(vec![ok("stopped 0a1b2c3d\n"), timeout(), listing(&[])]);
+        let err = switch_model(&cli, Path::new("/h"), &agent(Kind::Background), "haiku", &dir)
+            .unwrap_err();
+        assert!(err.starts_with("Stopped the old agent") && err.contains("took too long"), "{err}");
+        assert!(read_state(&dir).copies.is_empty());
     }
 
     #[test]
