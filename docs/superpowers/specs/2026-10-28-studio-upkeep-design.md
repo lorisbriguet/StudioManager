@@ -289,3 +289,16 @@ existing Agent access switches. Follows
 - Component structure, query hooks, and how the Upkeep page splits into files, following existing pages
   (Resources, Expenses).
 - Template intervals (§9).
+
+## Shared equipment between organisations
+
+Equipment is per organisation by default ([organisations](2026-09-22-organisations-design.md)). Settings › Upkeep ›
+Equipment lets an organisation use another's machines, upkeep and consumables instead (`equipmentFrom` in its
+prefs; absent = its own).
+
+- The borrowing organisation reads and writes the other's database (`getEquipmentDb`, and `execute_batch` with a
+  `targetOrg`). The data exists once; nothing is copied.
+- Not shared: projects, expenses, connections and subscriptions stay with the organisation that owns them.
+  A borrowed machine has no project links, and its consumable use is not tied to a project.
+- Calendar events for upkeep items are written only by the organisation that owns the equipment.
+- Test and presentation mode never reach into another organisation.

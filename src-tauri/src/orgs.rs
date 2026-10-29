@@ -29,6 +29,10 @@ pub struct OrgPrefs {
     pub renewal_window_days: u32,
     pub backup_path: String,
     pub export_language: String,
+    /// Id of another organisation whose machines and consumables this one
+    /// uses. Absent: this organisation keeps its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub equipment_from: Option<String>,
 }
 
 fn default_upkeep_alert() -> String {
@@ -61,6 +65,7 @@ impl Default for OrgPrefs {
             renewal_window_days: default_renewal_window_days(),
             backup_path: String::new(),
             export_language: "FR".to_string(),
+            equipment_from: None,
         }
     }
 }
@@ -326,6 +331,14 @@ mod tests {
             ..OrgPrefs::default()
         }).unwrap()).unwrap();
         assert_eq!(round.upkeep_alert_default, "week_before");
+        // Absent in older registries: the organisation keeps its own equipment.
+        assert_eq!(prefs.equipment_from, None);
+        let json = serde_json::to_string(&OrgPrefs {
+            equipment_from: Some("9qr85u".into()),
+            ..OrgPrefs::default()
+        }).unwrap();
+        assert!(json.contains(r#""equipmentFrom":"9qr85u""#));
+        assert!(!serde_json::to_string(&OrgPrefs::default()).unwrap().contains("equipmentFrom"));
     }
 
     #[test]

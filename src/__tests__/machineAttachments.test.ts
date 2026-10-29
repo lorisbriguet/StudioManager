@@ -18,7 +18,8 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 vi.mock("../lib/orgPaths", () => ({ orgPaths: async () => ({ root: "/data/orgs/a" }) }));
 vi.mock("../db/index", () => ({
-  getDb: async () => ({ execute, select: vi.fn(async () => []) }),
+  getEquipmentDb: async () => ({ execute, select: vi.fn(async () => []) }),
+  equipmentOrgId: () => null,
   validateFields: vi.fn(),
   TransactionBatch: class {},
 }));

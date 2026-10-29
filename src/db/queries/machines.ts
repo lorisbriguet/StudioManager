@@ -1,5 +1,5 @@
 import { copyFile, mkdir, exists, remove } from "@tauri-apps/plugin-fs";
-import { getDb, validateFields, TransactionBatch } from "../index";
+import { getEquipmentDb, equipmentOrgId, validateFields, TransactionBatch } from "../index";
 import { orgPaths } from "../../lib/orgPaths";
 import { sanitizeSegment } from "../../lib/attachReceipt";
 import { buildUpkeepItemInsert } from "./upkeepItems";
@@ -19,12 +19,12 @@ const MACHINE_COLUMNS = [
 ] as const;
 
 export async function getMachines(): Promise<Machine[]> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   return db.select<Machine[]>("SELECT * FROM machines ORDER BY name ASC");
 }
 
 export async function getMachine(id: number): Promise<Machine | null> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   const rows = await db.select<Machine[]>("SELECT * FROM machines WHERE id = $1", [id]);
   return rows[0] ?? null;
 }
@@ -38,7 +38,7 @@ export async function createMachine(
   items: MachineTemplateItemInput[] = []
 ): Promise<number> {
   const cols = MACHINE_COLUMNS.filter((c) => data[c] !== undefined);
-  const batch = new TransactionBatch();
+  const batch = new TransactionBatch(undefined, equipmentOrgId());
   batch.add(
     `INSERT INTO machines (${cols.join(", ")}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(", ")})`,
     cols.map((c) => data[c])
@@ -57,7 +57,7 @@ export async function updateMachine(id: number, data: Partial<MachineInput>): Pr
   );
   if (fields.length === 0) return;
   validateFields(fields);
-  const db = await getDb();
+  const db = await getEquipmentDb();
   const sets = fields.map((f, i) => `${f} = $${i + 1}`);
   // A new warranty date is a new warranty notice; saving the same date keeps
   // the marker (SQLite reads the old row in every right-hand side).
@@ -73,12 +73,14 @@ export async function updateMachine(id: number, data: Partial<MachineInput>): Pr
 }
 
 export async function deleteMachine(id: number): Promise<void> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   await db.execute("DELETE FROM machines WHERE id = $1", [id]);
 }
 
 export async function getMachineProjectIds(machineId: number): Promise<number[]> {
-  const db = await getDb();
+  // Project ids belong to the organisation that owns the project: borrowed equipment has no project links.
+  if (equipmentOrgId()) return [];
+  const db = await getEquipmentDb();
   const rows = await db.select<{ project_id: number }[]>(
     "SELECT project_id FROM machine_projects WHERE machine_id = $1",
     [machineId]
@@ -88,7 +90,9 @@ export async function getMachineProjectIds(machineId: number): Promise<number[]>
 
 /** Replace the set of projects a machine is used on (one transaction). */
 export async function setMachineProjects(id: number, projectIds: number[]): Promise<void> {
-  const batch = new TransactionBatch();
+  // Project ids belong to the organisation that owns the project: borrowed equipment has no project links.
+  if (equipmentOrgId()) return;
+  const batch = new TransactionBatch(undefined, equipmentOrgId());
   batch.add("DELETE FROM machine_projects WHERE machine_id = $1", [id]);
   for (const pid of new Set(projectIds)) {
     batch.add("INSERT INTO machine_projects (machine_id, project_id) VALUES ($1, $2)", [id, pid]);
@@ -97,7 +101,9 @@ export async function setMachineProjects(id: number, projectIds: number[]): Prom
 }
 
 export async function getMachinesByProject(projectId: number): Promise<Machine[]> {
-  const db = await getDb();
+  // Project ids belong to the organisation that owns the project: borrowed equipment has no project links.
+  if (equipmentOrgId()) return [];
+  const db = await getEquipmentDb();
   return db.select<Machine[]>(
     `SELECT m.* FROM machines m
      JOIN machine_projects mp ON mp.machine_id = m.id
@@ -108,7 +114,7 @@ export async function getMachinesByProject(projectId: number): Promise<Machine[]
 }
 
 export async function getMachineFiles(machineId: number): Promise<MachineFile[]> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   return db.select<MachineFile[]>(
     "SELECT * FROM machine_files WHERE machine_id = $1 ORDER BY id ASC",
     [machineId]
@@ -133,7 +139,7 @@ export async function addMachineFile(
     stored = `${dir}/${Date.now()}_${base}`;
     await copyFile(f.path_or_url, stored);
   }
-  const db = await getDb();
+  const db = await getEquipmentDb();
   const result = await db.execute(
     "INSERT INTO machine_files (machine_id, label, kind, path_or_url) VALUES ($1, $2, $3, $4)",
     [machineId, f.label, f.kind, stored]
@@ -142,7 +148,7 @@ export async function addMachineFile(
 }
 
 export async function removeMachineFile(fileId: number): Promise<void> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   const rows = await db.select<MachineFile[]>("SELECT * FROM machine_files WHERE id = $1", [fileId]);
   await db.execute("DELETE FROM machine_files WHERE id = $1", [fileId]);
   const row = rows[0];
@@ -152,7 +158,7 @@ export async function removeMachineFile(fileId: number): Promise<void> {
 }
 
 export async function getServiceLog(machineId: number): Promise<ServiceLogEntry[]> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   return db.select<ServiceLogEntry[]>(
     "SELECT * FROM service_log WHERE machine_id = $1 ORDER BY done_on DESC, id DESC",
     [machineId]
@@ -162,7 +168,7 @@ export async function getServiceLog(machineId: number): Promise<ServiceLogEntry[
 export async function addServiceLog(
   entry: Omit<ServiceLogEntry, "id" | "created_at">
 ): Promise<number> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   const result = await db.execute(
     `INSERT INTO service_log (machine_id, upkeep_item_id, done_on, description, cost, expense_id, reading)
      VALUES ($1, $2, $3, $4, $5, $6, $7)`,

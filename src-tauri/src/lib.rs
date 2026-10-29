@@ -83,11 +83,29 @@ fn check_expected_org(expected: Option<&str>, active_id: &str) -> Result<(), Str
     }
 }
 
+/// The database a batch writes to: the open organisation's, or `target`'s
+/// production database when an organisation borrows another's equipment.
+/// Test and presentation copies never reach into another organisation.
+fn batch_db_path(app: &tauri::AppHandle, org: &ActiveOrg, target: Option<&str>) -> Result<PathBuf, String> {
+    let Some(target) = target.filter(|t| *t != org.id) else {
+        return Ok(org.db_path());
+    };
+    if org.in_mode() {
+        return Err("another organisation's data is not available in test or presentation mode".into());
+    }
+    let dir = orgs::org_dir(&app_data_dir(app)?, target);
+    if !dir.join(DB_FILE).exists() {
+        return Err(format!("unknown organisation: {target}"));
+    }
+    Ok(dir.join(DB_FILE))
+}
+
 #[tauri::command]
 fn execute_batch(
     app: tauri::AppHandle,
     statements: Vec<SqlStatement>,
     expected_org: Option<String>,
+    target_org: Option<String>,
 ) -> Result<serde_json::Value, String> {
     if statements.len() > MAX_BATCH_STATEMENTS {
         return Err(format!(
@@ -97,7 +115,7 @@ fn execute_batch(
     }
     let org = active_org(&app)?;
     check_expected_org(expected_org.as_deref(), &org.id)?;
-    let db_path = org.db_path();
+    let db_path = batch_db_path(&app, &org, target_org.as_deref())?;
 
     let conn =
         rusqlite::Connection::open(&db_path).map_err(|e| format!("Failed to open DB: {e}"))?;

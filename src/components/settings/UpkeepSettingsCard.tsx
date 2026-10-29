@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { CARD_STACK, Input, Select, SettingRow, SettingsCard } from "../ui";
 import { ConnectionsCard } from "../upkeep/ConnectionsCard";
 import { logError } from "../../lib/log";
 import { useAppStore } from "../../stores/app-store";
+import { useOrgStore } from "../../stores/org-store";
+import { closeEquipmentDb } from "../../db";
 import { useT } from "../../i18n/useT";
 import { syncAllUpkeepEvents } from "../../lib/upkeep/calendar";
 import type { UpkeepAlert } from "../../types/upkeep";
@@ -39,6 +42,42 @@ function DaysInput({ label, value, onCommit }: { label: string; value: number; o
   );
 }
 
+/** Pick whose machines and consumables this organisation uses. */
+function EquipmentSourceRow() {
+  const t = useT();
+  const queryClient = useQueryClient();
+  const organisations = useOrgStore((s) => s.organisations);
+  const activeId = useOrgStore((s) => s.activeId);
+  const from = useOrgStore((s) => s.activePrefs()?.equipmentFrom ?? "");
+  const others = organisations.filter((o) => o.id !== activeId);
+  if (others.length === 0) return null;
+
+  const onChange = async (value: string) => {
+    await useOrgStore.getState().savePrefs({ equipmentFrom: value || undefined });
+    // The next query opens the right database; cached rows belong to the old one.
+    await closeEquipmentDb();
+    await queryClient.invalidateQueries();
+  };
+
+  return (
+    <SettingsCard title={t.upkeep_settings_equipment}>
+      <SettingRow label={t.upkeep_settings_equipment_source} desc={t.upkeep_settings_equipment_source_desc}>
+        <Select
+          aria-label={t.upkeep_settings_equipment_source}
+          value={from}
+          onChange={(e) => void onChange(e.target.value)}
+          fullWidth={false}
+        >
+          <option value="">{t.upkeep_settings_equipment_own}</option>
+          {others.map((o) => (
+            <option key={o.id} value={o.id}>{o.name}</option>
+          ))}
+        </Select>
+      </SettingRow>
+    </SettingsCard>
+  );
+}
+
 /** Settings card for Studio upkeep. */
 export function UpkeepSettingsCard() {
   const t = useT();
@@ -66,6 +105,7 @@ export function UpkeepSettingsCard() {
 
   return (
     <div className={CARD_STACK}>
+      <EquipmentSourceRow />
       <SettingsCard title={t.upkeep_settings_reminders}>
         <SettingRow label={t.upkeep_settings_alert} desc={t.upkeep_settings_alert_desc}>
           <Select

@@ -7,6 +7,7 @@ import { useAppStore } from "../../stores/app-store";
 import { useOrgStore } from "../../stores/org-store";
 import { notify, getLabels } from "../notify";
 import { effectiveDue, shouldMoveEvent } from "./schedule";
+import { equipmentOrgId } from "../../db";
 import { getMachine } from "../../db/queries/machines";
 import { getUpkeepItem, getUpkeepItems, setItemCalendarEvent } from "../../db/queries/upkeepItems";
 import { getSubscription, getSubscriptions, setSubscriptionCalendarEvent } from "../../db/queries/subscriptions";
@@ -89,6 +90,8 @@ export async function syncItemEvent(
     calendar_event_date: item.calendar_event_date,
   };
   if (calendarOff()) return current;
+  // Borrowed equipment: the organisation that owns it keeps the calendar events.
+  if (equipmentOrgId()) return current;
   const due = effectiveDue(item);
   const wanted =
     useAppStore.getState().calendarSync &&

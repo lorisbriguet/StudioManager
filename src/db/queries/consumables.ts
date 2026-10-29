@@ -1,4 +1,4 @@
-import { getDb, validateFields, TransactionBatch } from "../index";
+import { getEquipmentDb, equipmentOrgId, validateFields, TransactionBatch } from "../index";
 import type { Consumable } from "../../types/upkeep";
 
 export type ConsumableInput = Pick<Consumable, "name" | "unit"> &
@@ -32,14 +32,14 @@ export function isLow(c: Pick<Consumable, "stock" | "reorder_level">): boolean {
  * SQLite sorts the NULL ratio first, so they are pushed down explicitly.
  */
 export async function getConsumables(): Promise<Consumable[]> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   return db.select<Consumable[]>(
     "SELECT * FROM consumables ORDER BY (reorder_level = 0) ASC, stock / NULLIF(reorder_level, 0) ASC, name ASC"
   );
 }
 
 export async function getConsumable(id: number): Promise<Consumable | null> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   const rows = await db.select<Consumable[]>("SELECT * FROM consumables WHERE id = $1", [id]);
   return rows[0] ?? null;
 }
@@ -47,7 +47,7 @@ export async function getConsumable(id: number): Promise<Consumable | null> {
 export async function createConsumable(data: ConsumableInput): Promise<number> {
   const cols = CONSUMABLE_COLUMNS.filter((c) => data[c] !== undefined);
   validateFields([...cols]);
-  const db = await getDb();
+  const db = await getEquipmentDb();
   const result = await db.execute(
     `INSERT INTO consumables (${cols.join(", ")}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(", ")})`,
     cols.map((c) => data[c])
@@ -68,7 +68,7 @@ export async function updateConsumable(id: number, data: Partial<ConsumableInput
   validateFields(fields);
   const sets = fields.map((f, i) => `${f} = $${i + 1}`);
   sets.push("updated_at = datetime('now')");
-  const batch = new TransactionBatch();
+  const batch = new TransactionBatch(undefined, equipmentOrgId());
   batch.add(
     `UPDATE consumables SET ${sets.join(", ")} WHERE id = $${fields.length + 1}`,
     [...fields.map((f) => data[f as keyof ConsumableInput]), id]
@@ -83,7 +83,7 @@ export async function updateConsumable(id: number, data: Partial<ConsumableInput
 }
 
 export async function deleteConsumable(id: number): Promise<void> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   await db.execute("DELETE FROM consumables WHERE id = $1", [id]);
 }
 
@@ -98,7 +98,9 @@ export async function logConsumableUsage(
   usedOnISO: string
 ): Promise<void> {
   if (!(amount > 0)) throw new Error("Amount must be greater than zero");
-  const batch = new TransactionBatch();
+  // A project id of this organisation means nothing in the borrowed database.
+  if (equipmentOrgId()) projectId = null;
+  const batch = new TransactionBatch(undefined, equipmentOrgId());
   batch.add(
     `INSERT INTO consumable_usage (consumable_id, project_id, used_on, amount, cost)
      SELECT id, $2, $3, $4, CASE WHEN unit_price IS NULL THEN NULL ELSE $4 * unit_price END
@@ -115,7 +117,7 @@ export async function logConsumableUsage(
 /** Add stock; clears the low-stock notification once stock is above the reorder level. */
 export async function restockConsumable(id: number, amount: number): Promise<void> {
   if (!(amount > 0)) throw new Error("Amount must be greater than zero");
-  const batch = new TransactionBatch();
+  const batch = new TransactionBatch(undefined, equipmentOrgId());
   batch.add(
     "UPDATE consumables SET stock = stock + $1, updated_at = datetime('now') WHERE id = $2",
     [amount, id]
@@ -129,7 +131,8 @@ export async function restockConsumable(id: number, amount: number): Promise<voi
 
 /** Material used on a project, grouped by consumable. */
 export async function getProjectMaterialCost(projectId: number): Promise<ProjectMaterialCostRow[]> {
-  const db = await getDb();
+  if (equipmentOrgId()) return [];
+  const db = await getEquipmentDb();
   return db.select<ProjectMaterialCostRow[]>(
     `SELECT c.name AS name, c.unit AS unit, c.currency AS currency,
             SUM(u.amount) AS amount, COALESCE(SUM(u.cost), 0) AS cost

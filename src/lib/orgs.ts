@@ -18,6 +18,8 @@ export interface OrgPrefs {
   renewalWindowDays?: number;
   backupPath: string;
   exportLanguage: AppLanguage;
+  /** Id of another organisation whose machines and consumables this one uses. Absent: its own. */
+  equipmentFrom?: string;
 }
 
 export interface Organisation {
