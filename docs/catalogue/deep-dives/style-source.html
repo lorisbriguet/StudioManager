@@ -1,0 +1,270 @@
+<title>StudioManager Button</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one spec column (max 960px): findings, live comparison next to fields, proposal options, decisions.
+   Colours are StudioManager's src/index.css tokens. */
+:root {
+  --color-bg: #ffffff; --color-surface: #ffffff; --color-sidebar: #f8f8f8;
+  --color-text: #111827; --color-text-secondary: #374151; --color-muted: #5d6570;
+  --color-border: #e5e5e5; --color-border-divider: #f7f7f7; --color-border-header: #f0f0f0;
+  --color-input-bg: #f5f5f5; --color-input-border: #e5e5e5; --color-hover-row: #f8f8f8;
+  --color-accent: #2563eb; --color-accent-light: #dbeafe;
+  --color-success-bg: #dcfce7; --color-success-text: #15803d;
+  --color-warning-bg: #fef9c3; --color-warning-text: #a16207;
+  --color-danger-bg: #fee2e2; --color-danger-text: #dc2626;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg: #111111; --color-surface: #161616; --color-sidebar: #161616;
+    --color-text: #e5e5e5; --color-text-secondary: #d4d4d4; --color-muted: #b0b0b0;
+    --color-border: #333333; --color-border-divider: #1f1f1f; --color-border-header: #2a2a2a;
+    --color-input-bg: #1a1a1a; --color-input-border: #2a2a2a; --color-hover-row: #1a1a1a;
+    --color-accent-light: #172554;
+    --color-success-bg: #052e16; --color-success-text: #4ade80;
+    --color-warning-bg: #1c1917; --color-warning-text: #fbbf24;
+    --color-danger-bg: #2a1215; --color-danger-text: #f87171;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --color-bg: #111111; --color-surface: #161616; --color-sidebar: #161616;
+  --color-text: #e5e5e5; --color-text-secondary: #d4d4d4; --color-muted: #b0b0b0;
+  --color-border: #333333; --color-border-divider: #1f1f1f; --color-border-header: #2a2a2a;
+  --color-input-bg: #1a1a1a; --color-input-border: #2a2a2a; --color-hover-row: #1a1a1a;
+  --color-accent-light: #172554;
+  --color-success-bg: #052e16; --color-success-text: #4ade80;
+  --color-warning-bg: #1c1917; --color-warning-text: #fbbf24;
+  --color-danger-bg: #2a1215; --color-danger-text: #f87171;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--color-bg); color: var(--color-text); font: 14px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
+.page { max-width: 960px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 96px; display: flex; flex-direction: column; gap: 44px; }
+h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: 14px; font-weight: 600; margin: 0; }
+p { margin: 0; max-width: 68ch; color: var(--color-text-secondary); }
+code { font-family: var(--mono); font-size: 12px; background: var(--color-input-bg); padding: 1px 5px; border-radius: 4px; }
+.eyebrow { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: .1em; color: var(--color-muted); }
+.muted { color: var(--color-muted); } .xs { font-size: 12px; }
+section { display: flex; flex-direction: column; gap: 16px; }
+.sec-head { display: flex; flex-direction: column; gap: 4px; }
+.panel { border: 1px solid var(--color-border-header); border-radius: 12px; background: var(--color-surface); overflow: hidden; }
+.stats { display: flex; gap: 28px; flex-wrap: wrap; }
+.stat b { display: block; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12px; color: var(--color-muted); }
+.seg { display: inline-flex; background: var(--color-input-bg); border-radius: 6px; padding: 2px; gap: 2px; }
+.seg button { font: inherit; font-size: 12px; border: 0; background: transparent; color: var(--color-muted); padding: 2px 8px; border-radius: 4px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--color-surface); color: var(--color-text); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+button:focus-visible { outline: none; box-shadow: 0 0 0 1px var(--color-surface), 0 0 0 3px color-mix(in srgb, var(--color-accent) 50%, transparent); }
+header.top { display: flex; flex-direction: column; gap: 10px; }
+.bar { display: flex; justify-content: flex-end; }
+
+/* heatmap */
+.tw { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-size: 12px; font-weight: 400; color: var(--color-muted); padding: 8px 12px; border-bottom: 1px solid var(--color-border-header); white-space: nowrap; }
+td { padding: 8px 12px; border-bottom: 1px solid var(--color-border-divider); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+td.n { font-variant-numeric: tabular-nums; text-align: center; width: 70px; }
+td.n span { display: inline-block; min-width: 32px; padding: 2px 6px; border-radius: 6px; }
+.h0 { color: var(--color-muted); }
+.h1 { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
+.h2 { background: color-mix(in srgb, var(--color-accent) 22%, transparent); }
+.h3 { background: color-mix(in srgb, var(--color-accent) 40%, transparent); color: var(--color-text); font-weight: 600; }
+.flag { font-size: 11px; font-weight: 500; padding: 1px 7px; border-radius: 99px; background: var(--color-danger-bg); color: var(--color-danger-text); white-space: nowrap; }
+.flag.w { background: var(--color-warning-bg); color: var(--color-warning-text); }
+
+/* app controls */
+.btn { font: inherit; display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; cursor: pointer; white-space: nowrap; font-weight: 500; }
+.s-sm { padding: 4px 10px; font-size: 12px; line-height: 16px; border-radius: 6px; }
+.s-sm0 { padding: 4px 10px; font-size: 12px; line-height: 16px; border-radius: 6px; border-width: 0; }
+.s-md { padding: 7px 16px; font-size: 14px; line-height: 20px; border-radius: 8px; border-width: 0; }
+.s-lg { padding: 10px 20px; font-size: 16px; line-height: 24px; border-radius: 8px; border-width: 0; }
+.v-primary { background: var(--color-accent); color: #fff; }
+.v-secondary { background: var(--color-input-bg); color: var(--color-text-secondary); }
+.v-ghost { background: transparent; border: 1px solid var(--color-input-border); color: var(--color-muted); }
+.v-danger { background: var(--color-danger-bg); color: var(--color-danger-text); }
+.v-dangero { background: transparent; border: 1px solid color-mix(in srgb, var(--color-danger-text) 30%, transparent); color: var(--color-danger-text); }
+.v-success { background: var(--color-success-bg); color: var(--color-success-text); }
+.v-link { background: none; border: 0; padding: 0; color: var(--color-accent); }
+.field { background: var(--color-input-bg); border: 1px solid var(--color-input-border); border-radius: 6px; padding: 4px 10px; font-size: 12px; line-height: 16px; color: var(--color-text); display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.field svg { color: var(--color-muted); }
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ruler { position: relative; padding: 18px 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--color-bg);
+  background-image: linear-gradient(var(--color-accent) 0 0), linear-gradient(var(--color-accent) 0 0);
+  background-size: 100% 1px, 100% 1px; background-repeat: no-repeat; background-position: 0 18px, 0 calc(100% - 18px); }
+.h-tag { font-family: var(--mono); font-size: 10px; color: var(--color-muted); }
+.cmp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.cmp-col { padding: 16px; display: flex; flex-direction: column; gap: 12px; border-right: 1px solid var(--color-border-header); min-width: 0; }
+.cmp-col:last-child { border-right: 0; }
+.cmp-col h3 { margin: 0; font-size: 13px; font-weight: 600; }
+.modal { border: 1px solid var(--color-border-header); border-radius: 12px; background: var(--color-surface); overflow: hidden; }
+.modal .mb { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.modal .mf { padding: 10px 16px; border-top: 1px solid var(--color-border-divider); display: flex; justify-content: flex-end; gap: 8px; }
+.lab { font-size: 12px; color: var(--color-muted); }
+.toolbar { padding: 10px 16px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--color-border-header); }
+.toolbar .t { font-size: 20px; font-weight: 600; margin-right: auto; }
+
+/* options */
+.opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.opt { border: 1px solid var(--color-border-header); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; background: var(--color-surface); }
+.opt h3 { margin: 0; font-size: 14px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
+.opt ul { margin: 0; padding-left: 18px; font-size: 13px; color: var(--color-text-secondary); display: flex; flex-direction: column; gap: 4px; }
+.rec { font-size: 11px; font-weight: 500; padding: 1px 8px; border-radius: 99px; background: var(--color-accent-light); color: var(--color-accent); }
+.dec { display: flex; flex-direction: column; }
+.dec > div { display: grid; grid-template-columns: 24px 1fr; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--color-border-divider); }
+.dec > div:last-child { border-bottom: 0; }
+.dec .n { font-size: 12px; color: var(--color-muted); font-variant-numeric: tabular-nums; padding-top: 2px; }
+.dec b { font-size: 14px; }
+.dec p { font-size: 13px; }
+@media (max-width: 640px) { .cmp-col { border-right: 0; border-bottom: 1px solid var(--color-border-header); } }
+</style>
+
+<div class="page">
+  <header class="top">
+    <span class="eyebrow">StudioManager · ui/Button.tsx</span>
+    <h1>Button</h1>
+    <p>Button has 3 sizes and 7 variants. Fields and dropdowns now all use one compact height, so this page checks what Button actually needs, using real counts from the code.</p>
+    <div class="stats">
+      <div class="stat"><b>138</b><span>buttons in the app</span></div>
+      <div class="stat"><b>3 × 7</b><span>sizes × variants today</span></div>
+      <div class="stat"><b>0</b><span>uses of success</span></div>
+      <div class="stat"><b>24 vs 26px</b><span>sm button vs field height</span></div>
+    </div>
+    <div class="bar"><div class="seg" role="group" aria-label="Theme"><button type="button" data-th="light" id="th-l">Light</button><button type="button" data-th="dark" id="th-d">Dark</button></div></div>
+  </header>
+
+  <section>
+    <div class="sec-head">
+      <h2>How they're used today</h2>
+      <p class="xs muted">Every <code>&lt;Button&gt;</code> outside <code>ui/</code>, counted by variant and size. "default" means the prop was left out.</p>
+    </div>
+    <div class="panel tw">
+      <table>
+        <thead><tr><th>Variant</th><th>Looks like</th><th style="text-align:center">sm</th><th style="text-align:center">md</th><th style="text-align:center">lg</th><th style="text-align:center">Total</th><th></th></tr></thead>
+        <tbody>
+          <tr><td><b>primary</b> <span class="muted xs">(default)</span></td><td><button class="btn s-sm0 v-primary" type="button">Save</button></td><td class="n"><span class="h1">10</span></td><td class="n"><span class="h3">43</span></td><td class="n"><span class="h1">2</span></td><td class="n">55</td><td></td></tr>
+          <tr><td><b>secondary</b></td><td><button class="btn s-sm0 v-secondary" type="button">Cancel</button></td><td class="n"><span class="h1">9</span></td><td class="n"><span class="h2">16</span></td><td class="n"><span class="h1">5</span></td><td class="n">30</td><td></td></tr>
+          <tr><td><b>link</b></td><td><button class="btn s-sm0 v-link" type="button">View all</button></td><td class="n"><span class="h2">26</span></td><td class="n"><span class="h1">2</span></td><td class="n"><span class="h0">0</span></td><td class="n">28</td><td></td></tr>
+          <tr><td><b>ghost</b></td><td><button class="btn s-sm v-ghost" type="button">Export</button></td><td class="n"><span class="h2">14</span></td><td class="n"><span class="h1">3</span></td><td class="n"><span class="h0">0</span></td><td class="n">17</td><td><span class="flag w">really an outline</span></td></tr>
+          <tr><td><b>danger-outline</b></td><td><button class="btn s-sm v-dangero" type="button">Reset data</button></td><td class="n"><span class="h1">5</span></td><td class="n"><span class="h0">0</span></td><td class="n"><span class="h0">0</span></td><td class="n">5</td><td rowspan="2"><span class="flag w">two danger looks</span></td></tr>
+          <tr><td><b>danger</b></td><td><button class="btn s-sm0 v-danger" type="button">Delete</button></td><td class="n"><span class="h1">2</span></td><td class="n"><span class="h1">1</span></td><td class="n"><span class="h0">0</span></td><td class="n">3</td></tr>
+          <tr><td><b>success</b></td><td><button class="btn s-sm0 v-success" type="button">Mark paid</button></td><td class="n"><span class="h0">0</span></td><td class="n"><span class="h0">0</span></td><td class="n"><span class="h0">0</span></td><td class="n">0</td><td><span class="flag">unused</span></td></tr>
+          <tr><td class="muted">Total</td><td></td><td class="n">66</td><td class="n">65</td><td class="n">7</td><td class="n"><b>138</b></td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="xs muted"><b>lg</b> is only the invoice and quote form footers (Preview, Save draft, Save). <b>md</b> is mostly page and dialog actions left at the default, often right next to compact fields.</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Next to the fields</h2>
+      <p class="xs muted">The blue lines mark the top and bottom of a 26px field. A button that doesn't fill them is out of line.</p>
+    </div>
+    <div class="panel">
+      <div class="ruler" style="padding-block:18px">
+        <span class="field" style="width:160px">Fondation Artvis</span>
+        <span class="field">CHF <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+        <button class="btn s-sm0 v-primary" type="button">sm today · 24px</button>
+        <button class="btn s-sm v-primary" type="button">sm fixed · 26px</button>
+        <span class="h-tag">fields 26px</span>
+      </div>
+      <div style="padding:14px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid var(--color-border-header)">
+        <span class="field" style="width:160px">Fondation Artvis</span>
+        <button class="btn s-md v-primary" type="button">md · 34px</button>
+        <button class="btn s-lg v-primary" type="button">lg · 44px</button>
+        <span class="h-tag">today's default and the form footer size</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>The same screens, before and after</h2>
+      <p class="xs muted">A page header, a dialog and a form footer. Left: today. Right: option A below (one size, 26px).</p>
+    </div>
+    <div class="panel cmp-grid">
+      <div class="cmp-col">
+        <h3>Today</h3>
+        <div class="toolbar" style="border:1px solid var(--color-border-header);border-radius:8px"><span class="t">Invoices</span><span class="field">2026 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span><button class="btn s-md v-primary" type="button">New invoice</button></div>
+        <div class="modal"><div class="mb"><span class="lab">Paid on</span><span class="field">31.10.2026</span></div><div class="mf"><button class="btn s-md v-secondary" type="button">Cancel</button><button class="btn s-md v-primary" type="button">Save</button></div></div>
+        <div class="row" style="justify-content:flex-end"><button class="btn s-lg v-secondary" type="button">Preview</button><button class="btn s-lg v-primary" type="button">Save</button></div>
+      </div>
+      <div class="cmp-col">
+        <h3>Option A: one size</h3>
+        <div class="toolbar" style="border:1px solid var(--color-border-header);border-radius:8px"><span class="t">Invoices</span><span class="field">2026 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span><button class="btn s-sm v-primary" type="button">New invoice</button></div>
+        <div class="modal"><div class="mb"><span class="lab">Paid on</span><span class="field">31.10.2026</span></div><div class="mf"><button class="btn s-sm v-secondary" type="button">Cancel</button><button class="btn s-sm v-primary" type="button">Save</button></div></div>
+        <div class="row" style="justify-content:flex-end"><button class="btn s-sm v-secondary" type="button">Preview</button><button class="btn s-sm v-primary" type="button">Save</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Proposal</h2>
+    </div>
+    <div class="opts">
+      <div class="opt">
+        <h3>A · One size <span class="rec">chosen</span></h3>
+        <ul>
+          <li>Every button is 26px, 12px text, same as fields, dropdowns and chips.</li>
+          <li><code>size</code> goes away; 138 call sites lose it (or it's ignored).</li>
+          <li>Matches the "thin everywhere" choice for dropdowns and fields.</li>
+          <li>The primary button still stands out by colour, not by size.</li>
+        </ul>
+      </div>
+      <div class="opt">
+        <h3>B · Two sizes</h3>
+        <ul>
+          <li><code>sm</code> 26px default everywhere.</li>
+          <li><code>md</code> 32px kept for one place: the main action of a page or a form footer.</li>
+          <li><code>lg</code> removed (7 uses move to md).</li>
+          <li>More emphasis on big actions, but two heights to keep in line.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="opts">
+      <div class="opt">
+        <h3>Variants: 7 → 5</h3>
+        <ul>
+          <li><b>primary</b> · <b>secondary</b> · <b>link</b> stay.</li>
+          <li><b>ghost</b> becomes <b>outline</b> (what it looks like): a bordered, transparent button.</li>
+          <li><b>danger</b>: one look for all 8 destructive buttons (see decision 2).</li>
+          <li><b>success</b> removed (unused).</li>
+        </ul>
+      </div>
+      <div class="opt">
+        <h3>The same scale everywhere</h3>
+        <ul>
+          <li>26px is the one control height: Button, Input, Select, DatePicker, SegmentedControl, FilterChip.</li>
+          <li>Icon-only controls: IconButton sm 24px, xs 18px inside rows.</li>
+          <li>Pills: Tag, Badge, CountBadge stay smaller (they label, they don't act).</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Decided</h2></div>
+    <div class="panel dec">
+      <div><span class="n">1</span><div><b>One size.</b><p>Every button is 26px with 12px text, the same height as fields and dropdowns. The <code>size</code> prop is gone from all 78 call sites.</p></div></div>
+      <div><span class="n">2</span><div><b>Danger is outlined.</b><p><button class="btn s-sm v-dangero" type="button" style="margin-right:4px">Delete</button> is the one look for all 8 destructive buttons; <code>danger-outline</code> merged into <code>danger</code>.</p></div></div>
+      <div><span class="n">3</span><div><b>ghost is now outline.</b><p>17 call sites renamed. <code>success</code> was removed (unused). Five variants: primary, secondary, outline, danger, link.</p></div></div>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const root = document.documentElement;
+  const paint = () => {
+    const cur = root.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.querySelectorAll("[data-th]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.th === cur)));
+  };
+  document.querySelectorAll("[data-th]").forEach(b => b.addEventListener("click", () => { root.setAttribute("data-theme", b.dataset.th); paint(); }));
+  paint();
+})();
+</script>
