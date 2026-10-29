@@ -37,6 +37,14 @@ const ui = {
     edit_paid_date: "Edit paid date",
     mark_sent: "Mark as sent",
     mark_done: "Mark as done",
+    // Accessible names (screen readers)
+    select_all: "Select all",
+    select_row: "Select {name}",
+    main_navigation: "Main navigation",
+    sidebar: "Sidebar",
+    actions: "Actions",
+    wiki_insert_block: "Insert block",
+    filter_operator: "Operator",
     bulk_updated: "Items updated",
     save_filter: "Save filter",
     filter_name: "Filter name",
@@ -676,6 +684,8 @@ const ui = {
     toast_category_deleted: "Category deleted",
     toast_category_in_use: "Couldn't delete the category — expenses use it",
     toast_category_default: "A default category can't be deleted",
+    error_template_default: "The default template can't be deleted",
+    error_revert_to_draft: "A sent document can't go back to draft",
 
     // Time Tracking
     project: "Project",
@@ -1264,6 +1274,14 @@ const ui = {
     edit_paid_date: "Modifier la date de paiement",
     mark_sent: "Marquer comme envoyé",
     mark_done: "Marquer comme terminé",
+    // Noms accessibles (lecteurs d'écran)
+    select_all: "Tout sélectionner",
+    select_row: "Sélectionner {name}",
+    main_navigation: "Navigation principale",
+    sidebar: "Panneau latéral",
+    actions: "Actions",
+    wiki_insert_block: "Insérer un bloc",
+    filter_operator: "Opérateur",
     bulk_updated: "Éléments mis à jour",
     save_filter: "Enregistrer le filtre",
     filter_name: "Nom du filtre",
@@ -1903,6 +1921,8 @@ const ui = {
     toast_category_deleted: "Catégorie supprimée",
     toast_category_in_use: "Impossible de supprimer la catégorie — des dépenses l'utilisent",
     toast_category_default: "Une catégorie par défaut ne peut pas être supprimée",
+    error_template_default: "Le modèle par défaut ne peut pas être supprimé",
+    error_revert_to_draft: "Un document envoyé ne peut pas redevenir un brouillon",
 
     // Time Tracking
     project: "Projet",

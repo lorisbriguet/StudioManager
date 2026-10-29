@@ -215,7 +215,7 @@ function RecentInvoices() {
 
   return (
     <WidgetShell>
-      <WidgetTitle action={<Link to="/invoices" className="text-xs text-accent hover:underline">{t.view_all}</Link>}>
+      <WidgetTitle action={<Link to="/invoices" className="text-xs text-accent-text hover:underline">{t.view_all}</Link>}>
         {t.recent_invoices}
       </WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2">
@@ -320,7 +320,7 @@ function OverdueTasks() {
             <PriorityDot priority="high" />
             <span className="text-muted text-xs shrink-0">{projectName(task.project_id)}</span>
             <span className="truncate">{task.title}</span>
-            <span className="text-xs text-danger ml-auto shrink-0">{task.due_date}</span>
+            <span className="text-xs text-danger-text ml-auto shrink-0">{task.due_date}</span>
           </Link>
         ))}
         {overdueSubtasks.map((s) => (
@@ -328,7 +328,7 @@ function OverdueTasks() {
             <PriorityDot priority="high" />
             <span className="text-muted text-xs shrink-0">{projectName(s.project_id)}</span>
             <span className="truncate opacity-70">↳ {s.title}</span>
-            <span className="text-xs text-danger ml-auto shrink-0">{s.due_date}</span>
+            <span className="text-xs text-danger-text ml-auto shrink-0">{s.due_date}</span>
           </Link>
         ))}
         {tasks === undefined ? <ListSkeleton size="sm" rows={3} /> : overdueTasks.length === 0 && overdueSubtasks.length === 0 && (
@@ -374,7 +374,7 @@ function ProjectProgress() {
               <span className="truncate">{p.name}</span>
               <span className="text-xs text-muted shrink-0 ml-2">{p.done}/{p.total}</span>
             </div>
-            <ProgressBar value={p.pct} />
+            <ProgressBar value={p.pct} aria-label={`${t.progress}: ${p.name}`} />
           </Link>
         ))}
         {projects === undefined ? <ListSkeleton size="sm" rows={3} /> : activeProjects.length === 0 && (
@@ -676,7 +676,7 @@ function MonthlyComparison() {
       label={t.monthly_comparison}
       value={formatCHF(currentRev)}
       caption={lastRev > 0 ? (
-        <span className={diff >= 0 ? "text-success" : "text-danger"}>
+        <span className={diff >= 0 ? "text-success-text" : "text-danger-text"}>
           {diff >= 0 ? "+" : ""}{diff}% {t.vs_last_year}
         </span>
       ) : (
@@ -808,13 +808,13 @@ function ClientActivity() {
         {active.slice(0, 5).map((c) => (
           <div key={c.name} className="flex items-center justify-between text-sm px-2 py-1 -mx-2">
             <span className="truncate">{c.name}</span>
-            <span className="text-xs text-success shrink-0 ml-2">{t.active_clients}</span>
+            <span className="text-xs text-success-text shrink-0 ml-2">{t.active_clients}</span>
           </div>
         ))}
         {dormant.map((c) => (
           <div key={c.name} className="flex items-center justify-between text-sm px-2 py-1 -mx-2 opacity-60">
             <span className="truncate">{c.name}</span>
-            <span className="text-xs text-warning shrink-0 ml-2">{t.dormant}</span>
+            <span className="text-xs text-warning-text shrink-0 ml-2">{t.dormant}</span>
           </div>
         ))}
         {clients === undefined || invoices === undefined ? <ListSkeleton size="sm" rows={3} /> : active.length === 0 && dormant.length === 0 && <EmptyState size="sm" message={t.no_clients} />}
@@ -872,7 +872,7 @@ function StaleTasks() {
           <Link key={task.id} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
             <span className="text-muted text-xs shrink-0">{projectName(task.project_id)}</span>
             <span className="truncate">{task.title}</span>
-            <span className="text-xs text-warning ml-auto shrink-0">{task.daysInactive}{t.days_inactive}</span>
+            <span className="text-xs text-warning-text ml-auto shrink-0">{task.daysInactive}{t.days_inactive}</span>
           </Link>
         ))}
         {tasks === undefined ? <ListSkeleton size="sm" rows={3} /> : stale.length === 0 && <EmptyState size="sm" message={t.no_stale_tasks} />}
@@ -975,7 +975,7 @@ function UpcomingReminders() {
               <span className="font-medium">{inv.reference}</span>
               <span className="text-xs text-muted ml-2">{clientName(inv.client_id)}</span>
             </div>
-            <span className={`text-xs shrink-0 ml-2 ${inv.daysLeft <= 3 ? "text-danger" : inv.daysLeft <= 7 ? "text-warning" : "text-muted"}`}>
+            <span className={`text-xs shrink-0 ml-2 ${inv.daysLeft <= 3 ? "text-danger-text" : inv.daysLeft <= 7 ? "text-warning-text" : "text-muted"}`}>
               {inv.daysLeft} {t.days_outstanding}
             </span>
           </Link>
@@ -1009,7 +1009,7 @@ function RecentlyCompleted() {
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {completed.map((task) => (
           <Link key={task.id} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
-            <ICONS.done size={ICON_SIZE.control} className="text-success shrink-0" />
+            <ICONS.done size={ICON_SIZE.control} className="text-success-text shrink-0" />
             <span className="text-muted text-xs shrink-0">{projectName(task.project_id)}</span>
             <span className="truncate">{task.title}</span>
           </Link>
@@ -1049,7 +1049,7 @@ function StaleProjects() {
         {stale.map((p) => (
           <Link key={p.id} to={`/projects/${p.id}`} className="flex items-center justify-between text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
             <span className="truncate">{p.name}</span>
-            <span className="text-xs text-warning shrink-0 ml-2">{p.daysInactive}{t.days_inactive}</span>
+            <span className="text-xs text-warning-text shrink-0 ml-2">{p.daysInactive}{t.days_inactive}</span>
           </Link>
         ))}
         {projects === undefined || tasks === undefined ? <ListSkeleton size="sm" rows={3} /> : stale.length === 0 && <EmptyState size="sm" message={t.no_stale_projects} />}
@@ -1469,7 +1469,7 @@ function InvoiceAging() {
         {chartData.filter((d) => d.count > 0).map((d) => (
           <div key={d.bracket} className="flex items-center justify-between text-xs">
             <span className="text-muted">{d.bracket}d</span>
-            <span className="font-medium text-danger">{d.count} — CHF {d.total.toFixed(2)}</span>
+            <span className="font-medium text-danger-text">{d.count} — CHF {d.total.toFixed(2)}</span>
           </div>
         ))}
       </div>

@@ -31,7 +31,7 @@ export function MainLayout() {
       <Sidebar />
       <main className="flex-1 overflow-hidden flex flex-col">
         {testMode && (
-          <div className="bg-[var(--color-banner-test)] text-on-danger text-sm font-semibold py-1.5 px-4 shrink-0 flex items-center justify-center gap-3">
+          <div className="bg-[var(--color-banner-test)] text-on-banner text-sm font-semibold py-1.5 px-4 shrink-0 flex items-center justify-center gap-3">
             <span>{t.test_mode_banner}{" "}{t.mode_in_organisation.replace("{name}", orgName)}</span>
             <button
               type="button"
@@ -44,7 +44,7 @@ export function MainLayout() {
           </div>
         )}
         {presentationMode && (
-          <div className="bg-[var(--color-banner-presentation)] text-on-danger text-sm font-semibold py-1.5 px-4 shrink-0 flex items-center justify-center gap-3">
+          <div className="bg-[var(--color-banner-presentation)] text-on-banner text-sm font-semibold py-1.5 px-4 shrink-0 flex items-center justify-center gap-3">
             <span>{t.presentation_mode_banner}{" "}{t.mode_in_organisation.replace("{name}", orgName)}</span>
             <button
               type="button"

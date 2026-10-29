@@ -4,6 +4,7 @@ import { getNextQuoteReference } from "../queries/quotes";
 import type { Quote, QuoteLineItem } from "../../types/quote";
 import { useUndoStore } from "../../stores/undo-store";
 import { getLabels } from "../../lib/notify";
+import { AppError } from "../../lib/errors";
 
 export function useQuotes() {
   return useQuery({ queryKey: ["quotes"], queryFn: q.getQuotes });
@@ -82,7 +83,7 @@ export function useUpdateQuote() {
 
       // Prevent changing back to draft once it's been set to another status
       if (data.status === "draft" && prev && prev.status !== "draft") {
-        throw new Error("Cannot revert to draft status");
+        throw new AppError("error_revert_to_draft", "Cannot revert to draft status");
       }
 
       await q.updateQuoteWithLineItems(id, data, lineItems);

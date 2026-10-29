@@ -7,6 +7,7 @@ export function ColorSwatchPicker({ value, onChange }: { value: TagColorName | n
   return (
     <Select
       value={value ?? ""}
+      aria-label={t.color}
       onChange={(e) => onChange(e.target.value ? e.target.value as TagColorName : null)}
       fullWidth={false}
     >

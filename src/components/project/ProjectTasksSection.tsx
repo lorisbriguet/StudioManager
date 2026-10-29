@@ -122,6 +122,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                 />
                 <Checkbox
                   checked={tk.status === "done"}
+                  aria-label={`${t.mark_done}: ${tk.title}`}
                   onChange={(e) => {
                     if (e.target.checked) e.target.classList.add("check-pop");
                     updateTask.mutate({ id: tk.id, data: { status: tk.status === "done" ? "todo" : "done" } });
@@ -203,6 +204,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                     <SortableSubtaskRow key={s.id} id={s.id} hovered={hoveredSubtask === s.id} onHoverChange={setHoveredSubtask}>
                       <Checkbox
                         checked={s.status === "done"}
+                        aria-label={`${t.mark_done}: ${s.title}`}
                         onChange={(e) => {
                           if (e.target.checked) e.target.classList.add("check-pop");
                           updateSubtask.mutate({ id: s.id, data: { status: s.status === "done" ? "todo" : "done" } });

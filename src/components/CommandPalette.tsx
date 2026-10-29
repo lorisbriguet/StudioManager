@@ -172,7 +172,7 @@ function PaletteItem({
   return (
     <Command.Item
       onSelect={onSelect}
-      className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm cursor-pointer hover:bg-[var(--color-hover-row)] data-[selected=true]:bg-[var(--color-accent-light)] data-[selected=true]:text-accent"
+      className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm cursor-pointer hover:bg-[var(--color-hover-row)] data-[selected=true]:bg-[var(--color-accent-light)] data-[selected=true]:text-accent-text"
     >
       <div className="w-7 h-7 rounded-md bg-[var(--color-input-bg)] flex items-center justify-center shrink-0">
         <Icon size={ICON_SIZE.callout} strokeWidth={ICON_STROKE.nav} />

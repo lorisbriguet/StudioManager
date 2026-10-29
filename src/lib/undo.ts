@@ -49,11 +49,23 @@ export function undoableAction(message: string, action: UndoAction | undefined):
 }
 
 /**
- * The undo toast for the action most recently pushed onto the undo store
- * (delete mutations push before their onSuccess callbacks fire).
+ * The newest entry of the undo store (null when empty). Read it before a
+ * mutation and hand it to `undoableFromStore` so a mutation that pushed
+ * nothing doesn't get an Undo bound to an older, unrelated entry.
  */
-export function undoableFromStore(message: string): void {
-  undoableAction(message, useUndoStore.getState().stack[0]);
+export function undoTop(): UndoAction | null {
+  return useUndoStore.getState().stack[0] ?? null;
+}
+
+/**
+ * The undo toast for the action most recently pushed onto the undo store
+ * (delete mutations push before their onSuccess callbacks fire). `before`
+ * is `undoTop()` read before the mutation: when the top is still that entry,
+ * nothing was pushed and the toast is a plain success, without Undo.
+ */
+export function undoableFromStore(message: string, before?: UndoAction | null): void {
+  const top = undoTop();
+  undoableAction(message, top && top !== before ? top : undefined);
 }
 
 /**
@@ -68,9 +80,10 @@ export function deleteWithUndo<Id>(
   message: string,
   onSuccess?: () => void
 ): void {
+  const before = undoTop();
   mutation.mutate(id, {
     onSuccess: () => {
-      undoableFromStore(message);
+      undoableFromStore(message, before);
       onSuccess?.();
     },
   });

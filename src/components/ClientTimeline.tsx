@@ -27,7 +27,7 @@ function EventRow({ event }: { event: ClientActivityEvent }) {
       <div className="flex-1 min-w-0">
         <Link
           to={cfg.path(event.entity_id)}
-          className="text-sm hover:text-accent transition-colors truncate block"
+          className="text-sm hover:text-accent-text transition-colors truncate block"
         >
           {event.label}
         </Link>

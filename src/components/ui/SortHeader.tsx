@@ -22,6 +22,7 @@ export function SortHeader<K extends string>({
   const density = useTableDensity();
   return (
     <th
+      scope="col"
       aria-sort={active ? (current.dir === "asc" ? "ascending" : "descending") : "none"}
       className={`${TABLE_TH} ${TABLE_X[density]} ${align === "right" ? "text-right" : "text-left"}`}
     >

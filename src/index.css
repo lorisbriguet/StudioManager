@@ -24,10 +24,12 @@
   --color-info-text: var(--color-tag-blue-text);
   --color-indigo-bg: #e0e7ff;
   --color-indigo-text: #4338ca;
-  --color-banner-test: #f59e0b;
-  --color-banner-test-hover: #d97706;
-  --color-banner-presentation: #6366f1;
-  --color-banner-presentation-hover: #4f46e5;
+  /* Mode banners: deep enough for white text (on-banner, 4.5:1) */
+  --color-banner-test: #b45309;
+  --color-banner-test-hover: #92400e;
+  --color-banner-presentation: #4f46e5;
+  --color-banner-presentation-hover: #4338ca;
+  --color-on-banner: #ffffff;
   --color-chart-1: #2563eb;
   --color-chart-2: #16a34a;
   --color-chart-3: #d97706;
@@ -47,12 +49,21 @@
   --color-input-border: #d4d4d4;
   --color-input-bg: #f5f5f5;
   --color-hover-row: #f8f8f8;
-  /* Text on a coloured fill. applyAccentColor recomputes on-accent from the
-     accent's luminance (near-black on a light accent). */
+  /* Checkbox edge: 3:1 against surface and input-bg (a control boundary,
+     unlike field borders, which the field's own fill already outlines) */
+  --color-checkbox-border: #949494;
+  /* A control raised over its track (segmented-control thumb) */
+  --color-raised: var(--color-surface);
+  /* Text on a coloured fill: white or near-black, whichever contrasts more
+     (themeTokens onColorFor; applyAccentColor recomputes on-accent). */
   --color-on-accent: #ffffff;
   --color-on-danger: #ffffff;
-  /* Faint text: placeholders, empty hints, disabled glyphs */
+  /* Faint text: disabled glyphs only (under 4.5:1, never for content) */
   --color-text-faint: color-mix(in srgb, var(--color-muted) 60%, transparent);
+  /* Accent as TEXT (links, active nav, accent badges): the accent darkened
+     toward the text colour so it reads 4.5:1 on bg and on accent tints.
+     Fills, borders and rings keep --color-accent. */
+  --color-accent-text: color-mix(in srgb, var(--color-accent) 60%, var(--color-text));
   /* Accent derivatives, so they follow the accent at runtime */
   --color-accent-border: color-mix(in srgb, var(--color-accent) 30%, transparent);
   --color-focus-ring: color-mix(in srgb, var(--color-accent) 50%, transparent);
@@ -74,15 +85,17 @@
   --color-tag-cyan-bg: #cffafe;    --color-tag-cyan-text: #0e7490;
   --color-tag-orange-bg: #ffedd5;  --color-tag-orange-text: #c2410c;
   --color-tag-teal-bg: #ccfbf1;    --color-tag-teal-text: #0f766e;
-  --color-tag-gray-bg: #f3f4f6;    --color-tag-gray-text: #6b7280;
+  --color-tag-gray-bg: #f3f4f6;    --color-tag-gray-text: #5f6672;
 }
 
 /* ─── Shadows, tints, focus ───
    Kept out of @theme so the values are read at runtime: shadows change
    with .dark and tints follow the theme's accent. */
 :root {
-  /* Buttons, toggles knobs, segmented-control thumb */
+  /* Buttons, segmented-control thumb */
   --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.08);
+  /* Toggle knob: white on any track, so its own edge carries it */
+  --shadow-knob: 0 1px 3px rgba(0, 0, 0, 0.3), 0 0 0 0.5px rgba(0, 0, 0, 0.12);
   /* Dropdowns, context menus, tooltips, chart tooltips, floating bars */
   --shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06);
   /* Modals */
@@ -90,6 +103,9 @@
 }
 @utility shadow-control {
   box-shadow: var(--shadow-control);
+}
+@utility shadow-knob {
+  box-shadow: var(--shadow-knob);
 }
 @utility shadow-menu {
   box-shadow: var(--shadow-menu);
@@ -113,6 +129,10 @@
    inset ring in the focus-ring colour. */
 @utility focus-row {
   box-shadow: inset 0 0 0 2px var(--color-focus-ring);
+}
+/* useListNavigation moves DOM focus onto the row; focus-row is its ring. */
+[data-list-row]:focus {
+  outline: none;
 }
 
 body {
@@ -158,10 +178,13 @@ body {
   --color-chart-8: #a3e635;
   --color-indigo-bg: #1a1a2e;
   --color-indigo-text: #818cf8;
-  --color-banner-test: #d97706;
-  --color-banner-test-hover: #b45309;
-  --color-banner-presentation: #4f46e5;
-  --color-banner-presentation-hover: #4338ca;
+  --color-danger: #ef4444;
+  /* #ef4444 reads better with near-black than white (onColorFor) */
+  --color-on-danger: #111827;
+  --color-checkbox-border: #6b6b6b;
+  /* Lighter than the surface, so a thumb shows over its track */
+  --color-raised: color-mix(in srgb, var(--color-text) 10%, var(--color-surface));
+  --color-accent-text: color-mix(in srgb, var(--color-accent) 60%, white);
   --color-bg: #111111;
   --color-text: #e5e5e5;
   --color-text-secondary: #d4d4d4;
@@ -173,7 +196,9 @@ body {
   --color-hover-row: #1a1a1a;
   --color-overlay-hover: rgba(255, 255, 255, 0.12);
   --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.4);
+  /* A faint light edge: a dark shadow alone doesn't show on a dark page */
+  --shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 /* Defaults for native fields in dark mode. In the base layer, so the field
@@ -186,9 +211,10 @@ body {
     color: var(--color-text);
   }
 
+  /* Muted, like light-mode placeholders (text-faint is for disabled only) */
   .dark input::placeholder,
   .dark textarea::placeholder {
-    color: var(--color-text-faint);
+    color: var(--color-muted);
   }
 }
 
@@ -211,6 +237,27 @@ button:focus-visible:not(.focus-accent),
   box-shadow: 0 0 0 1px var(--color-surface), 0 0 0 3px var(--color-focus-ring);
 }
 
+/* Card interactive="link": the title button/link stretches over the whole
+   card (click anywhere), and the card shows its focus ring. Controls in the
+   card sit above it with CARD_CONTROL (relative z-10). */
+.card-link {
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+}
+.card-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 0.75rem; /* the card's rounded-xl */
+}
+.card-link.card-link:focus-visible {
+  box-shadow: none;
+}
+.card-link:focus-visible::after {
+  box-shadow: 0 0 0 1px var(--color-surface), 0 0 0 3px var(--color-focus-ring);
+}
+
 /* ─── FullCalendar overrides ─── */
 .fc-studio .fc {
   --fc-border-color: var(--color-border-divider);
@@ -221,7 +268,7 @@ button:focus-visible:not(.focus-accent),
   --fc-event-border-color: transparent;
   /* Plain events: the 10% accent tint over the page, accent text */
   --fc-event-bg-color: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg));
-  --fc-event-text-color: var(--color-accent);
+  --fc-event-text-color: var(--color-accent-text);
   font-size: 13px;
   border-radius: 0;
   overflow: visible;
@@ -407,6 +454,24 @@ button:focus-visible:not(.focus-accent),
 }
 .reduce-motion { --duration-fast: 0ms; --duration-normal: 0ms; --duration-slow: 0ms; }
 .reduce-motion .skeleton { animation: none; }
+
+/* Reduced motion, everywhere: animations end at once, transitions are instant,
+   scrolling jumps. Spinners keep turning (they show work, not decoration). */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.animate-spin), *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+.reduce-motion *:not(.animate-spin), .reduce-motion *::before, .reduce-motion *::after,
+.reduce-motion {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0ms !important;
+  scroll-behavior: auto !important;
+}
 
 /* ─── Global transitions (Notion-like smooth feel) ─── */
 table tbody tr {

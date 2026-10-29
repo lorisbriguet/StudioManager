@@ -43,6 +43,7 @@ export interface SelectProps {
   onBlur?: () => void;
   onFocus?: () => void;
   "aria-label"?: string;
+  "aria-labelledby"?: string;
   "aria-required"?: boolean | "true" | "false";
   "aria-invalid"?: boolean | "true" | "false";
   "aria-describedby"?: string;

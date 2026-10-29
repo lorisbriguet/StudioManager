@@ -51,6 +51,7 @@ export function ColumnEditorPopover({
       padding="content"
       autoFocus={false}
       className="min-w-[200px]"
+      aria-label={t.edit_column}
     >
       <FormField label={t.rename} className="mb-3">
         <Input

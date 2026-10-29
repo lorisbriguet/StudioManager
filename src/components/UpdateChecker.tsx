@@ -84,7 +84,7 @@ export function UpdateChecker() {
         <span className="text-muted">{t.up_to_date}</span>
         <button
           onClick={checkForUpdate}
-          className="text-xs text-accent hover:underline"
+          className="text-xs text-accent-text hover:underline"
         >
           {t.check_again}
         </button>
@@ -98,7 +98,7 @@ export function UpdateChecker() {
         <span className="text-muted">{t.update_check_failed}</span>
         <button
           onClick={checkForUpdate}
-          className="text-xs text-accent hover:underline"
+          className="text-xs text-accent-text hover:underline"
         >
           {t.check_again}
         </button>

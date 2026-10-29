@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { IconButton } from "../components/ui/IconButton";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
@@ -145,7 +145,10 @@ export function TasksPage() {
       arr.push(tk);
       groups.set(tk.project_id, arr);
     }
-    if (startProjectId != null && !groups.has(startProjectId)) groups.set(startProjectId, []);
+    // The first-run group only while there is no task at all and nothing filters the list
+    // (a "done" filter would hide the new task as soon as it's added).
+    const unfiltered = !q && filterConditions.length === 0 && filter !== "done";
+    if (startProjectId != null && tasks.length === 0 && unfiltered) groups.set(startProjectId, []);
     const result = Array.from(groups.entries()).map(([projectId, items]) => ({
       projectId,
       projectName: projectName(projectId),
@@ -161,6 +164,11 @@ export function TasksPage() {
     }
     return result;
   }, [tasks, projectName, clientForProject, filter, search, projectOrder, filterConditions, filterLogic, startProjectId]);
+
+  // The first task is in: the placeholder group has done its job.
+  useEffect(() => {
+    if (startProjectId != null && tasks && tasks.length > 0) setStartProjectId(null);
+  }, [tasks, startProjectId]);
 
   const flatTasks = useMemo(() => grouped.flatMap((g) => g.tasks), [grouped]);
   const bulk = useBulkSelect(flatTasks);
@@ -258,6 +266,7 @@ export function TasksPage() {
     setFilter("all");
     setFilterConditions([]);
     setActiveFilterId(null);
+    setStartProjectId(null);
   };
   const activeProjects = (projects ?? []).filter((p) => p.status === "active");
 
@@ -321,7 +330,7 @@ export function TasksPage() {
               <Link
                 to={`/projects/${g.projectId}`}
                 onClick={(e) => e.stopPropagation()}
-                className="text-sm font-medium text-accent hover:underline"
+                className="text-sm font-medium text-accent-text hover:underline"
               >
                 {g.projectName}
               </Link>
@@ -350,6 +359,7 @@ export function TasksPage() {
                         onChange={(e) => bulk.toggleItem(tk.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
                         onClick={(e) => e.stopPropagation()}
                         className="shrink-0"
+                        aria-label={t.select_row.replace("{name}", tk.title)}
                       />
                       <IconButton
                         onClick={() => toggleTaskExpanded(tk.id)}
@@ -360,6 +370,7 @@ export function TasksPage() {
                       />
                       <Checkbox
                         checked={tk.status === "done"}
+                        aria-label={`${t.mark_done}: ${tk.title}`}
                         onChange={(e) => {
                           if (e.target.checked) e.target.classList.add("check-pop");
                           const newStatus = tk.status === "done" ? "todo" : "done";
@@ -406,6 +417,7 @@ export function TasksPage() {
                       )}
                       <Select
                         value={tk.status}
+                        aria-label={`${t.status}: ${tk.title}`}
                         onChange={(e) =>
                           updateTask.mutate({
                             id: tk.id,
@@ -454,6 +466,7 @@ export function TasksPage() {
                           <div key={s.id} data-task-row className="flex items-center gap-2 py-1 group/sub" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setSubCtxMenu({ x: e.clientX, y: e.clientY, item: s }); }}>
                             <Checkbox
                               checked={s.status === "done"}
+                              aria-label={`${t.mark_done}: ${s.title}`}
                               onChange={(e) => {
                                 if (e.target.checked) e.target.classList.add("check-pop");
                                 const newStatus = s.status === "done" ? "todo" : "done";

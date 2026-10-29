@@ -78,7 +78,7 @@ function NewFilterRow({
         className={inputClassName}
       />
       {conditions && (
-        <IconButton icon={Filter} label={t.add_condition} tone="accent" active={conditions.open} onClick={conditions.onToggle} />
+        <IconButton icon={Filter} label={t.add_condition} tone="accent" pressed={conditions.open} onClick={conditions.onToggle} />
       )}
       <Button variant="link" onClick={onSave}>
         {t.save}
@@ -129,6 +129,7 @@ function ConditionRow({
     <div className="flex items-center gap-1.5">
       <Select
         value={condition.field}
+        aria-label={t.field}
         onChange={(e) => {
           const newField = fields.find((f) => f.key === e.target.value);
           const newOps = operatorsForType(newField?.type ?? "string");
@@ -144,6 +145,7 @@ function ConditionRow({
       </Select>
       <Select
         value={condition.operator}
+        aria-label={t.filter_operator}
         onChange={(e) => onChange({ ...condition, operator: e.target.value as FilterOperator })}
         fullWidth={false}
       >
@@ -154,6 +156,7 @@ function ConditionRow({
       {fieldDef?.type === "select" && fieldDef.options ? (
         <Select
           value={condition.value}
+          aria-label={t.value}
           onChange={(e) => onChange({ ...condition, value: e.target.value })}
           fullWidth={false}
         className="min-w-[80px]"
@@ -330,7 +333,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
           variant="link"
           icon={ICONS.add}
           onClick={addCondition}
-          className="text-muted hover:text-accent"
+          className="text-muted hover:text-accent-text"
         >
           {t.add_condition}
         </Button>
@@ -386,7 +389,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
               variant="link"
               icon={ICONS.savedFilter}
               onClick={handleStartNaming}
-              className="text-muted hover:text-accent"
+              className="text-muted hover:text-accent-text"
             >
               {t.save_filter}
             </Button>

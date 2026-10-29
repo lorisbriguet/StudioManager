@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { cloneElement, Fragment, isValidElement, useId, type ReactElement, type ReactNode } from "react";
 import { Card } from "./Card";
+import { Button } from "./Button";
 
 /**
  * Settings building blocks (see DESIGN-SYSTEM.md, "Settings").
@@ -10,7 +11,22 @@ import { Card } from "./Card";
  *   </SettingsCard>
  */
 
-/** Compact inline row: label left, control right, separated by faint dividers. */
+const LABELABLE_TAGS = new Set(["input", "select", "textarea"]);
+
+/** A single control the row's label can point at: a field component, a Toggle, a native field. Not a wrapper div or a Button. */
+function isLabelable(node: ReactNode): node is ReactElement<{ id?: string }> {
+  if (!isValidElement(node)) return false;
+  if (typeof node.type === "string") return LABELABLE_TAGS.has(node.type);
+  return node.type !== Fragment && node.type !== Button;
+}
+
+/**
+ * Compact inline row: label left, control right, separated by faint dividers.
+ * Like FormField: a single control child gets an id (its own, or generated) and
+ * the label is a <label htmlFor> pointing at it. When the child is a wrapper
+ * (a div with a select and a hint), pass `htmlFor` with the control's id, or
+ * give the control its own aria-label.
+ */
 export function SettingRow({
   label,
   desc,
@@ -23,11 +39,18 @@ export function SettingRow({
   htmlFor?: string;
   children: ReactNode;
 }) {
+  const generatedId = useId();
+  let control = children;
+  let target = htmlFor;
+  if (!target && isLabelable(children)) {
+    target = children.props.id ?? generatedId;
+    control = cloneElement(children, { id: target });
+  }
   return (
     <div className="flex items-center justify-between gap-4 py-2.5 min-h-9 border-b border-[var(--color-border-divider)] last:border-b-0">
       <div className="flex-1 min-w-0">
-        {htmlFor ? (
-          <label htmlFor={htmlFor} className="block text-sm">
+        {target ? (
+          <label htmlFor={target} className="block text-sm">
             {label}
           </label>
         ) : (
@@ -35,7 +58,7 @@ export function SettingRow({
         )}
         {desc && <div className="text-xs text-muted leading-tight mt-0.5">{desc}</div>}
       </div>
-      <div className="shrink-0">{children}</div>
+      <div className="shrink-0">{control}</div>
     </div>
   );
 }

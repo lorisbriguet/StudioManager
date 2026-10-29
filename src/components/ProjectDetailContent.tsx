@@ -25,7 +25,7 @@ import { useTabStore } from "../stores/tab-store";
 import { open as openDirectory } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { useT } from "../i18n/useT";
-import { undoableFromStore } from "../lib/undo";
+import { undoableFromStore, undoTop } from "../lib/undo";
 import { ProjectResources } from "./project/ProjectResources";
 import { ProjectWikiBlock } from "./project/ProjectWikiBlock";
 import { ProjectTasksSection } from "./project/ProjectTasksSection";
@@ -106,9 +106,10 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
     if (editingColumn === null) return;
     const next = wlColumns.filter((_, i) => i !== editingColumn.index);
     // The config mutation pushes its own undo entry.
+    const before = undoTop();
     setWlConfig.mutate(
       { templateId: wlTemplateId, columns: next },
-      { onSuccess: () => undoableFromStore(t.column_deleted) }
+      { onSuccess: () => undoableFromStore(t.column_deleted, before) }
     );
   }, [wlColumns, wlTemplateId, editingColumn, setWlConfig, t]);
 
@@ -222,6 +223,7 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
               <div className="mt-2">
                 <Select
                   value=""
+                  aria-label={t.link_invoice.replace(/\.+$/, "")}
                   onChange={(e) => {
                     const id = Number(e.target.value);
                     if (id) updateInvoice.mutate({ id, data: { project_id: projectId } });
@@ -264,6 +266,7 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
               <div className="mt-2">
                 <Select
                   value=""
+                  aria-label={t.link_quote.replace(/\.+$/, "")}
                   onChange={(e) => {
                     const id = Number(e.target.value);
                     if (id) updateQuote.mutate({ id, data: { project_id: projectId } });
@@ -294,13 +297,14 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
           title={project.name}
           back={onBack}
           meta={client && (
-            <Link to={`/clients/${client.id}`} className="hover:text-accent">
+            <Link to={`/clients/${client.id}`} className="hover:text-accent-text">
               {client.name}
             </Link>
           )}
           actions={<>
           <Select
             value={status}
+            aria-label={t.status}
             onChange={(e) => {
               const v = e.target.value as ProjectStatus;
               setStatus(v);

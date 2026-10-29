@@ -36,7 +36,7 @@ export function navItemClass({
 }) {
   return `${fill ? "w-full " : ""}flex items-center rounded-md text-left transition-colors focus-accent ${SIZE[size]} ${
     active
-      ? "bg-accent-light text-accent font-medium"
+      ? "bg-accent-light text-accent-text font-medium"
       : `hover:bg-[var(--color-hover-row)] ${MUTED_INTERACTIVE}`
   }`;
 }

@@ -60,6 +60,9 @@ export function SegmentedControl<V extends string>({
 }: SegmentedControlProps<V>) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const enabled = options.map((o, i) => (o.disabled ? -1 : i)).filter((i) => i >= 0);
+  // The one tab stop: the selected segment, or the first enabled one when the value matches none.
+  const valueIdx = options.findIndex((o) => o.value === value && !o.disabled);
+  const tabStop = valueIdx >= 0 ? valueIdx : (enabled[0] ?? -1);
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const keys: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
@@ -92,14 +95,14 @@ export function SegmentedControl<V extends string>({
             type="button"
             role="radio"
             aria-checked={on}
-            tabIndex={on ? 0 : -1}
+            tabIndex={i === tabStop ? 0 : -1}
             disabled={o.disabled}
             onClick={() => !on && onChange(o.value)}
             className={`inline-flex items-center justify-center gap-1.5 rounded-md whitespace-nowrap transition-colors focus-accent disabled:opacity-40 disabled:cursor-not-allowed ${
               SIZE[size]
             } ${fullWidth ? "flex-1" : ""} ${
               on
-                ? "bg-[var(--color-surface)] text-[var(--color-text)] font-medium shadow-control"
+                ? "bg-raised text-[var(--color-text)] font-medium shadow-control"
                 : MUTED_INTERACTIVE
             }`}
           >

@@ -10,7 +10,8 @@ import { FIELD_LABEL, FORM_SPAN, type FormSpan } from "./tokens";
  *                        with useId; targeted by the visible <label htmlFor>
  *   - `aria-required`    "true" when `required` is set
  *   - `aria-invalid`     "true" when `error` is set
- *   - `aria-describedby` points at the error line when `error` is set
+ *   - `aria-describedby` the child's own ids, then the hint, then the error
+ *                        line (merged, never replaced)
  *   - danger border      appends `aria-[invalid=true]:border-danger-text` to the
  *                        child's className, so the border turns to the danger
  *                        token exactly while the field is in error
@@ -26,7 +27,8 @@ import { FIELD_LABEL, FORM_SPAN, type FormSpan } from "./tokens";
  *     <Input value={form.name} onChange={...} onBlur={...} />
  *   </FormField>
  *
- * `hint` is a muted line under the field (the error replaces it while there is one).
+ * `hint` is a muted line under the field. The error takes its place on screen
+ * while there is one; the hint stays in the DOM (sr-only) and stays linked.
  * `span` makes the field take 2–4 columns, or the whole row, of a FormGrid.
  *
  * Not for checkboxes/toggles — give those their own `label`.
@@ -64,7 +66,10 @@ export function FormField({ label, children, error, required = false, className 
   const fieldId = children.props.id ?? generatedId;
   const errorId = `${fieldId}-error`;
   const hintId = `${fieldId}-hint`;
-  const describedBy = error ? errorId : hint ? hintId : undefined;
+  // The child's own description first, then the hint, then the error: none replaces another.
+  const describedBy =
+    [children.props["aria-describedby"], hint ? hintId : undefined, error ? errorId : undefined].filter(Boolean).join(" ") ||
+    undefined;
   const control = cloneElement(children, {
     id: fieldId,
     "aria-required": required || undefined,
@@ -75,7 +80,7 @@ export function FormField({ label, children, error, required = false, className 
   const labelEl = (
     <label htmlFor={fieldId} className={`${FIELD_LABEL} ${badge ? "" : "mb-1"}`}>
       {label}
-      {required && <span aria-hidden="true" className="text-accent ml-0.5">*</span>}
+      {required && <span aria-hidden="true" className="text-accent-text ml-0.5">*</span>}
     </label>
   );
   return (
@@ -89,13 +94,13 @@ export function FormField({ label, children, error, required = false, className 
         labelEl
       )}
       {control}
-      {error ? (
-        <FieldError id={errorId}>{error}</FieldError>
-      ) : hint ? (
-        <p id={hintId} className="mt-1 text-xs text-muted">
+      {hint && (
+        // While there is an error the hint is only read out (the error takes its place on screen).
+        <p id={hintId} className={error ? "sr-only" : "mt-1 text-xs text-muted"}>
           {hint}
         </p>
-      ) : null}
+      )}
+      {error && <FieldError id={errorId}>{error}</FieldError>}
     </div>
   );
 }

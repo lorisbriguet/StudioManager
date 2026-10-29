@@ -80,6 +80,10 @@ export interface PopoverProps {
   /** Runs before the built-in Esc handling; call preventDefault to keep the panel open. */
   onKeyDown?: (e: ReactKeyboardEvent<HTMLDivElement>) => void;
   id?: string;
+  /**
+   * Default: "dialog" for a content panel (padding="content"), none for menus
+   * (the menu inside brings its own role). A dialog needs aria-label or aria-labelledby.
+   */
   role?: string;
   "aria-label"?: string;
   "aria-labelledby"?: string;
@@ -99,13 +103,18 @@ export function Popover({
   autoFocus = true,
   onKeyDown,
   id,
-  role,
+  role: roleProp,
   className = "",
   style,
   children,
   ...aria
 }: PopoverProps) {
+  const role = roleProp ?? (padding === "content" ? "dialog" : undefined);
   const panelRef = useRef<HTMLDivElement>(null);
+  const unnamed = role === "dialog" && !aria["aria-label"] && !aria["aria-labelledby"];
+  useEffect(() => {
+    if (import.meta.env.DEV && unnamed) console.warn("Popover dialog has no accessible name: pass aria-label or aria-labelledby.");
+  }, [unnamed]);
   const [seq] = useState(() => ++openSeq);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;

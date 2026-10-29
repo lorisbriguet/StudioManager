@@ -14,6 +14,14 @@ import { ICON_SIZE, renderIcon, type IconProp } from "./icons";
  *   <Card tone="dashed" padding="sm">…</Card>        an add / draft box
  *   <Card interactive selected={open} onClick={…}>   a clickable card (Enter / Space too)
  *
+ *   A clickable card that holds its own controls (a checkbox, icon buttons):
+ *   a role="button" cannot contain other buttons, so the title is the button
+ *   and stretches over the card; the controls sit above it (CARD_CONTROL).
+ *   <Card interactive="link">
+ *     <h2><button type="button" className={CARD_LINK} onClick={open}>{name}</button></h2>
+ *     <div className={CARD_CONTROL}><Checkbox … /></div>
+ *   </Card>
+ *
  *   <Card>
  *     <Card.Header title={t.contacts} count={contacts.length} variant="label" action={<Button …/>} />
  *     …
@@ -32,6 +40,13 @@ const TONE: Record<CardTone, string> = {
 };
 
 const INTERACTIVE = "cursor-pointer transition-colors hover:bg-[var(--color-hover-row)] focus-accent";
+/** interactive="link": the card is the positioning box of its stretched title link. */
+const INTERACTIVE_LINK = "relative cursor-pointer transition-colors hover:bg-[var(--color-hover-row)]";
+
+/** On the title <button>/<Link> of an interactive="link" card: its ::after covers the card (index.css). */
+export const CARD_LINK = "card-link";
+/** On the controls of an interactive="link" card, so they sit above the stretched link. */
+export const CARD_CONTROL = "relative z-10";
 const SELECTED = "bg-[var(--color-hover-row)] outline outline-1 outline-accent";
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
@@ -41,8 +56,11 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
   padding?: CardPadding;
   /** surface (default), inset (a card inside a card), dashed (an add or draft box). */
   tone?: CardTone;
-  /** Hover tint, pointer and focus ring. A div gets role="button", tabIndex 0 and Enter / Space. */
-  interactive?: boolean;
+  /**
+   * Hover tint, pointer and focus ring. A div gets role="button", tabIndex 0 and Enter / Space.
+   * "link": hover tint and pointer only; a CARD_LINK title inside takes the click, the keyboard and the ring.
+   */
+  interactive?: boolean | "link";
   /** The accent outline of the selected / open card. */
   selected?: boolean;
   /** The element: `section` / `article` when the card is a landmark, `button` for a card that is one action. */
@@ -61,7 +79,7 @@ export function cardClass({
     "rounded-xl",
     selected ? SELECTED : TONE[tone],
     PADDING[padding],
-    interactive ? INTERACTIVE : "",
+    interactive === "link" ? INTERACTIVE_LINK : interactive ? INTERACTIVE : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -83,7 +101,7 @@ export function Card({
   const extra: HTMLAttributes<HTMLDivElement> & { type?: "button" } = {};
   if (as === "button") {
     extra.type = "button";
-  } else if (interactive && props.onClick) {
+  } else if (interactive === true && props.onClick) {
     extra.role = "button";
     extra.tabIndex = 0;
     extra.onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {

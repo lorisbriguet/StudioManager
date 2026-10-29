@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { MENU_DIVIDER, MENU_ITEM, MENU_TONE } from "./Dropdown";
 import { Popover } from "./Popover";
+import { useT } from "../../i18n/useT";
 import { ICON_SIZE, renderIcon, type IconProp } from "./icons";
 
 /**
@@ -27,6 +28,8 @@ interface ContextMenuProps {
   y: number;
   items: ContextMenuItem[];
   onClose: () => void;
+  /** Name of the menu, e.g. the row it acts on. Default: t.actions. */
+  "aria-label"?: string;
 }
 
 function getEnabledItems(menu: HTMLElement) {
@@ -35,7 +38,8 @@ function getEnabledItems(menu: HTMLElement) {
   );
 }
 
-export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
+export function ContextMenu({ x, y, items, onClose, "aria-label": label }: ContextMenuProps) {
+  const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const capturedRef = useRef(false);
@@ -140,7 +144,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
 
   return (
     <Popover at={{ x, y }} onClose={onClose} onKeyDown={handleKeyDown} autoFocus={false}>
-      <div ref={ref} role="menu" tabIndex={-1} className="flex flex-col outline-none">
+      <div ref={ref} role="menu" aria-label={label ?? t.actions} tabIndex={-1} className="flex flex-col outline-none">
         {items.map((item, i) => {
           if (item.divider) {
             return <div key={i} role="separator" className={MENU_DIVIDER} />;

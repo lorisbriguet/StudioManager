@@ -61,6 +61,14 @@ describe("Table", () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 
+  it("does not open the row from the padding around its checkbox or actions", () => {
+    const onOpen = vi.fn();
+    render(<Harness onOpen={onOpen} />);
+    fireEvent.click(screen.getByLabelText("Select INV-1").closest("td")!);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }).closest("td")!);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
   it("shows the select-all checkbox as indeterminate when some rows are selected", () => {
     render(<Harness />);
     expect((screen.getByLabelText("Select all") as HTMLInputElement).indeterminate).toBe(true);

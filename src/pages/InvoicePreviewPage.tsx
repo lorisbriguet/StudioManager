@@ -24,11 +24,14 @@ export function InvoicePreviewPage() {
 
   const invoiceQuery = useInvoice(invoiceId);
   const { data: invoice } = invoiceQuery;
-  const { data: lineItems } = useInvoiceLineItems(invoiceId);
-  const { data: client } = useClient(invoice?.client_id ?? "");
+  const lineItemsQuery = useInvoiceLineItems(invoiceId);
+  const { data: lineItems } = lineItemsQuery;
+  const clientQuery = useClient(invoice?.client_id ?? "");
+  const { data: client } = clientQuery;
   const { data: contacts } = useClientContacts(invoice?.client_id ?? "");
   const { data: addresses } = useClientAddresses(invoice?.client_id ?? "");
-  const { data: profile } = useBusinessProfile();
+  const profileQuery = useBusinessProfile();
+  const { data: profile } = profileQuery;
   const { data: project } = useProject(invoice?.project_id ?? 0);
   const invoiceTemplateId = invoice && "template_id" in invoice
     ? (invoice as { template_id?: number | null }).template_id ?? null
@@ -47,7 +50,11 @@ export function InvoicePreviewPage() {
   const t = useT();
 
   // Loading until the invoice and everything the PDF needs is in: "not found" must not flash while the client loads.
-  const isLoading = !!invoiceId && (invoice === undefined || (!!invoice && (lineItems === undefined || (!!invoice.client_id && client === undefined) || profile === undefined)));
+  // A failed query is not pending, so an error lands in the QueryError branch instead of a skeleton forever.
+  const needsClient = !!invoice?.client_id;
+  const isLoading = !!invoiceId && (invoiceQuery.isPending || (!!invoice && (lineItemsQuery.isPending || (needsClient && clientQuery.isPending) || profileQuery.isPending)));
+  const loadQueries = [invoiceQuery, lineItemsQuery, profileQuery, ...(needsClient ? [clientQuery] : [])];
+  const loadFailed = loadQueries.some((q) => q.isError && q.data === undefined);
   const needsPostProcess = invoice?.status === "cancelled";
 
   // Load stored PDF if available
@@ -106,8 +113,14 @@ export function InvoicePreviewPage() {
     };
   }, [invoice, lineItems, client, profile, contactName, addresses, project, needsPostProcess, invoiceTemplate]);
 
-  if (invoiceQuery.isError && invoice === undefined)
-    return <QueryError message={t.load_error_invoice} onRetry={invoiceQuery.refetch} retrying={invoiceQuery.isFetching} />;
+  if (loadFailed)
+    return (
+      <QueryError
+        message={t.load_error_invoice}
+        onRetry={() => loadQueries.forEach((q) => void q.refetch())}
+        retrying={loadQueries.some((q) => q.isFetching)}
+      />
+    );
   if (isLoading) return <DetailSkeleton />;
   if (!invoice || !lineItems || !client || !profile)
     return (

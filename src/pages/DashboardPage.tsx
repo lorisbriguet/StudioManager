@@ -78,11 +78,11 @@ function PresetDropdown() {
 
   const handleDelete = (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
-    deleteWithUndo(deletePreset, id, t.preset_deleted);
-    if (activePresetId === id) {
-      // Revert to "Custom" since active preset was deleted
-      setActivePreset(null, t.custom_layout, widgets, layout);
-    }
+    deleteWithUndo(deletePreset, id, t.preset_deleted, () => {
+      // Only once the delete went through: revert to "Custom" if the deleted preset is (still) the active one.
+      const s = useDashboardStore.getState();
+      if (s.activePresetId === id) s.setActivePreset(null, t.custom_layout, s.widgets, s.layout);
+    });
   };
 
   const displayName = activePresetId !== null ? activePresetName : t.custom_layout;
@@ -103,7 +103,7 @@ function PresetDropdown() {
       </Button>
 
       {open && (
-        <Popover anchor={dropdownRef} align="end" onClose={closeMenu} padding="none" className="p-1 min-w-[220px]">
+        <Popover anchor={dropdownRef} align="end" onClose={closeMenu} padding="none" className="p-1 min-w-[220px]" role="dialog" aria-label={t.presets}>
           {/* Built-in presets */}
           {builtinPresets.map((preset) => (
             <MenuItem
@@ -134,7 +134,7 @@ function PresetDropdown() {
                 onClick={() => handleLoadPreset(preset)}
                 className={`${MENU_ITEM} flex-1 min-w-0 ${
                   activePresetId === preset.id
-                    ? "text-accent font-medium"
+                    ? "text-accent-text font-medium"
                     : "text-[var(--color-text-secondary)]"
                 }`}
               >
@@ -241,7 +241,7 @@ export function DashboardPage() {
           variant="secondary"
           icon={ICONS.add}
           onClick={() => setShowWidgetPanel(!showWidgetPanel)}
-          className={showWidgetPanel ? "border-accent text-accent bg-accent-light" : ""}
+          className={showWidgetPanel ? "border-accent text-accent-text bg-accent-light" : ""}
         >
           {t.add}
         </Button>

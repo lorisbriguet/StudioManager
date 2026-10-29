@@ -37,8 +37,10 @@ interface IconButtonBase {
   size?: Size;
   /** Show only on hover of the row: `true` = nearest `group`, or a named group ("task" → group/task). */
   reveal?: RevealGroup | false;
-  /** Pressed / open state (toggles, an open menu's trigger). */
+  /** Pressed / open state, visual only (an open menu's trigger). For a toggle use `pressed`. */
   active?: boolean;
+  /** A toggle button: sets aria-pressed (true/false) and draws the active look when true. */
+  pressed?: boolean;
   /** Coloured at rest, not only on hover: a running timer (danger), a confirm check (accent). */
   color?: "danger" | "accent";
   /** Classes on the icon itself, e.g. a rotating expand chevron. */
@@ -83,7 +85,7 @@ export function revealClass(reveal: RevealGroup | false | undefined): string {
 const TONE: Record<Tone, string> = {
   default: "hover:text-[var(--color-text)] hover:bg-[var(--color-hover-row)]",
   danger: "hover:text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)]",
-  accent: "hover:text-accent hover:bg-[var(--color-hover-row)]",
+  accent: "hover:text-accent-text hover:bg-[var(--color-hover-row)]",
 };
 
 export function IconButton(allProps: IconButtonProps) {
@@ -93,13 +95,15 @@ export function IconButton(allProps: IconButtonProps) {
     tone = "default",
     size = "sm",
     reveal = false,
-    active = false,
+    active: activeProp = false,
+    pressed,
     color,
     iconClassName,
     className = "",
     title,
     ...props
   } = allProps;
+  const active = activeProp || pressed === true;
   const cls = `inline-flex items-center justify-center shrink-0 transition-colors focus-accent disabled:opacity-30 disabled:pointer-events-none ${
         SIZE[size].box
       } ${
@@ -108,7 +112,7 @@ export function IconButton(allProps: IconButtonProps) {
           : color === "danger"
             ? "text-[var(--color-danger-text)]"
             : color === "accent"
-              ? "text-accent"
+              ? "text-accent-text"
               : "text-muted"
       } ${TONE[color ?? tone]} ${
         reveal ? `${revealClass(reveal)} aria-expanded:opacity-100` : ""
@@ -139,7 +143,7 @@ export function IconButton(allProps: IconButtonProps) {
   const { type = "button", ...rest } = props as Omit<ButtonProps, keyof IconButtonBase>;
   return (
     <Tooltip content={title ?? label}>
-      <button type={type} aria-label={label} className={cls} {...rest}>
+      <button type={type} aria-label={label} aria-pressed={pressed} className={cls} {...rest}>
         {icon}
       </button>
     </Tooltip>

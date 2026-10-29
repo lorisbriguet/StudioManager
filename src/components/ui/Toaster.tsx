@@ -33,7 +33,7 @@ export function Toaster() {
           content: "flex-1 min-w-0",
           title: "leading-5",
           description: "text-xs text-muted leading-4 mt-0.5",
-          actionButton: "shrink-0 text-sm font-medium text-accent hover:underline cursor-pointer",
+          actionButton: "shrink-0 text-sm font-medium text-accent-text hover:underline cursor-pointer",
           cancelButton: "shrink-0 text-sm text-muted hover:text-[var(--color-text)] cursor-pointer",
         },
       }}

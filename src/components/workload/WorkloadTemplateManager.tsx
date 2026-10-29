@@ -159,7 +159,7 @@ export function WorkloadTemplateManager() {
                   onClick={() => setEditingTemplateId(
                     editingTemplateId === tpl.id ? null : tpl.id
                   )}
-                  className="text-left hover:text-accent"
+                  className="text-left hover:text-accent-text"
                 >
                   {tpl.name}
                 </button>
@@ -211,7 +211,7 @@ export function WorkloadTemplateManager() {
                   onClick={() =>
                     setEditingColumn({ column: null, index: tpl.columns.length })
                   }
-                  className="py-1 text-muted hover:text-accent"
+                  className="py-1 text-muted hover:text-accent-text"
                 >
                   {t.add_column}
                 </Button>

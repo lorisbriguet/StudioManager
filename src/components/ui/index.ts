@@ -7,7 +7,7 @@ export { Badge, CountBadge } from "./Badge";
 export { Tag } from "./Tag";
 export { useTagColor } from "./tagColor";
 export { FilterChip } from "./FilterChip";
-export { Card, cardClass } from "./Card";
+export { Card, cardClass, CARD_LINK, CARD_CONTROL } from "./Card";
 export type { CardPadding, CardTone } from "./Card";
 export { StatTile } from "./StatTile";
 export type { StatTileProps } from "./StatTile";

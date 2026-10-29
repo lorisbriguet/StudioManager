@@ -56,15 +56,30 @@ describe("Form layout", () => {
     expect(field.getAttribute("aria-describedby")).toBe(hint.id);
   });
 
-  it("replaces the hint with the error", () => {
+  it("shows the error in place of the hint, and keeps the hint linked for screen readers", () => {
     render(
       <FormField label="PO number" hint="PO-0000" error="Wrong format">
         <Input value="" onChange={() => {}} />
       </FormField>
     );
-    expect(screen.queryByText("PO-0000")).toBeNull();
-    expect(screen.getByRole("alert").textContent).toBe("Wrong format");
-    expect(screen.getByLabelText("PO number").getAttribute("aria-invalid")).toBe("true");
+    const hint = screen.getByText("PO-0000");
+    expect(hint).toHaveClass("sr-only");
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toBe("Wrong format");
+    const field = screen.getByLabelText("PO number");
+    expect(field.getAttribute("aria-invalid")).toBe("true");
+    expect(field.getAttribute("aria-describedby")).toBe(`${hint.id} ${alert.id}`);
+  });
+
+  it("merges the child's own aria-describedby with the hint and the error", () => {
+    render(
+      <FormField label="Amount" hint="In CHF" error="Required">
+        <Input value="" onChange={() => {}} aria-describedby="own-note" />
+      </FormField>
+    );
+    const ids = screen.getByLabelText("Amount").getAttribute("aria-describedby")!.split(" ");
+    expect(ids[0]).toBe("own-note");
+    expect(ids).toHaveLength(3);
   });
 
   it("lays fields in a grid with one gap, and a field can span the row", () => {

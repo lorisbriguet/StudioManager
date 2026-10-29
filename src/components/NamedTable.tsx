@@ -194,7 +194,7 @@ export function NamedTable({ table, projectId }: Props) {
             className="text-sm font-medium"
           />
         ) : (
-          <span className="cursor-pointer hover:text-accent" onDoubleClick={() => setEditingName(true)}>
+          <span className="cursor-pointer hover:text-accent-text" onDoubleClick={() => setEditingName(true)}>
             {table.name}
           </span>
         )}
@@ -214,7 +214,7 @@ export function NamedTable({ table, projectId }: Props) {
                     <button
                       type="button"
                       onClick={(e) => openColEditor(col, e)}
-                      className="hover:text-accent cursor-pointer"
+                      className="hover:text-accent-text cursor-pointer"
                     >
                       {col.name}
                     </button>

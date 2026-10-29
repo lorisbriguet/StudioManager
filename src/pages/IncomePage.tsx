@@ -170,7 +170,7 @@ export function IncomePage() {
     <div className="relative">
       {(isDragging || parsing) && (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-accent-tint-strong border-2 border-dashed border-accent rounded-lg pointer-events-none">
-          <div className="flex flex-col items-center gap-2 text-accent">
+          <div className="flex flex-col items-center gap-2 text-accent-text">
             <ICONS.upload size={ICON_SIZE.empty} />
             <span className="text-sm font-medium">{parsing ? t.parsing_receipt : t.drop_pdf_hint}</span>
           </div>
@@ -254,7 +254,7 @@ export function IncomePage() {
       {(all) => (
       <Table>
         <Table.Head>
-          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} />
+          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} label={t.select_all} />
           <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
           <SortHeader label={t.source} sortKey="source" current={sort} onSort={setSort} />
           <SortHeader label={t.description} sortKey="category" current={sort} onSort={setSort} />
@@ -287,7 +287,7 @@ export function IncomePage() {
                       onOpen={() => openIncome(inc)}
                       onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: inc }); }}
                     >
-                      <Table.Select checked={bulk.selected.has(inc.id)} onToggle={(shift) => bulk.toggleItem(inc.id, shift)} />
+                      <Table.Select checked={bulk.selected.has(inc.id)} onToggle={(shift) => bulk.toggleItem(inc.id, shift)} label={t.select_row.replace("{name}", inc.reference || inc.source)} />
                       <Table.Td className="font-medium">{inc.reference}</Table.Td>
                       <Table.Td>{inc.source}</Table.Td>
                       <Table.Td>
@@ -310,7 +310,7 @@ export function IncomePage() {
                             >
                               {t.view}
                             </Button>
-                            <span className="text-xs text-success flex items-center gap-1">
+                            <span className="text-xs text-success-text flex items-center gap-1">
                               <Paperclip size={ICON_SIZE.control} />
                             </span>
                           </div>

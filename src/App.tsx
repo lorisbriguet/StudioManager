@@ -45,6 +45,7 @@ import { useGuideUpdateCheck } from "./hooks/useGuideUpdateCheck";
 import { useErrorNotifications } from "./hooks/useErrorNotifications";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useUndoStore } from "./stores/undo-store";
+import { useConfirmStore } from "./stores/confirm-store";
 import { useAppStore } from "./stores/app-store";
 import { useOrgStore } from "./stores/org-store";
 import { getLabels, notify } from "./lib/notify";
@@ -88,6 +89,8 @@ function StartupChecks() {
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       // Rich-text editors (e.g. Wiki): let the editor handle its own undo/redo
       if (target?.isContentEditable || target?.closest?.('[contenteditable="true"]')) return;
+      // A confirm dialog or modal is open: undoing behind it would change what it is about.
+      if (useConfirmStore.getState().queue.length > 0 || document.querySelector('[aria-modal="true"]')) return;
 
       const store = useUndoStore.getState();
       // Read labels per keypress (not from the mount-time closure) so a

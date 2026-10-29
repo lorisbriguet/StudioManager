@@ -572,8 +572,8 @@ export function InvoiceFormPage() {
           <FormField label={t.date} required error={errors.invoice_date}>
             <DatePicker
               value={invoiceDate || null}
-              onChange={(v) => { setInvoiceDate(v ?? ""); clearError("invoice_date"); }}
-              onBlur={() => setFieldError("invoice_date", v.validateField(invoiceDate, invoiceSchema.invoice_date))}
+              onChange={(d) => { markDirty(); setInvoiceDate(d ?? ""); clearError("invoice_date"); }}
+              onBlur={(d) => setFieldError("invoice_date", v.validateField(d ?? "", invoiceSchema.invoice_date))}
             />
           </FormField>
           <FormField
@@ -708,7 +708,7 @@ export function InvoiceFormPage() {
                     markDirty();
                     clearError("line_items");
                   }}
-                  className="text-accent hover:underline"
+                  className="text-accent-text hover:underline"
                 >
                   {t.add_tasks}
                 </Button>
@@ -718,7 +718,7 @@ export function InvoiceFormPage() {
           renderDesignation={(item, i) => (
             <DesignationInput
               value={item.designation}
-              onChange={(v: string) => { updateItem(i, "designation", v); clearError("line_items"); }}
+              onChange={(v: string) => { updateItem(i, "designation", v); markDirty(); clearError("line_items"); }}
               tasks={availableTasks}
             />
           )}
@@ -819,6 +819,8 @@ function DesignationInput({
           matchWidth
           padding="menu"
           className="max-h-40 overflow-y-auto"
+          role="group"
+          aria-label={t.designation}
         >
           {filtered.map((tk, idx) => (
             <button

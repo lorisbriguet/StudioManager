@@ -92,7 +92,7 @@ export function SelectTagPicker({
         {search.trim() && !options.some((o) => o.value === search.trim()) && (
           <button
             onClick={createOption}
-            className="w-full text-left px-3 py-2 text-sm text-accent hover:bg-[var(--color-hover-row)]"
+            className="w-full text-left px-3 py-2 text-sm text-accent-text hover:bg-[var(--color-hover-row)]"
           >
             {t.create} &quot;{search.trim()}&quot;
           </button>

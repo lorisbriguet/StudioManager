@@ -66,10 +66,15 @@ export function showFatalDbError(err: unknown): void {
   try {
     const t = getLabels();
     const overlay = document.createElement("div");
-    overlay.setAttribute(
-      "style",
-      "position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:32px;text-align:center;background:#fff;color:#111;font-family:system-ui,-apple-system,sans-serif;"
-    );
+    overlay.className = "db-fatal";
+    // Its own stylesheet, so it follows the system's dark mode even when the
+    // app's tokens never loaded (this can fire before the first render).
+    const style = document.createElement("style");
+    style.textContent =
+      ".db-fatal{position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:32px;text-align:center;background:#fff;color:#111;font-family:system-ui,-apple-system,sans-serif;}" +
+      ".db-fatal .db-fatal-detail{color:#666;}" +
+      "@media (prefers-color-scheme: dark){.db-fatal{background:#111;color:#e5e5e5;}.db-fatal .db-fatal-detail{color:#a3a3a3;}}";
+    overlay.appendChild(style);
     const title = document.createElement("h1");
     title.textContent = t.page_error_title;
     title.setAttribute("style", "font-size:16px;font-weight:600;margin:0;");
@@ -78,7 +83,8 @@ export function showFatalDbError(err: unknown): void {
     message.setAttribute("style", "font-size:13px;max-width:480px;margin:0;");
     const detail = document.createElement("p");
     detail.textContent = err instanceof Error ? err.message : String(err);
-    detail.setAttribute("style", "font-size:12px;color:#666;max-width:480px;margin:0;word-break:break-word;");
+    detail.className = "db-fatal-detail";
+    detail.setAttribute("style", "font-size:12px;max-width:480px;margin:0;word-break:break-word;");
     overlay.append(title, message, detail);
     overlay.setAttribute("role", "alert");
     overlay.tabIndex = -1;

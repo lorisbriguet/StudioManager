@@ -20,6 +20,7 @@ import {
 import { deleteWithUndo } from "../lib/undo";
 import { useT } from "../i18n/useT";
 import { notify } from "../lib/notify";
+import { scrollBehavior } from "../lib/motion";
 import { ICONS, ICON_SIZE, Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem, Popover, IconButton, SectionLabel, Input, HEADING_1 } from "../components/ui";
 import { TagInput } from "../components/shared/TagInput";
 import { MENU_ITEM } from "../components/ui/Dropdown";
@@ -193,6 +194,8 @@ function LinkInsertPopup({
       onClose={() => onClose()}
       padding="none"
       className="w-80 overflow-hidden"
+      role="dialog"
+      aria-label={t.wiki_link_to_article}
     >
       <div className="px-3 pt-3 pb-2">
         <Input
@@ -322,6 +325,8 @@ function SlashCommandMenu({
       onClose={() => onClose()}
       autoFocus={false}
       style={{ minWidth: 180 }}
+      role="group"
+      aria-label={t.wiki_insert_block}
     >
       {filtered.map((cmd, i) => {
         const Icon = cmd.icon;
@@ -694,8 +699,7 @@ export function ArticleEditor({
           <IconButton
             icon={reading ? ICONS.edit : ICONS.preview}
             label={reading ? t.wiki_switch_to_editing : t.wiki_switch_to_reading}
-            active={!reading}
-            aria-pressed={!reading}
+            pressed={!reading}
             onClick={() => onModeChange(reading ? "editing" : "reading")}
           />
         )}
@@ -732,13 +736,14 @@ export function ArticleEditor({
 
             {reading ? (
               article.project_name && (
-                <span className="px-2 py-0.5 text-xs rounded-full bg-accent-light text-accent">{article.project_name}</span>
+                <span className="px-2 py-0.5 text-xs rounded-full bg-accent-light text-accent-text">{article.project_name}</span>
               )
             ) : (
               <>
                 <div className="h-4 w-px bg-[var(--color-border-divider)]" />
                 <Select
                   value={projectId?.toString() ?? ""}
+                  aria-label={t.project}
                   onChange={handleProjectChange}
                   fullWidth={false}
                   className="text-xs w-48"
@@ -963,7 +968,7 @@ export function WikiPage() {
     const headings = document.querySelectorAll(
       ".tiptap-editor .ProseMirror h1, .tiptap-editor .ProseMirror h2, .tiptap-editor .ProseMirror h3"
     );
-    headings[headingIndex]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    headings[headingIndex]?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
   }, []);
 
   const toggleExplorer = () =>

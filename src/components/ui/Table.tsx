@@ -62,10 +62,10 @@ interface ThProps extends ThHTMLAttributes<HTMLTableCellElement> {
   narrow?: boolean;
 }
 
-function Th({ numeric, narrow, className = "", children, ...rest }: ThProps) {
+function Th({ numeric, narrow, className = "", children, scope = "col", ...rest }: ThProps) {
   const d = useTableDensity();
   return (
-    <th className={`${TABLE_TH} ${narrow ? NARROW : TABLE_X[d]} ${numeric ? "text-right" : "text-left"} ${className}`} {...rest}>
+    <th scope={scope} className={`${TABLE_TH} ${narrow ? NARROW : TABLE_X[d]} ${numeric ? "text-right" : "text-left"} ${className}`} {...rest}>
       {children}
     </th>
   );
@@ -130,20 +130,20 @@ function Td({ numeric, muted, narrow, className = "", children, ...rest }: TdPro
   );
 }
 
-/** Header checkbox: selects all, shows "some selected" as indeterminate. */
-function SelectAll({ all, some, onToggle, label }: { all: boolean; some: boolean; onToggle: () => void; label?: string }) {
+/** Header checkbox: selects all, shows "some selected" as indeterminate. `label` is its accessible name (t.select_all). */
+function SelectAll({ all, some, onToggle, label }: { all: boolean; some: boolean; onToggle: () => void; label: string }) {
   return (
-    <th className={`${TABLE_TH} w-8 px-2`}>
+    <th scope="col" className={`${TABLE_TH} w-8 px-2`}>
       <Checkbox checked={all} indeterminate={some && !all} onChange={onToggle} aria-label={label} />
     </th>
   );
 }
 
-/** Row checkbox. Shift-click is passed on for range selection. */
-function Select({ checked, onToggle, label }: { checked: boolean; onToggle: (shift: boolean) => void; label?: string }) {
+/** Row checkbox. Shift-click is passed on for range selection. `label` names the row: selectRowLabel(t, name). */
+function Select({ checked, onToggle, label }: { checked: boolean; onToggle: (shift: boolean) => void; label: string }) {
   const d = useTableDensity();
   return (
-    <td className={`${TABLE_ROW_H[d]} w-8 px-2 align-middle`}>
+    <td data-no-row-click className={`${TABLE_ROW_H[d]} w-8 px-2 align-middle`}>
       <Checkbox
         checked={checked}
         aria-label={label}
@@ -155,7 +155,11 @@ function Select({ checked, onToggle, label }: { checked: boolean; onToggle: (shi
 
 /** Header over the actions column: empty, or a column-level action (add column). */
 function ActionsTh({ children }: { children?: ReactNode }) {
-  return <th className={`${TABLE_TH} w-px px-2 text-right`}>{children}</th>;
+  return (
+    <th scope="col" className={`${TABLE_TH} w-px px-2 text-right`}>
+      {children}
+    </th>
+  );
 }
 
 /**
@@ -166,7 +170,7 @@ function ActionsTh({ children }: { children?: ReactNode }) {
 function Actions({ children, always }: { children?: ReactNode; always?: boolean }) {
   const d = useTableDensity();
   return (
-    <td className={`${TABLE_ROW_H[d]} w-px px-2 align-middle whitespace-nowrap`}>
+    <td data-no-row-click className={`${TABLE_ROW_H[d]} w-px px-2 align-middle whitespace-nowrap`}>
       <div
         className={`flex items-center justify-end gap-0.5 ${
           always ? "" : `${REVEAL_CLASSES.row} group-focus-within/row:opacity-100 has-[[aria-expanded=true]]:opacity-100`

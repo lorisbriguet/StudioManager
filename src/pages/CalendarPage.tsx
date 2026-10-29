@@ -594,12 +594,14 @@ export function QuickCreatePopup({
       onClose={() => onClose()}
       padding="content"
       className="w-[260px]"
+      aria-label={t.quick_create}
     >
       <div className="text-xs text-muted mb-2">
         {date} · {timeLabel}
       </div>
       <Select
         value={projectId}
+        aria-label={t.project}
         onChange={(e) => {
           setProjectId(e.target.value ? Number(e.target.value) : "");
           setSelectedTask(null);

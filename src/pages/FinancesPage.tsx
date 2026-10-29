@@ -214,6 +214,7 @@ export function FinancesPage() {
       <PageHeader title={t.finances}>
         <Select
           value={year}
+          aria-label={t.year}
           onChange={(e) => setYear(Number(e.target.value))}
           fullWidth={false}
         >
@@ -363,7 +364,7 @@ function PLLine({
       </span>
       <span
         className={`${large ? "text-sm" : "text-xs"} ${bold ? "font-semibold" : ""} ${
-          negative && value < 0 ? "text-danger" : ""
+          negative && value < 0 ? "text-danger-text" : ""
         }`}
       >
         {value < 0 ? "- " : ""}CHF {Math.abs(value).toLocaleString("de-CH", {

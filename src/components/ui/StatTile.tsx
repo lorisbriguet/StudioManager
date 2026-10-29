@@ -14,9 +14,9 @@ import { STAT_VALUE } from "./tokens";
 
 const TONE = {
   default: "",
-  success: "text-success",
-  warning: "text-warning",
-  danger: "text-danger",
+  success: "text-success-text",
+  warning: "text-warning-text",
+  danger: "text-danger-text",
 };
 
 export interface StatTileProps {

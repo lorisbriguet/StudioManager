@@ -1,5 +1,6 @@
 import { getDb, validateFields, TransactionBatch } from "../index";
 import { getNextReference } from "./referenceGenerator";
+import { AppError } from "../../lib/errors";
 import type { Expense, ExpenseCategory } from "../../types/expense";
 
 export async function getExpenses(): Promise<Expense[]> {
@@ -170,7 +171,7 @@ export async function updateExpenseCategory(
 
 export async function deleteExpenseCategory(code: string): Promise<void> {
   if (DEFAULT_CATEGORIES.has(code)) {
-    throw new Error("Cannot delete a default category");
+    throw new AppError("toast_category_default", "Cannot delete a default category");
   }
   const db = await getDb();
   // Check if any expense references this category
@@ -179,7 +180,7 @@ export async function deleteExpenseCategory(code: string): Promise<void> {
     [code]
   );
   if (refs[0]?.cnt > 0) {
-    throw new Error("Category is in use by existing expenses");
+    throw new AppError("toast_category_in_use", "Category is in use by existing expenses");
   }
   await db.execute("DELETE FROM expense_categories WHERE code = $1", [code]);
 }

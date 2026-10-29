@@ -147,7 +147,7 @@ export function ProfilePage() {
       {/* Category sidebar */}
       <div className="w-56 shrink-0 border-r border-[var(--color-border-divider)] py-6">
         <SidebarTitle className="px-6 mb-6">{t.profile}</SidebarTitle>
-        <nav className="space-y-0.5 px-3">
+        <nav aria-label={t.profile} className="space-y-0.5 px-3">
           {categories.map((cat) => (
             <NavItem
               key={cat.key}
@@ -201,7 +201,7 @@ export function ProfilePage() {
                     >
                       <button
                         type="button"
-                        className="flex-1 text-left text-sm hover:text-accent"
+                        className="flex-1 text-left text-sm hover:text-accent-text"
                         onClick={() => setEditingTemplate(tmpl)}
                       >
                         <span>{tmpl.name}</span>

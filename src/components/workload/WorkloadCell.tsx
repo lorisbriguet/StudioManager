@@ -36,7 +36,7 @@ export const WorkloadCell = memo(function WorkloadCell({
       );
     case "checkbox":
       return (
-        <CheckboxCell value={!!value} onChange={onChange} />
+        <CheckboxCell label={column.name} value={!!value} onChange={onChange} />
       );
     case "select":
     case "multi_select":
@@ -178,9 +178,12 @@ function NumberCell({
 // ── Checkbox Cell ──────────────────────────────────────────
 
 function CheckboxCell({
+  label,
   value,
   onChange,
 }: {
+  /** The column's name: the checkbox's accessible name. */
+  label: string;
   value: boolean;
   onChange: (v: boolean) => void;
 }) {
@@ -188,6 +191,7 @@ function CheckboxCell({
     <div className="flex justify-center items-center min-h-[28px]">
       <Checkbox
         checked={value}
+        aria-label={label}
         onChange={() => onChange(!value)}
       />
     </div>

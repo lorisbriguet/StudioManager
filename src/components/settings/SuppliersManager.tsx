@@ -3,7 +3,7 @@ import { useT } from "../../i18n/useT";
 import { Checkbox, Select, Button, FIELD_LABEL, EmptyState, PanelTitle } from "../ui";
 import { useSupplierCounts, useMergeSuppliers } from "../../db/hooks/useExpenses";
 import { suggestSupplierGroups, type SupplierCount } from "../../lib/supplierMerge";
-import { undoableFromStore } from "../../lib/undo";
+import { undoableFromStore, undoTop } from "../../lib/undo";
 
 /** One suggested variant group: pick the canonical name and merge. */
 function SupplierGroupCard({
@@ -57,11 +57,12 @@ export function SuppliersManager() {
   const doMerge = (canonical: string, names: string[]) => {
     const variants = names.filter((n) => n !== canonical);
     if (!canonical || variants.length === 0) return;
+    const before = undoTop();
     mergeSuppliers.mutate(
       { canonical, variants },
       {
         onSuccess: () => {
-          undoableFromStore(t.suppliers_merged);
+          undoableFromStore(t.suppliers_merged, before);
           setSelected(new Set());
           setManualCanonical("");
         },

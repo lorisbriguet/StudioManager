@@ -18,7 +18,9 @@ All colours are CSS custom properties in `src/index.css` (`@theme`, then `.dark`
 - **No literal colours in components.** No hex, `rgb()`, `white`/`black`, Tailwind palette classes (`bg-gray-100`, `text-blue-500`, `text-white`, `bg-black/40`) or opacity-suffixed tokens (`bg-accent/20`, `text-muted/50`). Every colour is a token below. The exceptions: PDFs (they print on white, see [PDF palette](#pdf-palette)) and the Toggle knob (always white, it is a physical knob).
 - **Borders by role**, never by look: a row/section divider, a surface edge, or a control edge.
 - **Tints and the focus ring come from the accent at runtime**: use the utilities, never retype `color-mix`.
-- **Text on a coloured fill** is `text-on-accent` / `text-on-danger`, never `text-white`.
+- **Text on a coloured fill** is `text-on-accent` / `text-on-danger` / `text-on-banner`, never `text-white`. The on-colour is whichever of white and near-black `#111827` has more contrast with the fill (`onColorFor` in `lib/themeTokens.ts`), so a mid-tone accent such as Orange gets near-black text.
+- **Coloured text uses the `-text` token, never the solid.** Accent text is `text-accent-text` (links, active nav, accent badges, the selected menu row); status text is `text-success-text` / `text-warning-text` / `text-danger-text`. The solids (`accent`, `success`, `warning`, `danger`) are for fills, dots, borders and rings: as text they miss 4.5:1 on white or on dark.
+- **Contrast targets**: 4.5:1 for text, 3:1 for a control boundary (the Checkbox edge). `src/__tests__/colourTokens.test.ts` computes them from the real tokens for every theme and preset.
 
 ### Backgrounds
 | Token | Light | Dark | Usage |
@@ -27,6 +29,7 @@ All colours are CSS custom properties in `src/index.css` (`@theme`, then `.dark`
 | `--color-surface` | `#ffffff` | `#161616` | Cards, panels, dropdowns |
 | `--color-input-bg` | `#f5f5f5` | `#1a1a1a` | Input fields, progress bar tracks, inactive elements |
 | `--color-hover-row` | `#f8f8f8` | `#1a1a1a` | Table row hover, button hover |
+| `--color-raised` | surface | text 10% over surface | A control raised over its track: the SegmentedControl thumb (`bg-raised`), lighter than the track in dark |
 | `--color-sidebar` | `#f8f8f8` | `#161616` | Sidebar background |
 | `--color-scrim` | black 40% | black 40% | Behind a modal (`bg-scrim`) |
 | `--color-overlay-hover` | black 10% | white 12% | Hover on something already coloured: the × in a Tag, chart cursors (`hover:bg-overlay-hover`) |
@@ -38,7 +41,8 @@ Three roles, three distinct values, each step stronger:
 |-------|-------|------|------|
 | `--color-border-divider` | `#f3f3f3` | `#1e1e1e` | **Divider**: table rows, section separators, faint lines inside a surface |
 | `--color-border` | `#e8e8e8` | `#2a2a2a` | **Surface edge**: cards, menus, dialogs, popovers (`SURFACE`), the table header and footer, panel bars |
-| `--color-input-border` | `#d4d4d4` | `#3a3a3a` | **Control edge**: inputs, selects, outline buttons, filter chips |
+| `--color-input-border` | `#d4d4d4` | `#3a3a3a` | **Control edge**: inputs, selects, outline buttons, filter chips, the Toggle's off track. Under 3:1 by choice: a field's own fill already outlines it |
+| `--color-checkbox-border` | `#949494` | `#6b6b6b` | **Checkbox edge** (`border-checkbox-border`): 3:1 against bg and surface, since the box is the whole control. Also the checkbox squares in Dropdown multi-select rows |
 | `--color-sidebar-border` | `#e5e5e5` | `#333333` | Sidebar right edge |
 
 (`--color-border-header` is gone: it was merged into `--color-border`.)
@@ -49,14 +53,16 @@ Three roles, three distinct values, each step stronger:
 | `--color-text` | `#111827` | `#e5e5e5` | Primary text (also `body`) |
 | `--color-text-secondary` | `#374151` | `#d4d4d4` | Secondary text, hover states |
 | `--color-muted` | `#5d6570` | `#b0b0b0` | Muted text, labels |
-| `--color-text-faint` | muted 60% | muted 60% | Placeholders, disabled items, timestamps under muted text |
-| `--color-on-accent` | `#ffffff` | `#ffffff` | Text and glyphs on an accent fill (`text-on-accent`, `bg-on-accent` for the Radio dot). Recomputed from the accent: near-black `#111827` when the accent's relative luminance is above 0.4 (`lib/themeTokens.ts`, `onColorFor`) |
-| `--color-on-danger` | `#ffffff` | `#ffffff` | Text on danger, warning and banner fills (`text-on-danger`) |
+| `--color-text-faint` | muted 60% | muted 60% | Disabled glyphs only: under 4.5:1, never for content. Placeholders and timestamps use muted |
+| `--color-on-accent` | `#ffffff` | `#ffffff` | Text and glyphs on an accent fill (`text-on-accent`, `bg-on-accent` for the Radio dot). Recomputed from the accent by `onColorFor`: white or near-black `#111827`, whichever contrasts more |
+| `--color-on-danger` | `#ffffff` | `#111827` | Text on a danger fill (`bg-danger text-on-danger`, the danger CountBadge). `onColorFor(danger)`: dark mode's `#ef4444` takes near-black |
+| `--color-on-banner` | `#ffffff` | `#ffffff` | Text on the test and presentation mode banners (`--color-banner-test` `#b45309`, `--color-banner-presentation` `#4f46e5`) |
 
 ### Accent
 | Token / utility | Value | Usage |
 |-------|-------|-------|
-| `--color-accent` | `#2563eb` (preset or theme) | Primary buttons, links, selection |
+| `--color-accent` | `#2563eb` (preset or theme) | Fills, borders, rings, dots: primary buttons, selection, the active tab underline. Not text |
+| `--color-accent-text` | light: accent 60% over text; dark: accent 60% over white | Accent-coloured **text** (`text-accent-text`): links, `Button variant="link"`, active NavItem, accent Badge, the selected Dropdown row, calendar events. 4.5:1 on bg, surface, accent-light and the accent tints for every preset |
 | `--color-accent-light` | preset light / dark tint | Selected task chip, unread notification hover |
 | `bg-accent-tint` | accent 5% | Selected menu row, editing table row, today in the calendar |
 | `bg-accent-tint-strong` | accent 10% | Hovered selected row, drop zones, unread notification, dashboard drop placeholder |
@@ -79,7 +85,7 @@ Status colours alias them, so a status pill and a tag of the same colour are the
 | `--color-info-bg` / `-text` | blue | `#dbeafe` / `#1d4ed8` | `#1a2332` / `#60a5fa` |
 | `--color-indigo-bg` / `-text` | (own) | `#e0e7ff` / `#4338ca` | `#1a1a2e` / `#818cf8` |
 
-`--color-success`, `--color-warning`, `--color-danger` are the solid fills (dots, the now line, the Sidebar timer pulse). Calendar event kinds (`.fc-priority-high`, `.fc-deadline`, `.fc-invoice-overdue` → danger; `.fc-priority-medium`, `.fc-invoice-sent`, `.fc-quote-expiry` → warning; `.fc-done` → success) use the status tokens, so they follow dark mode and themes.
+`--color-success`, `--color-warning`, `--color-danger` are the solid fills (dots, the now line, the Sidebar timer pulse); dark mode's danger is `#ef4444`. Status-coloured text (a StatTile value, an overdue date, a "paid" note) uses the `-text` token, never the solid. Calendar event kinds (`.fc-priority-high`, `.fc-deadline`, `.fc-invoice-overdue` → danger; `.fc-priority-medium`, `.fc-invoice-sent`, `.fc-quote-expiry` → warning; `.fc-done` → success) use the status tokens, so they follow dark mode and themes.
 
 ### Charts
 `useChartTheme()` returns CSS variable strings (Recharts passes them to SVG): grid `--color-border-divider`, ticks `--color-muted`, cursor `--color-overlay-hover`, tooltip `--color-surface` / `--color-text` / `--shadow-menu`. Series use `--color-chart-1…8`, or a tag colour (`getTagColor(name).text`) when the series is a category.
@@ -96,8 +102,8 @@ className="hover:bg-[var(--color-hover-row)]"
 className="text-[var(--color-text-secondary)]"
 
 className="bg-accent text-on-accent"
-className="bg-accent-tint-strong"
-className="text-[var(--color-text-faint)]"
+className="bg-accent-tint-strong text-accent-text"
+className="text-success-text"
 style={{ background: getTagColor(tag).bg }}
 
 // WRONG — never do this
@@ -106,6 +112,8 @@ className="border-gray-200"
 className="text-white"
 className="bg-accent/20"
 className="text-muted/50"
+className="text-accent"        // accent as text: use text-accent-text
+className="text-success"       // status solid as text: use text-success-text
 className="border-[var(--color-input-border)]"   // on a card: that's a surface edge, use --color-border
 style={{ color: dark ? "#888" : "#999" }}
 ```
@@ -114,7 +122,7 @@ style={{ color: dark ? "#888" : "#999" }}
 `.dark` on `<html>` redefines the tokens; components never branch on dark mode for a colour. There is no `dark:` variant (the custom variant was removed): if a colour differs between light and dark, it is a token. Tag colours, status colours, chart colours and FullCalendar colours are all variables, so none of them reads `darkMode` from the store.
 
 ### Themes
-A theme (`src/lib/themes.ts`) gives its base colours: bg, surface, text, muted, border, sidebar, accent, status solids and charts. `applyThemeColors` (`stores/app-store.ts`) sets the full token set inline on `<html>` from `themeTokens()` (`src/lib/themeTokens.ts`), deriving what the theme leaves out with `color-mix`: text-secondary, input-bg, hover-row, border-divider (fainter than border), input-border (stronger than border), the status bg/text pairs, and on-accent from the accent's luminance. It sets `--color-bg` / `--color-text`, never `body.style`.
+A theme (`src/lib/themes.ts`) gives its base colours: bg, surface, text, muted, border, sidebar, accent, status solids and charts. `applyThemeColors` (`stores/app-store.ts`) sets the full token set inline on `<html>` from `themeTokens()` (`src/lib/themeTokens.ts`), deriving what the theme leaves out with `color-mix`: text-secondary, input-bg (text 8% over surface, so fields show on cards), hover-row (text 4% over bg), border-divider (fainter than border), input-border (stronger than border), checkbox-border (muted 75% over surface), the status bg/text pairs (text: the status colour 55% over text in dark, 50% in light), accent-text, and on-accent / on-danger from `onColorFor`. Dark custom themes also re-derive the tag palette from their surface (tag colour 15% over surface, text 50% over the theme text), so tags don't read as dark holes on a lighter surface. A theme's muted must reach 4.5:1 on its bg and surface (the test checks it). It sets `--color-bg` / `--color-text`, never `body.style`.
 
 The two default themes mirror `src/index.css` value for value (the `colourTokens` test checks it). Choosing one clears the inline overrides so the stylesheet applies and the dark-mode toggle keeps working.
 
@@ -227,13 +235,16 @@ Bottom bar text is `text-xs text-muted`. A column that has no footer simply ends
 
 ## Shadows
 
-Three shadows, as variables in `src/index.css` (`:root`, deeper in `.dark`), each with a utility. No Tailwind `shadow-sm/md/lg` and no arbitrary `shadow-[…]`.
+Four shadows, as variables in `src/index.css` (`:root`, deeper in `.dark`), each with a utility. No Tailwind `shadow-sm/md/lg` and no arbitrary `shadow-[…]`.
 
 | Token / utility | Value (light) | Element |
 |---------|-------|-------|
-| `shadow-control` (`--shadow-control`) | `0 1px 2px rgba(0,0,0,0.08)` (dark 0.4) | Small lift on a control: Toggle knob, SegmentedControl thumb, the selected theme card |
-| `shadow-menu` (`--shadow-menu`) | `0 8px 24px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.06)` (dark `0 8px 24px rgba(0,0,0,0.4)`) | Anything floating: dropdowns, context menus, popovers, tooltips, chart tooltips, BulkActionBar, the import bar, dragged items |
-| `shadow-modal` (`--shadow-modal`) | `0 16px 48px rgba(0,0,0,0.5)` | Modals |
+| `shadow-control` (`--shadow-control`) | `0 1px 2px rgba(0,0,0,0.08)` (dark 0.4) | Small lift on a control: SegmentedControl thumb, the selected theme card |
+| `shadow-knob` (`--shadow-knob`) | `0 1px 3px rgba(0,0,0,0.3), 0 0 0 0.5px rgba(0,0,0,0.12)` | The Toggle's white knob, so it shows on a light off track |
+| `shadow-menu` (`--shadow-menu`) | `0 8px 24px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.06)` (dark `0 8px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06)`) | Anything floating: dropdowns, context menus, popovers, tooltips, chart tooltips, BulkActionBar, the import bar, dragged items |
+| `shadow-modal` (`--shadow-modal`) | `0 16px 48px rgba(0,0,0,0.5)` (dark adds the same 1px white 6% edge) | Modals |
+
+In dark mode a dark shadow alone doesn't show on a dark page, so floating surfaces get a faint light edge.
 
 Cards have no shadow: they separate by their border.
 
@@ -408,7 +419,8 @@ import { Card } from "../components/ui";
   - `surface` (default): the surface fill, no border.
   - `inset`: surface plus a 1px `border-divider` border. A card inside a card is **always** bordered (ClientDetail contacts and addresses, NamedTable in a project block, wiki backlink cards, the link pickers of project blocks).
   - `dashed`: transparent with a dashed `input-border` border, for add and draft boxes (contact and address drafts, "Add block", an unlinked wiki mention).
-- **`interactive`:** hover tint (`hover-row`), pointer and the accent focus ring. On a div with `onClick` it adds `role="button"`, `tabIndex=0`, and Enter / Space click it (the key stops there, so a page-level list shortcut doesn't act twice). Use `as="button"` when the whole card is one action (wiki backlinks). Projects grid, notifications and wiki backlink cards use it.
+- **`interactive`:** hover tint (`hover-row`), pointer and the accent focus ring. On a div with `onClick` it adds `role="button"`, `tabIndex=0`, and Enter / Space click it (the key stops there, so a page-level list shortcut doesn't act twice). Use `as="button"` when the whole card is one action (wiki backlinks).
+- **`interactive="link"`:** for a clickable card that holds its own controls (the projects grid with its bulk checkbox, notifications with their icon buttons): a `role="button"` can't contain other buttons. The card gets the hover tint and pointer only; its title is a real `<button>` (or `<Link>`) with `className={CARD_LINK}`, whose `::after` stretches over the card, so a click anywhere opens it and Enter / Space work natively on the title. The ring shows on the whole card. Inner controls take `CARD_CONTROL` (`relative z-10`) to sit above the overlay.
 - **`selected`:** the accent outline on a `hover-row` fill (the open or bulk-selected project, the expanded workload template).
 - **`as`:** `div` (default), `section` / `article` for a landmark, `li`, `button`. Other props (`onContextMenu`, `style`, `ref`, `aria-*`, `data-*`) pass through.
 - **`cardClass({ padding, tone, interactive, selected })`:** the class string, for an element that can't be a Card.
@@ -435,6 +447,8 @@ import { Button } from "../components/ui";
 - `outline`: bordered and transparent; this was "ghost".
 - `danger`: outlined red, for every destructive action.
 - `link`: text only.
+
+**`loading`:** a spinner replaces the icon, and the button stays focusable: it is `aria-disabled` and `aria-busy`, and clicks (also a form's Enter submit) are ignored. It is not `disabled`, which would drop the keyboard focus to `<body>`. `disabled` still disables.
 
 Deep dive, with the counts behind this choice: [StudioManager Button](https://claude.ai/artifact/1wWC1A5CxpM4qxsXjd6wbw). The IconButton one: [StudioManager IconButton](https://claude.ai/artifact/BMjCuNLsU3XthiC8Vjmewo).
 
@@ -464,7 +478,8 @@ Deep dive, with the counts behind this choice: [StudioManager Button](https://cl
 | `size` | `sm` (default) · `xs` | `sm`: a 26px square with a 14px icon (toolbars, headers, dialogs, next to fields). `xs`: a 20px square with a 12px icon (inside table rows, lists, tree rows). The box is fixed, so there's no padding to set. |
 | `tone` | `default` · `danger` · `accent` | Hover colour and tint: text + hover-row, danger-text + danger-bg, accent + hover-row |
 | `reveal` | `true` · `"row"` · `"task"` · `"sub"` · `"item"` · `"col"` | Hidden until its row is hovered (`true` is the nearest `group`; a name targets `group/<name>`) or the button has keyboard focus |
-| `active` | boolean | Pressed/open look |
+| `active` | boolean | Open look, visual only (an open menu's trigger) |
+| `pressed` | boolean | A toggle: `aria-pressed` and the active look when true. Keep the `label` the same in both states |
 | `color` | `danger` · `accent` | Coloured at rest, not only on hover: a running timer, a confirm check |
 | `iconClassName` | string | Classes on the icon, e.g. a rotating expand chevron. The icon size can't be changed. |
 
@@ -588,6 +603,7 @@ Every date field uses `DatePicker` from `src/components/ui/DatePicker.tsx`. Neve
 - **Calendar:**
   - The calendar button (or Alt+↓) opens the calendar with Today/Tomorrow shortcuts.
   - Weeks start on Monday, and the month and weekday names follow the app language.
+  - The grid is one tab stop (the selected day, else today, else the 1st). Arrows move by day and week, Home / End to the week's Monday / Sunday, PageUp / PageDown by month; moving past the month turns the page.
 - **Looks:** `variant` `default`/`bare` and `detected`, as for Input. The calendar button is the Input's `trailing`. `className` goes on the wrapper (layout). `inputClassName` goes on the field.
 - **`TaskDatePicker`** (end date, times, reminder) is built on `Calendar`, `DateShortcuts` and `Toggle size="sm"`.
 
@@ -602,7 +618,7 @@ Every date field uses `DatePicker` from `src/components/ui/DatePicker.tsx`. Neve
 <Radio name="seed" label={t.start_empty} description={…} checked={!seed} onChange={() => setSeed(false)} />
 ```
 
-- **Look:** a 14px box on `input-bg` with an `input-border`. Checked is an accent fill with a white check. `indeterminate` (select-all with some rows selected) shows a dash.
+- **Look:** a 14px box on `input-bg` with a `checkbox-border` (3:1, stronger than field borders). Checked is an accent fill with a white check. `indeterminate` (select-all with some rows selected) shows a dash.
 - **A real input:** there's a native input underneath, so `onChange(e)`, `e.nativeEvent.shiftKey`, `e.target` and `ref` all work as before.
 - **`label` and `description`:** they make the text clickable. Without a label, give it an `aria-label`.
 - **`className`:** goes on the outer wrapper, for layout only.
@@ -636,7 +652,7 @@ import { Modal, Kbd } from "../components/ui";
 - **A name for every dialog:** a `title`, or an `aria-label` when there is none (palettes).
 - **Rendering:** it renders on `<body>`, so a transformed panel (the side peek) can't trap it. Tests should query `document` or `screen`, not the render container.
 - **Position:** `position="top"` places the dialog 20% from the top.
-- **Built in:** backdrop click and Esc close the dialog (only the topmost one, when a confirmation is open over a form), focus is trapped while open, and focus returns to where it was on close.
+- **Built in:** backdrop click and Esc close the dialog (only the topmost one, when a confirmation is open over a form), focus is trapped while open (Tab skips `tabindex="-1"` elements such as calendar days, and hidden ones), and focus returns to where it was on close.
 - **Never build your own overlay** (`fixed inset-0 bg-black/…`).
 - **`Kbd`:** draws a key hint.
 
@@ -755,7 +771,7 @@ Forms are built from `FormLayout`, `FormSection`, `FormGrid`, `FormField` and `F
 ```
 
 - **Labels:** above the field, 12px muted, plain weight, linked to the field. Only `FormField` draws them; a label over several controls uses `FIELD_LABEL`. No 10px, bold or uppercase field labels, and no placeholder-only forms.
-- **Required:** an accent `*`. **Hint:** a muted line under the field. **Error:** the red line that replaces the hint, announced, with the field's border in red.
+- **Required:** an accent `*`. **Hint:** a muted line under the field. **Error:** the red line that takes the hint's place on screen, announced, with the field's border in red. The hint stays linked (`sr-only` while there is an error): the field's `aria-describedby` is its own ids, then the hint, then the error, merged, never replaced.
 - **Fields:** one height, 26px. Don't add padding to make one taller.
 - **Checkboxes and toggles:** their own `label` / `description`, never wrapped in a hand-written `<label>`.
 - **Actions:** right-aligned with the primary last: Cancel (secondary), other actions, primary. A destructive action sits on the far left. In a Modal they go in `footer`, which is the same row.
@@ -778,7 +794,7 @@ Every data table uses `Table` (`src/components/ui/Table.tsx`). Don't write `<tab
 ```tsx
 <Table density="default">                     {/* or "compact" */}
   <Table.Head>
-    <Table.SelectAll all={…} some={…} onToggle={bulk.toggleAll} />
+    <Table.SelectAll all={…} some={…} onToggle={bulk.toggleAll} label={t.select_all} />
     <SortHeader label={t.date} sortKey="date" current={sort} onSort={setSort} />
     <Table.Th numeric>{t.amount}</Table.Th>
     <Table.ActionsTh />
@@ -786,7 +802,7 @@ Every data table uses `Table` (`src/components/ui/Table.tsx`). Don't write `<tab
   <Table.Body>
     <Table.Group colSpan={4} label="2026" count="3 invoices" total="CHF 18 130.50" open={open} onToggle={toggle} />
     <Table.Row data-list-row onOpen={() => open(row)} focused={i === focusIdx} selected={…} onContextMenu={…}>
-      <Table.Select checked={…} onToggle={(shift) => bulk.toggleItem(row.id, shift)} />
+      <Table.Select checked={…} onToggle={(shift) => bulk.toggleItem(row.id, shift)} label={t.select_row.replace("{name}", row.reference)} />
       <Table.Td muted>{date}</Table.Td>
       <Table.Td numeric>{amount}</Table.Td>
       <Table.Actions><IconButton size="xs" icon={ICONS.more} label={t.more_actions} onClick={…} /></Table.Actions>
@@ -802,7 +818,9 @@ Every data table uses `Table` (`src/components/ui/Table.tsx`). Don't write `<tab
 | `default` | 40px | 16px | Lists: invoices, quotes, expenses, income, clients, resources |
 | `compact` | 32px | 12px | Settings lists and editing grids: time entries, categories, named tables, workload, line items |
 
-- **Header:** 32px in both densities, `text-xs font-medium text-muted`, lowercase, header line under it. Sortable or not, it looks the same.
+- **Header:** 32px in both densities, `text-xs font-medium text-muted`, lowercase, header line under it. Sortable or not, it looks the same. `Th`, `SortHeader`, `SelectAll` and `ActionsTh` are `scope="col"`.
+- **Selection:** `label` is required on `Table.SelectAll` (`t.select_all`) and `Table.Select` (`t.select_row` with the row's name), so every checkbox is named.
+- **Keyboard:** `useListNavigation` moves DOM focus onto the row (`tabindex="-1"`, the `focus-row` ring), so a screen reader reads it. It leaves keys alone on controls (buttons, links, comboboxes, radios, tabs, switches) and keys another handler already took.
 - **Rows:** a minimum height, so a row holding a 26px field or a pill is as tall as a text row. Divider line, hover tint, accent tint when selected.
 - **Opening a row:** `onOpen` makes a single click anywhere on the row open it (pointer cursor). Clicks on checkboxes, buttons, links and fields act on themselves. Enter (`useListNavigation`) and the context menu still work. Editing grids have no `onOpen`.
 - **Row actions:** always the last column, `IconButton size="xs"` inside `Table.Actions`, shown on row hover, keyboard focus or while a menu from it is open.
@@ -847,13 +865,14 @@ From `src/components/ui/Feedback.tsx` and `Tooltip.tsx`:
 
 ```tsx
 <ProgressBar value={62} label={t.progress} showValue />            // tone accent|success|warning|danger, size sm|md
+<ProgressBar value={p.pct} aria-label={`${t.progress}: ${p.name}`} /> // no text label: a string aria-label is required
 <Callout tone="warning" action={<Button>…</Button>}>{msg}</Callout>  // warning|info|danger|success
 <ConfirmButton label={t.delete} question={t.confirm_delete_named.replace("{name}", ref)} onConfirm={remove} />
 <DragHandle {...attributes} {...listeners} reveal />                // dnd-kit grip; reveal = group hover
 <IconButton to={path} icon={ICONS.maximize} label={t.open_full_page} />   // an icon link: IconButton `to`, not Tooltip + Link
 ```
 
-- **Hints:** never use the native `title` attribute for a hint on a button or link. Use `Tooltip`, or `IconButton`, which shows its `label` as a tooltip. `title` stays only on truncated plain text, where it reveals the full text.
+- **Hints:** never use the native `title` attribute for a hint on a button or link. Use `Tooltip`, or `IconButton`, which shows its `label` as a tooltip. A tooltip that only repeats the element's `aria-label` is not linked as its description (it would be read twice); one that adds something (a shortcut) is. `title` stays only on truncated plain text, where it reveals the full text.
 - **Asking before an action:** see [Confirmations](#confirmations).
 - **Telling the user what happened:** see [Toasts](#toasts).
 - **Nothing to show, still loading, failed to load:** see [Empty, loading and error states](#empty-loading-and-error-states).
@@ -1055,7 +1074,7 @@ Rows in a navigation list use `src/components/ui/NavItem.tsx`: the app sidebar, 
 
 - **Look:** an `input-bg` track, `p-0.5 rounded-lg`. The selected segment is `surface` with a hairline shadow and `font-medium`. The others are `text-muted`.
 - **Options:** `size` is `sm` (the default, `px-3 py-1 text-xs`) or `md`. `fullWidth` stretches it and the segments share the width.
-- **Keyboard:** it is a radio group with one tab stop. Arrow keys and Home/End move and select, skipping disabled options.
+- **Keyboard:** it is a radio group with one tab stop (the selected segment; the first enabled one when the value matches none). Arrow keys and Home/End move and select, skipping disabled options.
 - **When not to use it:**
   - More options, or options that need a description: use `Select` or radios.
   - Filtering a list: use `FilterChip`.
@@ -1082,7 +1101,8 @@ import { SettingsCard, SettingRow } from "../components/ui";
   - Without `title`, the content brings its own header (time entries draws its own `SectionHeader` and toolbar).
 - **`SettingRow`:**
   - Layout: label (and an optional `desc`) on the left, control on the right, `py-2.5`, with faint dividers between rows. The last row has no divider.
-  - `htmlFor` turns the label into a real `<label>` for the control.
+  - The label is a real `<label>` for the control: like `FormField`, a single control child (Select, Input, Toggle, a native field) gets an id (its own, or a generated one) and the label points at it, so the control is named and clicking the label focuses or toggles it.
+  - When the child is a wrapper (a div with a select and a hint), pass `htmlFor` with the control's id, or give the control its own `aria-label`. A Button child is never labelled by the row (it keeps its own text).
 - **`SectionHeader`:** use it on its own for a flat section inside a card.
 
 ---
@@ -1114,6 +1134,8 @@ const pop = usePopover();
 | `align` / `side` | `start` / `bottom` | Flips when there is no room |
 | `matchWidth` | `false` | At least as wide as the anchor |
 | `autoFocus` | `true` | Focuses `[data-autofocus]`, else the first focusable element, else the panel |
+| `role` | `"dialog"` with `padding="content"`, else none | A menu panel takes its role from the menu inside; pass `role` for other panels (a menu of `MenuItem`s: `dialog`; an autocomplete under an input: `group`) |
+| `aria-label` / `aria-labelledby` | | Required on a dialog popover (a dev warning says so): `t.pick_date`, `t.edit_column`… |
 
 **What it handles for you:**
 - It renders on `<body>`, at `z-[60]`, with the `POPOVER_SURFACE` look: surface, `--color-border`, `rounded-xl`, `shadow-menu`. Tables and modals never clip it.
@@ -1155,6 +1177,8 @@ Every menu and select in the app uses `src/components/ui/Dropdown.tsx`. Never us
   ]} />
 ```
 
+**Names.** Every `Select` / `DropdownSelect` needs a name: inside `FormField` or `SettingRow` it gets one from the label; elsewhere (a toolbar, a table cell) pass `aria-label` (`t.status`, or `${t.status}: ${row.reference}` in a row). In development a select with no `aria-label`, `aria-labelledby` or `id` logs a warning. The open list and a `Dropdown`'s menu are labelled by their trigger (`aria-labelledby`); `Dropdown` and `ContextMenu` take an `aria-label` for a name of their own (ContextMenu defaults to `t.actions`).
+
 Item icons are components, drawn at 14px. A popover that holds more than commands (a preset list with delete buttons and a name field, a column header menu) builds its rows from `MenuItem` (`ui/MenuItem.tsx`: the same `MENU_ITEM` row, with `icon`, `selected` and `danger`), never raw `MENU_ITEM` buttons.
 
 **Trigger.** One size, thin everywhere, forms included: `bg-[var(--color-input-bg)]`, no border, `px-2.5 py-1 text-xs rounded-md`, chevron 12 (the same 26px as `Button` secondary). Options:
@@ -1191,7 +1215,7 @@ Item icons are components, drawn at 14px. A popover that holds more than command
 
 ## Transitions
 
-All animations respect `prefers-reduced-motion`. Use existing CSS classes:
+All animations respect `prefers-reduced-motion` and the app's own **Reduce motion** setting (the `reduce-motion` class on `<html>`). Under either, `index.css` cuts motion globally: animations end at once, transitions are instant and scrolling jumps; only spinners (`.animate-spin`) keep turning. Motion started from script follows the same rule through `src/lib/motion.ts` (`prefersReducedMotion()`, `scrollBehavior()` for `scrollIntoView`). Use existing CSS classes:
 
 | Effect | Class | Duration |
 |--------|-------|----------|

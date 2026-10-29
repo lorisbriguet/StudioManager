@@ -119,7 +119,7 @@ export function TaskDatePicker({
       </Button>
 
       {pop.open && (
-        <Popover anchor={pop.anchorRef} onClose={pop.close} align="end" padding="content" className="w-[300px]">
+        <Popover anchor={pop.anchorRef} onClose={pop.close} align="end" padding="content" className="w-[300px]" aria-label={t.pick_date}>
           <DateShortcuts
             onPick={(d) => {
               onChange({ due_date: format(d, "yyyy-MM-dd") });
@@ -183,6 +183,7 @@ export function TaskDatePicker({
             <span className="text-xs flex-1">{t.reminder}</span>
             <Select
               value={reminder ?? "none"}
+              aria-label={t.reminder}
               onChange={(e) =>
                 onChange({
                   reminder: e.target.value === "none" ? null : (e.target.value as ReminderOption),

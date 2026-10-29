@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { addMonths, format, getDay, isSameDay, isToday, isValid, parse, startOfMonth, subMonths, addDays } from "date-fns";
+import { addMonths, format, getDay, isSameDay, isSameMonth, isToday, isValid, parse, startOfMonth, subMonths, addDays } from "date-fns";
 import { ICONS } from "./icons";
 import { useAppStore, type DateFormatOption } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
@@ -70,6 +70,41 @@ export function Calendar({ selected, selectedEnd, onSelect, month: monthProp, on
 
   const title = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(month);
 
+  // Roving tabindex: one tab stop in the grid, on the day the arrows last
+  // reached, else the selected day, else today, else the 1st (when shown).
+  const [cursor, setCursor] = useState<Date | null>(null);
+  const moved = useRef(false);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const tabDay =
+    [cursor, selected, new Date()].find((d): d is Date => !!d && isSameMonth(d, month)) ?? monthStart;
+
+  useEffect(() => {
+    if (!moved.current) return;
+    moved.current = false;
+    gridRef.current?.querySelector<HTMLButtonElement>(`[data-day="${toDateString(tabDay)}"]`)?.focus();
+  });
+
+  const onGridKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const dow = (getDay(tabDay) + 6) % 7;
+    const steps: Record<string, () => Date> = {
+      ArrowLeft: () => addDays(tabDay, -1),
+      ArrowRight: () => addDays(tabDay, 1),
+      ArrowUp: () => addDays(tabDay, -7),
+      ArrowDown: () => addDays(tabDay, 7),
+      PageUp: () => subMonths(tabDay, 1),
+      PageDown: () => addMonths(tabDay, 1),
+      Home: () => addDays(tabDay, -dow),
+      End: () => addDays(tabDay, 6 - dow),
+    };
+    const step = steps[e.key];
+    if (!step || e.metaKey || e.ctrlKey || e.altKey) return;
+    e.preventDefault();
+    const next = step();
+    moved.current = true;
+    setCursor(next);
+    if (!isSameMonth(next, month)) setMonth(next);
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
@@ -86,7 +121,7 @@ export function Calendar({ selected, selectedEnd, onSelect, month: monthProp, on
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-7">
+      <div ref={gridRef} className="grid grid-cols-7" onKeyDown={onGridKeyDown}>
         {days.map((day, i) => {
           if (!day) return <div key={`empty-${i}`} className="h-8" />;
           const isStart = !!selected && isSameDay(day, selected);
@@ -97,6 +132,8 @@ export function Calendar({ selected, selectedEnd, onSelect, month: monthProp, on
             <button
               key={i}
               type="button"
+              data-day={toDateString(day)}
+              tabIndex={isSameDay(day, tabDay) ? 0 : -1}
               onClick={() => onSelect(day)}
               aria-pressed={isStart || isEnd}
               aria-label={new Intl.DateTimeFormat(locale, { dateStyle: "full" }).format(day)}
@@ -105,9 +142,9 @@ export function Calendar({ selected, selectedEnd, onSelect, month: monthProp, on
                 isStart || isEnd
                   ? "bg-accent text-on-accent font-medium"
                   : inRange
-                    ? "bg-accent-tint-strong text-accent"
+                    ? "bg-accent-tint-strong text-accent-text"
                     : today
-                      ? "font-bold text-accent hover:bg-[var(--color-hover-row)]"
+                      ? "font-bold text-accent-text hover:bg-[var(--color-hover-row)]"
                       : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
               }`}
             >
@@ -184,7 +221,12 @@ interface DatePickerProps {
   /** On the text field itself. */
   inputClassName?: string;
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
-  onBlur?: () => void;
+  /**
+   * Fires after the typed text is settled, with the value it settled to (a
+   * two-digit year like "1.2.26" commits only here, so the parent's state
+   * isn't updated yet: validate this argument, not the state).
+   */
+  onBlur?: (value: string | null) => void;
   "aria-label"?: string;
   "aria-invalid"?: boolean | "true" | "false";
   "aria-describedby"?: string;
@@ -248,15 +290,18 @@ export function DatePicker({
     }
   };
 
-  /** Enter / blur: also accept a two-digit year, then show the date in full. */
-  const settle = () => {
-    if (!text.trim()) return true;
+  /**
+   * Enter / blur: also accept a two-digit year, then show the date in full.
+   * Returns the settled value, or undefined when the text isn't a date.
+   */
+  const settle = (): string | null | undefined => {
+    if (!text.trim()) return null;
     const d = parseTypedDate(text, fmt);
-    if (!d) return false;
+    if (!d) return undefined;
     const iso = toDateString(d);
     if (iso !== value) onChange(iso);
     setText(format(d, fmt));
-    return true;
+    return iso;
   };
 
   const pick = (d: Date) => {
@@ -297,12 +342,14 @@ export function DatePicker({
             setOpen(true);
             return;
           }
-          if (e.key === "Enter" && !settle()) setInvalid(true);
+          if (e.key === "Enter" && settle() === undefined) setInvalid(true);
           onKeyDown?.(e);
         }}
         onBlur={() => {
-          if (!settle()) setInvalid(true);
-          onBlur?.();
+          const settled = settle();
+          if (settled === undefined) setInvalid(true);
+          // Text that isn't a date leaves the committed value as it was.
+          onBlur?.(settled === undefined ? value : settled);
         }}
         aria-label={aria["aria-label"]}
         aria-invalid={invalid || aria["aria-invalid"] === true || aria["aria-invalid"] === "true" ? true : undefined}

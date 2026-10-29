@@ -18,7 +18,8 @@ describe("IconButton", () => {
     fireEvent.mouseEnter(btn);
     act(() => vi.advanceTimersByTime(500));
     expect(screen.getByRole("tooltip")).toHaveTextContent("Edit");
-    expect(btn).toHaveAttribute("aria-describedby", screen.getByRole("tooltip").id);
+    // The tooltip repeats the name: not linked as a description (said once, not twice).
+    expect(btn).not.toHaveAttribute("aria-describedby");
     fireEvent.mouseLeave(btn);
     expect(screen.queryByRole("tooltip")).toBeNull();
     vi.useRealTimers();
@@ -76,5 +77,26 @@ describe("IconButton", () => {
     fireEvent.click(screen.getByRole("button", { name: "Columns" }));
     expect(screen.getByTestId("state")).toHaveTextContent("true");
     expect(screen.getByRole("button", { name: "Columns" })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("links a tooltip that adds to the name (a shortcut hint) as a description", () => {
+    vi.useFakeTimers();
+    render(<IconButton icon={Pencil} label="Edit" title="Edit (⌘E)" />);
+    const btn = screen.getByRole("button", { name: "Edit" });
+    fireEvent.mouseEnter(btn);
+    act(() => vi.advanceTimersByTime(500));
+    expect(btn).toHaveAttribute("aria-describedby", screen.getByRole("tooltip").id);
+    vi.useRealTimers();
+  });
+
+  it("pressed: a toggle with aria-pressed and the active look; active alone stays visual", () => {
+    const { rerender } = render(<IconButton icon={Pencil} label="Edit mode" pressed={false} />);
+    expect(screen.getByRole("button")).toHaveAttribute("aria-pressed", "false");
+    rerender(<IconButton icon={Pencil} label="Edit mode" pressed />);
+    const btn = screen.getByRole("button");
+    expect(btn).toHaveAttribute("aria-pressed", "true");
+    expect(btn.className).toContain("bg-[var(--color-hover-row)]");
+    rerender(<IconButton icon={Pencil} label="Menu" active />);
+    expect(screen.getByRole("button")).not.toHaveAttribute("aria-pressed");
   });
 });

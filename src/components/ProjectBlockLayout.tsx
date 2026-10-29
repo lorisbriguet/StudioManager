@@ -226,7 +226,7 @@ export function ProjectBlockLayout({ project, projectId, renderBlock, headingAs 
               as="button"
               tone="dashed"
               padding="sm"
-              className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-accent transition-colors w-full justify-center"
+              className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-accent-text transition-colors w-full justify-center"
             >
               <ICONS.add size={ICON_SIZE.menu} /> {t.add_block}
             </Card>

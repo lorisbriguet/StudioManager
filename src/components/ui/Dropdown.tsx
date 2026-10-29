@@ -42,8 +42,8 @@ export const MENU_GROUP_LABEL = `px-2 pt-2 pb-1 ${SECTION_LABEL}`;
 export const MENU_TONE = {
   base: "text-[var(--color-text-secondary)] cursor-pointer",
   active: "bg-[var(--color-hover-row)] text-[var(--color-text)] cursor-pointer",
-  selected: "text-accent font-medium bg-accent-tint cursor-pointer",
-  selectedActive: "text-accent font-medium bg-accent-tint-strong cursor-pointer",
+  selected: "text-accent-text font-medium bg-accent-tint cursor-pointer",
+  selectedActive: "text-accent-text font-medium bg-accent-tint-strong cursor-pointer",
   danger: "text-[var(--color-danger-text)] cursor-pointer",
   dangerActive: "bg-[var(--color-danger-bg)] text-[var(--color-danger-text)] cursor-pointer",
   disabled: "text-muted opacity-50 cursor-not-allowed",
@@ -85,6 +85,10 @@ interface MenuPanelProps {
   search?: { value: string; onChange: (q: string) => void; placeholder: string };
   emptyText: string;
   initialActive?: number;
+  /** Id of the trigger: names the list/menu. */
+  labelledBy?: string;
+  /** Or a name of its own. */
+  label?: string;
 }
 
 function MenuPanel({
@@ -99,6 +103,8 @@ function MenuPanel({
   search,
   emptyText,
   initialActive,
+  labelledBy,
+  label,
 }: MenuPanelProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -215,6 +221,8 @@ function MenuPanel({
         ref={listRef}
         id={id}
         role={role}
+        aria-label={label}
+        aria-labelledby={label ? undefined : labelledBy}
         aria-multiselectable={multiselectable || undefined}
         aria-activedescendant={search ? undefined : activeId}
         tabIndex={-1}
@@ -251,14 +259,14 @@ function MenuPanel({
                 if (!r.disabled && i !== current) setActive(i);
               }}
               onClick={() => pick(i)}
-              className={`${MENU_ITEM} ${tone} ${r.create ? "text-accent" : ""}`}
+              className={`${MENU_ITEM} ${tone} ${r.create ? "text-accent-text" : ""}`}
             >
               {r.checked !== undefined && (
                 <span
                   className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
                     r.checked
                       ? "bg-accent border-accent text-on-accent"
-                      : "bg-[var(--color-input-bg)] border-[var(--color-input-border)]"
+                      : "bg-[var(--color-input-bg)] border-checkbox-border"
                   }`}
                 >
                   {r.checked && <Check size={ICON_SIZE.pill} strokeWidth={ICON_STROKE.check} />}
@@ -276,7 +284,7 @@ function MenuPanel({
               {r.meta != null && <span className="text-xs text-muted tabular-nums shrink-0">{r.meta}</span>}
               {r.shortcut && <Kbd>{r.shortcut}</Kbd>}
               {role === "listbox" && r.checked === undefined && (
-                <Check size={ICON_SIZE.menu} className={`shrink-0 text-accent ${r.selected ? "" : "invisible"}`} />
+                <Check size={ICON_SIZE.menu} className={`shrink-0 text-accent-text ${r.selected ? "" : "invisible"}`} />
               )}
             </div>
           );
@@ -326,7 +334,9 @@ interface DropdownSelectCommon {
   /** Called when the trigger gets focus (e.g. lazy-load the options). */
   onFocus?: () => void;
   renderValue?: (selected: DropdownOption[]) => ReactNode;
+  /** A name is required: aria-label, aria-labelledby, or an `id` a <label htmlFor> points at (FormField, SettingRow). */
   "aria-label"?: string;
+  "aria-labelledby"?: string;
   "aria-required"?: boolean | "true" | "false";
   "aria-invalid"?: boolean | "true" | "false";
   "aria-describedby"?: string;
@@ -371,6 +381,13 @@ export function DropdownSelect(props: DropdownSelectProps) {
   const t = useT();
   const autoId = useId();
   const menuId = `${autoId}-menu`;
+  const triggerId = id ?? `${autoId}-trigger`;
+  const unnamed = !props["aria-label"] && !props["aria-labelledby"] && !id;
+  useEffect(() => {
+    if (import.meta.env.DEV && unnamed) {
+      console.warn("DropdownSelect has no accessible name: pass aria-label, aria-labelledby, or an id a <label> points at.");
+    }
+  }, [unnamed]);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(Boolean(defaultOpen && !disabled));
   const [query, setQuery] = useState("");
@@ -459,7 +476,7 @@ export function DropdownSelect(props: DropdownSelectProps) {
       <button
         ref={triggerRef}
         type="button"
-        id={id}
+        id={triggerId}
         title={title}
         disabled={disabled}
         role="combobox"
@@ -467,6 +484,7 @@ export function DropdownSelect(props: DropdownSelectProps) {
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         aria-label={props["aria-label"]}
+        aria-labelledby={props["aria-labelledby"]}
         aria-required={props["aria-required"]}
         aria-invalid={props["aria-invalid"]}
         aria-describedby={props["aria-describedby"]}
@@ -507,6 +525,7 @@ export function DropdownSelect(props: DropdownSelectProps) {
           search={withSearch ? { value: query, onChange: setQuery, placeholder: t.search } : undefined}
           emptyText={t.no_results}
           initialActive={initialActive}
+          labelledBy={triggerId}
         />
       )}
     </>
@@ -531,17 +550,21 @@ export type DropdownItem =
 
 interface DropdownProps {
   /** Any button. It gets aria-haspopup / aria-expanded; clicks on it toggle the menu. */
-  trigger: ReactElement<{ "aria-haspopup"?: string; "aria-expanded"?: boolean }>;
+  trigger: ReactElement<{ "aria-haspopup"?: string; "aria-expanded"?: boolean; id?: string }>;
   items: DropdownItem[];
   align?: "start" | "end";
   className?: string;
+  /** Name of the menu. Default: labelled by the trigger. */
+  "aria-label"?: string;
 }
 
-export function Dropdown({ trigger, items, align = "start", className = "" }: DropdownProps) {
+export function Dropdown({ trigger, items, align = "start", className = "", "aria-label": menuLabel }: DropdownProps) {
   const anchorRef = useRef<HTMLSpanElement>(null);
   const returnTo = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
-  const menuId = `${useId()}-menu`;
+  const baseId = useId();
+  const menuId = `${baseId}-menu`;
+  const triggerId = trigger.props.id ?? `${baseId}-trigger`;
 
   const close = useCallback((returnFocus: boolean) => {
     setOpen(false);
@@ -586,7 +609,7 @@ export function Dropdown({ trigger, items, align = "start", className = "" }: Dr
         }
       }}
     >
-      {cloneElement(trigger, { "aria-haspopup": "menu", "aria-expanded": open })}
+      {cloneElement(trigger, { id: triggerId, "aria-haspopup": "menu", "aria-expanded": open })}
       {open && (
         <MenuPanel
           id={menuId}
@@ -596,6 +619,8 @@ export function Dropdown({ trigger, items, align = "start", className = "" }: Dr
           align={align}
           onClose={close}
           emptyText=""
+          labelledBy={triggerId}
+          label={menuLabel}
           initialActive={rows.findIndex((r) => r.kind === "item" && !r.disabled)}
         />
       )}

@@ -100,7 +100,7 @@ export function OptionsEditor({
         {lists.find((l) => l.id === linkedListId)?.name ?? ""}
       </Badge>
       {onUnlink && (
-        <Button variant="link" icon={ICONS.unlink} onClick={onUnlink} className="text-muted hover:text-accent">
+        <Button variant="link" icon={ICONS.unlink} onClick={onUnlink} className="text-muted hover:text-accent-text">
           {t.unlink_list}
         </Button>
       )}
@@ -191,7 +191,7 @@ export function OptionsEditor({
           </div>
         ) : (
           <div>
-            <Button variant="link" icon={ICONS.link} onClick={() => setSavingAsList(true)} className="text-muted hover:text-accent">
+            <Button variant="link" icon={ICONS.link} onClick={() => setSavingAsList(true)} className="text-muted hover:text-accent-text">
               {t.save_as_list}
             </Button>
           </div>

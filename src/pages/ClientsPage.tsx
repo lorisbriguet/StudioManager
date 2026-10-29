@@ -176,7 +176,7 @@ export function ClientsPage() {
       {(all) => (
       <Table>
         <Table.Head>
-          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} />
+          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} label={t.select_all} />
           <SortHeader label="ID" sortKey="id" current={sort} onSort={setSort} />
           <SortHeader label={t.display_name} sortKey="name" current={sort} onSort={setSort} />
           <SortHeader label={t.language} sortKey="language" current={sort} onSort={setSort} />
@@ -193,10 +193,10 @@ export function ClientsPage() {
               onOpen={() => openClient(c)}
               onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: c }); }}
             >
-              <Table.Select checked={bulk.selected.has(c.id)} onToggle={(shift) => bulk.toggleItem(c.id, shift)} />
+              <Table.Select checked={bulk.selected.has(c.id)} onToggle={(shift) => bulk.toggleItem(c.id, shift)} label={t.select_row.replace("{name}", c.name)} />
               <Table.Td className="font-medium">{c.id}</Table.Td>
               <Table.Td>
-                <Link to={`/clients/${c.id}`} className="text-accent hover:underline">
+                <Link to={`/clients/${c.id}`} className="text-accent-text hover:underline">
                   {c.name}
                 </Link>
               </Table.Td>

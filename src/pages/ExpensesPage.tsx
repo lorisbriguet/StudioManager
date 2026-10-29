@@ -190,7 +190,7 @@ export function ExpensesPage() {
     <div className="relative">
       {isDragging && (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-accent-tint-strong border-2 border-dashed border-accent rounded-lg pointer-events-none">
-          <div className="flex flex-col items-center gap-2 text-accent">
+          <div className="flex flex-col items-center gap-2 text-accent-text">
             <ICONS.upload size={ICON_SIZE.empty} />
             <span className="text-sm font-medium">{t.drop_pdf_hint}</span>
           </div>
@@ -266,7 +266,7 @@ export function ExpensesPage() {
       {(all) => (
       <Table>
         <Table.Head>
-          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} />
+          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} label={t.select_all} />
           <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
           <SortHeader label={t.supplier} sortKey="supplier" current={sort} onSort={setSort} />
           <SortHeader label={t.category} sortKey="category_code" current={sort} onSort={setSort} />
@@ -300,7 +300,7 @@ export function ExpensesPage() {
                       onOpen={(e) => openRowMenu(exp, { x: e.clientX, y: e.clientY })}
                       onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: exp }); }}
                     >
-                      <Table.Select checked={bulk.selected.has(exp.id)} onToggle={(shift) => bulk.toggleItem(exp.id, shift)} />
+                      <Table.Select checked={bulk.selected.has(exp.id)} onToggle={(shift) => bulk.toggleItem(exp.id, shift)} label={t.select_row.replace("{name}", exp.reference || exp.supplier)} />
                       <Table.Td className="font-medium">{exp.reference}</Table.Td>
                       <Table.Td>{exp.supplier}</Table.Td>
                       <Table.Td>
@@ -323,7 +323,7 @@ export function ExpensesPage() {
                                 {t.view}
                               </Button>
                             </Tooltip>
-                            <span className="text-xs text-success flex items-center gap-1">
+                            <span className="text-xs text-success-text flex items-center gap-1">
                               <Paperclip size={ICON_SIZE.control} />
                             </span>
                           </div>
@@ -647,6 +647,8 @@ export function NewExpenseForm({
               anchor={supplierInputRef}
               onClose={() => setShowSuggestions(false)}
               autoFocus={false}
+              role="group"
+              aria-label={t.supplier}
               matchWidth
               padding="menu"
               className="max-h-48 overflow-y-auto"

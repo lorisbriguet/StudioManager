@@ -24,7 +24,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   /** Leading icon: a lucide component, drawn at 12px (ICON_SIZE.control). An element is kept as is. */
   icon?: IconProp;
-  /** Busy state: replaces the icon with a spinner and disables the button. */
+  /** Busy state: replaces the icon with a spinner; aria-disabled and clicks ignored, focus kept. */
   loading?: boolean;
   ref?: Ref<HTMLButtonElement>;
 }
@@ -37,7 +37,7 @@ const variantClasses: Record<ButtonVariant, string> = {
     "bg-transparent border-[var(--color-input-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text)]",
   danger:
     "bg-transparent border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)]",
-  link: "bg-transparent border-transparent text-accent hover:underline",
+  link: "bg-transparent border-transparent text-accent-text hover:underline",
 };
 
 // 26px, the shared control box (tokens.ts), like the fields.
@@ -54,16 +54,28 @@ export function Button({
   disabled,
   // "button", not the browser's "submit": a Button inside a form only submits it when asked to.
   type = "button",
+  onClick,
   ...props
 }: ButtonProps) {
+  // Loading keeps the button focusable (a disabled button drops focus to <body>):
+  // aria-disabled, and clicks (also a form's Enter submit) are swallowed.
+  const busy = loading && !disabled;
   return (
     <button
       type={type}
-      className={`inline-flex items-center gap-1.5 font-medium whitespace-nowrap transition-colors focus-accent disabled:opacity-50 disabled:cursor-not-allowed ${
+      className={`inline-flex items-center gap-1.5 font-medium whitespace-nowrap transition-colors focus-accent disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed ${
         variant === "link" ? LINK_BOX : BOX
       } ${variantClasses[variant]} ${className}`}
-      disabled={disabled || loading}
+      disabled={disabled}
+      aria-disabled={busy || undefined}
       aria-busy={loading || undefined}
+      onClick={(e) => {
+        if (loading) {
+          e.preventDefault();
+          return;
+        }
+        onClick?.(e);
+      }}
       {...props}
     >
       {loading ? (

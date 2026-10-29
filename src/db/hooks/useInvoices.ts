@@ -6,6 +6,7 @@ import type { Invoice, InvoiceLineItem } from "../../types/invoice";
 import { useUndoStore } from "../../stores/undo-store";
 import { generateAndStoreInvoicePdf } from "../../lib/invoicePdfStore";
 import { getLabels, notify } from "../../lib/notify";
+import { AppError } from "../../lib/errors";
 
 export function useInvoices() {
   return useQuery({ queryKey: ["invoices"], queryFn: q.getInvoices });
@@ -100,7 +101,7 @@ export function useUpdateInvoice() {
 
       // Prevent changing back to draft once it's been set to another status
       if (data.status === "draft" && prev && prev.status !== "draft") {
-        throw new Error("Cannot revert to draft status");
+        throw new AppError("error_revert_to_draft", "Cannot revert to draft status");
       }
 
       await q.updateInvoiceWithLineItems(id, data, lineItems);

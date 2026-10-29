@@ -18,7 +18,7 @@ function SnippetText({ s }: { s: Snippet }) {
   return (
     <span className="block mt-1 text-xs leading-relaxed text-muted">
       {s.before}
-      <mark className="bg-accent-light text-accent rounded px-0.5">{s.mark}</mark>
+      <mark className="bg-accent-light text-accent-text rounded px-0.5">{s.mark}</mark>
       {s.after}
     </span>
   );
@@ -220,7 +220,7 @@ export function WikiSidePanel({
                         {src.title}
                       </button>
                       <SnippetText s={u.snippet} />
-                      <button onClick={() => onLinkIt(u.sourceId)} className="mt-1.5 text-xs text-accent hover:underline">
+                      <button onClick={() => onLinkIt(u.sourceId)} className="mt-1.5 text-xs text-accent-text hover:underline">
                         {t.wiki_link_it}
                       </button>
                     </Card>

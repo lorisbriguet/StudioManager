@@ -23,7 +23,7 @@ import { useT } from "../i18n/useT";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { ClientTimeline } from "../components/ClientTimeline";
 import { ContextMenu } from "../components/ui/ContextMenu";
-import { deleteWithUndo, undoableFromStore } from "../lib/undo";
+import { deleteWithUndo, undoableFromStore, undoTop } from "../lib/undo";
 import type { Client, ClientContact, ClientAddress } from "../types/client";
 
 export function ClientDetailPage() {
@@ -189,7 +189,7 @@ export function ClientDetailPage() {
               <Link
                 key={p.id}
                 to={`/projects/${p.id}`}
-                className="block py-1.5 text-sm text-accent hover:underline"
+                className="block py-1.5 text-sm text-accent-text hover:underline"
               >
                 {p.name}
                 <span className="ml-2 text-xs text-muted">{p.status}</span>
@@ -317,9 +317,10 @@ function ContactsSection({
 
   const removeContact = (contact: ClientContact) => {
     if (editingId === contact.id) setEditingId(null);
+    const before = undoTop();
     deleteContact.mutate(
       { id: contact.id, clientId },
-      { onSuccess: () => undoableFromStore(t.contact_removed) }
+      { onSuccess: () => undoableFromStore(t.contact_removed, before) }
     );
   };
 
@@ -699,9 +700,10 @@ function AddressesSection({
   };
 
   const removeAddress = (addr: ClientAddress) => {
+    const before = undoTop();
     deleteAddress.mutate(
       { id: addr.id, clientId },
-      { onSuccess: () => undoableFromStore(t.address_removed) }
+      { onSuccess: () => undoableFromStore(t.address_removed, before) }
     );
   };
 

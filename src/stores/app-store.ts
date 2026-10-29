@@ -39,7 +39,7 @@ export const ACCENT_PRESETS: AccentPreset[] = [
   { name: "Cyan",    color: "#0891b2", light: "#cffafe", darkLight: "#083344" },
   // Earthy / Pastel
   { name: "Terracotta", color: "#b45939", light: "#fbe9e1", darkLight: "#3b1a0e" },
-  { name: "Clay",       color: "#a0755a", light: "#f5ebe3", darkLight: "#2e1e12" },
+  { name: "Clay",       color: "#8a6249", light: "#f5ebe3", darkLight: "#2e1e12" },
   { name: "Sage",       color: "#6b8f71", light: "#e8f0e9", darkLight: "#1a2e1c" },
   { name: "Olive",      color: "#7c8a3e", light: "#f0f2e0", darkLight: "#262b10" },
   { name: "Sand",       color: "#b59e6c", light: "#f7f2e8", darkLight: "#302612" },

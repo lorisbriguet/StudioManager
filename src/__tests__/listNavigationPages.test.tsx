@@ -148,7 +148,8 @@ describe("ProjectsPage arrow-key navigation", () => {
     renderRoute(<ProjectsPage />, "/projects", "/projects/:id", "project-detail");
 
     const cardA = (await screen.findByText("Website Revamp")).closest("[data-list-row]") as HTMLElement;
-    fireEvent.click(cardA);
+    // The card's title is its button, stretched over the card (Card interactive="link").
+    fireEvent.click(screen.getByRole("button", { name: "Website Revamp" }));
 
     // Peek panel open — its "open full page" button only renders inside it.
     await screen.findByRole("button", { name: "Open full page" });

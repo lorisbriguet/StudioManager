@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { notify } from "../../lib/notify";
-import { undoableFromStore } from "../../lib/undo";
+import { undoableFromStore, undoTop } from "../../lib/undo";
 import { ListChecks } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useUpdateCustomList, useDeleteCustomList, useSetCustomListItems } from "../../db/hooks/useCustomLists";
@@ -32,23 +32,38 @@ export function CustomListsManager() {
     setDirty(false);
   }, [items, selectedId]);
 
+  // A failed mutation is already reported by the mutation cache: the catches
+  // only keep the rejection from going unhandled.
   const handleCreateList = async (name: string) => {
-    const id = await createList.mutateAsync(name);
-    setAddingList(false);
-    setSelectedId(id);
-    notify.success(t.list_created);
+    try {
+      const id = await createList.mutateAsync(name);
+      setAddingList(false);
+      setSelectedId(id);
+      notify.success(t.list_created);
+    } catch {
+      // reported by the mutation
+    }
   };
 
   // No question: Undo puts the list and its items back.
   const handleDeleteList = async (id: number) => {
-    await deleteList.mutateAsync(id);
+    const before = undoTop();
+    try {
+      await deleteList.mutateAsync(id);
+    } catch {
+      return; // reported by the mutation
+    }
     if (selectedId === id) setSelectedId(null);
-    undoableFromStore(t.list_deleted);
+    undoableFromStore(t.list_deleted, before);
   };
 
   const commitRename = async (id: number, name: string) => {
-    await updateList.mutateAsync({ id, name });
-    setRenamingId(null);
+    try {
+      await updateList.mutateAsync({ id, name });
+      setRenamingId(null);
+    } catch {
+      // reported by the mutation
+    }
   };
 
   const saveItems = async () => {

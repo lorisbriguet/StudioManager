@@ -368,8 +368,8 @@ export function QuoteFormPage() {
           <FormField label={t.date} required error={errors.quote_date}>
             <DatePicker
               value={quoteDate || null}
-              onChange={(v) => { setQuoteDate(v ?? ""); clearError("quote_date"); }}
-              onBlur={() => setFieldError("quote_date", v.validateField(quoteDate, quoteSchema.quote_date))}
+              onChange={(d) => { markDirty(); setQuoteDate(d ?? ""); clearError("quote_date"); }}
+              onBlur={(d) => setFieldError("quote_date", v.validateField(d ?? "", quoteSchema.quote_date))}
             />
           </FormField>
           <FormField label={t.activity}>

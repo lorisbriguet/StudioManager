@@ -2,6 +2,7 @@ import { toast } from "sonner";
 import { useAppStore } from "../stores/app-store";
 import { uiLabels } from "../i18n/ui";
 import { logError } from "./log";
+import { isAppError } from "./errors";
 
 /**
  * The one way to show a toast. See "Toasts" in DESIGN-SYSTEM.md.
@@ -64,13 +65,14 @@ function detailsAction(err: unknown) {
   };
 }
 
-function showError(label: string, err: unknown, hasErr: boolean): void {
+function showError(label: string, err: unknown, hasErr: boolean, description?: string): void {
   const now = Date.now();
   const last = recentErrors.get(label);
   if (last !== undefined && now - last < ERROR_DEDUPE_MS) return;
   recentErrors.set(label, now);
   toast.error(label, {
     duration: TOAST_DURATION.error,
+    description,
     action: hasErr ? detailsAction(err) : undefined,
   });
 }
@@ -94,13 +96,17 @@ export const notify = {
   /**
    * Something failed. Shows the translated `label` ("Couldn't save the
    * invoice"), never the raw error: that goes to the log, and a "Details"
-   * action copies it. The same label shows once per 30 s.
+   * action copies it. The same label shows once per 30 s. An `AppError`
+   * (lib/errors.ts) carries a more telling label ("Expenses use this
+   * category"): that one is shown instead. `description` adds a second line
+   * ("No changes were made").
    */
-  error(label: string, err?: unknown): void {
-    const hasErr = arguments.length > 1 && err !== undefined;
-    if (hasErr) logError(label, errorDetails(err));
-    else logError(label);
-    showError(label, err, hasErr);
+  error(label: string, err?: unknown, opts?: { description?: string }): void {
+    const hasErr = err !== undefined;
+    const shown = isAppError(err) ? getLabels()[err.labelKey] : label;
+    if (hasErr) logError(shown, errorDetails(err));
+    else logError(shown);
+    showError(shown, err, hasErr, opts?.description);
   },
 
   /**
@@ -151,8 +157,9 @@ export const notify = {
       else toast.warning(outcome.warning, { id, duration: TOAST_DURATION.warning });
       return result;
     } catch (err) {
-      logError(msgs.error, errorDetails(err));
-      toast.error(msgs.error, { id, duration: TOAST_DURATION.error, action: detailsAction(err) });
+      const shown = isAppError(err) ? getLabels()[err.labelKey] : msgs.error;
+      logError(shown, errorDetails(err));
+      toast.error(shown, { id, duration: TOAST_DURATION.error, action: detailsAction(err) });
       return undefined;
     }
   },

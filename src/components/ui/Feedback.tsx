@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type HTMLAttributes, type ReactNode, type Ref } from "react";
+import { useEffect, useId, useRef, useState, type HTMLAttributes, type ReactNode, type Ref } from "react";
 import { ICONS, ICON_SIZE, type IconProp } from "./icons";
 import { useT } from "../../i18n/useT";
 import { Button } from "./Button";
@@ -22,8 +22,23 @@ const FILL: Record<Tone, string> = {
   danger: "bg-[var(--color-danger-text)]",
 };
 
+type ProgressBarProps = {
+  /** 0–100 */
+  value: number;
+  showValue?: boolean;
+  tone?: Tone;
+  size?: "sm" | "md";
+  className?: string;
+} & (
+  /** A text label names the bar (aria-labelledby). */
+  | { label: string; "aria-label"?: string }
+  /** No label, or a rich one: the bar needs its own string name. */
+  | { label?: Exclude<ReactNode, string>; "aria-label": string }
+);
+
 /**
  *   <ProgressBar value={62} label={t.progress} showValue />
+ *   <ProgressBar value={p.pct} aria-label={p.name} />
  */
 export function ProgressBar({
   value,
@@ -32,21 +47,16 @@ export function ProgressBar({
   tone = "accent",
   size = "sm",
   className = "",
-}: {
-  /** 0–100 */
-  value: number;
-  label?: ReactNode;
-  showValue?: boolean;
-  tone?: Tone;
-  size?: "sm" | "md";
-  className?: string;
-}) {
+  "aria-label": ariaLabel,
+}: ProgressBarProps) {
   const v = Math.max(0, Math.min(100, Math.round(value)));
+  const labelId = useId();
+  const labelledBy = label && !ariaLabel ? labelId : undefined;
   return (
     <div className={className}>
       {(label || showValue) && (
         <div className="flex justify-between text-xs text-muted mb-1">
-          <span>{label}</span>
+          <span id={labelId}>{label}</span>
           {showValue && <span className="tabular-nums">{v}%</span>}
         </div>
       )}
@@ -55,7 +65,8 @@ export function ProgressBar({
         aria-valuenow={v}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-label={typeof label === "string" ? label : undefined}
+        aria-label={ariaLabel}
+        aria-labelledby={labelledBy}
         className={`${size === "sm" ? "h-1.5" : "h-2"} w-full rounded-full bg-[var(--color-input-bg)] overflow-hidden`}
       >
         <div className={`h-full rounded-full transition-all ${FILL[tone]}`} style={{ width: `${v}%` }} />

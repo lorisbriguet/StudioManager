@@ -448,7 +448,7 @@ export function InvoicesPage() {
         variant="secondary"
         icon={ICONS.recurring}
         onClick={() => setShowRecurring(!showRecurring)}
-        className={showRecurring ? "border-accent text-accent bg-accent-light" : ""}
+        className={showRecurring ? "border-accent text-accent-text bg-accent-light" : ""}
       >
         {t.recurring}
         {(templates?.length ?? 0) > 0 && (
@@ -518,6 +518,7 @@ export function InvoicesPage() {
                     <Table.Td>
                       <Select
                         value={tmpl.frequency}
+                        aria-label={t.frequency}
                         onChange={(e) =>
                           updateTemplate.mutate({ id: tmpl.id, data: { frequency: e.target.value as RecurringFrequency } })
                         }
@@ -574,7 +575,7 @@ export function InvoicesPage() {
       {(all) => (
       <Table>
         <Table.Head>
-          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} />
+          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} label={t.select_all} />
           <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
           <SortHeader label={t.client} sortKey="client_name" current={sort} onSort={setSort} />
           <SortHeader label={t.date} sortKey="invoice_date" current={sort} onSort={setSort} />
@@ -606,13 +607,14 @@ export function InvoicesPage() {
                         onOpen={() => openInvoice(inv)}
                         onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: inv }); }}
                       >
-                        <Table.Select checked={bulk.selected.has(inv.id)} onToggle={(shift) => bulk.toggleItem(inv.id, shift)} />
+                        <Table.Select checked={bulk.selected.has(inv.id)} onToggle={(shift) => bulk.toggleItem(inv.id, shift)} label={t.select_row.replace("{name}", inv.reference)} />
                         <Table.Td>{inv.reference.startsWith("DRAFT") ? t.draft : inv.reference}</Table.Td>
                         <Table.Td>{inv.client_name}</Table.Td>
                         <Table.Td muted>{formatDisplayDate(inv.invoice_date)}</Table.Td>
                         <Table.Td>
                           <Select
                             value={inv.status}
+                            aria-label={`${t.status}: ${inv.reference.startsWith("DRAFT") ? t.draft : inv.reference}`}
                             onChange={(e) => {
                               const status = e.target.value as InvoiceStatus;
                               const prevStatus = inv.status;

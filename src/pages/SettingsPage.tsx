@@ -278,12 +278,13 @@ export function SettingsPage() {
     } catch (e) {
       // Restore runs in a single transaction — on failure it rolled back
       // (the raw cause, e.g. RestoreError.detail, is in the log and behind "Details")
+      const noChanges = { description: t.restore_no_changes };
       if (e instanceof RestoreError) {
-        notify.error(e.code === "backup_empty" ? t.restore_backup_empty : t.restore_safety_backup_failed, e.detail ?? e);
+        notify.error(e.code === "backup_empty" ? t.restore_backup_empty : t.restore_safety_backup_failed, e.detail ?? e, noChanges);
       } else if (isScopeDenied(e)) {
-        notify.error(t.backup_path_not_allowed, e);
+        notify.error(t.backup_path_not_allowed, e, noChanges);
       } else {
-        notify.error(t.toast_restore_failed, e);
+        notify.error(t.toast_restore_failed, e, noChanges);
       }
     } finally {
       setRestoring(false);
@@ -361,7 +362,7 @@ export function SettingsPage() {
       {/* Category sidebar */}
       <div className="w-48 shrink-0 border-r border-[var(--color-border-divider)] py-5">
         <SidebarTitle className="px-5 mb-4">{t.settings}</SidebarTitle>
-        <nav className="space-y-3 px-1">
+        <nav aria-label={t.settings} className="space-y-3 px-1">
           {categorySections.map((section) => (
             <div key={section.label}>
               <SectionLabel className="px-3 mb-1">{section.label}</SectionLabel>
@@ -535,6 +536,7 @@ export function SettingsPage() {
                 <div className="flex items-center gap-2">
                   <Select
                     value={calendarName}
+                    aria-label={t.target_calendar}
                     onChange={(e) => { setCalendarName(e.target.value); setCalendarError(null); }}
                     aria-invalid={calendarError ? true : undefined}
                     aria-describedby={calendarError ? "calendar-error" : undefined}
@@ -633,7 +635,7 @@ export function SettingsPage() {
                     </Button>
                   </div>
                 ) : (
-                  <button type="button" onClick={handleEnterTestMode} disabled={togglingTestMode} className="flex items-center gap-1 px-2.5 py-1 bg-[var(--color-banner-test)] text-on-danger text-xs rounded-md hover:opacity-90 disabled:opacity-50">
+                  <button type="button" onClick={handleEnterTestMode} disabled={togglingTestMode} className="flex items-center gap-1 px-2.5 py-1 bg-[var(--color-banner-test)] text-on-banner text-xs rounded-md hover:opacity-90 disabled:opacity-50">
                     {togglingTestMode ? <Spinner size={12} tone="current" /> : <FlaskConical size={ICON_SIZE.control} />}
                     {t.enter_test_mode}
                   </button>
@@ -651,7 +653,7 @@ export function SettingsPage() {
                     </Button>
                   </div>
                 ) : (
-                  <button type="button" onClick={handleEnterPresentation} disabled={togglingPresentation || testMode} className="flex items-center gap-1 px-2.5 py-1 bg-[var(--color-banner-presentation)] text-on-danger text-xs rounded-md hover:opacity-90 disabled:opacity-50">
+                  <button type="button" onClick={handleEnterPresentation} disabled={togglingPresentation || testMode} className="flex items-center gap-1 px-2.5 py-1 bg-[var(--color-banner-presentation)] text-on-banner text-xs rounded-md hover:opacity-90 disabled:opacity-50">
                     {togglingPresentation && <Spinner size={12} tone="current" />}
                     {t.enter_presentation_mode}
                   </button>
@@ -700,6 +702,7 @@ export function SettingsPage() {
                 <div className="flex items-center gap-2">
                   <Select
                     value={autoBackupInterval}
+                    aria-label={t.auto_backup_interval}
                     onChange={(e) => setAutoBackupInterval(Number(e.target.value))}
                     fullWidth={false}
                   >
@@ -728,6 +731,7 @@ export function SettingsPage() {
                 <div className="flex items-center gap-1.5">
                   <Select
                     value={selectedBackup}
+                    aria-label={t.select_backup}
                     onChange={(e) => setSelectedBackup(e.target.value)}
                     onFocus={() => {
                       if (availableBackups.length === 0 && !loadingBackups) loadBackupList();

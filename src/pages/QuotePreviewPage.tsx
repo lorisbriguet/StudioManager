@@ -24,10 +24,13 @@ export function QuotePreviewPage() {
 
   const quoteQuery = useQuote(quoteId);
   const { data: quote } = quoteQuery;
-  const { data: lineItems } = useQuoteLineItems(quoteId);
-  const { data: client } = useClient(quote?.client_id ?? "");
+  const lineItemsQuery = useQuoteLineItems(quoteId);
+  const { data: lineItems } = lineItemsQuery;
+  const clientQuery = useClient(quote?.client_id ?? "");
+  const { data: client } = clientQuery;
   const { data: addresses } = useClientAddresses(quote?.client_id ?? "");
-  const { data: profile } = useBusinessProfile();
+  const profileQuery = useBusinessProfile();
+  const { data: profile } = profileQuery;
   const { data: project } = useProject(quote?.project_id ?? 0);
   const quoteTemplateId = quote && "template_id" in quote
     ? (quote as { template_id?: number | null }).template_id ?? null
@@ -39,10 +42,20 @@ export function QuotePreviewPage() {
   const t = useT();
 
   // Loading until the quote and everything the PDF needs is in: "not found" must not flash while the client loads.
-  const isLoading = !!quoteId && (quote === undefined || (!!quote && (lineItems === undefined || (!!quote.client_id && client === undefined) || profile === undefined)));
+  // A failed query is not pending, so an error lands in the QueryError branch instead of a skeleton forever.
+  const needsClient = !!quote?.client_id;
+  const isLoading = !!quoteId && (quoteQuery.isPending || (!!quote && (lineItemsQuery.isPending || (needsClient && clientQuery.isPending) || profileQuery.isPending)));
+  const loadQueries = [quoteQuery, lineItemsQuery, profileQuery, ...(needsClient ? [clientQuery] : [])];
+  const loadFailed = loadQueries.some((q) => q.isError && q.data === undefined);
 
-  if (quoteQuery.isError && quote === undefined)
-    return <QueryError message={t.load_error_quote} onRetry={quoteQuery.refetch} retrying={quoteQuery.isFetching} />;
+  if (loadFailed)
+    return (
+      <QueryError
+        message={t.load_error_quote}
+        onRetry={() => loadQueries.forEach((q) => void q.refetch())}
+        retrying={loadQueries.some((q) => q.isFetching)}
+      />
+    );
   if (isLoading) return <DetailSkeleton />;
   if (!quote || !lineItems || !client || !profile)
     return (

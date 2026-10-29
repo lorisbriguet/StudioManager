@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { notify } from "../../lib/notify";
-import { undoableFromStore } from "../../lib/undo";
+import { undoableFromStore, undoTop } from "../../lib/undo";
 import { useT } from "../../i18n/useT";
 import { useExpenseCategories, useCreateExpenseCategory, useUpdateExpenseCategory, useDeleteExpenseCategory, isDefaultCategory } from "../../db/hooks/useExpenses";
 import { isCategoryInUse } from "../../db/queries/expenses";
@@ -72,9 +72,10 @@ export function ExpenseCategoryManager() {
       notify.error(t.toast_category_in_use);
       return;
     }
+    const before = undoTop();
     try {
       await deleteCategory.mutateAsync(code);
-      undoableFromStore(t.toast_category_deleted);
+      undoableFromStore(t.toast_category_deleted, before);
     } catch {
       // reported by the mutation
     }
@@ -219,7 +220,7 @@ export function ExpenseCategoryManager() {
             setAdding(true);
             setForm({ code: "", name_fr: "", name_en: "", pl_section: "operating", color: null });
           }}
-          className="mt-3 px-3 py-1.5 text-sm text-accent border border-accent rounded-md hover:bg-accent-light"
+          className="mt-3 px-3 py-1.5 text-sm text-accent-text border border-accent rounded-md hover:bg-accent-light"
         >
           + {t.add_category}
         </button>

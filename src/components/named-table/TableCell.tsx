@@ -78,7 +78,7 @@ export function TableCell({
               key={opt}
               type="button"
               onClick={() => addTag(opt)}
-              className="px-1.5 py-0.5 rounded-full text-[10px] bg-[var(--color-input-bg)] text-muted hover:text-accent hover:bg-accent-light transition-colors"
+              className="px-1.5 py-0.5 rounded-full text-[10px] bg-[var(--color-input-bg)] text-muted hover:text-accent-text hover:bg-accent-light transition-colors"
             >
               + {opt}
             </button>
@@ -114,7 +114,7 @@ export function TableCell({
       }
       return (
         <span
-          className="cursor-pointer hover:text-accent block truncate"
+          className="cursor-pointer hover:text-accent-text block truncate"
           onDoubleClick={onStartEdit}
         >
           {row.data[col.id] != null ? String(row.data[col.id]) : <span className="text-muted">—</span>}

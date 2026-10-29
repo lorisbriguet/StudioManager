@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { ICONS, ICON_SIZE, PageHeader, Button, Card, EmptyState, IconButton, QueryState, ListSkeleton } from "../components/ui";
+import { ICONS, ICON_SIZE, PageHeader, Button, Card, CARD_LINK, CARD_CONTROL, EmptyState, IconButton, QueryState, ListSkeleton } from "../components/ui";
 import { notify } from "../lib/notify";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
@@ -20,7 +20,7 @@ const typeConfig: Record<string, { icon: LucideIcon; color: string }> = {
   overdue: { icon: ICONS.reminder, color: "text-[var(--color-warning-text)]" },
   warning: { icon: ICONS.warning, color: "text-[var(--color-warning-text)]" },
   error: { icon: ICONS.error, color: "text-[var(--color-danger-text)]" },
-  info: { icon: ICONS.info, color: "text-accent" },
+  info: { icon: ICONS.info, color: "text-accent-text" },
 };
 
 export function NotificationsPage() {
@@ -87,9 +87,9 @@ export function NotificationsPage() {
             return (
               <Card
                 key={n.id}
-                interactive
+                // The title is the button (stretched over the card); the icon buttons sit above it.
+                interactive="link"
                 padding="sm"
-                onClick={() => handleClick(n)}
                 className={`flex items-start gap-3 group ${
                   n.read ? "" : "bg-accent-tint-strong! hover:bg-accent-light!"
                 }`}
@@ -99,9 +99,13 @@ export function NotificationsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className={`text-sm ${n.read ? "text-muted" : "font-medium"}`}>
+                    <button
+                      type="button"
+                      className={`${CARD_LINK} text-sm ${n.read ? "text-muted" : "font-medium"}`}
+                      onClick={() => handleClick(n)}
+                    >
                       {n.title}
-                    </span>
+                    </button>
                     {!n.read && (
                       <span className="dot bg-accent" />
                     )}
@@ -109,11 +113,11 @@ export function NotificationsPage() {
                   {n.message && (
                     <p className="text-xs text-muted mt-0.5 truncate">{n.message}</p>
                   )}
-                  <p className="text-[10px] text-[var(--color-text-faint)] mt-1">
+                  <p className="text-[10px] text-muted mt-1">
                     {formatDisplayDateTime(n.created_at)}
                   </p>
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                <div className={`${CARD_CONTROL} flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity`}>
                   <IconButton size="xs"
                     icon={ICONS.copy}
                     label={t.copy}

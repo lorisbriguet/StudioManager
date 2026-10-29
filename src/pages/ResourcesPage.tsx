@@ -19,7 +19,7 @@ import { BulkActionBar } from "../components/ui/BulkActionBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useBulkDelete } from "../hooks/useBulkDelete";
 import { useT } from "../i18n/useT";
-import { undoableFromStore } from "../lib/undo";
+import { undoableFromStore, undoTop } from "../lib/undo";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
@@ -105,9 +105,10 @@ export function ResourcesPage() {
   const bulkDelete = () => void deleteSelection([...bulk.selected] as number[], bulk.clearSelection);
 
   const handleDelete = async (id: number) => {
+    const before = undoTop();
     try {
       await deleteResource.mutateAsync(id);
-      undoableFromStore(t.toast_resource_deleted);
+      undoableFromStore(t.toast_resource_deleted, before);
     } catch {
       // reported by the mutation
     }
@@ -195,7 +196,7 @@ export function ResourcesPage() {
       {() => (
       <Table>
         <Table.Head>
-          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} />
+          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} label={t.select_all} />
           <SortHeader<SortKey> label={t.name} sortKey="name" current={sort} onSort={setSort} />
           <Table.Th>{t.type}</Table.Th>
           <SortHeader<SortKey> label={t.price_label} sortKey="price" current={sort} onSort={setSort} />
@@ -491,7 +492,7 @@ function ResourceTableRow({
         onBlur={handleBlur}
         onFocus={handleFocus}
       >
-        <Table.Select checked={isSelected} onToggle={onToggleSelect} />
+        <Table.Select checked={isSelected} onToggle={onToggleSelect} label={t.select_row.replace("{name}", resource.name)} />
         <Table.Td>
           <Input
             value={name}
@@ -532,7 +533,7 @@ function ResourceTableRow({
       onOpen={onStartEdit}
       onContextMenu={onContextMenu}
     >
-      <Table.Select checked={isSelected} onToggle={onToggleSelect} />
+      <Table.Select checked={isSelected} onToggle={onToggleSelect} label={t.select_row.replace("{name}", resource.name)} />
       <Table.Td className="font-medium">{resource.name}</Table.Td>
       <Table.Td>
         <TagInput value={resource.tags} onChange={() => {}} readOnly />

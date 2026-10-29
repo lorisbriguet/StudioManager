@@ -9,7 +9,7 @@ import { ICON_SIZE } from "../ui";
 export function ReceiptNote({ path }: { path: string }) {
   const t = useT();
   return (
-    <div className="flex items-center gap-2 text-xs text-success">
+    <div className="flex items-center gap-2 text-xs text-success-text">
       <Paperclip size={ICON_SIZE.control} />
       <span>{t.receipt_will_be_attached} {path.split("/").pop()}</span>
     </div>

@@ -111,12 +111,15 @@ export function Tooltip({
 }: {
   content: ReactNode;
   side?: "top" | "bottom";
-  children: ReactElement<Partial<TriggerProps>>;
+  children: ReactElement<Partial<TriggerProps> & { "aria-label"?: string }>;
 }) {
   const tip = useTooltip(content, { side });
   const own = children.props;
+  // A tooltip repeating the element's name (an IconButton's label) is not a
+  // description: linking it would make screen readers say it twice.
+  const repeatsName = typeof content === "string" && content === own["aria-label"];
   const merged: Partial<TriggerProps> = {
-    "aria-describedby": tip.triggerProps["aria-describedby"] ?? own["aria-describedby"],
+    "aria-describedby": (repeatsName ? undefined : tip.triggerProps["aria-describedby"]) ?? own["aria-describedby"],
   };
   for (const key of ["onMouseEnter", "onMouseLeave", "onMouseDown", "onFocus", "onBlur"] as const) {
     const a = tip.triggerProps[key] as (e: never) => void;

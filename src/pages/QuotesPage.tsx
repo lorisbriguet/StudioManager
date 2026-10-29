@@ -292,7 +292,7 @@ export function QuotesPage() {
       {(all) => (
       <Table>
         <Table.Head>
-          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} />
+          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} label={t.select_all} />
           <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
           <SortHeader label={t.client} sortKey="client_name" current={sort} onSort={setSort} />
           <SortHeader label={t.date} sortKey="quote_date" current={sort} onSort={setSort} />
@@ -310,7 +310,7 @@ export function QuotesPage() {
               onOpen={() => openQuote(q)}
               onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: q }); }}
             >
-              <Table.Select checked={bulk.selected.has(q.id)} onToggle={(shift) => bulk.toggleItem(q.id, shift)} />
+              <Table.Select checked={bulk.selected.has(q.id)} onToggle={(shift) => bulk.toggleItem(q.id, shift)} label={t.select_row.replace("{name}", q.reference)} />
               <Table.Td>
                 <span className="font-medium">{q.reference.startsWith("DRAFT") ? t.draft : q.reference}</span>
               </Table.Td>
@@ -319,6 +319,7 @@ export function QuotesPage() {
               <Table.Td>
                 <Select
                   value={q.status}
+                  aria-label={`${t.status}: ${q.reference}`}
                   onChange={(e) => {
                     const status = e.target.value as QuoteStatus;
                     updateQuote.mutate({ id: q.id, data: { status } });

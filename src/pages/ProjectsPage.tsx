@@ -20,7 +20,7 @@ import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { ICONS, Checkbox, Button, Badge, PageHeader, SearchBar, DatePicker, Input, FormField, FormGrid, FormModal, EmptyState, QueryState, CardGridSkeleton, Select, FilterChip, ProgressBar, PeekHeader, HEADING_2, Card, CARD_GAP } from "../components/ui";
+import { ICONS, Checkbox, Button, Badge, PageHeader, SearchBar, DatePicker, Input, FormField, FormGrid, FormModal, EmptyState, QueryState, CardGridSkeleton, Select, FilterChip, ProgressBar, PeekHeader, HEADING_2, Card, CARD_GAP, CARD_LINK, CARD_CONTROL, revealClass } from "../components/ui";
 import { undoable, deleteWithUndo } from "../lib/undo";
 import { confirmDelete } from "../lib/confirm";
 import { useBulkDelete } from "../hooks/useBulkDelete";
@@ -330,9 +330,9 @@ export function ProjectsPage() {
               <Card
                 key={p.id}
                 data-list-row
-                interactive
+                // The title is the button (stretched over the card); the checkbox sits above it.
+                interactive="link"
                 selected={peekId === p.id || bulk.selected.has(p.id)}
-                onClick={() => handleProjectClick(p.id)}
                 onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: { id: p.id, name: p.name } }); }}
                 className={`group${pi === focusIdx ? " focus-row" : ""}`}
               >
@@ -340,13 +340,18 @@ export function ProjectsPage() {
                   <div className="flex items-center gap-2 min-w-0">
                     <Checkbox
                       checked={bulk.selected.has(p.id)}
+                      aria-label={t.select_row.replace("{name}", p.name)}
                       onChange={(e) => bulk.toggleItem(p.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
                       onClick={(e) => e.stopPropagation()}
-                      className={`shrink-0 transition-opacity ${
-                        bulk.selected.has(p.id) || bulk.count > 0 ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                      className={`${CARD_CONTROL} shrink-0 transition-opacity ${
+                        bulk.selected.has(p.id) || bulk.count > 0 ? "opacity-100" : `${revealClass(true)} focus-within:opacity-100`
                       }`}
                     />
-                    <h2 className={`${HEADING_2} leading-tight truncate`}>{p.name}</h2>
+                    <h2 className={`${HEADING_2} leading-tight truncate`}>
+                      <button type="button" className={`${CARD_LINK} truncate max-w-full`} onClick={() => handleProjectClick(p.id)}>
+                        {p.name}
+                      </button>
+                    </h2>
                   </div>
                   <Badge variant={projectStatusVariant(p.status)} className="shrink-0 ml-2">
                     {t[statusKeys[p.status]]}

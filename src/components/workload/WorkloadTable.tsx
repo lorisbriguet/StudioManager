@@ -430,6 +430,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
       <div className="flex items-center gap-2 mb-3 select-none">
         <Select
           value={templateId ?? ""}
+          aria-label={t.templates}
           onChange={(e) => {
             const val = e.target.value;
             if (val === "__save__") {
@@ -616,7 +617,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
           variant="link"
           icon={ICONS.add}
           onClick={handleAddRow}
-          className={`w-full ${TABLE_X.compact} py-2 text-muted hover:text-accent hover:no-underline! hover:bg-[var(--color-hover-row)] border-t border-[var(--color-border-divider)]`}
+          className={`w-full ${TABLE_X.compact} py-2 text-muted hover:text-accent-text hover:no-underline! hover:bg-[var(--color-hover-row)] border-t border-[var(--color-border-divider)]`}
         >
           {t.new_row}
         </Button>
@@ -746,7 +747,7 @@ function SectionContextMenu({
   t: Record<string, string>;
 }) {
   return (
-    <Popover at={{ x, y }} onClose={onClose} className="w-48">
+    <Popover at={{ x, y }} onClose={onClose} className="w-48" role="dialog" aria-label={t.options}>
       <MenuItem icon={ICONS.pin} selected={stickyFirstCol} onClick={onTogglePin}>
         {t.pin_first_column}
       </MenuItem>
@@ -1006,7 +1007,7 @@ function SystemHeaderMenu({
   t: Record<string, string>;
 }) {
   return (
-    <Popover anchor={anchor} onClose={onClose} className="w-48">
+    <Popover anchor={anchor} onClose={onClose} className="w-48" role="dialog" aria-label={t.options}>
       <MenuItem icon={ICONS.sortAsc} selected={isAsc} onClick={() => onSort("asc")}>
         {t.sort_ascending}
       </MenuItem>
@@ -1054,7 +1055,7 @@ function ColumnHeaderMenu({
   const sumVisible = col.showSum !== false;
 
   return (
-    <Popover anchor={anchor} onClose={onClose} className="w-48">
+    <Popover anchor={anchor} onClose={onClose} className="w-48" role="dialog" aria-label={`${t.options}: ${col.name}`}>
       {col.type !== "formula" && (
         <>
           <MenuItem icon={ICONS.sortAsc} selected={isAsc} onClick={() => onSort(col.key, "asc")}>

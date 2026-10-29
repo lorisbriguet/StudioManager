@@ -33,8 +33,31 @@ const sizeClasses: Record<ModalSize, string> = {
   full: "w-[80vw]! max-w-none h-[85vh]",
 };
 
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+// Every part skips tabindex="-1": a roving-tabindex day or segment is not a tab stop.
+const NOT_SKIPPED = ':not([tabindex="-1"])';
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled]):not([type=hidden])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]",
+]
+  .map((s) => `${s}${NOT_SKIPPED}`)
+  .join(", ");
+
+/** Tab stops inside `root`, in DOM order, without hidden ones (display:none, a collapsed section). */
+function tabStops(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(isShown);
+}
+
+function isShown(el: HTMLElement): boolean {
+  // Browsers: no offsetParent means display:none here or above (fixed elements excepted).
+  if (el.offsetParent !== undefined) return el.offsetParent !== null || getComputedStyle(el).position === "fixed";
+  // DOMs without layout (tests): walk up for display:none.
+  for (let n: HTMLElement | null = el; n; n = n.parentElement) if (getComputedStyle(n).display === "none") return false;
+  return true;
+}
 
 export function Modal({ open, onClose, title, children, footer, size = "sm", position = "center", padding = true, ...aria }: ModalProps) {
   const t = useT();
@@ -102,7 +125,7 @@ export function Modal({ open, onClose, title, children, footer, size = "sm", pos
     if (e.key !== "Tab") return;
     const dialog = ref.current;
     if (!dialog) return;
-    const focusables = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+    const focusables = tabStops(dialog);
     if (focusables.length === 0) {
       e.preventDefault();
       dialog.focus();

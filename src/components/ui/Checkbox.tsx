@@ -23,7 +23,7 @@ interface BaseProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "type" |
 }
 
 const BOX =
-  "peer appearance-none shrink-0 w-3.5 h-3.5 m-0 border border-[var(--color-input-border)] bg-[var(--color-input-bg)] cursor-pointer transition-colors focus-accent checked:bg-accent checked:border-accent disabled:opacity-50 disabled:cursor-not-allowed";
+  "peer appearance-none shrink-0 w-3.5 h-3.5 m-0 border border-checkbox-border bg-[var(--color-input-bg)] cursor-pointer transition-colors focus-accent checked:bg-accent checked:border-accent disabled:opacity-50 disabled:cursor-not-allowed";
 
 /**
  * The label wrapper Checkbox, Radio and Toggle share: the control on the left,

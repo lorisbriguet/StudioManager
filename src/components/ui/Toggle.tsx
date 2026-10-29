@@ -25,6 +25,8 @@ interface ToggleProps {
   /** sm: compact rows inside popovers (date picker options). */
   size?: "sm" | "md";
   className?: string;
+  /** On the switch, so a <label htmlFor> (SettingRow) points at it. */
+  id?: string;
 }
 
 const SIZE = {
@@ -33,22 +35,23 @@ const SIZE = {
   sm: { track: "h-4.5 w-8", knob: "h-3.5 w-3.5", on: "translate-x-4", offset: "mt-px" },
 };
 
-export function Toggle({ checked, onChange, disabled, ariaLabel, label, description, size = "md", className = "" }: ToggleProps) {
+export function Toggle({ checked, onChange, disabled, ariaLabel, label, description, size = "md", className = "", id }: ToggleProps) {
   const sz = SIZE[size];
   const control = (
     <button
       type="button"
+      id={id}
       role="switch"
       aria-checked={checked}
       aria-label={ariaLabel}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex ${sz.track} shrink-0 cursor-pointer rounded-full transition-colors duration-200 focus-accent disabled:opacity-50 disabled:cursor-not-allowed ${
-        checked ? "bg-accent" : "bg-[var(--color-input-bg)]"
+        checked ? "bg-accent" : "bg-[var(--color-input-border)]"
       } ${label ? "" : className}`}
     >
       <span
-        className={`pointer-events-none inline-block ${sz.knob} rounded-full bg-white shadow-control transition-transform duration-200 translate-y-0.5 ${
+        className={`pointer-events-none inline-block ${sz.knob} rounded-full bg-white shadow-knob transition-transform duration-200 translate-y-0.5 ${
           checked ? sz.on : "translate-x-0.5"
         }`}
       />

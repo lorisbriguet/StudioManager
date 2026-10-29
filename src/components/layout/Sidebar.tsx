@@ -11,7 +11,7 @@ import { useUnreadNotificationCount } from "../../db/hooks/useNotifications";
 import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
 import type { UIKey } from "../../i18n/ui";
-import { BOTTOM_BAR, CountBadge, ICONS, IconButton } from "../ui";
+import { BOTTOM_BAR, CountBadge, ICONS, IconButton, Tooltip } from "../ui";
 import { navIcon, navItemClass } from "../ui/NavItem";
 
 type NavItem = { to: string; icon: LucideIcon; labelKey: UIKey };
@@ -181,6 +181,7 @@ export function Sidebar() {
 
   return (
     <aside
+      aria-label={t.sidebar}
       className={`flex flex-col border-r border-sidebar-border bg-sidebar h-full transition-all ${
         collapsed ? "w-16" : "w-56"
       }`}
@@ -192,7 +193,7 @@ export function Sidebar() {
         <OrgSwitcher collapsed={collapsed} onCreate={() => setCreateOpen(true)} />
       </div>
       <OrgCreateDialog open={createOpen} onClose={() => setCreateOpen(false)} />
-      <nav ref={navRef} className="flex-1 py-2 overflow-y-auto">
+      <nav ref={navRef} aria-label={t.main_navigation} className="flex-1 py-2 overflow-y-auto">
         {allVisible.map((item, i) => {
           if ("divider" in item) {
             return (
@@ -203,10 +204,13 @@ export function Sidebar() {
           const label = t[item.labelKey];
           const isNotifications = item.labelKey === "notifications";
           const isFocused = focusIdx === currentLinkIdx;
-          return (
+          // Collapsed, the link is only an icon: it takes its name from aria-label and shows it in a Tooltip.
+          const collapsedName = isNotifications && unreadCount > 0 ? `${label} (${unreadCount})` : label;
+          const link = (
             <NavLink
               key={item.to}
               to={item.to}
+              aria-label={collapsed ? collapsedName : undefined}
               data-nav-link
               onAuxClick={(e) => {
                 if (e.button === 1) {
@@ -233,6 +237,13 @@ export function Sidebar() {
                 </span>
               )}
             </NavLink>
+          );
+          return collapsed ? (
+            <Tooltip key={item.to} content={collapsedName}>
+              {link}
+            </Tooltip>
+          ) : (
+            link
           );
         })}
       </nav>
