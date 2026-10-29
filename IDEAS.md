@@ -85,11 +85,17 @@ All 12 checklist items pass after three fixes found by the pass:
 - [x] Test Mode and Presentation Mode are demo-build tools now: their Settings category is hidden in the real app (banners and exit paths stay for anyone mid-mode at update time); the Snapshot card moved under Backup
 - [x] Docs: guide, [README](README.md) and landing page no longer point testers at Presentation Mode
 
-## Next — Agents window (design: [specs/2026-10-28-agents-window-design.md](docs/superpowers/specs/2026-10-28-agents-window-design.md))
+## V3.0.0 — Done (agents, menu bar, studio upkeep, UI library)
 
+Design: [specs/2026-10-28-agents-window-design.md](docs/superpowers/specs/2026-10-28-agents-window-design.md)
+
+- [x] UI component library: every form, table, menu, dialog and input on shared components in `src/components/ui/`; tokens by role, one icon map, a DatePicker you can type in, undo on every reversible delete, toasts and empty/loading/error states ([DESIGN-SYSTEM.md](DESIGN-SYSTEM.md))
+- [x] Studio upkeep: machines, reminders, consumables, subscriptions, warranties, lending; Synology NAS and Bambu Lab connections with secrets in the Keychain ([spec](docs/superpowers/specs/2026-10-28-studio-upkeep-design.md))
 - [x] Settings switch + Agents page: list agents by needs you / working / idle / done, labelled by project; start, read, send, switch model, stop, delete; terminal attached to an agent; Mac notification when one waits ([docs](docs/agents.md))
 - [x] Menu bar: the agent bar inside StudioManager, with plan limits, alerts and a Day tab of routines ([docs](docs/menu-bar.md); design: [specs/2026-10-28-menu-bar-design.md](docs/superpowers/specs/2026-10-28-menu-bar-design.md))
+- [x] Full check of 2026-10-29: all 43 interface findings and the P1/P2 security and backend findings fixed ([report](docs/audits/2026-10-29-full-check.md)); quieter "needs you" notifications, one row per resumed session; menus no longer flash in the corner
 - [ ] Follow-up: Per-window command ACL (AppManifest) so the menu bar panel can only call its own commands
+- [ ] Follow-up: verify the MCP sidecar the app registers (G.9 of the full check)
 
 ## V2.3.0 — Done (wiki vault)
 
