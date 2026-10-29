@@ -61,6 +61,45 @@ pub fn needs_attention(agents: &[Agent]) -> bool {
     agents.iter().any(|a| a.group == Group::NeedsYou)
 }
 
+/// A wait must last this long before it is announced (skips status flicker and instant auto-approvals).
+const NOTIFY_DELAY_MS: i64 = 6_000;
+/// At most one banner per agent in this window, however often it flips back to needing you.
+const NOTIFY_COOLDOWN_MS: i64 = 180_000;
+
+/// Holds back `poll_once`'s notifications until the wait has lasted `NOTIFY_DELAY_MS`, and lets
+/// each agent through at most once per `NOTIFY_COOLDOWN_MS`.
+#[derive(Default)]
+pub struct NotifyGate {
+    pending: HashMap<String, i64>,
+    last_sent: HashMap<String, i64>,
+}
+
+impl NotifyGate {
+    /// `fresh` is what `poll_once` wants to announce, `list` the full list of this pass.
+    pub fn admit(&mut self, fresh: Vec<Agent>, list: &[Agent], now_ms: i64) -> Vec<Agent> {
+        for a in &fresh {
+            self.pending.entry(a.session_id.clone()).or_insert(now_ms);
+        }
+        // A wait that ended, or an agent that left, is forgotten before it was announced.
+        self.pending.retain(|id, _| list.iter().any(|a| &a.session_id == id && a.group == Group::NeedsYou));
+        self.last_sent.retain(|id, _| list.iter().any(|a| &a.session_id == id));
+        let mut out = vec![];
+        for a in list.iter().filter(|a| a.group == Group::NeedsYou) {
+            let Some(&since) = self.pending.get(&a.session_id) else { continue };
+            if now_ms - since < NOTIFY_DELAY_MS {
+                continue;
+            }
+            self.pending.remove(&a.session_id);
+            let cooled = self.last_sent.get(&a.session_id).map_or(true, |t| now_ms - t >= NOTIFY_COOLDOWN_MS);
+            if cooled {
+                self.last_sent.insert(a.session_id.clone(), now_ms);
+                out.push(a.clone());
+            }
+        }
+        out
+    }
+}
+
 /// `Organisation › Client › Project`, or the folder's last segment.
 fn place(a: &Agent) -> String {
     match &a.project {
@@ -181,6 +220,7 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
     let mut index_at: Option<Instant> = None;
     let mut models = ModelCache::new();
     let mut alerts_at: Option<Instant> = None;
+    let mut gate = NotifyGate::default();
     loop {
         std::thread::sleep(POLL_INTERVAL);
         let Some(state) = app.try_state::<super::AgentsState>() else {
@@ -191,6 +231,7 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
             // Off: forget everything so turning it on starts a new baseline.
             if poll.baseline_done || !poll.last_good.is_empty() {
                 poll = PollState::default();
+                gate = NotifyGate::default();
                 if let Ok(mut c) = state.last.lock() {
                     c.clear();
                 }
@@ -225,7 +266,8 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
             label_and_quiet(&mut v, &index, &state.app_dir, &mut models);
             v
         });
-        let (emit, notify) = poll_once(&mut poll, result);
+        let (emit, fresh) = poll_once(&mut poll, result);
+        let notify = gate.admit(fresh, &emit, now_ms());
         if let Ok(mut c) = state.last.lock() {
             *c = emit.clone();
         }
@@ -432,6 +474,43 @@ mod tests {
         quiet_pass(&mut v, &dir, 0, &|_| None);
         assert!(read_state(&dir).dismissed.is_empty());
         assert_eq!(v[0].group, Group::NeedsYou);
+    }
+
+    #[test]
+    fn a_wait_is_announced_only_after_the_delay() {
+        let mut g = NotifyGate::default();
+        let waiting = vec![ag("a", Group::NeedsYou)];
+        assert!(g.admit(waiting.clone(), &waiting, 0).is_empty());
+        assert!(g.admit(vec![], &waiting, 5_000).is_empty());
+        assert_eq!(g.admit(vec![], &waiting, 6_000).len(), 1);
+        assert!(g.admit(vec![], &waiting, 7_000).is_empty());
+    }
+
+    #[test]
+    fn a_wait_that_ends_before_the_delay_is_never_announced() {
+        let mut g = NotifyGate::default();
+        let waiting = vec![ag("a", Group::NeedsYou)];
+        g.admit(waiting.clone(), &waiting, 0);
+        let working = vec![ag("a", Group::Working)];
+        assert!(g.admit(vec![], &working, 3_000).is_empty());
+        assert!(g.admit(vec![], &waiting, 9_000).is_empty());
+    }
+
+    #[test]
+    fn a_flapping_agent_gets_one_banner_per_cooldown() {
+        let mut g = NotifyGate::default();
+        let waiting = vec![ag("a", Group::NeedsYou)];
+        let working = vec![ag("a", Group::Working)];
+        g.admit(waiting.clone(), &waiting, 0);
+        assert_eq!(g.admit(vec![], &waiting, 6_000).len(), 1);
+        g.admit(vec![], &working, 10_000);
+        // Back to waiting inside the cooldown: held back, then dropped.
+        g.admit(waiting.clone(), &waiting, 20_000);
+        assert!(g.admit(vec![], &waiting, 30_000).is_empty());
+        // Waiting again after the cooldown: announced.
+        g.admit(vec![], &working, 100_000);
+        g.admit(waiting.clone(), &waiting, 190_000);
+        assert_eq!(g.admit(vec![], &waiting, 196_000).len(), 1);
     }
 
     #[test]
