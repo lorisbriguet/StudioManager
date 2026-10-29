@@ -63,11 +63,12 @@ import { ProgressBar } from "../ui/Feedback";
 import { EmptyState } from "../ui/EmptyState";
 import { ListSkeleton } from "../ui/Skeleton";
 import { invoiceStatusDotClass, priorityDotClass } from "../../lib/statusColors";
+import { formatMoney } from "../../lib/money";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function formatCHF(amount: number): string {
-  return `CHF ${amount.toLocaleString("de-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return formatMoney(amount, "CHF");
 }
 
 function PriorityDot({ priority }: { priority: string }) {

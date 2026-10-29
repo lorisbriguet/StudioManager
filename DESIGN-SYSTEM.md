@@ -581,7 +581,7 @@ One size: `CONTROL_BOX` (`px-2.5 py-1 text-xs leading-4 border`) and `rounded-md
 
 - **Numbers:** `numeric` aligns right with tabular digits (`NUMERIC`), hides the spinner arrows and defaults `type` to `"number"`. Money fields take `step="0.01"`.
 - **Units:** `unit` is a muted suffix inside the box (`CHF`, `%`, `h`, `m`), read out with the field. Never a span next to the field. An amount shows its record's currency (the invoice's or quote's, CHF elsewhere).
-- **Money as text:** `formatMoney(amount, currency)` (`src/lib/upkeep/money.ts`) writes "CHF 1’234.50": Swiss grouping (de-CH), the currency code first, in both languages (FR doesn't switch to "1 234.50 CHF"), the same as the invoice and quote PDFs and the dashboard. A negative amount puts the sign on the number ("CHF -5.00"); a code that isn't ISO 4217 is kept as typed.
+- **Money as text:** `formatMoney(amount, currency)` (`src/lib/money.ts`) writes "CHF 1’234.50": Swiss grouping (de-CH), the currency code first, in both languages (FR doesn't switch to "1 234.50 CHF"), the same as the invoice and quote PDFs and the dashboard, with a no-break space after the code. The PDFs keep their own `formatCHF` with a plain space: their output is pinned by `pdfGolden.test.tsx`. A negative amount puts the sign on the number ("CHF -5.00"); a code that isn't ISO 4217 is kept as typed.
 - **Icon and clear:** `icon` is a leading 12px icon. `onClear` adds a trailing `xs` clear `IconButton` while there is a value (`clearLabel` names it). `trailing` takes your own control (DatePicker's calendar button).
 - **Width:** full width by default. Short fields take `width`: `xs` 64px (hours, minutes), `sm` 96px (rates, %), `md` 144px (amounts with a unit). Never `w-16`/`w-24`/… on a field.
 - **Wrapper:** with `icon`, `unit`, `onClear` or `trailing`, the field sits in a wrapper: `className` goes on the wrapper (layout) and `inputClassName` on the field.
@@ -688,7 +688,7 @@ import { Modal, Kbd } from "../components/ui";
 - **A name for every dialog:** a `title`, or an `aria-label` when there is none (palettes).
 - **Rendering:** it renders on `<body>`, so a transformed panel (the side peek) can't trap it. Tests should query `document` or `screen`, not the render container.
 - **Position:** `position="top"` places the dialog 20% from the top.
-- **Built in:** backdrop click and Esc close the dialog (`closeOnBackdrop={false}` keeps it open on a backdrop click, a press that starts in a field and ends on the backdrop never counts; only the topmost one closes, when a confirmation is open over a form), focus is trapped while open (Tab skips `tabindex="-1"` elements such as calendar days, and hidden ones), and focus returns to where it was on close.
+- **Built in:** backdrop click and Esc close the dialog (`closeOnBackdrop={false}` keeps it open on a backdrop click, a press that starts in a field and ends on the backdrop never counts; only the topmost one closes, when a confirmation is open over a form; an Esc a child already handled with `preventDefault`, such as a suggestion list closing, doesn't close the dialog), focus is trapped while open (Tab skips `tabindex="-1"` elements such as calendar days, and hidden ones), and focus returns to where it was on close.
 - **Never build your own overlay** (`fixed inset-0 bg-black/…`).
 - **`Kbd`:** draws a key hint.
 
@@ -1260,7 +1260,7 @@ Item icons are components, drawn at 14px. A popover that holds more than command
 - Keyboard: arrows (they skip disabled rows), Home/End, type-ahead, Enter/Space to pick. Esc and Tab close and return focus to the trigger, and Esc doesn't close a surrounding Modal.
 - Clicks and keys inside the panel don't reach the trigger's ancestors (table rows, forms).
 - **Lazy options:** `onOpen` on `Select` / `DropdownSelect` runs each time the list opens (click, arrow keys, `defaultOpen`): load or refresh the options there. Not `onFocus`: WebKit doesn't focus a clicked button.
-- `Select` sends no DOM `change` event. Inside a `FormModal`, a pick marks the form dirty by itself; any other form that tracks dirty state with `<div onChange>` must call `markDirty()` in each Select's `onChange`.
+- `Select` sends no DOM `change` event. Inside a `FormModal`, a pick (in `Select`, `DropdownSelect`, or a `Dropdown` menu action) marks the form dirty by itself; any other form that tracks dirty state with `<div onChange>` must call `markDirty()` in each Select's `onChange`.
 - Tests: open with `pickOption(trigger, "Label")` from `src/__tests__/fixtures/dropdown.ts`.
 - A popup that opens at the text caret and keeps the focus in the editor (the wiki's slash menu and link picker) is a `Popover` with the `MENU_*` row look, `role="listbox"` with `role="option"` rows; `Popover` flips above the caret or slides left instead of leaving the window, and closes when the editor scrolls. A right-click menu is always `ContextMenu`, never hand-built, and never the only way in: WebKit sends no `contextmenu` event from the keyboard, so the same items also sit behind a "more" `IconButton` (`ICONS.more`, `reveal`, also shown while the row has focus: `group-focus-within:opacity-100`) opening a `Dropdown` (the wiki explorer's article and file rows).
 
@@ -1309,7 +1309,7 @@ const t = useT();
 
 Keys are defined in `src/i18n/ui.ts` (EN section, then FR section). Always add both.
 
-Counts use `plural()` from `src/i18n/plural.ts` with a `_one` / `_other` pair of keys (`task_count_one` "{count} task", `task_count_other` "{count} tasks"), never `n === 1 ? … : …` around two unrelated keys or an "(s)" suffix.
+Counts use `plural()` from `src/i18n/plural.ts` with a `_one` / `_other` pair of keys (`task_count_one` "{count} task", `task_count_other` "{count} tasks"). It follows the UI language's plural rule (`Intl.PluralRules`): French uses the singular for 0 ("0 tâche"), so a `_one` string always writes `{count}`, never a literal 1. Never `n === 1 ? … : …` around two unrelated keys or an "(s)" suffix.
 
 ---
 

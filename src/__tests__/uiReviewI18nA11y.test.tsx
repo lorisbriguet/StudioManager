@@ -11,7 +11,7 @@ import { TasksPage } from "../pages/TasksPage";
 import { SortableSubtaskRow } from "../components/project/SortableSubtaskRow";
 import { TabItem, TabList, tabIds } from "../components/ui/TabItem";
 import { MenuBarApp } from "../menubar/MenuBarApp";
-import { formatMoney } from "../lib/upkeep/money";
+import { formatMoney } from "../lib/money";
 import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorFallback } from "../components/ErrorFallback";
 import { getDb } from "../db";

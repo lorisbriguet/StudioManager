@@ -4,7 +4,7 @@ import { PrefilledExpenseModal } from "./PrefilledExpenseModal";
 import { useT } from "../../i18n/useT";
 import { useUpdateMachine } from "../../db/hooks/useUpkeep";
 import { useExpenses } from "../../db/hooks/useExpenses";
-import { formatMoney } from "../../lib/upkeep/money";
+import { formatMoney } from "../../lib/money";
 import { formatDisplayDate } from "../../utils/formatDate";
 import { todayLocalISO } from "../../utils/localDate";
 import type { Machine } from "../../types/upkeep";

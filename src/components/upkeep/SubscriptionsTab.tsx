@@ -12,7 +12,7 @@ import {
   useSubscriptions,
 } from "../../db/hooks/useUpkeep";
 import { yearlyTotal, type PendingRenewal } from "../../db/queries/subscriptions";
-import { formatMoney } from "../../lib/upkeep/money";
+import { formatMoney } from "../../lib/money";
 import { formatDisplayDate } from "../../utils/formatDate";
 import type { Subscription } from "../../types/upkeep";
 
