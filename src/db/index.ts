@@ -32,6 +32,12 @@ interface BatchStatement {
 export class TransactionBatch {
   private statements: BatchStatement[] = [];
 
+  /**
+   * `expectedOrg`: Rust refuses the batch unless that organisation is still
+   * the active one, so a write started before a switch can't land in the next.
+   */
+  constructor(private readonly expectedOrg?: string) {}
+
   /** Queue a SQL statement. Use $LAST_INSERT_ID to reference the last insert rowid. */
   add(sql: string, params: unknown[] = []): void {
     this.statements.push({ sql, params });
@@ -41,6 +47,7 @@ export class TransactionBatch {
   async commit(): Promise<{ lastInsertId: number }> {
     return invoke<{ lastInsertId: number }>("execute_batch", {
       statements: this.statements,
+      expectedOrg: this.expectedOrg,
     });
   }
 }
@@ -104,6 +111,13 @@ export function dbUrlFor(name: string): string {
 export async function getDb(): Promise<Database> {
   if (!dbPromise) {
     dbPromise = (async () => {
+      // Dev only: a hot reload can re-run the organisation store behind OrgGate,
+      // leaving no active organisation, and dbUrlFor would then open (and create)
+      // an empty file at the data-folder root. Reload the registry first.
+      // The built app never gets here without one: OrgGate loads it before any query.
+      if (import.meta.env.MODE === "development" && !useOrgStore.getState().activeId) {
+        await useOrgStore.getState().load();
+      }
       const database = await Database.load(dbUrlFor(currentDbName));
       try {
         await ensureSchema(database);

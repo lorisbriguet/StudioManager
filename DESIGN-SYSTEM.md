@@ -10,6 +10,17 @@ Reference guide for all UI patterns, tokens, and conventions. Every new componen
 
 ---
 
+## Reuse First
+
+Anything new is built from what already exists. Before writing a component, a style or a variable, look for it in this order: the shared UI components (`src/components/ui`), the app's other components (`src/components`, for example `ContextMenu`, `EmptyState`, `PageHeader`), the hooks (`src/hooks`), the CSS tokens and classes in `src/index.css`, and the patterns in this file.
+
+- **Reuse as is** when something fits: the component, the token, the class (`dot`, `PANEL_TOP_BAR`…), the pattern.
+- **Extend rather than copy.** If a shared component almost fits, add a prop or variant to it. Never copy its classes onto a raw element.
+- **Say what it derives from.** When something new is built on an existing component (wraps it, extends it, follows its pattern), name that component in the change description and tell Loris.
+- **Flag anything new.** When nothing fits and a new component, variable, token or class has to be created, say so explicitly to Loris before or when it lands: what was created, why nothing existing fitted, and where it lives. New tokens go in `src/index.css` (light and dark) and in the [CSS Tokens](#css-tokens) table; new shared components go in `src/components/ui` and in [Shared Components](#shared-components).
+
+---
+
 ## CSS Tokens
 
 All colours are CSS custom properties in `src/index.css` (`@theme`, then `.dark`). Themes override them inline on `<html>` (see [Themes](#themes)).
@@ -199,6 +210,7 @@ Every small uppercase label uses `src/components/ui/SectionLabel.tsx`. There is 
 - **Action:** `action` puts a button on the right of the same row.
 - **Spacing:** it sets no margin, so the caller adds it.
 - **Class string:** for a `<th>` or a third-party heading, use the `SECTION_LABEL` class string. `MENU_GROUP_LABEL` and `SectionHeader` (`ui/Settings`) are built on it.
+- **Not a title:** a page's own title is `PageHeader` (or `SidebarTitle`), never a section label. The one exception is the wiki explorer's "Wiki" label, which becomes the page `h1` only when nothing with its own title is open (see [PageHeader](#pageheader)).
 
 ---
 
@@ -228,6 +240,8 @@ Columns of the window sit side by side (app sidebar, wiki explorer, editor, side
 | Bottom bar (footer, status bar) | `h-11` (44px), `border-t` | `<BottomBar>`, or the `BOTTOM_BAR` classes for a custom one (app sidebar footer) |
 | Panel top bar (tab row, panel toolbar) | `h-10` (40px), `border-b` | `PANEL_TOP_BAR` classes |
 | App sidebar header | `h-14` (56px), `border-b` | logo row only |
+
+Both bars draw their line in `--color-border` (pass `border-[var(--color-border)]` with `PANEL_TOP_BAR`), so the top and bottom lines of a column have the same weight. Icon-only buttons inside a bar use the `BAR_ICON_BUTTON` classes from the same file, with 14px icons.
 
 Bottom bar text is `text-xs text-muted`. A column that has no footer simply ends; it never gets a shorter bar of its own. Dialog footers (`Modal`) are not window bars: they keep `px-5 py-3`.
 
@@ -311,6 +325,7 @@ One icon per concept, so the same thing always looks the same. Use the `ICONS` k
 | Go to linked record | `goToLinked` | `ArrowUpRight` | |
 | Preview | `preview` | `Eye` | |
 | Expand / maximize | `maximize` | `Maximize2` | |
+| Fit to screen | `fit` | `Scan` | Graph and canvas zoom controls; never `Maximize2` |
 | Drag handle | `drag` | `GripVertical` | |
 | Copy | `copy` | `Copy` | |
 | Duplicate | `duplicate` | `CopyPlus` | |
@@ -347,11 +362,13 @@ One icon per concept, so the same thing always looks the same. Use the `ICONS` k
 | Calendar | `calendar` | `CalendarDays` | |
 | Date field · date range | `dateField` · `dateRange` | `Calendar` · `CalendarRange` | |
 | Back | `back` | `ArrowLeft` | |
-| Previous / next | `prev` · `next` | `ChevronLeft` · `ChevronRight` | Calendars, carousels |
+| Previous / next | `prev` · `next` | `ChevronLeft` · `ChevronRight` | Calendars, carousels, and back/forward in a tab bar or panel bar (app `TabBar`, wiki) |
 | Reorder | `moveUp` · `moveDown` | `ChevronUp` · `ChevronDown` | |
 | Move a column | `moveLeft` · `moveRight` | `ArrowLeft` · `ArrowRight` | |
 | Sort | `sortAsc` · `sortDesc` · `sortNone` | `ArrowUp` · `ArrowDown` · `ArrowUpDown` | |
 | Collapse / expand sidebar | `collapseSidebar` · `expandSidebar` | `PanelLeftClose` · `PanelLeftOpen` | |
+| Agents | `agents` | `Bot` | Agents page, Settings → Agents |
+| Studio upkeep | `upkeep` | `Wrench` | Upkeep page, Settings → Upkeep |
 
 ---
 
@@ -668,7 +685,7 @@ Use for boolean settings. Don't use checkboxes for settings toggles.
 import { Skeleton } from "../components/ui/Skeleton";
 <Skeleton width="60%" height={14} rounded="md" />
 ```
-Use while data is loading. Match the shape of what will appear: `ListSkeleton`, `CardGridSkeleton`, `DetailSkeleton` and `TableSkeleton` are ready-made; see [Empty, loading and error states](#empty-loading-and-error-states).
+Use while data is loading. Match the shape of what will appear: `ListSkeleton`, `CardGridSkeleton`, `DetailSkeleton` and `TableSkeleton` are ready-made; see [Empty, loading and error states](#empty-loading-and-error-states). `inline` renders a span, for a placeholder inside text or a button (a tab label still loading). Never show an empty state ("nothing here yet") before the data has loaded.
 
 ### SearchBar
 ```tsx
@@ -747,6 +764,8 @@ import { invoiceStatusVariant, quoteStatusVariant, taskStatusVariant, projectSta
 | active | `accent` |
 
 The variants' colours are the status tokens, which alias the tag palette (green, yellow, red, blue; indigo has its own pair). See [Status and tag colours](#status-and-tag-colours). Danger text is one value (`#b91c1c` light, `#f87171` dark), warning one pair (`#fef3c7` / `#92400e` light). Dots use the solids: `invoiceStatusDotClass` and `priorityDotClass` return `bg-success` / `bg-warning` / `bg-danger`.
+
+Studio upkeep and agents have their own helpers in the same file: `machineStatusVariant` (working success, attention warning, broken danger, lent info, retired neutral), `dueStateVariant` (overdue danger, soon warning), `diskHealthVariant`, `connectionVariant` (failing danger) and `agentGroupVariant` (needs you warning, working info, idle neutral, done success).
 
 ---
 
@@ -866,12 +885,14 @@ From `src/components/ui/Feedback.tsx` and `Tooltip.tsx`:
 ```tsx
 <ProgressBar value={62} label={t.progress} showValue />            // tone accent|success|warning|danger, size sm|md
 <ProgressBar value={p.pct} aria-label={`${t.progress}: ${p.name}`} /> // no text label: a string aria-label is required
+<ProgressBar value={share} color={COLORS[i]} aria-label={r.label} />  // a fill of its own: category or threshold colour
 <Callout tone="warning" action={<Button>…</Button>}>{msg}</Callout>  // warning|info|danger|success
 <ConfirmButton label={t.delete} question={t.confirm_delete_named.replace("{name}", ref)} onConfirm={remove} />
 <DragHandle {...attributes} {...listeners} reveal />                // dnd-kit grip; reveal = group hover
 <IconButton to={path} icon={ICONS.maximize} label={t.open_full_page} />   // an icon link: IconButton `to`, not Tooltip + Link
 ```
 
+- **Bars:** `ProgressBar` is the one thin bar (`h-1.5`, `--color-input-bg` track, rounded fill) for progress, shares, stock levels, drive age and plan limits. The value is clamped to 0–100 (a non-number shows empty); `className` sets the width and spacing (`w-[120px]`). `color` overrides `tone` for a bar coloured by category (revenue shares) or by threshold: plan limits (menu bar Usage tab) use `--color-warning` from 75% and `--color-danger` from 90%. Never rebuild the track and fill by hand.
 - **Hints:** never use the native `title` attribute for a hint on a button or link. Use `Tooltip`, or `IconButton`, which shows its `label` as a tooltip. A tooltip that only repeats the element's `aria-label` is not linked as its description (it would be read twice); one that adds something (a shortcut) is. `title` stays only on truncated plain text, where it reveals the full text.
 - **Asking before an action:** see [Confirmations](#confirmations).
 - **Telling the user what happened:** see [Toasts](#toasts).
@@ -1196,6 +1217,7 @@ Item icons are components, drawn at 14px. A popover that holds more than command
 - Clicks and keys inside the panel don't reach the trigger's ancestors (table rows, forms).
 - `Select` sends no DOM `change` event, so a form that tracks dirty state with `<div onChange>` must call `markDirty()` in each Select's `onChange`.
 - Tests: open with `pickOption(trigger, "Label")` from `src/__tests__/fixtures/dropdown.ts`.
+- A popup that opens at the text caret and keeps the focus in the editor (the wiki's slash menu and link picker) is a `Popover` with the `MENU_*` row look, `role="listbox"` with `role="option"` rows; `Popover` flips above the caret or slides left instead of leaving the window, and closes when the editor scrolls. A right-click menu is always `ContextMenu`, never hand-built.
 
 ---
 
@@ -1288,3 +1310,4 @@ Before merging any new UI work, verify:
 - [ ] 2–4 way choices use `SegmentedControl`
 - [ ] Tag pills use `Tag`, filter pills use `FilterChip`, number pills use `CountBadge`
 - [ ] No hand-made floating panel (use `Popover`, `Dropdown` or `ContextMenu`)
+- [ ] [Reuse First](#reuse-first): existing components, tokens and classes reused; anything derived or newly created named to Loris

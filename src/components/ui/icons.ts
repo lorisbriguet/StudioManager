@@ -10,6 +10,7 @@ import {
   Bell,
   BellRing,
   BookOpen,
+  Bot,
   Bookmark,
   Building2,
   Calendar,
@@ -62,6 +63,7 @@ import {
   RotateCcw,
   Zap,
   Save,
+  Scan,
   Search,
   Send,
   Settings2,
@@ -78,6 +80,7 @@ import {
   UserCircle,
   UserRound,
   Users,
+  Wrench,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -113,6 +116,7 @@ export const ICONS = {
   email: Mail,
   preview: Eye,
   maximize: Maximize2,
+  fit: Scan,
   drag: GripVertical,
   more: Ellipsis,
   settings: Settings2,
@@ -176,6 +180,8 @@ export const ICONS = {
   appearance: Palette,
   time: Clock,
   timer: Timer,
+  agents: Bot,
+  upkeep: Wrench,
 
   // ── Dates
   calendar: CalendarDays,

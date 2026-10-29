@@ -8,19 +8,23 @@ import interactionPlugin from "@fullcalendar/interaction";
 import type { EventInput, EventContentArg, EventDropArg } from "@fullcalendar/core";
 import type { DateClickArg, EventResizeDoneArg } from "@fullcalendar/interaction";
 import { ICONS, ICON_SIZE } from "../components/ui/icons";
-import { Button, Select, Popover, Input, FormActions, PageHeader, PeekHeader, Callout } from "../components/ui";
+import { Button, Select, Popover, Input, FormActions, PageHeader, PeekHeader, Callout, FilterChip } from "../components/ui";
 import { useT } from "../i18n/useT";
 import { useTasksWithDueDate, useUpdateTask, useUpdateSubtask, useCreateTask, useCreateSubtask, useTasksByProject } from "../db/hooks/useTasks";
 import { useProjects, useUpdateProject } from "../db/hooks/useProjects";
 import { useInvoices } from "../db/hooks/useInvoices";
 import { useQuotes } from "../db/hooks/useQuotes";
 import { useAppStore } from "../stores/app-store";
+import { useOrgStore } from "../stores/org-store";
 import { ProjectDetailContent } from "../components/ProjectDetailContent";
 import { getSubtasksWithDueDate } from "../db/queries/tasks";
 import { useQuery } from "@tanstack/react-query";
 import { effectivePriority } from "../types/task";
 import { useAllProjectWorkloadConfigs } from "../db/hooks/useWorkload";
-import { getTagColor } from "../lib/tagColors";
+import { getTagColor, getNamedTagColor } from "../lib/tagColors";
+import { useActiveUpkeepItems, useMachines, useSubscriptions } from "../db/hooks/useUpkeep";
+import { effectiveDue } from "../lib/upkeep/schedule";
+import { upkeepEventTitle } from "../lib/upkeep/calendar";
 import type { WorkloadColumn } from "../types/workload";
 import { DEFAULT_WORKLOAD_COLUMNS } from "../types/workload";
 import { SegmentedControl } from "../components/ui/SegmentedControl";
@@ -55,6 +59,10 @@ function extractEventData(event: EventDropArg["event"]) {
     endDate = endStr !== date ? endStr : null;
   }
   return { due_date: date, end_date: endDate, start_time: startTime, end_time: endTime };
+}
+
+function readFlag(base: string): boolean {
+  try { return localStorage.getItem(useOrgStore.getState().orgKey(base)) !== "0"; } catch { return true; }
 }
 
 interface QuickCreateState {
@@ -115,6 +123,16 @@ export function CalendarPage() {
   const navigate = useNavigate();
   const projectOpenMode = useAppStore((s) => s.projectOpenMode);
   const { data: wlConfigs } = useAllProjectWorkloadConfigs();
+  const { data: upkeepItems } = useActiveUpkeepItems();
+  const { data: upkeepMachines } = useMachines();
+  const { data: upkeepSubs } = useSubscriptions();
+  // Filter chips, remembered across launches like the view and peek width.
+  const [showUpkeep, setShowUpkeep] = useState(() => readFlag("calendarShowUpkeep"));
+  const [showRenewals, setShowRenewals] = useState(() => readFlag("calendarShowRenewals"));
+  const toggleFlag = (key: string, value: boolean, set: (v: boolean) => void) => {
+    set(value);
+    try { localStorage.setItem(useOrgStore.getState().orgKey(key), value ? "1" : "0"); } catch { /* not persisted */ }
+  };
 
   const [quickCreate, setQuickCreate] = useState<QuickCreateState | null>(null);
   const [peekId, setPeekId] = useState<number | null>(null);
@@ -254,8 +272,45 @@ export function CalendarPage() {
       });
     }
 
+    // Studio upkeep: next due dates of active items, and subscription renewals
+    if (showUpkeep) {
+      const color = getNamedTagColor("teal");
+      const byId = new Map((upkeepMachines ?? []).map((m) => [m.id, m]));
+      for (const it of upkeepItems ?? []) {
+        const machine = byId.get(it.machine_id);
+        const due = effectiveDue(it);
+        if (!machine || machine.status === "retired" || it.archived || !due) continue;
+        items.push({
+          id: `up-${it.id}`,
+          title: upkeepEventTitle(it, machine),
+          start: due,
+          allDay: true,
+          editable: false,
+          backgroundColor: color.bg,
+          textColor: color.text,
+          extendedProps: { type: "upkeep", itemId: machine.id },
+        });
+      }
+    }
+    if (showRenewals) {
+      const color = { bg: "var(--color-indigo-bg)", text: "var(--color-indigo-text)" };
+      for (const sub of upkeepSubs ?? []) {
+        if (sub.status !== "active") continue;
+        items.push({
+          id: `ren-${sub.id}`,
+          title: t.upkeep_renewal_event_title.replace("{name}", sub.name),
+          start: sub.renews_on,
+          allDay: true,
+          editable: false,
+          backgroundColor: color.bg,
+          textColor: color.text,
+          extendedProps: { type: "renewal", itemId: sub.id },
+        });
+      }
+    }
+
     return items;
-  }, [tasks, subtasks, projects, invoices, quotes, t, wlConfigs]);
+  }, [tasks, subtasks, projects, invoices, quotes, t, wlConfigs, showUpkeep, showRenewals, upkeepItems, upkeepMachines, upkeepSubs]);
 
   const handleEventChange = useCallback((event: EventDropArg["event"], revert?: () => void) => {
     const { type, itemId } = event.extendedProps;
@@ -288,6 +343,14 @@ export function CalendarPage() {
     }
     if (type === "quote") {
       navigate(`/quotes/${itemId}/preview`);
+      return;
+    }
+    if (type === "upkeep") {
+      navigate(`/upkeep/machines/${itemId}`);
+      return;
+    }
+    if (type === "renewal") {
+      navigate("/upkeep?tab=subscriptions");
       return;
     }
     if (!projectId) return;
@@ -442,7 +505,14 @@ export function CalendarPage() {
               {t.today}
             </Button>
           </>}
-          actions={
+          actions={<>
+            <FilterChip active={showUpkeep} onClick={() => toggleFlag("calendarShowUpkeep", !showUpkeep, setShowUpkeep)}>
+              {t.upkeep_cal_filter_upkeep}
+            </FilterChip>
+            <FilterChip active={showRenewals} onClick={() => toggleFlag("calendarShowRenewals", !showRenewals, setShowRenewals)}>
+              {t.upkeep_cal_filter_renewals}
+            </FilterChip>
+            <span className="w-px h-4 bg-[var(--color-border-divider)] mx-1" aria-hidden />
             <SegmentedControl
               aria-label={t.calendar}
               value={calView === "timeGridWeek" ? "timeGridWeek" : "dayGridMonth"}
@@ -452,7 +522,7 @@ export function CalendarPage() {
                 { value: "timeGridWeek", label: t.week },
               ]}
             />
-          }
+          </>}
         />
         {/* First-run hint: the calendar feeds off dated tasks/subtasks */}
         {tasks !== undefined && subtasks !== undefined && tasks.length === 0 && subtasks.length === 0 && (

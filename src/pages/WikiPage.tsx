@@ -1,16 +1,19 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect, useId } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
 import { useSearchParams } from "react-router-dom";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
-import { isAllowedWikiLink, parseWikiArticleId, parseWikiFileKey, wikiFileHref } from "../lib/wikiLinks";
+import { isAllowedWikiLink, parseWikiArticleId, parseWikiFileKey, slashCommandQuery, wikiFileHref } from "../lib/wikiLinks";
 import {
   Heading1,
   Heading2,
   Heading3,
   List,
+  ListOrdered,
+  Quote,
+  Code,
   Minus,
   PanelLeft,
   PanelRight,
@@ -19,12 +22,14 @@ import {
 } from "lucide-react";
 import { deleteWithUndo } from "../lib/undo";
 import { useT } from "../i18n/useT";
-import { notify } from "../lib/notify";
+import { getLabels, notify } from "../lib/notify";
 import { scrollBehavior } from "../lib/motion";
-import { ICONS, ICON_SIZE, Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem, Popover, IconButton, SectionLabel, Input, HEADING_1 } from "../components/ui";
+import { ICONS, ICON_SIZE, Badge, Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem, Popover, IconButton, SectionLabel, Input, HEADING_1 } from "../components/ui";
 import { TagInput } from "../components/shared/TagInput";
 import { MENU_ITEM } from "../components/ui/Dropdown";
 import { Select } from "../components/ui/Select";
+import { Skeleton } from "../components/ui/Skeleton";
+import { undoable } from "../lib/undo";
 import {
   useWikiFolders,
   useWikiArticles,
@@ -42,6 +47,7 @@ import { useOrgStore } from "../stores/org-store";
 import { buildLinkIndex, linkFirstMention, wordCount } from "../lib/wikiGraph";
 import { WikiExplorer } from "../components/wiki/WikiExplorer";
 import { WikiGraph } from "../components/wiki/WikiGraph";
+import type { GraphBox } from "../components/wiki/GraphView";
 import { WikiSidePanel, DocSidePanel } from "../components/wiki/WikiSidePanel";
 import { projectColors } from "../components/wiki/wikiColors";
 import { closeTab, EMPTY_TABS, openInTabs, pruneTabs, tabArticleId, tabRef, type TabsState, type WikiRef } from "../lib/wikiTabs";
@@ -80,6 +86,21 @@ function getSlashCommands(t: ReturnType<typeof useT>): SlashMenuItem[] {
       action: (editor) => editor?.chain().focus().toggleBulletList().run(),
     },
     {
+      label: t.wiki_numbered_list,
+      icon: ListOrdered,
+      action: (editor) => editor?.chain().focus().toggleOrderedList().run(),
+    },
+    {
+      label: t.wiki_quote,
+      icon: Quote,
+      action: (editor) => editor?.chain().focus().toggleBlockquote().run(),
+    },
+    {
+      label: t.wiki_code_block,
+      icon: Code,
+      action: (editor) => editor?.chain().focus().toggleCodeBlock().run(),
+    },
+    {
       label: t.wiki_divider,
       icon: Minus,
       action: (editor) => editor?.chain().focus().setHorizontalRule().run(),
@@ -104,6 +125,10 @@ interface LinkTarget {
   file?: boolean;
 }
 
+/** Where a popup opened at the caret goes: below it, or above (`flipTop`)
+ *  when the window has no room below. */
+type CaretPos = { top: number; left: number; flipTop: number };
+
 /** Link picker, opened by /link or by typing [[ (then `initialQuery` is
  *  set and articles show before anything is typed). */
 function LinkInsertPopup({
@@ -116,7 +141,7 @@ function LinkInsertPopup({
   onCreate,
   onClose,
 }: {
-  position: { top: number; left: number };
+  position: CaretPos;
   articles: LinkTarget[];
   currentArticleId: number;
   currentProjectId: number | null;
@@ -129,6 +154,7 @@ function LinkInsertPopup({
   const [query, setQuery] = useState(initialQuery ?? "");
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
   const bracket = initialQuery !== undefined;
 
   const isUrl = /^https?:\/\//.test(query.trim());
@@ -171,7 +197,8 @@ function LinkInsertPopup({
       onClose();
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (isUrl) onInsert(query.trim(), "link");
+      // A pasted URL is its own link text.
+      if (isUrl) onInsert(query.trim(), query.trim());
       else if (optionCount > 0) choose(selectedIdx);
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -182,6 +209,7 @@ function LinkInsertPopup({
     }
   };
 
+  const optionId = (i: number) => `${listId}-${i}`;
   const rowClass = (i: number) =>
     `w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] ${
       i === selectedIdx ? "bg-[var(--color-hover-row)]" : ""
@@ -206,6 +234,11 @@ function LinkInsertPopup({
           onKeyDown={handleKeyDown}
           placeholder={t.link_url_or_article}
           aria-label={t.wiki_link_to_article}
+          role="combobox"
+          aria-expanded={optionCount > 0}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-activedescendant={optionCount > 0 ? optionId(selectedIdx) : undefined}
         />
       </div>
       {isUrl && (
@@ -215,43 +248,51 @@ function LinkInsertPopup({
       )}
       {optionCount > 0 && (
         <div className="border-t border-[var(--color-border-divider)] py-1 max-h-64 overflow-y-auto">
-          <div className="px-3 py-1">
-            <SectionLabel as="span">{t.wiki_link_to_article}</SectionLabel>
+          <SectionLabel as="span" className="block px-3 py-1">{t.wiki_link_to_article}</SectionLabel>
+          <div role="listbox" id={listId} aria-label={t.wiki_link_to_article}>
+            {matchedArticles.map((article, i) => (
+              <button
+                key={article.key}
+                id={optionId(i)}
+                role="option"
+                aria-selected={i === selectedIdx}
+                tabIndex={-1}
+                className={rowClass(i)}
+                onMouseEnter={() => setSelectedIdx(i)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  choose(i);
+                }}
+              >
+                {article.file ? <ICONS.file size={ICON_SIZE.menu} className="text-muted shrink-0" /> : <ICONS.wikiArticle size={ICON_SIZE.menu} className="text-muted shrink-0" />}
+                <span className="truncate">{article.title}</span>
+                <span className="ml-auto pl-2 text-xs text-muted truncate max-w-32">
+                  {article.project_id != null && article.project_id === currentProjectId
+                    ? t.wiki_this_project
+                    : article.project_name ?? ""}
+                </span>
+              </button>
+            ))}
+            {canCreate && (
+              <button
+                id={optionId(matchedArticles.length)}
+                role="option"
+                aria-selected={selectedIdx === matchedArticles.length}
+                tabIndex={-1}
+                className={`${rowClass(matchedArticles.length)} border-t border-[var(--color-border-divider)]`}
+                onMouseEnter={() => setSelectedIdx(matchedArticles.length)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  choose(matchedArticles.length);
+                }}
+              >
+                <ICONS.add size={ICON_SIZE.menu} className="text-muted shrink-0" />
+                <span className="truncate">{t.wiki_new_article_named.replace("{title}", query.trim())}</span>
+              </button>
+            )}
           </div>
-          {matchedArticles.map((article, i) => (
-            <button
-              key={article.key}
-              className={rowClass(i)}
-              onMouseEnter={() => setSelectedIdx(i)}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                choose(i);
-              }}
-            >
-              {article.file ? <ICONS.file size={ICON_SIZE.menu} className="text-muted shrink-0" /> : <ICONS.wikiArticle size={ICON_SIZE.menu} className="text-muted shrink-0" />}
-              <span className="truncate">{article.title}</span>
-              <span className="ml-auto pl-2 text-xs text-muted truncate max-w-32">
-                {article.project_id != null && article.project_id === currentProjectId
-                  ? t.wiki_this_project
-                  : article.project_name ?? ""}
-              </span>
-            </button>
-          ))}
-          {canCreate && (
-            <button
-              className={`${rowClass(matchedArticles.length)} border-t border-[var(--color-border-divider)]`}
-              onMouseEnter={() => setSelectedIdx(matchedArticles.length)}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                choose(matchedArticles.length);
-              }}
-            >
-              <ICONS.add size={ICON_SIZE.menu} className="text-muted shrink-0" />
-              <span className="truncate">{t.wiki_new_article_named.replace("{title}", query.trim())}</span>
-            </button>
-          )}
           <div className="px-3 pt-1 pb-0.5">
-            <span className="text-[10px] text-muted">{t.wiki_link_open_hint}</span>
+            <span className="text-xs text-muted">{t.wiki_link_open_hint}</span>
           </div>
         </div>
       )}
@@ -275,7 +316,7 @@ function SlashCommandMenu({
   onSelect,
   onClose,
 }: {
-  position: { top: number; left: number };
+  position: CaretPos;
   filter: string;
   onSelect: (item: SlashMenuItem) => void;
   onClose: () => void;
@@ -325,14 +366,17 @@ function SlashCommandMenu({
       onClose={() => onClose()}
       autoFocus={false}
       style={{ minWidth: 180 }}
-      role="group"
-      aria-label={t.wiki_insert_block}
+      role="listbox"
+      aria-label={t.wiki_commands}
     >
       {filtered.map((cmd, i) => {
         const Icon = cmd.icon;
         return (
           <button
             key={cmd.label}
+            role="option"
+            aria-selected={i === selectedIdx}
+            tabIndex={-1}
             className={`${MENU_ITEM} cursor-pointer ${
               i === selectedIdx
                 ? "bg-[var(--color-hover-row)] text-[var(--color-text)]"
@@ -356,6 +400,7 @@ function SlashCommandMenu({
 // ─── Article Editor ───────────────────────────────────────────────
 // Exported for testability (wikiAutosave.test.tsx exercises it directly).
 export type WikiMode = "reading" | "editing";
+export type SaveState = "idle" | "saving" | "saved";
 
 export function ArticleEditor({
   articleId,
@@ -365,6 +410,8 @@ export function ArticleEditor({
   mode = "editing",
   onModeChange,
   nav,
+  onContentChange,
+  onSaveStateChange,
 }: {
   articleId: number;
   /** Called after the article is deleted (closes its tab). */
@@ -378,8 +425,17 @@ export function ArticleEditor({
   onModeChange?: (mode: WikiMode) => void;
   /** Back/forward through this tab's history, and the folder for the breadcrumb. */
   nav?: { canBack: boolean; canForward: boolean; onBack: () => void; onForward: () => void; folderName?: string };
+  /** The editor's HTML as it is typed, before the autosave writes it. */
+  onContentChange?: (html: string) => void;
+  /** "saving" while an edit waits for the autosave, "saved" once written. */
+  onSaveStateChange?: (state: SaveState) => void;
 }) {
   const t = useT();
+  // The editor's callbacks are created once per article: read these live.
+  const onContentChangeRef = useRef(onContentChange);
+  onContentChangeRef.current = onContentChange;
+  const onSaveStateRef = useRef(onSaveStateChange);
+  onSaveStateRef.current = onSaveStateChange;
   const { data: article } = useWikiArticle(articleId);
   const { data: articleTags = [] } = useWikiArticleTags(articleId);
   const { data: allTags = [] } = useAllWikiTags();
@@ -392,13 +448,14 @@ export function ArticleEditor({
 
   const [title, setTitle] = useState("");
   const [projectId, setProjectId] = useState<number | null>(null);
-  const [slashMenu, setSlashMenu] = useState<{ top: number; left: number } | null>(null);
+  const [slashMenu, setSlashMenu] = useState<CaretPos | null>(null);
   const [slashFilter, setSlashFilter] = useState("");
   // `bracketFrom` is set when the picker was opened by typing [[: that text
   // is replaced by the link.
   const [linkPopup, setLinkPopup] = useState<{
     top: number;
     left: number;
+    flipTop: number;
     bracketFrom?: number;
     query?: string;
   } | null>(null);
@@ -426,6 +483,7 @@ export function ArticleEditor({
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       const scheduledFor = articleId;
       pendingSaveArticleIdRef.current = scheduledFor;
+      onSaveStateRef.current?.("saving");
       saveTimeoutRef.current = setTimeout(() => {
         // The editor may have moved to another article inside the debounce
         // window; this content belongs to the one that was open when it was
@@ -435,6 +493,16 @@ export function ArticleEditor({
         if (articleIdRef.current !== scheduledFor) return;
         updateArticle.mutate(
           { id: scheduledFor, data: { content } },
+          {
+            onSuccess: () => {
+              // Not if more typing is already waiting for the next save.
+              if (articleIdRef.current === scheduledFor && !saveTimeoutRef.current) onSaveStateRef.current?.("saved");
+            },
+            onError: (e) => {
+              onSaveStateRef.current?.("idle");
+              notify.error(getLabels().operation_failed, e);
+            },
+          }
         );
       }, 2000);
     },
@@ -444,7 +512,9 @@ export function ArticleEditor({
   const editor = useEditor(
     {
       extensions: [
-        StarterKit,
+        // StarterKit v3 ships its own Link: switched off so the one below,
+        // with the URL allowlist, is the only one.
+        StarterKit.configure({ link: false }),
         Placeholder.configure({
           placeholder: t.start_writing,
         }),
@@ -460,8 +530,10 @@ export function ArticleEditor({
       onUpdate: ({ editor: ed }) => {
         const html = ed.getHTML();
         debouncedSave(html);
+        onContentChangeRef.current?.(html);
 
-        // Slash command detection — look for "/" at start of line or after whitespace
+        // Slash command detection: a "/" at the start of the line or after a
+        // space, so "km/h" or "and/or" never open the menu.
         const { state } = ed;
         const { from } = state.selection;
         // Get text from start of current line to cursor
@@ -475,15 +547,14 @@ export function ArticleEditor({
           const coords = ed.view.coordsAtPos(bracketFrom);
           setSlashMenu(null);
           setSlashFilter("");
-          setLinkPopup({ top: coords.bottom + 4, left: coords.left, bracketFrom, query: bracketMatch[1] });
+          setLinkPopup({ top: coords.bottom + 4, left: coords.left, flipTop: coords.top, bracketFrom, query: bracketMatch[1] });
           return;
         }
-        // Check if there's a "/" with optional command text after it
-        const slashMatch = textInLine.match(/\/(\w*)$/);
-        if (slashMatch) {
-          const coords = ed.view.coordsAtPos(lineStart + textInLine.lastIndexOf("/"));
-          setSlashMenu({ top: coords.bottom + 4, left: coords.left });
-          setSlashFilter(slashMatch[1] ?? "");
+        const slashQuery = slashCommandQuery(textInLine);
+        if (slashQuery !== null) {
+          const coords = ed.view.coordsAtPos(from - slashQuery.length - 1);
+          setSlashMenu({ top: coords.bottom + 4, left: coords.left, flipTop: coords.top });
+          setSlashFilter(slashQuery);
         } else {
           setSlashMenu(null);
           setSlashFilter("");
@@ -579,7 +650,7 @@ export function ArticleEditor({
         // Show link popup after a tick (let editor settle after deleteRange)
         setTimeout(() => {
           const coords = editor.view.coordsAtPos(editor.state.selection.from);
-          setLinkPopup({ top: coords.bottom + 4, left: coords.left });
+          setLinkPopup({ top: coords.bottom + 4, left: coords.left, flipTop: coords.top });
         }, 0);
         return;
       }
@@ -680,7 +751,7 @@ export function ArticleEditor({
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Top bar: history, breadcrumb, mode, delete */}
-      <div className={`${PANEL_TOP_BAR} gap-1 px-3 border-[var(--color-border-divider)]`}>
+      <div className={`${PANEL_TOP_BAR} gap-1 px-3 border-[var(--color-border)]`}>
         {nav && (
           <>
             <IconButton icon={ICONS.prev} label={t.wiki_back} onClick={nav.onBack} disabled={!nav.canBack} />
@@ -703,10 +774,22 @@ export function ArticleEditor({
             onClick={() => onModeChange(reading ? "editing" : "reading")}
           />
         )}
+        {/* Kept apart from the mode toggle, so a missed click can't delete. */}
+        <div aria-hidden="true" className="h-4 w-px mx-1.5 bg-[var(--color-border)]" />
         <IconButton icon={ICONS.delete} label={t.delete} tone="danger" onClick={handleDeleteArticle} />
       </div>
 
-      <div className="flex-1 overflow-y-auto px-8 py-8">
+      <div
+        className="flex-1 overflow-y-auto px-8 py-8"
+        onScroll={() => {
+          // The menus sit at the caret: they'd float off the text it scrolls.
+          if (slashMenu) {
+            setSlashMenu(null);
+            setSlashFilter("");
+          }
+          if (linkPopup) closeLinkPopup();
+        }}
+      >
         <div className="max-w-[720px] mx-auto">
           {/* Title: the page h1, editable in place */}
           <h1 className={`${HEADING_1} mb-3`}>
@@ -736,7 +819,7 @@ export function ArticleEditor({
 
             {reading ? (
               article.project_name && (
-                <span className="px-2 py-0.5 text-xs rounded-full bg-accent-light text-accent-text">{article.project_name}</span>
+                <Badge variant="accent">{article.project_name}</Badge>
               )
             ) : (
               <>
@@ -823,6 +906,10 @@ function writeStored(key: string, value: unknown) {
 }
 
 // ─── Main WikiPage ────────────────────────────────────────────────
+/** Below this width the side panel opens over the editor instead of beside
+ *  it, so the editor never shrinks to a sliver (window minimum is 900px). */
+const SIDE_PANEL_INLINE_MIN = 1000;
+
 export function WikiPage() {
   const t = useT();
   const tabsKey = useOrgStore((s) => s.orgKey("wikiTabs"));
@@ -830,7 +917,7 @@ export function WikiPage() {
   const { data: allArticles = [], isSuccess: articlesLoaded } = useWikiArticles();
   const { data: folders = [] } = useWikiFolders();
   const { data: projects = [] } = useProjects();
-  const docs = useProjectDocs(projects);
+  const { docs, loading: docsLoading } = useProjectDocs(projects);
   const docsByKey = useMemo(() => new Map(docs.map((d) => [d.key, d])), [docs]);
   const createArticle = useCreateWikiArticle();
   const deleteArticle = useDeleteWikiArticle();
@@ -840,11 +927,33 @@ export function WikiPage() {
   const [mode, setModeState] = useState<WikiMode>(() => readStored<WikiMode>("wikiMode", "reading"));
   const [explorerOpen, setExplorerOpen] = useState(() => readStored("wikiExplorerOpen", true));
   const [sideOpen, setSideOpen] = useState(() => readStored("wikiSidePanelOpen", true));
+  // Narrow window: the side panel floats over the editor, closed by default.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [narrow, setNarrow] = useState(false);
+  const [sideOverlayOpen, setSideOverlayOpen] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  // The open article's HTML as typed, so the outline and word count don't
+  // wait for the 2s autosave.
+  const [live, setLive] = useState<{ id: number; html: string } | null>(null);
+  const liveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The graph's zoom and pan, kept while the page is open.
+  const graphViewRef = useRef<GraphBox | null>(null);
 
   useEffect(() => writeStored(tabsKey, tabsState), [tabsKey, tabsState]);
   const setMode = useCallback((m: WikiMode) => {
     setModeState(m);
     writeStored("wikiMode", m);
+  }, []);
+
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof ResizeObserver !== "function") return;
+    const ro = new ResizeObserver(([entry]) => {
+      const w = entry.contentRect.width;
+      if (w) setNarrow(w < SIDE_PANEL_INLINE_MIN);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   const byId = useMemo(() => new Map(allArticles.map((a) => [a.id, a])), [allArticles]);
@@ -866,11 +975,26 @@ export function WikiPage() {
   const activeRef = tabRef(activeTab);
   const activeFileKey = typeof activeRef === "string" ? activeRef : null;
   const activeDoc = activeFileKey ? docsByKey.get(activeFileKey) : undefined;
+  const activeHtml = activeId != null && live?.id === activeId ? live.html : activeArticle?.content ?? "";
   // The graph's "current only" view centres on what you had open last.
   const [lastRef, setLastRef] = useState<WikiRef | null>(null);
   useEffect(() => {
     if (activeRef != null) setLastRef(activeRef);
   }, [activeRef]);
+  useEffect(() => setSaveState("idle"), [activeId]);
+
+  const handleContentChange = useCallback(
+    (html: string) => {
+      if (activeId == null) return;
+      const id = activeId;
+      if (liveTimer.current) clearTimeout(liveTimer.current);
+      liveTimer.current = setTimeout(() => setLive({ id, html }), 250);
+    },
+    [activeId]
+  );
+  useEffect(() => () => {
+    if (liveTimer.current) clearTimeout(liveTimer.current);
+  }, []);
 
   const openArticle = useCallback(
     (id: number, newTab = false) => {
@@ -911,6 +1035,30 @@ export function WikiPage() {
     }));
   }, []);
 
+  // Keyboard: Cmd+[ / Cmd+] go back and forward in the tab's history,
+  // Cmd+Shift+[ / Cmd+Shift+] switch wiki tabs. (Cmd+W and Ctrl+Tab stay
+  // with the app's own tabs.)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      if (e.code !== "BracketLeft" && e.code !== "BracketRight") return;
+      e.preventDefault();
+      const step = e.code === "BracketLeft" ? -1 : 1;
+      if (!e.shiftKey) {
+        moveHistory(step);
+        return;
+      }
+      setTabsState((s) => {
+        if (s.tabs.length < 2) return s;
+        const idx = s.tabs.findIndex((tab) => tab.key === s.active);
+        const next = s.tabs[(idx + step + s.tabs.length) % s.tabs.length];
+        return { ...s, active: next.key };
+      });
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [moveHistory]);
+
   // Open the article named in the address (`/wiki?article=42`), e.g. from a
   // project page. The param is consumed so the open article stays driven by
   // in-page state, and the same link can be followed again later.
@@ -939,6 +1087,7 @@ export function WikiPage() {
             setMode("editing");
             setTabsState((s) => openInTabs(s, newId, true));
           },
+          onError: (e) => notify.error(getLabels().operation_failed, e),
         }
       );
     },
@@ -950,18 +1099,26 @@ export function WikiPage() {
     [deleteArticle, t.article_deleted]
   );
 
+  // Rewrites another article: say so, and offer to put it back.
   const handleLinkIt = useCallback(
     (sourceId: number) => {
       const source = byId.get(sourceId);
       if (!source || !activeArticle) return;
-      const html = linkFirstMention(source.content, activeArticle.title, activeArticle.id);
-      if (html) {
-        updateArticle.mutate(
-          { id: sourceId, data: { content: html } },
-        );
-      }
+      const before = source.content;
+      const html = linkFirstMention(before, activeArticle.title, activeArticle.id);
+      if (!html) return;
+      updateArticle.mutate(
+        { id: sourceId, data: { content: html } },
+        {
+          onSuccess: () =>
+            undoable(t.wiki_linked_in.replace("{title}", source.title), () =>
+              updateArticle.mutateAsync({ id: sourceId, data: { content: before } }).then(() => undefined)
+            ),
+          onError: (e) => notify.error(getLabels().operation_failed, e),
+        }
+      );
     },
-    [byId, activeArticle, updateArticle]
+    [byId, activeArticle, updateArticle, t.wiki_linked_in]
   );
 
   const scrollToHeading = useCallback((headingIndex: number) => {
@@ -976,14 +1133,60 @@ export function WikiPage() {
       writeStored("wikiExplorerOpen", !o);
       return !o;
     });
-  const toggleSide = () =>
+  const sideVisible = narrow ? sideOverlayOpen : sideOpen;
+  const toggleSide = () => {
+    if (narrow) {
+      setSideOverlayOpen((o) => !o);
+      return;
+    }
     setSideOpen((o: boolean) => {
       writeStored("wikiSidePanelOpen", !o);
       return !o;
     });
+  };
+  const hasSidePanel = !!(activeArticle || activeDoc);
+
+  const sidePanel =
+    activeArticle && activeTab?.kind === "article" ? (
+      <WikiSidePanel
+        article={activeArticle}
+        articles={allArticles}
+        content={activeHtml}
+        index={index}
+        colors={colors}
+        onOpen={openArticle}
+        onOpenGraph={openGraph}
+        onLinkIt={handleLinkIt}
+        onOutline={scrollToHeading}
+        docs={docs}
+        onOpenFile={openRef}
+      />
+    ) : activeDoc ? (
+      <DocSidePanel
+        doc={activeDoc}
+        docs={docs}
+        articles={allArticles}
+        index={index}
+        colors={colors}
+        onOpen={openArticle}
+        onOpenFile={openRef}
+        onOpenGraph={openGraph}
+        onOutline={scrollToHeading}
+      />
+    ) : null;
+
+  const editorSkeleton = (
+    <div className="flex-1 px-8 py-8">
+      <div className="max-w-[720px] mx-auto space-y-3">
+        <Skeleton width="50%" height={20} rounded="md" />
+        <Skeleton width="90%" height={14} rounded="md" />
+        <Skeleton width="80%" height={14} rounded="md" />
+      </div>
+    </div>
+  );
 
   return (
-    <div className="flex flex-1 min-h-0 -m-8 page-transition">
+    <div ref={rootRef} className="relative flex flex-1 min-h-0 -m-8 page-transition">
       {explorerOpen && (
         <WikiExplorer
           articles={allArticles}
@@ -1001,7 +1204,7 @@ export function WikiPage() {
 
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Tab bar: same tabs and icon buttons as the app's own tab bar */}
-        <div className={`${PANEL_TOP_BAR} border-[var(--color-border-divider)] bg-[var(--color-bg)]`}>
+        <div className={`${PANEL_TOP_BAR} border-[var(--color-border)] bg-[var(--color-bg)]`}>
           <IconButton
             icon={PanelLeft}
             label={t.wiki_explorer}
@@ -1012,18 +1215,27 @@ export function WikiPage() {
           <div role="tablist" aria-label={t.wiki_open_tabs} className="flex items-center flex-1 min-w-0 overflow-x-auto scrollbar-hide">
             {tabsState.tabs.map((tab) => {
               const ref = tabRef(tab);
+              const pending = typeof ref === "number" && !articlesLoaded;
               const label =
                 tab.kind === "graph"
                   ? t.wiki_graph
                   : typeof ref === "string"
                     ? (docsByKey.get(ref)?.rel ?? ref.split(":").slice(2).join(":")).split("/").pop()!
-                    : byId.get(ref ?? -1)?.title ?? "…";
+                    : byId.get(ref ?? -1)?.title ?? "";
               return (
                 <TabItem
                   key={tab.key}
                   role="tab"
                   label={label}
-                  icon={tab.kind === "graph" ? Waypoints : typeof ref === "string" ? ICONS.file : undefined}
+                  icon={
+                    tab.kind === "graph"
+                      ? Waypoints
+                      : typeof ref === "string"
+                        ? ICONS.file
+                        : pending
+                          ? <Skeleton inline width={72} height={10} />
+                          : ICONS.wikiArticle
+                  }
                   active={tab.key === tabsState.active}
                   onActivate={() => setTabsState((s) => ({ ...s, active: tab.key }))}
                   onClose={() => setTabsState((s) => closeTab(s, tab.key))}
@@ -1032,15 +1244,16 @@ export function WikiPage() {
               );
             })}
           </div>
-          {(activeArticle || activeDoc) && (
-            <IconButton
-              icon={PanelRight}
-              label={t.wiki_side_panel}
-              aria-pressed={sideOpen}
-              onClick={toggleSide}
-              className="mr-1.5"
-            />
-          )}
+          {/* Always there (greyed when nothing open has a side panel), so the
+              tab strip doesn't shift when you switch tabs. */}
+          <IconButton
+            icon={PanelRight}
+            label={t.wiki_side_panel}
+            aria-pressed={hasSidePanel && sideVisible}
+            disabled={!hasSidePanel}
+            onClick={toggleSide}
+            className="mr-1.5"
+          />
         </div>
 
         {activeTab?.kind === "graph" ? (
@@ -1052,6 +1265,10 @@ export function WikiPage() {
             docs={docs}
             activeRef={lastRef}
             onOpen={openRef}
+            savedView={graphViewRef.current}
+            onViewChange={(v) => {
+              graphViewRef.current = v;
+            }}
           />
         ) : activeTab?.kind === "article" && activeFileKey ? (
           activeDoc ? (
@@ -1074,9 +1291,19 @@ export function WikiPage() {
                 <span>{t.wiki_reading}</span>
               </BottomBar>
             </>
+          ) : docsLoading ? (
+            editorSkeleton
           ) : (
             <div className="flex-1 flex items-center justify-center">
-              <EmptyState message={t.wiki_file_unreadable} icon={ICONS.file} />
+              <EmptyState
+                message={t.wiki_file_unreadable}
+                icon={ICONS.file}
+                action={
+                  <Button variant="secondary" icon={ICONS.close} onClick={() => setTabsState((s) => closeTab(s, activeTab.key))}>
+                    {t.wiki_close_tab}
+                  </Button>
+                }
+              />
             </div>
           )
         ) : activeTab?.kind === "article" && activeId != null && activeArticle ? (
@@ -1091,6 +1318,8 @@ export function WikiPage() {
               linkFiles={docs}
               mode={mode}
               onModeChange={setMode}
+              onContentChange={handleContentChange}
+              onSaveStateChange={setSaveState}
               nav={{
                 canBack: activeTab.pos > 0,
                 canForward: activeTab.pos < activeTab.history.length - 1,
@@ -1110,10 +1339,15 @@ export function WikiPage() {
               <span>
                 {t.wiki_outgoing} {index.outgoing.get(activeId)?.size ?? 0}
               </span>
-              <span>{t.wiki_words.replace("{n}", String(wordCount(activeArticle.content)))}</span>
+              <span>{t.wiki_words.replace("{n}", String(wordCount(activeHtml)))}</span>
+              {saveState !== "idle" && (
+                <span aria-live="polite">{saveState === "saving" ? t.wiki_saving : t.wiki_saved}</span>
+              )}
               <span>{mode === "reading" ? t.wiki_reading : t.wiki_editing}</span>
             </BottomBar>
           </>
+        ) : !articlesLoaded ? (
+          activeTab ? editorSkeleton : <div className="flex-1" />
         ) : (
           <div className="flex-1 flex items-center justify-center">
             {!articlesLoaded ? null : allArticles.length === 0 ? (
@@ -1122,7 +1356,7 @@ export function WikiPage() {
                 hint={t.first_run_wiki}
                 icon={ICONS.wikiArticle}
                 action={
-                  <Button icon={ICONS.add} onClick={() => handleNewArticle(null)}>
+                  <Button icon={ICONS.add} onClick={() => handleNewArticle(null)} disabled={createArticle.isPending}>
                     {t.new_article}
                   </Button>
                 }
@@ -1142,32 +1376,14 @@ export function WikiPage() {
         )}
       </div>
 
-      {sideOpen && activeArticle && activeTab?.kind === "article" && (
-        <WikiSidePanel
-          article={activeArticle}
-          articles={allArticles}
-          index={index}
-          colors={colors}
-          onOpen={openArticle}
-          onOpenGraph={openGraph}
-          onLinkIt={handleLinkIt}
-          onOutline={scrollToHeading}
-          docs={docs}
-          onOpenFile={openRef}
-        />
-      )}
-      {sideOpen && activeDoc && (
-        <DocSidePanel
-          doc={activeDoc}
-          docs={docs}
-          articles={allArticles}
-          index={index}
-          colors={colors}
-          onOpen={openArticle}
-          onOpenFile={openRef}
-          onOpenGraph={openGraph}
-          onOutline={scrollToHeading}
-        />
+      {sideVisible && sidePanel && (
+        narrow ? (
+          <div className="absolute inset-y-0 right-0 z-20 flex bg-[var(--color-bg)] shadow-menu">
+            {sidePanel}
+          </div>
+        ) : (
+          sidePanel
+        )
       )}
     </div>
   );

@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { notify } from "../lib/notify";
-import { HardDrive, RotateCcw, FlaskConical, Camera, LayoutList, Tags, Archive, Shield, Store, Bot, type LucideIcon } from "lucide-react";
+import { HardDrive, RotateCcw, FlaskConical, Camera, LayoutList, Tags, Archive, Shield, Store, type LucideIcon } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { open } from "@tauri-apps/plugin-dialog";
 import { purgeAllCalendarEvents, syncAllExisting, listWritableCalendars } from "../lib/appleCalendar";
+import { syncAllUpkeepEvents } from "../lib/upkeep/calendar";
 import { createBackup, listBackups, restoreFromBackup, RestoreError, validateBackupPath, isBackupRunning, setBackupRunning, isScopeDenied } from "../lib/backup";
 import { resetDb } from "../db";
 import { enterTestMode, enterPresentationMode } from "../lib/modes";
@@ -20,7 +21,10 @@ import { WorkloadTemplateManager } from "../components/workload/WorkloadTemplate
 import { ICONS, ICON_SIZE, Input, Select, Button, IconButton, SectionLabel, SidebarTitle, SettingRow, SettingsCard, NavItem, Tooltip, FieldError, Spinner } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
+import { UpkeepSettingsCard } from "../components/settings/UpkeepSettingsCard";
 import { AgentAccessCard } from "../components/settings/AgentAccessCard";
+import { AgentsCard } from "../components/settings/AgentsCard";
+import { RoutinesCard } from "../components/settings/RoutinesCard";
 import { OrganisationsCard } from "../components/settings/OrganisationsCard";
 import { DemoDataCard } from "../components/settings/DemoDataCard";
 import { isDemoBuild } from "../lib/demoBuild";
@@ -30,9 +34,9 @@ import { ExpenseCategoryManager } from "../components/settings/ExpenseCategoryMa
 import { CustomListsManager } from "../components/settings/CustomListsManager";
 import { TimeEntriesManager } from "../components/settings/TimeEntriesManager";
 
-type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "agent_access" | "workload" | "organisations" | "categories" | "suppliers" | "lists" | "time_entries" | "updates" | "backup" | "sandbox" | "demo_data";
+type SettingsCategory = "general" | "appearance" | "behavior" | "calendar" | "agents" | "upkeep" | "workload" | "organisations" | "categories" | "suppliers" | "lists" | "time_entries" | "updates" | "backup" | "sandbox" | "demo_data";
 
-const SETTINGS_CATEGORIES_BASE: SettingsCategory[] = ["general", "appearance", "behavior", "calendar", "agent_access", "workload", "organisations", "categories", "suppliers", "lists", "time_entries", "updates", "backup"];
+const SETTINGS_CATEGORIES_BASE: SettingsCategory[] = ["general", "appearance", "behavior", "calendar", "agents", "upkeep", "workload", "organisations", "categories", "suppliers", "lists", "time_entries", "updates", "backup"];
 
 export function SettingsPage() {
   const dateFormat = useAppStore((s) => s.dateFormat);
@@ -82,7 +86,8 @@ export function SettingsPage() {
   const [availableCalendars, setAvailableCalendars] = useState<string[]>([]);
   const [loadingCalendars, setLoadingCalendars] = useState(false);
   const [searchParams] = useSearchParams();
-  const requestedCategory = searchParams.get("category");
+  // "agent_access" was merged into "agents"; old links still land there.
+  const requestedCategory = searchParams.get("category") === "agent_access" ? "agents" : searchParams.get("category");
   // demo_data is only a valid ?category= target in the demo build — in the
   // real build it would otherwise resolve to an empty pane instead of
   // falling back to "general".
@@ -189,7 +194,7 @@ export function SettingsPage() {
       setSyncing(true);
       try {
         await purgeAllCalendarEvents();
-        const count = await syncAllExisting();
+        const count = (await syncAllExisting()) + (await syncAllUpkeepEvents());
         if (count > 0) notify.success(t.synced_events.replace("{count}", String(count)));
       } catch (e) {
         notify.error(t.toast_failed_sync, e);
@@ -299,7 +304,8 @@ export function SettingsPage() {
         { key: "appearance", label: t.appearance, icon: ICONS.appearance },
         { key: "behavior", label: t.behavior, icon: ICONS.behavior },
         { key: "calendar", label: t.calendar_sync, icon: ICONS.calendar },
-        { key: "agent_access", label: t.agent_access, icon: Bot },
+        { key: "agents", label: t.agents, icon: ICONS.agents },
+        { key: "upkeep", label: t.upkeep_settings, icon: ICONS.upkeep },
         { key: "workload", label: t.workload_templates, icon: LayoutList },
       ],
     },
@@ -358,7 +364,7 @@ export function SettingsPage() {
   }, [handleSettingsKeyDown]);
 
   return (
-    <div className="flex gap-0 h-full -m-8">
+    <div className="flex gap-0 flex-1 min-h-0 -m-8">
       {/* Category sidebar */}
       <div className="w-48 shrink-0 border-r border-[var(--color-border-divider)] py-5">
         <SidebarTitle className="px-5 mb-4">{t.settings}</SidebarTitle>
@@ -528,7 +534,15 @@ export function SettingsPage() {
             </SettingsCard>
           )}
 
-          {activeCategory === "agent_access" && <AgentAccessCard />}
+          {activeCategory === "agents" && (
+            <div className="space-y-4">
+              <AgentsCard />
+              <RoutinesCard />
+              <AgentAccessCard />
+            </div>
+          )}
+
+          {activeCategory === "upkeep" && <UpkeepSettingsCard />}
 
           {activeCategory === "calendar" && (
             <SettingsCard title={t.calendar_sync} desc={t.calendar_permission_help}>

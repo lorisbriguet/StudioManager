@@ -21,6 +21,9 @@ pub mod markdown;
 pub mod money;
 pub mod read;
 pub mod server;
+#[path = "../../src/agents/usage/samples.rs"]
+pub mod samples;
+pub mod statusline;
 pub mod text;
 pub mod write;
 

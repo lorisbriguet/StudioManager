@@ -40,7 +40,7 @@ export { Spinner, PageSpinner } from "./Spinner";
 export { Toaster } from "./Toaster";
 export { TableSkeleton } from "./TableSkeleton";
 export { Table, useTableDensity } from "./Table";
-export { BottomBar, BOTTOM_BAR, PANEL_TOP_BAR } from "./Bars";
+export { BottomBar, BOTTOM_BAR, PANEL_TOP_BAR, BAR_ICON_BUTTON } from "./Bars";
 export { TabItem } from "./TabItem";
 export { NavItem, navItemClass, navIcon } from "./NavItem";
 export { SegmentedControl } from "./SegmentedControl";

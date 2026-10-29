@@ -1,0 +1,27 @@
+{
+  "data": {
+    "cpu_clock_speed": 2000,
+    "cpu_cores": "4",
+    "cpu_family": "Celeron",
+    "cpu_series": "J4125",
+    "cpu_vendor": "INTEL",
+    "enabled_ntp": true,
+    "firmware_date": "2024/02/27",
+    "firmware_ver": "DSM 7.2.1-69057 Update 5",
+    "model": "DS920+",
+    "ntp_server": "time.google.com",
+    "ram_size": 4096,
+    "sata_dev": [],
+    "serial": "SCRUBBEDNAS01",
+    "support_esata": "yes",
+    "sys_temp": 41,
+    "sys_tempwarn": false,
+    "systempwarn": false,
+    "temperature_warning": false,
+    "time": "2026-10-28 10:12:00",
+    "time_zone": "Amsterdam",
+    "up_time": "312:4:51",
+    "usb_dev": []
+  },
+  "success": true
+}

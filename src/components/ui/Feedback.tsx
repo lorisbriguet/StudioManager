@@ -27,6 +27,9 @@ type ProgressBarProps = {
   value: number;
   showValue?: boolean;
   tone?: Tone;
+  /** A fill colour of its own, for a bar coloured by category or threshold
+   *  (`getTagColor(name).text`, `var(--color-danger)`). Overrides `tone`. */
+  color?: string;
   size?: "sm" | "md";
   className?: string;
 } & (
@@ -39,17 +42,19 @@ type ProgressBarProps = {
 /**
  *   <ProgressBar value={62} label={t.progress} showValue />
  *   <ProgressBar value={p.pct} aria-label={p.name} />
+ *   <ProgressBar value={share} color={getTagColor(r.key).text} aria-label={r.label} />
  */
 export function ProgressBar({
   value,
   label,
   showValue = false,
   tone = "accent",
+  color,
   size = "sm",
   className = "",
   "aria-label": ariaLabel,
 }: ProgressBarProps) {
-  const v = Math.max(0, Math.min(100, Math.round(value)));
+  const v = Number.isFinite(value) ? Math.max(0, Math.min(100, Math.round(value))) : 0;
   const labelId = useId();
   const labelledBy = label && !ariaLabel ? labelId : undefined;
   return (
@@ -69,7 +74,10 @@ export function ProgressBar({
         aria-labelledby={labelledBy}
         className={`${size === "sm" ? "h-1.5" : "h-2"} w-full rounded-full bg-[var(--color-input-bg)] overflow-hidden`}
       >
-        <div className={`h-full rounded-full transition-all ${FILL[tone]}`} style={{ width: `${v}%` }} />
+        <div
+          className={`h-full rounded-full transition-all ${color ? "" : FILL[tone]}`}
+          style={color ? { width: `${v}%`, backgroundColor: color } : { width: `${v}%` }}
+        />
       </div>
     </div>
   );

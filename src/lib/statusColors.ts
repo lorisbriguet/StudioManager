@@ -2,6 +2,42 @@ import { variantClasses, type BadgeVariant } from "../components/ui/Badge";
 import type { InvoiceStatus } from "../types/invoice";
 import type { QuoteStatus } from "../types/quote";
 import type { TaskStatus } from "../types/task";
+import type { Group as AgentGroup } from "./agents";
+import type { DiskHealth, MachineStatus } from "../types/upkeep";
+
+const MACHINE_VARIANT: Record<MachineStatus, BadgeVariant> = {
+  working: "success",
+  attention: "warning",
+  broken: "danger",
+  lent: "info",
+  retired: "neutral",
+};
+
+export function machineStatusVariant(s: MachineStatus): BadgeVariant {
+  return MACHINE_VARIANT[s];
+}
+
+/** Upkeep due state: only overdue and soon rows are listed, the rest stay quiet. */
+export function dueStateVariant(s: "overdue" | "soon" | "later" | "none"): BadgeVariant {
+  if (s === "overdue") return "danger";
+  if (s === "soon") return "warning";
+  return "neutral";
+}
+
+const DISK_VARIANT: Record<DiskHealth, BadgeVariant> = {
+  healthy: "success",
+  warning: "warning",
+  failing: "danger",
+};
+
+export function diskHealthVariant(h: DiskHealth): BadgeVariant {
+  return DISK_VARIANT[h] ?? "warning";
+}
+
+/** Connection state: failing since a date, or working. */
+export function connectionVariant(failing: boolean): BadgeVariant {
+  return failing ? "danger" : "success";
+}
 
 /**
  * Maps any entity status to a Badge variant.
@@ -40,6 +76,18 @@ export function quoteStatusVariant(s: QuoteStatus): BadgeVariant {
 
 export function taskStatusVariant(s: TaskStatus): BadgeVariant {
   return TASK_VARIANT[s];
+}
+
+const AGENT_GROUP_VARIANT: Record<AgentGroup, BadgeVariant> = {
+  "needs-you": "warning",
+  working: "info",
+  idle: "neutral",
+  done: "success",
+};
+
+/** Agents page: the colour of an agent's group (needs you, working, idle, done). */
+export function agentGroupVariant(g: AgentGroup): BadgeVariant {
+  return AGENT_GROUP_VARIANT[g];
 }
 
 /**

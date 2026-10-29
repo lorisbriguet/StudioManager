@@ -8,6 +8,7 @@ import { useAppStore } from "../../stores/app-store";
 import { useTabStore } from "../../stores/tab-store";
 import { confirmIfDirty } from "../../lib/dirty-guard";
 import { useUnreadNotificationCount } from "../../db/hooks/useNotifications";
+import { useUpkeepOverview } from "../../db/hooks/useUpkeep";
 import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
 import type { UIKey } from "../../i18n/ui";
@@ -25,7 +26,9 @@ const navItems: SidebarItem[] = [
   { to: "/calendar", icon: ICONS.calendar, labelKey: "calendar" },
   { divider: true },
   { to: "/wiki", icon: ICONS.wikiArticle, labelKey: "wiki" },
+  { to: "/agents", icon: ICONS.agents, labelKey: "agents" },
   { to: "/resources", icon: ICONS.resource, labelKey: "resources" },
+  { to: "/upkeep", icon: ICONS.upkeep, labelKey: "upkeep" },
   { divider: true },
   { to: "/invoices", icon: ICONS.invoice, labelKey: "invoices" },
   { to: "/quotes", icon: ICONS.quote, labelKey: "quotes" },
@@ -43,7 +46,9 @@ export function Sidebar() {
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const showTasksPage = useAppStore((s) => s.showTasksPage);
   const showIncome = useAppStore((s) => s.showIncome);
+  const agentsEnabled = useAppStore((s) => s.agentsEnabled);
   const { data: unreadCount = 0 } = useUnreadNotificationCount();
+  const { overdueCount } = useUpkeepOverview();
   const openTab = useTabStore((s) => s.openTab);
   const t = useT();
   const navigate = useNavigate();
@@ -55,9 +60,10 @@ export function Sidebar() {
       if ("divider" in item) return false;
       if (item.labelKey === "tasks" && !showTasksPage) return false;
       if (item.labelKey === "income" && !showIncome) return false;
+      if (item.labelKey === "agents" && !agentsEnabled) return false;
       return true;
     });
-  }, [showTasksPage, showIncome]);
+  }, [showTasksPage, showIncome, agentsEnabled]);
 
   // Track keyboard focus index (-1 = no keyboard focus)
   const [focusIdx, setFocusIdx] = useState(-1);
@@ -165,9 +171,10 @@ export function Sidebar() {
       if ("divider" in item) return true;
       if (item.labelKey === "tasks" && !showTasksPage) return false;
       if (item.labelKey === "income" && !showIncome) return false;
+      if (item.labelKey === "agents" && !agentsEnabled) return false;
       return true;
     });
-  }, [showTasksPage, showIncome]);
+  }, [showTasksPage, showIncome, agentsEnabled]);
 
   // Map from allVisible index to visibleLinks index (for focus matching)
   const linkIndexMap = useMemo(() => {
@@ -203,6 +210,8 @@ export function Sidebar() {
           const currentLinkIdx = linkIndexMap.get(i) ?? -1;
           const label = t[item.labelKey];
           const isNotifications = item.labelKey === "notifications";
+          const isUpkeep = item.labelKey === "upkeep";
+          const badgeCount = isNotifications ? unreadCount : isUpkeep ? overdueCount : 0;
           const isFocused = focusIdx === currentLinkIdx;
           // Collapsed, the link is only an icon: it takes its name from aria-label and shows it in a Tooltip.
           const collapsedName = isNotifications && unreadCount > 0 ? `${label} (${unreadCount})` : label;
@@ -224,15 +233,15 @@ export function Sidebar() {
             >
               <span className="relative">
                 {navIcon(item.icon)}
-                {isNotifications && unreadCount > 0 && (
-                  <CountBadge value={unreadCount} tone="danger" max={9} className="absolute -top-1.5 -right-1.5" />
+                {badgeCount > 0 && (
+                  <CountBadge value={badgeCount} tone="danger" max={9} className="absolute -top-1.5 -right-1.5" />
                 )}
               </span>
               {!collapsed && (
                 <span className="flex items-center gap-2">
                   {label}
-                  {isNotifications && unreadCount > 0 && (
-                    <CountBadge value={unreadCount} tone="danger" />
+                  {badgeCount > 0 && (
+                    <CountBadge value={badgeCount} tone="danger" />
                   )}
                 </span>
               )}

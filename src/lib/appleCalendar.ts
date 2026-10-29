@@ -26,12 +26,15 @@ export async function listWritableCalendars(): Promise<string[]> {
   return invokeCalendar<string[]>("calendar_list_writable");
 }
 
-interface CalendarEvent {
+export interface CalendarEvent {
   title: string;
   date: string; // yyyy-MM-dd
   startTime?: string | null; // HH:mm
   endTime?: string | null; // HH:mm
   notes?: string;
+  /** Display alarm, in minutes relative to the event start (midnight for an
+   *  all-day event); negative = before. null/absent = no alarm. */
+  alertMinutes?: number | null;
 }
 
 /** Create an event in Apple Calendar and return its uid */
@@ -43,6 +46,7 @@ export async function createCalendarEvent(event: CalendarEvent): Promise<string>
     date: event.date,
     startTime: event.startTime ?? null,
     endTime: event.endTime ?? null,
+    alertMinutes: event.alertMinutes ?? null,
   });
 }
 
@@ -84,6 +88,14 @@ export async function purgeAllCalendarEvents(): Promise<void> {
     );
     uids.push(...projects.map((p) => p.calendar_deadline_id));
   } catch (e) { logWarn("Calendar sync: fetch project UIDs:", e); }
+  for (const table of ["upkeep_items", "subscriptions"]) {
+    try {
+      const rows = await db.select<{ calendar_event_id: string }[]>(
+        `SELECT calendar_event_id FROM ${table} WHERE calendar_event_id IS NOT NULL AND calendar_event_id != ''`
+      );
+      uids.push(...rows.map((r) => r.calendar_event_id));
+    } catch (e) { logWarn(`Calendar sync: fetch ${table} UIDs:`, e); }
+  }
 
   // Delete each tracked event by UID
   for (const uid of uids) {
@@ -98,6 +110,12 @@ export async function purgeAllCalendarEvents(): Promise<void> {
   try {
     await db.execute("UPDATE projects SET calendar_deadline_id = NULL WHERE calendar_deadline_id IS NOT NULL");
   } catch (e) { logWarn("Calendar sync: clear project deadline IDs:", e); }
+  try {
+    await db.execute(
+      "UPDATE upkeep_items SET calendar_event_id = NULL, calendar_event_date = NULL WHERE calendar_event_id IS NOT NULL"
+    );
+    await db.execute("UPDATE subscriptions SET calendar_event_id = NULL WHERE calendar_event_id IS NOT NULL");
+  } catch (e) { logWarn("Calendar sync: clear upkeep event IDs:", e); }
 }
 
 /** Sync all existing tasks, subtasks, and project deadlines that don't have a calendar_event_id yet */

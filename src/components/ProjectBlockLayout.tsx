@@ -29,7 +29,7 @@ interface Props {
   headingAs?: PanelTitleProps["as"];
 }
 
-const ALL_BLOCKS: BlockType[] = ["tasks", "workload", "resources", "notes", "named_tables", "invoices", "quotes", "wiki"];
+const ALL_BLOCKS: BlockType[] = ["tasks", "workload", "resources", "notes", "named_tables", "invoices", "quotes", "wiki", "equipment"];
 
 const BLOCK_LABELS: Record<BlockType, string> = {
   tasks: "Tasks",
@@ -40,6 +40,7 @@ const BLOCK_LABELS: Record<BlockType, string> = {
   invoices: "Invoices",
   quotes: "Quotes",
   wiki: "Wiki",
+  equipment: "Equipment and materials",
 };
 
 interface SortableBlockProps {

@@ -51,12 +51,17 @@ export async function switchOrganisation(id: string, deps: SwitchDeps): Promise<
   // organisation's database is not held open while Rust swaps the active
   // one. Registry next — the URL the connection reopens on is built from
   // the org store's activeId — and only then reopen.
-  await deps.closeDb();
-  const reg = await deps.switchCmd(id);
-  deps.applyRegistry(reg);
+  // `switching` tells background checks to stop touching the database: between
+  // closeDb and applyRegistry Rust's active org is already the new one while
+  // the org store still names the old one.
+  useOrgStore.setState({ switching: true });
   try {
+    await deps.closeDb();
+    const reg = await deps.switchCmd(id);
+    deps.applyRegistry(reg);
     await deps.openDb();
   } finally {
+    useOrgStore.setState({ switching: false });
     // switchCmd already succeeded, so the new organisation is active
     // (Rust persisted it) and applyRegistry has updated the frontend
     // stores — which also reloaded the new organisation's saved tabs. The

@@ -27,6 +27,11 @@ import { FinancesPage } from "./pages/FinancesPage";
 import { InvoicePreviewPage } from "./pages/InvoicePreviewPage";
 import { QuotePreviewPage } from "./pages/QuotePreviewPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
+import { UpkeepPage } from "./pages/UpkeepPage";
+import { MachinePage } from "./pages/MachinePage";
+const AgentsPage = lazy(() =>
+  import("./pages/AgentsPage").then((m) => ({ default: m.AgentsPage }))
+);
 const WikiPage = lazy(() =>
   import("./pages/WikiPage").then((m) => ({ default: m.WikiPage }))
 );
@@ -37,8 +42,11 @@ import { CommandPalette } from "./components/CommandPalette";
 import { ConfirmHost } from "./components/ui/ConfirmDialog";
 import { QuickTimerModal } from "./components/QuickTimerModal";
 import { OrgGate } from "./components/OrgGate";
+import { MenuBarApp } from "./menubar/MenuBarApp";
+import { useFollowAppSettings } from "./menubar/useFollowAppSettings";
 import { PageSpinner, Toaster } from "./components/ui";
 import { useOverdueCheck } from "./hooks/useOverdueCheck";
+import { useUpkeepCheck } from "./hooks/useUpkeepCheck";
 import { useRecurringCheck } from "./hooks/useRecurringCheck";
 import { useAutoBackup } from "./hooks/useAutoBackup";
 import { useGuideUpdateCheck } from "./hooks/useGuideUpdateCheck";
@@ -50,11 +58,13 @@ import { useAppStore } from "./stores/app-store";
 import { useOrgStore } from "./stores/org-store";
 import { getLabels, notify } from "./lib/notify";
 import { requestNotificationPermission } from "./lib/nativeNotification";
+import { getAgentsEnabled } from "./lib/agents";
 
 import { queryClient } from "./lib/queryClient";
 
 function StartupChecks() {
   useOverdueCheck();
+  useUpkeepCheck();
   useRecurringCheck();
   useAutoBackup();
   useGuideUpdateCheck();
@@ -63,6 +73,9 @@ function StartupChecks() {
 
   useEffect(() => {
     requestNotificationPermission();
+    getAgentsEnabled()
+      .then((enabled) => useAppStore.getState().setAgentsEnabled(enabled === true))
+      .catch(() => {});
   }, []);
 
   // Suppress native WebView context menu globally (Tauri renders its own).
@@ -161,7 +174,28 @@ function StartupChecks() {
   return null;
 }
 
+/** The menu bar panel's window (route `/menubar`): no organisation gate, no app chrome and
+ *  none of the main window's startup checks. Theme and language come from the app store, and
+ *  follow changes made in the main window. */
+function MenuBarShell() {
+  useFollowAppSettings();
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ErrorBoundary FallbackComponent={ErrorFallback}>
+        <MenuBarApp />
+      </ErrorBoundary>
+      <Toaster />
+    </QueryClientProvider>
+  );
+}
+
 export default function App() {
+  // Each window loads one page for its whole life, so this never flips between renders.
+  if (window.location.pathname === "/menubar") return <MenuBarShell />;
+  return <MainApp />;
+}
+
+function MainApp() {
   const activeId = useOrgStore((s) => s.activeId);
   return (
     <QueryClientProvider client={queryClient}>
@@ -191,8 +225,11 @@ export default function App() {
                 <Route path="income" element={<IncomePage />} />
                 <Route path="finances" element={<FinancesPage />} />
                 <Route path="wiki" element={<Suspense fallback={<PageSpinner />}><WikiPage /></Suspense>} />
+                <Route path="agents" element={<Suspense fallback={<PageSpinner />}><AgentsPage /></Suspense>} />
                 <Route path="resources" element={<ResourcesPage />} />
-                <Route path="notifications" element={<NotificationsPage />} />
+                <Route path="upkeep" element={<UpkeepPage />} />
+                <Route path="upkeep/machines/:id" element={<MachinePage />} />
+                <Route path="notifications"element={<NotificationsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="profile" element={<ProfilePage />} />
               </Route>

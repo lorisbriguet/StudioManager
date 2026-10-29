@@ -17,6 +17,7 @@ import {
 } from "recharts";
 import { useQuery } from "@tanstack/react-query";
 import { ICONS, ICON_SIZE } from "../ui/icons";
+import { UpkeepWidget } from "../upkeep/UpkeepWidget";
 import { useCountUp } from "../../hooks/useCountUp";
 import { StatTile } from "../ui/StatTile";
 import { STAT_VALUE } from "../ui/tokens";
@@ -461,10 +462,8 @@ function RevenueByActivity() {
                 <span className="truncate">{r.label}</span>
                 <span className="text-xs text-muted shrink-0 ml-2">{formatCHF(r.total)} ({pct}%)</span>
               </div>
-              <div className="w-full bg-[var(--color-input-bg)] rounded-full h-1.5">
-                {/* Hash the stable key, not the sorted index: an activity keeps its color when rankings shift */}
-                <div className="rounded-full h-1.5 transition-all" style={{ width: `${pct}%`, backgroundColor: COLORS[tagHash(r.key) % COLORS.length] }} />
-              </div>
+              {/* Hash the stable key, not the sorted index: an activity keeps its color when rankings shift */}
+              <ProgressBar value={pct} color={COLORS[tagHash(r.key) % COLORS.length]} aria-label={r.label} />
             </div>
           );
         })}
@@ -495,10 +494,8 @@ function RevenueByClient() {
                 <span className="truncate">{r.label}</span>
                 <span className="text-xs text-muted shrink-0 ml-2">{formatCHF(r.total)} ({pct}%)</span>
               </div>
-              <div className="w-full bg-[var(--color-input-bg)] rounded-full h-1.5">
-                {/* Hash the client name so colors survive ranking changes */}
-                <div className="rounded-full h-1.5 transition-all" style={{ width: `${pct}%`, backgroundColor: COLORS[tagHash(r.label) % COLORS.length] }} />
-              </div>
+              {/* Hash the client name so colors survive ranking changes */}
+              <ProgressBar value={pct} color={COLORS[tagHash(r.label) % COLORS.length]} aria-label={r.label} />
             </div>
           );
         })}
@@ -1494,6 +1491,7 @@ export function renderWidget(type: WidgetType) {
     case "recent-invoices": return <RecentInvoices />;
     case "today-tasks": return <TodayTasks />;
     case "overdue-tasks": return <OverdueTasks />;
+    case "upkeep": return <UpkeepWidget />;
     case "project-progress": return <ProjectProgress />;
     case "upcoming-deadlines": return <UpcomingDeadlines />;
     case "revenue-by-activity": return <RevenueByActivity />;

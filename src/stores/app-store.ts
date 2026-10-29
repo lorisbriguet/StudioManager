@@ -3,6 +3,7 @@ import type { AppLanguage } from "../i18n/ui";
 import { getThemeById } from "../lib/themes";
 import { isDefaultTheme, onColorFor, THEME_TOKEN_NAMES, themeTokens } from "../lib/themeTokens";
 import type { ThemeDefinition } from "../types/theme";
+import type { UpkeepAlert } from "../types/upkeep";
 import { useOrgStore } from "./org-store";
 
 function getInitialDarkMode(): boolean {
@@ -143,6 +144,14 @@ export interface AppState {
   accentColor: AccentPreset;
   calendarSync: boolean;
   calendarName: string;
+  /** Alert used by upkeep items and subscriptions whose alert is 'default'. */
+  upkeepAlertDefault: Exclude<UpkeepAlert, "default">;
+  /** Items due within this many days count as "due soon". */
+  upkeepSoonDays: number;
+  /** Warranty ends within this many days: notice and overview card. */
+  warrantyWindowDays: number;
+  /** Subscription renews within this many days: notice and overview card. */
+  renewalWindowDays: number;
   backupPath: string;
   backupPath2: string;
   maxBackups: number;
@@ -150,6 +159,9 @@ export interface AppState {
   lastAutoBackup: number; // timestamp
   projectOpenMode: ProjectOpenMode;
   showTasksPage: boolean;
+  /** Mirror of agents.json's switch, loaded at startup. */
+  agentsEnabled: boolean;
+  setAgentsEnabled: (enabled: boolean) => void;
   showIncome: boolean;
   showTimeOverview: boolean;
   language: AppLanguage;
@@ -184,6 +196,10 @@ export interface AppState {
   setAccentColor: (preset: AccentPreset) => void;
   setCalendarSync: (enabled: boolean) => void;
   setCalendarName: (name: string) => void;
+  setUpkeepAlertDefault: (alert: Exclude<UpkeepAlert, "default">) => void;
+  setUpkeepSoonDays: (days: number) => void;
+  setWarrantyWindowDays: (days: number) => void;
+  setRenewalWindowDays: (days: number) => void;
   setBackupPath: (path: string) => void;
   setBackupPath2: (path: string) => void;
   setMaxBackups: (count: number) => void;
@@ -202,38 +218,62 @@ export interface AppState {
   setNativeNotifications: (enabled: boolean) => void;
 }
 
-const initialDark = getInitialDarkMode();
-applyDarkClass(initialDark);
-
-if (localStorage.getItem("reduceMotion") === "true") {
-  document.documentElement.classList.add("reduce-motion");
-}
-
-const initialAccent = getInitialAccent();
-const initialThemeId = localStorage.getItem("themeId") ?? "default-light";
-const initialTheme = getThemeById(initialThemeId);
-if (initialTheme && initialThemeId !== "default-light") {
-  applyThemeColors(initialTheme);
-} else {
-  applyAccentColor(initialAccent.color, initialDark ? initialAccent.darkLight : initialAccent.light, initialAccent.darkLight);
-}
-
-// Derive the effective accent for the initial theme so the picker stays in sync
-function getInitialAccentForTheme(): AccentPreset {
-  if (initialTheme && initialThemeId !== "default-light") {
+/** The accent the picker shows: the theme's own for a non-default theme. */
+function accentForTheme(theme: ThemeDefinition | undefined, themeId: string, accent: AccentPreset): AccentPreset {
+  if (theme && themeId !== "default-light") {
     const matchingPreset = ACCENT_PRESETS.find(
-      (p) => p.color.toLowerCase() === initialTheme.colors.accent.toLowerCase()
+      (p) => p.color.toLowerCase() === theme.colors.accent.toLowerCase()
     );
     return matchingPreset ?? {
       name: "Theme",
-      color: initialTheme.colors.accent,
-      light: initialTheme.colors.accentLight,
-      darkLight: initialTheme.colors.accentLight,
+      color: theme.colors.accent,
+      light: theme.colors.accentLight,
+      darkLight: theme.colors.accentLight,
     };
   }
-  return initialAccent;
+  return accent;
 }
-const effectiveInitialAccent = getInitialAccentForTheme();
+
+/** Dark mode, reduced motion, theme and accent as stored, applied to the document. */
+function applyStoredAppearance() {
+  const darkMode = getInitialDarkMode();
+  applyDarkClass(darkMode);
+  const reduceMotion = localStorage.getItem("reduceMotion") === "true";
+  document.documentElement.classList.toggle("reduce-motion", reduceMotion);
+  const accent = getInitialAccent();
+  const themeId = localStorage.getItem("themeId") ?? "default-light";
+  const theme = getThemeById(themeId);
+  if (theme && themeId !== "default-light") {
+    applyThemeColors(theme);
+  } else {
+    applyAccentColor(accent.color, darkMode ? accent.darkLight : accent.light, accent.darkLight);
+  }
+  return { darkMode, reduceMotion, themeId, accentColor: accentForTheme(theme, themeId, accent) };
+}
+
+const initialAppearance = applyStoredAppearance();
+const initialDark = initialAppearance.darkMode;
+const effectiveInitialAccent = initialAppearance.accentColor;
+
+/** The localStorage keys `syncAppearanceFromStorage` follows. */
+export const APPEARANCE_KEYS = ["darkMode", "themeId", "accentColor", "reduceMotion", "appLanguage", "dateFormat"];
+
+/** For a second window (the menu bar panel): pick up theme, dark mode, accent, reduced motion,
+ *  language and date format changed in the main window, as a reload would. */
+export function syncAppearanceFromStorage() {
+  // Drop what an earlier theme set inline, so going back to the default theme looks like a reload.
+  const el = document.documentElement;
+  for (const name of Array.from(el.style)) {
+    if (name.startsWith("--color-")) el.style.removeProperty(name);
+  }
+  document.body.style.background = "";
+  document.body.style.color = "";
+  useAppStore.setState({
+    ...applyStoredAppearance(),
+    language: (localStorage.getItem("appLanguage") as AppLanguage) ?? "EN",
+    dateFormat: (localStorage.getItem("dateFormat") as DateFormatOption) ?? "dd.MM.yyyy",
+  });
+}
 
 export const useAppStore = create<AppState>((set) => ({
   commandPaletteOpen: false,
@@ -250,6 +290,10 @@ export const useAppStore = create<AppState>((set) => ({
   accentColor: effectiveInitialAccent,
   calendarSync: localStorage.getItem("calendarSync") === "true",
   calendarName: localStorage.getItem("calendarName") ?? "",
+  upkeepAlertDefault: "day_9am",
+  upkeepSoonDays: 14,
+  warrantyWindowDays: 60,
+  renewalWindowDays: 14,
   backupPath: localStorage.getItem("backupPath") ?? "",
   backupPath2: localStorage.getItem("backupPath2") ?? "",
   maxBackups: Number(localStorage.getItem("maxBackups")) || 5,
@@ -258,6 +302,8 @@ export const useAppStore = create<AppState>((set) => ({
   // on applyRegistry (org-store.ts), so no plain "lastAutoBackup" key here.
   lastAutoBackup: 0,
   projectOpenMode: (localStorage.getItem("projectOpenMode") as ProjectOpenMode) ?? "peek",
+  agentsEnabled: false,
+  setAgentsEnabled: (enabled) => set({ agentsEnabled: enabled }),
   showTasksPage: localStorage.getItem("showTasksPage") !== "false",
   showIncome: localStorage.getItem("showIncome") === "true",
   showTimeOverview: localStorage.getItem("showTimeOverview") === "true",
@@ -340,6 +386,10 @@ export const useAppStore = create<AppState>((set) => ({
     }),
   setCalendarSync: (enabled) => { set({ calendarSync: enabled }); void useOrgStore.getState().savePrefs({ calendarSync: enabled }); },
   setCalendarName: (name) => { set({ calendarName: name }); void useOrgStore.getState().savePrefs({ calendarName: name }); },
+  setUpkeepAlertDefault: (alert) => { set({ upkeepAlertDefault: alert }); void useOrgStore.getState().savePrefs({ upkeepAlertDefault: alert }); },
+  setUpkeepSoonDays: (days) => { set({ upkeepSoonDays: days }); void useOrgStore.getState().savePrefs({ upkeepSoonDays: days }); },
+  setWarrantyWindowDays: (days) => { set({ warrantyWindowDays: days }); void useOrgStore.getState().savePrefs({ warrantyWindowDays: days }); },
+  setRenewalWindowDays: (days) => { set({ renewalWindowDays: days }); void useOrgStore.getState().savePrefs({ renewalWindowDays: days }); },
   setBackupPath: (path) => { set({ backupPath: path }); void useOrgStore.getState().savePrefs({ backupPath: path }); },
   setBackupPath2: (path) => {
     localStorage.setItem("backupPath2", path);

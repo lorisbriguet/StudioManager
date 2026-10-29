@@ -52,7 +52,7 @@ export function DocView({
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className={`${PANEL_TOP_BAR} gap-1 px-3 border-[var(--color-border-divider)]`}>
+      <div className={`${PANEL_TOP_BAR} gap-1 px-3 border-[var(--color-border)]`}>
         <IconButton icon={ChevronLeft} label={t.wiki_back} onClick={nav.onBack} disabled={!nav.canBack} />
         <IconButton icon={ChevronRight} label={t.wiki_forward} onClick={nav.onForward} disabled={!nav.canForward} />
         <div className="flex-1 min-w-0 text-center text-xs text-muted truncate">

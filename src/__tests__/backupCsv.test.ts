@@ -87,6 +87,19 @@ describe("TABLES", () => {
     "wiki_articles",
     "wiki_article_tags",
     "custom_list_items",
+    // Studio upkeep
+    "connections",
+    "machines",
+    "machine_files",
+    "machine_projects",
+    "upkeep_items",
+    "service_log",
+    "consumables",
+    "consumable_usage",
+    "subscriptions",
+    "subscription_renewals",
+    "machine_readings",
+    "machine_disks",
   ];
 
   it("pins the full table list in parent-first restore order", () => {

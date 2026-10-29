@@ -6,12 +6,18 @@ let invokeHandler: InvokeHandler | null = null;
 export const invokedCommands: { cmd: string; args: Record<string, unknown> }[] = [];
 export function setInvokeHandler(handler: InvokeHandler | null): void { invokeHandler = handler; }
 export function clearInvokedCommands(): void { invokedCommands.length = 0; }
+type BatchFailure = (statements: { sql: string; params: unknown[] }[]) => Error | null;
+let batchFailure: BatchFailure | null = null;
+/** Make matching `execute_batch` calls reject (nothing is recorded as executed). */
+export function setBatchFailure(fn: BatchFailure | null): void { batchFailure = fn; }
 
 export async function invoke(cmd?: string, args?: Record<string, unknown>): Promise<unknown> {
   const c = cmd ?? "";
   const a = args ?? {};
   invokedCommands.push({ cmd: c, args: a });
   if (c === "execute_batch" && Array.isArray(a.statements)) {
+    const failure = batchFailure?.(a.statements as { sql: string; params: unknown[] }[]);
+    if (failure) throw failure;
     for (const stmt of a.statements as { sql: string; params: unknown[] }[]) {
       executedStatements.push({ sql: stmt.sql, params: stmt.params });
     }

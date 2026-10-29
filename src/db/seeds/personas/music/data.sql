@@ -41,6 +41,18 @@ DELETE FROM projects;
 DELETE FROM clients;
 DELETE FROM notifications;
 DELETE FROM saved_filters;
+DELETE FROM machine_disks;
+DELETE FROM machine_readings;
+DELETE FROM subscription_renewals;
+DELETE FROM subscriptions;
+DELETE FROM consumable_usage;
+DELETE FROM consumables;
+DELETE FROM service_log;
+DELETE FROM upkeep_items;
+DELETE FROM machine_projects;
+DELETE FROM machine_files;
+DELETE FROM machines;
+DELETE FROM connections;
 
 -- Reset autoincrement counters so the explicit ids below stay stable
 DELETE FROM sqlite_sequence WHERE name IN (
@@ -48,6 +60,7 @@ DELETE FROM sqlite_sequence WHERE name IN (
   'quote_line_items', 'expenses', 'income', 'resources', 'resource_tags',
   'recurring_invoice_templates', 'time_entries', 'project_tables',
   'project_table_rows', 'wiki_folders', 'wiki_articles', 'client_contacts',
+  'machines', 'upkeep_items', 'service_log', 'consumables', 'consumable_usage', 'subscriptions', 'subscription_renewals', 'machine_readings', 'machine_disks', 'machine_files', 'connections',
   'client_addresses', 'notifications', 'saved_filters', 'custom_lists',
   'custom_list_items', 'workload_rows'
 );
@@ -412,6 +425,48 @@ INSERT INTO wiki_article_tags (article_id, tag) VALUES
   (3, 'admin'),
   (4, 'ateliers'),
   (4, 'pédagogie');
+
+-- ═══════════════════════════════════════════════════
+-- STUDIO UPKEEP (machines, upkeep items, stock, subscriptions)
+-- No connections: readings and disks are fake, nothing syncs in the demo.
+-- ═══════════════════════════════════════════════════
+INSERT INTO machines (id, name, kind, maker, model, location, status, lent_to, lent_until, purchase_date, supplier, price, currency, warranty_until, lifespan_years, template_key, notes) VALUES
+  (1, 'Studio NAS', 'nas', 'Synology', 'DS923+', 'Rack, back office', 'attention', NULL, NULL, date('now', '-900 days'), 'Digitec', 780, 'CHF', date('now', '+195 days'), 7, 'nas', 'Backups and project archive.'),
+  (2, 'Bambu Lab P1S', 'printer_3d', 'Bambu Lab', 'P1S', 'Workbench', 'working', NULL, NULL, date('now', '-400 days'), 'Bambu Lab', 599, 'CHF', date('now', '-35 days'), 5, 'printer_3d', 'Prototypes and packaging mock-ups.'),
+  (3, 'Genelec 8030C', 'monitor', 'Genelec', '8030C', 'Desk', 'working', NULL, NULL, date('now', '-1100 days'), 'Eizo Store', 1100, 'CHF', date('now', '+40 days'), 8, 'monitor', 'Calibrated every quarter.'),
+  (4, 'Zoom H6 recorder', 'camera', 'Zoom', 'H6', 'Shelf', 'lent', 'Chœur de Nyon', date('now', '+9 days'), date('now', '-650 days'), 'Foto Video', 380, 'CHF', date('now', '+80 days'), 10, 'camera', '');
+INSERT INTO upkeep_items (id, machine_id, title, schedule, interval_n, interval_unit, anchor_day, usage_metric, usage_every, last_done_on, last_done_reading, next_due_on, snooze_until, in_calendar, alert) VALUES
+  (1, 1, 'Check disk health', 'interval', 3, 'month', NULL, NULL, NULL, date('now', '-95 days'), NULL, date('now', '-5 days'), NULL, 1, 'default'),
+  (2, 1, 'Test a backup restore', 'interval', 6, 'month', NULL, NULL, NULL, date('now', '-170 days'), NULL, date('now', '+10 days'), NULL, 1, 'default'),
+  (3, 2, 'Lubricate rods', 'usage', NULL, NULL, NULL, 'print_hours', 100, date('now', '-60 days'), 40, NULL, NULL, 1, 'default'),
+  (4, 2, 'Clean the build plate', 'interval', 1, 'month', NULL, NULL, NULL, date('now', '-20 days'), NULL, date('now', '+10 days'), NULL, 1, 'default'),
+  (5, 3, 'Calibrate colours', 'interval', 3, 'month', NULL, NULL, NULL, date('now', '-80 days'), NULL, date('now', '+10 days'), NULL, 1, 'default'),
+  (6, 4, 'Clean the sensor', 'interval', 1, 'year', NULL, NULL, NULL, date('now', '-300 days'), NULL, date('now', '+65 days'), NULL, 1, 'default'),
+  (7, 4, 'Update the firmware', 'interval', 6, 'month', NULL, NULL, NULL, date('now', '-120 days'), NULL, date('now', '+60 days'), NULL, 0, 'none');
+INSERT INTO service_log (machine_id, upkeep_item_id, done_on, description, cost, reading) VALUES
+  (1, 1, date('now', '-95 days'), 'Checked the four disks, all healthy.', NULL, NULL),
+  (2, 3, date('now', '-60 days'), 'Greased the carbon rods.', 12, 40),
+  (3, 5, date('now', '-80 days'), 'Calibration with the probe.', NULL, NULL);
+INSERT INTO consumables (id, name, machine_id, unit, stock, reorder_level, supplier, unit_price, currency) VALUES
+  (1, 'PLA filament, white', 2, 'spools', 1, 2, 'Bambu Lab', 24, 'CHF'),
+  (2, 'Build plate glue', 2, 'sticks', 3, 1, 'Bambu Lab', 8, 'CHF'),
+  (3, 'Cleaning wipes', NULL, 'packs', 5, 2, 'Migros', 4, 'CHF');
+INSERT INTO consumable_usage (consumable_id, project_id, used_on, amount, cost) VALUES
+  (1, NULL, date('now', '-12 days'), 1, 24);
+INSERT INTO subscriptions (id, name, plan, vendor, renews_on, anchor_day, period, cost, currency, status, in_calendar, alert) VALUES
+  (1, 'Adobe Creative Cloud', 'All Apps', 'Adobe', date('now', '+3 days'), CAST(strftime('%d', date('now', '+3 days')) AS INTEGER), 'month', 72.2, 'CHF', 'active', 1, 'week_before'),
+  (2, 'Splice', 'Creator', 'Splice', date('now', '+80 days'), CAST(strftime('%d', date('now', '+80 days')) AS INTEGER), 'year', 140, 'CHF', 'active', 1, 'week_before'),
+  (3, 'Backblaze B2', 'Pay as you go', 'Backblaze', date('now', '+21 days'), CAST(strftime('%d', date('now', '+21 days')) AS INTEGER), 'month', 9, 'CHF', 'active', 1, 'week_before');
+INSERT INTO subscription_renewals (subscription_id, renewed_on, amount, currency, decision, notified) VALUES
+  (1, date('now', '-27 days'), 72.2, 'CHF', 'skipped', 1),
+  (1, date('now', '-1 days'), 72.2, 'CHF', 'pending', 0);
+INSERT INTO machine_readings (machine_id, metric, value, read_at) VALUES
+  (2, 'print_hours', 12, datetime('now', '-60 days')),
+  (2, 'print_hours', 61, datetime('now', '-30 days')),
+  (2, 'print_hours', 118, datetime('now', '-1 days'));
+INSERT INTO machine_disks (machine_id, slot, model, serial, size_bytes, power_on_hours, health, bad_sectors, temperature, first_seen, last_read_at) VALUES
+  (1, 'Drive 1', 'WD Red Plus 8TB', 'DEMO-WD-0001', 8001563222016, 21400, 'healthy', 0, 36, date('now', '-900 days'), datetime('now', '-1 days')),
+  (1, 'Drive 2', 'WD Red Plus 8TB', 'DEMO-WD-0002', 8001563222016, 21400, 'warning', 12, 41, date('now', '-900 days'), datetime('now', '-1 days'));
 
 -- ═══════════════════════════════════════════════════
 -- REFERENCE RENUMBERING (per calendar year, from each row's own date)
