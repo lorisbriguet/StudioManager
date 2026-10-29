@@ -20,6 +20,11 @@ interface ModalProps {
   position?: "center" | "top";
   /** false: the content lays itself out edge to edge (no body padding). */
   padding?: boolean;
+  /**
+   * false: a click on the backdrop doesn't close (a form with unsaved changes;
+   * FormModal sets it). Esc and the close button still do.
+   */
+  closeOnBackdrop?: boolean;
   /** Accessible name when there is no visible title. */
   "aria-label"?: string;
 }
@@ -59,12 +64,15 @@ function isShown(el: HTMLElement): boolean {
   return true;
 }
 
-export function Modal({ open, onClose, title, children, footer, size = "sm", position = "center", padding = true, ...aria }: ModalProps) {
+export function Modal({ open, onClose, title, children, footer, size = "sm", position = "center", padding = true, closeOnBackdrop = true, ...aria }: ModalProps) {
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const wasOpenRef = useRef(false);
+  // Where the press began: a drag from a field (selecting text) that ends on
+  // the backdrop is not a backdrop click.
+  const pressedBackdropRef = useRef(false);
 
   // Capture the trigger element at render time, on the closed->open transition:
   // children with autoFocus grab focus during commit (before effects run), so an
@@ -154,7 +162,14 @@ export function Modal({ open, onClose, title, children, footer, size = "sm", pos
       className={`fixed inset-0 z-50 flex justify-center bg-scrim animate-in fade-in ${
         position === "top" ? "items-start pt-[20vh]" : "items-center"
       }`}
-      onClick={onClose}
+      onMouseDown={(e) => {
+        pressedBackdropRef.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        const pressed = pressedBackdropRef.current;
+        pressedBackdropRef.current = false;
+        if (e.target === e.currentTarget && pressed && closeOnBackdrop) onClose();
+      }}
     >
       <div
         ref={ref}

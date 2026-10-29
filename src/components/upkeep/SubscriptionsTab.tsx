@@ -129,6 +129,7 @@ export function SubscriptionsTab() {
       )}
       {adding && (
         <PrefilledExpenseModal
+          title={t.upkeep_renewal_expense_title}
           supplier={subs.find((s) => s.id === adding.subscription_id)?.vendor ?? adding.name}
           amount={adding.amount}
           date={adding.renewed_on}
