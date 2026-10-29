@@ -382,7 +382,7 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
           <ProgressBar value={progress} label={t.progress} showValue className="mb-4" />
         )}
 
-        <ProjectBlockLayout project={project} projectId={projectId} renderBlock={renderBlock} />
+        <ProjectBlockLayout project={project} projectId={projectId} renderBlock={renderBlock} headingAs={compact ? "h3" : "h2"} />
 
         {sectionCtxMenu && (
           <ContextMenu

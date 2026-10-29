@@ -306,8 +306,7 @@ interface DropdownSelectCommon {
   searchable?: boolean;
   /** Adds a "Create …" row when the search matches no option. */
   onCreate?: (query: string) => void;
-  /** sm (default): thin, like the Dashboard header. md: form-height, opt-in. bare: no fill, for table cells. */
-  size?: "sm" | "md";
+  /** default: the thin 26px filled trigger (the shared control box). bare: no fill, for table cells. */
   variant?: "default" | "bare";
   /** Muted label inside the trigger, before the value ("Status:"). */
   prefix?: string;
@@ -342,9 +341,7 @@ const TRIGGER_BASE =
   "focus-accent inline-flex items-center text-left min-w-0 max-w-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
 const TRIGGER_SIZE = {
   // 26px, the shared control box (tokens.ts), filled instead of framed.
-  sm: `gap-1.5 rounded-md ${CONTROL_BOX} border-transparent bg-[var(--color-input-bg)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] aria-expanded:bg-[var(--color-hover-row)]`,
-  // A taller framed trigger (opt-in, rare). Inputs have one size; this keeps its own box.
-  md: "gap-2 text-[var(--color-text)] px-3 py-2 text-sm rounded-lg bg-[var(--color-input-bg)] border border-[var(--color-input-border)] aria-[invalid=true]:border-danger-text placeholder:text-muted",
+  default: `gap-1.5 rounded-md ${CONTROL_BOX} border-transparent bg-[var(--color-input-bg)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] aria-expanded:bg-[var(--color-hover-row)]`,
   // No colour of its own: a bare trigger takes its parent's, or a status pill's classes.
   bare: "gap-1 text-xs bg-transparent border-0 p-0",
 };
@@ -355,7 +352,6 @@ export function DropdownSelect(props: DropdownSelectProps) {
     placeholder,
     searchable,
     onCreate,
-    size = "sm",
     variant = "default",
     prefix,
     fullWidth = true,
@@ -454,7 +450,7 @@ export function DropdownSelect(props: DropdownSelectProps) {
       ? placeholder ?? ""
       : selected.map((o) => o.label).join(", ");
   const icon = !props.multiple && selected[0]?.icon;
-  const look = variant === "bare" ? TRIGGER_SIZE.bare : TRIGGER_SIZE[size];
+  const look = TRIGGER_SIZE[variant];
 
   return (
     <>

@@ -188,6 +188,11 @@ describe("NamedTable checkbox cell", () => {
     expect(updateRowMutate).toHaveBeenCalledWith({ id: 1, data: { col_checkbox: true } });
   });
 
+  it("is named after its column", () => {
+    renderTable(makeTable(), [makeRow({ col_checkbox: false })]);
+    expect(screen.getByRole("checkbox", { name: "Done" })).toBeInTheDocument();
+  });
+
   it("toggles from true back to false", () => {
     renderTable(makeTable(), [makeRow({ col_checkbox: true })]);
     const checkbox = screen.getByRole("checkbox") as HTMLInputElement;
@@ -195,6 +200,17 @@ describe("NamedTable checkbox cell", () => {
 
     fireEvent.click(checkbox);
     expect(updateRowMutate).toHaveBeenCalledWith({ id: 1, data: { col_checkbox: false } });
+  });
+});
+
+describe("NamedTable header", () => {
+  it("the rename pencil is revealed by hovering its own header row, or by keyboard focus", () => {
+    renderTable(makeTable(), []);
+    const pencil = screen.getByRole("button", { name: "Rename" });
+    expect(pencil.className).toContain("group-hover/item:opacity-100");
+    expect(pencil.className).toContain("focus-visible:opacity-100");
+    expect(pencil.closest(".group\\/item")).not.toBeNull();
+    expect(screen.getByRole("heading", { level: 3, name: /My Table/ })).toBeInTheDocument();
   });
 });
 

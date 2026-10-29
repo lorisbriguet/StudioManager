@@ -6,8 +6,13 @@ import { useT } from "../../i18n/useT";
 import { parseWikiArticleId, parseWikiFileKey } from "../../lib/wikiLinks";
 import { useProjectDoc, type ProjectDoc } from "../../db/hooks/useProjectDocs";
 import type { WikiRef } from "../../lib/wikiTabs";
-import { EmptyState, PANEL_TOP_BAR, IconButton } from "../ui";
+import { EmptyState, PANEL_TOP_BAR, IconButton, HEADING_1 } from "../ui";
 import { Skeleton } from "../ui/Skeleton";
+
+/** True when the rendered Markdown opens with its own level-1 title (`# …`). */
+function startsWithH1(html: string): boolean {
+  return /^\s*<h1[\s>]/i.test(html);
+}
 
 /**
  * A project's Markdown file, read-only, straight from disk. The HTML comes
@@ -26,6 +31,7 @@ export function DocView({
   const t = useT();
   const { data: content, isLoading, isError } = useProjectDoc(doc);
   const path = `${doc.folder.replace(/\/$/, "")}/${doc.rel}`;
+  const fileName = doc.rel.split("/").pop() ?? doc.rel;
 
   const handleClick = (e: React.MouseEvent) => {
     const anchor = (e.target as HTMLElement).closest("a");
@@ -75,9 +81,13 @@ export function DocView({
           ) : isError || !content ? (
             <EmptyState message={t.wiki_file_unreadable} />
           ) : (
-            <div className="tiptap-editor is-reading" onClick={handleClick}>
-              <div className="ProseMirror wiki-doc" dangerouslySetInnerHTML={{ __html: content.html }} />
-            </div>
+            <>
+              {/* The page's h1, like an article title, unless the file opens with its own `# …`. */}
+              {!startsWithH1(content.html) && <h1 className={`${HEADING_1} mb-3`}>{fileName}</h1>}
+              <div className="tiptap-editor is-reading" onClick={handleClick}>
+                <div className="ProseMirror wiki-doc" dangerouslySetInnerHTML={{ __html: content.html }} />
+              </div>
+            </>
           )}
         </div>
       </div>

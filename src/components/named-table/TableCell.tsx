@@ -41,6 +41,7 @@ export function TableCell({
         <Checkbox
           checked={!!row.data[col.id]}
           onChange={() => onChange({ ...row.data, [col.id]: !row.data[col.id] })}
+          aria-label={col.name}
         />
       );
     case "select":

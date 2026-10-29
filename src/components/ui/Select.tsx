@@ -32,8 +32,6 @@ export interface SelectProps {
   name?: string;
   title?: string;
   placeholder?: string;
-  /** sm (default) thin · md form height, opt-in */
-  size?: "sm" | "md";
   /** bare: no fill, for table cells */
   variant?: "default" | "bare";
   /** Muted label inside the trigger, before the value ("Status:"). */

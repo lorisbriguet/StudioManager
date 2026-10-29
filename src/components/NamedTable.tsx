@@ -161,9 +161,10 @@ export function NamedTable({ table, projectId }: Props) {
 
   return (
     <Card tone="inset" padding="none" className="overflow-visible">
+      {/* group/item on the header row: the rename pencil shows on its hover (or keyboard focus), not on the whole project block's. */}
       <Card.Header
         as="h3"
-        className="px-3 py-2"
+        className="group/item px-3 py-2"
         icon={
           <IconButton
             icon={collapsed ? ChevronRight : ChevronDown}
@@ -174,7 +175,7 @@ export function NamedTable({ table, projectId }: Props) {
         count={rows?.length ?? 0}
         action={
           <>
-            <IconButton icon={Pencil} label={t.rename} size="xs" tone="accent" reveal onClick={() => setEditingName(true)} />
+            <IconButton icon={Pencil} label={t.rename} size="xs" tone="accent" reveal="item" onClick={() => setEditingName(true)} />
             <IconButton
               icon={Trash2}
               label={t.delete}

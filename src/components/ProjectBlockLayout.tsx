@@ -17,7 +17,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useUpdateProject } from "../db/hooks/useProjects";
 import { useT } from "../i18n/useT";
-import { Card, CARD_GAP, CARD_STACK, DragHandle, Dropdown, IconButton } from "./ui";
+import { Card, CARD_GAP, CARD_STACK, DragHandle, Dropdown, IconButton, type PanelTitleProps } from "./ui";
 import type { LayoutConfig, LayoutBlock, BlockType, Project } from "../types/project";
 import { STANDARD_LAYOUT } from "../types/project";
 
@@ -25,6 +25,8 @@ interface Props {
   project: Project;
   projectId: number;
   renderBlock: (type: BlockType) => React.ReactNode;
+  /** The blocks' heading level: h2 on the full page, h3 in a peek panel (under the h2 project title). */
+  headingAs?: PanelTitleProps["as"];
 }
 
 const ALL_BLOCKS: BlockType[] = ["tasks", "workload", "resources", "notes", "named_tables", "invoices", "quotes", "wiki"];
@@ -47,9 +49,10 @@ interface SortableBlockProps {
   onRemove: (type: BlockType) => void;
   onToggleWidth: (type: BlockType) => void;
   t: Record<string, string>;
+  headingAs: PanelTitleProps["as"];
 }
 
-function SortableBlock({ block, renderBlock, onToggleCollapse, onRemove, onToggleWidth, t }: SortableBlockProps) {
+function SortableBlock({ block, renderBlock, onToggleCollapse, onRemove, onToggleWidth, t, headingAs }: SortableBlockProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.type });
 
   const style = {
@@ -67,6 +70,7 @@ function SortableBlock({ block, renderBlock, onToggleCollapse, onRemove, onToggl
         <Card.Header
           className={isCollapsed ? "" : "mb-3"}
           title={t[block.type] ?? BLOCK_LABELS[block.type]}
+          as={headingAs}
           icon={
             <>
               <DragHandle {...attributes} {...listeners} reveal />
@@ -112,7 +116,7 @@ function groupBlocksIntoRows(layout: LayoutConfig): { blocks: LayoutBlock[]; isG
   return rows;
 }
 
-export function ProjectBlockLayout({ project, projectId, renderBlock }: Props) {
+export function ProjectBlockLayout({ project, projectId, renderBlock, headingAs = "h2" }: Props) {
   const t = useT();
   const updateProject = useUpdateProject();
 
@@ -191,6 +195,7 @@ export function ProjectBlockLayout({ project, projectId, renderBlock }: Props) {
                       onRemove={removeBlock}
                       onToggleWidth={toggleWidth}
                       t={t as unknown as Record<string, string>}
+                headingAs={headingAs}
                     />
                   ))}
                 </div>
@@ -206,6 +211,7 @@ export function ProjectBlockLayout({ project, projectId, renderBlock }: Props) {
                 onRemove={removeBlock}
                 onToggleWidth={toggleWidth}
                 t={t as unknown as Record<string, string>}
+                headingAs={headingAs}
               />
             );
           })}

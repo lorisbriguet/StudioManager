@@ -72,6 +72,6 @@ describe("Income category labels", () => {
     fireEvent.contextMenu(row);
     fireEvent.click(await screen.findByRole("menuitem", { name: /modifier|edit/i }));
 
-    expect(await screen.findByRole("combobox", { name: /categorie|category/i })).toHaveTextContent("Revenu accessoire");
+    expect(await screen.findByRole("combobox", { name: /catégorie|category/i })).toHaveTextContent("Revenu accessoire");
   });
 });

@@ -1013,9 +1013,8 @@ Every menu and select in the app uses `src/components/ui/Dropdown.tsx`. Never us
   ]} />
 ```
 
-**Trigger.** Thin by default everywhere, forms included: `bg-[var(--color-input-bg)]`, no border, `px-2.5 py-1 text-xs rounded-md`, chevron 12 (the same 26px as `Button` secondary). Options:
+**Trigger.** One size, thin everywhere, forms included: `bg-[var(--color-input-bg)]`, no border, `px-2.5 py-1 text-xs rounded-md`, chevron 12 (the same 26px as `Button` secondary). Options:
 - `prefix="Status:"`: a muted label inside the trigger, for toolbars and page headers.
-- `size="md"`: form height with an input border. Opt-in only.
 - `variant="bare"`: no fill, no padding, no colour of its own. For table cells and status pills.
 - `fullWidth`: defaults to `true`. Pass `false` inline.
 
@@ -1037,8 +1036,12 @@ Every menu and select in the app uses `src/components/ui/Dropdown.tsx`. Never us
 - Width: half of content area (`w-1/2`)
 - Border: `border-l border-[var(--color-border-divider)]`
 - No shadow (flat, consistent with borders approach)
-- Top bar: label + icon actions (Pencil, Maximize2, X) — no footer
-- Content uses same block card pattern as full page
+- Header: `ui/PeekHeader` — a bar with only two `IconButton`s, close (X) on the left and open the full page (Maximize2) on the right, a header-border rule under it. No title or label in the bar, no footer.
+  ```tsx
+  <PeekHeader onClose={closePeek} onOpenFull={() => navigate(`/projects/${id}`)} />
+  ```
+- Title: in the content, below the bar — the peeked page's `PageHeader as="h2"` (the host page owns the `h1`). `ProjectDetailContent compact` does this.
+- Content uses the same block card pattern as the full page, one heading level down: project blocks are `h3` in a peek (`ProjectBlockLayout headingAs="h3"`), `h2` on the full page.
 
 ---
 
