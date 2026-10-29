@@ -14,11 +14,11 @@ describe("toBaseAmount: an upkeep amount as a CHF expense", () => {
   });
 
   it("a non-CHF subscription is converted through the CHF rate", async () => {
-    // 1 CHF = 1.25 USD: USD 15.00 is CHF 12.00.
+    // 1 CHF = 1.25 USD: USD\u00a015.00 is CHF 12.00.
     const rate = vi.fn(async () => 1.25);
     const r = await toBaseAmount(15, "usd", rate);
     expect(rate).toHaveBeenCalledWith("USD");
-    expect(r).toEqual({ ok: true, amount: 12, converted: { original: "USD 15.00", currency: "USD", rate: 1.25 } });
+    expect(r).toEqual({ ok: true, amount: 12, converted: { original: "USD\u00a015.00", currency: "USD", rate: 1.25 } });
   });
 
   it("refuses when the rate can't be fetched, instead of booking the raw number", async () => {
@@ -32,10 +32,10 @@ describe("toBaseAmount: an upkeep amount as a CHF expense", () => {
   });
 
   it("says what was converted, under the amount and in the expense notes", () => {
-    const c = { original: "USD 15.00", currency: "USD" as const, rate: 1.25 };
-    expect(conversionHint(c, 12, t)).toBe("USD 15.00 prefilled as CHF 12.00 (1 CHF = 1.2500 USD).");
-    expect(conversionNote(c, "2026-10-29", t)).toBe("Converted from USD 15.00 at 1 CHF = 1.2500 USD (2026-10-29).");
-    expect(conversionNote(c, "2026-10-29", uiLabels.FR)).toContain("USD 15.00");
+    const c = { original: "USD\u00a015.00", currency: "USD" as const, rate: 1.25 };
+    expect(conversionHint(c, 12, t)).toBe("USD\u00a015.00 prefilled as CHF 12.00 (1 CHF = 1.2500 USD).");
+    expect(conversionNote(c, "2026-10-29", t)).toBe("Converted from USD\u00a015.00 at 1 CHF = 1.2500 USD (2026-10-29).");
+    expect(conversionNote(c, "2026-10-29", uiLabels.FR)).toContain("USD\u00a015.00");
   });
 
   it("says why nothing was prefilled", () => {

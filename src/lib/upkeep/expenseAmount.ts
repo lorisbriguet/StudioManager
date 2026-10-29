@@ -1,5 +1,5 @@
 import { currencies, getExchangeRate, toCHF, type Currency } from "../exchangeRate";
-import { formatMoney } from "./money";
+import { formatMoney } from "../money";
 
 /** Expenses have no currency column: every amount there is CHF. */
 export const EXPENSE_CURRENCY = "CHF";

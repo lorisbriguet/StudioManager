@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent, within, getDefaultNormalizer } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { Subscription } from "../types/upkeep";
 import type { PendingRenewal } from "../db/queries/subscriptions";
@@ -101,19 +101,19 @@ describe("SubscriptionsTab", () => {
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_renewal_add }));
     const amount = await screen.findByDisplayValue("12");
     // The conversion is said in the dialog, under the amount it explains, not in a toast.
-    const hint = "USD 15.00 prefilled as CHF 12.00 (1 CHF = 1.2500 USD).";
-    expect(within(screen.getByRole("dialog")).getByText(hint)).toBeInTheDocument();
+    const hint = "USD\u00a015.00 prefilled as CHF 12.00 (1 CHF = 1.2500 USD).";
+    expect(within(screen.getByRole("dialog")).getByText(hint, { normalizer: getDefaultNormalizer({ collapseWhitespace: false }) })).toBeInTheDocument();
     expect(amount).toHaveAccessibleDescription(expect.stringContaining(hint));
     expect(info).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: t.save }));
     await vi.waitFor(() => expect(createExpense).toHaveBeenCalled());
     const saved = createExpense.mock.calls[0][0];
     expect(saved.amount).toBe(12);
-    expect(saved.notes).toMatch(/^Converted from USD 15\.00 at 1 CHF = 1\.2500 USD/);
+    expect(saved.notes).toMatch(/^Converted from USD\u00a015\.00 at 1 CHF = 1\.2500 USD/);
     info.mockRestore();
   });
 
-  it("without an exchange rate it refuses instead of booking USD 15 as CHF 15", async () => {
+  it("without an exchange rate it refuses instead of booking USD\u00a015 as CHF 15", async () => {
     getExchangeRate.mockResolvedValueOnce(null);
     const error = vi.spyOn(notify, "error").mockImplementation(() => {});
     pending = [renewal({ amount: 15, currency: "USD", name: "Figma" })];
