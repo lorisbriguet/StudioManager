@@ -45,8 +45,9 @@ const READER_GRACE: Duration = Duration::from_secs(1);
 /// The longest status message kept from a line of output.
 const MESSAGE_CHARS: usize = 300;
 
-/// Runs `program` with `args` in `cwd` (no shell), with `PATH`, `HOME` and `LANG` only. After
-/// `timeout` the program and everything it started are killed.
+/// Runs `program` with `args` in `cwd` (no shell), with `PATH` (the login shell's), `HOME`,
+/// `LANG`, and `USER` and `TMPDIR` when the app has them; nothing else from the environment.
+/// After `timeout` the program and everything it started are killed.
 pub fn run_command(
     program: &str,
     args: &[String],
@@ -64,13 +65,19 @@ pub fn run_command(
         return failed(format!("Folder not found: {cwd}"));
     }
     let var = |k: &str, default: &str| std::env::var(k).unwrap_or_else(|_| default.into());
-    let mut child = match Command::new(program)
-        .args(args)
+    let mut cmd = Command::new(program);
+    cmd.args(args)
         .current_dir(cwd)
         .env_clear()
         .env("PATH", path_env)
         .env("HOME", var("HOME", ""))
-        .env("LANG", var("LANG", "en_US.UTF-8"))
+        .env("LANG", var("LANG", "en_US.UTF-8"));
+    for k in ["USER", "TMPDIR"] {
+        if let Ok(v) = std::env::var(k) {
+            cmd.env(k, v);
+        }
+    }
+    let mut child = match cmd
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -332,6 +339,19 @@ mod tests {
         // It runs in the folder given.
         let o = run_command("/bin/pwd", &[], "/usr", PATH, TIMEOUT);
         assert_eq!(command_result(&o).shown(), Some("/usr"));
+    }
+
+    #[test]
+    fn command_environment_is_cleared_but_for_a_few() {
+        let o = sh("echo \"[$SM_ROUTINE_SECRET][$USER][$TMPDIR]\"", TIMEOUT);
+        let want = format!(
+            "[][{}][{}]",
+            std::env::var("USER").unwrap_or_default(),
+            std::env::var("TMPDIR").unwrap_or_default()
+        );
+        // The test process's own variables (here a made-up one) are not passed on.
+        assert!(std::env::var("SM_ROUTINE_SECRET").is_err());
+        assert_eq!(command_result(&o).shown(), Some(want.as_str()));
     }
 
     #[test]
