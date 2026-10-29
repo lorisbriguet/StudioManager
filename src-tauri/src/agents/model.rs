@@ -111,16 +111,22 @@ pub fn parse_agents(json: &str) -> Result<Vec<Agent>, String> {
 
 /// A resumed conversation keeps its session id, so the CLI can list it twice: the live process
 /// and the background job it left behind (often "blocked"). One row per session id, in the place
-/// of the first: the entry with a live pid wins, then the newest start.
+/// of the first: a live process that needs you wins, then any live process, then the newest
+/// start. The row kept takes the job id of the one dropped when it has none, so send, answer and
+/// stop keep working.
 fn dedupe_by_session(agents: Vec<Agent>) -> Vec<Agent> {
     let mut out: Vec<Agent> = Vec::with_capacity(agents.len());
     for a in agents {
         match out.iter().position(|o| o.session_id == a.session_id) {
             None => out.push(a),
             Some(i) => {
-                let live = |x: &Agent| x.pid.is_some();
-                if (live(&a), a.started_at) > (live(&out[i]), out[i].started_at) {
-                    out[i] = a;
+                let rank = |x: &Agent| {
+                    let live = x.pid.is_some();
+                    (live && x.group == Group::NeedsYou, live, x.started_at)
+                };
+                let dropped = if rank(&a) > rank(&out[i]) { std::mem::replace(&mut out[i], a) } else { a };
+                if out[i].short_id.is_none() {
+                    out[i].short_id = dropped.short_id;
                 }
             }
         }
@@ -185,6 +191,22 @@ mod tests {
             assert_eq!(a.len(), 1);
             assert_eq!((a[0].pid, a[0].group), (Some(8601), Group::Working));
         }
+    }
+
+    #[test]
+    fn a_resumed_session_keeps_its_prompt_and_job_id() {
+        // The background job is live and waiting; the interactive resume is newer but busy.
+        let job = r#"{"pid":100,"id":"3bec7f97","cwd":"/x","kind":"background","startedAt":1,"sessionId":"s","name":"d","status":"waiting","waitingFor":"permission prompt"}"#;
+        let live = r#"{"pid":200,"cwd":"/x/wt","kind":"interactive","startedAt":2,"sessionId":"s","name":"d","status":"busy"}"#;
+        for j in [format!("[{job},{live}]"), format!("[{live},{job}]")] {
+            let a = parse_agents(&j).unwrap();
+            assert_eq!(a.len(), 1);
+            assert_eq!((a[0].pid, a[0].group, a[0].short_id.as_deref()), (Some(100), Group::NeedsYou, Some("3bec7f97")));
+        }
+        // Both busy: the newest wins but inherits the job id.
+        let job = r#"{"pid":100,"id":"3bec7f97","cwd":"/x","kind":"background","startedAt":1,"sessionId":"s","name":"d","status":"busy"}"#;
+        let a = parse_agents(&format!("[{job},{live}]")).unwrap();
+        assert_eq!((a[0].pid, a[0].short_id.as_deref()), (Some(200), Some("3bec7f97")));
     }
 
     #[test]

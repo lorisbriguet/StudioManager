@@ -67,7 +67,8 @@ const NOTIFY_DELAY_MS: i64 = 6_000;
 const NOTIFY_COOLDOWN_MS: i64 = 180_000;
 
 /// Holds back `poll_once`'s notifications until the wait has lasted `NOTIFY_DELAY_MS`, and lets
-/// each agent through at most once per `NOTIFY_COOLDOWN_MS`.
+/// each agent through at most once per `NOTIFY_COOLDOWN_MS`: a wait that starts inside the
+/// cooldown is announced when the cooldown ends, if the agent is still waiting by then.
 #[derive(Default)]
 pub struct NotifyGate {
     pending: HashMap<String, i64>,
@@ -80,21 +81,19 @@ impl NotifyGate {
         for a in &fresh {
             self.pending.entry(a.session_id.clone()).or_insert(now_ms);
         }
-        // A wait that ended, or an agent that left, is forgotten before it was announced.
+        // A wait that ended is forgotten before it was announced. Cooldowns expire on their own,
+        // so one pass that misses an agent does not reset its cooldown.
         self.pending.retain(|id, _| list.iter().any(|a| &a.session_id == id && a.group == Group::NeedsYou));
-        self.last_sent.retain(|id, _| list.iter().any(|a| &a.session_id == id));
+        self.last_sent.retain(|_, t| now_ms - *t < NOTIFY_COOLDOWN_MS);
         let mut out = vec![];
         for a in list.iter().filter(|a| a.group == Group::NeedsYou) {
             let Some(&since) = self.pending.get(&a.session_id) else { continue };
-            if now_ms - since < NOTIFY_DELAY_MS {
+            if now_ms - since < NOTIFY_DELAY_MS || self.last_sent.contains_key(&a.session_id) {
                 continue;
             }
             self.pending.remove(&a.session_id);
-            let cooled = self.last_sent.get(&a.session_id).map_or(true, |t| now_ms - t >= NOTIFY_COOLDOWN_MS);
-            if cooled {
-                self.last_sent.insert(a.session_id.clone(), now_ms);
-                out.push(a.clone());
-            }
+            self.last_sent.insert(a.session_id.clone(), now_ms);
+            out.push(a.clone());
         }
         out
     }
@@ -504,13 +503,28 @@ mod tests {
         g.admit(waiting.clone(), &waiting, 0);
         assert_eq!(g.admit(vec![], &waiting, 6_000).len(), 1);
         g.admit(vec![], &working, 10_000);
-        // Back to waiting inside the cooldown: held back, then dropped.
+        // Back to waiting inside the cooldown: held until the cooldown ends, then announced.
         g.admit(waiting.clone(), &waiting, 20_000);
         assert!(g.admit(vec![], &waiting, 30_000).is_empty());
-        // Waiting again after the cooldown: announced.
-        g.admit(vec![], &working, 100_000);
-        g.admit(waiting.clone(), &waiting, 190_000);
-        assert_eq!(g.admit(vec![], &waiting, 196_000).len(), 1);
+        assert!(g.admit(vec![], &waiting, 185_000).is_empty());
+        assert_eq!(g.admit(vec![], &waiting, 186_000).len(), 1);
+        // A wait answered before the cooldown ends is never announced.
+        g.admit(vec![], &working, 200_000);
+        g.admit(waiting.clone(), &waiting, 210_000);
+        g.admit(vec![], &working, 220_000);
+        assert!(g.admit(vec![], &waiting, 400_000).is_empty());
+    }
+
+    #[test]
+    fn a_pass_that_misses_the_agent_keeps_its_cooldown() {
+        let mut g = NotifyGate::default();
+        let waiting = vec![ag("a", Group::NeedsYou)];
+        g.admit(waiting.clone(), &waiting, 0);
+        assert_eq!(g.admit(vec![], &waiting, 6_000).len(), 1);
+        // One flaky `claude agents` pass without the agent, then it is back and waiting again.
+        g.admit(vec![], &[], 10_000);
+        g.admit(waiting.clone(), &waiting, 20_000);
+        assert!(g.admit(vec![], &waiting, 30_000).is_empty());
     }
 
     #[test]
