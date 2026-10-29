@@ -17,15 +17,7 @@ interface Props {
   onClose: () => void;
 }
 
-const COLUMN_TYPES: { value: WorkloadColumnType; label: string }[] = [
-  { value: "text", label: "Text" },
-  { value: "number", label: "Number" },
-  { value: "checkbox", label: "Checkbox" },
-  { value: "select", label: "Select" },
-  { value: "multi_select", label: "Multi Select" },
-  { value: "formula", label: "Formula" },
-  { value: "link", label: "Link to Task" },
-];
+const COLUMN_TYPES: WorkloadColumnType[] = ["text", "number", "checkbox", "select", "multi_select", "formula", "link"];
 
 export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDelete, onClose }: Props) {
   const t = useT();
@@ -154,8 +146,8 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
             onChange={(e) => setType(e.target.value as WorkloadColumnType)}
           >
             {COLUMN_TYPES.map((ct) => (
-              <option key={ct.value} value={ct.value}>
-                {ct.label}
+              <option key={ct} value={ct}>
+                {t[`column_type_${ct}`]}
               </option>
             ))}
           </Select>

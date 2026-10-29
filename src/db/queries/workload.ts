@@ -27,6 +27,12 @@ export async function getWorkloadTemplates(): Promise<WorkloadTemplate[]> {
   return rows.map(parseTemplate);
 }
 
+export async function getWorkloadTemplate(id: number): Promise<WorkloadTemplate | null> {
+  const db = await getDb();
+  const rows = await db.select<WorkloadTemplateRow[]>("SELECT * FROM workload_templates WHERE id = $1", [id]);
+  return rows[0] ? parseTemplate(rows[0]) : null;
+}
+
 export async function createWorkloadTemplate(
   name: string,
   columns: WorkloadColumn[]

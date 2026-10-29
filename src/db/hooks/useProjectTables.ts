@@ -1,9 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as q from "../queries/projectTables";
 import { useUndoStore } from "../../stores/undo-store";
-import type { TableColumnDef } from "../../types/project-table";
+import type { TableColumnDef, ProjectTableRow } from "../../types/project-table";
 import { getLabels } from "../../lib/notify";
-import { snapshotRows, pushRestore } from "../undoRestore";
+import { snapshotRows, pushRestore, reinsertAt } from "../undoRestore";
 
 export function useProjectTables(projectId: number) {
   return useQuery({
@@ -35,35 +35,55 @@ export function useUpdateProjectTable(projectId: number) {
 
 export function useDeleteProjectTable(projectId: number) {
   const qc = useQueryClient();
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["project-tables", projectId] });
+    qc.invalidateQueries({ queryKey: ["project-table-rows"] });
+  };
   return useMutation({
     meta: { errorLabel: "error_delete_table" },
+    // Undo puts the very same rows back (ids, sort_order, dates); redo deletes that id.
     mutationFn: async (id: number) => {
-      // Snapshot table + rows before deleting for undo
-      const tables = await q.getProjectTables(projectId);
-      const table = tables.find((t) => t.id === id);
-      const rows = await q.getProjectTableRows(id);
+      const snap = await snapshotRows([
+        { table: "project_tables", where: "id = $1", params: [id] },
+        { table: "project_table_rows", where: "table_id = $1", params: [id] },
+      ]);
       await q.deleteProjectTable(id);
-      if (table) {
-        // The restore assigns a fresh rowid; redo targets exactly that id —
-        // a name lookup could hit a different row with the same name.
-        let restoredId: number | null = null;
-        useUndoStore.getState().push({
-          label: `${getLabels().undo_delete_table} "${table.name}"`,
-          execute: async () => {
-            restoredId = await q.createProjectTable(projectId, table.name, table.column_config);
-            for (const row of rows) {
-              await q.createProjectTableRow(restoredId, row.data);
-            }
-            qc.invalidateQueries({ queryKey: ["project-tables", projectId] });
-          },
-          redo: async () => {
-            if (restoredId !== null) await q.deleteProjectTable(restoredId);
-            qc.invalidateQueries({ queryKey: ["project-tables", projectId] });
-          },
-        });
-      }
+      const name = String(snap[0].rows[0]?.name ?? "");
+      pushRestore(`${getLabels().undo_delete_table} "${name}"`, snap, { redo: () => q.deleteProjectTable(id), invalidate });
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["project-tables", projectId] }),
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * Remove a column (the rows keep its values). Undo and redo work on the
+ * columns as they are when they run, so a column added or edited since stays.
+ */
+export function useDeleteProjectTableColumn(projectId: number) {
+  const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["project-tables", projectId] });
+  const setColumns = async (tableId: number, change: (cols: TableColumnDef[]) => TableColumnDef[]) => {
+    const table = await q.getProjectTable(tableId);
+    if (!table) return;
+    await q.updateProjectTable(tableId, { column_config: change(table.column_config) });
+    invalidate();
+  };
+  return useMutation({
+    meta: { errorLabel: "error_save_table" },
+    mutationFn: async ({ tableId, colId }: { tableId: number; colId: string }) => {
+      const table = await q.getProjectTable(tableId);
+      const index = table?.column_config.findIndex((c) => c.id === colId) ?? -1;
+      if (!table || index === -1) return;
+      const col = table.column_config[index];
+      const without = (cols: TableColumnDef[]) => cols.filter((c) => c.id !== colId);
+      await q.updateProjectTable(tableId, { column_config: without(table.column_config) });
+      useUndoStore.getState().push({
+        label: getLabels().undo_delete_column,
+        execute: () => setColumns(tableId, (cols) => reinsertAt(cols, col, index, (c) => c.id === colId)),
+        redo: () => setColumns(tableId, without),
+      });
+    },
+    onSuccess: invalidate,
   });
 }
 
@@ -107,5 +127,28 @@ export function useDeleteProjectTableRow(tableId: number) {
       pushRestore(getLabels().undo_delete_row, snap, { redo: () => q.deleteProjectTableRow(id), invalidate });
     },
     onSuccess: invalidate,
+  });
+}
+
+/** Drag-and-drop order of a table's rows; the list moves at once, the write follows. */
+export function useReorderProjectTableRows(tableId: number) {
+  const qc = useQueryClient();
+  const key = ["project-table-rows", tableId];
+  return useMutation({
+    meta: { errorLabel: "error_save_row" },
+    mutationFn: (ids: number[]) => q.reorderProjectTableRows(ids),
+    onMutate: async (ids: number[]) => {
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<ProjectTableRow[]>(key);
+      if (prev) {
+        const byId = new Map(prev.map((r) => [r.id, r]));
+        qc.setQueryData(key, ids.flatMap((id, i) => (byId.has(id) ? [{ ...byId.get(id)!, sort_order: i }] : [])));
+      }
+      return { prev };
+    },
+    onError: (_e, _ids, ctx) => {
+      if (ctx?.prev) qc.setQueryData(key, ctx.prev);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: key }),
   });
 }

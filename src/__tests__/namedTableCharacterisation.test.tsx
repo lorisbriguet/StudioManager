@@ -23,6 +23,8 @@ const createRowMutate = vi.fn();
 const deleteRowMutate = vi.fn();
 const updateTableMutate = vi.fn();
 const deleteTableMutate = vi.fn();
+const deleteColumnMutate = vi.fn();
+const reorderRowsMutate = vi.fn();
 
 let rowsData: ProjectTableRow[] = [];
 
@@ -33,6 +35,8 @@ vi.mock("../db/hooks/useProjectTables", () => ({
   useDeleteProjectTableRow: () => ({ mutate: deleteRowMutate }),
   useUpdateProjectTable: () => ({ mutate: updateTableMutate }),
   useDeleteProjectTable: () => ({ mutate: deleteTableMutate }),
+  useDeleteProjectTableColumn: () => ({ mutate: deleteColumnMutate }),
+  useReorderProjectTableRows: () => ({ mutate: reorderRowsMutate }),
 }));
 
 const customListsData = [
@@ -370,9 +374,11 @@ describe("NamedTable column editor popover", () => {
 
     fireEvent.click(screen.getByText("Delete column"));
 
-    // Second argument: the onSuccess that offers Undo.
-    expect(updateTableMutate).toHaveBeenCalledWith(
-      { id: 1, data: { column_config: COLUMNS.slice(1) } },
+    // Through the hook whose Undo re-inserts the column into the columns as
+    // they are at undo time (see undoRestoreRealDb.test.tsx); second argument:
+    // the onSuccess that offers Undo.
+    expect(deleteColumnMutate).toHaveBeenCalledWith(
+      { tableId: 1, colId: "col_text" },
       expect.objectContaining({ onSuccess: expect.any(Function) })
     );
     expect(screen.queryByDisplayValue("Name")).not.toBeInTheDocument();
@@ -396,5 +402,24 @@ describe("NamedTable column editor popover", () => {
     const updatedCol = call.data.column_config.find((c: TableColumnDef) => c.id === "col_select");
     expect(updatedCol.name).toBe("Status");
     expect(updatedCol.options).toEqual(["Todo", "Done"]);
+  });
+});
+
+describe("NamedTable column types and row order", () => {
+  it("names the column types in the app language, in the menu and for a new column", () => {
+    useAppStore.setState({ language: "FR" });
+    renderTable(makeTable(), [makeRow({})]);
+    fireEvent.click(screen.getByRole("button", { name: "Ajouter une colonne" }));
+    expect(screen.getByRole("menuitem", { name: "Case à cocher" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Nombre" }));
+    const added = updateTableMutate.mock.calls[0][0].data.column_config.at(-1);
+    expect(added).toMatchObject({ name: "Nombre", type: "number" });
+  });
+
+  it("each row's drag handle is a dnd-kit sortable handle", () => {
+    renderTable(makeTable(), [makeRow({ col_text: "A" }, 1), makeRow({ col_text: "B" }, 2)]);
+    const handles = screen.getAllByLabelText("Drag to reorder");
+    expect(handles).toHaveLength(2);
+    for (const h of handles) expect(h).toHaveAttribute("aria-roledescription", "sortable");
   });
 });

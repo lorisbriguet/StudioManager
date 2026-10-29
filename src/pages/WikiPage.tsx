@@ -17,14 +17,14 @@ import {
   Minus,
   PanelLeft,
   PanelRight,
-  Waypoints,
   type LucideIcon,
 } from "lucide-react";
 import { deleteWithUndo } from "../lib/undo";
 import { useT } from "../i18n/useT";
-import { getLabels, notify } from "../lib/notify";
+import { notify } from "../lib/notify";
 import { scrollBehavior } from "../lib/motion";
-import { ICONS, ICON_SIZE, Badge, Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem, Popover, IconButton, SectionLabel, Input, HEADING_1 } from "../components/ui";
+import { ICONS, ICON_SIZE, Badge, Button, BottomBar, EmptyState, PANEL_TOP_BAR, Popover, IconButton, SectionLabel, Input, HEADING_1 } from "../components/ui";
+import { TabItem, TabList, tabIds } from "../components/ui/TabItem";
 import { TagInput } from "../components/shared/TagInput";
 import { MENU_ITEM } from "../components/ui/Dropdown";
 import { Select } from "../components/ui/Select";
@@ -498,10 +498,8 @@ export function ArticleEditor({
               // Not if more typing is already waiting for the next save.
               if (articleIdRef.current === scheduledFor && !saveTimeoutRef.current) onSaveStateRef.current?.("saved");
             },
-            onError: (e) => {
-              onSaveStateRef.current?.("idle");
-              notify.error(getLabels().operation_failed, e);
-            },
+            // The mutation's own error toast (error_save_article) says it.
+            onError: () => onSaveStateRef.current?.("idle"),
           }
         );
       }, 2000);
@@ -912,6 +910,7 @@ const SIDE_PANEL_INLINE_MIN = 1000;
 
 export function WikiPage() {
   const t = useT();
+  const tabsBase = useId();
   const tabsKey = useOrgStore((s) => s.orgKey("wikiTabs"));
 
   const { data: allArticles = [], isSuccess: articlesLoaded } = useWikiArticles();
@@ -1087,7 +1086,6 @@ export function WikiPage() {
             setMode("editing");
             setTabsState((s) => openInTabs(s, newId, true));
           },
-          onError: (e) => notify.error(getLabels().operation_failed, e),
         }
       );
     },
@@ -1114,7 +1112,6 @@ export function WikiPage() {
             undoable(t.wiki_linked_in.replace("{title}", source.title), () =>
               updateArticle.mutateAsync({ id: sourceId, data: { content: before } }).then(() => undefined)
             ),
-          onError: (e) => notify.error(getLabels().operation_failed, e),
         }
       );
     },
@@ -1212,7 +1209,7 @@ export function WikiPage() {
             onClick={toggleExplorer}
             className="ml-1.5"
           />
-          <div role="tablist" aria-label={t.wiki_open_tabs} className="flex items-center flex-1 min-w-0 overflow-x-auto scrollbar-hide">
+          <TabList label={t.wiki_open_tabs} className="flex items-center flex-1 min-w-0 overflow-x-auto scrollbar-hide">
             {tabsState.tabs.map((tab) => {
               const ref = tabRef(tab);
               const pending = typeof ref === "number" && !articlesLoaded;
@@ -1222,14 +1219,17 @@ export function WikiPage() {
                   : typeof ref === "string"
                     ? (docsByKey.get(ref)?.rel ?? ref.split(":").slice(2).join(":")).split("/").pop()!
                     : byId.get(ref ?? -1)?.title ?? "";
+              const ids = tabIds(tabsBase, tab.key);
               return (
                 <TabItem
                   key={tab.key}
                   role="tab"
+                  id={ids.tab}
+                  controls={ids.panel}
                   label={label}
                   icon={
                     tab.kind === "graph"
-                      ? Waypoints
+                      ? ICONS.graph
                       : typeof ref === "string"
                         ? ICONS.file
                         : pending
@@ -1243,7 +1243,7 @@ export function WikiPage() {
                 />
               );
             })}
-          </div>
+          </TabList>
           {/* Always there (greyed when nothing open has a side panel), so the
               tab strip doesn't shift when you switch tabs. */}
           <IconButton
@@ -1256,6 +1256,13 @@ export function WikiPage() {
           />
         </div>
 
+        {/* The active tab's panel (just a wrapper when nothing is open). */}
+        <div
+          className="flex-1 min-h-0 min-w-0 flex flex-col"
+          {...(activeTab
+            ? { role: "tabpanel", id: tabIds(tabsBase, activeTab.key).panel, "aria-labelledby": tabIds(tabsBase, activeTab.key).tab }
+            : {})}
+        >
         {activeTab?.kind === "graph" ? (
           <WikiGraph
             articles={allArticles}
@@ -1366,7 +1373,7 @@ export function WikiPage() {
                 message={t.wiki_nothing_open}
                 icon={ICONS.wikiArticle}
                 action={
-                  <Button variant="secondary" icon={Waypoints} onClick={openGraph}>
+                  <Button variant="secondary" icon={ICONS.graph} onClick={openGraph}>
                     {t.wiki_open_graph}
                   </Button>
                 }
@@ -1374,6 +1381,7 @@ export function WikiPage() {
             )}
           </div>
         )}
+        </div>
       </div>
 
       {sideVisible && sidePanel && (
