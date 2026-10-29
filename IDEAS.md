@@ -85,6 +85,15 @@ All 12 checklist items pass after three fixes found by the pass:
 - [x] Test Mode and Presentation Mode are demo-build tools now: their Settings category is hidden in the real app (banners and exit paths stay for anyone mid-mode at update time); the Snapshot card moved under Backup
 - [x] Docs: guide, [README](README.md) and landing page no longer point testers at Presentation Mode
 
+## V3.1.0 — Done (shared equipment, agents polish)
+
+- [x] Shared equipment: an organisation can use another organisation's machines, upkeep and consumables (Settings › Upkeep › Equipment); project links and calendar events stay with the owner ([spec](docs/superpowers/specs/2026-10-28-studio-upkeep-design.md))
+- [x] Wiki dashboard widgets: recently edited articles, article count
+- [x] Agents: messages you sent show greyed out until they reach the transcript; the working dots stop once the reply has settled; the conversation holds your place when the window slides; the terminal fits the panel (Claude's footer line no longer cut off)
+- [x] Menu bar: one notification badge, rounded panel, no scroll pull-down
+- [x] Popovers open in place and only fade (no jump from the corner)
+- [x] Component catalogue generators kept in the repo ([docs/catalogue](docs/catalogue/README.md))
+
 ## V3.0.0 — Done (agents, menu bar, studio upkeep, UI library)
 
 Design: [specs/2026-10-28-agents-window-design.md](docs/superpowers/specs/2026-10-28-agents-window-design.md)

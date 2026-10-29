@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "StudioManager",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "identifier": "ch.studiomanager.app",
   "build": {
     "frontendDist": "../dist",
@@ -10,6 +10,7 @@
     "beforeBuildCommand": "bash scripts/build-mcp.sh && npm run build"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "StudioManager",

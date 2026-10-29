@@ -170,6 +170,8 @@ fn ensure_panel(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
         .inner_size(PANEL_WIDTH, PANEL_HEIGHT)
         .resizable(false)
         .decorations(false)
+        // Transparent, with the rounded frame drawn by the page (`MenuBarApp`).
+        .transparent(true)
         .skip_taskbar(true)
         .always_on_top(true)
         .visible_on_all_workspaces(true)

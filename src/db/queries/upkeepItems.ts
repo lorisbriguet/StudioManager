@@ -1,4 +1,4 @@
-import { getDb, validateFields, TransactionBatch } from "../index";
+import { getEquipmentDb, equipmentOrgId, validateFields, TransactionBatch } from "../index";
 import { nextIntervalDue } from "../../lib/upkeep/schedule";
 import { addInterval } from "../../utils/recurringDates";
 import { parseLocalDate, todayLocalISO } from "../../utils/localDate";
@@ -83,7 +83,7 @@ export function buildUpkeepItemInsert(
 }
 
 export async function getUpkeepItems(machineId?: number): Promise<UpkeepItem[]> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   if (machineId !== undefined) {
     return db.select<UpkeepItem[]>(
       "SELECT * FROM upkeep_items WHERE machine_id = $1 ORDER BY archived ASC, next_due_on IS NULL, next_due_on ASC, title ASC",
@@ -97,7 +97,7 @@ export async function getUpkeepItems(machineId?: number): Promise<UpkeepItem[]> 
 
 /** Items that still need attention: not archived and the machine is not retired. */
 export async function getActiveUpkeepItems(): Promise<UpkeepItem[]> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   return db.select<UpkeepItem[]>(
     `SELECT u.* FROM upkeep_items u
      JOIN machines m ON m.id = u.machine_id
@@ -107,13 +107,13 @@ export async function getActiveUpkeepItems(): Promise<UpkeepItem[]> {
 }
 
 export async function getUpkeepItem(id: number): Promise<UpkeepItem | null> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   const rows = await db.select<UpkeepItem[]>("SELECT * FROM upkeep_items WHERE id = $1", [id]);
   return rows[0] ?? null;
 }
 
 export async function createUpkeepItem(data: UpkeepItemInput): Promise<number> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   const { machine_id, ...rest } = data;
   const stmt = buildUpkeepItemInsert(rest, machine_id);
   const result = await db.execute(stmt.sql, stmt.params);
@@ -174,7 +174,7 @@ export async function updateUpkeepItem(
   const fields = Object.keys(patch);
   if (fields.length === 0) return;
   validateFields(fields);
-  const db = await getDb();
+  const db = await getEquipmentDb();
   const sets = fields.map((f, i) => `${f} = $${i + 1}`);
   sets.push("updated_at = datetime('now')");
   await db.execute(
@@ -184,7 +184,7 @@ export async function updateUpkeepItem(
 }
 
 export async function archiveUpkeepItem(id: number): Promise<void> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   await db.execute(
     "UPDATE upkeep_items SET archived = 1, updated_at = datetime('now') WHERE id = $1",
     [id]
@@ -192,7 +192,7 @@ export async function archiveUpkeepItem(id: number): Promise<void> {
 }
 
 export async function deleteUpkeepItem(id: number): Promise<void> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   await db.execute("DELETE FROM upkeep_items WHERE id = $1", [id]);
 }
 
@@ -210,7 +210,7 @@ export async function markUpkeepDone(
   const item = await getUpkeepItem(id);
   if (!item) throw new Error(`Upkeep item ${id} not found`);
 
-  const batch = new TransactionBatch();
+  const batch = new TransactionBatch(undefined, equipmentOrgId());
   batch.add(
     `INSERT INTO service_log (machine_id, upkeep_item_id, done_on, description, reading)
      VALUES ($1, $2, $3, $4, $5)`,
@@ -245,7 +245,7 @@ export async function setItemCalendarEvent(
   eventDate: string | null,
   expectedOrg?: string
 ): Promise<void> {
-  const batch = new TransactionBatch(expectedOrg);
+  const batch = new TransactionBatch(expectedOrg, equipmentOrgId());
   batch.add(
     "UPDATE upkeep_items SET calendar_event_id = $1, calendar_event_date = $2 WHERE id = $3",
     [eventId, eventDate, id]
@@ -255,7 +255,7 @@ export async function setItemCalendarEvent(
 
 /** Hide an item from alerts for 1, 3 or 7 days. */
 export async function snoozeUpkeep(id: number, days: 1 | 3 | 7, todayISO: string): Promise<void> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   const until = addInterval(todayISO, days, "day", parseLocalDate(todayISO).getDate());
   await db.execute(
     `UPDATE upkeep_items SET snooze_until = $1, overdue_notified_for = NULL,
