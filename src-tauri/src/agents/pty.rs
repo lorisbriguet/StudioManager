@@ -365,6 +365,24 @@ impl TerminalHub {
         process.as_mut().ok_or("Terminal closed")?.resize(cols, rows)
     }
 
+    /// A terminal the webview opened (`open`), for its keys and size. Temporary terminals are
+    /// refused: only `send_message` and `prompt::choose` write to them, after their checks.
+    fn panel(&self, term_id: u32) -> Result<Arc<Term>, String> {
+        self.get(term_id).filter(|t| !t.temporary).ok_or_else(|| "Terminal closed".to_string())
+    }
+
+    /// `write`, for `agents_term_write`: refuses temporary terminals.
+    pub fn panel_write(&self, term_id: u32, data: &[u8]) -> Result<(), String> {
+        self.panel(term_id)?;
+        self.write(term_id, data)
+    }
+
+    /// `resize`, for `agents_term_resize`: refuses temporary terminals.
+    pub fn panel_resize(&self, term_id: u32, cols: u16, rows: u16) -> Result<(), String> {
+        self.panel(term_id)?;
+        self.resize(term_id, cols, rows)
+    }
+
     /// Kills and reaps the process; unknown ids are ignored.
     pub fn close(&self, term_id: u32) {
         if let Some(term) = self.forget(term_id) {
@@ -591,7 +609,7 @@ pub async fn agents_term_write(
 ) -> Result<(), String> {
     super::actions::switched_on(&state)?;
     let hub = state.hub.clone();
-    blocking(move || hub.write(term_id, data.as_bytes())).await
+    blocking(move || hub.panel_write(term_id, data.as_bytes())).await
 }
 
 #[tauri::command]
@@ -603,7 +621,7 @@ pub async fn agents_term_resize(
 ) -> Result<(), String> {
     super::actions::switched_on(&state)?;
     let hub = state.hub.clone();
-    blocking(move || hub.resize(term_id, cols, rows)).await
+    blocking(move || hub.panel_resize(term_id, cols, rows)).await
 }
 
 #[tauri::command]
@@ -872,6 +890,29 @@ pub(super) mod tests {
             open(&hub, "0a1b2c3d").unwrap();
         }
         assert!(open(&hub, "0a1b2c3d").is_err());
+    }
+
+    /// The webview may only type into and resize the panels it opened: a temporary terminal
+    /// (one send, one answer, a watch) belongs to the code that checks the prompt before Enter.
+    #[test]
+    fn panel_write_to_temporary_terminal_refused() {
+        let (hub, spawner, _) = hub();
+        let temp = hub.open_temporary("0a1b2c3d", 80, 24).unwrap();
+        let watch = hub.watch("11111111", 80, 24).unwrap();
+        for id in [temp, watch] {
+            assert!(hub.panel_write(id, b"\r").is_err());
+            assert!(hub.panel_resize(id, 100, 30).is_err());
+        }
+        assert!(spawner.handles().iter().all(|h| h.writes().is_empty()), "nothing written");
+        assert!(spawner.handles().iter().all(|h| *h.size.lock().unwrap() == (80, 24)));
+        // The panel's own terminal still takes keys and sizes.
+        let panel = open(&hub, "0a1b2c3d").unwrap();
+        hub.panel_write(panel, b"x").unwrap();
+        hub.panel_resize(panel, 100, 30).unwrap();
+        let h = &spawner.handles()[2];
+        assert_eq!(h.writes(), vec!["x"]);
+        assert_eq!(*h.size.lock().unwrap(), (100, 30));
+        assert!(hub.panel_write(999, b"x").is_err(), "unknown id");
     }
 
     #[test]
