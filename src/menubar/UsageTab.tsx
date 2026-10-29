@@ -96,7 +96,7 @@ function MeterRow({ meter, locale }: { meter: Meter; locale: string }) {
     <div className="mb-3 last:mb-0">
       <div className="flex justify-between items-baseline text-sm mb-1">
         <span>{name}</span>
-        <span className="text-xs text-muted">{`${percent}% · ${resets}`}</span>
+        <span className="text-xs text-muted">{`${t.usage_percent.replace("{percent}", String(percent))} · ${resets}`}</span>
       </div>
       <ProgressBar value={meter.percent} color={meterColor(meter.percent)} aria-label={name} />
       {pace &&

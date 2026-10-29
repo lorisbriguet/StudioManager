@@ -1,5 +1,7 @@
+import { useId } from "react";
 import { useSearchParams } from "react-router-dom";
 import { PageHeader, TabItem } from "../components/ui";
+import { TabList, tabIds } from "../components/ui/TabItem";
 import { ConsumablesTab } from "../components/upkeep/ConsumablesTab";
 import { SubscriptionsTab } from "../components/upkeep/SubscriptionsTab";
 import { MachinesTab } from "../components/upkeep/MachinesTab";
@@ -14,6 +16,8 @@ export function UpkeepPage() {
   const [params, setParams] = useSearchParams();
   const raw = params.get("tab");
   const tab: Tab = (TABS as readonly string[]).includes(raw ?? "") ? (raw as Tab) : "overview";
+  const idBase = useId();
+  const panel = tabIds(idBase, tab);
 
   const labels: Record<Tab, string> = {
     overview: t.upkeep_tab_overview,
@@ -25,26 +29,33 @@ export function UpkeepPage() {
   return (
     <div>
       <PageHeader title={t.upkeep} />
-      <div role="tablist" aria-label={t.upkeep} className="flex items-center gap-1 mb-6 border-b border-[var(--color-border)]">
-        {TABS.map((k) => (
-          <TabItem
-            key={k}
-            role="tab"
-            label={labels[k]}
-            active={tab === k}
-            onActivate={() => setParams(k === "overview" ? {} : { tab: k }, { replace: true })}
-          />
-        ))}
+      <TabList label={t.upkeep} className="flex items-center gap-1 mb-6 border-b border-[var(--color-border)]">
+        {TABS.map((k) => {
+          const ids = tabIds(idBase, k);
+          return (
+            <TabItem
+              key={k}
+              role="tab"
+              id={ids.tab}
+              controls={ids.panel}
+              label={labels[k]}
+              active={tab === k}
+              onActivate={() => setParams(k === "overview" ? {} : { tab: k }, { replace: true })}
+            />
+          );
+        })}
+      </TabList>
+      <div role="tabpanel" id={panel.panel} aria-labelledby={panel.tab}>
+        {tab === "overview" ? (
+          <OverviewTab />
+        ) : tab === "machines" ? (
+          <MachinesTab />
+        ) : tab === "consumables" ? (
+          <ConsumablesTab />
+        ) : (
+          <SubscriptionsTab />
+        )}
       </div>
-      {tab === "overview" ? (
-        <OverviewTab />
-      ) : tab === "machines" ? (
-        <MachinesTab />
-      ) : tab === "consumables" ? (
-        <ConsumablesTab />
-      ) : (
-        <SubscriptionsTab />
-      )}
     </div>
   );
 }

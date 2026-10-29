@@ -251,6 +251,17 @@ function applyStoredAppearance() {
   return { darkMode, reduceMotion, themeId, accentColor: accentForTheme(theme, themeId, accent) };
 }
 
+/** Tell screen readers (and the browser's hyphenation / spell check) which language the UI is in. */
+function applyDocumentLang(lang: AppLanguage) {
+  document.documentElement.lang = lang === "FR" ? "fr" : "en";
+}
+
+function storedLanguage(): AppLanguage {
+  return (localStorage.getItem("appLanguage") as AppLanguage) ?? "EN";
+}
+
+applyDocumentLang(storedLanguage());
+
 const initialAppearance = applyStoredAppearance();
 const initialDark = initialAppearance.darkMode;
 const effectiveInitialAccent = initialAppearance.accentColor;
@@ -268,9 +279,11 @@ export function syncAppearanceFromStorage() {
   }
   document.body.style.background = "";
   document.body.style.color = "";
+  const language = storedLanguage();
+  applyDocumentLang(language);
   useAppStore.setState({
     ...applyStoredAppearance(),
-    language: (localStorage.getItem("appLanguage") as AppLanguage) ?? "EN",
+    language,
     dateFormat: (localStorage.getItem("dateFormat") as DateFormatOption) ?? "dd.MM.yyyy",
   });
 }
@@ -307,7 +320,7 @@ export const useAppStore = create<AppState>((set) => ({
   showTasksPage: localStorage.getItem("showTasksPage") !== "false",
   showIncome: localStorage.getItem("showIncome") === "true",
   showTimeOverview: localStorage.getItem("showTimeOverview") === "true",
-  language: (localStorage.getItem("appLanguage") as AppLanguage) ?? "EN",
+  language: storedLanguage(),
   exportLanguage: (localStorage.getItem("exportLanguage") as AppLanguage) ?? "FR",
   clientsSortKey: localStorage.getItem("clientsSortKey") ?? "name",
   clientsSortDir: (localStorage.getItem("clientsSortDir") as "asc" | "desc") ?? "asc",
@@ -339,6 +352,7 @@ export const useAppStore = create<AppState>((set) => ({
   },
   setLanguage: (lang) => {
     localStorage.setItem("appLanguage", lang);
+    applyDocumentLang(lang);
     set({ language: lang });
   },
   setExportLanguage: (lang) => { set({ exportLanguage: lang }); void useOrgStore.getState().savePrefs({ exportLanguage: lang }); },

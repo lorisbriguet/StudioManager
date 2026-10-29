@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { BottomBar, Button, PANEL_TOP_BAR, TabItem } from "../components/ui";
+import { TabList, tabIds } from "../components/ui/TabItem";
 import { AgentsTab } from "./AgentsTab";
 import { UsageTab } from "./UsageTab";
 import { DayTab } from "./DayTab";
@@ -37,6 +38,8 @@ export function MenuBarApp() {
   const t = useT();
   const [tab, setTab] = useState<Tab>(readTab);
   const labels: Record<Tab, string> = { agents: t.agents, usage: t.menubar_usage, day: t.menubar_day };
+  const idBase = useId();
+  const panel = tabIds(idBase, tab);
 
   const openApp = (
     <Button variant="outline" onClick={() => void openMainWindow()}>
@@ -51,19 +54,30 @@ export function MenuBarApp() {
 
   return (
     <div className="h-screen flex flex-col bg-[var(--color-bg)] text-[var(--color-text)] overflow-hidden">
-      <div role="tablist" aria-label="StudioManager" className={`${PANEL_TOP_BAR} px-1.5 border-[var(--color-border)]`}>
-        {TABS.map((id) => (
-          <TabItem key={id} role="tab" label={labels[id]} active={tab === id} onActivate={() => choose(id)} />
-        ))}
-      </div>
+      <TabList label="StudioManager" className={`${PANEL_TOP_BAR} px-1.5 border-[var(--color-border)]`}>
+        {TABS.map((id) => {
+          const ids = tabIds(idBase, id);
+          return (
+            <TabItem
+              key={id}
+              role="tab"
+              id={ids.tab}
+              controls={ids.panel}
+              label={labels[id]}
+              active={tab === id}
+              onActivate={() => choose(id)}
+            />
+          );
+        })}
+      </TabList>
       {tab === "usage" ? (
         // The Usage tab owns the bottom bar: "Copy as text" sits next to the shell's action.
-        <div role="tabpanel" aria-label={labels[tab]} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div role="tabpanel" id={panel.panel} aria-labelledby={panel.tab} className="flex-1 min-h-0 flex flex-col overflow-hidden">
           <UsageTab trailing={openApp} />
         </div>
       ) : (
         <>
-          <div role="tabpanel" aria-label={labels[tab]} className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+          <div role="tabpanel" id={panel.panel} aria-labelledby={panel.tab} tabIndex={0} className="flex-1 min-h-0 overflow-y-auto flex flex-col focus-accent">
             {tab === "agents" && <AgentsTab />}
             {tab === "day" && <DayTab />}
           </div>
