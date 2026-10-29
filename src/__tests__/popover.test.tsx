@@ -125,6 +125,27 @@ describe("Popover", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("fades in only once placed, never from the top-left corner", () => {
+    // No anchor and no point: the panel cannot be placed yet.
+    const { unmount } = render(
+      <Popover onClose={vi.fn()} padding="content" aria-label="Unplaced">
+        x
+      </Popover>
+    );
+    const unplaced = screen.getByRole("dialog", { name: "Unplaced" });
+    expect(unplaced.className).not.toContain("animate-in");
+    expect(unplaced.style.opacity).toBe("0");
+    unmount();
+    render(
+      <Popover at={{ x: 120, y: 80 }} onClose={vi.fn()} padding="content" aria-label="Placed">
+        x
+      </Popover>
+    );
+    const placed = screen.getByRole("dialog", { name: "Placed" });
+    expect(placed.className).toContain("animate-in");
+    expect(placed.style.opacity).toBe("");
+  });
+
   it("can open at a point (right-click)", () => {
     const onClose = vi.fn();
     render(
