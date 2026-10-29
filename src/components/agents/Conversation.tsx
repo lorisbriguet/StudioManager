@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ChevronRight } from "lucide-react";
@@ -82,10 +82,47 @@ export function Conversation({ sessionId, working }: ConversationProps) {
     if (!scroller) return;
     const onScroll = () => {
       stickRef.current = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= STICK_PX;
+      captureAnchor();
     };
     scroller.addEventListener("scroll", onScroll, { passive: true });
     return () => scroller.removeEventListener("scroll", onScroll);
   }, []);
+
+  // The transcript is the last 300 items: a new message pushes the oldest off the top and
+  // everything below moves up. WebKit has no scroll anchoring, so a reader scrolled up would
+  // be carried along by the height of what was dropped. Remember the first message in view
+  // and where it sat; after each update, scroll by however far it moved.
+  const anchorRef = useRef<{ key: string; top: number } | null>(null);
+  const captureAnchor = () => {
+    const root = rootRef.current;
+    const scroller = root?.parentElement;
+    if (!root || !scroller) return;
+    const base = scroller.getBoundingClientRect().top;
+    for (const el of root.querySelectorAll<HTMLElement>("[data-anchor-key]")) {
+      const r = el.getBoundingClientRect();
+      if (r.bottom > base + 1) {
+        anchorRef.current = { key: el.dataset.anchorKey ?? "", top: r.top - base };
+        return;
+      }
+    }
+    anchorRef.current = null;
+  };
+  const groups = useMemo(() => keyed(groupTools(items)), [items]);
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    const scroller = root?.parentElement;
+    const a = anchorRef.current;
+    if (root && scroller && a && !stickRef.current) {
+      const el = Array.from(root.querySelectorAll<HTMLElement>("[data-anchor-key]")).find(
+        (e) => e.dataset.anchorKey === a.key,
+      );
+      if (el) {
+        const moved = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top - a.top;
+        if (moved !== 0) scroller.scrollTop += moved;
+      }
+    }
+    captureAnchor();
+  }, [groups]);
 
   // Opening another agent starts at its latest message.
   useEffect(() => {
@@ -116,17 +153,17 @@ export function Conversation({ sessionId, working }: ConversationProps) {
         <EmptyState icon={ICONS.agents} message={t.agents_no_conversation} />
       ) : (
         <div className="max-w-3xl mx-auto px-5 py-5 space-y-6">
-          {groupTools(items).map((g, i) =>
+          {groups.map((g) =>
             g.kind === "tools" ? (
-              <ToolRun key={i} tools={g.tools} />
+              <ToolRun key={g.key} anchorKey={g.key} tools={g.tools} />
             ) : g.item.kind === "user" ? (
-              <div key={i} className="flex justify-end">
+              <div key={g.key} data-anchor-key={g.key} className="flex justify-end">
                 <div className="max-w-[80%] rounded-xl bg-[var(--color-input-bg)] px-4 py-2.5 text-sm whitespace-pre-wrap break-words">
                   {g.item.text}
                 </div>
               </div>
             ) : g.item.kind === "assistant" ? (
-              <div key={i} className="agent-markdown text-sm leading-relaxed break-words">
+              <div key={g.key} data-anchor-key={g.key} className="agent-markdown text-sm leading-relaxed break-words">
                 <Markdown remarkPlugins={[remarkGfm]} components={{ a: ExternalLink }}>{g.item.text}</Markdown>
               </div>
             ) : null,
@@ -181,12 +218,31 @@ function groupTools(items: Item[]): Group[] {
   return out;
 }
 
-function ToolRun({ tools }: { tools: ToolItem[] }) {
+type KeyedGroup = Group & { key: string };
+
+/**
+ * Gives each group a key from what it holds, not where it sits: the window slides, so an index
+ * would hand a row's state (an open tool run) to its neighbour and give the scroll no row to
+ * hold on to. A group of tools is named by its first call, so it keeps its key as calls join it.
+ */
+function keyed(groups: Group[]): KeyedGroup[] {
+  const seen = new Map<string, number>();
+  return groups.map((g) => {
+    const it = g.kind === "tools" ? g.tools[0] : g.item;
+    const body = it.kind === "tool" ? `${it.name}|${it.summary}` : it.text;
+    const base = `${g.kind === "tools" ? "tools" : it.kind}|${it.at ?? ""}|${body.slice(0, 40)}`;
+    const n = (seen.get(base) ?? 0) + 1;
+    seen.set(base, n);
+    return { ...g, key: n === 1 ? base : `${base}#${n}` };
+  });
+}
+
+function ToolRun({ tools, anchorKey }: { tools: ToolItem[]; anchorKey: string }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const label = tools.length === 1 ? `${t.agents_used_tool} ${tools[0].name}` : t.agents_used_tools.replace("{n}", String(tools.length));
   return (
-    <div className="text-xs text-muted">
+    <div data-anchor-key={anchorKey} className="text-xs text-muted">
       <button
         type="button"
         aria-expanded={open}

@@ -49,6 +49,59 @@ describe("isWorkingNow", () => {
   });
 });
 
+describe("Conversation keeps the reader's place when the window slides", () => {
+  const msg = (n: number): Item => ({ kind: "assistant", text: `message ${n}`, at: null });
+  const realRect = HTMLElement.prototype.getBoundingClientRect;
+  let window_: Item[];
+  let scrollTop = 0;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    Element.prototype.scrollIntoView = vi.fn();
+    scrollTop = 0;
+    window_ = [0, 1, 2, 3, 4, 5].map(msg);
+    setInvokeHandler((cmd) => (cmd === "agents_conversation" ? window_ : null));
+    // A layout jsdom lacks: a 400 px scroller (top 0) over rows 100 px high, one under the other.
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      const rect = (top: number, h: number) => ({ top, bottom: top + h, left: 0, right: 0, width: 0, height: h, x: 0, y: top, toJSON() {} });
+      if (this.getAttribute("data-testid") === "scroller") return rect(0, 400);
+      if (this.dataset.anchorKey) {
+        const rows = Array.from(document.querySelectorAll("[data-anchor-key]"));
+        return rect(rows.indexOf(this) * 100 - scrollTop, 100);
+      }
+      return rect(0, 0);
+    } as typeof HTMLElement.prototype.getBoundingClientRect;
+  });
+  afterEach(() => {
+    HTMLElement.prototype.getBoundingClientRect = realRect;
+    vi.useRealTimers();
+  });
+
+  it("scrolls back by the height of the message that slid off the top", async () => {
+    render(
+      <div data-testid="scroller">
+        <Conversation sessionId="s1" working={true} />
+      </div>,
+    );
+    const scroller = screen.getByTestId("scroller");
+    Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 1000 });
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 400 });
+    Object.defineProperty(scroller, "scrollTop", { configurable: true, get: () => scrollTop, set: (v: number) => { scrollTop = v; } });
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(3100); });
+    scrollTop = 250; // reading in the middle: 350 px above the bottom
+    fireEvent.scroll(scroller);
+
+    // A new message arrives and the oldest drops off the top: every row moves up by 100 px.
+    window_ = [1, 2, 3, 4, 5, 6].map(msg);
+    await act(async () => { await vi.advanceTimersByTimeAsync(3100); });
+
+    expect(screen.queryByText("message 0")).not.toBeInTheDocument();
+    expect(screen.getByText("message 6")).toBeInTheDocument();
+    expect(scrollTop).toBe(150); // message 2 is still where the reader saw it
+  });
+});
+
 describe("Conversation scrolling and working indicator", () => {
   beforeEach(() => {
     vi.useFakeTimers();

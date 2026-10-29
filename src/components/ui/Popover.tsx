@@ -157,7 +157,7 @@ export function Popover({
       // The fade-in starts only once placed: a running animation overrides the inline opacity.
       p.style.opacity = "";
       p.style.pointerEvents = "";
-      p.classList.add("animate-in", "fade-in", "duration-100");
+      p.classList.add("animate-popover");
     }
     // `at` is read through atX/atY so a new object with the same point does not re-place.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -236,7 +236,9 @@ export function Popover({
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.stopPropagation()}
-      className={`fixed z-[60] ${POPOVER_SURFACE} ${PADDING[padding]} ${className}`}
+      // `transition-none`: the position is set directly and must never glide (a bare transition
+      // duration would animate `top` and `left` too, the default property being `all`).
+      className={`fixed z-[60] transition-none ${POPOVER_SURFACE} ${PADDING[padding]} ${className}`}
       // Until `place` runs (before the first paint): far off screen and transparent, never at
       // the top left corner. Not visibility:hidden: a hidden element cannot take focus.
       // `place` then sets top, left, opacity and pointer events on the element itself.

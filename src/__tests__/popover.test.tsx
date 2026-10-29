@@ -133,7 +133,7 @@ describe("Popover", () => {
       </Popover>
     );
     const unplaced = screen.getByRole("dialog", { name: "Unplaced" });
-    expect(unplaced.className).not.toContain("animate-in");
+    expect(unplaced.className).not.toContain("animate-popover");
     expect(unplaced.style.opacity).toBe("0");
     unmount();
     render(
@@ -142,8 +142,23 @@ describe("Popover", () => {
       </Popover>
     );
     const placed = screen.getByRole("dialog", { name: "Placed" });
-    expect(placed.className).toContain("animate-in");
+    expect(placed.className).toContain("animate-popover");
     expect(placed.style.opacity).toBe("");
+  });
+
+  it("never glides: no transition on its position, and no duration class that would add one", () => {
+    // A bare `duration-*` class sets a transition duration while the property defaults to `all`,
+    // so `top` and `left` animated from where the panel was mounted to where it belongs.
+    render(
+      <Popover at={{ x: 120, y: 80 }} onClose={vi.fn()} padding="content" aria-label="Still">
+        x
+      </Popover>
+    );
+    const cls = screen.getByRole("dialog", { name: "Still" }).className;
+    expect(cls).toContain("transition-none");
+    expect(cls).not.toMatch(/\bduration-/);
+    // The only animation is a fade; it moves nothing.
+    expect(cls).not.toContain("animate-in");
   });
 
   it("is placed on the element itself, parked off screen (not at 0,0) until then", () => {
