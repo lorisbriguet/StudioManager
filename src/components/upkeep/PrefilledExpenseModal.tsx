@@ -4,7 +4,7 @@ import { notify } from "../../lib/notify";
 import { useCreateExpense, useDistinctSuppliers, useExpenseCategories } from "../../db/hooks/useExpenses";
 import { getNextExpenseReference } from "../../db/queries/expenses";
 import { todayLocalISO } from "../../utils/localDate";
-import { conversionNote, conversionToast, refusalText, toBaseAmount } from "../../lib/upkeep/expenseAmount";
+import { conversionHint, conversionNote, refusalText, toBaseAmount } from "../../lib/upkeep/expenseAmount";
 
 // The expense form is the Expenses page's own (a FormModal); load it only when asked for.
 const NewExpenseForm = lazy(() =>
@@ -38,6 +38,7 @@ export function PrefilledExpenseModal({ supplier, amount, currency, date, onCanc
         categories={categories}
         pastSuppliers={suppliers}
         prefill={{ supplier, amount: base.amount, invoice_date: date ?? todayLocalISO() }}
+        amountHint={base.hint ?? undefined}
         onCancel={onCancel}
         onSave={async (data) => {
           const reference = await getNextExpenseReference(
@@ -59,14 +60,14 @@ export function PrefilledExpenseModal({ supplier, amount, currency, date, onCanc
 }
 
 /**
- * `amount` in CHF, with the note on what was converted; null until known.
- * Another currency is converted at today's rate and said so in a toast; with
+ * `amount` in CHF, with the hint and note on what was converted; null until known.
+ * Another currency is converted at today's rate and said so under the amount; with
  * no rate the dialog closes with the reason instead of booking the raw number.
  */
 function useBaseAmount(amount: number | undefined, currency: string | null | undefined, onCancel: () => void) {
   const t = useT();
-  const [base, setBase] = useState<{ amount?: number; note: string | null } | null>(
-    amount == null ? { amount, note: null } : null
+  const [base, setBase] = useState<{ amount?: number; hint: string | null; note: string | null } | null>(
+    amount == null ? { amount, hint: null, note: null } : null
   );
   const latest = useRef({ t, onCancel });
   latest.current = { t, onCancel };
@@ -81,8 +82,11 @@ function useBaseAmount(amount: number | undefined, currency: string | null | und
         onCancel();
         return;
       }
-      if (r.converted) notify.info(conversionToast(r.converted, r.amount, t));
-      setBase({ amount: r.amount, note: r.converted ? conversionNote(r.converted, todayLocalISO(), t) : null });
+      setBase({
+        amount: r.amount,
+        hint: r.converted ? conversionHint(r.converted, r.amount, t) : null,
+        note: r.converted ? conversionNote(r.converted, todayLocalISO(), t) : null,
+      });
     });
     return () => { live = false; };
   }, [amount, currency]);

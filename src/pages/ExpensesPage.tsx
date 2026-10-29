@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { Paperclip, CalendarCheck } from "lucide-react";
 import { ICONS, ICON_SIZE, Button, DatePicker, Input, Select, FormField, FormGrid, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, QueryState, NoResults, Spinner, Popover, IconButton, Tag, Callout, Tooltip } from "../components/ui";
 import * as v from "../lib/validate";
@@ -452,6 +452,7 @@ export function NewExpenseForm({
   prefill,
   onSave,
   onCancel,
+  amountHint,
 }: {
   categories: { code: string; name_fr: string }[];
   pastSuppliers: { supplier: string; category_code: string; amount: number }[];
@@ -467,6 +468,8 @@ export function NewExpenseForm({
     notes: string;
   }) => void;
   onCancel: () => void;
+  /** A muted line under the amount (e.g. the currency conversion of a prefilled renewal). */
+  amountHint?: ReactNode;
 }) {
   const t = useT();
   const [form, setForm] = useState(() => {
@@ -707,6 +710,7 @@ export function NewExpenseForm({
           label={t.amount}
           required
           error={errors.amount}
+          hint={amountHint}
           badge={detectedBadge("amount", () => setForm((f) => ({ ...f, amount: 0 })))}
         >
           <Input

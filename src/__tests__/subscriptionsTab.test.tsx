@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { Subscription } from "../types/upkeep";
 import type { PendingRenewal } from "../db/queries/subscriptions";
@@ -91,7 +91,7 @@ describe("SubscriptionsTab", () => {
     expect(screen.getByDisplayValue(format(new Date(2026, 9, 1), useAppStore.getState().dateFormat))).toBeInTheDocument();
   });
 
-  it("a USD renewal is prefilled in CHF at today's rate, with the source amount kept in the notes", async () => {
+  it("a USD renewal is prefilled in CHF at today's rate, the conversion shown under the amount and kept in the notes", async () => {
     // 1 CHF = 1.25 USD.
     getExchangeRate.mockResolvedValueOnce(1.25);
     const info = vi.spyOn(notify, "info").mockImplementation(() => {});
@@ -99,8 +99,12 @@ describe("SubscriptionsTab", () => {
     subs = [sub({ vendor: "Figma Inc", currency: "USD", cost: 15 })];
     renderTab();
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_renewal_add }));
-    expect(await screen.findByDisplayValue("12")).toBeInTheDocument();
-    expect(info).toHaveBeenCalledWith("USD 15.00 prefilled as CHF 12.00 (1 CHF = 1.2500 USD).");
+    const amount = await screen.findByDisplayValue("12");
+    // The conversion is said in the dialog, under the amount it explains, not in a toast.
+    const hint = "USD 15.00 prefilled as CHF 12.00 (1 CHF = 1.2500 USD).";
+    expect(within(screen.getByRole("dialog")).getByText(hint)).toBeInTheDocument();
+    expect(amount).toHaveAccessibleDescription(expect.stringContaining(hint));
+    expect(info).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: t.save }));
     await vi.waitFor(() => expect(createExpense).toHaveBeenCalled());
     const saved = createExpense.mock.calls[0][0];

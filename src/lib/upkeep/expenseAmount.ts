@@ -47,8 +47,8 @@ function fill(tpl: string, vars: Record<string, string>): string {
   return tpl.replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? "");
 }
 
-/** Shown when the converted expense form opens. */
-export function conversionToast(c: Conversion, amount: number, t: Labels): string {
+/** Shown under the converted amount in the expense form. */
+export function conversionHint(c: Conversion, amount: number, t: Labels): string {
   return fill(t.upkeep_expense_converted, {
     original: c.original, amount: amount.toFixed(2), rate: c.rate.toFixed(4), currency: c.currency,
   });
