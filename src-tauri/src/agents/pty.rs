@@ -8,6 +8,7 @@ use std::io::{Read, Write};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::collections::HashSet;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 
 pub const MAX_TERMINALS: usize = 8;
 /// Pause between the text and the Enter, as a person would type.
@@ -61,24 +62,44 @@ impl Clock for SystemClock {
 }
 
 /// The login environment, resolved on first use and shared with `AgentsState`.
-pub type LoginCache = Arc<Mutex<Option<Arc<LoginEnv>>>>;
+pub type LoginCache = Arc<Mutex<Option<CachedLogin>>>;
+
+/// A login-shell lookup and when it ran.
+pub struct CachedLogin {
+    env: Arc<LoginEnv>,
+    at: Instant,
+}
+
+/// How long a lookup that found no `claude` is trusted before `fresh_login_env` runs the login
+/// shell (up to 10 s, holding the cache) again.
+const MISSING_RECHECK: Duration = Duration::from_secs(30);
 
 pub fn cached_login_env(cache: &LoginCache) -> Arc<LoginEnv> {
     let mut guard = lock(cache);
-    guard.get_or_insert_with(|| Arc::new(super::cli::resolve_login_env())).clone()
+    let resolve = || CachedLogin {
+        env: Arc::new(super::cli::resolve_login_env()),
+        at: Instant::now(),
+    };
+    guard.get_or_insert_with(resolve).env.clone()
 }
 
-/// Like `cached_login_env`, but looks again when the cached lookup found no `claude`, so
-/// installing Claude Code then reopening the settings card is enough.
+/// Like `cached_login_env`, but looks again when the cached lookup found no `claude` and is
+/// over 30 s old, so installing Claude Code then reopening the settings card is enough, while
+/// reopening it in the meantime does not block the poller behind another login shell.
 pub fn fresh_login_env(cache: &LoginCache) -> Arc<LoginEnv> {
-    refresh_login_env(cache, &super::cli::resolve_login_env)
+    refresh_login_env(cache, &super::cli::resolve_login_env, Instant::now())
 }
 
-fn refresh_login_env(cache: &LoginCache, resolve: &dyn Fn() -> LoginEnv) -> Arc<LoginEnv> {
+fn refresh_login_env(
+    cache: &LoginCache,
+    resolve: &dyn Fn() -> LoginEnv,
+    now: Instant,
+) -> Arc<LoginEnv> {
     let mut guard = lock(cache);
     match guard.as_ref() {
-        Some(env) if env.claude.is_some() => env.clone(),
-        _ => guard.insert(Arc::new(resolve())).clone(),
+        Some(c) if c.env.claude.is_some() => c.env.clone(),
+        Some(c) if now.saturating_duration_since(c.at) < MISSING_RECHECK => c.env.clone(),
+        _ => guard.insert(CachedLogin { env: Arc::new(resolve()), at: now }).env.clone(),
     }
 }
 
@@ -822,12 +843,19 @@ pub(super) mod tests {
             let claude = found.get().then(|| std::path::PathBuf::from("/opt/x/claude"));
             LoginEnv { claude, path: "/usr/bin".into(), vars: vec![] }
         };
-        assert_eq!(refresh_login_env(&cache, &resolve).claude, None);
-        assert_eq!(refresh_login_env(&cache, &resolve).claude, None);
-        assert_eq!(calls.load(Ordering::SeqCst), 2, "missing: looked up again");
+        let t0 = Instant::now();
+        let at = |s: u64| t0 + Duration::from_secs(s);
+        assert_eq!(refresh_login_env(&cache, &resolve, at(0)).claude, None);
+        // Missing: not looked up again for 30 s, however often the settings card opens.
+        assert_eq!(refresh_login_env(&cache, &resolve, at(1)).claude, None);
+        assert_eq!(refresh_login_env(&cache, &resolve, at(29)).claude, None);
+        assert_eq!(calls.load(Ordering::SeqCst), 1, "missing: cached for 30 s");
+        assert_eq!(refresh_login_env(&cache, &resolve, at(31)).claude, None);
+        assert_eq!(calls.load(Ordering::SeqCst), 2, "missing: looked up again after 30 s");
         found.set(true); // Claude Code installed meanwhile
-        assert!(refresh_login_env(&cache, &resolve).claude.is_some());
-        assert!(refresh_login_env(&cache, &resolve).claude.is_some());
+        assert_eq!(refresh_login_env(&cache, &resolve, at(40)).claude, None, "still within 30 s");
+        assert!(refresh_login_env(&cache, &resolve, at(62)).claude.is_some());
+        assert!(refresh_login_env(&cache, &resolve, at(500)).claude.is_some());
         assert_eq!(calls.load(Ordering::SeqCst), 3, "found: cached");
         assert!(cached_login_env(&cache).claude.is_some(), "shared with the cached lookup");
     }
