@@ -152,25 +152,45 @@ fn read_into<R: Read + Send + 'static>(
     });
 }
 
-/// Done on exit code 0, failed otherwise; the message is the last non-empty output line.
-pub fn command_result(o: &CommandOutcome) -> (Status, Option<String>) {
+/// How a command run ended, as recorded.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CommandResult {
+    pub status: Status,
+    /// Why it failed, in the app's words ("Exited with code 3"): written to the runs file.
+    pub message: Option<String>,
+    /// The last non-empty output line: shown in the panel, never written or notified.
+    pub output: Option<String>,
+}
+
+impl CommandResult {
+    /// What the panel shows: the output line, else the message.
+    #[cfg(test)]
+    pub fn shown(&self) -> Option<&str> {
+        self.output.as_deref().or(self.message.as_deref())
+    }
+}
+
+/// Done on exit code 0, failed otherwise; `output` is the last non-empty output line.
+pub fn command_result(o: &CommandOutcome) -> CommandResult {
+    let failed = |m: String| CommandResult { status: Status::Failed, message: Some(m), output: None };
     if let Some(e) = &o.error {
-        return (Status::Failed, Some(e.clone()));
+        return failed(e.clone());
     }
     if o.timed_out {
-        return (Status::Failed, Some("Timed out".into()));
+        return failed("Timed out".into());
     }
-    let last = o
+    let output = o
         .tail
         .lines()
         .map(str::trim)
         .rfind(|l| !l.is_empty())
         .map(|l| l.chars().take(MESSAGE_CHARS).collect::<String>());
-    match o.code {
-        Some(0) => (Status::Done, last),
-        Some(code) => (Status::Failed, last.or_else(|| Some(format!("Exited with code {code}")))),
-        None => (Status::Failed, last.or_else(|| Some("Stopped by a signal".into()))),
-    }
+    let (status, message) = match o.code {
+        Some(0) => (Status::Done, None),
+        Some(code) => (Status::Failed, Some(format!("Exited with code {code}"))),
+        None => (Status::Failed, Some("Stopped by a signal".into())),
+    };
+    CommandResult { status, message, output }
 }
 
 pub fn now_ms() -> i64 {
@@ -188,6 +208,7 @@ pub fn begin(routine_id: &str, scheduled_for: Option<String>) -> Run {
         agent_short_id: None,
         scheduled_for,
         last_scheduled_for: None,
+        output: None,
     }
 }
 
@@ -215,7 +236,8 @@ pub fn finish(deps: &Deps, routine: &Routine, mut run: Run) -> Run {
         }
         RoutineKind::Command { program, args, cwd } => {
             let outcome = run_command(program, args, cwd, deps.path_env, deps.timeout);
-            (run.status, run.message) = command_result(&outcome);
+            let r = command_result(&outcome);
+            (run.status, run.message, run.output) = (r.status, r.message, r.output);
         }
     }
     run.finished_at = Some(now_ms());
@@ -299,28 +321,35 @@ mod tests {
     fn command_status_is_last_line() {
         let o = sh("echo one; echo '  two  '; echo; echo '   '", TIMEOUT);
         assert_eq!(o.code, Some(0));
-        assert_eq!(command_result(&o), (Status::Done, Some("two".into())));
+        let done = CommandResult { status: Status::Done, message: None, output: Some("two".into()) };
+        assert_eq!(command_result(&o), done);
         // stderr counts as output too, and the environment is the one given.
         let o = sh("echo \"$PATH\" >&2", TIMEOUT);
-        assert_eq!(command_result(&o), (Status::Done, Some(PATH.into())));
+        assert_eq!(command_result(&o).shown(), Some(PATH));
         // Arguments are passed as is, never through a shell.
         let o = run_command("/bin/echo", &["$HOME; ls".into()], "/tmp", PATH, TIMEOUT);
-        assert_eq!(command_result(&o).1.as_deref(), Some("$HOME; ls"));
+        assert_eq!(command_result(&o).shown(), Some("$HOME; ls"));
         // It runs in the folder given.
         let o = run_command("/bin/pwd", &[], "/usr", PATH, TIMEOUT);
-        assert_eq!(command_result(&o).1.as_deref(), Some("/usr"));
+        assert_eq!(command_result(&o).shown(), Some("/usr"));
     }
 
     #[test]
     fn command_failure_by_exit_code() {
         let o = sh("echo 'Missing end time'; exit 3", TIMEOUT);
         assert_eq!(o.code, Some(3));
-        assert_eq!(command_result(&o), (Status::Failed, Some("Missing end time".into())));
+        // The output line is shown; the recorded message is the app's own.
+        let r = command_result(&o);
+        assert_eq!(r.status, Status::Failed);
+        assert_eq!(r.output.as_deref(), Some("Missing end time"));
+        assert_eq!(r.message.as_deref(), Some("Exited with code 3"));
+        assert_eq!(r.shown(), Some("Missing end time"));
         let o = sh("exit 2", TIMEOUT);
-        assert_eq!(command_result(&o), (Status::Failed, Some("Exited with code 2".into())));
+        let r = command_result(&o);
+        assert_eq!((r.status, r.shown()), (Status::Failed, Some("Exited with code 2")));
         let o = run_command("/bin/echo", &[], "/no/such/folder", PATH, TIMEOUT);
         assert!(o.error.is_some());
-        assert_eq!(command_result(&o).0, Status::Failed);
+        assert_eq!(command_result(&o).status, Status::Failed);
     }
 
     #[test]
@@ -329,9 +358,9 @@ mod tests {
         let o = run_command("/bin/sleep", &["5".into()], "/tmp", PATH, Duration::from_millis(100));
         assert!(started.elapsed() < Duration::from_secs(3), "{:?}", started.elapsed());
         assert!(o.timed_out);
-        let (status, msg) = command_result(&o);
-        assert_eq!(status, Status::Failed);
-        assert!(msg.unwrap().contains("Timed out"));
+        let r = command_result(&o);
+        assert_eq!(r.status, Status::Failed);
+        assert!(r.message.unwrap().contains("Timed out"));
 
         // A child that keeps running in the background is killed with it: no wait for the
         // readers' grace period (1 s) on pipes it would hold open.
@@ -346,7 +375,7 @@ mod tests {
         assert!(o.tail.len() <= TAIL_BYTES, "{}", o.tail.len());
         assert!(o.tail.len() > TAIL_BYTES - 200, "{}", o.tail.len());
         assert!(o.tail.ends_with("last\n"));
-        assert_eq!(command_result(&o), (Status::Done, Some("last".into())));
+        assert_eq!(command_result(&o).shown(), Some("last"));
     }
 
     struct FakeCli {
@@ -446,7 +475,8 @@ mod tests {
         let cli = fake("", 0);
         let d = deps(Some(&cli), &[]);
         let run = run_routine(&d, &all, &id, begin(&id, None)).unwrap();
-        assert_eq!((run.status, run.message.as_deref()), (Status::Done, Some("saved")));
+        assert_eq!((run.status, run.output.as_deref()), (Status::Done, Some("saved")));
+        assert_eq!(run.message, None);
         assert_eq!(run.routine_id, id);
         assert_eq!(run_routine(&d, &all, "nope", begin("r", None)).unwrap_err(), "Unknown routine");
         assert_eq!(run_routine(&d, &all, "", begin("r", None)).unwrap_err(), "Unknown routine");

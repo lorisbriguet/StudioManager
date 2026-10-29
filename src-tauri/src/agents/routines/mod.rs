@@ -230,18 +230,19 @@ pub async fn routines_run(
     blocking(move || launch(&app, dir, login, &id, None)).await
 }
 
-/// The last run of each saved routine.
+/// The last run of each saved routine, with a command's last output line while the app still
+/// remembers it. An unreadable runs file is an error (scheduled runs wait meanwhile).
 #[tauri::command]
 pub async fn routines_runs(state: tauri::State<'_, super::AgentsState>) -> Result<Vec<Run>, String> {
     switched_on(&state)?;
     let dir = state.app_dir.clone();
     blocking(move || {
         let all = store::read_routines(&dir);
-        let runs = store::read_runs(&dir)
+        let runs = store::read_runs(&dir)?
             .into_iter()
             .filter(|r| all.routines.iter().any(|x| x.id == r.routine_id))
             .collect();
-        Ok(run::settle(runs, &run::is_running))
+        Ok(run::settle(store::with_output(&dir, runs), &run::is_running))
     })
     .await
 }
