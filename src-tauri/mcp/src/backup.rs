@@ -1,5 +1,7 @@
 //! Safety copy before the first agent write: SQLite backup API into
-//! `<data dir>/backups/agent/<org>-<yyyyMMdd-HHmmss>.db`, newest 20 kept.
+//! `<data dir>/backups/agent/<org>-<yyyyMMdd-HHmmss>-<pid>.db`, newest 20
+//! kept. The process id keeps two servers (Claude Desktop and Claude Code)
+//! starting in the same second from writing the same file.
 
 use crate::guard::Org;
 use std::path::{Path, PathBuf};
@@ -10,14 +12,22 @@ pub fn backup_dir(dir: &Path) -> PathBuf {
     dir.join("backups").join("agent")
 }
 
-/// `<org>-yyyyMMdd-HHmmss.db` for exactly this organisation id.
+/// `<org>-yyyyMMdd-HHmmss-<pid>.db` (or, from older versions, without the
+/// pid) for exactly this organisation id.
 fn is_backup_of(name: &str, org_id: &str) -> bool {
-    let Some(stamp) = name
+    let Some(rest) = name
         .strip_prefix(org_id)
         .and_then(|r| r.strip_prefix('-'))
         .and_then(|r| r.strip_suffix(".db"))
     else {
         return false;
+    };
+    let stamp = match rest.get(15..) {
+        Some(pid) if !pid.is_empty() => match pid.strip_prefix('-') {
+            Some(digits) if !digits.is_empty() && digits.bytes().all(|c| c.is_ascii_digit()) => &rest[..15],
+            _ => return false,
+        },
+        _ => rest,
     };
     let b = stamp.as_bytes();
     b.len() == 15
@@ -31,7 +41,7 @@ pub fn ensure(dir: &Path, org: &Org) -> Result<(), String> {
     let bdir = backup_dir(dir);
     std::fs::create_dir_all(&bdir).map_err(|e| format!("create backup folder: {e}"))?;
     let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
-    let dest = bdir.join(format!("{}-{stamp}.db", org.id));
+    let dest = bdir.join(format!("{}-{stamp}-{}.db", org.id, std::process::id()));
 
     let src =
         rusqlite::Connection::open_with_flags(&org.db, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
@@ -124,6 +134,29 @@ mod tests {
             )
             .unwrap();
         assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn backup_names_carry_the_process_id() {
+        let dir = ready_dir("pid001", "Studio");
+        let org = guard::resolve_org(&dir, None).unwrap();
+        super::ensure(&dir, &org).unwrap();
+        let names = backups(&dir);
+        assert_eq!(names.len(), 1);
+        assert!(names[0].ends_with(&format!("-{}.db", std::process::id())), "{names:?}");
+        assert!(super::is_backup_of(&names[0], "pid001"));
+    }
+
+    #[test]
+    fn backup_name_forms() {
+        use super::is_backup_of;
+        assert!(is_backup_of("org1-20261029-120000.db", "org1"));
+        assert!(is_backup_of("org1-20261029-120000-4242.db", "org1"));
+        assert!(!is_backup_of("org1-20261029-120000-.db", "org1"));
+        assert!(!is_backup_of("org1-20261029-120000-42x.db", "org1"));
+        assert!(!is_backup_of("org1-20261029-1200.db", "org1"));
+        assert!(!is_backup_of("org10-20261029-120000.db", "org1"));
+        assert!(!is_backup_of("org1-20261029-120000.db-wal", "org1"));
     }
 
     #[test]
