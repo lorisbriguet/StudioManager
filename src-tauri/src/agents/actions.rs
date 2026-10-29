@@ -53,11 +53,39 @@ pub fn transcript_session(
     current
 }
 
+/// The state file; a missing or unreadable one is empty. One that does not parse is moved to
+/// `agents-state.json.bak` (and logged) before it reads as empty, so the next write does not
+/// silently throw its dismissals, links and copies away.
 pub fn read_state(dir: &Path) -> AgentsStateFile {
-    std::fs::read_to_string(dir.join(STATE_FILE))
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default()
+    match load_state(dir) {
+        Some(st) => st,
+        None => {
+            let _held = STATE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            load_state(dir).unwrap_or_else(|| set_aside_corrupt(dir))
+        }
+    }
+}
+
+/// None when the file exists but does not parse.
+fn load_state(dir: &Path) -> Option<AgentsStateFile> {
+    match std::fs::read_to_string(dir.join(STATE_FILE)) {
+        Ok(raw) => serde_json::from_str(&raw).ok(),
+        Err(_) => Some(AgentsStateFile::default()),
+    }
+}
+
+/// Moves a state file that does not parse to `.bak`. The caller holds `STATE_LOCK` and has just
+/// read it, so a good file written meanwhile is never the one moved.
+fn set_aside_corrupt(dir: &Path) -> AgentsStateFile {
+    let path = dir.join(STATE_FILE);
+    let bak = dir.join(format!("{STATE_FILE}.bak"));
+    match std::fs::rename(&path, &bak) {
+        Ok(()) => {
+            log::warn!("[agents] {STATE_FILE} is damaged; kept it as {}, starting anew", bak.display())
+        }
+        Err(e) => log::warn!("[agents] {STATE_FILE} is damaged and could not be set aside: {e}"),
+    }
+    AgentsStateFile::default()
 }
 
 fn write_state(dir: &Path, s: &AgentsStateFile) -> Result<(), String> {
@@ -73,7 +101,7 @@ static STATE_LOCK: Mutex<()> = Mutex::new(());
 /// Reads the state file, applies `f`, and writes it back if `f` changed it.
 fn update_state<T>(dir: &Path, f: impl FnOnce(&mut AgentsStateFile) -> T) -> Result<T, String> {
     let _held = STATE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let before = read_state(dir);
+    let before = load_state(dir).unwrap_or_else(|| set_aside_corrupt(dir));
     let mut st = before.clone();
     let out = f(&mut st);
     if st != before {
@@ -553,6 +581,27 @@ mod tests {
         dismiss(&dir, SID).unwrap();
         assert_eq!(read_state(&dir).dismissed, vec![SID.to_string()]);
         assert!(dismiss(&dir, "../x").is_err());
+    }
+
+    #[test]
+    fn corrupt_state_file_is_kept_as_bak() {
+        let dir = tmp("corrupt");
+        std::fs::write(dir.join(STATE_FILE), "{\"dismissed\": [tru").unwrap();
+        assert_eq!(read_state(&dir), AgentsStateFile::default());
+        let bak = dir.join(format!("{STATE_FILE}.bak"));
+        assert_eq!(std::fs::read_to_string(&bak).unwrap(), "{\"dismissed\": [tru");
+        assert!(!dir.join(STATE_FILE).exists());
+        // Writing starts a new file and leaves the copy alone; so does a corrupt file met by a write.
+        dismiss(&dir, SID).unwrap();
+        assert_eq!(read_state(&dir).dismissed, vec![SID.to_string()]);
+        std::fs::write(dir.join(STATE_FILE), "garbage").unwrap();
+        dismiss(&dir, SID).unwrap();
+        assert_eq!(std::fs::read_to_string(&bak).unwrap(), "garbage");
+        assert_eq!(read_state(&dir).dismissed, vec![SID.to_string()]);
+        // A missing file is simply empty: nothing to keep.
+        let empty = tmp("corrupt-missing");
+        assert_eq!(read_state(&empty), AgentsStateFile::default());
+        assert!(!empty.join(format!("{STATE_FILE}.bak")).exists());
     }
 
     #[test]
