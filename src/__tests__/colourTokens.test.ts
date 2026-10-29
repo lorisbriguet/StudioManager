@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { getNamedTagColor, getStoredTagColor, getTagColor, TAG_COLOR_NAMES } from "../lib/tagColors";
 import {
-  contrastRatio, DARK_TAG_COLORS, isDefaultTheme, onColorFor, relativeLuminance, themeTokens, THEME_TOKEN_NAMES,
+  contrastRatio, DARK_TAG_COLORS, INFO_COLORS, isDefaultTheme, onColorFor, relativeLuminance, themeTokens, THEME_TOKEN_NAMES,
   ON_DARK, ON_LIGHT,
 } from "../lib/themeTokens";
 import { getThemeById, THEMES } from "../lib/themes";
@@ -225,19 +225,45 @@ describe("themes", () => {
       const tokens = themeTokens(getThemeById(id)!);
       for (const [name, value] of Object.entries(tokens)) {
         const fromCss = sheet[name];
-        // Only literal colours: aliases and color-mix values aren't comparable
-        // Default Dark keeps its own slate accent (applied by applyAccentColor), so the accent isn't compared
-        const ownAccent = id === "default-dark" && name === "--color-accent";
-        if (fromCss && /^#/.test(fromCss) && name !== "--color-accent-light" && name !== "--color-accent-hover" && !ownAccent) {
+        // Only literal colours: aliases and color-mix values aren't comparable.
+        // The accent is checked on its own below: applyAccentColor sets it inline.
+        if (fromCss && /^#/.test(fromCss) && name !== "--color-accent" && name !== "--color-accent-light" && name !== "--color-accent-hover") {
           expect(value.toLowerCase(), `${id} ${name}`).toBe(fromCss.toLowerCase());
         }
       }
     }
   });
 
-  it("Default Dark keeps the slate accent", () => {
+  it("the default themes' accents: Default Light the stylesheet blue, Default Dark its own slate", () => {
+    // Default Light's accent is the @theme value; Default Dark deliberately
+    // differs from it: applyAccentColor sets slate inline over the stylesheet.
+    expect(getThemeById("default-light")!.colors.accent).toBe(block("@theme")["--color-accent"]);
+    expect(block(".dark")["--color-accent"]).toBeUndefined();
     const c = getThemeById("default-dark")!.colors;
     expect([c.accent, c.accentLight, c.accentHover]).toEqual(["#64748b", "#0f172a", "#475569"]);
+
+    applyThemeColors(getThemeById("default-dark")!);
+    const style = document.documentElement.style;
+    expect(style.getPropertyValue("--color-accent")).toBe("#64748b");
+    expect(style.getPropertyValue("--color-on-accent")).toBe(onColorFor("#64748b"));
+
+    // The slate reads like any accent: on-accent on the fill, accent-text on
+    // the dark page, surface and accent-light
+    const env = themeEnv(getThemeById("default-dark")!);
+    env["--color-accent"] = c.accent;
+    env["--color-accent-light"] = c.accentLight;
+    expect(contrastRatio(onColorFor(c.accent), c.accent)).toBeGreaterThanOrEqual(4.5);
+    for (const bg of ["--color-bg", "--color-surface", "--color-accent-light"]) {
+      expect(ratio(env, "--color-accent-text", bg), bg).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("--color-info is a solid fill, light and dark, and themes take their mode's", () => {
+    expect(block("@theme")["--color-info"]).toBe(INFO_COLORS.light);
+    expect(block(".dark")["--color-info"]).toBe(INFO_COLORS.dark);
+    for (const theme of THEMES) {
+      expect(themeTokens(theme)["--color-info"], theme.id).toBe(INFO_COLORS[theme.mode]);
+    }
   });
 });
 
@@ -274,6 +300,15 @@ describe("contrast", () => {
         for (const bg of surfaces) {
           expect(ratio(env, `--color-${s}-text`, bg), `${theme.id} ${s} on ${bg}`).toBeGreaterThanOrEqual(4.5);
         }
+      }
+    }
+  });
+
+  it("the info fill (status dots) is 3:1 against bg and surface in every theme", () => {
+    for (const theme of THEMES) {
+      const env = themeEnv(theme);
+      for (const bg of surfaces) {
+        expect(ratio(env, "--color-info", bg), `${theme.id} ${bg}`).toBeGreaterThanOrEqual(3);
       }
     }
   });

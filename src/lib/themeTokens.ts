@@ -44,6 +44,13 @@ export const DARK_TAG_COLORS: Record<string, string> = {
   cyan: "#38bdf8", orange: "#fb923c", teal: "#2dd4bf", gray: "#a8a8a8",
 };
 
+/**
+ * The solid info fill (status dots), light and dark: the --color-info values
+ * in src/index.css (@theme and .dark), checked by colourTokens.test.ts.
+ * Themes have no info colour of their own; they take the one for their mode.
+ */
+export const INFO_COLORS = { light: "#2563eb", dark: "#60a5fa" } as const;
+
 /** True for the two built-in themes, whose values live in src/index.css. */
 export function isDefaultTheme(theme: ThemeDefinition): boolean {
   return theme.id === "default-light" || theme.id === "default-dark";
@@ -68,7 +75,9 @@ export function isDefaultTheme(theme: ThemeDefinition): boolean {
  *   tags (dark)      tag colour 15% over surface, text 50% over theme text,
  *                    so tags don't read as dark holes on lighter surfaces
  *
- * Info keeps the tag palette's blue (it follows .dark by itself).
+ *   info             INFO_COLORS for the theme's mode (a fill: status dots)
+ *
+ * Info text and pills keep the tag palette's blue (it follows .dark by itself).
  */
 export function themeTokens(theme: ThemeDefinition): Record<string, string> {
   const c = theme.colors;
@@ -126,6 +135,7 @@ export function themeTokens(theme: ThemeDefinition): Record<string, string> {
     "--color-success": c.success,
     "--color-warning": c.warning,
     "--color-danger": c.danger,
+    "--color-info": dark ? INFO_COLORS.dark : INFO_COLORS.light,
     "--color-on-danger": onColorFor(c.danger),
     ...status,
     ...tags,

@@ -82,12 +82,9 @@ export function UpdateChecker() {
     return (
       <div className="flex items-center gap-2 text-sm">
         <span className="text-muted">{t.up_to_date}</span>
-        <button
-          onClick={checkForUpdate}
-          className="text-xs text-accent-text hover:underline"
-        >
+        <Button variant="link" onClick={checkForUpdate}>
           {t.check_again}
-        </button>
+        </Button>
       </div>
     );
   }
@@ -96,12 +93,9 @@ export function UpdateChecker() {
     return (
       <div className="flex items-center gap-2 text-sm">
         <span className="text-muted">{t.update_check_failed}</span>
-        <button
-          onClick={checkForUpdate}
-          className="text-xs text-accent-text hover:underline"
-        >
+        <Button variant="link" onClick={checkForUpdate}>
           {t.check_again}
-        </button>
+        </Button>
       </div>
     );
   }

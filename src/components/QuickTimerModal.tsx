@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Button, Input, Modal, FormField, FormGrid, FormGroup, EmptyState, ICONS } from "./ui";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Button, Input, Modal, FormField, FormGrid, FormGroup, EmptyState, ICONS, MenuItem, Popover, SURFACE } from "./ui";
 import { useAppStore } from "../stores/app-store";
 import { useProjects } from "../db/hooks/useProjects";
 import { useTasksByProject } from "../db/hooks/useTasks";
@@ -14,6 +14,9 @@ export function QuickTimerModal() {
   const [projectSearch, setProjectSearch] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  // The project suggestions under the search field (closed by a click outside)
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const projectInputRef = useRef<HTMLInputElement>(null);
 
   const { data: projects } = useProjects();
   const { data: tasks } = useTasksByProject(selectedProjectId ?? 0);
@@ -25,6 +28,7 @@ export function QuickTimerModal() {
       setProjectSearch("");
       setSelectedProjectId(null);
       setSelectedTaskId(null);
+      setSuggestOpen(false);
     }
   }, [open]);
 
@@ -82,15 +86,18 @@ export function QuickTimerModal() {
             <Input
               type="text"
               placeholder={t.select_project}
+              ref={projectInputRef}
               value={selectedProject ? selectedProject.name : projectSearch}
               onChange={(e) => {
                 setProjectSearch(e.target.value);
+                setSuggestOpen(true);
                 setSelectedProjectId(null);
                 setSelectedTaskId(null);
               }}
               onFocus={() => {
                 if (selectedProject) {
                   setProjectSearch(selectedProject.name);
+                  setSuggestOpen(true);
                   setSelectedProjectId(null);
                   setSelectedTaskId(null);
                 }
@@ -98,23 +105,29 @@ export function QuickTimerModal() {
               autoFocus
             />
           </FormField>
-          {!selectedProjectId && projectSearch && filteredProjects.length > 0 && (
-            <div className="mt-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden max-h-44 overflow-y-auto shadow-menu">
+          {suggestOpen && !selectedProjectId && projectSearch && filteredProjects.length > 0 && (
+            // Typing stays in the field: the panel takes no focus
+            <Popover
+              anchor={projectInputRef}
+              onClose={() => setSuggestOpen(false)}
+              matchWidth
+              autoFocus={false}
+              className="max-h-44 overflow-y-auto"
+            >
               {filteredProjects.map((p) => (
-                <button
+                <MenuItem
                   key={p.id}
-                  type="button"
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-accent-light)] transition-colors"
                   onClick={() => {
                     setSelectedProjectId(p.id);
                     setSelectedTaskId(null);
                     setProjectSearch("");
+                    setSuggestOpen(false);
                   }}
                 >
                   {p.name}
-                </button>
+                </MenuItem>
               ))}
-            </div>
+            </Popover>
           )}
         </div>
 
@@ -124,21 +137,16 @@ export function QuickTimerModal() {
             {todoTasks.length === 0 ? (
               <EmptyState size="sm" message={t.no_open_tasks_in_project} />
             ) : (
-              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden max-h-44 overflow-y-auto">
+              <div className={`${SURFACE} p-1 max-h-44 overflow-y-auto`}>
                 {todoTasks.map((task) => (
-                  <button
+                  <MenuItem
                     key={task.id}
-                    type="button"
-                    className={[
-                      "w-full text-left px-3 py-2 text-sm transition-colors",
-                      selectedTaskId === task.id
-                        ? "bg-[var(--color-accent-light)] font-medium"
-                        : "hover:bg-[var(--color-accent-light)]",
-                    ].join(" ")}
+                    selected={selectedTaskId === task.id}
+                    aria-pressed={selectedTaskId === task.id}
                     onClick={() => setSelectedTaskId(task.id)}
                   >
                     {task.title}
-                  </button>
+                  </MenuItem>
                 ))}
               </div>
             )}

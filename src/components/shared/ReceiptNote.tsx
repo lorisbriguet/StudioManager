@@ -1,6 +1,5 @@
-import { Paperclip } from "lucide-react";
 import { useT } from "../../i18n/useT";
-import { ICON_SIZE } from "../ui";
+import { ICONS, ICON_SIZE } from "../ui";
 
 /**
  * "Receipt will be attached: file.pdf" — the line at the top of the expense
@@ -10,7 +9,7 @@ export function ReceiptNote({ path }: { path: string }) {
   const t = useT();
   return (
     <div className="flex items-center gap-2 text-xs text-success-text">
-      <Paperclip size={ICON_SIZE.control} />
+      <ICONS.attachment size={ICON_SIZE.control} />
       <span>{t.receipt_will_be_attached} {path.split("/").pop()}</span>
     </div>
   );

@@ -3,7 +3,7 @@ import { Tag } from "../ui/Tag";
 import { Select } from "../ui/Select";
 import type { TableColumnDef, ProjectTableRow } from "../../types/project-table";
 
-import { Checkbox, DatePicker, Input } from "../ui";
+import { Checkbox, DatePicker, Input, PILL_XS } from "../ui";
 interface Props {
   row: ProjectTableRow;
   col: TableColumnDef;
@@ -78,7 +78,8 @@ export function TableCell({
               key={opt}
               type="button"
               onClick={() => addTag(opt)}
-              className="px-1.5 py-0.5 rounded-full text-[10px] bg-[var(--color-input-bg)] text-muted hover:text-accent-text hover:bg-accent-light transition-colors"
+              // The same 16px pill as the Tag beside it (PILL_XS), neutral until hovered
+              className={`${PILL_XS} bg-[var(--color-input-bg)] text-muted hover:text-accent-text hover:bg-accent-light focus-accent transition-colors`}
             >
               + {opt}
             </button>

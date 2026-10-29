@@ -331,7 +331,7 @@ function ContactsSection({
         count={contacts.length}
         variant="label"
         action={
-          <Button variant="link" icon={ICONS.add} onClick={addDraft} className="hover:text-accent-hover">
+          <Button variant="link" icon={ICONS.add} onClick={addDraft}>
             {t.add}
           </Button>
         }
@@ -713,7 +713,7 @@ function AddressesSection({
         title={t.billing_addresses}
         variant="label"
         action={
-          <Button variant="link" icon={ICONS.add} onClick={addDraft} className="hover:text-accent-hover">
+          <Button variant="link" icon={ICONS.add} onClick={addDraft}>
             {t.add}
           </Button>
         }

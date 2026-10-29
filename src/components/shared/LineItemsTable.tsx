@@ -9,7 +9,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Button, Card, DragHandle, ICONS, Select, IconButton, Input, Table } from "../ui";
+import { Button, Card, DragHandle, HEADING_2, ICONS, Select, IconButton, Input, Table } from "../ui";
 import type { LineItem } from "../../lib/lineItems";
 import { useT } from "../../i18n/useT";
 
@@ -190,7 +190,7 @@ export function LineItemsTable({
                       {t.cultural_discount} ({(discountRate * 100).toFixed(0)}%)
                     </div>
                   )}
-                  <div className="font-semibold text-base">{t.total}</div>
+                  <div className={HEADING_2}>{t.total}</div>
                 </div>
               </Table.Td>
               <Table.Td numeric className="py-2 whitespace-nowrap">
@@ -199,7 +199,7 @@ export function LineItemsTable({
                   {discountRate > 0 && (
                     <div className="text-muted font-normal">- {currency} {discountAmount.toFixed(2)}</div>
                   )}
-                  <div className="font-semibold text-base">{currency} {total.toFixed(2)}</div>
+                  <div className={HEADING_2}>{currency} {total.toFixed(2)}</div>
                 </div>
               </Table.Td>
               <td />

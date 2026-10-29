@@ -13,6 +13,8 @@
   --color-danger: #dc2626;
   --color-success: #16a34a;
   --color-warning: #d97706;
+  /* Solid info fill (status dots); text and pills use info-text / info-bg */
+  --color-info: #2563eb;
   /* Status pills alias the tag palette (below), so they follow .dark */
   --color-success-bg: var(--color-tag-green-bg);
   --color-success-text: var(--color-tag-green-text);
@@ -181,6 +183,8 @@ body {
   --color-danger: #ef4444;
   /* #ef4444 reads better with near-black than white (onColorFor) */
   --color-on-danger: #111827;
+  /* The dark tag blue: reads 3:1 on dark surfaces as a dot fill */
+  --color-info: #60a5fa;
   --color-checkbox-border: #6b6b6b;
   /* Lighter than the surface, so a thumb shows over its track */
   --color-raised: color-mix(in srgb, var(--color-text) 10%, var(--color-surface));
@@ -639,7 +643,7 @@ button, a, select, [role="button"] {
 .tiptap-editor .ProseMirror ul { list-style: disc; padding-left: 1.5em; margin: 0.5em 0; }
 .tiptap-editor .ProseMirror ol { list-style: decimal; padding-left: 1.5em; margin: 0.5em 0; }
 .tiptap-editor .ProseMirror a {
-  color: var(--color-accent);
+  color: var(--color-accent-text);
   text-decoration: none;
   border-bottom: 1px dotted color-mix(in srgb, var(--color-accent) 60%, transparent);
 }
