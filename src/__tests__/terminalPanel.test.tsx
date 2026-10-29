@@ -23,7 +23,17 @@ vi.mock("@xterm/xterm", () => ({
     constructor() {
       created.push(this as unknown as FakeTerm);
     }
-    open() {}
+    open(host: HTMLElement) {
+      // xterm's grid: one 20 px row per line.
+      const screen = document.createElement("div");
+      screen.className = "xterm-screen";
+      Object.defineProperty(screen, "offsetHeight", { get: () => this.rows * 20 });
+      host.appendChild(screen);
+    }
+    resize(cols: number, rows: number) {
+      this.cols = cols;
+      this.rows = rows;
+    }
     loadAddon() {}
     keyHandler: ((e: KeyboardEvent) => boolean) | null = null;
     attachCustomKeyEventHandler(h: (e: KeyboardEvent) => boolean) {
@@ -83,6 +93,23 @@ describe("TerminalPanel", () => {
     unmount();
     await waitFor(() => expect(invokedCommands).toContainEqual({ cmd: "agents_term_close", args: { termId: 7 } }));
     await waitFor(() => expect(created[0].dispose).toHaveBeenCalled());
+  });
+
+  it("drops a row when the fitted grid is taller than the room, so the last line is never cut", async () => {
+    // 30 rows of 20 px are 600 px; the panel has 590 px: the 30th row would be half hidden.
+    const clientHeight = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(590);
+    try {
+      setInvokeHandler(async (cmd) => (cmd === "agents_term_open" ? 7 : undefined));
+      render(<TerminalPanel shortId="abcd1234" onClose={() => {}} />);
+      await waitFor(() =>
+        expect(invokedCommands).toContainEqual({
+          cmd: "agents_term_open",
+          args: { shortId: "abcd1234", cols: 100, rows: 29 },
+        }),
+      );
+    } finally {
+      clientHeight.mockRestore();
+    }
   });
 
   it("writes decoded data for its termId only, including early chunks", async () => {
