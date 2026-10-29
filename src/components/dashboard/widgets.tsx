@@ -18,6 +18,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { ICONS, ICON_SIZE } from "../ui/icons";
 import { UpkeepWidget } from "../upkeep/UpkeepWidget";
+import { WikiOverviewWidget, WikiRecentWidget } from "./WikiWidgets";
 import { useCountUp } from "../../hooks/useCountUp";
 import { StatTile } from "../ui/StatTile";
 import { STAT_VALUE } from "../ui/tokens";
@@ -1493,6 +1494,8 @@ export function renderWidget(type: WidgetType) {
     case "today-tasks": return <TodayTasks />;
     case "overdue-tasks": return <OverdueTasks />;
     case "upkeep": return <UpkeepWidget />;
+    case "wiki-recent": return <WikiRecentWidget />;
+    case "wiki-overview": return <WikiOverviewWidget />;
     case "project-progress": return <ProjectProgress />;
     case "upcoming-deadlines": return <UpcomingDeadlines />;
     case "revenue-by-activity": return <RevenueByActivity />;

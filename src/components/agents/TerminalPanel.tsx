@@ -42,6 +42,7 @@ export function TerminalPanel({ shortId, onClose }: TerminalPanelProps) {
   const host = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [ended, setEnded] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     const el = host.current;
@@ -59,11 +60,26 @@ export function TerminalPanel({ shortId, onClose }: TerminalPanelProps) {
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(el);
-    try {
-      fit.fit();
-    } catch {
-      /* not laid out yet: keep the default size */
-    }
+
+    // Fits whole rows into the panel, then makes sure the grid really is no taller than the
+    // room: fit measures a row before the font has loaded (or on a rounding edge), and a grid
+    // a fraction too tall hides Claude's last line, the footer with the sub-agent count.
+    const fitToHost = (): boolean => {
+      try {
+        fit.fit();
+      } catch {
+        return false; // not laid out yet: keep the current size
+      }
+      const screen = el.querySelector<HTMLElement>(".xterm-screen");
+      if (!screen) return true;
+      const style = getComputedStyle(el);
+      const room = el.clientHeight - (parseFloat(style.paddingTop) || 0) - (parseFloat(style.paddingBottom) || 0);
+      for (let i = 0; i < 3 && room > 0 && term.rows > 2 && screen.offsetHeight > room + 0.5; i++) {
+        term.resize(term.cols, term.rows - 1);
+      }
+      return true;
+    };
+    fitToHost();
 
     let disposed = false;
     let termId: number | null = null;
@@ -93,16 +109,16 @@ export function TerminalPanel({ shortId, onClose }: TerminalPanelProps) {
 
     let resizeObserver: ResizeObserver | null = null;
     if (typeof ResizeObserver !== "undefined") {
-      resizeObserver = new ResizeObserver(() => {
-        try {
-          fit.fit();
-        } catch {
-          return;
-        }
-        if (termId !== null && !exited) termResize(termId, term.cols, term.rows).catch(() => {});
-      });
+      resizeObserver = new ResizeObserver(() => refit());
       resizeObserver.observe(el);
     }
+    // Tells the agent the new size once the terminal is open.
+    function refit() {
+      if (disposed || !fitToHost()) return;
+      if (termId !== null && !exited) termResize(termId, term.cols, term.rows).catch(() => {});
+    }
+    // Once the font is in, a row measures differently: fit again.
+    void document.fonts?.ready.then(refit);
 
     (async () => {
       // Subscribe first: the backend emits the first redraw before termOpen resolves.
@@ -169,17 +185,31 @@ export function TerminalPanel({ shortId, onClose }: TerminalPanelProps) {
   }, [shortId]);
 
   return (
-    <Card tone="inset" padding="none" className="overflow-hidden flex flex-col h-72 shrink-0">
+    // Tall enough for Claude's sub-agents list (about 30 rows); the toggle gives it most of the window.
+    <Card
+      tone="inset"
+      padding="none"
+      className={`overflow-hidden flex flex-col shrink-0 ${expanded ? "h-[80vh]" : "h-[min(28rem,60vh)]"}`}
+    >
       <div className={`${PANEL_TOP_BAR} justify-between px-3 border-[var(--color-border)]`}>
         <span className="text-sm text-muted">
           {ended ? t.agents_terminal_closed : shortId}
         </span>
-        <Button variant="outline" onClick={onClose}>
-          {t.agents_terminal_close}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" aria-pressed={expanded} onClick={() => setExpanded((e) => !e)}>
+            {expanded ? t.agents_terminal_shrink : t.agents_terminal_expand}
+          </Button>
+          <Button variant="outline" onClick={onClose}>
+            {t.agents_terminal_close}
+          </Button>
+        </div>
       </div>
       {error && <p role="alert" className="p-3 text-sm text-[var(--color-danger-text)]">{error}</p>}
-      <div ref={host} className={error ? "hidden" : "flex-1 min-h-0 p-2 overflow-hidden"} />
+      {/* The padding sits here, not on the host: xterm's fit reads its parent's height with the
+          parent's own padding in it, and would count one row too many. */}
+      <div className={error ? "hidden" : "flex-1 min-h-0 p-2"}>
+        <div ref={host} className="h-full w-full overflow-hidden" />
+      </div>
     </Card>
   );
 }

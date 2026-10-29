@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { dismissAgent, deleteAgent, saveImage, sendMessage, stopAgent, switchModel, type Agent } from "../../lib/agents";
+import { addSent } from "../../lib/outbox";
 import { useT } from "../../i18n/useT";
 import { Badge, Button, Callout, HEADING_2, ICONS, IconButton, PANEL_TOP_BAR, Textarea } from "../ui";
 import { useConfirm } from "../../lib/confirm";
@@ -166,7 +167,10 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
     try {
       // Each image is saved on this Mac and named by its path, so the agent can open it.
       const paths = await Promise.all(images.map(async (a) => saveImage(a.file.type, await toBase64(a.file))));
-      await sendMessage(agent.sessionId, [typed, ...paths].filter(Boolean).join("\n\n"));
+      const message = [typed, ...paths].filter(Boolean).join("\n\n");
+      await sendMessage(agent.sessionId, message);
+      // Greyed out in the conversation until the agent's transcript shows it.
+      addSent(agent.sessionId, message);
       setText("");
       images.forEach((a) => URL.revokeObjectURL(a.url));
       setImages([]);

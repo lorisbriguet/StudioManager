@@ -10,6 +10,7 @@
     "beforeBuildCommand": "bash scripts/build-mcp.sh && npm run build"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "StudioManager",

@@ -237,14 +237,7 @@ export function Sidebar() {
                   <CountBadge value={badgeCount} tone="danger" max={9} className="absolute -top-1.5 -right-1.5" />
                 )}
               </span>
-              {!collapsed && (
-                <span className="flex items-center gap-2">
-                  {label}
-                  {badgeCount > 0 && (
-                    <CountBadge value={badgeCount} tone="danger" />
-                  )}
-                </span>
-              )}
+              {!collapsed && label}
             </NavLink>
           );
           return collapsed ? (

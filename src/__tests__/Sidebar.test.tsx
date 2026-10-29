@@ -71,8 +71,8 @@ describe("Sidebar", () => {
   it("shows notification badge with unread count", () => {
     renderSidebar();
     // The badge shows "3" (from our mock)
-    const badges = screen.getAllByText("3");
-    expect(badges.length).toBeGreaterThan(0);
+    // Exactly one: on the icon, not repeated next to the label.
+    expect(screen.getAllByText("3")).toHaveLength(1);
   });
 
   it("shows the overdue upkeep count on the Upkeep link and hides it at 0", () => {
