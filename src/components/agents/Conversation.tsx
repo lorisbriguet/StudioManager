@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ChevronRight } from "lucide-react";
 import { conversation, type Item } from "../../lib/agents";
+import { settle, unread, useSent } from "../../lib/outbox";
 import { useT } from "../../i18n/useT";
 import { EmptyState, ICONS, ICON_SIZE } from "../ui";
 import { ExternalLink } from "./ExternalLink";
@@ -75,9 +76,16 @@ export function Conversation({ sessionId, working }: ConversationProps) {
     stickRef.current = true;
   }, [sessionId]);
 
+  // Messages sent from here that the transcript does not show yet.
+  const sent = useSent(sessionId);
+  const waiting = useMemo(() => unread(sent, items), [sent, items]);
+  useEffect(() => {
+    if (loadedFor === sessionId) settle(sessionId, items);
+  }, [items, loadedFor, sessionId]);
+
   useEffect(() => {
     if (stickRef.current) endRef.current?.scrollIntoView?.({ block: "end" });
-  }, [items, working]);
+  }, [items, working, waiting.length]);
 
   // A live region: replies that arrive (or grow, while the agent works) are read out
   // without moving focus. It turns on after a session's first load, so opening an
@@ -85,7 +93,7 @@ export function Conversation({ sessionId, working }: ConversationProps) {
   const live = loadedFor === sessionId;
   return (
     <div ref={rootRef} role={live ? "log" : undefined} aria-live={live ? "polite" : undefined}>
-      {items.length === 0 ? (
+      {items.length === 0 && waiting.length === 0 ? (
         <EmptyState icon={ICONS.agents} message={t.agents_no_conversation} />
       ) : (
         <div className="max-w-3xl mx-auto px-5 py-5 space-y-6">
@@ -104,6 +112,14 @@ export function Conversation({ sessionId, working }: ConversationProps) {
               </div>
             ) : null,
           )}
+          {waiting.map((m, i) => (
+            <div key={`sent-${m.sentAt}-${i}`} className="flex flex-col items-end gap-1" data-testid="agent-unread">
+              <div className="max-w-[80%] rounded-xl bg-[var(--color-input-bg)] px-4 py-2.5 text-sm whitespace-pre-wrap break-words opacity-50">
+                {m.text}
+              </div>
+              <span className="text-xs text-muted">{t.agents_message_unread}</span>
+            </div>
+          ))}
           {working && <WorkingDots label={t.agents_working} />}
           <div ref={endRef} />
         </div>
