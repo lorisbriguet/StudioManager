@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 use super::tls::SeenCert;
-use super::{describe, percent_encode, Connector, DeviceInfo, DeviceList, DeviceReading, DiskReading, SyncResult};
+use super::{describe, percent_encode, read_limited, Connector, MAX_RESPONSE_BYTES, DeviceInfo, DeviceList, DeviceReading, DiskReading, SyncResult};
 
 /// One HTTP round trip to `https://<nas>/webapi/<path>`: form body in, JSON out.
 pub(crate) trait Transport {
@@ -408,8 +408,9 @@ impl Transport for Https {
         if !status.is_success() {
             return Err(format!("the NAS answered HTTP {}", status.as_u16()));
         }
-        resp.json::<JsonValue>()
-            .map_err(|e| format!("the NAS sent an unreadable answer: {}", describe(e)))
+        let body = read_limited(resp.content_length(), resp, MAX_RESPONSE_BYTES)
+            .map_err(|e| format!("the NAS sent an unreadable answer: {e}"))?;
+        serde_json::from_slice(&body).map_err(|_| "the NAS sent an unreadable answer: not JSON".to_string())
     }
 }
 

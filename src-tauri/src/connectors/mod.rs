@@ -168,6 +168,68 @@ pub(crate) fn redact(msg: &str, secret: Option<&str>) -> String {
     out
 }
 
+/// Serialises this process's writes of connection secrets, so "write only if
+/// unchanged" ([`replace_secret_if_unchanged`]) can't interleave with a save
+/// from the setup form (the Keychain itself has no compare-and-swap).
+static SECRET_WRITES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn secret_writes() -> std::sync::MutexGuard<'static, ()> {
+    SECRET_WRITES.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+fn save_secret(store: &dyn SecretStore, account: &str, secret: &str) -> Result<(), String> {
+    let _g = secret_writes();
+    store.set(account, secret)
+}
+
+fn delete_secret(store: &dyn SecretStore, account: &str) -> Result<(), String> {
+    let _g = secret_writes();
+    store.delete(account)
+}
+
+/// Write `new` only while the stored secret is still `expected` (the one a
+/// call started with). A secret saved meanwhile (Reconnect's new password and
+/// one-time code) or removed (connection deleted) is left as it is. Returns
+/// whether it wrote.
+fn replace_secret_if_unchanged(
+    store: &dyn SecretStore,
+    account: &str,
+    expected: Option<&str>,
+    new: &str,
+) -> Result<bool, String> {
+    let _g = secret_writes();
+    match store.get(account)? {
+        Some(current) if Some(current.as_str()) == expected => store.set(account, new).map(|()| true),
+        _ => Ok(false),
+    }
+}
+
+/// Largest answer a connector reads from a device or cloud (a DSM or Bambu
+/// answer is a few kB; a history page well under 1 MB).
+pub(crate) const MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
+
+/// Read a response body of at most `limit` bytes: refused up front when the
+/// declared length is larger, and never more than `limit + 1` bytes read when
+/// it isn't declared (or lies).
+pub(crate) fn read_limited(declared: Option<u64>, body: impl std::io::Read, limit: usize) -> Result<Vec<u8>, String> {
+    let too_large = || format!("the answer is too large (over {} MB)", limit / (1024 * 1024));
+    if declared.is_some_and(|n| n > limit as u64) {
+        return Err(too_large());
+    }
+    let mut buf = Vec::new();
+    std::io::Read::read_to_end(&mut std::io::Read::take(body, limit as u64 + 1), &mut buf).map_err(|e| {
+        // A body read error wraps the reqwest error, whose text has the URL.
+        match e.into_inner().map(|inner| inner.downcast::<reqwest::Error>()) {
+            Some(Ok(re)) => format!("the answer could not be read: {}", describe(*re)),
+            _ => "the answer could not be read".to_string(),
+        }
+    })?;
+    if buf.len() > limit {
+        return Err(too_large());
+    }
+    Ok(buf)
+}
+
 type Factory<'a> =
     &'a dyn Fn(&str, &JsonValue, Option<String>) -> Result<Box<dyn Connector>, String>;
 
@@ -188,15 +250,14 @@ fn with_connector<T>(
     let updated = connector.updated_secret();
     let scrub = |e: String| redact(&redact(&e, secret.as_deref()), updated.as_deref());
     if let Some(new) = updated.as_deref() {
-        // Only renew a secret that still exists: a connection removed while
-        // the call was in flight must not leave an orphan Keychain entry.
-        let saved = match store.get(&account) {
-            Ok(Some(_)) => store.set(&account, new),
-            Ok(None) => Ok(()),
-            Err(e) => Err(e),
-        };
-        if let Err(e) = saved {
-            log::warn!("connection {id}: the renewed secret could not be saved: {}", scrub(e));
+        // Compare-and-swap: only renew the secret this call started with. A
+        // connection removed while the call was in flight must not leave an
+        // orphan Keychain entry, and a secret saved meanwhile (Reconnect's new
+        // password and one-time code) must not be overwritten by this older one.
+        match replace_secret_if_unchanged(store, &account, secret.as_deref(), new) {
+            Ok(true) => {}
+            Ok(false) => log::info!("connection {id}: the secret changed during the call; the renewed one was dropped"),
+            Err(e) => log::warn!("connection {id}: the renewed secret could not be saved: {}", scrub(e)),
         }
     }
     result.map_err(scrub)
@@ -291,7 +352,7 @@ pub(crate) async fn connection_save_secret(
     guard(&app, &org)?;
     blocking(move || {
         let account = keychain::account(&org, id)?;
-        keychain::Keychain.set(&account, &secret)
+        save_secret(&keychain::Keychain, &account, &secret)
     })
     .await
 }
@@ -308,7 +369,7 @@ pub(crate) async fn connection_delete_secret(app: tauri::AppHandle, org: String,
     }
     blocking(move || {
         let account = keychain::account(&org, id)?;
-        keychain::Keychain.delete(&account)
+        delete_secret(&keychain::Keychain, &account)
     })
     .await
 }
@@ -481,6 +542,62 @@ mod tests {
         })
         .unwrap();
         assert_eq!(store.get("6kun0b:3").unwrap(), None, "no orphan Keychain entry");
+    }
+
+    #[test]
+    fn updated_secret_never_overwrites_a_secret_saved_during_the_call() {
+        let factory = |_: &str, _: &JsonValue, _: Option<String>| -> Result<Box<dyn Connector>, String> {
+            Ok(Box::new(Renews))
+        };
+        let store = store_with(r#"{"password":"old"}"#);
+        let reconnect = r#"{"password":"new","otp_code":"123456"}"#;
+        // A background sync is in flight when Reconnect saves a new password + code.
+        with_connector(&store, "6kun0b", 3, "fake", &JsonValue::Null, &factory, |c| {
+            save_secret(&store, "6kun0b:3", reconnect).unwrap();
+            c.sync()
+        })
+        .unwrap();
+        assert_eq!(store.get("6kun0b:3").unwrap().as_deref(), Some(reconnect), "Reconnect's secret kept");
+    }
+
+    #[test]
+    fn replace_secret_if_unchanged_is_a_compare_and_swap() {
+        let store = store_with("a");
+        assert!(!replace_secret_if_unchanged(&store, "6kun0b:3", Some("b"), "c").unwrap());
+        assert_eq!(store.get("6kun0b:3").unwrap().as_deref(), Some("a"));
+        assert!(replace_secret_if_unchanged(&store, "6kun0b:3", Some("a"), "c").unwrap());
+        assert_eq!(store.get("6kun0b:3").unwrap().as_deref(), Some("c"));
+        // Nothing stored: nothing written, whatever was expected.
+        assert!(!replace_secret_if_unchanged(&store, "6kun0b:4", None, "c").unwrap());
+        assert_eq!(store.get("6kun0b:4").unwrap(), None);
+    }
+
+    #[test]
+    fn read_limited_refuses_a_large_declared_length_without_reading() {
+        struct Unread;
+        impl std::io::Read for Unread {
+            fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+                panic!("must not read");
+            }
+        }
+        let e = read_limited(Some(5_000_000), Unread, MAX_RESPONSE_BYTES).unwrap_err();
+        assert!(e.contains("too large"), "{e}");
+    }
+
+    #[test]
+    fn read_limited_stops_an_undeclared_large_body() {
+        // An endless body: only limit + 1 bytes are ever read.
+        let e = read_limited(None, std::io::repeat(b'x'), 1024).unwrap_err();
+        assert!(e.contains("too large"), "{e}");
+        // A body lying about its length is cut too.
+        let e = read_limited(Some(10), &[b'x'; 2000][..], 1024).unwrap_err();
+        assert!(e.contains("too large"), "{e}");
+    }
+
+    #[test]
+    fn read_limited_returns_a_body_within_the_limit() {
+        assert_eq!(read_limited(Some(2), &b"{}"[..], 1024).unwrap(), b"{}");
+        assert_eq!(read_limited(None, &[b'x'; 1024][..], 1024).unwrap().len(), 1024);
     }
 
     #[test]
