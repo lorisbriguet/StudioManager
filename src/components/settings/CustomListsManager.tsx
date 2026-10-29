@@ -34,15 +34,13 @@ export function CustomListsManager() {
 
   // A failed mutation is already reported by the mutation cache: the catches
   // only keep the rejection from going unhandled.
+  // No catch here: AddRow keeps the typed name when the promise rejects (and
+  // swallows the rejection), so a failed create can be retried.
   const handleCreateList = async (name: string) => {
-    try {
-      const id = await createList.mutateAsync(name);
-      setAddingList(false);
-      setSelectedId(id);
-      notify.success(t.list_created);
-    } catch {
-      // reported by the mutation
-    }
+    const id = await createList.mutateAsync(name);
+    setAddingList(false);
+    setSelectedId(id);
+    notify.success(t.list_created);
   };
 
   // No question: Undo puts the list and its items back.

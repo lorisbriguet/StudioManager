@@ -1,9 +1,9 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { ChevronDown, ChevronRight, ChevronsDownUp, Waypoints } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronsDownUp } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useOrgStore } from "../../stores/org-store";
 import { useWikiFolders } from "../../db/hooks/useWiki";
-import { BottomBar, SearchBar, IconButton, SectionLabel, Tooltip, ICONS, ICON_SIZE } from "../ui";
+import { BottomBar, Dropdown, SearchBar, IconButton, SectionLabel, Tooltip, ICONS, ICON_SIZE, type DropdownItem } from "../ui";
 import type { WikiArticleWithTags } from "../../types/wiki";
 import type { ProjectDoc } from "../../db/hooks/useProjectDocs";
 import type { WikiRef } from "../../lib/wikiTabs";
@@ -188,6 +188,22 @@ export function WikiExplorer({
         ]
       : []),
   ];
+  // The same items behind a "more" button on each row: WebKit sends no
+  // contextmenu event from the keyboard, so right-click alone isn't reachable.
+  const moreMenu = (ref: WikiRef, title: string) => (
+    <Dropdown
+      align="end"
+      className="absolute right-1 top-1/2 -translate-y-1/2"
+      items={menuItems(ref).map((it): DropdownItem =>
+        it.divider ? { divider: true } : { label: it.label, icon: it.icon, danger: it.danger, disabled: it.disabled, onSelect: it.onClick }
+      )}
+      trigger={
+        <IconButton size="xs" icon={ICONS.more} label={`${t.more_actions}: ${title}`} reveal className="group-focus-within:opacity-100" />
+      }
+    />
+  );
+  /** A tree row with a "more" button: room for it while it shows. */
+  const MORE_ROOM = "group-hover:pr-8 group-focus-within:pr-8";
 
   return (
     <aside
@@ -200,7 +216,7 @@ export function WikiExplorer({
         <div className="flex items-center gap-1 px-1">
           <IconButton icon={ICONS.add} label={t.new_article} onClick={() => onNewArticle(null)} disabled={creating} />
           <IconButton icon={ChevronsDownUp} label={t.wiki_collapse_all} onClick={() => setOpen(new Set())} />
-          <IconButton icon={Waypoints} label={t.wiki_open_graph} onClick={onOpenGraph} className="ml-auto" />
+          <IconButton icon={ICONS.graph} label={t.wiki_open_graph} onClick={onOpenGraph} className="ml-auto" />
         </div>
       </div>
 
@@ -254,8 +270,8 @@ export function WikiExplorer({
                   {list.map((a) => {
                     const active = a.id === activeRef;
                     return (
+                      <div key={a.id} className="group relative">
                       <button
-                        key={a.id}
                         data-tree-item
                         role="treeitem"
                         aria-level={2}
@@ -266,11 +282,13 @@ export function WikiExplorer({
                         onContextMenu={openMenu(a.id)}
                         aria-current={active ? "page" : undefined}
                         type="button"
-                        className={rowClass(active)}
+                        className={`${rowClass(active)} ${MORE_ROOM}`}
                       >
                         <ICONS.wikiArticle size={ICON_SIZE.menu} className="shrink-0" />
                         <span className="flex-1 truncate">{a.title}</span>
                       </button>
+                      {moreMenu(a.id, a.title)}
+                      </div>
                     );
                   })}
                   {files.length > 0 && (
@@ -291,7 +309,8 @@ export function WikiExplorer({
                       {filesOpen && (
                         <div role="group" className="ml-4.5 pl-1 border-l border-[var(--color-border-divider)] space-y-px">
                           {files.map((d) => (
-                            <Tooltip key={d.key} content={d.title !== d.rel ? `${d.rel} — ${d.title}` : d.rel}>
+                            <div key={d.key} className="group relative">
+                            <Tooltip content={d.title !== d.rel ? `${d.rel} — ${d.title}` : d.rel}>
                             <button
                               type="button"
                               data-tree-item
@@ -303,12 +322,14 @@ export function WikiExplorer({
                               }}
                               onContextMenu={openMenu(d.key)}
                               aria-current={d.key === activeRef ? "page" : undefined}
-                              className={rowClass(d.key === activeRef)}
+                              className={`${rowClass(d.key === activeRef)} ${MORE_ROOM}`}
                             >
                               <ICONS.file size={ICON_SIZE.menu} className="shrink-0" />
                               <span className="flex-1 truncate">{d.rel}</span>
                             </button>
                             </Tooltip>
+                            {moreMenu(d.key, d.rel)}
+                            </div>
                           ))}
                         </div>
                       )}

@@ -1,5 +1,6 @@
 import { createElement, isValidElement, type ReactNode } from "react";
 import {
+  Archive,
   ArrowDown,
   ArrowLeft,
   ArrowRight,
@@ -14,6 +15,7 @@ import {
   Bookmark,
   Building2,
   Calendar,
+  Camera,
   CalendarDays,
   CalendarRange,
   Check,
@@ -43,6 +45,8 @@ import {
   FolderOpen,
   FolderPlus,
   GripVertical,
+  HardDrive,
+  ImagePlus,
   Info,
   LayoutDashboard,
   LayoutTemplate,
@@ -52,6 +56,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Palette,
+  Paperclip,
   Pause,
   Pencil,
   Pin,
@@ -80,6 +85,7 @@ import {
   UserCircle,
   UserRound,
   Users,
+  Waypoints,
   Wrench,
   X,
   type LucideIcon,
@@ -128,6 +134,11 @@ export const ICONS = {
   newTab: ExternalLink,
   goToLinked: ArrowUpRight,
   saveLayout: Save,
+  attachment: Paperclip,
+  attachImage: ImagePlus,
+  archive: Archive,
+  restore: RotateCcw,
+  camera: Camera,
 
   // ── States and status changes
   done: CircleCheckBig,
@@ -182,6 +193,8 @@ export const ICONS = {
   timer: Timer,
   agents: Bot,
   upkeep: Wrench,
+  graph: Waypoints,
+  disk: HardDrive,
 
   // ── Dates
   calendar: CalendarDays,

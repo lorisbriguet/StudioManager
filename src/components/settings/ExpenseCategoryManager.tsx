@@ -6,7 +6,7 @@ import { useExpenseCategories, useCreateExpenseCategory, useUpdateExpenseCategor
 import { isCategoryInUse } from "../../db/queries/expenses";
 import type { ExpenseCategory } from "../../types/expense";
 import { getNamedTagColor } from "../../lib/tagColors";
-import { ICONS, IconButton, Input, Select, Table } from "../ui";
+import { Button, ICONS, IconButton, Input, Select, Table } from "../ui";
 import { ColorSwatchPicker } from "./ColorSwatchPicker";
 
 export function ExpenseCategoryManager() {
@@ -63,13 +63,14 @@ export function ExpenseCategoryManager() {
   };
 
   const handleDelete = async (code: string) => {
+    // Checked first so the user gets the reason, not a generic failure. A
+    // refusal is a warning: nothing failed, and warnings are never deduped.
     if (isDefaultCategory(code)) {
-      notify.error(t.toast_category_default);
+      notify.warning(t.toast_category_default);
       return;
     }
-    // Checked first so the user gets the reason, not a generic failure
     if (await isCategoryInUse(code)) {
-      notify.error(t.toast_category_in_use);
+      notify.warning(t.toast_category_in_use);
       return;
     }
     const before = undoTop();
@@ -214,16 +215,18 @@ export function ExpenseCategoryManager() {
         </Table.Body>
       </Table>
       {!adding && !editingCode && (
-        <button
+        <Button
           type="button"
+          variant="outline"
+          icon={ICONS.add}
+          className="mt-3"
           onClick={() => {
             setAdding(true);
             setForm({ code: "", name_fr: "", name_en: "", pl_section: "operating", color: null });
           }}
-          className="mt-3 px-3 py-1.5 text-sm text-accent-text border border-accent rounded-md hover:bg-accent-light"
         >
-          + {t.add_category}
-        </button>
+          {t.add_category}
+        </Button>
       )}
     </div>
   );

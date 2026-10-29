@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { answerPrompt, getPrompt, type Prompt } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
-import { Button, Card } from "../ui";
+import { Button, Callout, Card } from "../ui";
+import { logError } from "../../lib/log";
 
 const POLL_MS = 2000;
 // Free-text and chat entries of a question: only the terminal can answer these.
@@ -17,7 +18,7 @@ export function PromptAnswer({ shortId, onOpenTerminal }: PromptAnswerProps) {
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [answering, setAnswering] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const answeringRef = useRef(false);
   // gen: bumped when the agent changes. answers: bumped per answer, so a poll that
   // started before an answer cannot overwrite what follows it.
@@ -32,7 +33,7 @@ export function PromptAnswer({ shortId, onOpenTerminal }: PromptAnswerProps) {
     const current = () => gen.current === myGen;
     setPrompt(null);
     setLoaded(false);
-    setError(null);
+    setFailed(false);
     const poll = () => {
       if (inflight || answeringRef.current) return;
       inflight = true;
@@ -65,19 +66,18 @@ export function PromptAnswer({ shortId, onOpenTerminal }: PromptAnswerProps) {
     const mine = gen.current;
     answers.current++;
     setAnswering(true);
-    setError(null);
+    setFailed(false);
     try {
       await answerPrompt(shortId, number, label, prompt.fingerprint);
     } catch (e) {
-      if (gen.current === mine) setError(String(e));
+      void logError(`Agent ${shortId}: answer failed:`, e);
+      if (gen.current === mine) setFailed(true);
     } finally {
       answeringRef.current = false;
       if (gen.current === mine) setAnswering(false);
     }
     if (gen.current === mine) pollRef.current();
   };
-
-  if (!loaded) return null;
 
   const terminalHint = (
     <div className="flex items-center gap-3">
@@ -88,42 +88,45 @@ export function PromptAnswer({ shortId, onOpenTerminal }: PromptAnswerProps) {
     </div>
   );
 
-  if (!prompt)
-    return (
-      <Card tone="inset" padding="sm">
-        {terminalHint}
-      </Card>
-    );
+  const buttons = prompt ? prompt.options.filter((o) => !TERMINAL_ONLY.has(o.label.trim().toLowerCase())) : [];
+  const hasTerminalOnly = !prompt || buttons.length < prompt.options.length || buttons.length === 0;
 
-  const buttons = prompt.options.filter((o) => !TERMINAL_ONLY.has(o.label.trim().toLowerCase()));
-  const hasTerminalOnly = buttons.length < prompt.options.length || buttons.length === 0;
-
+  // A live region that stays mounted from the first render, so the question is read out
+  // when it arrives or changes (a region inserted along with its content is often not announced).
   return (
-    <Card tone="inset" padding="sm" className="space-y-3">
-      {prompt.detail && (
-        <pre className="text-xs font-mono whitespace-pre-wrap break-words bg-[var(--color-input-bg)] rounded-lg p-2">
-          {prompt.detail}
-        </pre>
+    <div role="log" aria-live="polite" aria-label={t.agents_group_needs_you}>
+      {loaded && !prompt && (
+        <Card tone="inset" padding="sm">
+          {terminalHint}
+        </Card>
       )}
-      <p className="text-sm font-medium">{prompt.question}</p>
-      <div className="flex flex-wrap gap-2">
-        {buttons.map((o) => (
-          <Button
-            key={o.number}
-            variant={o.selected ? "primary" : "outline"}
-            disabled={answering}
-            onClick={() => void answer(o.number, o.label)}
-          >
-            {o.number}. {o.label}
-          </Button>
-        ))}
-      </div>
-      {error && (
-        <p role="alert" className="text-sm text-[var(--color-danger-text)]">
-          {error}
-        </p>
+      {loaded && prompt && (
+        <Card tone="inset" padding="sm" className="space-y-3">
+          {prompt.detail && (
+            <pre className="text-xs font-mono whitespace-pre-wrap break-words bg-[var(--color-input-bg)] rounded-lg p-2">
+              {prompt.detail}
+            </pre>
+          )}
+          <p className="text-sm font-medium">{prompt.question}</p>
+          <div className="flex flex-wrap gap-2">
+            {buttons.map((o) => (
+              <Button
+                key={o.number}
+                variant={o.selected ? "primary" : "outline"}
+                // The terminal's highlighted default: these buttons submit, they are not toggles.
+                aria-current={o.selected ? "true" : undefined}
+                disabled={answering}
+                onClick={() => void answer(o.number, o.label)}
+              >
+                {o.number}. {o.label}
+                {o.selected && <span className="sr-only"> ({t.agents_prompt_default})</span>}
+              </Button>
+            ))}
+          </div>
+          {failed && <Callout tone="danger">{t.agents_answer_failed}</Callout>}
+          {hasTerminalOnly && terminalHint}
+        </Card>
       )}
-      {hasTerminalOnly && terminalHint}
-    </Card>
+    </div>
   );
 }

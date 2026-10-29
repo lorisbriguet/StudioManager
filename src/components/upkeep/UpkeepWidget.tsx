@@ -4,7 +4,7 @@ import { WidgetShell, WidgetTitle } from "../dashboard/WidgetShell";
 import { DueList } from "./DueList";
 import { usePendingRenewals, useUpkeepOverview } from "../../db/hooks/useUpkeep";
 import { useT } from "../../i18n/useT";
-import { formatMoney } from "../../lib/upkeep/money";
+import { formatMoney } from "../../lib/money";
 import { formatDisplayDate } from "../../utils/formatDate";
 
 /** Dashboard widget: what needs attention in the studio. Sections with nothing in them are hidden. */

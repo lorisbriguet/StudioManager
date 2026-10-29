@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import type { Agent, Group } from "../../lib/agents";
-import { agentGroupVariant } from "../../lib/statusColors";
+import { agentGroupDotClass, agentGroupTextClass, agentGroupVariant } from "../../lib/statusColors";
 import { Badge, ICON_SIZE, SECTION_LABEL } from "../ui";
 import { useT } from "../../i18n/useT";
 import type { UIKey } from "../../i18n/ui";
@@ -15,29 +15,8 @@ const GROUP_KEYS: Record<Group, UIKey> = {
   done: "agents_group_done",
 };
 
-/** One colour per group, from the app's status tokens (light and dark aware). */
-export const GROUP_STYLE: Record<Group, { dot: string; text: string; row: string }> = {
-  "needs-you": {
-    dot: "bg-warning",
-    text: "text-[var(--color-warning-text)]",
-    row: "bg-[var(--color-warning-bg)]",
-  },
-  working: {
-    dot: "bg-[var(--color-info-text)] animate-pulse",
-    text: "text-[var(--color-info-text)]",
-    row: "",
-  },
-  idle: {
-    dot: "bg-[var(--color-text-secondary)] opacity-40",
-    text: "text-muted",
-    row: "",
-  },
-  done: {
-    dot: "bg-success",
-    text: "text-[var(--color-success-text)]",
-    row: "",
-  },
-};
+/** The needs-you row is tinted; the others stay plain. */
+const NEEDS_YOU_ROW = "bg-[var(--color-warning-bg)]";
 
 export const GROUP_LABEL_KEYS = GROUP_KEYS;
 
@@ -106,7 +85,7 @@ export function AgentList({ byGroup, selectedId, onSelect, compact, renderExtra 
                   className={`w-full flex items-center gap-2 pl-3 py-1.5 text-left ${SECTION_LABEL}`}
                 >
                   <ChevronRight size={ICON_SIZE.menu} className={`shrink-0 text-muted transition-transform ${open ? "rotate-90" : ""}`} />
-                  <span className={`dot ${GROUP_STYLE[g].dot}`} aria-hidden />
+                  <span className={`dot ${agentGroupDotClass(g)}`} aria-hidden />
                   <span className="truncate">{t[GROUP_KEYS[g]]}</span>
                 </button>
               </h2>
@@ -123,11 +102,11 @@ export function AgentList({ byGroup, selectedId, onSelect, compact, renderExtra 
                       className={`w-full text-left px-3 ${compact ? "py-1.5" : "py-2"} rounded-md transition-colors focus-accent ${
                         a.sessionId === selectedId
                           ? "bg-accent-light"
-                          : `${GROUP_STYLE[g].row} hover:bg-[var(--color-hover-row)]`
+                          : `${g === "needs-you" ? NEEDS_YOU_ROW : ""} hover:bg-[var(--color-hover-row)]`
                       }`}
                     >
                       <div className="flex items-center gap-2 text-sm font-medium">
-                        <span className={`dot ${GROUP_STYLE[g].dot}`} aria-hidden />
+                        <span className={`dot ${agentGroupDotClass(g)}`} aria-hidden />
                         <span className="truncate">{a.name}</span>
                         {(a.modelLabel ?? a.model) && (
                           <span className="shrink-0 text-xs font-normal text-muted">{a.modelLabel ?? (a.model && MODEL_LABELS[a.model]) ?? a.model}</span>
@@ -139,7 +118,7 @@ export function AgentList({ byGroup, selectedId, onSelect, compact, renderExtra 
                         <div className="pl-4 text-xs text-muted truncate">{agentLabel(a)}</div>
                       )}
                       {a.waitingFor && (
-                        <div className={`pl-4 text-xs font-medium truncate ${GROUP_STYLE[g].text}`}>{a.waitingFor}</div>
+                        <div className={`pl-4 text-xs font-medium truncate ${agentGroupTextClass(g)}`}>{a.waitingFor}</div>
                       )}
                     </button>
                     {renderExtra?.(a)}

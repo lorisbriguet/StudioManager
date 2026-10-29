@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Paperclip } from "lucide-react";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { openMachineAttachment } from "../../lib/upkeep/openAttachment";
 import { Button, DatePicker, EmptyState, ICONS, ICON_SIZE, IconButton, Input, PanelTitle, Table } from "../ui";
@@ -52,7 +51,7 @@ export function FilesSection({ machineId, headingAs = "h2" }: { machineId: numbe
         title={t.upkeep_files_links}
         className="mb-3"
         action={<>
-          <Button variant="secondary" icon={Paperclip} onClick={() => void attach()}>
+          <Button variant="secondary" icon={ICONS.attachment} onClick={() => void attach()}>
             {t.upkeep_attach_file}
           </Button>
           <Button variant="secondary" icon={ICONS.link} onClick={() => setAdding((a) => !a)}>

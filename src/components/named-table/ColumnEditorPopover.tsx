@@ -19,13 +19,15 @@ interface Props {
   onSaveAsList: (name: string) => void | Promise<void>;
   onDelete: () => void;
   onCommit: () => void;
+  /** Esc: close without saving (the parent drops the edit). */
+  onCancel: () => void;
 }
 
 /** The column-editor popover — rename, options (for select/tags columns,
  * with optional linking to a saved custom list), delete and save. Extracted
- * verbatim out of NamedTable's column header cell, including its
- * outside-click-commits behaviour, which now lives here since the popover
- * only ever mounts while it is open. */
+ * out of NamedTable's column header cell, including its outside-click-commits
+ * behaviour (Esc discards), which now lives here since the popover only ever
+ * mounts while it is open. */
 export function ColumnEditorPopover({
   col,
   pos,
@@ -41,13 +43,15 @@ export function ColumnEditorPopover({
   onSaveAsList,
   onDelete,
   onCommit,
+  onCancel,
 }: Props) {
-  // Closing (outside click or Esc) commits with whatever is currently in the
-  // (parent-owned) editor state, same as the original NamedTable listener.
+  // An outside click commits whatever is in the (parent-owned) editor state,
+  // same as the original NamedTable listener; Esc (Popover passes
+  // returnFocus = true) discards it.
   return (
     <Popover
       at={{ x: pos.left, y: pos.top }}
-      onClose={onCommit}
+      onClose={(viaEscape) => (viaEscape ? onCancel() : onCommit())}
       padding="content"
       autoFocus={false}
       className="min-w-[200px]"

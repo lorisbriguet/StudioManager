@@ -11,7 +11,14 @@ import { useUndoStore } from "../stores/undo-store";
  *   await q.deleteCustomList(id);
  *   pushRestore(label, snap, { redo: () => q.deleteCustomList(id), invalidate });
  *
- * `table` and `where` are constants written in the hooks, never user input.
+ * Rows that only point at the deleted one through `ON DELETE SET NULL` lose
+ * that link and keep their own row; `snapshotLinks` records which ones did,
+ * and its statements (pushRestore's `extra`) link them back:
+ *
+ *   const links = await snapshotLinks([{ table: "invoices", column: "template_id", id }]);
+ *   pushRestore(label, snap, { redo, invalidate, extra: links });
+ *
+ * `table`, `where` and `column` are constants written in the hooks, never user input.
  */
 export interface RowSnapshot {
   table: string;
@@ -29,6 +36,39 @@ export async function snapshotRows(
     out.push({ table: p.table, rows: rows ?? [] });
   }
   return out;
+}
+
+/**
+ * The rows whose `column` points at `id` (to be cut by an `ON DELETE SET NULL`),
+ * as the statements that point them at it again. Only that column is written:
+ * the rows keep their other fields and their `updated_at`.
+ */
+export async function snapshotLinks(
+  parts: { table: string; column: string; id: unknown }[]
+): Promise<{ sql: string; params: unknown[] }[]> {
+  const db = await getDb();
+  const out: { sql: string; params: unknown[] }[] = [];
+  for (const p of parts) {
+    validateFields([p.table, p.column]);
+    const rows = await db.select<{ id: unknown }[]>(`SELECT id FROM ${p.table} WHERE ${p.column} = $1`, [p.id]);
+    if (!rows?.length) continue;
+    out.push({
+      sql: `UPDATE ${p.table} SET ${p.column} = $1 WHERE id IN (SELECT value FROM json_each($2))`,
+      params: [p.id, JSON.stringify(rows.map((r) => r.id))],
+    });
+  }
+  return out;
+}
+
+/**
+ * Undo of a removal from a list kept inside a row (a table's columns): put the
+ * item back into the list as it is NOW, at its old position (or the end), so
+ * changes made since the removal stay. A no-op when it is already there.
+ */
+export function reinsertAt<T>(list: T[], item: T, index: number, same: (a: T) => boolean): T[] {
+  if (list.some(same)) return list;
+  const i = Math.max(0, Math.min(index, list.length));
+  return [...list.slice(0, i), item, ...list.slice(i)];
 }
 
 /** Re-insert the rows in one transaction (parents first: the order they were snapshotted in). */

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Badge, CARD_GAP, CARD_LINK, CARD_STACK, Card, EmptyState, ICONS, ICON_SIZE, ProgressBar } from "../ui";
+import { Badge, CARD_GAP, CARD_LINK, CARD_STACK, Card, EmptyState, HEADING_2, ICONS, ICON_SIZE, ProgressBar } from "../ui";
 import { DueList } from "./DueList";
 import { useMachines, useUpkeepOverview } from "../../db/hooks/useUpkeep";
 import { useT } from "../../i18n/useT";
@@ -17,7 +17,7 @@ function MachineCard({ machine, nextTitle }: { machine: Machine; nextTitle: stri
           <ICONS.upkeep size={ICON_SIZE.menu} />
         </span>
         <div className="min-w-0">
-          <h3 className="text-sm font-medium truncate">
+          <h3 className={`${HEADING_2} truncate`}>
             <Link to={`/upkeep/machines/${machine.id}`} className={CARD_LINK}>{machine.name}</Link>
           </h3>
           {sub && <div className="text-xs text-muted truncate">{sub}</div>}

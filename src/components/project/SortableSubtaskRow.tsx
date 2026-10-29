@@ -32,7 +32,8 @@ export function SortableSubtaskRow({
       onMouseEnter={() => onHoverChange(id)}
       onMouseLeave={() => onHoverChange(null)}
     >
-      <DragHandle {...attributes} {...listeners} className={hovered ? "opacity-100" : "opacity-0"} />
+      {/* Not reveal="sub": that is CSS :hover, the stale-hover bug above. Keyboard focus still shows it. */}
+      <DragHandle {...attributes} {...listeners} className={hovered ? "opacity-100" : "opacity-0 focus-visible:opacity-100"} />
       {children}
     </div>
   );

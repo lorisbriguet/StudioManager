@@ -1,5 +1,4 @@
-import { X } from "lucide-react";
-import type { IconProp } from "./icons";
+import { ICONS, type IconProp } from "./icons";
 import { useT } from "../../i18n/useT";
 import { IconButton } from "./IconButton";
 import { Button } from "./Button";
@@ -40,7 +39,7 @@ export function BulkActionBar({ count, actions, onClear }: Props) {
           {action.label}
         </Button>
       ))}
-      <IconButton icon={X} label={t.cancel} onClick={onClear} />
+      <IconButton icon={ICONS.close} label={t.cancel} onClick={onClear} />
     </div>
   );
 }

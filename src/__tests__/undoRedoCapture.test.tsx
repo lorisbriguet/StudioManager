@@ -106,7 +106,7 @@ describe("redo id-capture", () => {
     expect(del!.params).not.toContain(999);
   });
 
-  it("recurring template delete: undo arms a redo that deletes the restored id", async () => {
+  it("recurring template delete: undo arms a redo that deletes the restored (same) id", async () => {
     setSelectHandler((sql, params) => {
       const flat = sql.replace(/\s+/g, " ");
       if (flat.includes("FROM recurring_invoice_templates WHERE id")) {
@@ -118,9 +118,11 @@ describe("redo id-capture", () => {
     result.current.mutate(4);
     await waitFor(() => expect(useUndoStore.getState().stack).toHaveLength(1));
 
+    // The restore puts back the very same row (snapshotRows), so redo
+    // deletes the original id.
     const del = await runUndoRedo();
     expect(del).toBeDefined();
     expect(del!.sql).toContain("recurring_invoice_templates");
-    expect(del!.params).toContain(1);
+    expect(del!.params).toContain(4);
   });
 });

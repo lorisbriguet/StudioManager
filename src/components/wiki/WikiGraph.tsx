@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, RotateCcw, Waypoints } from "lucide-react";
-import { Button, Card, EmptyState, IconButton, SearchBar, SectionLabel, POPOVER_SURFACE } from "../ui";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import { Button, Card, EmptyState, IconButton, SearchBar, SectionLabel, POPOVER_SURFACE, ICONS } from "../ui";
 import { Toggle } from "../ui/Toggle";
 import { useT } from "../../i18n/useT";
 import { useOrgStore } from "../../stores/org-store";
@@ -161,9 +161,9 @@ export function WikiGraph({
         <div className="h-full flex items-center justify-center">
           <EmptyState
             message={t.wiki_graph_empty}
-            icon={Waypoints}
+            icon={ICONS.graph}
             action={
-              <Button variant="secondary" icon={RotateCcw} onClick={resetFilters}>
+              <Button variant="secondary" icon={ICONS.restore} onClick={resetFilters}>
                 {t.wiki_graph_reset_filters}
               </Button>
             }

@@ -23,6 +23,10 @@ import {
 // collision and proves redo targets the id the mock's INSERT reported
 // (lastInsertId = 1), never the lookalike row (id 999).
 
+// Project tables and wiki articles now restore the very same row
+// (snapshotRows/pushRestore, see undoRestoreRealDb.test.tsx), so their redo
+// targets the original id (5).
+
 function wrapper({ children }: { children: ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return createElement(QueryClientProvider, { client: qc }, children);
@@ -60,9 +64,9 @@ describe("useDeleteProjectTable redo", () => {
     const action = useUndoStore.getState().stack[0];
 
     clearExecutedStatements();
-    await action.execute(); // undo: restore, mock reports lastInsertId 1
+    await action.execute(); // undo: restore the same row, id 5
 
-    // Post-restore world: the original row (id 5) is gone; a DIFFERENT
+    // Post-restore world: a DIFFERENT
     // table (id 999) that happens to also be named "Untitled" is what the
     // old name-lookup would find.
     setSelectHandler((sql) => {
@@ -75,11 +79,11 @@ describe("useDeleteProjectTable redo", () => {
 
     clearExecutedStatements();
     expect(action.redo).toBeDefined();
-    await action.redo!(); // redo: must delete restored id 1, not the lookalike
+    await action.redo!(); // redo: must delete restored id 5, not the lookalike
 
     const del = executedStatements.find((s) => s.sql.includes("DELETE FROM project_tables WHERE id"));
     expect(del).toBeDefined();
-    expect(del!.params).toContain(1);
+    expect(del!.params).toContain(5);
     expect(del!.params).not.toContain(999);
   });
 });
@@ -88,7 +92,7 @@ describe("useDeleteWikiArticle redo", () => {
   it("redo deletes the article restored by undo, not a title+folder lookalike", async () => {
     setSelectHandler((sql, params) => {
       const flat = sql.replace(/\s+/g, " ");
-      if (flat.includes("WHERE a.id = $1")) {
+      if (flat.includes("FROM wiki_articles WHERE id = $1")) {
         return [
           {
             id: params[0],
@@ -99,7 +103,6 @@ describe("useDeleteWikiArticle redo", () => {
             sort_order: 0,
             created_at: "2026-01-01",
             updated_at: "2026-01-01",
-            project_name: null,
           },
         ];
       }
@@ -115,7 +118,7 @@ describe("useDeleteWikiArticle redo", () => {
     const action = useUndoStore.getState().stack[0];
 
     clearExecutedStatements();
-    await action.execute(); // undo: restore, mock reports lastInsertId 1
+    await action.execute(); // undo: restore the same row, id 5
 
     // Post-restore world: a DIFFERENT article (id 999) in the same folder
     // also happens to be titled "Untitled" — the old title+folder lookup
@@ -131,11 +134,11 @@ describe("useDeleteWikiArticle redo", () => {
 
     clearExecutedStatements();
     expect(action.redo).toBeDefined();
-    await action.redo!(); // redo: must delete restored id 1, not the lookalike
+    await action.redo!(); // redo: must delete restored id 5, not the lookalike
 
     const del = executedStatements.find((s) => s.sql.includes("DELETE FROM wiki_articles"));
     expect(del).toBeDefined();
-    expect(del!.params).toContain(1);
+    expect(del!.params).toContain(5);
     expect(del!.params).not.toContain(999);
   });
 });

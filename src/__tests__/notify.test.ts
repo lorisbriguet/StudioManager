@@ -68,11 +68,32 @@ describe("notify", () => {
     expect(lastOpts(toast.error).action).toBeUndefined();
   });
 
-  it("the same error label shows once per 30 s, but is always logged", () => {
-    notify.error(t.calendar_sync_failed, new Error("a"));
-    notify.error(t.calendar_sync_failed, new Error("b"));
+  it("an identical error (same label, same cause) shows once while its toast is up, but is always logged", () => {
+    notify.error(t.calendar_sync_failed, new Error("calendar not found"));
+    notify.error(t.calendar_sync_failed, new Error("calendar not found"));
     expect(toast.error).toHaveBeenCalledTimes(1);
     expect(logError).toHaveBeenCalledTimes(2);
+  });
+
+  // Review A5: hooks rely on the MutationCache backstop, which reports every
+  // failed save with the same generic label. Two different failures must both
+  // show, or the second row reverts without a word.
+  it("two different errors with the same label both show", () => {
+    notify.error(t.operation_failed, new Error("UNIQUE constraint failed: clients.name"));
+    notify.error(t.operation_failed, new Error("database is locked"));
+    expect(toast.error).toHaveBeenCalledTimes(2);
+  });
+
+  it("the same error shows again once its toast is gone", () => {
+    vi.useFakeTimers();
+    try {
+      notify.error(t.operation_failed, new Error("database is locked"));
+      vi.advanceTimersByTime(TOAST_DURATION.error + 1);
+      notify.error(t.operation_failed, new Error("database is locked"));
+      expect(toast.error).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("undo shows the message 8 s with Undo; clicking runs onUndo then says so", async () => {

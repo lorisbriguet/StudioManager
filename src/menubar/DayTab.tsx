@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { Button, Dropdown, EmptyState, ICONS, IconButton, SectionLabel, type DropdownItem } from "../components/ui";
+import { Button, Callout, Dropdown, EmptyState, ICONS, IconButton, SectionLabel, type DropdownItem } from "../components/ui";
 import { useAgents } from "../components/agents/useAgents";
 import { useT } from "../i18n/useT";
 import { useAppStore } from "../stores/app-store";
 import { openMainWindow } from "../lib/agents";
+import { logError } from "../lib/log";
+import { routineRunTextClass } from "../lib/statusColors";
 import {
   ROUTINES_CHANGED,
   getRoutineRuns,
@@ -57,38 +59,32 @@ function useRoutines() {
 const timeOf = (epochMs: number, locale: string) =>
   new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(epochMs));
 
-/** Status colours as the Agents groups: running info, done success, failed danger. */
-const TONE = {
-  running: "text-[var(--color-info-text)]",
-  done: "text-[var(--color-success-text)]",
-  failed: "text-[var(--color-danger-text)]",
-} as const;
-
 function RoutineRow({ routine, run, sessionId }: { routine: Routine; run: Run | undefined; sessionId: string | null }) {
   const t = useT();
   const locale = useAppStore((s) => (s.language === "FR" ? "fr" : "en"));
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  /** Runs an action; a failure (e.g. "Agents are switched off") shows in the row. */
+  const [failed, setFailed] = useState(false);
+  /** Runs an action; a failure shows a translated line in the row, the raw error goes to the log. */
   const attempt = async (action: () => Promise<unknown>) => {
-    setError(null);
+    setFailed(false);
     try {
       await action();
     } catch (e) {
-      setError(errorText(e));
+      setFailed(true);
+      void logError(`Routine ${routine.id}: action failed:`, e instanceof Error ? e.message : e);
     }
   };
 
   const running = run?.status === "running";
   let status = { text: routine.idleHint, tone: "text-muted" as string };
-  if (run?.status === "running") status = { text: t.routines_running, tone: TONE.running };
+  if (run?.status === "running") status = { text: t.routines_running, tone: routineRunTextClass("running") };
   else if (run?.status === "done") {
     const at = t.routines_done_at.replace("{time}", run.finishedAt ? timeOf(run.finishedAt, locale) : "");
-    status = { text: run.message ? `${at} · ${run.message}` : at, tone: TONE.done };
+    status = { text: run.message ? `${at} · ${run.message}` : at, tone: routineRunTextClass("done") };
   } else if (run?.status === "failed") {
     status = {
       text: run.message ? t.routines_failed.replace("{message}", run.message) : t.routines_failed_plain,
-      tone: TONE.failed,
+      tone: routineRunTextClass("failed"),
     };
   }
 
@@ -121,10 +117,10 @@ function RoutineRow({ routine, run, sessionId }: { routine: Routine; run: Run | 
       <div className="flex-1 min-w-0">
         <div className="text-sm truncate">{routine.title}</div>
         {status.text && <div className={`text-xs truncate ${status.tone}`}>{status.text}</div>}
-        {error && (
-          <div role="alert" className="text-xs text-danger-text">
-            {error}
-          </div>
+        {failed && (
+          <Callout tone="danger" className="mt-1">
+            {t.routines_action_failed}
+          </Callout>
         )}
       </div>
       <Button variant="secondary" onClick={main.onClick} disabled={main.disabled}>

@@ -12,6 +12,8 @@ const NewExpenseForm = lazy(() =>
 );
 
 interface Props {
+  /** The dialog title (e.g. "Add renewal to expenses"); "New expense" when omitted. */
+  title?: string;
   supplier?: string;
   amount?: number;
   /** Currency of `amount`: converted to CHF (expenses have no currency), or refused without a rate. */
@@ -24,7 +26,7 @@ interface Props {
 }
 
 /** The Expenses page's own new-expense dialog, prefilled; the user still saves it. */
-export function PrefilledExpenseModal({ supplier, amount, currency, date, onCancel, onSaved }: Props) {
+export function PrefilledExpenseModal({ title, supplier, amount, currency, date, onCancel, onSaved }: Props) {
   const { data: categories = [] } = useExpenseCategories();
   const { data: suppliers = [] } = useDistinctSuppliers();
   const createExpense = useCreateExpense();
@@ -37,6 +39,7 @@ export function PrefilledExpenseModal({ supplier, amount, currency, date, onCanc
       <NewExpenseForm
         categories={categories}
         pastSuppliers={suppliers}
+        title={title}
         prefill={{ supplier, amount: base.amount, invoice_date: date ?? todayLocalISO() }}
         amountHint={base.hint ?? undefined}
         onCancel={onCancel}

@@ -90,6 +90,40 @@ export function agentGroupVariant(g: AgentGroup): BadgeVariant {
   return AGENT_GROUP_VARIANT[g];
 }
 
+// Spelled out so Tailwind generates each one. Same tones as agentGroupVariant.
+const AGENT_GROUP_DOT: Record<AgentGroup, string> = {
+  "needs-you": "bg-warning",
+  working: "bg-info animate-pulse",
+  idle: "bg-checkbox-border",
+  done: "bg-success",
+};
+
+const AGENT_GROUP_TEXT: Record<AgentGroup, string> = {
+  "needs-you": "text-[var(--color-warning-text)]",
+  working: "text-[var(--color-info-text)]",
+  idle: "text-muted",
+  done: "text-[var(--color-success-text)]",
+};
+
+/** Background class for an agent group's status dot (`dot`): working pulses. */
+export function agentGroupDotClass(g: AgentGroup): string {
+  return AGENT_GROUP_DOT[g];
+}
+
+/** Text class for a line coloured by an agent's group (what it waits for, a routine's run). */
+export function agentGroupTextClass(g: AgentGroup): string {
+  return AGENT_GROUP_TEXT[g];
+}
+
+/**
+ * Text class for a routine's last run (menu bar Day tab): the Agents colours,
+ * running as working and done as done; failed is danger.
+ */
+export function routineRunTextClass(s: "running" | "done" | "failed"): string {
+  if (s === "failed") return "text-[var(--color-danger-text)]";
+  return agentGroupTextClass(s === "running" ? "working" : "done");
+}
+
 /**
  * Client status is derived at render time ("active" when the client has an
  * active project, "inactive" otherwise) — it is not stored on the Client type,

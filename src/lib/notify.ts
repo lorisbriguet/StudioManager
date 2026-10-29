@@ -32,12 +32,14 @@ export function getLabels() {
   return uiLabels[useAppStore.getState().language];
 }
 
-// The same error label shows at most once per window, so repeated failures
-// (e.g. per-event calendar sync errors) don't stack toasts. Logging is never
-// deduplicated. Keys are translated labels (a small fixed set), so the map
-// stays bounded.
+// An identical error (same label AND same cause) shows once while its toast
+// is still up, so a burst of the same failure (per-event calendar sync
+// errors) doesn't stack. A different cause under the same label always
+// shows: the query-client backstop reports every failed save with one
+// generic label, and a second, different failure must not go silent.
+// Logging is never deduplicated. Entries are pruned as they expire.
 const recentErrors = new Map<string, number>();
-const ERROR_DEDUPE_MS = 30_000;
+const ERROR_DEDUPE_MS = TOAST_DURATION.error;
 
 /** Test helper: forget which errors were shown recently. */
 export function resetNotifyDedupe(): void {
@@ -65,11 +67,19 @@ function detailsAction(err: unknown) {
   };
 }
 
+/** What makes two errors "the same": the message, not the stack (which differs per call site). */
+function causeKey(err: unknown): string {
+  if (err === undefined) return "";
+  if (err instanceof Error) return `${err.name}: ${err.message}`;
+  return errorDetails(err);
+}
+
 function showError(label: string, err: unknown, hasErr: boolean, description?: string): void {
   const now = Date.now();
-  const last = recentErrors.get(label);
-  if (last !== undefined && now - last < ERROR_DEDUPE_MS) return;
-  recentErrors.set(label, now);
+  for (const [k, at] of recentErrors) if (now - at >= ERROR_DEDUPE_MS) recentErrors.delete(k);
+  const key = `${label}\u0000${causeKey(err)}\u0000${description ?? ""}`;
+  if (recentErrors.has(key)) return;
+  recentErrors.set(key, now);
   toast.error(label, {
     duration: TOAST_DURATION.error,
     description,
@@ -96,7 +106,8 @@ export const notify = {
   /**
    * Something failed. Shows the translated `label` ("Couldn't save the
    * invoice"), never the raw error: that goes to the log, and a "Details"
-   * action copies it. The same label shows once per 30 s. An `AppError`
+   * action copies it. The same label with the same cause shows once while
+   * its toast is up (10 s); a different cause always shows. An `AppError`
    * (lib/errors.ts) carries a more telling label ("Expenses use this
    * category"): that one is shown instead. `description` adds a second line
    * ("No changes were made").

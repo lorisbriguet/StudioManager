@@ -1,4 +1,4 @@
-import { useId, type ElementType, type FormEvent, type HTMLAttributes, type ReactNode } from "react";
+import { createContext, useId, useMemo, useRef, useState, type ElementType, type FormEvent, type HTMLAttributes, type KeyboardEvent, type ReactNode } from "react";
 import { useT } from "../../i18n/useT";
 import { Button } from "./Button";
 import { Modal, type ModalSize } from "./Modal";
@@ -103,12 +103,22 @@ interface FormModalProps {
   open: boolean;
   onClose: () => void;
   title: string;
-  /** Runs on the primary button and on Enter in a field. */
-  onSubmit: () => void;
+  /**
+   * Runs on the primary button and on Enter in a field. When it returns a
+   * promise, the form shows the spinner and ignores further submits until it
+   * settles.
+   */
+  onSubmit: () => void | Promise<unknown>;
   submitLabel: string;
   submitDisabled?: boolean;
   /** Shows the spinner on the primary button. */
   submitting?: boolean;
+  /**
+   * The form holds changes a backdrop click would throw away. FormModal tracks
+   * typing and picks in its fields itself; pass true for changes it can't see
+   * (a form filled from a receipt), false to let the backdrop always close.
+   */
+  dirty?: boolean;
   /** Actions between Cancel and the primary (e.g. "Save and preview"). */
   extraActions?: ReactNode;
   /** Far-left action (Delete). */
@@ -119,48 +129,122 @@ interface FormModalProps {
 }
 
 /**
+ * What a field inside a FormModal can tell it. `register` adds a check run
+ * before every submit: it returns the field to focus when its text can't be
+ * saved (DatePicker with "31.02.2026"), else null; it returns the unregister.
+ * `markDirty`: a change FormModal can't see as an input event (a calendar pick).
+ */
+export interface FormModalFields {
+  register: (check: () => HTMLElement | null) => () => void;
+  markDirty: () => void;
+}
+
+export const FormModalContext = createContext<FormModalFields | null>(null);
+
+/**
  * Every dialog with fields: creating a client, an expense, a project, a
  * one-field prompt… The body is a <form>, so Enter in a field submits; the
  * footer is Cancel (secondary), any extra actions, then the primary. Give the
  * first field `autoFocus`; pass `submitting` while it saves.
+ *
+ * It submits once: a held Enter (key repeat) and a second Enter or click while
+ * an async `onSubmit` runs are ignored. A field whose text isn't a value yet
+ * (an invalid date) blocks the submit and takes the focus. Once a field has
+ * changed, a backdrop click no longer closes it (Esc and Cancel still do).
  *
  *   <FormModal open title={t.new_client} submitLabel={t.save} onSubmit={save} onClose={close}>
  *     <FormGrid cols={2}>…</FormGrid>
  *   </FormModal>
  */
 export function FormModal({
-  open, onClose, title, onSubmit, submitLabel, submitDisabled, submitting, extraActions, destructive, size = "md", children,
+  open, onClose, title, onSubmit, submitLabel, submitDisabled, submitting, dirty, extraActions, destructive, size = "md", children,
 }: FormModalProps) {
   const t = useT();
   const formId = useId();
+  const busyRef = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [touched, setTouched] = useState(false);
+  // A closed form starts clean when it reopens.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (!open) setTouched(false);
+  }
+  const checks = useRef(new Set<() => HTMLElement | null>());
+  const fields = useMemo<FormModalFields>(
+    () => ({
+      register: (check) => {
+        checks.current.add(check);
+        return () => {
+          checks.current.delete(check);
+        };
+      },
+      markDirty: () => setTouched(true),
+    }),
+    []
+  );
+
+  const submit = () => {
+    if (submitDisabled || submitting || busyRef.current) return;
+    // Run every check so each bad field is flagged, then focus the first.
+    const bad = Array.from(checks.current, (check) => check()).filter((el): el is HTMLElement => el !== null);
+    if (bad.length > 0) {
+      bad[0].focus();
+      return;
+    }
+    const result = onSubmit();
+    if (result && typeof (result as Promise<unknown>).then === "function") {
+      busyRef.current = true;
+      setBusy(true);
+      const done = () => {
+        busyRef.current = false;
+        setBusy(false);
+      };
+      // Rethrow so a failure still reaches the caller's error reporting.
+      void Promise.resolve(result).then(done, (e: unknown) => {
+        done();
+        throw e;
+      });
+    }
+  };
+
   return (
     <Modal
       open={open}
       onClose={onClose}
       title={title}
       size={size}
+      closeOnBackdrop={!(dirty ?? touched)}
       footer={
         <>
           {destructive && <div className="mr-auto flex items-center gap-2">{destructive}</div>}
           <Button variant="secondary" onClick={onClose}>{t.cancel}</Button>
           {extraActions}
-          <Button type="submit" form={formId} disabled={submitDisabled} loading={submitting}>{submitLabel}</Button>
+          <Button type="submit" form={formId} disabled={submitDisabled} loading={submitting || busy}>{submitLabel}</Button>
         </>
       }
     >
-      <form
-        id={formId}
-        // The forms validate themselves (lib/validate, inline errors): no browser
-        // bubbles, and a step="0.01" or type="email" field never blocks the submit.
-        noValidate
-        className={FORM_STACK}
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!submitDisabled && !submitting) onSubmit();
-        }}
-      >
-        {children}
-      </form>
+      <FormModalContext.Provider value={fields}>
+        <form
+          id={formId}
+          // The forms validate themselves (lib/validate, inline errors): no browser
+          // bubbles, and a step="0.01" or type="email" field never blocks the submit.
+          noValidate
+          className={FORM_STACK}
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+          onKeyDown={(e: KeyboardEvent<HTMLFormElement>) => {
+            // A held Enter repeats the keydown: only the first one submits.
+            if (e.key === "Enter" && e.repeat && !(e.target instanceof HTMLTextAreaElement)) e.preventDefault();
+          }}
+          onInput={() => setTouched(true)}
+          onChange={() => setTouched(true)}
+        >
+          {children}
+        </form>
+      </FormModalContext.Provider>
     </Modal>
   );
 }

@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Archive } from "lucide-react";
 import { readFile } from "@tauri-apps/plugin-fs";
 import {
   Badge, Button, Card, DatePicker, EmptyState, FIELD_LABEL, FormField, FormGrid, FormModal, ICONS, IconButton,
@@ -283,7 +282,7 @@ export function MachineDetail({ machineId, compact = false, onDeleted, onBack }:
                       <IconButton size="xs" icon={ICONS.markDone} label={t.upkeep_mark_done}
                         onClick={() => markDone.mutate({ id: it.id, doneOn: today, reading: null })} />
                       <IconButton size="xs" icon={ICONS.edit} label={t.edit} onClick={() => setItemForm({ item: it })} />
-                      <IconButton size="xs" icon={Archive} label={t.upkeep_archive} onClick={() => archiveItem.mutate(it.id)} />
+                      <IconButton size="xs" icon={ICONS.archive} label={t.upkeep_archive} onClick={() => archiveItem.mutate(it.id)} />
                     </Table.Actions>
                   </Table.Row>
                 );

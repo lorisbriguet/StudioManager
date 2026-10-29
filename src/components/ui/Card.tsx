@@ -1,10 +1,9 @@
 import type { HTMLAttributes, KeyboardEvent, ReactNode, Ref } from "react";
-import { X } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { IconButton } from "./IconButton";
 import { PanelTitle, type PanelTitleProps } from "./PanelTitle";
 import { HEADING_COUNT } from "./tokens";
-import { ICON_SIZE, renderIcon, type IconProp } from "./icons";
+import { ICONS, ICON_SIZE, renderIcon, type IconProp } from "./icons";
 
 /**
  * Card — the block surface. See DESIGN-SYSTEM.md, "Card".
@@ -176,7 +175,7 @@ function CardHeader({
     onClose || (action != null && action !== false) ? (
       <>
         {action}
-        {onClose && <IconButton icon={X} label={t.close} onClick={onClose} />}
+        {onClose && <IconButton icon={ICONS.close} label={t.close} onClick={onClose} />}
       </>
     ) : undefined;
   const row = <PanelTitle title={heading} action={actions} variant={variant} tone={tone} as={as} id={id} className="flex-1 min-w-0" />;

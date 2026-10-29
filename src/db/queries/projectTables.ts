@@ -1,4 +1,4 @@
-import { getDb } from "../index";
+import { getDb, TransactionBatch } from "../index";
 import type { ProjectTable, ProjectTableRow, TableColumnDef } from "../../types/project-table";
 
 type RawTable = Omit<ProjectTable, "column_config"> & { column_config: string };
@@ -11,6 +11,12 @@ export async function getProjectTables(projectId: number): Promise<ProjectTable[
     [projectId]
   );
   return rows.map((r) => ({ ...r, column_config: JSON.parse(r.column_config) }));
+}
+
+export async function getProjectTable(id: number): Promise<ProjectTable | null> {
+  const db = await getDb();
+  const rows = await db.select<RawTable[]>("SELECT * FROM project_tables WHERE id = $1", [id]);
+  return rows[0] ? { ...rows[0], column_config: JSON.parse(rows[0].column_config) } : null;
 }
 
 export async function createProjectTable(projectId: number, name: string, columns?: TableColumnDef[]): Promise<number> {
@@ -76,6 +82,13 @@ export async function createProjectTableRow(tableId: number, data?: Record<strin
 export async function updateProjectTableRow(id: number, data: Record<string, unknown>): Promise<void> {
   const db = await getDb();
   await db.execute("UPDATE project_table_rows SET data = $1 WHERE id = $2", [JSON.stringify(data), id]);
+}
+
+/** Rows in the order given (sort_order 0, 1, …). */
+export async function reorderProjectTableRows(ids: number[]): Promise<void> {
+  const batch = new TransactionBatch();
+  ids.forEach((id, i) => batch.add("UPDATE project_table_rows SET sort_order = $1 WHERE id = $2", [i, id]));
+  await batch.commit();
 }
 
 export async function deleteProjectTableRow(id: number): Promise<void> {

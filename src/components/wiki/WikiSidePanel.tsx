@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { useT } from "../../i18n/useT";
 import type { WikiArticleWithTags } from "../../types/wiki";
 import {
@@ -13,6 +13,7 @@ import {
 import { GraphView } from "./GraphView";
 import { colorFor } from "./wikiColors";
 import { Button, PANEL_TOP_BAR, TabItem, IconButton, SectionLabel, Tooltip, EmptyState, Card, ICONS, ICON_SIZE } from "../ui";
+import { TabList, tabIds } from "../ui/TabItem";
 import { useProjectDoc, type ProjectDoc } from "../../db/hooks/useProjectDocs";
 
 function SnippetText({ s }: { s: Snippet }) {
@@ -39,14 +40,25 @@ function localGraph(graph: ReturnType<typeof buildWikiGraph>, id: number) {
 const ROW =
   "w-full flex items-center gap-1.5 h-7 px-2 rounded-md text-sm text-left text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors";
 
-function PanelTabs({ tab, onTab }: { tab: "links" | "outline"; onTab: (tab: "links" | "outline") => void }) {
+type PanelTab = "links" | "outline";
+
+/** The side panel's tabs; `idBase` (from useId) wires each tab to the panel below it. */
+function PanelTabs({ tab, onTab, idBase }: { tab: PanelTab; onTab: (tab: PanelTab) => void; idBase: string }) {
   const t = useT();
+  const links = tabIds(idBase, "links");
+  const outline = tabIds(idBase, "outline");
   return (
-    <div role="tablist" aria-label={t.wiki_side_panel} className={`${PANEL_TOP_BAR} px-1.5 border-[var(--color-border)]`}>
-      <TabItem role="tab" label={t.wiki_links} active={tab === "links"} onActivate={() => onTab("links")} />
-      <TabItem role="tab" label={t.wiki_outline} active={tab === "outline"} onActivate={() => onTab("outline")} />
-    </div>
+    <TabList label={t.wiki_side_panel} className={`${PANEL_TOP_BAR} px-1.5 border-[var(--color-border)]`}>
+      <TabItem role="tab" id={links.tab} controls={links.panel} label={t.wiki_links} active={tab === "links"} onActivate={() => onTab("links")} />
+      <TabItem role="tab" id={outline.tab} controls={outline.panel} label={t.wiki_outline} active={tab === "outline"} onActivate={() => onTab("outline")} />
+    </TabList>
   );
+}
+
+/** role/id/aria-labelledby for the panel of the active tab. */
+function panelProps(idBase: string, tab: PanelTab) {
+  const ids = tabIds(idBase, tab);
+  return { role: "tabpanel", id: ids.panel, "aria-labelledby": ids.tab } as const;
 }
 
 function OutlineList({ outline, onOutline }: { outline: OutlineItem[]; onOutline: (headingIndex: number) => void }) {
@@ -175,7 +187,8 @@ export function WikiSidePanel({
   onOpenFile?: (key: string, newTab: boolean) => void;
 }) {
   const t = useT();
-  const [tab, setTab] = useState<"links" | "outline">("links");
+  const [tab, setTab] = useState<PanelTab>("links");
+  const idBase = useId();
   const docsByKey = useMemo(() => new Map(docs.map((d) => [d.key, d])), [docs]);
   const outgoingFiles = [...(index.fileOutgoing.get(article.id) ?? new Map<string, number>()).keys()];
   const byId = useMemo(() => new Map(articles.map((a) => [a.id, a])), [articles]);
@@ -198,14 +211,14 @@ export function WikiSidePanel({
       aria-label={t.wiki_side_panel}
       className="w-72 shrink-0 flex flex-col min-h-0 border-l border-[var(--color-border-divider)]"
     >
-      <PanelTabs tab={tab} onTab={setTab} />
+      <PanelTabs tab={tab} onTab={setTab} idBase={idBase} />
 
       {tab === "outline" ? (
-        <div className="flex-1 overflow-y-auto p-3">
+        <div {...panelProps(idBase, tab)} className="flex-1 overflow-y-auto p-3">
           <OutlineList outline={outline} onOutline={onOutline} />
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto p-3 space-y-5">
+        <div {...panelProps(idBase, tab)} className="flex-1 overflow-y-auto p-3 space-y-5">
           <LocalGraph
             graph={local}
             focusId={article.id}
@@ -337,7 +350,8 @@ export function DocSidePanel({
   onOutline: (headingIndex: number) => void;
 }) {
   const t = useT();
-  const [tab, setTab] = useState<"links" | "outline">("links");
+  const [tab, setTab] = useState<PanelTab>("links");
+  const idBase = useId();
   const { data: content } = useProjectDoc(doc);
   const byId = useMemo(() => new Map(articles.map((a) => [a.id, a])), [articles]);
   const linkedFrom = index.fileBacklinks.get(doc.key) ?? [];
@@ -351,8 +365,8 @@ export function DocSidePanel({
 
   return (
     <aside aria-label={t.wiki_side_panel} className="w-72 shrink-0 flex flex-col min-h-0 border-l border-[var(--color-border-divider)]">
-      <PanelTabs tab={tab} onTab={setTab} />
-      <div className="flex-1 overflow-y-auto p-3">
+      <PanelTabs tab={tab} onTab={setTab} idBase={idBase} />
+      <div {...panelProps(idBase, tab)} className="flex-1 overflow-y-auto p-3">
         {tab === "outline" ? (
           <OutlineList outline={outline} onOutline={onOutline} />
         ) : (

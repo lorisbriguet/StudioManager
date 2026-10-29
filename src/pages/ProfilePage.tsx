@@ -206,7 +206,7 @@ export function ProfilePage() {
                       >
                         <span>{tmpl.name}</span>
                         {!!tmpl.is_default && (
-                          <span className="ml-2 text-xs text-muted">(default)</span>
+                          <span className="ml-2 text-xs text-muted">({t.template_default_badge})</span>
                         )}
                       </button>
                       <IconButton size="xs"

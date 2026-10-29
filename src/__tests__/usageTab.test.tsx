@@ -102,6 +102,13 @@ describe("ProgressBar with a fill colour (usage meters)", () => {
 });
 
 describe("UsageTab", () => {
+  it("writes the meter percent the French way (space before %)", async () => {
+    useAppStore.setState({ language: "FR" });
+    serve();
+    render(<UsageTab trailing={null} />);
+    expect(await screen.findByText("62\u00a0% · réinitialisation 16:40", { normalizer: (s) => s })).toBeInTheDocument();
+  });
+
   it("shows the meters with reset text and pacing", async () => {
     serve();
     render(<UsageTab trailing={null} />);

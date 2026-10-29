@@ -18,6 +18,8 @@ interface ConversationProps {
 export function Conversation({ sessionId, working }: ConversationProps) {
   const t = useT();
   const [items, setItems] = useState<Item[]>([]);
+  /** The session whose first load is in: from then on, new replies are announced. */
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -33,7 +35,11 @@ export function Conversation({ sessionId, working }: ConversationProps) {
       if (inflight) return;
       inflight = true;
       conversation(sessionId)
-        .then((list) => alive && setItems(list))
+        .then((list) => {
+          if (!alive) return;
+          setItems(list);
+          setLoadedFor(sessionId);
+        })
         // Keep what is shown; the next refresh may succeed.
         .catch(() => {})
         .finally(() => {
@@ -52,26 +58,34 @@ export function Conversation({ sessionId, working }: ConversationProps) {
     endRef.current?.scrollIntoView?.({ block: "end" });
   }, [items]);
 
-  if (items.length === 0) return <EmptyState icon={ICONS.agents} message={t.agents_no_conversation} />;
-
+  // A live region: replies that arrive (or grow, while the agent works) are read out
+  // without moving focus. It turns on after a session's first load, so opening an
+  // agent doesn't read out its whole history.
+  const live = loadedFor === sessionId;
   return (
-    <div className="max-w-3xl mx-auto px-5 py-5 space-y-6">
-      {groupTools(items).map((g, i) =>
-        g.kind === "tools" ? (
-          <ToolRun key={i} tools={g.tools} />
-        ) : g.item.kind === "user" ? (
-          <div key={i} className="flex justify-end">
-            <div className="max-w-[80%] rounded-xl bg-[var(--color-input-bg)] px-4 py-2.5 text-sm whitespace-pre-wrap break-words">
-              {g.item.text}
-            </div>
-          </div>
-        ) : g.item.kind === "assistant" ? (
-          <div key={i} className="agent-markdown text-sm leading-relaxed break-words">
-            <Markdown remarkPlugins={[remarkGfm]} components={{ a: ExternalLink }}>{g.item.text}</Markdown>
-          </div>
-        ) : null,
+    <div role={live ? "log" : undefined} aria-live={live ? "polite" : undefined}>
+      {items.length === 0 ? (
+        <EmptyState icon={ICONS.agents} message={t.agents_no_conversation} />
+      ) : (
+        <div className="max-w-3xl mx-auto px-5 py-5 space-y-6">
+          {groupTools(items).map((g, i) =>
+            g.kind === "tools" ? (
+              <ToolRun key={i} tools={g.tools} />
+            ) : g.item.kind === "user" ? (
+              <div key={i} className="flex justify-end">
+                <div className="max-w-[80%] rounded-xl bg-[var(--color-input-bg)] px-4 py-2.5 text-sm whitespace-pre-wrap break-words">
+                  {g.item.text}
+                </div>
+              </div>
+            ) : g.item.kind === "assistant" ? (
+              <div key={i} className="agent-markdown text-sm leading-relaxed break-words">
+                <Markdown remarkPlugins={[remarkGfm]} components={{ a: ExternalLink }}>{g.item.text}</Markdown>
+              </div>
+            ) : null,
+          )}
+          <div ref={endRef} />
+        </div>
       )}
-      <div ref={endRef} />
     </div>
   );
 }

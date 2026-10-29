@@ -42,6 +42,8 @@ export interface SelectProps {
   autoFocus?: boolean;
   onBlur?: () => void;
   onFocus?: () => void;
+  /** Each time the menu opens: lazy-load or refresh the options (see DropdownSelect). */
+  onOpen?: () => void;
   "aria-label"?: string;
   "aria-labelledby"?: string;
   "aria-required"?: boolean | "true" | "false";

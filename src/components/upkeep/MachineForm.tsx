@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { ImagePlus } from "lucide-react";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { copyFile, exists, mkdir } from "@tauri-apps/plugin-fs";
 import {
@@ -269,7 +268,7 @@ export function MachineForm({ onClose, machine, onSaved }: Props) {
           </FormField>
           <FormGroup label={t.upkeep_photo}>
             <div className="flex items-center gap-2">
-              <Button variant="secondary" icon={ImagePlus} onClick={() => void choosePhoto()}>
+              <Button variant="secondary" icon={ICONS.attachImage} onClick={() => void choosePhoto()}>
                 {photo ? t.upkeep_photo_change : t.upkeep_photo_add}
               </Button>
               {photo && (

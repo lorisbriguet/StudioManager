@@ -1,5 +1,22 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Button, Card, DragHandle, Dropdown, ICONS, ICON_SIZE, InlineRename } from "./ui";
 import { TableCell } from "./named-table/TableCell";
 import { ColumnEditorPopover } from "./named-table/ColumnEditorPopover";
@@ -10,14 +27,28 @@ import {
   useDeleteProjectTableRow,
   useUpdateProjectTable,
   useDeleteProjectTable,
+  useDeleteProjectTableColumn,
+  useReorderProjectTableRows,
 } from "../db/hooks/useProjectTables";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useSetCustomListItems } from "../db/hooks/useCustomLists";
 import { useT } from "../i18n/useT";
 import { notify } from "../lib/notify";
-import { deleteWithUndo, pushUndoable } from "../lib/undo";
+import { deleteWithUndo } from "../lib/undo";
 import type { ProjectTable, TableColumnDef, ProjectTableRow } from "../types/project-table";
 import { IconButton } from "./ui/IconButton";
 import { Table } from "./ui/Table";
+
+const COLUMN_TYPES = ["text", "number", "checkbox", "select", "tags", "date"] as const satisfies readonly TableColumnDef["type"][];
+
+/** The label of each column type: the menu entry, and a new column's name. */
+const COLUMN_TYPE_LABEL = {
+  text: "column_type_text",
+  number: "column_type_number",
+  checkbox: "column_type_checkbox",
+  select: "column_type_select",
+  tags: "column_type_tags",
+  date: "column_type_date",
+} as const satisfies Record<TableColumnDef["type"], string>;
 
 interface Props {
   table: ProjectTable;
@@ -32,6 +63,12 @@ export function NamedTable({ table, projectId }: Props) {
   const deleteRow = useDeleteProjectTableRow(table.id);
   const updateTable = useUpdateProjectTable(projectId);
   const deleteTable = useDeleteProjectTable(projectId);
+  const deleteCol = useDeleteProjectTableColumn(projectId);
+  const reorderRows = useReorderProjectTableRows(table.id);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   const [collapsed, setCollapsed] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -129,34 +166,26 @@ export function NamedTable({ table, projectId }: Props) {
   }, [editingCol, cols, colName, colOptions, colLinkedListId, updateTable, table.id]);
 
   // The rows keep the column's values, so putting the column back restores them.
+  // Undo puts it back into the columns as they are then (one added since stays).
   const deleteColumn = (colId: string) => {
-    const prev = cols;
-    const updated = cols.filter((c) => c.id !== colId);
-    updateTable.mutate(
-      { id: table.id, data: { column_config: updated } },
-      {
-        onSuccess: () =>
-          pushUndoable(t.column_deleted, {
-            label: t.undo_delete_column,
-            execute: async () => {
-              await updateTable.mutateAsync({ id: table.id, data: { column_config: prev } });
-            },
-            redo: async () => {
-              await updateTable.mutateAsync({ id: table.id, data: { column_config: updated } });
-            },
-          }),
-      }
-    );
+    deleteWithUndo(deleteCol, { tableId: table.id, colId }, t.column_deleted);
     setEditingCol(null);
     setColEditorPos(null);
   };
 
   const addColumn = (type: TableColumnDef["type"]) => {
     const id = `col_${Date.now()}`;
-    const name = (t as Record<string, string>)[`col_type_${type}`] ?? (type.charAt(0).toUpperCase() + type.slice(1));
-    const newCol: TableColumnDef = { id, name, type };
+    const newCol: TableColumnDef = { id, name: t[COLUMN_TYPE_LABEL[type]], type };
     if (type === "select" || type === "tags") newCol.options = [t.default_option_1, t.default_option_2];
     updateTable.mutate({ id: table.id, data: { column_config: [...table.column_config, newCol] } });
+  };
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!rows || !over || active.id === over.id) return;
+    const from = rows.findIndex((r) => r.id === active.id);
+    const to = rows.findIndex((r) => r.id === over.id);
+    if (from === -1 || to === -1) return;
+    reorderRows.mutate(arrayMove(rows, from, to).map((r) => r.id));
   };
 
   return (
@@ -202,6 +231,8 @@ export function NamedTable({ table, projectId }: Props) {
 
       {!collapsed && (
         <>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={(rows ?? []).map((r) => r.id)} strategy={verticalListSortingStrategy}>
           <Table density="compact">
             <Table.Head>
               <Table.Th narrow />
@@ -234,6 +265,10 @@ export function NamedTable({ table, projectId }: Props) {
                         onSaveAsList={handleSaveAsList}
                         onDelete={() => deleteColumn(col.id)}
                         onCommit={commitColEdit}
+                        onCancel={() => {
+                          setEditingCol(null);
+                          setColEditorPos(null);
+                        }}
                       />
                     )}
                   </Table.Th>
@@ -245,8 +280,8 @@ export function NamedTable({ table, projectId }: Props) {
                     trigger={
                       <IconButton icon={ICONS.add} label={t.add_column} size="xs" tone="accent" />
                     }
-                    items={(["text", "number", "checkbox", "select", "tags", "date"] as const).map((type) => ({
-                      label: type.charAt(0).toUpperCase() + type.slice(1),
+                    items={COLUMN_TYPES.map((type) => ({
+                      label: t[COLUMN_TYPE_LABEL[type]],
                       onSelect: () => addColumn(type),
                     }))}
                   />
@@ -254,9 +289,11 @@ export function NamedTable({ table, projectId }: Props) {
             </Table.Head>
             <Table.Body>
               {(rows ?? []).map((row) => (
-                <Table.Row key={row.id}>
+                <SortableRow key={row.id} id={row.id}>
+                  {(handle) => (
+                  <>
                   <Table.Td narrow>
-                    <DragHandle size={ICON_SIZE.control} />
+                    {handle}
                   </Table.Td>
                   {cols.map((col) => (
                     <Table.Td key={col.id} style={{ width: col.width ?? 150 }}>
@@ -277,10 +314,14 @@ export function NamedTable({ table, projectId }: Props) {
                   <Table.Actions>
                     <IconButton icon={ICONS.delete} label={t.delete} size="xs" tone="danger" onClick={() => deleteWithUndo(deleteRow, row.id, t.row_deleted)} />
                   </Table.Actions>
-                </Table.Row>
+                  </>
+                  )}
+                </SortableRow>
               ))}
             </Table.Body>
           </Table>
+          </SortableContext>
+          </DndContext>
           <Button
             variant="link"
             icon={ICONS.add}
@@ -292,5 +333,18 @@ export function NamedTable({ table, projectId }: Props) {
         </>
       )}
     </Card>
+  );
+}
+
+/** A row that drags by its handle (the first cell), as in LineItemsTable. */
+function SortableRow({ id, children }: { id: number; children: (handle: ReactNode) => ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <Table.Row
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : undefined }}
+    >
+      {children(<DragHandle {...attributes} {...listeners} size={ICON_SIZE.control} />)}
+    </Table.Row>
   );
 }
