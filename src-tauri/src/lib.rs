@@ -534,10 +534,51 @@ fn startup_state(app_dir: &Path, init: Result<ActiveOrg, String>) -> (ActiveOrg,
     }
 }
 
+/// Extensions macOS runs, installs or loads when a bundle or file of that
+/// type is opened. `open_in_finder` refuses them outright: a project folder
+/// or a link can be set by an agent (MCP `link_folder`), and "Open folder"
+/// must never launch what it points at.
+const EXECUTABLE_EXTENSIONS: &[&str] = &[
+    "app", "appex", "action", "bundle", "command", "component", "framework", "kext",
+    "mpkg", "osax", "pkg", "plugin", "prefpane", "qlgenerator", "saver", "service",
+    "terminal", "tool", "workflow", "xpc",
+];
+
+/// Is this a bundle or an executable document, by its extension or, for a
+/// directory, by the `Contents/Info.plist` every application-like bundle has
+/// whatever its name?
+fn is_executable_target(path: &Path) -> bool {
+    let by_extension = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| EXECUTABLE_EXTENSIONS.iter().any(|x| x.eq_ignore_ascii_case(e)));
+    by_extension || (path.is_dir() && path.join("Contents").join("Info.plist").exists())
+}
+
+/// The `open` arguments for a canonical path: a folder opens in Finder
+/// (`-a Finder`, never its default handler), a file is revealed in its
+/// folder (`-R`, never opened). Bundles and executable files are refused.
+fn finder_open_args(canonical: &Path) -> Result<Vec<std::ffi::OsString>, String> {
+    if is_executable_target(canonical) {
+        return Err(format!(
+            "refusing to open an application, installer or script: {}",
+            canonical.display()
+        ));
+    }
+    let mut args: Vec<std::ffi::OsString> = if canonical.is_dir() {
+        vec!["-a".into(), "Finder".into()]
+    } else {
+        vec!["-R".into()]
+    };
+    args.push(canonical.as_os_str().to_owned());
+    Ok(args)
+}
+
 /// Open a directory in Finder, or reveal a file in its enclosing folder
 /// (macOS `open` command). The path is canonicalized first: it must exist
 /// and resolve to an absolute path, and a canonical path can never start
-/// with `-`, so it cannot be misparsed as an `open` flag.
+/// with `-`, so it cannot be misparsed as an `open` flag. See
+/// `finder_open_args` for what is refused.
 #[tauri::command]
 async fn open_in_finder(path: String) -> Result<(), String> {
     let canonical =
@@ -545,13 +586,8 @@ async fn open_in_finder(path: String) -> Result<(), String> {
     if !canonical.is_absolute() {
         return Err(format!("path is not absolute: {path}"));
     }
-    let mut cmd = std::process::Command::new("open");
-    if canonical.is_file() {
-        // Reveal files in their enclosing Finder window instead of
-        // launching the default application for the file type.
-        cmd.arg("-R");
-    }
-    let output = cmd.arg(&canonical).output().map_err(|e| e.to_string())?;
+    let args = finder_open_args(&canonical)?;
+    let output = std::process::Command::new("open").args(&args).output().map_err(|e| e.to_string())?;
     if output.status.success() {
         Ok(())
     } else {
@@ -910,6 +946,47 @@ mod tests {
         assert!(!allow_navigation(&url("https://evil.example/"), Some(&dev)));
         // and the app's own origin still is
         assert!(allow_navigation(&url("tauri://localhost/"), Some(&dev)));
+    }
+
+    #[test]
+    fn a_folder_opens_in_finder_and_a_file_is_revealed() {
+        let dir = tmp_dir("finder-plain");
+        let folder = dir.join("Client work");
+        std::fs::create_dir_all(&folder).unwrap();
+        let file = folder.join("invoice.pdf");
+        std::fs::write(&file, b"%PDF").unwrap();
+        let args = |p: &Path| -> Vec<String> {
+            finder_open_args(p).unwrap().into_iter().map(|a| a.into_string().unwrap()).collect()
+        };
+        assert_eq!(args(&folder), vec!["-a".to_string(), "Finder".into(), folder.display().to_string()]);
+        assert_eq!(args(&file), vec!["-R".to_string(), file.display().to_string()]);
+        // a dotted folder name that is not a bundle type is a plain folder
+        let dotted = dir.join("v2.3.0");
+        std::fs::create_dir_all(&dotted).unwrap();
+        assert_eq!(args(&dotted)[0], "-a");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn bundles_and_executable_files_are_refused() {
+        let dir = tmp_dir("finder-bundles");
+        for name in ["Invoice.app", "Setup.PKG", "Tool.bundle", "Run.workflow"] {
+            let bundle = dir.join(name);
+            std::fs::create_dir_all(&bundle).unwrap();
+            let err = finder_open_args(&bundle).unwrap_err();
+            assert!(err.contains("refusing"), "{name}: {err}");
+        }
+        for name in ["run.command", "shell.terminal", "Installer.pkg"] {
+            let file = dir.join(name);
+            std::fs::write(&file, b"#!/bin/sh").unwrap();
+            assert!(finder_open_args(&file).is_err(), "{name} must be refused");
+        }
+        // an application bundle renamed to look like a folder
+        let disguised = dir.join("Invoices 2026");
+        std::fs::create_dir_all(disguised.join("Contents")).unwrap();
+        std::fs::write(disguised.join("Contents").join("Info.plist"), b"<plist/>").unwrap();
+        assert!(finder_open_args(&disguised).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
