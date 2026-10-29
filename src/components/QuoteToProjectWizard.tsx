@@ -148,9 +148,9 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
             <div
               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
                 i < step
-                  ? "bg-[var(--accent)] text-white"
+                  ? "bg-accent text-white"
                   : i === step
-                  ? "bg-[var(--accent)] text-white"
+                  ? "bg-accent text-white"
                   : "bg-[var(--color-input-bg)] text-muted"
               }`}
             >
