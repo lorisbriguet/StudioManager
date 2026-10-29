@@ -331,8 +331,10 @@ interface DropdownSelectCommon {
   autoFocus?: boolean;
   /** Called when focus leaves the dropdown (trigger and panel). */
   onBlur?: () => void;
-  /** Called when the trigger gets focus (e.g. lazy-load the options). */
+  /** Called when the trigger gets focus. Not for lazy-loading: WebKit doesn't focus a clicked button; use `onOpen`. */
   onFocus?: () => void;
+  /** Called each time the menu opens (click, arrow keys, defaultOpen): lazy-load or refresh the options here. */
+  onOpen?: () => void;
   renderValue?: (selected: DropdownOption[]) => ReactNode;
   /** A name is required: aria-label, aria-labelledby, or an `id` a <label htmlFor> points at (FormField, SettingRow). */
   "aria-label"?: string;
@@ -376,6 +378,7 @@ export function DropdownSelect(props: DropdownSelectProps) {
     autoFocus,
     onBlur,
     onFocus,
+    onOpen,
     renderValue,
   } = props;
   const t = useT();
@@ -393,6 +396,11 @@ export function DropdownSelect(props: DropdownSelectProps) {
   const [query, setQuery] = useState("");
   const onBlurRef = useRef(onBlur);
   onBlurRef.current = onBlur;
+  const onOpenRef = useRef(onOpen);
+  onOpenRef.current = onOpen;
+  useEffect(() => {
+    if (open) onOpenRef.current?.();
+  }, [open]);
 
   const selectedValues = props.multiple ? props.value : [props.value];
   const selected = options.filter((o) => selectedValues.includes(o.value));

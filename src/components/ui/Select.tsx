@@ -2,10 +2,12 @@ import {
   Children,
   Fragment,
   isValidElement,
+  useContext,
   type ChangeEvent,
   type ReactNode,
 } from "react";
 import { DropdownSelect, type DropdownOption } from "./Dropdown";
+import { FormModalContext } from "./Form";
 
 /**
  * Select — the app's select field, drawn with DropdownSelect (no native
@@ -42,6 +44,8 @@ export interface SelectProps {
   autoFocus?: boolean;
   onBlur?: () => void;
   onFocus?: () => void;
+  /** Each time the menu opens: lazy-load or refresh the options (see DropdownSelect). */
+  onOpen?: () => void;
   "aria-label"?: string;
   "aria-labelledby"?: string;
   "aria-required"?: boolean | "true" | "false";
@@ -74,6 +78,9 @@ export function optionsFromChildren(children: ReactNode, group?: string, out: Dr
 }
 
 export function Select({ value, onChange, children, name, placeholder, ...rest }: SelectProps) {
+  // A pick fires no input/change event, so tell a surrounding FormModal the
+  // form changed (its backdrop click then no longer discards it).
+  const form = useContext(FormModalContext);
   const options = optionsFromChildren(children);
   const current = value == null ? "" : String(value);
   // Like a native select: an unmatched value shows the first option.
@@ -85,6 +92,7 @@ export function Select({ value, onChange, children, name, placeholder, ...rest }
       value={matched ? current : (options[0]?.value ?? "")}
       placeholder={placeholder}
       onChange={(v) => {
+        form?.markDirty();
         const target = { value: v, name: name ?? "" };
         onChange?.({ target, currentTarget: target } as unknown as ChangeEvent<HTMLSelectElement>);
       }}
