@@ -19,7 +19,7 @@ An agent in Needs you that has waited for more than 2 hours with no change, or t
 
 For each agent you can read the conversation. Agents started in the background (from this page or with `claude --bg`) also let you send a message, switch model, stop or delete them. Agents started in a terminal are listed and readable only. In Needs you you can also dismiss an agent.
 
-- **Send a message:** not while a prompt is open, and not for agents started in a terminal.
+- **Send a message:** not while a prompt is open, and not for agents started in a terminal. The message always reaches the agent as text: it is pasted in one piece, then Enter is pressed. A message that starts with `!` or `/` gets a space in front, so it never runs a shell command or a slash command such as `/clear`: use the terminal for those. If a prompt opens while the message is being pasted, Enter is not pressed and the message stays in the agent's input.
 - **Switch model:** stops the agent and continues the same conversation as a new agent on the model you pick.
 
 ## New agent

@@ -569,6 +569,8 @@ mod tests {
             let next = match data {
                 b"\x1b[B" => &self.after_down,
                 b"\r" => &None,
+                // A pasted message is text; other escapes are keys.
+                d if d.starts_with(b"\x1b[200~") => &self.after_text,
                 d if d.starts_with(b"\x1b") => &None,
                 _ => &self.after_text,
             };
@@ -775,11 +777,11 @@ mod tests {
         let err = send_message(&f.hub, &idle_agent(), "hi").unwrap_err();
         assert!(err.starts_with("Answer the open prompt first"), "{err}");
         assert!(err.contains("typed but not sent"), "{err}");
-        assert_eq!(f.writes(), vec!["hi"], "no Enter");
+        assert_eq!(f.writes(), vec!["\x1b[200~hi\x1b[201~"], "no Enter");
         assert_eq!(f.hub.len(), 0, "temporary terminal closed");
         // Without a prompt the same send presses Enter.
         let f = fake_typed(NONE, None, Some(NONE));
         send_message(&f.hub, &idle_agent(), "hi").unwrap();
-        assert_eq!(f.writes(), vec!["hi", "\r"]);
+        assert_eq!(f.writes(), vec!["\x1b[200~hi\x1b[201~", "\r"]);
     }
 }

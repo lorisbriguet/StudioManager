@@ -456,7 +456,7 @@ impl TerminalHub {
     }
 }
 
-/// Types `text` into a background agent, as the reference `sendToSession` does. An open terminal
+/// Pastes `text` into a background agent, then presses Enter. An open terminal
 /// is reused and left open; otherwise a temporary one is attached and closed 2 s after the Enter.
 pub fn send_message(hub: &TerminalHub, agent: &Agent, text: &str) -> Result<(), String> {
     if agent.kind != Kind::Background {
@@ -467,12 +467,7 @@ pub fn send_message(hub: &TerminalHub, agent: &Agent, text: &str) -> Result<(), 
     }
     let text = normalise_message(text).ok_or("Invalid message")?;
     let short_id = agent.short_id.as_deref().ok_or("Agent has no id")?;
-    let payload = if text.contains('\n') {
-        format!("\x1b[200~{text}\x1b[201~")
-    } else {
-        // Typed as keys: a Tab would trigger the TUI's completion.
-        text.replace('\t', "  ")
-    };
+    let payload = paste_payload(&text);
 
     let guard = hub.lock_agent(short_id);
     if let Some(id) = hub.existing(short_id) {
@@ -492,6 +487,22 @@ pub fn send_message(hub: &TerminalHub, agent: &Agent, text: &str) -> Result<(), 
         drop(guard);
     });
     Ok(())
+}
+
+/// The message as one bracketed paste that Claude Code takes as plain text.
+///
+/// Never typed as keys: a Tab would trigger completion. A paste alone is not enough either
+/// (checked against Claude Code 2.1): a leading `!` still switches the input to shell mode
+/// and a leading `/` opens the slash-command menu, so the Enter would run "!rm …" in the
+/// agent's folder or "/clear" its context. A space in front makes both plain text. A last
+/// word starting with `@` opens the file menu, which would take the Enter: a space after it
+/// closes the menu. `normalise_message` refused control characters, so the text cannot end
+/// the paste early.
+fn paste_payload(text: &str) -> String {
+    let lead = if text.starts_with(['!', '/']) { " " } else { "" };
+    let mention_last = text.rsplit(char::is_whitespace).next().is_some_and(|w| w.starts_with('@'));
+    let trail = if mention_last { " " } else { "" };
+    format!("\x1b[200~{lead}{text}{trail}\x1b[201~")
 }
 
 /// The CLI's status can lag: a prompt that opened since would take the typed text as an answer.
@@ -902,9 +913,33 @@ pub(super) mod tests {
     fn send_single_line() {
         let (hub, spawner, clock) = hub();
         send_message(&hub, &agent("bg", "idle"), "hi").unwrap();
-        assert_eq!(spawner.handles()[0].writes(), vec!["hi", "\r"]);
+        assert_eq!(spawner.handles()[0].writes(), vec!["\x1b[200~hi\x1b[201~", "\r"]);
         assert_eq!(*spawner.handles()[0].size.lock().unwrap(), (80, 24));
         assert!(clock.sleeps.lock().unwrap().contains(&300));
+    }
+
+    /// Typed as keys (or pasted as is), a leading `!` would switch Claude Code to shell mode
+    /// and `/` would run a slash command: every message goes in as one plain-text paste, then
+    /// the Enter on its own.
+    #[test]
+    fn send_bang_and_slash_as_bracketed_paste() {
+        for (text, pasted) in [
+            // A leading space keeps Claude Code out of shell mode and the slash-command menu.
+            ("!ls", "\x1b[200~ !ls\x1b[201~"),
+            ("/clear", "\x1b[200~ /clear\x1b[201~"),
+            ("/clear\nmore", "\x1b[200~ /clear\nmore\x1b[201~"),
+            // Already plain text: unchanged.
+            (" /clear", "\x1b[200~ /clear\x1b[201~"),
+            ("a !b /c", "\x1b[200~a !b /c\x1b[201~"),
+            ("a\tb", "\x1b[200~a\tb\x1b[201~"),
+            // A trailing @word would open the file menu and take the Enter.
+            ("see @notes", "\x1b[200~see @notes \x1b[201~"),
+            ("@a b", "\x1b[200~@a b\x1b[201~"),
+        ] {
+            let (hub, spawner, _) = hub();
+            send_message(&hub, &agent("bg", "idle"), text).unwrap();
+            assert_eq!(spawner.handles()[0].writes(), vec![pasted, "\r"], "{text:?}");
+        }
     }
 
     #[test]
@@ -959,7 +994,7 @@ pub(super) mod tests {
         let id = open(&hub, "0a1b2c3d").unwrap();
         send_message(&hub, &agent("bg", "idle"), "hi").unwrap();
         assert_eq!(spawner.handles().len(), 1);
-        assert_eq!(spawner.handles()[0].writes(), vec!["hi", "\r"]);
+        assert_eq!(spawner.handles()[0].writes(), vec!["\x1b[200~hi\x1b[201~", "\r"]);
         std::thread::sleep(Duration::from_millis(50));
         assert_eq!(hub.existing("0a1b2c3d"), Some(id), "the panel stays open");
     }
