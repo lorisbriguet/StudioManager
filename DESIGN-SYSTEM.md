@@ -30,7 +30,7 @@ All colours are CSS custom properties in `src/index.css` (`@theme`, then `.dark`
 - **Borders by role**, never by look: a row/section divider, a surface edge, or a control edge.
 - **Tints and the focus ring come from the accent at runtime**: use the utilities, never retype `color-mix`.
 - **Text on a coloured fill** is `text-on-accent` / `text-on-danger` / `text-on-banner`, never `text-white`. The on-colour is whichever of white and near-black `#111827` has more contrast with the fill (`onColorFor` in `lib/themeTokens.ts`), so a mid-tone accent such as Orange gets near-black text.
-- **Coloured text uses the `-text` token, never the solid.** Accent text is `text-accent-text` (links, active nav, accent badges, the selected menu row); status text is `text-success-text` / `text-warning-text` / `text-danger-text`. The solids (`accent`, `success`, `warning`, `danger`) are for fills, dots, borders and rings: as text they miss 4.5:1 on white or on dark.
+- **Coloured text uses the `-text` token, never the solid.** Accent text is `text-accent-text` (links, active nav, accent badges, the selected menu row); status text is `text-success-text` / `text-warning-text` / `text-danger-text`. The solids (`accent`, `success`, `warning`, `danger`, `info`) are for fills, dots, borders and rings: as text they miss 4.5:1 on white or on dark.
 - **Contrast targets**: 4.5:1 for text, 3:1 for a control boundary (the Checkbox edge). `src/__tests__/colourTokens.test.ts` computes them from the real tokens for every theme and preset.
 
 ### Backgrounds
@@ -72,7 +72,7 @@ Three roles, three distinct values, each step stronger:
 ### Accent
 | Token / utility | Value | Usage |
 |-------|-------|-------|
-| `--color-accent` | `#2563eb` (preset or theme) | Fills, borders, rings, dots: primary buttons, selection, the active tab underline. Not text |
+| `--color-accent` | `#2563eb` in the stylesheet; at runtime the accent preset, or the theme's own (Default Dark: slate `#64748b`) | Fills, borders, rings, dots: primary buttons, selection, the active tab underline. Not text |
 | `--color-accent-text` | light: accent 60% over text; dark: accent 60% over white | Accent-coloured **text** (`text-accent-text`): links, `Button variant="link"`, active NavItem, accent Badge, the selected Dropdown row, calendar events. 4.5:1 on bg, surface, accent-light and the accent tints for every preset |
 | `--color-accent-light` | preset light / dark tint | Selected task chip, unread notification hover |
 | `bg-accent-tint` | accent 5% | Selected menu row, editing table row, today in the calendar |
@@ -94,9 +94,10 @@ Status colours alias them, so a status pill and a tag of the same colour are the
 | `--color-warning-bg` / `-text` | yellow | `#fef3c7` / `#92400e` | `#1c1917` / `#fbbf24` |
 | `--color-danger-bg` / `-text` | red | `#fee2e2` / `#b91c1c` | `#2a1215` / `#f87171` |
 | `--color-info-bg` / `-text` | blue | `#dbeafe` / `#1d4ed8` | `#1a2332` / `#60a5fa` |
+| `--color-info` | (solid) | `#2563eb` | `#60a5fa` |
 | `--color-indigo-bg` / `-text` | (own) | `#e0e7ff` / `#4338ca` | `#1a1a2e` / `#818cf8` |
 
-`--color-success`, `--color-warning`, `--color-danger` are the solid fills (dots, the now line, the Sidebar timer pulse); dark mode's danger is `#ef4444`. Status-coloured text (a StatTile value, an overdue date, a "paid" note) uses the `-text` token, never the solid. Calendar event kinds (`.fc-priority-high`, `.fc-deadline`, `.fc-invoice-overdue` → danger; `.fc-priority-medium`, `.fc-invoice-sent`, `.fc-quote-expiry` → warning; `.fc-done` → success) use the status tokens, so they follow dark mode and themes.
+`--color-success`, `--color-warning`, `--color-danger` and `--color-info` are the solid fills (dots, the now line, the Sidebar timer pulse, the agent status dots: `bg-info` for a running agent); dark mode's danger is `#ef4444` and info `#60a5fa` (the dark tag blue, 3:1 as a dot on every dark theme's surface). Themes have no info colour of their own: `themeTokens` gives the one for their mode (`INFO_COLORS` in `lib/themeTokens.ts`). Status-coloured text (a StatTile value, an overdue date, a "paid" note) uses the `-text` token, never the solid. Calendar event kinds (`.fc-priority-high`, `.fc-deadline`, `.fc-invoice-overdue` → danger; `.fc-priority-medium`, `.fc-invoice-sent`, `.fc-quote-expiry` → warning; `.fc-done` → success) use the status tokens, so they follow dark mode and themes.
 
 ### Charts
 `useChartTheme()` returns CSS variable strings (Recharts passes them to SVG): grid `--color-border-divider`, ticks `--color-muted`, cursor `--color-overlay-hover`, tooltip `--color-surface` / `--color-text` / `--shadow-menu`. Series use `--color-chart-1…8`, or a tag colour (`getTagColor(name).text`) when the series is a category.
@@ -135,7 +136,7 @@ style={{ color: dark ? "#888" : "#999" }}
 ### Themes
 A theme (`src/lib/themes.ts`) gives its base colours: bg, surface, text, muted, border, sidebar, accent, status solids and charts. `applyThemeColors` (`stores/app-store.ts`) sets the full token set inline on `<html>` from `themeTokens()` (`src/lib/themeTokens.ts`), deriving what the theme leaves out with `color-mix`: text-secondary, input-bg (text 8% over surface, so fields show on cards), hover-row (text 4% over bg), border-divider (fainter than border), input-border (stronger than border), checkbox-border (muted 75% over surface), the status bg/text pairs (text: the status colour 55% over text in dark, 50% in light), accent-text, and on-accent / on-danger from `onColorFor`. Dark custom themes also re-derive the tag palette from their surface (tag colour 15% over surface, text 50% over the theme text), so tags don't read as dark holes on a lighter surface. A theme's muted must reach 4.5:1 on its bg and surface (the test checks it). It sets `--color-bg` / `--color-text`, never `body.style`.
 
-The two default themes mirror `src/index.css` value for value (the `colourTokens` test checks it). Choosing one clears the inline overrides so the stylesheet applies and the dark-mode toggle keeps working.
+The two default themes mirror `src/index.css` value for value, except their accent (the `colourTokens` test checks both). Choosing one clears the inline overrides so the stylesheet applies and the dark-mode toggle keeps working; `applyAccentColor` (`stores/app-store.ts`) then sets only the theme's accent inline. Default Light's is the stylesheet blue `#2563eb`. Default Dark's is its own slate, `#64748b` (accent-light `#0f172a`, hover `#475569`), not the stylesheet's blue: `.dark` sets no accent, so the slate always comes from the theme. The test covers the slate like any accent (on-accent on the fill, accent-text 4.5:1 on bg, surface and accent-light). An accent preset picked afterwards replaces it the same way.
 
 ---
 
@@ -338,6 +339,11 @@ One icon per concept, so the same thing always looks the same. Use the `ICONS` k
 | Recurring | `recurring` | `Repeat` | |
 | Updates | `updates` | `RefreshCw` | |
 | Save layout | `saveLayout` | `Save` | |
+| Attachment | `attachment` | `Paperclip` | Attach a file, a receipt that will be attached |
+| Attach an image | `attachImage` | `ImagePlus` | A machine photo, an image in a composer |
+| Archive | `archive` | `Archive` | |
+| Restore, reset | `restore` | `RotateCcw` | Unarchive, reset filters; same glyph as `markUnpaid` |
+| Camera | `camera` | `Camera` | The camera machine type, a photo taken |
 | Dashboard | `dashboard` | `LayoutDashboard` | |
 | Client | `client` | `Users` | |
 | Contact | `contact` | `UserRound` | |
@@ -369,6 +375,8 @@ One icon per concept, so the same thing always looks the same. Use the `ICONS` k
 | Collapse / expand sidebar | `collapseSidebar` · `expandSidebar` | `PanelLeftClose` · `PanelLeftOpen` | |
 | Agents | `agents` | `Bot` | Agents page, Settings → Agents |
 | Studio upkeep | `upkeep` | `Wrench` | Upkeep page, Settings → Upkeep |
+| Graph | `graph` | `Waypoints` | The wiki graph, a link map |
+| Disk, storage | `disk` | `HardDrive` | The NAS machine type, a disk or volume |
 
 ---
 
@@ -388,7 +396,11 @@ Two standardized dot sizes defined as CSS classes in `index.css`. Never use inli
 
 // WRONG — don't inline dot sizes
 <span className="inline-block w-2 h-2 rounded-full bg-danger" />
+// WRONG — a dot is a solid fill, never a -text token
+<span className="dot bg-[var(--color-info-text)]" />
 ```
+
+Dot fills are the solids: `bg-success`, `bg-warning`, `bg-danger`, `bg-info`, `bg-accent`. Agent status dots come from `agentGroupDotClass` (see [Status Colors](#status-colors)).
 
 **Special cases** (not using dot classes):
 - Sidebar notification ping: animated pulse, unique pattern
@@ -415,6 +427,8 @@ Priorities use colored `dot` class, never text symbols:
 ## Shared Components
 
 Always use shared components from `src/components/ui/`. Never write raw HTML equivalents with custom classes.
+
+Import them from the index, `src/components/ui/index.ts` (`from "../components/ui"`), never from a component file: it exports every component and the shared classes, including the menu row classes (`MENU_ITEM`, `MENU_DIVIDER`, `MENU_GROUP_LABEL`, `MENU_TONE`), `Labelled`, and `TabList` / `tabIds`. Files inside `src/components/ui/` import each other directly (`./Dropdown`), never through the index, so the index never imports itself in a loop.
 
 ### Card
 ```tsx
@@ -487,6 +501,8 @@ Deep dive, with the counts behind this choice: [StudioManager Button](https://cl
 <IconButton href={url} target="_blank" icon={ICONS.openExternal} label={t.open} />          // an <a>
 ```
 
+**Rows that track hover in React state** (the WebKit stale-hover workaround, e.g. `SortableSubtaskRow`) don't use `reveal`: they show their buttons from that state and add `focus-visible:opacity-100`, so keyboard focus still shows the handle.
+
 | Prop | Values | |
 |------|--------|--|
 | `icon` | a lucide icon component | `ICONS.edit`, not `<Pencil />` |
@@ -499,6 +515,7 @@ Deep dive, with the counts behind this choice: [StudioManager Button](https://cl
 | `pressed` | boolean | A toggle: `aria-pressed` and the active look when true. Keep the `label` the same in both states |
 | `color` | `danger` · `accent` | Coloured at rest, not only on hover: a running timer, a confirm check |
 | `iconClassName` | string | Classes on the icon, e.g. a rotating expand chevron. The icon size can't be changed. |
+| `floating` | boolean | A round chip on a bordered surface, pinned over the top-right corner of its `relative` parent: remove a thumbnail (the agent composer's attached images). No positioning classes to add |
 
 At rest an IconButton is `text-muted`. Disabled is `opacity-30`, with clicks turned off.
 
@@ -517,10 +534,10 @@ These patterns keep raw `<button>` elements — do not convert them to the share
 
 - **Icon sizes**: Button draws its `icon` at `12`; IconButton at `14` (sm) or `12` (xs). Pass the component, never a size.
 - **Sanctioned className modifiers** on `variant="link"` (only these two):
-  - `text-muted hover:text-accent` — quiet links (add-condition, save-filter, folder actions)
+  - `text-muted hover:text-accent-text` — quiet links (add-condition, save-filter, folder actions). Never `hover:text-accent` (the solid isn't text, see [CSS Tokens](#css-tokens)) or `hover:text-accent-hover` (no such text token)
   - `text-danger-text` — danger links (clear date)
 
-  Both rely on Tailwind emitting these color utilities *after* `text-accent` in the compiled CSS (driven by `@theme` declaration order in `index.css`). Verify compiled order before introducing any other color override.
+  Both rely on Tailwind emitting these color utilities *after* `text-accent-text` in the compiled CSS (driven by `@theme` declaration order in `index.css`). Verify compiled order before introducing any other color override.
 - **Full-width footer add-row** (named pattern: `WorkloadTable` and `NamedTable` table footers): `variant="link"` + `className="w-full px-* py-*"` — explicit `px/py` reliably restores padding over the variant's `p-0`. To suppress the variant's hover underline (as in `WorkloadTable`), use `hover:no-underline!` — the important modifier is required because plain `hover:no-underline` sorts *before* `hover:underline` in the compiled CSS and loses.
 
 ### Badge
@@ -564,10 +581,12 @@ One size: `CONTROL_BOX` (`px-2.5 py-1 text-xs leading-4 border`) and `rounded-md
 
 - **Numbers:** `numeric` aligns right with tabular digits (`NUMERIC`), hides the spinner arrows and defaults `type` to `"number"`. Money fields take `step="0.01"`.
 - **Units:** `unit` is a muted suffix inside the box (`CHF`, `%`, `h`, `m`), read out with the field. Never a span next to the field. An amount shows its record's currency (the invoice's or quote's, CHF elsewhere).
+- **Money as text:** `formatMoney(amount, currency)` (`src/lib/upkeep/money.ts`) writes "CHF 1’234.50": Swiss grouping (de-CH), the currency code first, in both languages (FR doesn't switch to "1 234.50 CHF"), the same as the invoice and quote PDFs and the dashboard. A negative amount puts the sign on the number ("CHF -5.00"); a code that isn't ISO 4217 is kept as typed.
 - **Icon and clear:** `icon` is a leading 12px icon. `onClear` adds a trailing `xs` clear `IconButton` while there is a value (`clearLabel` names it). `trailing` takes your own control (DatePicker's calendar button).
 - **Width:** full width by default. Short fields take `width`: `xs` 64px (hours, minutes), `sm` 96px (rates, %), `md` 144px (amounts with a unit). Never `w-16`/`w-24`/… on a field.
 - **Wrapper:** with `icon`, `unit`, `onClear` or `trailing`, the field sits in a wrapper: `className` goes on the wrapper (layout) and `inputClassName` on the field.
 - **Textarea:** `rows` (3) is the starting height. It grows with its content up to `maxRows` (12), then scrolls: CSS `field-sizing: content`, with a height that follows the content where the engine lacks it. Notes use the default 3 rows. `fill` fills the parent's height, without growing or a resize handle.
+- **Composer:** `Textarea variant="composer"` (`TextareaVariant` is `default` · `bare` · `composer`) is a message box (the Agents composer): one `rounded-xl` frame (input-bg, input-border, `p-2`, accent border on `focus-within`) holding the text and its buttons. `leading` (attach) sits left of the text, `trailing` (send) on the right, both bottom-aligned with the first line; `attachments` is a wrapping row of thumbnails above the text; `highlight` draws the accent frame without focus (a file dragged over the window). `className` goes on the frame, `textareaClassName` on the textarea. The slots are ignored by the other variants. A thumbnail's remove button is `IconButton size="xs" floating`.
 - **Names:** every field has one: a `FormField` label, or `aria-label` (table cells: the column name).
 - **Dark mode:** the native-field defaults in `src/index.css` sit in `@layer base`, so these classes win over them.
 - **Class string:** for the rare control that can't be one of these, use `fieldClass({ variant, width, readOnly, detected, numeric })`.
@@ -669,7 +688,7 @@ import { Modal, Kbd } from "../components/ui";
 - **A name for every dialog:** a `title`, or an `aria-label` when there is none (palettes).
 - **Rendering:** it renders on `<body>`, so a transformed panel (the side peek) can't trap it. Tests should query `document` or `screen`, not the render container.
 - **Position:** `position="top"` places the dialog 20% from the top.
-- **Built in:** backdrop click and Esc close the dialog (only the topmost one, when a confirmation is open over a form), focus is trapped while open (Tab skips `tabindex="-1"` elements such as calendar days, and hidden ones), and focus returns to where it was on close.
+- **Built in:** backdrop click and Esc close the dialog (`closeOnBackdrop={false}` keeps it open on a backdrop click, a press that starts in a field and ends on the backdrop never counts; only the topmost one closes, when a confirmation is open over a form), focus is trapped while open (Tab skips `tabindex="-1"` elements such as calendar days, and hidden ones), and focus returns to where it was on close.
 - **Never build your own overlay** (`fixed inset-0 bg-black/…`).
 - **`Kbd`:** draws a key hint.
 
@@ -765,7 +784,9 @@ import { invoiceStatusVariant, quoteStatusVariant, taskStatusVariant, projectSta
 
 The variants' colours are the status tokens, which alias the tag palette (green, yellow, red, blue; indigo has its own pair). See [Status and tag colours](#status-and-tag-colours). Danger text is one value (`#b91c1c` light, `#f87171` dark), warning one pair (`#fef3c7` / `#92400e` light). Dots use the solids: `invoiceStatusDotClass` and `priorityDotClass` return `bg-success` / `bg-warning` / `bg-danger`.
 
-Studio upkeep and agents have their own helpers in the same file: `machineStatusVariant` (working success, attention warning, broken danger, lent info, retired neutral), `dueStateVariant` (overdue danger, soon warning), `diskHealthVariant`, `connectionVariant` (failing danger) and `agentGroupVariant` (needs you warning, working info, idle neutral, done success).
+Studio upkeep and agents have their own helpers in the same file: `machineStatusVariant` (working success, attention warning, broken danger, lent info, retired neutral), `dueStateVariant` (overdue danger, soon warning), `diskHealthVariant`, `connectionVariant` (failing danger) and `agentGroupVariant` (needs you warning, working info, idle neutral, done success). An agent's status dot is `agentGroupDotClass(group)` (`bg-warning`, `bg-info` pulsing while it works, `bg-checkbox-border` idle, `bg-success`) and a line coloured by its group is `agentGroupTextClass(group)` (the `-text` tokens, muted when idle); a routine's last run in the menu bar uses `routineRunTextClass` (the same colours, failed in danger). Never fill a dot with a `-text` token.
+
+**Agents page.** A prompt's answer options submit (they aren't toggles): the pre-selected default is marked `aria-current="true"` with a visually hidden "(default)" suffix, not `aria-pressed`. The conversation is `role="log" aria-live="polite"` once its first load is done, so the history isn't read out on open.
 
 ---
 
@@ -795,6 +816,7 @@ Forms are built from `FormLayout`, `FormSection`, `FormGrid`, `FormField` and `F
 - **Checkboxes and toggles:** their own `label` / `description`, never wrapped in a hand-written `<label>`.
 - **Actions:** right-aligned with the primary last: Cancel (secondary), other actions, primary. A destructive action sits on the far left. In a Modal they go in `footer`, which is the same row.
 - **Every dialog with fields is a `FormModal`:** creating a record (client, expense, income, project, resource, `md`) and the small prompts (new organisation, paid date, make recurring, save as template, `sm`). The body is a `<form>`, so Enter submits; Cancel · other actions · primary in the footer, a Delete in `destructive` on the far left (the column editor). The first field has `autoFocus`. While it saves, pass `submitting` (spinner on the primary, no second submit), not `submitDisabled`, which is for a form that isn't ready. A field that uses Enter itself (suggestions, tag entry) calls `preventDefault`. Tests press Enter with `pressEnter` (`src/__tests__/fixtures/form.ts`): happy-dom doesn't submit a form from a keydown.
+- **FormModal guards:** it submits once: a held Enter (key repeat) and a second Enter or click while an async `onSubmit` runs are ignored (a returned promise shows the spinner until it settles). Once a field has changed (an input or change event, or a pick a field reports with `markDirty()` from the exported `FormModalContext`), a backdrop click no longer closes it (`Modal closeOnBackdrop={false}`); Esc, ✕ and Cancel still do. Pass `dirty` for changes it can't see (a form filled from a receipt), or `false` to let the backdrop always close. A field whose text isn't a value yet blocks the submit and takes the focus: it registers a check with `FormModalContext.register(check)`, which returns the element to focus or null. A `DatePicker` with text that isn't a date ("31.02.2026") does: Enter doesn't submit or reach an `onKeyDown`, and the field shows its own "Enter a valid date" `FieldError` line (not with `variant="bare"`, or when the caller already shows an error) instead of saving the old date behind a red field. The `New…Form` components take `submitting` and pass it on.
 - **Spanning:** `FormField span={2 | 3 | 4 | "full"}`; anything else in a grid (a checkbox row, a note) goes in `FormGridItem`.
 - **Buttons inside a form** don't submit it unless they are `type="submit"`: `Button` defaults to `type="button"`. `FormModal`'s form is `noValidate`, so the app's own errors show, not the browser's.
 - **Errors without a visible label** (a row rename, the line-items check) use `FieldError`.
@@ -845,6 +867,7 @@ Every data table uses `Table` (`src/components/ui/Table.tsx`). Don't write `<tab
 - **Row actions:** always the last column, `IconButton size="xs"` inside `Table.Actions`, shown on row hover, keyboard focus or while a menu from it is open.
 - **Numbers:** `numeric` on `Th` and `Td` right-aligns them with tabular digits.
 - **Empty:** `Table.Empty` inside the body, so the header stays. **Loading:** `TableSkeleton` with the same `density`.
+- **Reordering:** rows that the user orders (line items, workload rows, project table rows) drag with dnd-kit, with the pointer and keyboard sensors both on, and a `DragHandle` in the row.
 - **Totals:** `Table.Foot`, inside the table.
 - **Groups:** `Table.Group`, a collapsible row with a chevron, `SectionLabel`, a count and a total on the right.
 - No container border; the table scrolls sideways when it is too wide.
@@ -863,14 +886,14 @@ Shared class strings and small parts that the components are built from (`src/co
 | `MUTED_INTERACTIVE` | Muted text that darkens on hover | NavItem, TabItem, SegmentedControl, FilterChip, SortHeader, DragHandle |
 | `SURFACE` / `SURFACE_FILL` | A raised surface with / without a border. Add the shadow per use | Popover, Modal / BulkActionBar |
 | `PILL` / `PILL_XS` | The 20px and 16px label pills | Tag, Badge, CountBadge, status pills |
-| `MENU_TONE` | Menu row tones | Dropdown, ContextMenu |
+| `MENU_ITEM` / `MENU_TONE` / `MENU_DIVIDER` / `MENU_GROUP_LABEL` | The menu row, its tones, the divider and the group label | Dropdown, ContextMenu, MenuItem, CommandPalette, the workload column menu |
 | `FORM_GAP` / `FORM_STACK` / `FORM_WIDTH` / `FORM_ACTIONS` / `FIELD_LABEL` / `FORM_SPAN` | Form spacing, width, the action row and the field label | FormGrid, FormLayout, FormActions, Modal footer, FormField |
 | `TABLE_X` / `TABLE_ROW_H` / `TABLE_TH` / `NUMERIC` | Table geometry per density: cell sides, row height, header text, numbers | Table, SortHeader, TableSkeleton |
 | `revealClass(reveal)` | Reveal-on-hover for `true` or a named group (`"task"` → `group/task`) | IconButton, DragHandle |
 | `useTagColor(name, color?)` | A tag's colours for the current mode | Tag, FilterChip |
 | `<PanelTitle title action? tone? variant?>` | A title on the left and an action on the right | Modal header, SectionLabel with `action`, dashboard widgets, line items |
 | `<Spinner tone="accent"\|"current">` | The loading spinner, announced as "Loading" | Button `loading`, PageSpinner |
-| `Labelled` | A control with a clickable label and description | Checkbox, Radio, Toggle |
+| `Labelled` | A control with a clickable label and description (exported from the `ui` index) | Checkbox, Radio, Toggle |
 
 - **`Card`:** it takes `as="section"`, and SettingsCard is built on it.
 - **`Toggle`:** it takes `label` and `description`, like Checkbox.
@@ -943,6 +966,7 @@ Every surface that reads data goes through the same five states, in this order. 
 | `sm` | Dashboard widgets, project and client blocks, side panels, popovers | 20px | `text-xs` | `py-4` |
 
 - `icon` takes the Lucide component (`icon={FolderOpen}`) so the size follows `size`; an element is kept as is.
+- `tone="danger"` is an error state: the icon in the danger colour, and the block is `role="alert"`, so it is announced when it appears.
 - **Wording:** say what is empty: "Nothing overdue", "No unpaid invoices", "No projects for this client yet". Short labels take no trailing period ("No results").
 - Every entity list's empty state offers its "New …" action.
 
@@ -992,8 +1016,10 @@ await notify.progress(t.generating_pdf, work(), {          // spinner, then the 
 | `undo` | 8 s | — | A reversible change, with Undo (see [Confirmations](#confirmations)) |
 | `progress` | while it runs | spinner | A task of more than a moment (a PDF, an export) |
 
-- **Errors show the label, never the raw error.** `notify.error(label, err)` shows the translated label, writes the raw error to the log and puts a "Copy details" action on the toast that copies it. The same label shows at most once in 30 s (it is still logged each time). Never pass `String(e)` or `e.message` as the message.
-- **A failed save is reported once, by the query client.** Each mutation in `src/db/hooks` names its label with `meta: { errorLabel: "error_save_invoice" }` (a `ui.ts` key, checked by TypeScript); the `MutationCache` in `src/lib/queryClient.ts` calls `notify.error` with it (`operation_failed` when there is none). Hooks and call sites don't add an `onError` toast for the same failure: a `try/catch` around `mutateAsync` only stops the flow (`// reported by the mutation`). A hook-level `onError` opts out of the backstop.
+- **Inline errors too:** an error shown in place (the Agents page: a failed start, send or answer) is a `Callout tone="danger"` with a translated label; the raw error goes to `logError`, never on screen.
+- **Errors show the label, never the raw error.** `notify.error(label, err)` shows the translated label, writes the raw error to the log and puts a "Copy details" action on the toast that copies it. An identical error (same label and same cause; a description, when given, counts too) shows once while its toast is up (10 s, `TOAST_DURATION.error`), so a burst of the same failure doesn't stack; a different cause under the same label always shows, so a second, different failed save isn't silenced by the backstop's shared label. Every error is still logged. Never pass `String(e)` or `e.message` as the message.
+- **Refusals and validation aren't errors:** "can't do that" (a refusal, a rule the input breaks) is `notify.warning` or an inline message, never `notify.error`.
+- **A failed save is reported once, by the query client.** Each mutation in `src/db/hooks` names its label with `meta: { errorLabel: "error_save_invoice" }` (a `ui.ts` key, checked by TypeScript); the `MutationCache` in `src/lib/queryClient.ts` calls `notify.error` with it (`operation_failed` when there is none). Hooks and call sites don't add an `onError` toast for the same failure: a `try/catch` around `mutateAsync` only stops the flow (`// reported by the mutation`). A hook-level `onError` opts out of the backstop. So a call site whose mutation has an `errorLabel` never adds its own error toast.
 - **`notify.progress`** replaces hand-made loading toasts (`toast.loading` + ids). `work` can take `update(label)` to change the running text ("Exporting 3 of 10…"). It resolves to the result, or `undefined` when it failed (already reported).
 - **Undo:** the undo store helpers (`deleteWithUndo`, `undoableFromStore`, `pushUndoable`, `undoable` in `src/lib/undo.ts`) all show `notify.undo`. Clicking Undo runs the rollback and then says "Action undone"; Cmd+Z says "Undone: {label}".
 - **Validation is not a toast.** A missing name or a bad folder shows under its field with `FormField error` or `FieldError` (see [Forms](#forms)).
@@ -1014,7 +1040,7 @@ await notify.progress(t.generating_pdf, work(), {          // spinner, then the 
 
 ### Toaster
 
-`<Toaster/>` (`src/components/ui/Toaster.tsx`), mounted once in `App`, bottom right: a `SURFACE` card (surface fill, header border, `rounded-xl`) with `shadow-menu`, 14px text, a `dot` in the kind's colour (a `Spinner` while loading), the description muted, the action (Undo, Copy details) as an accent link. It follows the app's light/dark setting.
+`<Toaster/>` (`src/components/ui/Toaster.tsx`), mounted once in `App`, bottom right: a `SURFACE` card (surface fill, header border, `rounded-xl`) with `shadow-menu`, 14px text, a `dot` in the kind's colour (a `Spinner` while loading), the description muted, the action (Undo, Copy details) as an accent link. It follows the app's light/dark setting. Its region is named by `t.toast_region_label`. Error toasts stay polite like the others: sonner 2.0.8 has no assertive option.
 
 ---
 
@@ -1053,7 +1079,9 @@ const choice = await confirm({ …, extra: { label: t.export_as_draft, value: "d
 | No undo possible: a whole organisation, restoring a backup or snapshot, demo data, resetting the guide, leaving test or presentation mode | Yes (an organisation: type its name) | — |
 
 - **Where it asks:** in place with `ConfirmButton` for a single delete behind its own visible button (a client or project page, the invoice form: "Delete {reference}?"); a `ConfirmDialog` for bulk deletes, a context-menu delete, a whole organisation or the database.
-- **Undo:** a delete mutation pushes its own undo entry (`src/db/hooks`); the page then shows the toast with `deleteWithUndo(mutation, id, t.x_deleted)` (or `undoableFromStore` after a `mutateAsync`). A delete with no hook of its own pushes one with `pushUndoable`. Rows with no restore query are copied before the delete and put back as they were, same ids, with `snapshotRows` / `pushRestore` (`src/db/undoRestore.ts`). The toast is `notify.undo` and stays 8 seconds (`TOAST_DURATION.undo`, see [Toasts](#toasts)).
+- **Undo:** a delete mutation pushes its own undo entry (`src/db/hooks`); the page then shows the toast with `deleteWithUndo(mutation, id, t.x_deleted)` (or `undoableFromStore` after a `mutateAsync`). A delete with no hook of its own pushes one with `pushUndoable`. Rows with no restore query are copied before the delete and put back as they were, same ids, with `snapshotRows` / `pushRestore` (`src/db/undoRestore.ts`). `snapshotRows` takes the row and its cascading children; rows that point at it through `ON DELETE SET NULL` are covered by `snapshotLinks([{ table, column, id }])`, which rewrites only that column on undo, so their `updated_at` is kept. A column with no foreign key (`projects.workload_template_id`) stays valid because the same id comes back. Never re-create a deleted row with a new id. A delete stays undo-instead-of-confirm (see [Which deletes ask](#which-deletes-ask)). The toast is `notify.undo` and stays 8 seconds (`TOAST_DURATION.undo`, see [Toasts](#toasts)).
+- **Undo inside a JSON list** (a change to one item of a row's list, such as a table's columns): compute the restored list at undo time with `reinsertAt(list, item, index, same)` (`src/db/undoRestore.ts`) on the current list, never replay an array captured at delete time (it would wipe later changes).
+- **Tests with real SQL:** a test that depends on real SQLite behaviour (cascades, `SET NULL`, triggers) uses `src/__tests__/fixtures/realSqlite.ts` (`node:sqlite` with the real migrations), not the mocked database.
 - **Bulk:** `useBulkDelete(entity, id => mutation.mutateAsync(id), { message })` (`src/hooks/useBulkDelete.ts`): one question with the count, the deletes in turn (a failed one is reported by its mutation, the rest go on), then one toast; `batchUndo` folds their undo entries into one, so Undo or Cmd+Z brings the whole selection back.
 - **Test and presentation mode:** leave through `useExitMode()` (`src/hooks/useExitMode.ts`), from the banner and from Settings.
 
@@ -1076,9 +1104,24 @@ Rows in a navigation list use `src/components/ui/NavItem.tsx`: the app sidebar, 
 | `sm` (default) | `gap-2 px-3 py-1.5 text-xs` | Settings, wiki explorer, custom lists |
 | `md` | `gap-2.5 px-3.5 py-1.5 text-sm` | App sidebar, profile |
 
-- **Active row:** `bg-accent-light text-accent font-medium` and `aria-current="page"`.
+- **Active row:** `bg-accent-light text-accent-text font-medium` and `aria-current="page"`.
 - **Inactive row:** `text-muted`, turning `hover-row` with secondary text on hover.
 - **Width:** rows are full width. Pass `fill: false` when the row has side margins.
+
+### Tabs
+
+`TabItem` (`src/components/ui/TabItem.tsx`) is one tab. As ARIA tabs, the row is a `TabList`, which renders `role="tablist"` named by `label`, makes the row one Tab stop (a roving tabindex: only the active tab is in the Tab order, only inside a `TabList`) and moves with Left / Right / Home / End, activating as it goes. Each tab gets `id` and `controls` (its panel's id); `tabIds(base, key)` gives both as `{ tab, panel }`. The panel is `role="tabpanel"` with `aria-labelledby` the tab's id. All three come from the `ui` index.
+
+```tsx
+const base = useId();
+<TabList label={t.upkeep}>
+  {keys.map((key) => {
+    const ids = tabIds(base, key);
+    return <TabItem key={key} role="tab" id={ids.tab} controls={ids.panel} label={…} active={key === tab} onActivate={() => setTab(key)} />;
+  })}
+</TabList>
+<div role="tabpanel" id={tabIds(base, tab).panel} aria-labelledby={tabIds(base, tab).tab} tabIndex={0}>…</div>
+```
 
 ### Segmented control
 
@@ -1163,6 +1206,7 @@ const pop = usePopover();
 - It follows its anchor when the page scrolls or the window resizes.
 - A click outside calls `onClose(false)`. Esc calls `onClose(true)`, and a surrounding Modal stays open.
 - Clicks and keys inside it don't reach the anchor's ancestors, such as table rows and forms.
+- An editing popover decides what closing means. The named-table column editor (`ColumnEditorPopover`): Esc discards the edits; a click outside or Enter commits them.
 
 Use `Dropdown` or `ContextMenu` when the content is a plain list of commands. Use `Popover` with the `MENU_*` row classes when rows need extra controls.
 
@@ -1209,15 +1253,16 @@ Item icons are components, drawn at 14px. A popover that holds more than command
 
 **Panel.** `bg-[var(--color-surface)] border-[var(--color-border)] rounded-xl shadow-menu p-1`, min 160px, max 320px wide, 288px tall then scrolls. It renders on `<body>`, 4px under the trigger, so tables, cards and modals never clip it. It flips up when there's no room below.
 
-**Rows.** Inset: `px-2 py-1 rounded-md text-sm`, hover `bg-[var(--color-hover-row)]`. Selected: `text-accent font-medium bg-accent-tint` plus a check 14 on the right. Danger: `text-[var(--color-danger-text)]` on `bg-[var(--color-danger-bg)]`, always last, after a divider. Divider: `my-1 border-t border-[var(--color-border-divider)]`. Group label: the 10px uppercase section label. Use `MENU_PANEL`, `MENU_ITEM`, `MENU_DIVIDER` and `MENU_GROUP_LABEL` from `Dropdown.tsx` for any custom popover.
+**Rows.** Inset: `px-2 py-1 rounded-md text-sm`, hover `bg-[var(--color-hover-row)]`. Selected: `text-accent-text font-medium bg-accent-tint` plus a check 14 on the right. Danger: `text-[var(--color-danger-text)]` on `bg-[var(--color-danger-bg)]`, always last, after a divider. Divider: `my-1 border-t border-[var(--color-border-divider)]`. Group label: the 10px uppercase section label. For any custom popover use `Popover` (its surface is `POPOVER_SURFACE`) with `MenuItem` rows, or the `MENU_ITEM`, `MENU_TONE`, `MENU_DIVIDER` and `MENU_GROUP_LABEL` classes, all from the `ui` index. A list of picks in a panel (the quick timer's project suggestions and task list) is `MenuItem` rows, the current one `selected`, never hand-rolled rows with an `accent-light` hover.
 
 **Behaviour.**
 - Search turns on by itself above 10 options.
 - Keyboard: arrows (they skip disabled rows), Home/End, type-ahead, Enter/Space to pick. Esc and Tab close and return focus to the trigger, and Esc doesn't close a surrounding Modal.
 - Clicks and keys inside the panel don't reach the trigger's ancestors (table rows, forms).
-- `Select` sends no DOM `change` event, so a form that tracks dirty state with `<div onChange>` must call `markDirty()` in each Select's `onChange`.
+- **Lazy options:** `onOpen` on `Select` / `DropdownSelect` runs each time the list opens (click, arrow keys, `defaultOpen`): load or refresh the options there. Not `onFocus`: WebKit doesn't focus a clicked button.
+- `Select` sends no DOM `change` event. Inside a `FormModal`, a pick marks the form dirty by itself; any other form that tracks dirty state with `<div onChange>` must call `markDirty()` in each Select's `onChange`.
 - Tests: open with `pickOption(trigger, "Label")` from `src/__tests__/fixtures/dropdown.ts`.
-- A popup that opens at the text caret and keeps the focus in the editor (the wiki's slash menu and link picker) is a `Popover` with the `MENU_*` row look, `role="listbox"` with `role="option"` rows; `Popover` flips above the caret or slides left instead of leaving the window, and closes when the editor scrolls. A right-click menu is always `ContextMenu`, never hand-built.
+- A popup that opens at the text caret and keeps the focus in the editor (the wiki's slash menu and link picker) is a `Popover` with the `MENU_*` row look, `role="listbox"` with `role="option"` rows; `Popover` flips above the caret or slides left instead of leaving the window, and closes when the editor scrolls. A right-click menu is always `ContextMenu`, never hand-built, and never the only way in: WebKit sends no `contextmenu` event from the keyboard, so the same items also sit behind a "more" `IconButton` (`ICONS.more`, `reveal`, also shown while the row has focus: `group-focus-within:opacity-100`) opening a `Dropdown` (the wiki explorer's article and file rows).
 
 ---
 
@@ -1263,6 +1308,8 @@ const t = useT();
 ```
 
 Keys are defined in `src/i18n/ui.ts` (EN section, then FR section). Always add both.
+
+Counts use `plural()` from `src/i18n/plural.ts` with a `_one` / `_other` pair of keys (`task_count_one` "{count} task", `task_count_other` "{count} tasks"), never `n === 1 ? … : …` around two unrelated keys or an "(s)" suffix.
 
 ---
 
