@@ -1,9 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import * as q from "../queries/expenses";
 import type { Expense, ExpenseCategory } from "../../types/expense";
 import { useUndoStore } from "../../stores/undo-store";
-import { getLabels } from "../../lib/notifyError";
+import { getLabels } from "../../lib/notify";
 
 export function useExpenses() {
   return useQuery({ queryKey: ["expenses"], queryFn: q.getExpenses });
@@ -26,6 +25,7 @@ export function useSupplierCounts() {
 export function useMergeSuppliers() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_merge_suppliers" },
     mutationFn: async ({ canonical, variants }: { canonical: string; variants: string[] }) => {
       const prev = await q.mergeSuppliers(canonical, variants);
       useUndoStore.getState().push({
@@ -45,7 +45,6 @@ export function useMergeSuppliers() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["expenses"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -59,6 +58,7 @@ export function useExpenseCategories() {
 export function useCreateExpense() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_expense" },
     mutationFn: async (data: Omit<Expense, "id" | "created_at" | "updated_at">) => {
       const id = await q.createExpense(data);
       useUndoStore.getState().push({
@@ -75,13 +75,13 @@ export function useCreateExpense() {
       qc.invalidateQueries({ queryKey: ["expenses"] });
       qc.invalidateQueries({ queryKey: ["finance"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useUpdateExpense() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_expense" },
     mutationFn: async ({
       id,
       data,
@@ -110,13 +110,13 @@ export function useUpdateExpense() {
       qc.invalidateQueries({ queryKey: ["expenses"] });
       qc.invalidateQueries({ queryKey: ["finance"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useDeleteExpense() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_delete_expense" },
     mutationFn: async (id: number) => {
       const prev = await q.getExpenseById(id);
       await q.deleteExpense(id);
@@ -136,7 +136,6 @@ export function useDeleteExpense() {
       qc.invalidateQueries({ queryKey: ["expenses"] });
       qc.invalidateQueries({ queryKey: ["finance"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -144,6 +143,7 @@ export function useDeleteExpense() {
 
 export function useDuplicateCheck() {
   return useMutation({
+    meta: { errorLabel: "error_check_duplicates" },
     mutationFn: ({ supplier, amount, date }: { supplier: string; amount: number; date: string }) =>
       q.findDuplicateExpenses(supplier, amount, date),
   });
@@ -154,6 +154,7 @@ export function useDuplicateCheck() {
 export function useCreateExpenseCategory() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_category" },
     mutationFn: async (data: ExpenseCategory) => {
       await q.createExpenseCategory(data);
       useUndoStore.getState().push({
@@ -169,13 +170,13 @@ export function useCreateExpenseCategory() {
       });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["expense-categories"] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useUpdateExpenseCategory() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_category" },
     mutationFn: async (vars: {
       code: string;
       data: Partial<Omit<ExpenseCategory, "code">>;
@@ -206,13 +207,13 @@ export function useUpdateExpenseCategory() {
       qc.invalidateQueries({ queryKey: ["expense-categories"] });
       qc.invalidateQueries({ queryKey: ["finance"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useDeleteExpenseCategory() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_delete_category" },
     mutationFn: async (code: string) => {
       const prev = await q.getExpenseCategory(code);
       await q.deleteExpenseCategory(code);
@@ -236,7 +237,6 @@ export function useDeleteExpenseCategory() {
       qc.invalidateQueries({ queryKey: ["expense-categories"] });
       qc.invalidateQueries({ queryKey: ["finance"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 

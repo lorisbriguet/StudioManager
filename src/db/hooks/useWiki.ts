@@ -15,7 +15,7 @@ import {
   getWikiArticlesByProject,
 } from "../queries/wiki";
 import { useUndoStore } from "../../stores/undo-store";
-import { getLabels } from "../../lib/notifyError";
+import { getLabels } from "../../lib/notify";
 
 // ── Folders ──────────────────────────────────────────────────
 
@@ -29,6 +29,7 @@ export function useWikiFolders() {
 export function useCreateWikiFolder() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_folder" },
     mutationFn: (name: string) => createWikiFolder(name),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["wiki-folders"] }),
   });
@@ -37,6 +38,7 @@ export function useCreateWikiFolder() {
 export function useUpdateWikiFolder() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_folder" },
     mutationFn: ({ id, data }: { id: number; data: { name?: string; sort_order?: number } }) =>
       updateWikiFolder(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["wiki-folders"] }),
@@ -46,6 +48,7 @@ export function useUpdateWikiFolder() {
 export function useDeleteWikiFolder() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_delete_folder" },
     mutationFn: (id: number) => deleteWikiFolder(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["wiki-folders"] });
@@ -74,6 +77,7 @@ export function useWikiArticle(id: number | null) {
 export function useCreateWikiArticle() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_article" },
     mutationFn: (data: { folder_id?: number | null; project_id?: number | null; title?: string }) =>
       createWikiArticle(data),
     onSuccess: () => {
@@ -85,6 +89,7 @@ export function useCreateWikiArticle() {
 export function useUpdateWikiArticle() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_article" },
     mutationFn: ({
       id,
       data,
@@ -114,6 +119,7 @@ export function useDeleteWikiArticle() {
     qc.invalidateQueries({ queryKey: ["wiki-tags"] });
   };
   return useMutation({
+    meta: { errorLabel: "error_delete_article" },
     mutationFn: async (id: number) => {
       const prev = await getWikiArticle(id);
       const prevTags = await getWikiArticleTags(id);
@@ -160,6 +166,7 @@ export function useWikiArticleTags(articleId: number | null) {
 export function useSetWikiArticleTags() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_article" },
     mutationFn: ({ articleId, tags }: { articleId: number; tags: string[] }) =>
       setWikiArticleTags(articleId, tags),
     onSuccess: (_result, variables) => {

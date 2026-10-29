@@ -6,12 +6,7 @@ import Link from "@tiptap/extension-link";
 import { useSearchParams } from "react-router-dom";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
 import { isAllowedWikiLink, parseWikiArticleId, parseWikiFileKey, slashCommandQuery, wikiFileHref } from "../lib/wikiLinks";
-import { logError } from "../lib/log";
 import {
-  Plus,
-  BookOpen,
-  X,
-  Trash2,
   Heading1,
   Heading2,
   Heading3,
@@ -19,28 +14,21 @@ import {
   ListOrdered,
   Quote,
   Code,
-  Link as LinkIcon,
   Minus,
-  ChevronLeft,
-  ChevronRight,
-  Eye,
-  Pencil,
   PanelLeft,
   PanelRight,
   Waypoints,
-  File,
-  FileText,
+  type LucideIcon,
 } from "lucide-react";
-import { ask } from "@tauri-apps/plugin-dialog";
-import { toast } from "sonner";
+import { deleteWithUndo } from "../lib/undo";
 import { useT } from "../i18n/useT";
-import { useAppStore } from "../stores/app-store";
-import { getTagColor } from "../lib/tagColors";
-import { notifyError, getLabels } from "../lib/notifyError";
-import { Badge, Button, BottomBar, BAR_ICON_BUTTON, EmptyState, Input, PANEL_TOP_BAR, SectionLabel, TabItem } from "../components/ui";
+import { getLabels, notify } from "../lib/notify";
+import { scrollBehavior } from "../lib/motion";
+import { ICONS, ICON_SIZE, Badge, Button, BottomBar, EmptyState, PANEL_TOP_BAR, TabItem, Popover, IconButton, SectionLabel, Input, HEADING_1 } from "../components/ui";
+import { TagInput } from "../components/shared/TagInput";
+import { MENU_ITEM } from "../components/ui/Dropdown";
 import { Select } from "../components/ui/Select";
 import { Skeleton } from "../components/ui/Skeleton";
-import { useKeepInViewport } from "../hooks/useKeepInViewport";
 import { undoable } from "../lib/undo";
 import {
   useWikiFolders,
@@ -69,7 +57,7 @@ import { DocView } from "../components/wiki/DocView";
 // ─── Slash Command Menu ───────────────────────────────────────────
 interface SlashMenuItem {
   label: string;
-  icon: typeof Heading1;
+  icon: LucideIcon;
   action: (editor: ReturnType<typeof useEditor>) => void;
   /** If true, the action is handled specially by the ArticleEditor */
   special?: string;
@@ -119,7 +107,7 @@ function getSlashCommands(t: ReturnType<typeof useT>): SlashMenuItem[] {
     },
     {
       label: t.wiki_link,
-      icon: LinkIcon,
+      icon: ICONS.link,
       action: () => { /* handled specially via LinkInsertPopup */ },
       special: "link",
     },
@@ -166,23 +154,8 @@ function LinkInsertPopup({
   const [query, setQuery] = useState(initialQuery ?? "");
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const popupRef = useRef<HTMLDivElement>(null);
   const listId = useId();
   const bracket = initialQuery !== undefined;
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onClose]);
 
   const isUrl = /^https?:\/\//.test(query.trim());
   const q = query.trim().toLowerCase();
@@ -204,7 +177,6 @@ function LinkInsertPopup({
     q !== "" &&
     !articles.some((a) => !a.file && a.title.toLowerCase() === q && a.project_id === currentProjectId);
   const optionCount = matchedArticles.length + (canCreate ? 1 : 0);
-  const placed = useKeepInViewport(popupRef, position, `${optionCount}:${isUrl}`);
 
   useEffect(() => {
     setSelectedIdx(0);
@@ -244,14 +216,19 @@ function LinkInsertPopup({
     } hover:bg-[var(--color-hover-row)]`;
 
   return (
-    <div
-      ref={popupRef}
-      className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] w-80 overflow-hidden"
-      style={{ top: placed.top, left: placed.left }}
+    <Popover
+      // Under the caret: `position.top` is the caret's bottom + 4.
+      at={{ x: position.left, y: position.top - 4 }}
+      onClose={() => onClose()}
+      padding="none"
+      className="w-80 overflow-hidden"
+      role="dialog"
+      aria-label={t.wiki_link_to_article}
     >
       <div className="px-3 pt-3 pb-2">
         <Input
           ref={inputRef}
+          data-autofocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -262,7 +239,6 @@ function LinkInsertPopup({
           aria-controls={listId}
           aria-autocomplete="list"
           aria-activedescendant={optionCount > 0 ? optionId(selectedIdx) : undefined}
-          className="py-1.5"
         />
       </div>
       {isUrl && (
@@ -272,7 +248,7 @@ function LinkInsertPopup({
       )}
       {optionCount > 0 && (
         <div className="border-t border-[var(--color-border-divider)] py-1 max-h-64 overflow-y-auto">
-          <SectionLabel className="px-3 py-1">{t.wiki_link_to_article}</SectionLabel>
+          <SectionLabel as="span" className="block px-3 py-1">{t.wiki_link_to_article}</SectionLabel>
           <div role="listbox" id={listId} aria-label={t.wiki_link_to_article}>
             {matchedArticles.map((article, i) => (
               <button
@@ -288,7 +264,7 @@ function LinkInsertPopup({
                   choose(i);
                 }}
               >
-                {article.file ? <File size={14} className="text-muted shrink-0" /> : <FileText size={14} className="text-muted shrink-0" />}
+                {article.file ? <ICONS.file size={ICON_SIZE.menu} className="text-muted shrink-0" /> : <ICONS.wikiArticle size={ICON_SIZE.menu} className="text-muted shrink-0" />}
                 <span className="truncate">{article.title}</span>
                 <span className="ml-auto pl-2 text-xs text-muted truncate max-w-32">
                   {article.project_id != null && article.project_id === currentProjectId
@@ -310,7 +286,7 @@ function LinkInsertPopup({
                   choose(matchedArticles.length);
                 }}
               >
-                <Plus size={14} className="text-muted shrink-0" />
+                <ICONS.add size={ICON_SIZE.menu} className="text-muted shrink-0" />
                 <span className="truncate">{t.wiki_new_article_named.replace("{title}", query.trim())}</span>
               </button>
             )}
@@ -330,7 +306,7 @@ function LinkInsertPopup({
           <span className="text-xs text-muted">{t.link_hint}</span>
         </div>
       )}
-    </div>
+    </Popover>
   );
 }
 
@@ -347,7 +323,6 @@ function SlashCommandMenu({
 }) {
   const t = useT();
   const [selectedIdx, setSelectedIdx] = useState(0);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   const allCommands = useMemo(() => getSlashCommands(t), [t]);
 
@@ -356,7 +331,6 @@ function SlashCommandMenu({
     const q = filter.toLowerCase();
     return allCommands.filter((cmd) => cmd.label.toLowerCase().includes(q));
   }, [filter, allCommands]);
-  const placed = useKeepInViewport(menuRef, position, filtered.length);
 
   useEffect(() => {
     setSelectedIdx(0);
@@ -386,12 +360,14 @@ function SlashCommandMenu({
   if (filtered.length === 0) return null;
 
   return (
-    <div
-      ref={menuRef}
+    <Popover
+      // Under the caret: `position.top` is the caret's bottom + 4.
+      at={{ x: position.left, y: position.top - 4 }}
+      onClose={() => onClose()}
+      autoFocus={false}
+      style={{ minWidth: 180 }}
       role="listbox"
       aria-label={t.wiki_commands}
-      className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[160px]"
-      style={{ top: placed.top, left: placed.left }}
     >
       {filtered.map((cmd, i) => {
         const Icon = cmd.icon;
@@ -401,21 +377,23 @@ function SlashCommandMenu({
             role="option"
             aria-selected={i === selectedIdx}
             tabIndex={-1}
-            className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] ${
-              i === selectedIdx ? "bg-[var(--color-hover-row)]" : ""
-            } hover:bg-[var(--color-hover-row)]`}
+            className={`${MENU_ITEM} cursor-pointer ${
+              i === selectedIdx
+                ? "bg-[var(--color-hover-row)] text-[var(--color-text)]"
+                : "text-[var(--color-text-secondary)]"
+            }`}
             onMouseEnter={() => setSelectedIdx(i)}
             onMouseDown={(e) => {
               e.preventDefault();
               onSelect(cmd);
             }}
           >
-            <Icon size={14} />
+            <Icon size={ICON_SIZE.menu} />
             {cmd.label}
           </button>
         );
       })}
-    </div>
+    </Popover>
   );
 }
 
@@ -458,7 +436,6 @@ export function ArticleEditor({
   onContentChangeRef.current = onContentChange;
   const onSaveStateRef = useRef(onSaveStateChange);
   onSaveStateRef.current = onSaveStateChange;
-  const darkMode = useAppStore((s) => s.darkMode);
   const { data: article } = useWikiArticle(articleId);
   const { data: articleTags = [] } = useWikiArticleTags(articleId);
   const { data: allTags = [] } = useAllWikiTags();
@@ -471,7 +448,6 @@ export function ArticleEditor({
 
   const [title, setTitle] = useState("");
   const [projectId, setProjectId] = useState<number | null>(null);
-  const [tagInput, setTagInput] = useState("");
   const [slashMenu, setSlashMenu] = useState<CaretPos | null>(null);
   const [slashFilter, setSlashFilter] = useState("");
   // `bracketFrom` is set when the picker was opened by typing [[: that text
@@ -524,7 +500,7 @@ export function ArticleEditor({
             },
             onError: (e) => {
               onSaveStateRef.current?.("idle");
-              notifyError(getLabels().operation_failed, e);
+              notify.error(getLabels().operation_failed, e);
             },
           }
         );
@@ -608,25 +584,9 @@ export function ArticleEditor({
     [editor]
   );
 
-  const handleAddTag = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter" && tagInput.trim()) {
-        e.preventDefault();
-        const newTag = tagInput.trim().toLowerCase();
-        if (!articleTags.includes(newTag)) {
-          setTags.mutate({ articleId, tags: [...articleTags, newTag] });
-        }
-        setTagInput("");
-      }
-    },
-    [tagInput, articleTags, articleId, setTags]
-  );
-
-  const handleRemoveTag = useCallback(
-    (tag: string) => {
-      setTags.mutate({ articleId, tags: articleTags.filter((t) => t !== tag) });
-    },
-    [articleTags, articleId, setTags]
+  const handleTagsChange = useCallback(
+    (tags: string[]) => setTags.mutate({ articleId, tags }),
+    [articleId, setTags]
   );
 
   const handleProjectChange = useCallback(
@@ -639,14 +599,11 @@ export function ArticleEditor({
     [articleId, updateArticle]
   );
 
-  const handleDeleteArticle = useCallback(async () => {
-    const name = article?.title || t.untitled;
-    const confirmed = await ask(t.wiki_delete_confirm.replace("{title}", name), { kind: "warning" });
-    if (confirmed) {
-      deleteArticle.mutate(articleId);
-      onBack?.();
-    }
-  }, [articleId, article?.title, deleteArticle, onBack, t.wiki_delete_confirm, t.untitled]);
+  // No question: Undo brings the article back (with its content and tags).
+  const handleDeleteArticle = useCallback(() => {
+    deleteWithUndo(deleteArticle, articleId, t.article_deleted);
+    onBack?.();
+  }, [articleId, deleteArticle, onBack, t.article_deleted]);
 
   // Keep a ref for unmount cleanup to avoid a stale closure over `editor`
   // (articleIdRef is declared above, next to the debounce it also guards)
@@ -667,7 +624,6 @@ export function ArticleEditor({
         if (ed && pendingId !== null && pendingId === articleIdRef.current) {
           updateArticle.mutate(
             { id: pendingId, data: { content: ed.getHTML() } },
-            { onError: (e) => notifyError(getLabels().operation_failed, e) }
           );
         }
       }
@@ -746,7 +702,6 @@ export function ArticleEditor({
         { title: newTitle, folder_id: article?.folder_id ?? null, project_id: article?.project_id ?? null },
         {
           onSuccess: (newId: number) => handleLinkInsert(`/wiki?article=${newId}`, newTitle),
-          onError: (e) => notifyError(getLabels().operation_failed, e),
         }
       );
     },
@@ -783,8 +738,7 @@ export function ArticleEditor({
       }
       if (/^https?:\/\//i.test(href)) {
         openUrl(href).catch((err) => {
-          logError("Open URL failed:", err);
-          toast.error(t.failed_to_open_url);
+          notify.error(t.failed_to_open_url, err);
         });
       }
     },
@@ -797,15 +751,11 @@ export function ArticleEditor({
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Top bar: history, breadcrumb, mode, delete */}
-      <div className={`${PANEL_TOP_BAR} gap-1 px-3 border-[var(--color-border-header)]`}>
+      <div className={`${PANEL_TOP_BAR} gap-1 px-3 border-[var(--color-border)]`}>
         {nav && (
           <>
-            <button onClick={nav.onBack} disabled={!nav.canBack} className={BAR_ICON_BUTTON} aria-label={t.wiki_back} title={t.wiki_back}>
-              <ChevronLeft size={14} />
-            </button>
-            <button onClick={nav.onForward} disabled={!nav.canForward} className={BAR_ICON_BUTTON} aria-label={t.wiki_forward} title={t.wiki_forward}>
-              <ChevronRight size={14} />
-            </button>
+            <IconButton icon={ICONS.prev} label={t.wiki_back} onClick={nav.onBack} disabled={!nav.canBack} />
+            <IconButton icon={ICONS.next} label={t.wiki_forward} onClick={nav.onForward} disabled={!nav.canForward} />
           </>
         )}
         <div className="flex-1 min-w-0 text-center text-xs text-muted truncate">
@@ -817,25 +767,16 @@ export function ArticleEditor({
           <span className="text-[var(--color-text)]">{article.title}</span>
         </div>
         {onModeChange && (
-          <button
+          <IconButton
+            icon={reading ? ICONS.edit : ICONS.preview}
+            label={reading ? t.wiki_switch_to_editing : t.wiki_switch_to_reading}
+            pressed={!reading}
             onClick={() => onModeChange(reading ? "editing" : "reading")}
-            className={`${BAR_ICON_BUTTON} ${reading ? "" : "text-accent hover:text-accent"}`}
-            aria-label={reading ? t.wiki_switch_to_editing : t.wiki_switch_to_reading}
-            title={reading ? t.wiki_switch_to_editing : t.wiki_switch_to_reading}
-          >
-            {reading ? <Pencil size={14} /> : <Eye size={14} />}
-          </button>
+          />
         )}
         {/* Kept apart from the mode toggle, so a missed click can't delete. */}
-        <div aria-hidden="true" className="h-4 w-px mx-1.5 bg-[var(--color-border-header)]" />
-        <button
-          onClick={handleDeleteArticle}
-          className={`${BAR_ICON_BUTTON} hover:text-[var(--color-danger-text)]`}
-          title={t.delete}
-          aria-label={t.delete}
-        >
-          <Trash2 size={14} />
-        </button>
+        <div aria-hidden="true" className="h-4 w-px mx-1.5 bg-[var(--color-border)]" />
+        <IconButton icon={ICONS.delete} label={t.delete} tone="danger" onClick={handleDeleteArticle} />
       </div>
 
       <div
@@ -850,61 +791,31 @@ export function ArticleEditor({
         }}
       >
         <div className="max-w-[720px] mx-auto">
-          {/* Title */}
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={handleTitleBlur}
-            onKeyDown={handleTitleKeyDown}
-            readOnly={reading}
-            placeholder={t.untitled}
-            className="w-full text-xl font-semibold tracking-tight bg-transparent border-none outline-none mb-3 text-[var(--color-text)] placeholder:text-muted"
-          />
+          {/* Title: the page h1, editable in place */}
+          <h1 className={`${HEADING_1} mb-3`}>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={handleTitleBlur}
+              onKeyDown={handleTitleKeyDown}
+              readOnly={reading}
+              placeholder={t.untitled}
+              aria-label={t.wiki_article_title}
+              className={`w-full ${HEADING_1} block bg-transparent border-none outline-none text-[var(--color-text)] placeholder:text-muted`}
+            />
+          </h1>
 
           {/* Metadata row */}
           <div className="flex items-center gap-3 mb-6 flex-wrap">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {articleTags.map((tag) => {
-                const color = getTagColor(tag, darkMode);
-                return (
-                  <span
-                    key={tag}
-                    style={{ background: color.bg, color: color.text }}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full font-medium"
-                  >
-                    {tag}
-                    {!reading && (
-                      <button
-                        onClick={() => handleRemoveTag(tag)}
-                        className="opacity-60 hover:opacity-100"
-                        aria-label={`${t.remove_tag} ${tag}`}
-                      >
-                        <X size={10} />
-                      </button>
-                    )}
-                  </span>
-                );
-              })}
-              {!reading && (
-                <div className="relative">
-                  <input
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={handleAddTag}
-                    list="wiki-tags-datalist"
-                    placeholder={t.add_tag}
-                    className="w-24 bg-transparent border-none outline-none text-xs text-muted placeholder:text-muted"
-                  />
-                  <datalist id="wiki-tags-datalist">
-                    {allTags
-                      .filter((tg) => !articleTags.includes(tg))
-                      .map((tg) => (
-                        <option key={tg} value={tg} />
-                      ))}
-                  </datalist>
-                </div>
-              )}
-            </div>
+            <TagInput
+              value={articleTags}
+              onChange={handleTagsChange}
+              suggestions={allTags}
+              lowercase
+              readOnly={reading}
+              variant="bare"
+              width="sm"
+            />
 
             {reading ? (
               article.project_name && (
@@ -915,6 +826,7 @@ export function ArticleEditor({
                 <div className="h-4 w-px bg-[var(--color-border-divider)]" />
                 <Select
                   value={projectId?.toString() ?? ""}
+                  aria-label={t.project}
                   onChange={handleProjectChange}
                   fullWidth={false}
                   className="text-xs w-48"
@@ -1087,7 +999,7 @@ export function WikiPage() {
   const openArticle = useCallback(
     (id: number, newTab = false) => {
       if (!byId.has(id)) {
-        toast.error(t.wiki_article_not_found);
+        notify.error(t.wiki_article_not_found);
         return;
       }
       setTabsState((s) => openInTabs(s, id, newTab));
@@ -1175,7 +1087,7 @@ export function WikiPage() {
             setMode("editing");
             setTabsState((s) => openInTabs(s, newId, true));
           },
-          onError: (e) => notifyError(getLabels().operation_failed, e),
+          onError: (e) => notify.error(getLabels().operation_failed, e),
         }
       );
     },
@@ -1183,12 +1095,8 @@ export function WikiPage() {
   );
 
   const handleDeleteArticle = useCallback(
-    async (id: number) => {
-      const name = byId.get(id)?.title || t.untitled;
-      const confirmed = await ask(t.wiki_delete_confirm.replace("{title}", name), { kind: "warning" });
-      if (confirmed) deleteArticle.mutate(id);
-    },
-    [byId, deleteArticle, t.wiki_delete_confirm, t.untitled]
+    (id: number) => deleteWithUndo(deleteArticle, id, t.article_deleted),
+    [deleteArticle, t.article_deleted]
   );
 
   // Rewrites another article: say so, and offer to put it back.
@@ -1206,7 +1114,7 @@ export function WikiPage() {
             undoable(t.wiki_linked_in.replace("{title}", source.title), () =>
               updateArticle.mutateAsync({ id: sourceId, data: { content: before } }).then(() => undefined)
             ),
-          onError: (e) => notifyError(getLabels().operation_failed, e),
+          onError: (e) => notify.error(getLabels().operation_failed, e),
         }
       );
     },
@@ -1217,7 +1125,7 @@ export function WikiPage() {
     const headings = document.querySelectorAll(
       ".tiptap-editor .ProseMirror h1, .tiptap-editor .ProseMirror h2, .tiptap-editor .ProseMirror h3"
     );
-    headings[headingIndex]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    headings[headingIndex]?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
   }, []);
 
   const toggleExplorer = () =>
@@ -1290,22 +1198,20 @@ export function WikiPage() {
           onNewArticle={handleNewArticle}
           onOpenGraph={openGraph}
           onDeleteArticle={handleDeleteArticle}
+          pageHeading={!(activeTab?.kind === "article" && (activeDoc || activeArticle))}
         />
       )}
 
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Tab bar: same tabs and icon buttons as the app's own tab bar */}
-        <div className={`${PANEL_TOP_BAR} border-[var(--color-border-header)] bg-[var(--color-bg)]`}>
-          <button
-            type="button"
-            onClick={toggleExplorer}
-            className={`${BAR_ICON_BUTTON} ml-1.5`}
-            aria-label={t.wiki_explorer}
+        <div className={`${PANEL_TOP_BAR} border-[var(--color-border)] bg-[var(--color-bg)]`}>
+          <IconButton
+            icon={PanelLeft}
+            label={t.wiki_explorer}
             aria-pressed={explorerOpen}
-            title={t.wiki_explorer}
-          >
-            <PanelLeft size={14} />
-          </button>
+            onClick={toggleExplorer}
+            className="ml-1.5"
+          />
           <div role="tablist" aria-label={t.wiki_open_tabs} className="flex items-center flex-1 min-w-0 overflow-x-auto scrollbar-hide">
             {tabsState.tabs.map((tab) => {
               const ref = tabRef(tab);
@@ -1322,15 +1228,13 @@ export function WikiPage() {
                   role="tab"
                   label={label}
                   icon={
-                    tab.kind === "graph" ? (
-                      <Waypoints size={14} className="shrink-0" />
-                    ) : typeof ref === "string" ? (
-                      <File size={14} className="shrink-0" />
-                    ) : pending ? (
-                      <Skeleton inline width={72} height={10} />
-                    ) : (
-                      <FileText size={14} className="shrink-0" />
-                    )
+                    tab.kind === "graph"
+                      ? Waypoints
+                      : typeof ref === "string"
+                        ? ICONS.file
+                        : pending
+                          ? <Skeleton inline width={72} height={10} />
+                          : ICONS.wikiArticle
                   }
                   active={tab.key === tabsState.active}
                   onActivate={() => setTabsState((s) => ({ ...s, active: tab.key }))}
@@ -1342,17 +1246,14 @@ export function WikiPage() {
           </div>
           {/* Always there (greyed when nothing open has a side panel), so the
               tab strip doesn't shift when you switch tabs. */}
-          <button
-            type="button"
-            onClick={toggleSide}
-            disabled={!hasSidePanel}
-            className={`${BAR_ICON_BUTTON} mr-1.5`}
-            aria-label={t.wiki_side_panel}
+          <IconButton
+            icon={PanelRight}
+            label={t.wiki_side_panel}
             aria-pressed={hasSidePanel && sideVisible}
-            title={t.wiki_side_panel}
-          >
-            <PanelRight size={14} />
-          </button>
+            disabled={!hasSidePanel}
+            onClick={toggleSide}
+            className="mr-1.5"
+          />
         </div>
 
         {activeTab?.kind === "graph" ? (
@@ -1396,9 +1297,9 @@ export function WikiPage() {
             <div className="flex-1 flex items-center justify-center">
               <EmptyState
                 message={t.wiki_file_unreadable}
-                icon={<File size={32} />}
+                icon={ICONS.file}
                 action={
-                  <Button variant="secondary" icon={<X size={14} />} onClick={() => setTabsState((s) => closeTab(s, activeTab.key))}>
+                  <Button variant="secondary" icon={ICONS.close} onClick={() => setTabsState((s) => closeTab(s, activeTab.key))}>
                     {t.wiki_close_tab}
                   </Button>
                 }
@@ -1449,33 +1350,35 @@ export function WikiPage() {
           activeTab ? editorSkeleton : <div className="flex-1" />
         ) : (
           <div className="flex-1 flex items-center justify-center">
-            <EmptyState
-              message={allArticles.length === 0 ? t.first_run_wiki : t.wiki_nothing_open}
-              icon={<BookOpen size={32} />}
-              action={
-                allArticles.length > 0 ? (
-                  <Button variant="secondary" icon={<Waypoints size={14} />} onClick={openGraph}>
-                    {t.wiki_open_graph}
-                  </Button>
-                ) : (
-                  <Button
-                    variant="primary"
-                    icon={<Plus size={14} />}
-                    onClick={() => handleNewArticle(null)}
-                    disabled={createArticle.isPending}
-                  >
+            {!articlesLoaded ? null : allArticles.length === 0 ? (
+              <EmptyState
+                message={t.no_articles_yet}
+                hint={t.first_run_wiki}
+                icon={ICONS.wikiArticle}
+                action={
+                  <Button icon={ICONS.add} onClick={() => handleNewArticle(null)} disabled={createArticle.isPending}>
                     {t.new_article}
                   </Button>
-                )
-              }
-            />
+                }
+              />
+            ) : (
+              <EmptyState
+                message={t.wiki_nothing_open}
+                icon={ICONS.wikiArticle}
+                action={
+                  <Button variant="secondary" icon={Waypoints} onClick={openGraph}>
+                    {t.wiki_open_graph}
+                  </Button>
+                }
+              />
+            )}
           </div>
         )}
       </div>
 
       {sideVisible && sidePanel && (
         narrow ? (
-          <div className="absolute inset-y-0 right-0 z-20 flex bg-[var(--color-bg)] shadow-[0_8px_24px_rgba(0,0,0,0.4)]">
+          <div className="absolute inset-y-0 right-0 z-20 flex bg-[var(--color-bg)] shadow-menu">
             {sidePanel}
           </div>
         ) : (

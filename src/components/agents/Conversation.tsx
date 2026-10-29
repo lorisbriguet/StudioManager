@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Bot, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { conversation, type Item } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
-import { EmptyState } from "../ui";
+import { EmptyState, ICONS, ICON_SIZE } from "../ui";
 
 const REFRESH_MS = 3000;
 
@@ -51,7 +51,7 @@ export function Conversation({ sessionId, working }: ConversationProps) {
     endRef.current?.scrollIntoView?.({ block: "end" });
   }, [items]);
 
-  if (items.length === 0) return <EmptyState icon={<Bot size={32} />} message={t.agents_no_conversation} />;
+  if (items.length === 0) return <EmptyState icon={ICONS.agents} message={t.agents_no_conversation} />;
 
   return (
     <div className="max-w-3xl mx-auto px-5 py-5 space-y-6">
@@ -105,7 +105,7 @@ function ToolRun({ tools }: { tools: ToolItem[] }) {
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-1 rounded-md px-1.5 py-0.5 -mx-1.5 hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text)]"
       >
-        <ChevronRight size={12} className={`transition-transform ${open ? "rotate-90" : ""}`} />
+        <ChevronRight size={ICON_SIZE.control} className={`transition-transform ${open ? "rotate-90" : ""}`} />
         {label}
       </button>
       {open && (

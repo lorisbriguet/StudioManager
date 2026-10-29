@@ -16,10 +16,12 @@ import {
   Legend,
 } from "recharts";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Receipt, ClipboardList, FolderPlus } from "lucide-react";
+import { ICONS, ICON_SIZE } from "../ui/icons";
 import { UpkeepWidget } from "../upkeep/UpkeepWidget";
-import { MeterBar } from "../ui";
 import { useCountUp } from "../../hooks/useCountUp";
+import { StatTile } from "../ui/StatTile";
+import { STAT_VALUE } from "../ui/tokens";
+import { Textarea } from "../ui/Input";
 import { useDashboardKPIs, useMonthlyData, useRevenueByActivity, useRevenueByClient } from "../../db/hooks/useFinance";
 import { useProjects } from "../../db/hooks/useProjects";
 // V1.11 C1: task-list widgets (today, overdue, deadlines, this-week, stale,
@@ -56,6 +58,11 @@ import { resolveActivityRevenue } from "../../lib/activityResolve";
 import { tagHash } from "../../lib/tagColors";
 import { yoyDelta } from "../../lib/yoyDelta";
 import { useDashboardYear } from "./DashboardYearContext";
+import { WidgetShell, WidgetTitle } from "./WidgetShell";
+import { ProgressBar } from "../ui/Feedback";
+import { EmptyState } from "../ui/EmptyState";
+import { ListSkeleton } from "../ui/Skeleton";
+import { invoiceStatusDotClass, priorityDotClass } from "../../lib/statusColors";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -64,21 +71,17 @@ function formatCHF(amount: number): string {
 }
 
 function PriorityDot({ priority }: { priority: string }) {
-  const color = priority === "high" ? "bg-danger" : priority === "medium" ? "bg-warning" : "bg-success";
-  return <span className={`dot-sm ${color}`} />;
+  return <span className={`dot-sm ${priorityDotClass(priority)}`} />;
 }
 
 function StatusDot({ status }: { status: string }) {
-  const color =
-    status === "paid" ? "bg-success" :
-    status === "overdue" ? "bg-danger" :
-    status === "sent" ? "bg-warning" :
-    status === "draft" ? "bg-[var(--color-indigo-text)]" :
-    "bg-[var(--color-input-bg)]";
-  return <span className={`dot-sm ml-2 ${color}`} />;
+  return <span className={`dot-sm ml-2 ${invoiceStatusDotClass(status)}`} />;
 }
 
 // ── KPI widgets ──
+
+/** A KPI widget fills its Card frame: the frame's 16px padding, centred vertically. */
+const KPI_TILE = "h-full justify-center p-4";
 
 export function KPIWidget({ label, value, numericValue, accent, delta }: { label: string; value: string; numericValue?: number; accent?: boolean; delta?: number | null }) {
   const t = useT();
@@ -87,15 +90,17 @@ export function KPIWidget({ label, value, numericValue, accent, delta }: { label
     ? `CHF ${animated.toLocaleString("de-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     : value;
   return (
-    <div className="h-full flex flex-col justify-center px-4">
-      <div className="text-xs text-muted uppercase tracking-wide mb-1">{label}</div>
-      <div className={`text-lg font-semibold ${accent ? "text-warning" : ""}`}>{displayValue}</div>
-      {delta != null && (
-        <div className={`text-[10px] font-medium ${delta >= 0 ? "text-[var(--color-success-text)]" : "text-[var(--color-danger-text)]"}`}>
+    <StatTile
+      className={KPI_TILE}
+      label={label}
+      value={displayValue}
+      tone={accent ? "warning" : "default"}
+      caption={delta != null && (
+        <span className={`font-medium ${delta >= 0 ? "text-[var(--color-success-text)]" : "text-[var(--color-danger-text)]"}`}>
           {delta >= 0 ? "+" : ""}{delta}% {t.vs_last_year}
-        </div>
+        </span>
       )}
-    </div>
+    />
   );
 }
 
@@ -166,8 +171,8 @@ function ChartRevenue() {
   })) ?? [];
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.revenue} {year}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.revenue} {year}</WidgetTitle>
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} barGap={2}>
@@ -184,7 +189,7 @@ function ChartRevenue() {
           </BarChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -210,11 +215,10 @@ function RecentInvoices() {
   }, [invoices]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-medium">{t.recent_invoices}</h2>
-        <Link to="/invoices" className="text-xs text-accent hover:underline">{t.view_all}</Link>
-      </div>
+    <WidgetShell>
+      <WidgetTitle action={<Link to="/invoices" className="text-xs text-accent-text hover:underline">{t.view_all}</Link>}>
+        {t.recent_invoices}
+      </WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2">
         {recentInvoices.map((inv) => (
           <Link
@@ -232,11 +236,11 @@ function RecentInvoices() {
             <span className="text-muted shrink-0 ml-2">CHF {inv.total.toFixed(2)}</span>
           </Link>
         ))}
-        {recentInvoices.length === 0 && (
-          <div className="text-xs text-muted">{t.no_invoices_yet}</div>
+        {invoices === undefined ? <ListSkeleton size="sm" rows={3} /> : recentInvoices.length === 0 && (
+          <EmptyState size="sm" icon={ICONS.invoice} message={t.no_invoices_yet} />
         )}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -261,8 +265,8 @@ function TodayTasks() {
   );
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.today}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.today}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {todayTasks.map((task) => (
           <Link key={`t-${task.id}`} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
@@ -280,11 +284,11 @@ function TodayTasks() {
             {s.start_time && <span className="text-xs text-muted ml-auto shrink-0">{s.start_time.slice(0, 5)}</span>}
           </Link>
         ))}
-        {todayTasks.length === 0 && todaySubtasks.length === 0 && (
-          <div className="text-xs text-muted">{t.nothing_due_today}</div>
+        {tasks === undefined ? <ListSkeleton size="sm" rows={3} /> : todayTasks.length === 0 && todaySubtasks.length === 0 && (
+          <EmptyState size="sm" message={t.nothing_due_today} />
         )}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -309,15 +313,15 @@ function OverdueTasks() {
   );
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3 text-danger">{t.overdue}</h2>
+    <WidgetShell>
+      <WidgetTitle tone="danger">{t.overdue}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {overdueTasks.map((task) => (
           <Link key={`t-${task.id}`} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
             <PriorityDot priority="high" />
             <span className="text-muted text-xs shrink-0">{projectName(task.project_id)}</span>
             <span className="truncate">{task.title}</span>
-            <span className="text-xs text-danger ml-auto shrink-0">{task.due_date}</span>
+            <span className="text-xs text-danger-text ml-auto shrink-0">{task.due_date}</span>
           </Link>
         ))}
         {overdueSubtasks.map((s) => (
@@ -325,14 +329,14 @@ function OverdueTasks() {
             <PriorityDot priority="high" />
             <span className="text-muted text-xs shrink-0">{projectName(s.project_id)}</span>
             <span className="truncate opacity-70">↳ {s.title}</span>
-            <span className="text-xs text-danger ml-auto shrink-0">{s.due_date}</span>
+            <span className="text-xs text-danger-text ml-auto shrink-0">{s.due_date}</span>
           </Link>
         ))}
-        {overdueTasks.length === 0 && overdueSubtasks.length === 0 && (
-          <div className="text-xs text-muted">{t.no_overdue_items}</div>
+        {tasks === undefined ? <ListSkeleton size="sm" rows={3} /> : overdueTasks.length === 0 && overdueSubtasks.length === 0 && (
+          <EmptyState size="sm" message={t.nothing_overdue} />
         )}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -362,8 +366,8 @@ function ProjectProgress() {
   }, [projects, tasks]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.progress}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.progress}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-3">
         {activeProjects.map((p) => (
           <Link key={p.id} to={`/projects/${p.id}`} className="block hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
@@ -371,14 +375,14 @@ function ProjectProgress() {
               <span className="truncate">{p.name}</span>
               <span className="text-xs text-muted shrink-0 ml-2">{p.done}/{p.total}</span>
             </div>
-            <MeterBar pct={p.pct} color="var(--color-accent)" />
+            <ProgressBar value={p.pct} aria-label={`${t.progress}: ${p.name}`} />
           </Link>
         ))}
-        {activeProjects.length === 0 && (
-          <div className="text-xs text-muted">{t.no_projects}</div>
+        {projects === undefined ? <ListSkeleton size="sm" rows={3} /> : activeProjects.length === 0 && (
+          <EmptyState size="sm" message={t.no_active_projects} />
         )}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -401,8 +405,8 @@ function UpcomingDeadlines() {
   }, [tasks, today]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.deadline}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.deadline}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {upcoming.map((task) => (
           <Link key={task.id} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
@@ -412,11 +416,11 @@ function UpcomingDeadlines() {
             <span className="text-xs text-muted ml-auto shrink-0">{task.due_date}</span>
           </Link>
         ))}
-        {upcoming.length === 0 && (
-          <div className="text-xs text-muted">{t.nothing_due_today}</div>
+        {tasks === undefined ? <ListSkeleton size="sm" rows={3} /> : upcoming.length === 0 && (
+          <EmptyState size="sm" message={t.no_upcoming_deadlines} />
         )}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -447,8 +451,8 @@ function RevenueByActivity() {
   const total = rows.reduce((s, r) => s + r.total, 0);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.revenue_by_activity}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.revenue_by_activity}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2">
         {rows.map((r) => {
           const pct = total > 0 ? Math.round((r.total / total) * 100) : 0;
@@ -459,13 +463,13 @@ function RevenueByActivity() {
                 <span className="text-xs text-muted shrink-0 ml-2">{formatCHF(r.total)} ({pct}%)</span>
               </div>
               {/* Hash the stable key, not the sorted index: an activity keeps its color when rankings shift */}
-              <MeterBar pct={pct} color={COLORS[tagHash(r.key) % COLORS.length]} />
+              <ProgressBar value={pct} color={COLORS[tagHash(r.key) % COLORS.length]} aria-label={r.label} />
             </div>
           );
         })}
-        {rows.length === 0 && <div className="text-xs text-muted">{t.no_invoices_yet}</div>}
+        {rawRows === undefined ? <ListSkeleton size="sm" rows={3} /> : rows.length === 0 && <EmptyState size="sm" message={t.no_revenue_in_year.replace("{year}", String(year))} />}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -479,8 +483,8 @@ function RevenueByClient() {
   const total = rows?.reduce((s, r) => s + r.total, 0) ?? 0;
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.revenue_by_client}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.revenue_by_client}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2">
         {rows?.map((r) => {
           const pct = total > 0 ? Math.round((r.total / total) * 100) : 0;
@@ -491,13 +495,13 @@ function RevenueByClient() {
                 <span className="text-xs text-muted shrink-0 ml-2">{formatCHF(r.total)} ({pct}%)</span>
               </div>
               {/* Hash the client name so colors survive ranking changes */}
-              <MeterBar pct={pct} color={COLORS[tagHash(r.label) % COLORS.length]} />
+              <ProgressBar value={pct} color={COLORS[tagHash(r.label) % COLORS.length]} aria-label={r.label} />
             </div>
           );
         })}
-        {(!rows || rows.length === 0) && <div className="text-xs text-muted">{t.no_invoices_yet}</div>}
+        {rows === undefined ? <ListSkeleton size="sm" rows={3} /> : rows.length === 0 && <EmptyState size="sm" message={t.no_revenue_in_year.replace("{year}", String(year))} />}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -535,8 +539,8 @@ function ThisWeekEvents() {
   };
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.this_week}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.this_week}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {weekEvents.map((task) => (
           <Link key={task.id} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
@@ -547,9 +551,9 @@ function ThisWeekEvents() {
             {task.start_time && <span className="text-xs text-muted ml-auto shrink-0">{task.start_time.slice(0, 5)}</span>}
           </Link>
         ))}
-        {weekEvents.length === 0 && <div className="text-xs text-muted">{t.nothing_due_today}</div>}
+        {tasks === undefined ? <ListSkeleton size="sm" rows={3} /> : weekEvents.length === 0 && <EmptyState size="sm" message={t.nothing_due_this_week} />}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -575,8 +579,8 @@ function UnpaidInvoices() {
   }, [invoices]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.unpaid_invoices}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.unpaid_invoices}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2">
         {unpaid.map((inv) => (
           <Link key={inv.id} to={`/invoices/${inv.id}/edit`} className="flex justify-between items-center text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1.5 -mx-2">
@@ -591,9 +595,9 @@ function UnpaidInvoices() {
             </div>
           </Link>
         ))}
-        {unpaid.length === 0 && <div className="text-xs text-muted">{t.no_data}</div>}
+        {invoices === undefined ? <ListSkeleton size="sm" rows={3} /> : unpaid.length === 0 && <EmptyState size="sm" message={t.no_unpaid_invoices} />}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -627,8 +631,8 @@ function ExpenseBreakdown() {
   }, [expenses, categories, year]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.expense_breakdown} {year}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.expense_breakdown} {year}</WidgetTitle>
       <div className="flex-1 min-h-0">
         {data.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
@@ -640,11 +644,13 @@ function ExpenseBreakdown() {
               <Tooltip formatter={(value) => `CHF ${Number(value).toFixed(2)}`} contentStyle={chart.tooltipStyle} itemStyle={chart.pieItemStyle} labelStyle={{ color: "var(--color-text)" }} />
             </PieChart>
           </ResponsiveContainer>
+        ) : expenses === undefined || categories === undefined ? (
+          <ListSkeleton size="sm" rows={3} />
         ) : (
-          <div className="text-xs text-muted">{t.no_data}</div>
+          <EmptyState size="sm" icon={ICONS.expense} message={t.no_expenses_in_year.replace("{year}", String(year))} className="h-full" />
         )}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -662,19 +668,18 @@ function MonthlyComparison() {
   const diff = lastRev > 0 ? Math.round(((currentRev - lastRev) / lastRev) * 100) : 0;
 
   return (
-    <div className="h-full flex flex-col justify-center px-4">
-      <div className="text-xs text-muted uppercase tracking-wide mb-1">{t.monthly_comparison}</div>
-      <div className="text-lg font-semibold">{formatCHF(currentRev)}</div>
-      <div className="text-xs text-muted mt-1">
-        {lastRev > 0 ? (
-          <span className={diff >= 0 ? "text-success" : "text-danger"}>
-            {diff >= 0 ? "+" : ""}{diff}% {t.vs_last_year}
-          </span>
-        ) : (
-          <span>{t.vs_last_year}: {t.no_data}</span>
-        )}
-      </div>
-    </div>
+    <StatTile
+      className={KPI_TILE}
+      label={t.monthly_comparison}
+      value={formatCHF(currentRev)}
+      caption={lastRev > 0 ? (
+        <span className={diff >= 0 ? "text-success-text" : "text-danger-text"}>
+          {diff >= 0 ? "+" : ""}{diff}% {t.vs_last_year}
+        </span>
+      ) : (
+        <span>{t.vs_last_year}: {t.no_data}</span>
+      )}
+    />
   );
 }
 
@@ -690,13 +695,13 @@ function ProfitMargin() {
   const margin = revenue > 0 ? Math.round((net / revenue) * 100) : 0;
 
   return (
-    <div className="h-full flex flex-col justify-center px-4">
-      <div className="text-xs text-muted uppercase tracking-wide mb-1">{t.profit_margin}</div>
-      <div className={`text-lg font-semibold ${margin < 0 ? "text-danger" : margin < 20 ? "text-warning" : "text-success"}`}>
-        {margin}%
-      </div>
-      <div className="text-xs text-muted mt-1">{formatCHF(net)} / {formatCHF(revenue)}</div>
-    </div>
+    <StatTile
+      className={KPI_TILE}
+      label={t.profit_margin}
+      value={`${margin}%`}
+      tone={margin < 0 ? "danger" : margin < 20 ? "warning" : "success"}
+      caption={<>{formatCHF(net)} / {formatCHF(revenue)}</>}
+    />
   );
 }
 
@@ -710,17 +715,14 @@ function TopClient() {
   const top = rows?.[0];
 
   return (
-    <div className="h-full flex flex-col justify-center px-4">
-      <div className="text-xs text-muted uppercase tracking-wide mb-1">{t.top_client}</div>
-      {top ? (
-        <>
-          <div className="text-lg font-semibold truncate">{top.label}</div>
-          <div className="text-xs text-muted mt-1">{formatCHF(top.total)}</div>
-        </>
-      ) : (
-        <div className="text-sm text-muted">{t.no_data}</div>
+    <StatTile
+      className={KPI_TILE}
+      label={t.top_client}
+      value={top ? top.label : (
+        <span className="text-sm font-normal text-muted">{rows === undefined ? "…" : t.no_revenue_in_year.replace("{year}", String(year))}</span>
       )}
-    </div>
+      caption={top && formatCHF(top.total)}
+    />
   );
 }
 
@@ -754,11 +756,12 @@ function QuoteConversionRate() {
   }, [quotes]);
 
   return (
-    <div className="h-full flex flex-col justify-center px-4">
-      <div className="text-xs text-muted uppercase tracking-wide mb-1">{t.quote_conversion_rate}</div>
-      <div className="text-lg font-semibold">{rate}%</div>
-      <div className="text-xs text-muted mt-1">{converted}/{total} {t.of_quotes_converted}</div>
-    </div>
+    <StatTile
+      className={KPI_TILE}
+      label={t.quote_conversion_rate}
+      value={`${rate}%`}
+      caption={<>{converted}/{total} {t.of_quotes_converted}</>}
+    />
   );
 }
 
@@ -796,24 +799,24 @@ function ClientActivity() {
   }, [clients, invoices]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.client_activity}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.client_activity}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {active.slice(0, 5).map((c) => (
           <div key={c.name} className="flex items-center justify-between text-sm px-2 py-1 -mx-2">
             <span className="truncate">{c.name}</span>
-            <span className="text-xs text-success shrink-0 ml-2">{t.active_clients}</span>
+            <span className="text-xs text-success-text shrink-0 ml-2">{t.active_clients}</span>
           </div>
         ))}
         {dormant.map((c) => (
           <div key={c.name} className="flex items-center justify-between text-sm px-2 py-1 -mx-2 opacity-60">
             <span className="truncate">{c.name}</span>
-            <span className="text-xs text-warning shrink-0 ml-2">{t.dormant}</span>
+            <span className="text-xs text-warning-text shrink-0 ml-2">{t.dormant}</span>
           </div>
         ))}
-        {active.length === 0 && dormant.length === 0 && <div className="text-xs text-muted">{t.no_data}</div>}
+        {clients === undefined || invoices === undefined ? <ListSkeleton size="sm" rows={3} /> : active.length === 0 && dormant.length === 0 && <EmptyState size="sm" message={t.no_clients} />}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -830,11 +833,7 @@ function NewClientsYear() {
   }, [clients, year]);
 
   return (
-    <div className="h-full flex flex-col justify-center px-4">
-      <div className="text-xs text-muted uppercase tracking-wide mb-1">{t.new_clients_year}</div>
-      <div className="text-lg font-semibold">{count}</div>
-      <div className="text-xs text-muted mt-1">{t.new_this_year}</div>
-    </div>
+    <StatTile className={KPI_TILE} label={t.new_clients_year} value={count} caption={t.new_this_year} />
   );
 }
 
@@ -863,19 +862,19 @@ function StaleTasks() {
   }, [tasks]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3 text-warning">{t.stale_tasks}</h2>
+    <WidgetShell>
+      <WidgetTitle tone="warning">{t.stale_tasks}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {stale.map((task) => (
           <Link key={task.id} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
             <span className="text-muted text-xs shrink-0">{projectName(task.project_id)}</span>
             <span className="truncate">{task.title}</span>
-            <span className="text-xs text-warning ml-auto shrink-0">{task.daysInactive}{t.days_inactive}</span>
+            <span className="text-xs text-warning-text ml-auto shrink-0">{task.daysInactive}{t.days_inactive}</span>
           </Link>
         ))}
-        {stale.length === 0 && <div className="text-xs text-muted">{t.no_stale_tasks}</div>}
+        {tasks === undefined ? <ListSkeleton size="sm" rows={3} /> : stale.length === 0 && <EmptyState size="sm" message={t.no_stale_tasks} />}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -897,17 +896,17 @@ function ProjectsWithoutDeadline() {
   }, [projects, tasks]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.projects_no_deadline}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.projects_no_deadline}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {noDeadline.map((p) => (
           <Link key={p.id} to={`/projects/${p.id}`} className="flex items-center text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
             <span className="truncate">{p.name}</span>
           </Link>
         ))}
-        {noDeadline.length === 0 && <div className="text-xs text-muted">{t.no_data}</div>}
+        {projects === undefined || tasks === undefined ? <ListSkeleton size="sm" rows={3} /> : noDeadline.length === 0 && <EmptyState size="sm" message={t.all_projects_have_deadlines} />}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -936,11 +935,7 @@ function FreeDaysWeek() {
   }, [tasks]);
 
   return (
-    <div className="h-full flex flex-col justify-center px-4">
-      <div className="text-xs text-muted uppercase tracking-wide mb-1">{t.free_days_week}</div>
-      <div className="text-lg font-semibold">{freeDays}/5</div>
-      <div className="text-xs text-muted mt-1">{t.free}</div>
-    </div>
+    <StatTile className={KPI_TILE} label={t.free_days_week} value={`${freeDays}/5`} caption={t.free} />
   );
 }
 
@@ -968,8 +963,8 @@ function UpcomingReminders() {
   }, [invoices, today]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.upcoming_reminders}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.upcoming_reminders}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2">
         {upcoming.map((inv) => (
           <Link key={inv.id} to={`/invoices/${inv.id}/edit`} className="flex justify-between items-center text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1.5 -mx-2">
@@ -977,14 +972,14 @@ function UpcomingReminders() {
               <span className="font-medium">{inv.reference}</span>
               <span className="text-xs text-muted ml-2">{clientName(inv.client_id)}</span>
             </div>
-            <span className={`text-xs shrink-0 ml-2 ${inv.daysLeft <= 3 ? "text-danger" : inv.daysLeft <= 7 ? "text-warning" : "text-muted"}`}>
+            <span className={`text-xs shrink-0 ml-2 ${inv.daysLeft <= 3 ? "text-danger-text" : inv.daysLeft <= 7 ? "text-warning-text" : "text-muted"}`}>
               {inv.daysLeft} {t.days_outstanding}
             </span>
           </Link>
         ))}
-        {upcoming.length === 0 && <div className="text-xs text-muted">{t.no_data}</div>}
+        {invoices === undefined ? <ListSkeleton size="sm" rows={3} /> : upcoming.length === 0 && <EmptyState size="sm" message={t.no_payments_due_soon} />}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -1006,19 +1001,19 @@ function RecentlyCompleted() {
   }, [tasks]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.recently_completed}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.recently_completed}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {completed.map((task) => (
           <Link key={task.id} to={`/projects/${task.project_id}`} className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
-            <span className="text-success text-xs shrink-0">&#10003;</span>
+            <ICONS.done size={ICON_SIZE.control} className="text-success-text shrink-0" />
             <span className="text-muted text-xs shrink-0">{projectName(task.project_id)}</span>
             <span className="truncate">{task.title}</span>
           </Link>
         ))}
-        {completed.length === 0 && <div className="text-xs text-muted">{t.no_data}</div>}
+        {tasks === undefined ? <ListSkeleton size="sm" rows={3} /> : completed.length === 0 && <EmptyState size="sm" message={t.no_completed_tasks} />}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -1045,18 +1040,18 @@ function StaleProjects() {
   }, [projects, tasks]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3 text-warning">{t.stale_projects}</h2>
+    <WidgetShell>
+      <WidgetTitle tone="warning">{t.stale_projects}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1.5">
         {stale.map((p) => (
           <Link key={p.id} to={`/projects/${p.id}`} className="flex items-center justify-between text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2">
             <span className="truncate">{p.name}</span>
-            <span className="text-xs text-warning shrink-0 ml-2">{p.daysInactive}{t.days_inactive}</span>
+            <span className="text-xs text-warning-text shrink-0 ml-2">{p.daysInactive}{t.days_inactive}</span>
           </Link>
         ))}
-        {stale.length === 0 && <div className="text-xs text-muted">{t.no_stale_projects}</div>}
+        {projects === undefined || tasks === undefined ? <ListSkeleton size="sm" rows={3} /> : stale.length === 0 && <EmptyState size="sm" message={t.no_stale_projects} />}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -1098,11 +1093,7 @@ function WeeklyStreak() {
   }, [tasks]);
 
   return (
-    <div className="h-full flex flex-col justify-center px-4">
-      <div className="text-xs text-muted uppercase tracking-wide mb-1">{t.weekly_streak}</div>
-      <div className="text-lg font-semibold">{streak}</div>
-      <div className="text-xs text-muted mt-1">{t.weeks}</div>
-    </div>
+    <StatTile className={KPI_TILE} label={t.weekly_streak} value={streak} caption={t.weeks} />
   );
 }
 
@@ -1129,8 +1120,8 @@ function BusiestDay() {
   }, [tasks]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.busiest_day}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.busiest_day}</WidgetTitle>
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data}>
@@ -1142,7 +1133,7 @@ function BusiestDay() {
           </BarChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -1153,15 +1144,15 @@ function QuickCreate() {
   const t = useT();
 
   const items = [
-    { label: t.new_invoice, icon: <FileText size={16} />, to: "/invoices/new" },
-    { label: t.new_quote, icon: <ClipboardList size={16} />, to: "/quotes/new" },
-    { label: t.new_expense, icon: <Receipt size={16} />, to: "/expenses" },
-    { label: t.new_project, icon: <FolderPlus size={16} />, to: "/projects" },
+    { label: t.new_invoice, icon: ICONS.invoice, to: "/invoices/new" },
+    { label: t.new_quote, icon: ICONS.quote, to: "/quotes/new" },
+    { label: t.new_expense, icon: ICONS.expense, to: "/expenses" },
+    { label: t.new_project, icon: ICONS.newProject, to: "/projects" },
   ];
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.quick_create}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.quick_create}</WidgetTitle>
       <div className="flex-1 grid grid-cols-2 gap-2 content-start">
         {items.map((item) => (
           <button
@@ -1170,12 +1161,12 @@ function QuickCreate() {
             onClick={() => navigate(item.to)}
             className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-[var(--color-input-bg)] hover:bg-[var(--color-hover-row)] transition-colors"
           >
-            <span className="text-muted">{item.icon}</span>
+            <item.icon size={ICON_SIZE.callout} className="text-muted shrink-0" />
             <span className="truncate">{item.label}</span>
           </button>
         ))}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -1196,17 +1187,19 @@ function PinnedNotes() {
   };
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-2">{t.pinned_notes}</h2>
-      <textarea
-        className="flex-1 w-full resize-none text-sm bg-[var(--color-input-bg)] rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-accent cursor-text"
+    <WidgetShell>
+      <WidgetTitle>{t.pinned_notes}</WidgetTitle>
+      <Textarea
+        fill
+        className="flex-1 cursor-text"
+        aria-label={t.pinned_notes}
         value={local}
         onChange={(e) => handleChange(e.target.value)}
         onMouseDown={(e) => e.stopPropagation()}
         onTouchStart={(e) => e.stopPropagation()}
         placeholder={t.notes}
       />
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -1241,14 +1234,12 @@ function TimeThisWeek() {
 
   const totalMin = chartData.reduce((s, d) => s + d.minutes, 0);
 
-  if (!data || data.length === 0) {
-    return <div className="h-full flex items-center justify-center text-sm text-muted">{t.no_time_data}</div>;
-  }
+  if (!data?.length) return <TimeWidgetState title={t.time_this_week} loading={data === undefined} />;
 
   return (
-    <div className="h-full flex flex-col p-3">
-      <div className="text-xs text-muted mb-1">{t.time_this_week}</div>
-      <div className="text-lg font-semibold mb-2">{fmtHours(totalMin)}</div>
+    <WidgetShell>
+      <WidgetTitle>{t.time_this_week}</WidgetTitle>
+      <div className={`${STAT_VALUE} mb-2`}>{fmtHours(totalMin)}</div>
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData}>
@@ -1260,7 +1251,18 @@ function TimeThisWeek() {
           </BarChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </WidgetShell>
+  );
+}
+
+/** A time widget before it has data: its title, then a skeleton (loading) or "No tracked time yet". */
+function TimeWidgetState({ title, loading }: { title: string; loading: boolean }) {
+  const t = useT();
+  return (
+    <WidgetShell>
+      <WidgetTitle>{title}</WidgetTitle>
+      {loading ? <ListSkeleton size="sm" rows={3} /> : <EmptyState size="sm" icon={ICONS.time} message={t.no_tracked_time} className="flex-1" />}
+    </WidgetShell>
   );
 }
 
@@ -1269,9 +1271,7 @@ function PlannedVsActual() {
   const chart = useChartTheme();
   const { data } = useQuery({ queryKey: ["planned-vs-actual"], queryFn: getPlannedVsActual });
 
-  if (!data || data.length === 0) {
-    return <div className="h-full flex items-center justify-center text-sm text-muted">{t.no_time_data}</div>;
-  }
+  if (!data?.length) return <TimeWidgetState title={t.planned_vs_actual} loading={data === undefined} />;
 
   const chartData = data.map((d) => ({
     name: d.project_name.length > 15 ? d.project_name.slice(0, 14) + "..." : d.project_name,
@@ -1280,8 +1280,8 @@ function PlannedVsActual() {
   }));
 
   return (
-    <div className="h-full flex flex-col p-3">
-      <div className="text-xs text-muted mb-2">{t.planned_vs_actual}</div>
+    <WidgetShell>
+      <WidgetTitle>{t.planned_vs_actual}</WidgetTitle>
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} layout="vertical">
@@ -1295,7 +1295,7 @@ function PlannedVsActual() {
           </BarChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -1303,14 +1303,12 @@ function TopTimeConsumers() {
   const t = useT();
   const { data } = useQuery({ queryKey: ["top-time-consumers"], queryFn: () => getTopTimeConsumers(8) });
 
-  if (!data || data.length === 0) {
-    return <div className="h-full flex items-center justify-center text-sm text-muted">{t.no_time_data}</div>;
-  }
+  if (!data?.length) return <TimeWidgetState title={t.top_time_consumers} loading={data === undefined} />;
 
   return (
-    <div className="h-full overflow-y-auto p-3">
-      <div className="text-xs text-muted mb-2">{t.top_time_consumers}</div>
-      <div className="space-y-1.5">
+    <WidgetShell>
+      <WidgetTitle>{t.top_time_consumers}</WidgetTitle>
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
         {data.map((task) => (
           <div key={task.id} className="flex items-center justify-between text-sm">
             <div className="truncate flex-1 mr-2">
@@ -1321,7 +1319,7 @@ function TopTimeConsumers() {
           </div>
         ))}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -1332,11 +1330,7 @@ function BillableSummary() {
   const animated = useCountUp(totalHours);
 
   return (
-    <div className="h-full flex flex-col justify-center px-4">
-      <div className="text-xs text-muted uppercase tracking-wide mb-1">{t.billable_summary}</div>
-      <div className="text-lg font-semibold">{animated.toFixed(1)}h</div>
-      <div className="text-xs text-muted">{t.tracked}</div>
-    </div>
+    <StatTile className={KPI_TILE} label={t.billable_summary} value={`${animated.toFixed(1)}h`} caption={t.tracked} />
   );
 }
 
@@ -1345,9 +1339,7 @@ function WeeklyTrendWidget() {
   const chart = useChartTheme();
   const { data } = useQuery({ queryKey: ["weekly-trend"], queryFn: getWeeklyTrend });
 
-  if (!data || data.length === 0) {
-    return <div className="h-full flex items-center justify-center text-sm text-muted">{t.no_time_data}</div>;
-  }
+  if (!data?.length) return <TimeWidgetState title={t.weekly_trend} loading={data === undefined} />;
 
   const chartData = data.map((d) => ({
     week: d.week,
@@ -1355,8 +1347,8 @@ function WeeklyTrendWidget() {
   }));
 
   return (
-    <div className="h-full flex flex-col p-3">
-      <div className="text-xs text-muted mb-2">{t.weekly_trend}</div>
+    <WidgetShell>
+      <WidgetTitle>{t.weekly_trend}</WidgetTitle>
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData}>
@@ -1368,7 +1360,7 @@ function WeeklyTrendWidget() {
           </LineChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -1382,9 +1374,7 @@ function ProjectTimeDistribution() {
   const chart = useChartTheme();
   const { data } = useQuery({ queryKey: ["project-time-distribution"], queryFn: getProjectTimeDistribution });
 
-  if (!data || data.length === 0) {
-    return <div className="h-full flex items-center justify-center text-sm text-muted">{t.no_time_data}</div>;
-  }
+  if (!data?.length) return <TimeWidgetState title={t.project_time_distribution} loading={data === undefined} />;
 
   const chartData = data.map((d) => ({
     name: d.project_name,
@@ -1392,8 +1382,8 @@ function ProjectTimeDistribution() {
   }));
 
   return (
-    <div className="h-full flex flex-col p-3">
-      <div className="text-xs text-muted mb-2">{t.project_time_distribution}</div>
+    <WidgetShell>
+      <WidgetTitle>{t.project_time_distribution}</WidgetTitle>
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -1420,7 +1410,7 @@ function ProjectTimeDistribution() {
           </PieChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 
@@ -1444,16 +1434,16 @@ function InvoiceAging() {
 
   if (!hasData) {
     return (
-      <div className="h-full flex flex-col p-4">
-        <h2 className="text-sm font-medium mb-3">{t.invoice_aging}</h2>
-        <div className="flex-1 flex items-center justify-center text-xs text-muted">{t.no_data}</div>
-      </div>
+      <WidgetShell>
+        <WidgetTitle>{t.invoice_aging}</WidgetTitle>
+        {data === undefined ? <ListSkeleton size="sm" rows={3} /> : <EmptyState size="sm" message={t.no_outstanding_invoices} className="flex-1" />}
+      </WidgetShell>
     );
   }
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.invoice_aging}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.invoice_aging}</WidgetTitle>
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
@@ -1476,11 +1466,11 @@ function InvoiceAging() {
         {chartData.filter((d) => d.count > 0).map((d) => (
           <div key={d.bracket} className="flex items-center justify-between text-xs">
             <span className="text-muted">{d.bracket}d</span>
-            <span className="font-medium text-danger">{d.count} — CHF {d.total.toFixed(2)}</span>
+            <span className="font-medium text-danger-text">{d.count} — CHF {d.total.toFixed(2)}</span>
           </div>
         ))}
       </div>
-    </div>
+    </WidgetShell>
   );
 }
 

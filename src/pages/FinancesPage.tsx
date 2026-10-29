@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Download, BarChart3, Plus } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -16,7 +15,7 @@ import { createElement } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile, mkdir, copyFile } from "@tauri-apps/plugin-fs";
 import { pdf } from "@react-pdf/renderer";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { usePLData, useMonthlyData } from "../db/hooks/useFinance";
 import { useInvoices } from "../db/hooks/useInvoices";
 import { useExpenses } from "../db/hooks/useExpenses";
@@ -24,7 +23,7 @@ import { useClients } from "../db/hooks/useClients";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
-import { PageHeader, PageSpinner, Button, Card, EmptyState } from "../components/ui";
+import { ICONS, PageHeader, QueryError, DetailSkeleton, Button, Card, EmptyState, Select, SectionLabel, Callout, CARD_GAP } from "../components/ui";
 import { useNavigate } from "react-router-dom";
 import { useChartTheme } from "../hooks/useChartTheme";
 import { getTagColor } from "../lib/tagColors";
@@ -38,16 +37,17 @@ import { missingChfEquivalent } from "../lib/chfEquivalent";
 import { logError } from "../lib/log";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-/** Derive pie-chart fill color from category name using the tag color palette */
-function getPieColor(categoryName: string, dark: boolean): string {
-  return getTagColor(categoryName, dark).text;
+/** Pie-chart fill for a category: its tag colour, a CSS variable (Recharts passes it to SVG fill). */
+function getPieColor(categoryName: string): string {
+  return getTagColor(categoryName).text;
 }
 
 export function FinancesPage() {
   const t = useT();
   const [year, setYear] = useState(new Date().getFullYear());
   const navigate = useNavigate();
-  const { data: pl, isLoading } = usePLData(year);
+  const plQuery = usePLData(year);
+  const { data: pl } = plQuery;
   const { data: monthly } = useMonthlyData(year);
   const { data: invoices } = useInvoices();
   const { data: expenses } = useExpenses();
@@ -55,7 +55,6 @@ export function FinancesPage() {
   const { data: profile } = useBusinessProfile();
   const chart = useChartTheme();
   const exportLang = useAppStore((s) => s.exportLanguage);
-  const darkMode = useAppStore((s) => s.darkMode);
   const [exporting, setExporting] = useState(false);
 
   const exportForTrustee = async () => {
@@ -121,7 +120,7 @@ export function FinancesPage() {
         }
       }
       if (invoicePdfsFailed > 0) {
-        toast.warning(t.export_invoices_failed.replace("{count}", String(invoicePdfsFailed)));
+        notify.warning(t.export_invoices_failed.replace("{count}", String(invoicePdfsFailed)));
       }
 
       // Export expenses list PDF + copy receipts
@@ -146,18 +145,29 @@ export function FinancesPage() {
         }
       }
       if (receiptsSkipped > 0) {
-        toast.warning(t.export_receipts_skipped.replace("{count}", String(receiptsSkipped)));
+        notify.warning(t.export_receipts_skipped.replace("{count}", String(receiptsSkipped)));
       }
 
-      toast.success(t.exported_to.replace("{path}", basePath));
-    } catch {
-      toast.error(t.export_failed);
+      notify.success(t.exported_to.replace("{path}", basePath));
+    } catch (e) {
+      notify.error(t.export_failed, e);
     } finally {
       setExporting(false);
     }
   };
 
-  if (isLoading) return <PageSpinner />;
+  if (pl === undefined) {
+    return (
+      <div>
+        <PageHeader title={t.finances} />
+        {plQuery.isError ? (
+          <QueryError message={t.load_error_finances} onRetry={plQuery.refetch} retrying={plQuery.isFetching} />
+        ) : (
+          <DetailSkeleton />
+        )}
+      </div>
+    );
+  }
 
   // First run: no financial data at all — guide instead of empty charts.
   if (invoices !== undefined && expenses !== undefined && invoices.length === 0 && expenses.length === 0) {
@@ -166,9 +176,9 @@ export function FinancesPage() {
         <PageHeader title={t.finances} />
         <EmptyState
           message={t.first_run_finances}
-          icon={<BarChart3 size={32} />}
+          icon={ICONS.finances}
           action={
-            <Button icon={<Plus size={16} />} onClick={() => navigate("/invoices/new")}>
+            <Button icon={ICONS.add} onClick={() => navigate("/invoices/new")}>
               {t.new_invoice}
             </Button>
           }
@@ -202,28 +212,29 @@ export function FinancesPage() {
   return (
     <div>
       <PageHeader title={t.finances}>
-        <select
+        <Select
           value={year}
+          aria-label={t.year}
           onChange={(e) => setYear(Number(e.target.value))}
-          className="border border-[var(--color-border-divider)] rounded-lg px-3 py-1.5 text-sm bg-[var(--color-surface)]"
+          fullWidth={false}
         >
           {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((y) => (
             <option key={y} value={y}>{y}</option>
           ))}
-        </select>
-        <Button icon={<Download size={14} />} loading={exporting} onClick={exportForTrustee}>{t.export_trustee}</Button>
+        </Select>
+        <Button icon={ICONS.export} loading={exporting} onClick={exportForTrustee}>{t.export_trustee}</Button>
       </PageHeader>
 
       {missingChfCount > 0 && (
-        <div className="flex items-center gap-2 p-3 mb-4 bg-[var(--color-warning-bg)] border border-[var(--color-border-header)] rounded-md text-sm text-[var(--color-warning-text)]">
+        <Callout tone="warning" className="mb-4">
           {t.chf_equivalent_missing_banner.replace("{count}", String(missingChfCount))}
-        </div>
+        </Callout>
       )}
 
       {/* Monthly revenue vs expenses chart */}
-      <div className="text-[10px] font-medium uppercase tracking-widest text-muted mb-2">{t.finances_overview}</div>
-      <Card className="mb-6">
-        <h2 className="text-sm font-medium mb-4">{t.revenue_vs_expenses}</h2>
+      <SectionLabel className="mb-2">{t.finances_overview}</SectionLabel>
+      <Card className="mb-4">
+        <Card.Header title={t.revenue_vs_expenses} />
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={chartData} barGap={2}>
             <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} />
@@ -240,12 +251,12 @@ export function FinancesPage() {
         </ResponsiveContainer>
       </Card>
 
-      <div className="text-[10px] font-medium uppercase tracking-widest text-muted mb-2">{t.finances_breakdown}</div>
-      <div className="grid grid-cols-2 gap-6">
+      <SectionLabel className="mb-2">{t.finances_breakdown}</SectionLabel>
+      <div className={`grid grid-cols-2 ${CARD_GAP}`}>
         {/* Expense breakdown pie chart */}
         {pieData.length > 0 && (
           <Card>
-            <h2 className="text-sm font-medium mb-4">{t.expense_breakdown}</h2>
+            <Card.Header title={t.expense_breakdown} />
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
                 <Pie
@@ -258,7 +269,7 @@ export function FinancesPage() {
                   stroke="none"
                 >
                   {pieData.map((d, i) => (
-                    <Cell key={i} fill={getPieColor(d.name, darkMode)} />
+                    <Cell key={i} fill={getPieColor(d.name)} />
                   ))}
                 </Pie>
                 <Tooltip
@@ -276,7 +287,7 @@ export function FinancesPage() {
                 <div key={d.name} className="flex items-center gap-1.5 text-xs">
                   <div
                     className="dot"
-                    style={{ backgroundColor: getPieColor(d.name, darkMode) }}
+                    style={{ backgroundColor: getPieColor(d.name) }}
                   />
                   <span className="text-muted">{d.name}</span>
                 </div>
@@ -288,7 +299,7 @@ export function FinancesPage() {
         {/* P&L statement */}
         {pl && (
           <Card>
-            <h2 className="text-sm font-medium mb-4">{t.profit_loss}</h2>
+            <Card.Header title={t.profit_loss} />
             <div className="space-y-1">
               <PLLine label={t.revenue} value={pl.revenue} bold />
               {pl.other_income > 0 && (
@@ -316,7 +327,7 @@ export function FinancesPage() {
               <PLLine label={t.operating_net} value={pl.operating_net} bold />
               <PLLine label={t.social_charges} value={-pl.social_charges} negative />
 
-              <div className="border-t-2 border-[var(--color-border-header)] mt-2 pt-2">
+              <div className="border-t-2 border-[var(--color-border)] mt-2 pt-2">
                 <PLLine label={t.net_result} value={pl.net_result} bold large />
               </div>
             </div>
@@ -353,7 +364,7 @@ function PLLine({
       </span>
       <span
         className={`${large ? "text-sm" : "text-xs"} ${bold ? "font-semibold" : ""} ${
-          negative && value < 0 ? "text-danger" : ""
+          negative && value < 0 ? "text-danger-text" : ""
         }`}
       >
         {value < 0 ? "- " : ""}CHF {Math.abs(value).toLocaleString("de-CH", {

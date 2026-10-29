@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { MoreHorizontal } from "lucide-react";
-import { Button, EmptyState, BAR_ICON_BUTTON, SectionLabel } from "../components/ui";
-import { ContextMenu, type ContextMenuItem } from "../components/ContextMenu";
+import { Button, Dropdown, EmptyState, ICONS, IconButton, SectionLabel, type DropdownItem } from "../components/ui";
 import { useAgents } from "../components/agents/useAgents";
 import { useT } from "../i18n/useT";
 import { useAppStore } from "../stores/app-store";
@@ -63,7 +61,6 @@ const TONE = {
 function RoutineRow({ routine, run, sessionId }: { routine: Routine; run: Run | undefined; sessionId: string | null }) {
   const t = useT();
   const locale = useAppStore((s) => (s.language === "FR" ? "fr" : "en"));
-  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Runs an action; a failure (e.g. "Agents are switched off") shows in the row. */
@@ -104,12 +101,13 @@ function RoutineRow({ routine, run, sessionId }: { routine: Routine; run: Run | 
     main = { label: t.routines_run, onClick: () => void start(), disabled: running || busy };
   }
 
-  const items: ContextMenuItem[] = [
-    { label: t.routines_run_now, onClick: () => void start(), disabled: running || busy },
-    { label: t.routines_open_folder, onClick: () => void attempt(() => openRoutineFolder(routine.id)), divider: true },
+  const items: DropdownItem[] = [
+    { label: t.routines_run_now, onSelect: () => void start(), disabled: running || busy },
+    { label: t.routines_open_folder, onSelect: () => void attempt(() => openRoutineFolder(routine.id)) },
   ];
   if (routine.resultLink) {
-    items.push({ label: t.routines_open_link, onClick: () => void attempt(() => openRoutineResult(routine.id)) });
+    items.push({ divider: true });
+    items.push({ label: t.routines_open_link, onSelect: () => void attempt(() => openRoutineResult(routine.id)) });
   }
 
   return (
@@ -123,22 +121,10 @@ function RoutineRow({ routine, run, sessionId }: { routine: Routine; run: Run | 
           </div>
         )}
       </div>
-      <Button size="sm" variant="secondary" onClick={main.onClick} disabled={main.disabled}>
+      <Button variant="secondary" onClick={main.onClick} disabled={main.disabled}>
         {main.label}
       </Button>
-      <button
-        type="button"
-        className={BAR_ICON_BUTTON}
-        aria-label={`${t.routines_more}: ${routine.title}`}
-        aria-haspopup="menu"
-        onClick={(e) => {
-          const r = e.currentTarget.getBoundingClientRect();
-          setMenuAt({ x: r.right - 160, y: r.bottom + 4 });
-        }}
-      >
-        <MoreHorizontal size={14} />
-      </button>
-      {menuAt && <ContextMenu x={menuAt.x} y={menuAt.y} items={items} onClose={() => setMenuAt(null)} />}
+      <Dropdown align="end" trigger={<IconButton icon={ICONS.more} label={`${t.routines_more}: ${routine.title}`} />} items={items} />
     </div>
   );
 }
@@ -159,7 +145,7 @@ export function DayTab() {
       <EmptyState
         message={t.routines_day_empty}
         action={
-          <Button size="sm" variant="secondary" onClick={() => void openMainWindow({ settings: "agents" })}>
+          <Button variant="secondary" onClick={() => void openMainWindow({ settings: "agents" })}>
             {t.routines_open_settings}
           </Button>
         }
@@ -175,10 +161,10 @@ export function DayTab() {
         return (
           <section key={s.id} className="pt-3 border-b border-[var(--color-border-divider)] last:border-b-0">
             <div className="flex items-end justify-between gap-2 px-4 mb-1">
-              <SectionLabel className="mb-0">{s.name}</SectionLabel>
+              <SectionLabel as="h2">{s.name}</SectionLabel>
               <div className="flex flex-wrap justify-end gap-x-3">
                 {s.links.map((l, i) => (
-                  <Button key={i} variant="link" size="sm" onClick={() => void openSectionLink(s.id, i).catch(() => {})}>
+                  <Button key={i} variant="link" onClick={() => void openSectionLink(s.id, i).catch(() => {})}>
                     {l.label}
                   </Button>
                 ))}

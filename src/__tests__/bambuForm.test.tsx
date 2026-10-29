@@ -24,6 +24,7 @@ vi.mock("../hooks/useUnsavedChangesWarning", () => ({ useUnsavedChangesWarning: 
 
 import { BambuForm } from "../components/upkeep/BambuForm";
 import { CONNECTION_FORMS } from "../components/upkeep/connectionForms";
+import { pickOption } from "./fixtures/dropdown";
 
 const t = uiLabels.EN;
 
@@ -58,7 +59,7 @@ describe("BambuForm", () => {
     testConnection.mockResolvedValue([{ device_id: "01P", name: "P2S", model: "P2S" }]);
     const onDone = vi.fn();
     render(<BambuForm onDone={onDone} onCancel={vi.fn()} />);
-    fireEvent.change(screen.getByLabelText(/^Region/), { target: { value: "china" } });
+    pickOption(screen.getByLabelText(/^Region/), t.upkeep_bambu_region_china);
     fill();
     await waitFor(() => expect(onDone).toHaveBeenCalled());
     const { data, secret } = create.mock.calls[0][0];

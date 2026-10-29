@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Download, FolderPlus } from "lucide-react";
-import { Button, PageSpinner, Modal } from "../components/ui";
+import { ICONS, Button, PageHeader, EmptyState, QueryError, DetailSkeleton } from "../components/ui";
+import { confirmDraftExport } from "../lib/confirmDraftExport";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { useQuote, useUpdateQuote } from "../db/hooks/useQuotes";
 import { getQuote } from "../db/queries/quotes";
@@ -14,7 +14,7 @@ import { useProject } from "../db/hooks/useProjects";
 import { QuotePDF } from "../components/quote/QuotePDF";
 import { useInvoiceTemplate } from "../db/hooks/useInvoiceTemplates";
 import { QuoteToProjectWizard } from "../components/QuoteToProjectWizard";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { useT } from "../i18n/useT";
 
 export function QuotePreviewPage() {
@@ -22,27 +22,50 @@ export function QuotePreviewPage() {
   const quoteId = Number(id);
   const navigate = useNavigate();
 
-  const { data: quote, isLoading: loadingQuote } = useQuote(quoteId);
-  const { data: lineItems, isLoading: loadingItems } = useQuoteLineItems(quoteId);
-  const { data: client } = useClient(quote?.client_id ?? "");
+  const quoteQuery = useQuote(quoteId);
+  const { data: quote } = quoteQuery;
+  const lineItemsQuery = useQuoteLineItems(quoteId);
+  const { data: lineItems } = lineItemsQuery;
+  const clientQuery = useClient(quote?.client_id ?? "");
+  const { data: client } = clientQuery;
   const { data: addresses } = useClientAddresses(quote?.client_id ?? "");
-  const { data: profile } = useBusinessProfile();
+  const profileQuery = useBusinessProfile();
+  const { data: profile } = profileQuery;
   const { data: project } = useProject(quote?.project_id ?? 0);
   const quoteTemplateId = quote && "template_id" in quote
     ? (quote as { template_id?: number | null }).template_id ?? null
     : null;
   const { data: quoteTemplate } = useInvoiceTemplate(quoteTemplateId);
-  const [showDraftWarning, setShowDraftWarning] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
   const [exporting, setExporting] = useState(false);
   const updateQuote = useUpdateQuote();
   const t = useT();
 
-  const isLoading = loadingQuote || loadingItems;
+  // Loading until the quote and everything the PDF needs is in: "not found" must not flash while the client loads.
+  // A failed query is not pending, so an error lands in the QueryError branch instead of a skeleton forever.
+  const needsClient = !!quote?.client_id;
+  const isLoading = !!quoteId && (quoteQuery.isPending || (!!quote && (lineItemsQuery.isPending || (needsClient && clientQuery.isPending) || profileQuery.isPending)));
+  const loadQueries = [quoteQuery, lineItemsQuery, profileQuery, ...(needsClient ? [clientQuery] : [])];
+  const loadFailed = loadQueries.some((q) => q.isError && q.data === undefined);
 
-  if (isLoading) return <PageSpinner />;
+  if (loadFailed)
+    return (
+      <QueryError
+        message={t.load_error_quote}
+        onRetry={() => loadQueries.forEach((q) => void q.refetch())}
+        retrying={loadQueries.some((q) => q.isFetching)}
+      />
+    );
+  if (isLoading) return <DetailSkeleton />;
   if (!quote || !lineItems || !client || !profile)
-    return <div className="text-muted text-sm">{t.quote_not_found}</div>;
+    return (
+      <EmptyState
+        icon={ICONS.quote}
+        message={t.quote_not_found}
+        hint={t.not_found_hint}
+        action={<Button variant="secondary" onClick={() => navigate("/quotes")}>{t.back_to_quotes}</Button>}
+      />
+    );
 
   const billingAddress = quote.billing_address_id
     ? addresses?.find((a) => a.id === quote.billing_address_id) ?? null
@@ -79,20 +102,19 @@ export function QuotePreviewPage() {
       );
       a.click();
       URL.revokeObjectURL(url);
-      toast.success(t.pdf_downloaded);
-    } catch {
-      toast.error(t.failed_to_generate_pdf);
+      notify.success(t.pdf_downloaded);
+    } catch (e) {
+      notify.error(t.failed_to_generate_pdf, e);
     } finally {
       setExporting(false);
     }
   };
 
-  const downloadPdf = () => {
-    if (quote.status === "draft") {
-      setShowDraftWarning(true);
-    } else {
-      doDownload();
-    }
+  const downloadPdf = async () => {
+    if (quote.status !== "draft") return doDownload();
+    const choice = await confirmDraftExport();
+    if (choice === "draft") await doDownload();
+    if (choice === "sent") handleMarkSentAndExport();
   };
 
   const handleMarkSentAndExport = () => {
@@ -100,13 +122,8 @@ export function QuotePreviewPage() {
       { id: quoteId, data: { status: "sent" } },
       {
         onSuccess: async () => {
-          setShowDraftWarning(false);
           const fresh = await getQuote(quoteId);
           await doDownload(fresh ?? quote);
-        },
-        onError: (e) => {
-          setShowDraftWarning(false);
-          toast.error(String(e));
         },
       }
     );
@@ -114,26 +131,21 @@ export function QuotePreviewPage() {
 
   return (
     <div className="flex flex-col -m-8 h-screen">
-      <div className="flex items-center gap-3 px-6 py-3 border-b border-[var(--color-border-divider)] bg-[var(--color-surface)]">
-        <button
-          onClick={() => navigate(-1)}
-          className="text-muted hover:text-[var(--color-text)]"
-          aria-label={t.back}
-        >
-          <ArrowLeft size={18} />
-        </button>
-        <h1 className="text-sm font-semibold flex-1">
-          {quote.reference.startsWith("DRAFT") ? t.draft : quote.reference} — {client.name}
-        </h1>
-        {quote.status === "accepted" && !quote.converted_to_project_id && (
-          <Button variant="secondary" icon={<FolderPlus size={14} />} onClick={() => setShowWizard(true)}>
-            {t.generate_project}
+      <PageHeader
+        compact
+        title={`${quote.reference.startsWith("DRAFT") ? t.draft : quote.reference} — ${client.name}`}
+        back={() => navigate(-1)}
+        actions={<>
+          {quote.status === "accepted" && !quote.converted_to_project_id && (
+            <Button variant="secondary" icon={ICONS.newProject} onClick={() => setShowWizard(true)}>
+              {t.generate_project}
+            </Button>
+          )}
+          <Button icon={ICONS.download} loading={exporting || updateQuote.isPending} onClick={downloadPdf}>
+            {t.download_pdf}
           </Button>
-        )}
-        <Button icon={<Download size={14} />} loading={exporting} onClick={downloadPdf}>
-          {t.download_pdf}
-        </Button>
-      </div>
+        </>}
+      />
       <div className="flex-1 bg-[var(--color-bg)]">
         <PDFViewer
           width="100%"
@@ -153,25 +165,6 @@ export function QuotePreviewPage() {
           clientName={client.name}
         />
       )}
-      <Modal
-        open={showDraftWarning}
-        onClose={() => setShowDraftWarning(false)}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setShowDraftWarning(false)}>
-              {t.cancel}
-            </Button>
-            <Button variant="secondary" onClick={() => { setShowDraftWarning(false); doDownload(); }}>
-              {t.export_as_draft}
-            </Button>
-            <Button loading={updateQuote.isPending} onClick={handleMarkSentAndExport}>
-              {t.mark_sent_and_export}
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm">{t.export_draft_warning}</p>
-      </Modal>
     </div>
   );
 }

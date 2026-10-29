@@ -1,8 +1,8 @@
-import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { Plus, Trash2, GripVertical, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Settings2, X, Copy, Download, Sigma, Pin, Play, Square } from "lucide-react";
-import { Button } from "../ui";
-import { createPortal } from "react-dom";
-import { toast } from "sonner";
+import { useState, useCallback, useMemo, useRef, useEffect, type RefObject } from "react";
+import { Sigma } from "lucide-react";
+import { Button, DragHandle, Select, Popover, Input, FormModal, FormField, MenuItem, ICONS, ICON_SIZE } from "../ui";
+import { MENU_DIVIDER } from "../ui/Dropdown";
+import { notify } from "../../lib/notify";
 import {
   DndContext,
   closestCenter,
@@ -37,6 +37,16 @@ import { COLUMN_ICONS } from "./columnIcons";
 import { evaluateFormula } from "../../lib/formulaEval";
 import { useT } from "../../i18n/useT";
 import { useTimerActions } from "../../hooks/useTimerActions";
+import { IconButton } from "../ui/IconButton";
+import { Table } from "../ui/Table";
+import { MUTED_INTERACTIVE, TABLE_ROW_H, TABLE_TH, TABLE_X } from "../ui/tokens";
+
+/** Header cells open the column menu on click. */
+const HEADER_BUTTON = `cursor-pointer ${MUTED_INTERACTIVE}`;
+/** "Pin first column": the drag handle (w-8) and the task column stay put. */
+const STICKY_HANDLE = "sticky left-0 z-10 bg-[var(--color-surface)]";
+const STICKY_TASK = "sticky left-8 z-10 bg-[var(--color-surface)]";
+
 
 interface Props {
   projectId: number;
@@ -86,7 +96,10 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
   // Collapse is now handled by ProjectBlockLayout
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveTemplateName, setSaveTemplateName] = useState("");
-  const [headerMenu, setHeaderMenu] = useState<{ ci: number; pos: { top: number; left: number }; isSystem?: boolean } | null>(null);
+  const [saveTemplateError, setSaveTemplateError] = useState<string | undefined>();
+  const [headerMenu, setHeaderMenu] = useState<{ ci: number; isSystem?: boolean } | null>(null);
+  // The header cell the open column menu hangs from.
+  const headerMenuAnchorRef = useRef<HTMLElement | null>(null);
   const [sectionMenu, setSectionMenu] = useState<{ x: number; y: number } | null>(null);
   const [stickyFirstCol, setStickyFirstCol] = useState(() => {
     try { return localStorage.getItem(`workload_sticky_${projectId}`) === "1"; } catch { return false; }
@@ -107,7 +120,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
       if (tpl) {
         setConfig.mutate(
           { templateId: tpl.id, columns: tpl.columns },
-          { onSuccess: () => toast.success(t.toast_status_updated) }
+          { onSuccess: () => notify.success(t.template_applied) }
         );
       }
     },
@@ -142,6 +155,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
   const handleSaveAsTemplate = useCallback(() => {
     if (columns.length === 0) return;
     setSaveTemplateName("");
+    setSaveTemplateError(undefined);
     setShowSaveModal(true);
   }, [columns]);
 
@@ -161,12 +175,12 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
     const name = saveTemplateName.trim();
     if (!name) return;
     if (templates?.some((tpl) => tpl.name.toLowerCase() === name.toLowerCase())) {
-      toast.error(t.template_name_exists);
+      setSaveTemplateError(t.template_name_exists);
       return;
     }
     createTemplate.mutate(
       { name, columns },
-      { onSuccess: () => toast.success(t.toast_created) }
+      { onSuccess: () => notify.success(t.template_saved) }
     );
     setShowSaveModal(false);
   }, [saveTemplateName, columns, createTemplate, templates, t]);
@@ -175,7 +189,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
     if (!templateId || columns.length === 0) return;
     updateTemplate.mutate(
       { id: templateId, columns },
-      { onSuccess: () => toast.success(t.toast_status_updated) }
+      { onSuccess: () => notify.success(t.template_updated) }
     );
   }, [templateId, columns, updateTemplate, t]);
 
@@ -383,7 +397,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
     a.download = `workload-${projectId}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success(t.export_csv);
+    notify.success(t.csv_exported);
   }, [sortedRows, columns, projectId, t]);
 
   // Compute summary row (sum of number & formula columns + system duration/planned)
@@ -414,8 +428,9 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
     <div>
       {/* Toolbar */}
       <div className="flex items-center gap-2 mb-3 select-none">
-        <select
+        <Select
           value={templateId ?? ""}
+          aria-label={t.templates}
           onChange={(e) => {
             const val = e.target.value;
             if (val === "__save__") {
@@ -426,7 +441,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
               handleTemplateChange(val ? Number(val) : null);
             }
           }}
-          className="text-xs border border-[var(--color-border-divider)] rounded-lg px-2 py-1"
+          fullWidth={false}
         >
           <option value="">{t.select_template}</option>
           {templates?.map((tpl) => (
@@ -440,106 +455,99 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
           {columns.length > 0 && (
             <option value="__save__">{t.save_as_template}</option>
           )}
-        </select>
+        </Select>
         <div className="flex-1" />
-        <button
-          onClick={() => onEditColumn?.(null, columns.length)}
-          className="p-1 text-muted hover:text-accent"
-          title={t.add_column}
-          aria-label={t.add_column}
-        >
-          <Plus size={16} />
-        </button>
+        <IconButton icon={ICONS.add} label={t.add_column} tone="accent" onClick={() => onEditColumn?.(null, columns.length)} />
       </div>
 
       {/* Table */}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
-      <div className="overflow-x-auto">
-          <table className="text-sm" style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}>
-            <thead>
-              <tr className="border-b border-[var(--color-border-header)] select-none">
+          <Table density="compact" style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}>
+            <Table.Head>
                 {/* Drag handle column */}
-                <th className={`w-8 px-2 ${stickyFirstCol ? "sticky left-0 z-10 bg-[var(--color-surface)]" : ""}`} />
+                <th className={`${TABLE_TH} w-8 px-2 ${stickyFirstCol ? STICKY_HANDLE : ""}`} />
                 {/* System: Task */}
-                <th
-                  className={`relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-[var(--color-text-secondary)] select-none ${stickyFirstCol ? "sticky left-8 z-10 bg-[var(--color-surface)]" : ""}`}
+                <Table.Th
+                  className={`relative ${HEADER_BUTTON} ${stickyFirstCol ? STICKY_TASK : ""}`}
                   style={{ width: taskColWidth, minWidth: 80 }}
                   onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
+                    headerMenuAnchorRef.current = e.currentTarget;
                     setHeaderMenu((prev) =>
-                      prev?.ci === -1 && prev?.isSystem ? null : { ci: -1, pos: { top: rect.bottom + 2, left: rect.left }, isSystem: true }
+                      prev?.ci === -1 && prev?.isSystem ? null : { ci: -1, isSystem: true }
                     );
                   }}
                 >
                   <div className="flex items-center gap-1">
                     <span className="truncate">{t.tasks}</span>
-                    {sortKey === "__title" && <span className="ml-auto">{sortDir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />}</span>}
+                    {sortKey === "__title" && <span className="ml-auto">{sortDir === "asc" ? <ICONS.sortAsc size={ICON_SIZE.control} /> : <ICONS.sortDesc size={ICON_SIZE.control} />}</span>}
                   </div>
                   {/* Resize handle */}
                   <div
                     onPointerDown={(e) => { e.stopPropagation(); onTaskColResizeStart(e); }}
-                    className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-accent/30 active:bg-accent/50"
+                    className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-accent-handle active:bg-accent"
                   />
-                </th>
+                </Table.Th>
                 {/* System: Duration */}
-                <th
-                  className="relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-[var(--color-text-secondary)] select-none"
+                <Table.Th
+                  numeric
+                  className={`relative ${HEADER_BUTTON}`}
                   style={{ width: 90, minWidth: 60 }}
                   onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
+                    headerMenuAnchorRef.current = e.currentTarget;
                     setHeaderMenu((prev) =>
-                      prev?.ci === -2 && prev?.isSystem ? null : { ci: -2, pos: { top: rect.bottom + 2, left: rect.left }, isSystem: true }
+                      prev?.ci === -2 && prev?.isSystem ? null : { ci: -2, isSystem: true }
                     );
                   }}
                 >
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center justify-end gap-1">
+                    {sortKey === "__duration" && (sortDir === "asc" ? <ICONS.sortAsc size={ICON_SIZE.control} /> : <ICONS.sortDesc size={ICON_SIZE.control} />)}
                     <span className="truncate">{t.duration}</span>
-                    {sortKey === "__duration" && <span className="ml-auto">{sortDir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />}</span>}
                   </div>
-                </th>
+                </Table.Th>
                 {/* System: Planned */}
-                <th
-                  className="relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-[var(--color-text-secondary)] select-none"
+                <Table.Th
+                  numeric
+                  className={`relative ${HEADER_BUTTON}`}
                   style={{ width: 90, minWidth: 60 }}
                   onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
+                    headerMenuAnchorRef.current = e.currentTarget;
                     setHeaderMenu((prev) =>
-                      prev?.ci === -3 && prev?.isSystem ? null : { ci: -3, pos: { top: rect.bottom + 2, left: rect.left }, isSystem: true }
+                      prev?.ci === -3 && prev?.isSystem ? null : { ci: -3, isSystem: true }
                     );
                   }}
                 >
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center justify-end gap-1">
+                    {sortKey === "__planned" && (sortDir === "asc" ? <ICONS.sortAsc size={ICON_SIZE.control} /> : <ICONS.sortDesc size={ICON_SIZE.control} />)}
                     <span className="truncate">{t.planned}</span>
-                    {sortKey === "__planned" && <span className="ml-auto">{sortDir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />}</span>}
                   </div>
-                </th>
+                </Table.Th>
                 {/* Custom columns */}
                 {columns.map((col, ci) => {
                   const w = getColWidth(col);
                   return (
-                    <th
+                    <Table.Th
                       key={`${col.key}_${ci}`}
-                      className="relative px-4 py-2 text-left text-xs font-medium text-muted cursor-pointer hover:text-[var(--color-text-secondary)] select-none"
+                      className={`relative ${HEADER_BUTTON}`}
                       style={{ width: w, minWidth: 24 }}
                       onClick={(e) => {
-                        const rect = e.currentTarget.getBoundingClientRect();
+                        headerMenuAnchorRef.current = e.currentTarget;
                         setHeaderMenu((prev) =>
-                          prev?.ci === ci && !prev?.isSystem ? null : { ci, pos: { top: rect.bottom + 2, left: rect.left } }
+                          prev?.ci === ci && !prev?.isSystem ? null : { ci }
                         );
                       }}
                     >
                       <div className="flex items-center gap-1">
                         {col.icon && COLUMN_ICONS[col.icon] && (() => {
                           const Icon = COLUMN_ICONS[col.icon!];
-                          return <Icon size={14} className="shrink-0" />;
+                          return <Icon size={ICON_SIZE.menu} className="shrink-0" />;
                         })()}
                         {!col.iconOnly && (
                           <span className="truncate">{col.name}</span>
                         )}
                         {sortKey === col.key && (
                           <span className="ml-auto">
-                            {sortDir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />}
+                            {sortDir === "asc" ? <ICONS.sortAsc size={ICON_SIZE.control} /> : <ICONS.sortDesc size={ICON_SIZE.control} />}
                           </span>
                         )}
                       </div>
@@ -549,15 +557,14 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                           e.stopPropagation();
                           onResizeStart(e, ci);
                         }}
-                        className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-accent/30 active:bg-accent/50"
+                        className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-accent-handle active:bg-accent"
                       />
-                    </th>
+                    </Table.Th>
                   );
                 })}
-                <th className="w-14" />
-              </tr>
-            </thead>
-            <tbody>
+                <Table.ActionsTh />
+            </Table.Head>
+            <Table.Body>
               {sortedRows.map((row) => (
                 <SortableRow
                   key={row.id}
@@ -577,49 +584,40 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
                   toggleTimer={toggleTimer}
                 />
               ))}
-              {/* Summary row */}
-              {summaryRow && sortedRows.length > 0 && (
-                <tr className="border-t border-[var(--color-border-header)] font-medium">
-                  <td className={`${stickyFirstCol ? "sticky left-0 z-10 bg-[var(--color-surface)]" : ""}`} />
-                  {/* System: Task total label */}
-                  <td className={`px-4 py-2 text-sm ${stickyFirstCol ? "sticky left-8 z-10 bg-[var(--color-surface)]" : ""}`}>
-                    <span className="text-muted">{t.total}</span>
-                  </td>
-                  {/* System: Duration total */}
-                  <td className="px-4 py-2 text-sm text-right">
-                    {fmtMin(summaryRow.__duration)}
-                  </td>
-                  {/* System: Planned total */}
-                  <td className="px-4 py-2 text-sm text-right">
-                    {fmtMin(summaryRow.__planned)}
-                  </td>
-                  {/* Custom columns */}
-                  {columns.map((col, ci) => (
-                    <td
-                      key={`${col.key}_${ci}`}
-                      className="px-4 py-2 text-sm"
-                    >
-                      {(col.type === "number" || col.type === "formula") && summaryRow[col.key] !== undefined ? (
-                        <span className="block text-right">
-                          {Math.round(summaryRow[col.key] * 100) / 100}
-                        </span>
-                      ) : null}
-                    </td>
-                  ))}
-                  <td />
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            </Table.Body>
+            {/* Summary row */}
+            {summaryRow && sortedRows.length > 0 && (
+              <Table.Foot>
+                <td className={stickyFirstCol ? STICKY_HANDLE : ""} />
+                {/* System: Task total label */}
+                <Table.Td muted className={stickyFirstCol ? STICKY_TASK : ""}>
+                  {t.total}
+                </Table.Td>
+                {/* System: Duration total */}
+                <Table.Td numeric>{fmtMin(summaryRow.__duration)}</Table.Td>
+                {/* System: Planned total */}
+                <Table.Td numeric>{fmtMin(summaryRow.__planned)}</Table.Td>
+                {/* Custom columns */}
+                {columns.map((col, ci) =>
+                  (col.type === "number" || col.type === "formula") && summaryRow[col.key] !== undefined ? (
+                    <Table.Td key={`${col.key}_${ci}`} numeric>
+                      {Math.round(summaryRow[col.key] * 100) / 100}
+                    </Table.Td>
+                  ) : (
+                    <Table.Td key={`${col.key}_${ci}`} />
+                  )
+                )}
+                <td />
+              </Table.Foot>
+            )}
+          </Table>
 
         {/* Add row button */}
         <Button
           variant="link"
-          size="md"
-          icon={<Plus size={14} />}
+          icon={ICONS.add}
           onClick={handleAddRow}
-          className="w-full px-4 py-2 text-muted hover:text-accent hover:no-underline! hover:bg-[var(--color-hover-row)] border-t border-[var(--color-border-divider)]"
+          className={`w-full ${TABLE_X.compact} py-2 text-muted hover:text-accent-text hover:no-underline! hover:bg-[var(--color-hover-row)] border-t border-[var(--color-border-divider)]`}
         >
           {t.new_row}
         </Button>
@@ -633,9 +631,9 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
         if (!sysKey) return null;
         const isAsc = sortKey === sysKey && sortDir === "asc";
         const isDesc = sortKey === sysKey && sortDir === "desc";
-        return createPortal(
+        return (
           <SystemHeaderMenu
-            pos={headerMenu.pos}
+            anchor={headerMenuAnchorRef}
             isAsc={isAsc}
             isDesc={isDesc}
             onSort={(dir) => {
@@ -649,8 +647,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
             }}
             onClose={() => setHeaderMenu(null)}
             t={t}
-          />,
-          document.body
+          />
         );
       })()}
 
@@ -658,9 +655,9 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
       {headerMenu && !headerMenu.isSystem && (() => {
         const col = columns[headerMenu.ci];
         if (!col) return null;
-        return createPortal(
+        return (
           <ColumnHeaderMenu
-            pos={headerMenu.pos}
+            anchor={headerMenuAnchorRef}
             col={col}
             colIndex={headerMenu.ci}
             colCount={columns.length}
@@ -681,52 +678,33 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
             onToggleSum={() => { handleToggleSum(headerMenu.ci); setHeaderMenu(null); }}
             onClose={() => setHeaderMenu(null)}
             t={t}
-          />,
-          document.body
+          />
         );
       })()}
 
-      {/* Save as template modal — portalled so it escapes side-peek overflow */}
-      {showSaveModal && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-[var(--color-surface)] rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-divider)]">
-              <h3 className="text-sm font-medium">{t.save_as_template}</h3>
-              <button onClick={() => setShowSaveModal(false)} aria-label={t.close} className="text-muted hover:text-[var(--color-text-secondary)]">
-                <X size={16} />
-              </button>
-            </div>
-            <div className="p-4">
-              <label className="text-xs text-muted block mb-1">{t.template_name_prompt}</label>
-              <input
-                value={saveTemplateName}
-                onChange={(e) => setSaveTemplateName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && confirmSaveTemplate()}
-                className="w-full border border-[var(--color-border-divider)] rounded-lg px-3 py-2 text-sm"
-                autoFocus
-              />
-            </div>
-            <div className="flex justify-end gap-2 px-4 py-3 border-t border-[var(--color-border-divider)]">
-              <Button
-                variant="secondary"
-                onClick={() => setShowSaveModal(false)}
-              >
-                {t.cancel}
-              </Button>
-              <Button
-                onClick={confirmSaveTemplate}
-                disabled={!saveTemplateName.trim()}
-              >
-                {t.save}
-              </Button>
-            </div>
-          </div>
-        </div>,
-        document.body
+      {/* Save as template (the dialog renders on <body> itself) */}
+      {showSaveModal && (
+        <FormModal
+          open
+          onClose={() => setShowSaveModal(false)}
+          title={t.save_as_template}
+          size="sm"
+          submitLabel={t.save}
+          onSubmit={confirmSaveTemplate}
+          submitDisabled={!saveTemplateName.trim()}
+        >
+          <FormField label={t.template_name_prompt} error={saveTemplateError}>
+            <Input
+              value={saveTemplateName}
+              onChange={(e) => { setSaveTemplateName(e.target.value); setSaveTemplateError(undefined); }}
+              autoFocus
+            />
+          </FormField>
+        </FormModal>
       )}
 
       {/* Section context menu (right-click on "Workload" header) */}
-      {sectionMenu && createPortal(
+      {sectionMenu && (
         <SectionContextMenu
           x={sectionMenu.x}
           y={sectionMenu.y}
@@ -741,8 +719,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
           onExportCsv={() => { handleExportCsv(); setSectionMenu(null); }}
           onClose={() => setSectionMenu(null)}
           t={t}
-        />,
-        document.body
+        />
       )}
     </div>
   );
@@ -769,39 +746,17 @@ function SectionContextMenu({
   onClose: () => void;
   t: Record<string, string>;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onPointerDown(e: PointerEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    }
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [onClose]);
-
   return (
-    <div
-      ref={ref}
-      className="fixed z-50 w-48 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-lg overflow-hidden py-1"
-      style={{ top: y, left: x }}
-    >
-      <button
-        onClick={onTogglePin}
-        className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)] ${stickyFirstCol ? "text-accent" : ""}`}
-      >
-        <Pin size={14} />
+    <Popover at={{ x, y }} onClose={onClose} className="w-48" role="dialog" aria-label={t.options}>
+      <MenuItem icon={ICONS.pin} selected={stickyFirstCol} onClick={onTogglePin}>
         {t.pin_first_column}
-      </button>
+      </MenuItem>
       {hasRows && (
-        <button
-          onClick={onExportCsv}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)]"
-        >
-          <Download size={14} />
+        <MenuItem icon={ICONS.export} onClick={onExportCsv}>
           {t.export_csv}
-        </button>
+        </MenuItem>
       )}
-    </div>
+    </Popover>
   );
 }
 
@@ -857,68 +812,53 @@ function SortableRow({
   const isTimerActive = activeTimer?.taskId === row.id;
 
   return (
-    <tr
-      ref={setNodeRef}
-      style={style}
-      className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] group/row"
-    >
+    <Table.Row ref={setNodeRef} style={style}>
       {/* Drag handle */}
-      <td className={`${stickyFirstCol ? "sticky left-0 z-10" : ""} bg-inherit`}>
-        <div
-          {...attributes}
-          {...listeners}
-          className="flex items-center justify-center w-full h-full min-h-[32px] cursor-grab text-muted opacity-0 group-hover/row:opacity-50"
-          aria-label={t.drag_to_reorder}
-        >
-          <GripVertical size={14} />
-        </div>
+      <td className={`${TABLE_ROW_H.compact} px-2 align-middle bg-inherit ${stickyFirstCol ? "sticky left-0 z-10" : ""}`}>
+        <DragHandle {...attributes} {...listeners} reveal="row" className="flex items-center justify-center" />
       </td>
 
-      {/* System: Task title + timer button */}
-      <td className={`px-4 py-2 ${stickyFirstCol ? "sticky left-8 z-10 bg-inherit" : ""}`} style={{ width: taskColWidth }}>
+      {/* System: Task title + timer button (the timer stays visible while it runs) */}
+      <Table.Td className={stickyFirstCol ? "sticky left-8 z-10 bg-inherit" : ""} style={{ width: taskColWidth }}>
         <div className="flex items-center gap-1">
-          <button
+          <IconButton
+            icon={isTimerActive ? ICONS.stopTimer : ICONS.startTimer}
+            label={isTimerActive ? t.stop_timer : t.start_timer}
+            size="xs"
+            color={isTimerActive ? "danger" : undefined}
+            tone={isTimerActive ? "danger" : "accent"}
+            reveal={isTimerActive ? false : "row"}
             onClick={() => toggleTimer(row.id, projectId)}
-            className={`shrink-0 p-0.5 rounded-md ${
-              isTimerActive
-                ? "text-[var(--color-danger-text)] hover:text-[var(--color-danger-text)]"
-                : "text-muted opacity-0 group-hover/row:opacity-100 hover:text-accent"
-            }`}
-            title={isTimerActive ? t.stop_timer : t.start_timer}
-            aria-label={isTimerActive ? t.stop_timer : t.start_timer}
-          >
-            {isTimerActive ? <Square size={12} /> : <Play size={12} />}
-          </button>
+          />
           <InlineTitle
             value={row.title}
             onChange={(v) => handleSystemChange(row, "title", v)}
           />
         </div>
-      </td>
+      </Table.Td>
 
       {/* System: Duration (tracked_minutes) */}
-      <td className="px-4 py-2" style={{ width: 90 }}>
+      <Table.Td numeric style={{ width: 90 }}>
         <InlineDuration
           value={row.tracked_minutes}
           isTimerActive={isTimerActive}
           timerStartedAt={isTimerActive ? activeTimer!.startedAt : undefined}
           onChange={(v) => handleSystemChange(row, "tracked_minutes", v)}
         />
-      </td>
+      </Table.Td>
 
       {/* System: Planned (planned_minutes) */}
-      <td className="px-4 py-2" style={{ width: 90 }}>
+      <Table.Td numeric style={{ width: 90 }}>
         <InlineDuration
           value={row.planned_minutes ?? 0}
           onChange={(v) => handleSystemChange(row, "planned_minutes", v)}
         />
-      </td>
+      </Table.Td>
 
       {/* Custom columns */}
       {columns.map((col, ci) => (
-        <td
+        <Table.Td
           key={`${col.key}_${ci}`}
-          className="px-4 py-2"
           style={{ width: getColWidth(col), minWidth: 24 }}
         >
           <WorkloadCell
@@ -932,37 +872,21 @@ function SortableRow({
                 : undefined
             }
           />
-        </td>
+        </Table.Td>
       ))}
 
-      {/* Row actions */}
-      <td className="px-2 text-center">
-        <div className="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100">
-          <button
-            onClick={() => handleDuplicateRow(row)}
-            className="p-0.5 text-muted hover:text-accent"
-            title={t.duplicate_row}
-            aria-label={t.duplicate_row}
-          >
-            <Copy size={14} />
-          </button>
-          <button
-            onClick={() => deleteRow.mutate(row.id)}
-            className="p-0.5 text-muted hover:text-[var(--color-danger-text)]"
-            title={t.delete}
-            aria-label={t.delete}
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
-      </td>
-    </tr>
+      <Table.Actions>
+        <IconButton icon={ICONS.duplicate} label={t.duplicate_row} size="xs" tone="accent" onClick={() => handleDuplicateRow(row)} />
+        <IconButton icon={ICONS.delete} label={t.delete} size="xs" tone="danger" onClick={() => deleteRow.mutate(row.id)} />
+      </Table.Actions>
+    </Table.Row>
   );
 }
 
 // ── Inline Title Editor ────────────────────────────────────
 
 function InlineTitle({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const t = useT();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
 
@@ -978,8 +902,9 @@ function InlineTitle({ value, onChange }: { value: string; onChange: (v: string)
   }
 
   return (
-    <input
-      className="text-sm w-full bg-transparent border-none outline-none flex-1 min-w-0"
+    <Input variant="bare"
+      className="flex-1 min-w-0"
+      aria-label={t.task_name}
       value={draft}
       autoFocus
       onChange={(e) => setDraft(e.target.value)}
@@ -1010,6 +935,7 @@ function InlineDuration({
   timerStartedAt?: number;
 }) {
   const [editing, setEditing] = useState(false);
+  const t = useT();
   const [draft, setDraft] = useState("");
   const [liveElapsed, setLiveElapsed] = useState(0);
 
@@ -1029,8 +955,10 @@ function InlineDuration({
 
   if (editing) {
     return (
-      <input
-        className="text-sm w-full bg-transparent border-none outline-none text-right"
+      <Input variant="bare"
+        numeric
+        type="text"
+        aria-label={t.duration}
         value={draft}
         autoFocus
         onChange={(e) => setDraft(e.target.value)}
@@ -1064,60 +992,36 @@ function InlineDuration({
 // ── Column Header Menu ──────────────────────────────────────
 
 function SystemHeaderMenu({
-  pos,
+  anchor,
   isAsc,
   isDesc,
   onSort,
   onClose,
   t,
 }: {
-  pos: { top: number; left: number };
+  anchor: RefObject<HTMLElement | null>;
   isAsc: boolean;
   isDesc: boolean;
   onSort: (dir: "asc" | "desc") => void;
   onClose: () => void;
   t: Record<string, string>;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onPointerDown(e: PointerEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
-    }
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [onClose]);
-
   return (
-    <div
-      ref={ref}
-      className="fixed z-50 w-48 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-lg overflow-hidden py-1"
-      style={{ top: pos.top, left: pos.left }}
-    >
-      <button
-        onClick={() => onSort("asc")}
-        className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)] ${isAsc ? "text-accent" : ""}`}
-      >
-        <ArrowUp size={14} />
+    <Popover anchor={anchor} onClose={onClose} className="w-48" role="dialog" aria-label={t.options}>
+      <MenuItem icon={ICONS.sortAsc} selected={isAsc} onClick={() => onSort("asc")}>
         {t.sort_ascending}
-      </button>
-      <button
-        onClick={() => onSort("desc")}
-        className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)] ${isDesc ? "text-accent" : ""}`}
-      >
-        <ArrowDown size={14} />
+      </MenuItem>
+      <MenuItem icon={ICONS.sortDesc} selected={isDesc} onClick={() => onSort("desc")}>
         {t.sort_descending}
-      </button>
-    </div>
+      </MenuItem>
+    </Popover>
   );
 }
 
 // ── Column Header Menu (custom columns) ─────────────────────
 
 function ColumnHeaderMenu({
-  pos,
+  anchor,
   col,
   colIndex,
   colCount,
@@ -1131,7 +1035,7 @@ function ColumnHeaderMenu({
   onClose,
   t,
 }: {
-  pos: { top: number; left: number };
+  anchor: RefObject<HTMLElement | null>;
   col: WorkloadColumn;
   colIndex: number;
   colCount: number;
@@ -1145,86 +1049,46 @@ function ColumnHeaderMenu({
   onClose: () => void;
   t: Record<string, string>;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onPointerDown(e: PointerEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
-    }
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [onClose]);
-
   const isAsc = sortKey === col.key && sortDir === "asc";
   const isDesc = sortKey === col.key && sortDir === "desc";
   const isSummable = col.type === "number" || col.type === "formula";
   const sumVisible = col.showSum !== false;
 
   return (
-    <div
-      ref={ref}
-      className="fixed z-50 w-48 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-lg overflow-hidden py-1"
-      style={{ top: pos.top, left: pos.left }}
-    >
+    <Popover anchor={anchor} onClose={onClose} className="w-48" role="dialog" aria-label={`${t.options}: ${col.name}`}>
       {col.type !== "formula" && (
         <>
-          <button
-            onClick={() => onSort(col.key, "asc")}
-            className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)] ${isAsc ? "text-accent" : ""}`}
-          >
-            <ArrowUp size={14} />
+          <MenuItem icon={ICONS.sortAsc} selected={isAsc} onClick={() => onSort(col.key, "asc")}>
             {t.sort_ascending}
-          </button>
-          <button
-            onClick={() => onSort(col.key, "desc")}
-            className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)] ${isDesc ? "text-accent" : ""}`}
-          >
-            <ArrowDown size={14} />
+          </MenuItem>
+          <MenuItem icon={ICONS.sortDesc} selected={isDesc} onClick={() => onSort(col.key, "desc")}>
             {t.sort_descending}
-          </button>
-          <div className="border-t border-[var(--color-border-divider)] my-1" />
+          </MenuItem>
+          <div className={MENU_DIVIDER} />
         </>
       )}
       {colIndex > 0 && (
-        <button
-          onClick={onMoveLeft}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)]"
-        >
-          <ArrowLeft size={14} />
+        <MenuItem icon={ICONS.moveLeft} onClick={onMoveLeft}>
           {t.move_left}
-        </button>
+        </MenuItem>
       )}
       {colIndex < colCount - 1 && (
-        <button
-          onClick={onMoveRight}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)]"
-        >
-          <ArrowRight size={14} />
+        <MenuItem icon={ICONS.moveRight} onClick={onMoveRight}>
           {t.move_right}
-        </button>
+        </MenuItem>
       )}
       {isSummable && (
         <>
-          <div className="border-t border-[var(--color-border-divider)] my-1" />
-          <button
-            onClick={onToggleSum}
-            className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)] ${sumVisible ? "" : "text-muted"}`}
-          >
-            <Sigma size={14} />
+          <div className={MENU_DIVIDER} />
+          <MenuItem icon={Sigma} onClick={onToggleSum}>
             {sumVisible ? t.hide_sum : t.show_sum}
-          </button>
+          </MenuItem>
         </>
       )}
-      <div className="border-t border-[var(--color-border-divider)] my-1" />
-      <button
-        onClick={onEdit}
-        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-hover-row)]"
-      >
-        <Settings2 size={14} />
+      <div className={MENU_DIVIDER} />
+      <MenuItem icon={ICONS.edit} onClick={onEdit}>
         {t.edit_column}
-      </button>
-    </div>
+      </MenuItem>
+    </Popover>
   );
 }

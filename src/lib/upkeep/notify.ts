@@ -6,7 +6,7 @@ import { getConsumables, isLow } from "../../db/queries/consumables";
 import { applyRenewals, getPendingRenewals, getSubscriptions } from "../../db/queries/subscriptions";
 import type { PendingRenewal } from "../../db/queries/subscriptions";
 import { sendNativeNotification } from "../nativeNotification";
-import { getLabels } from "../notifyError";
+import { getLabels } from "../notify";
 import { logWarn } from "../log";
 import { useAppStore } from "../../stores/app-store";
 import { useOrgStore } from "../../stores/org-store";

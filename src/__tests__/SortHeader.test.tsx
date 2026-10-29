@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { SortHeader } from "../components/SortHeader";
+import { SortHeader } from "../components/ui/SortHeader";
 
 function renderInTable(ui: React.ReactElement) {
   return render(<table><thead><tr>{ui}</tr></thead></table>);
@@ -29,7 +29,7 @@ describe("SortHeader", () => {
     renderInTable(
       <SortHeader label="Name" sortKey="name" current={{ key: "name", dir: "asc" }} onSort={onSort} />
     );
-    fireEvent.click(screen.getByText("Name").closest("th")!);
+    fireEvent.click(screen.getByRole("button", { name: "Name" }));
     expect(onSort).toHaveBeenCalledWith({ key: "name", dir: "desc" });
   });
 
@@ -38,7 +38,8 @@ describe("SortHeader", () => {
     renderInTable(
       <SortHeader label="Total" sortKey="total" current={{ key: "name", dir: "asc" }} onSort={onSort} />
     );
-    fireEvent.click(screen.getByText("Total").closest("th")!);
+    fireEvent.click(screen.getByRole("button", { name: "Total" }));
+    expect(screen.getByRole("columnheader")).toHaveAttribute("aria-sort", "none");
     expect(onSort).toHaveBeenCalledWith({ key: "total", dir: "asc" });
   });
 });

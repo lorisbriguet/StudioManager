@@ -35,8 +35,8 @@ export function useDetectedFields<F extends string>(initial: () => Set<F>) {
       />
     ) : undefined;
 
-  const detectedClass = (field: F) =>
-    detected.has(field) ? "!border-[var(--color-accent)]" : "";
+  /** Still holds the detected value: pass as `detected` to Input / DatePicker. */
+  const isDetected = (field: F) => detected.has(field);
 
-  return { undetect, resetDetected, detectedBadge, detectedClass };
+  return { undetect, resetDetected, detectedBadge, isDetected };
 }

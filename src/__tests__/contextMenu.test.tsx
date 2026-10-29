@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { StrictMode, useState } from "react";
-import { ContextMenu, type ContextMenuItem } from "../components/ContextMenu";
+import { ContextMenu, type ContextMenuItem } from "../components/ui/ContextMenu";
 
 // All renders are wrapped in StrictMode on purpose: the focus capture/restore
 // logic must survive React 19's double render and double effect invocation.
@@ -95,6 +95,17 @@ describe("ContextMenu keyboard and focus behavior", () => {
     expect(trigger).toHaveFocus();
     expect(editSpy).not.toHaveBeenCalled();
     expect(deleteSpy).not.toHaveBeenCalled();
+  });
+
+  it("Escape stops at the menu: a surrounding Modal's document listener never sees it", () => {
+    const docEscape = vi.fn();
+    const onDoc = (e: KeyboardEvent) => e.key === "Escape" && docEscape();
+    document.addEventListener("keydown", onDoc);
+    renderHarness();
+    fireEvent.keyDown(focused(), { key: "Escape" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(docEscape).not.toHaveBeenCalled();
+    document.removeEventListener("keydown", onDoc);
   });
 
   it("still activates items by mouse click and ignores clicks on disabled items", () => {

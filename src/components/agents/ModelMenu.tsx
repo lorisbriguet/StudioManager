@@ -1,6 +1,4 @@
-import { useState } from "react";
-import { Check, ChevronDown } from "lucide-react";
-import { ContextMenu } from "../ContextMenu";
+import { DropdownSelect } from "../ui";
 
 export const MODELS = ["haiku", "sonnet", "opus", "fable"];
 
@@ -20,43 +18,27 @@ interface ModelMenuProps {
   onChange: (model: string) => void;
   label: string;
   disabled?: boolean;
+  /** Set by FormField, so its label points at the trigger. */
+  id?: string;
 }
 
-/** A compact model picker using the app's dropdown menu pattern instead of a native select. */
-export function ModelMenu({ value, currentLabel, onChange, label, disabled }: ModelMenuProps) {
-  const [at, setAt] = useState<{ x: number; y: number } | null>(null);
+const OPTIONS = MODELS.map((m) => ({ value: m, label: MODEL_LABELS[m] ?? m }));
+
+/** The model picker: a DropdownSelect named by `label`, showing the exact model when known. */
+export function ModelMenu({ value, currentLabel, onChange, label, disabled, id }: ModelMenuProps) {
   return (
-    <>
-      <button
-        type="button"
-        aria-label={label}
-        aria-haspopup="menu"
-        aria-expanded={at !== null}
-        disabled={disabled}
-        onClick={(e) => {
-          const r = e.currentTarget.getBoundingClientRect();
-          setAt(at ? null : { x: r.left, y: r.bottom + 4 });
-        }}
-        className="inline-flex items-center gap-1.5 h-8 pl-3 pr-2 rounded-lg border border-[var(--color-input-border)] bg-[var(--color-input-bg)] text-sm focus-accent hover:bg-[var(--color-hover-row)] disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <span className={value ? "" : "text-muted"}>{currentLabel ?? (value ? MODEL_LABELS[value] ?? value : label)}</span>
-        <ChevronDown size={14} className="text-muted" />
-      </button>
-      {at && (
-        <ContextMenu
-          x={at.x}
-          y={at.y}
-          onClose={() => setAt(null)}
-          items={MODELS.map((m) => ({
-            label: MODEL_LABELS[m] ?? m,
-            icon: <Check size={14} className={m === value ? "" : "invisible"} />,
-            onClick: () => {
-              setAt(null);
-              if (m !== value) onChange(m);
-            },
-          }))}
-        />
-      )}
-    </>
+    <DropdownSelect
+      id={id}
+      aria-label={label}
+      options={OPTIONS}
+      value={value ?? ""}
+      placeholder={label}
+      disabled={disabled}
+      align="end"
+      renderValue={currentLabel ? () => currentLabel : undefined}
+      onChange={(m) => {
+        if (m && m !== value) onChange(m);
+      }}
+    />
   );
 }

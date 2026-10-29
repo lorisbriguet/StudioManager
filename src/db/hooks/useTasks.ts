@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient, QueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import * as q from "../queries/tasks";
 import type { Task, Subtask } from "../../types/task";
 import { useAppStore } from "../../stores/app-store";
@@ -9,16 +8,16 @@ import {
   deleteCalendarEvent,
 } from "../../lib/appleCalendar";
 import { useUndoStore } from "../../stores/undo-store";
-import { notifyError, getLabels } from "../../lib/notifyError";
+import { getLabels, notify } from "../../lib/notify";
 import { todayLocalISO } from "../../utils/localDate";
 
 // Guards against concurrent calendar syncs for the same item
 const pendingTaskSyncs = new Set<number>();
 const pendingSubtaskSyncs = new Set<number>();
 
-// notifyError logs AND toasts (toast deduped); no separate logError needed
+// notify.error logs AND toasts (deduped); no separate logError needed
 const notifyCalendarSyncFailure = (e: unknown) =>
-  notifyError(getLabels().calendar_sync_failed, e);
+  notify.error(getLabels().calendar_sync_failed, e);
 
 let _qc: QueryClient | null = null;
 
@@ -137,6 +136,7 @@ export function useCreateTask() {
   const qc = useQueryClient();
   _qc = qc;
   return useMutation({
+    meta: { errorLabel: "error_save_task" },
     mutationFn: async (data: Omit<Task, "id" | "created_at" | "updated_at" | "calendar_event_id" | "planned_minutes" | "tracked_minutes" | "workload_cells" | "workload_sort_order">) => {
       const id = await q.createTask(data);
       syncTaskCalendar(id);
@@ -157,13 +157,13 @@ export function useCreateTask() {
       qc.invalidateQueries({ queryKey: ["tasks"] });
       qc.invalidateQueries({ queryKey: ["workload-rows"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useUpdateTask() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_task" },
     mutationFn: async ({
       id,
       data,
@@ -200,13 +200,13 @@ export function useUpdateTask() {
       qc.invalidateQueries({ queryKey: ["tasks"] });
       qc.invalidateQueries({ queryKey: ["workload-rows"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useDeleteTask() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_delete_task" },
     mutationFn: async (id: number) => {
       const prev = await q.getTaskById(id);
       // Snapshot subtasks before delete — the schema cascade removes them
@@ -250,7 +250,6 @@ export function useDeleteTask() {
       qc.invalidateQueries({ queryKey: ["tasks"] });
       qc.invalidateQueries({ queryKey: ["workload-rows"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -265,6 +264,7 @@ export function useSubtasksByProject(projectId: number) {
 export function useCreateSubtask() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_subtask" },
     mutationFn: async (data: Omit<Subtask, "id" | "created_at" | "updated_at" | "calendar_event_id">) => {
       const id = await q.createSubtask(data);
       syncSubtaskCalendar(id);
@@ -282,13 +282,13 @@ export function useCreateSubtask() {
       return id;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["subtasks"] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useUpdateSubtask() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_subtask" },
     mutationFn: async ({
       id,
       data,
@@ -321,13 +321,13 @@ export function useUpdateSubtask() {
       syncSubtaskCalendar(id);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["subtasks"] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useDeleteSubtask() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_delete_subtask" },
     mutationFn: async (id: number) => {
       const prev = await q.getSubtaskById(id);
       const calId = useAppStore.getState().calendarSync ? prev?.calendar_event_id : null;
@@ -348,15 +348,14 @@ export function useDeleteSubtask() {
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["subtasks"] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useReorderSubtasks() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_subtask" },
     mutationFn: (ids: number[]) => q.reorderSubtasks(ids),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["subtasks"] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }

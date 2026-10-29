@@ -1,22 +1,22 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, Eye, Trash2, ExternalLink, Users } from "lucide-react";
-import { toast } from "sonner";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { notify } from "../lib/notify";
 import { useClients, useCreateClient, useDeleteClient, getNextClientId } from "../db/hooks/useClients";
 import { useProjects } from "../db/hooks/useProjects";
-import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
+import { SortHeader, sortRows, type SortState } from "../components/ui/SortHeader";
 import { useT } from "../i18n/useT";
 import { useAppStore } from "../stores/app-store";
-import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
-import { BulkActionBar } from "../components/BulkActionBar";
-import { SavedFilterBar } from "../components/SavedFilterBar";
+import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu";
+import { BulkActionBar } from "../components/ui/BulkActionBar";
+import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { Button, Badge, Card, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState } from "../components/ui";
+import { ICONS, Checkbox, Button, Badge, Input, Select, FormField, FormGrid, FormGridItem, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, QueryState, NoResults } from "../components/ui";
 import * as v from "../lib/validate";
-import { undoableFromStore } from "../lib/undo";
+import { deleteWithUndo } from "../lib/undo";
+import { confirmDelete } from "../lib/confirm";
+import { useBulkDelete } from "../hooks/useBulkDelete";
 import { clientStatusVariant } from "../lib/statusColors";
 import type { Client } from "../types/client";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
@@ -26,7 +26,8 @@ type SortKey = "id" | "name" | "language" | "discount_rate" | "status";
 
 export function ClientsPage() {
   const t = useT();
-  const { data: clients, isLoading } = useClients();
+  const clientsQuery = useClients();
+  const { data: clients } = clientsQuery;
   const { data: projects } = useProjects();
   const navigate = useNavigate();
   const openTab = useTabStore((s) => s.openTab);
@@ -103,36 +104,32 @@ export function ClientsPage() {
   }, [clients, search, sort, activeClientIds, filterConditions, filterLogic]);
 
   // Keyboard row navigation (flat list — every filtered row is visible).
+  const openClient = useCallback((c: (typeof filtered)[0]) => navigate(`/clients/${c.id}`), [navigate]);
   const { focusIdx } = useListNavigation({
     items: filtered,
-    onOpen: useCallback((c: (typeof filtered)[0]) => navigate(`/clients/${c.id}`), [navigate]),
+    onOpen: openClient,
     onMenu: useCallback((c: (typeof filtered)[0], pos: { x: number; y: number }) => setCtxMenu({ ...pos, item: c }), []),
   });
 
   const bulk = useBulkSelect(filtered);
 
-  const bulkDelete = useCallback(async () => {
-    if (!(await ask(t.confirm_bulk_delete_clients, { kind: "warning" }))) return;
-    const ids = [...bulk.selected] as string[];
-    ids.forEach((id) => deleteClient.mutate(id));
-    bulk.clearSelection();
-  }, [bulk, deleteClient, t]);
+  // Cascading: a client takes its projects, tasks and documents with it, so
+  // both deletes ask first (then Undo brings everything back).
+  const deleteSelection = useBulkDelete("clients", (id: string) => deleteClient.mutateAsync(id), {
+    message: t.delete_clients_cascade,
+  });
+  const bulkDelete = () => void deleteSelection([...bulk.selected] as string[], bulk.clearSelection);
 
-  if (isLoading) return (
-    <div>
-      <PageHeader title={t.clients}>
-        <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>
-          {t.new_client}
-        </Button>
-      </PageHeader>
-      <TableSkeleton columns={5} />
-    </div>
-  );
+  const clearFilters = () => {
+    setSearch("");
+    setFilterConditions([]);
+    setActiveFilterId(null);
+  };
 
   return (
     <div>
       <PageHeader title={t.clients}>
-        <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>
+        <Button icon={ICONS.add} onClick={() => setShowForm(true)}>
           {t.new_client}
         </Button>
       </PageHeader>
@@ -159,7 +156,7 @@ export function ClientsPage() {
                 { ...data, id },
                 {
                   onSuccess: () => {
-                    toast.success(t.toast_client_created);
+                    notify.success(t.toast_client_created);
                     setShowForm(false);
                   },
                   onSettled: () => {
@@ -175,81 +172,79 @@ export function ClientsPage() {
         />
       )}
 
-      <div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[var(--color-border-header)]">
-              <th className="w-8 px-2 py-2">
-                <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
-              </th>
-              <SortHeader label="ID" sortKey="id" current={sort} onSort={setSort} />
-              <SortHeader label={t.display_name} sortKey="name" current={sort} onSort={setSort} />
-              <SortHeader label={t.language} sortKey="language" current={sort} onSort={setSort} />
-              <SortHeader label={t.cultural_discount} sortKey="discount_rate" current={sort} onSort={setSort} />
-              <SortHeader label="Status" sortKey="status" current={sort} onSort={setSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((c, ci) => (
-              <tr
-                key={c.id}
-                data-list-row
-                className={`border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md${ci === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
-                onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: c }); }}
-              >
-                <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="checkbox"
-                    checked={bulk.selected.has(c.id)}
-                    onChange={(e) => bulk.toggleItem(c.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-                    className="accent-[var(--accent)]"
-                  />
-                </td>
-                <td className="px-4 py-2.5 font-medium">{c.id}</td>
-                <td className="px-4 py-2.5">
-                  <Link to={`/clients/${c.id}`} className="text-accent hover:underline">
-                    {c.name}
-                  </Link>
-                </td>
-                <td className="px-4 py-2.5">{c.language}</td>
-                <td className="px-4 py-2.5">
-                  {c.has_discount ? `${(c.discount_rate * 100).toFixed(0)}%` : "-"}
-                </td>
-                <td className="px-4 py-2.5">
-                  <Badge variant={clientStatusVariant(c.status)}>
-                    {c.status === "active" ? t.active : t.inactive}
-                  </Badge>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {filtered.length === 0 && !isLoading && (
-          <EmptyState
-            message={(clients?.length ?? 0) === 0 ? t.no_clients : t.no_matching_clients}
-            icon={<Users size={32} />}
-            action={(clients?.length ?? 0) === 0 ? (
-              <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>
-                {t.new_client}
-              </Button>
-            ) : undefined}
-          />
-        )}
-      </div>
+      <QueryState query={clientsQuery} skeleton={<TableSkeleton columns={6} />} errorMessage={t.load_error_clients}>
+      {(all) => (
+      <Table>
+        <Table.Head>
+          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} label={t.select_all} />
+          <SortHeader label="ID" sortKey="id" current={sort} onSort={setSort} />
+          <SortHeader label={t.display_name} sortKey="name" current={sort} onSort={setSort} />
+          <SortHeader label={t.language} sortKey="language" current={sort} onSort={setSort} />
+          <SortHeader label={t.cultural_discount} sortKey="discount_rate" current={sort} onSort={setSort} align="right" />
+          <SortHeader label="Status" sortKey="status" current={sort} onSort={setSort} />
+        </Table.Head>
+        <Table.Body>
+          {filtered.map((c, ci) => (
+            <Table.Row
+              key={c.id}
+              data-list-row
+              focused={ci === focusIdx}
+              selected={bulk.selected.has(c.id)}
+              onOpen={() => openClient(c)}
+              onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: c }); }}
+            >
+              <Table.Select checked={bulk.selected.has(c.id)} onToggle={(shift) => bulk.toggleItem(c.id, shift)} label={t.select_row.replace("{name}", c.name)} />
+              <Table.Td className="font-medium">{c.id}</Table.Td>
+              <Table.Td>
+                <Link to={`/clients/${c.id}`} className="text-accent-text hover:underline">
+                  {c.name}
+                </Link>
+              </Table.Td>
+              <Table.Td>{c.language}</Table.Td>
+              <Table.Td numeric>
+                {c.has_discount ? `${(c.discount_rate * 100).toFixed(0)}%` : "-"}
+              </Table.Td>
+              <Table.Td>
+                <Badge variant={clientStatusVariant(c.status)}>
+                  {c.status === "active" ? t.active : t.inactive}
+                </Badge>
+              </Table.Td>
+            </Table.Row>
+          ))}
+          {filtered.length === 0 && (
+            <Table.Empty colSpan={6}>
+              {all.length === 0 ? (
+                <EmptyState
+                  message={t.no_clients}
+                  icon={ICONS.client}
+                  action={
+                    <Button icon={ICONS.add} onClick={() => setShowForm(true)}>
+                      {t.new_client}
+                    </Button>
+                  }
+                />
+              ) : (
+                <NoResults message={t.no_matching_clients} onClear={clearFilters} />
+              )}
+            </Table.Empty>
+          )}
+        </Table.Body>
+      </Table>
+      )}
+      </QueryState>
       {ctxMenu && (
         <ContextMenu
           x={ctxMenu.x}
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
-            { label: t.view_details, icon: <Eye size={14} />, onClick: () => navigate(`/clients/${ctxMenu.item.id}`) },
-            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/clients/${ctxMenu.item.id}`, ctxMenu.item.name) },
+            { label: t.view_details, icon: ICONS.preview, onClick: () => navigate(`/clients/${ctxMenu.item.id}`) },
+            { label: t.open_in_new_tab, icon: ICONS.newTab, onClick: () => openTab(`/clients/${ctxMenu.item.id}`, ctxMenu.item.name) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: async () => {
-              if (!(await ask(t.confirm_delete_client, { kind: "warning" }))) return;
-              deleteClient.mutate(ctxMenu.item.id, {
-                onSuccess: () => undoableFromStore(t.toast_client_deleted),
-              });
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: async () => {
+              const client = ctxMenu.item;
+              if (!(await confirmDelete(client.name, t.delete_client_cascade))) return;
+              deleteWithUndo(deleteClient, client.id, t.toast_client_deleted);
             } },
           ]}
         />
@@ -258,7 +253,7 @@ export function ClientsPage() {
         count={bulk.count}
         onClear={bulk.clearSelection}
         actions={[
-          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+          { label: t.delete, icon: ICONS.delete, onClick: bulkDelete, danger: true },
         ]}
       />
     </div>
@@ -320,10 +315,11 @@ function NewClientForm({
   };
 
   return (
-    <Card className="mb-6 space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+    <FormModal open onClose={onCancel} title={t.new_client} submitLabel={t.save} onSubmit={submit} submitting={saving}>
+      <FormGrid cols={2}>
         <FormField label={t.display_name} required error={errors.name}>
           <Input
+            autoFocus
             value={form.name}
             onChange={(e) => { setForm({ ...form, name: e.target.value }); clearError("name"); }}
             onBlur={() => validateOnBlur("name")}
@@ -377,23 +373,14 @@ function NewClientForm({
             <option value="EN">{t.english}</option>
           </Select>
         </FormField>
-      </div>
-      <div className="flex items-center gap-4">
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
+        <FormGridItem>
+          <Checkbox
+            label={t.cultural_discount}
             checked={!!form.has_discount}
             onChange={(e) => setForm({ ...form, has_discount: e.target.checked ? 1 : 0 })}
           />
-          {t.cultural_discount}
-        </label>
-      </div>
-      <div className="flex gap-2">
-        <Button onClick={submit} disabled={saving}>{t.save}</Button>
-        <Button variant="secondary" onClick={onCancel}>
-          {t.cancel}
-        </Button>
-      </div>
-    </Card>
+        </FormGridItem>
+      </FormGrid>
+    </FormModal>
   );
 }

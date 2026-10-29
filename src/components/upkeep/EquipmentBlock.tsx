@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { EmptyState, SectionLabel } from "../ui";
 import { useMachinesByProject, useProjectMaterialCost } from "../../db/hooks/useUpkeep";
 import { useT } from "../../i18n/useT";
 import { formatMoney } from "../../lib/upkeep/money";
@@ -21,7 +22,7 @@ export function EquipmentBlock({ projectId }: { projectId: number }) {
   const { data: costs = [] } = useProjectMaterialCost(projectId);
 
   if (machines.length === 0 && costs.length === 0) {
-    return <p className="text-xs text-muted">{t.equipment_empty}</p>;
+    return <EmptyState size="sm" message={t.equipment_empty} />;
   }
 
   const totals = sumByCurrency(costs);
@@ -30,7 +31,7 @@ export function EquipmentBlock({ projectId }: { projectId: number }) {
     <div className="space-y-3">
       {machines.length > 0 && (
         <section>
-          <h4 className="mb-1 text-[10px] font-medium uppercase tracking-widest text-muted">{t.equipment_machines}</h4>
+          <SectionLabel as="h4" className="mb-1">{t.equipment_machines}</SectionLabel>
           <ul className="space-y-1">
             {machines.map((m) => (
               <li key={m.id}>
@@ -49,7 +50,7 @@ export function EquipmentBlock({ projectId }: { projectId: number }) {
 
       {costs.length > 0 && (
         <section>
-          <h4 className="mb-1 text-[10px] font-medium uppercase tracking-widest text-muted">{t.equipment_materials}</h4>
+          <SectionLabel as="h4" className="mb-1">{t.equipment_materials}</SectionLabel>
           <ul className="space-y-1">
             {costs.map((c) => (
               <li key={`${c.name}-${c.unit}-${c.currency}`} className="flex items-center justify-between text-sm">

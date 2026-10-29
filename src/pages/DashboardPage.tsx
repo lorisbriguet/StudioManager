@@ -1,16 +1,19 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { ResponsiveGridLayout, useContainerWidth, verticalCompactor } from "react-grid-layout";
 import type { Layout, ResponsiveLayouts } from "react-grid-layout";
-import { Plus, X, ChevronDown, Lock, Save, Trash2, Users } from "lucide-react";
+import { ChevronDown, Lock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useClients } from "../db/hooks/useClients";
 import { useDashboardStore, WIDGET_CATALOG, type WidgetType, type DashboardWidget } from "../stores/dashboard-store";
 import type { LayoutItem } from "react-grid-layout";
 import { renderWidget } from "../components/dashboard/widgets";
+import { ErrorBoundary } from "react-error-boundary";
+import { WidgetErrorFallback } from "../components/ErrorFallback";
 import { DashboardYearContext } from "../components/dashboard/DashboardYearContext";
-import { PageHeader, Button, EmptyState } from "../components/ui";
+import { ICONS, ICON_SIZE, MenuItem, PageHeader, Button, EmptyState, Select, Popover, IconButton, SectionLabel, AddRow, Card } from "../components/ui";
+import { MENU_ITEM, MENU_DIVIDER } from "../components/ui/Dropdown";
 import { useT } from "../i18n/useT";
-import { toast } from "sonner";
+import { deleteWithUndo } from "../lib/undo";
 import { useDashboardPresets, useCreateDashboardPreset, useUpdateDashboardPreset, useDeleteDashboardPreset } from "../db/hooks/useDashboardPresets";
 import "react-grid-layout/css/styles.css";
 
@@ -33,27 +36,13 @@ function PresetDropdown() {
   const deletePreset = useDeleteDashboardPreset();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saveName, setSaveName] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setSaving(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  // Focus input when saving
-  useEffect(() => {
-    if (saving) inputRef.current?.focus();
-  }, [saving]);
+  const closeMenu = (returnFocus: boolean) => {
+    setOpen(false);
+    setSaving(false);
+    if (returnFocus) dropdownRef.current?.querySelector("button")?.focus({ preventScroll: true });
+  };
 
   const builtinPresets = presets?.filter((p) => p.is_builtin === 1) ?? [];
   const userPresets = presets?.filter((p) => p.is_builtin === 0) ?? [];
@@ -67,12 +56,10 @@ function PresetDropdown() {
     setSaving(false);
   };
 
-  const handleSave = async () => {
-    if (!saveName.trim()) return;
+  const handleSave = async (name: string) => {
     const layoutJson = JSON.stringify({ widgets, layout });
-    const newId = await createPreset.mutateAsync({ name: saveName.trim(), layoutJson });
-    setActivePreset(newId, saveName.trim(), widgets, layout);
-    setSaveName("");
+    const newId = await createPreset.mutateAsync({ name, layoutJson });
+    setActivePreset(newId, name, widgets, layout);
     setSaving(false);
     setOpen(false);
   };
@@ -80,18 +67,22 @@ function PresetDropdown() {
   const handleUpdate = async () => {
     if (activePresetId === null) return;
     const layoutJson = JSON.stringify({ widgets, layout });
-    await updatePreset.mutateAsync({ id: activePresetId, data: { layout_json: layoutJson } });
+    try {
+      await updatePreset.mutateAsync({ id: activePresetId, data: { layout_json: layoutJson } });
+    } catch {
+      return; // reported by the mutation; keep the menu open
+    }
+    // No toast: saving the layout is routine.
     setOpen(false);
-    toast.success(t.layout_updated);
   };
 
   const handleDelete = (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
-    deletePreset.mutate(id);
-    if (activePresetId === id) {
-      // Revert to "Custom" since active preset was deleted
-      setActivePreset(null, t.custom_layout, widgets, layout);
-    }
+    deleteWithUndo(deletePreset, id, t.preset_deleted, () => {
+      // Only once the delete went through: revert to "Custom" if the deleted preset is (still) the active one.
+      const s = useDashboardStore.getState();
+      if (s.activePresetId === id) s.setActivePreset(null, t.custom_layout, s.widgets, s.layout);
+    });
   };
 
   const displayName = activePresetId !== null ? activePresetName : t.custom_layout;
@@ -100,123 +91,96 @@ function PresetDropdown() {
     <div className="relative" ref={dropdownRef}>
       <Button
         variant="secondary"
-        size="sm"
-        onClick={() => setOpen(!open)}
+        onClick={() => (open ? closeMenu(false) : setOpen(true))}
+        aria-haspopup="dialog"
+        aria-expanded={open}
       >
         <span className="flex items-center gap-1.5">
           <span className="text-muted text-xs">{t.presets}:</span>
           <span>{displayName}</span>
-          <ChevronDown size={12} />
+          <ChevronDown size={ICON_SIZE.control} />
         </span>
       </Button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[220px]">
+        <Popover anchor={dropdownRef} align="end" onClose={closeMenu} padding="none" className="p-1 min-w-[220px]" role="dialog" aria-label={t.presets}>
           {/* Built-in presets */}
           {builtinPresets.map((preset) => (
-            <button
+            <MenuItem
               key={preset.id}
-              type="button"
+              icon={Lock}
+              selected={activePresetId === preset.id}
               onClick={() => handleLoadPreset(preset)}
-              className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors ${
-                activePresetId === preset.id
-                  ? "text-accent bg-accent/5"
-                  : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
-              }`}
             >
-              <Lock size={12} className="text-muted shrink-0" />
-              <span className="truncate">{preset.name}</span>
-            </button>
+              {preset.name}
+            </MenuItem>
           ))}
 
           {/* Divider if user presets exist or for save option */}
-          <div className="my-1 border-t border-[var(--color-border-divider)]" />
+          <div className={MENU_DIVIDER} />
 
           {/* User presets */}
           {userPresets.map((preset) => (
             <div
               key={preset.id}
-              className={`flex items-center group/item transition-colors ${
+              className={`flex items-center rounded-md group/item transition-colors ${
                 activePresetId === preset.id
-                  ? "bg-accent/5"
+                  ? "bg-accent-tint"
                   : "hover:bg-[var(--color-hover-row)]"
               }`}
             >
               <button
                 type="button"
                 onClick={() => handleLoadPreset(preset)}
-                className={`flex-1 flex items-center gap-2 px-3 py-1.5 text-sm text-left ${
+                className={`${MENU_ITEM} flex-1 min-w-0 ${
                   activePresetId === preset.id
-                    ? "text-accent"
+                    ? "text-accent-text font-medium"
                     : "text-[var(--color-text-secondary)]"
                 }`}
               >
                 <span className="truncate">{preset.name}</span>
               </button>
-              <button
-                type="button"
+              <IconButton
+                icon={ICONS.delete}
+                label={t.delete_preset}
+                size="xs"
+                tone="danger"
                 onClick={(e) => handleDelete(e, preset.id)}
-                className="opacity-0 group-hover/item:opacity-100 transition-opacity text-muted hover:text-[var(--color-danger-text)] px-2 py-1.5"
-                title={t.delete_preset}
-                aria-label={t.delete_preset}
-              >
-                <Trash2 size={12} />
-              </button>
+                reveal="item" className="mx-1.5"
+              />
             </div>
           ))}
 
           {userPresets.length > 0 && (
-            <div className="my-1 border-t border-[var(--color-border-divider)]" />
+            <div className={MENU_DIVIDER} />
           )}
 
           {/* Update active user preset */}
           {activePresetId !== null && presets?.find((p) => p.id === activePresetId && p.is_builtin === 0) && (
-            <button
-              type="button"
-              onClick={handleUpdate}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
-            >
-              <Save size={14} className="text-accent" />
+            <MenuItem icon={ICONS.saveLayout} onClick={handleUpdate}>
               {t.update_preset}
-            </button>
+            </MenuItem>
           )}
 
           {/* Save current layout */}
           {saving ? (
-            <div className="px-3 py-2 flex items-center gap-2">
-              <input
-                ref={inputRef}
-                type="text"
-                value={saveName}
-                onChange={(e) => setSaveName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSave();
-                  if (e.key === "Escape") { setSaving(false); setSaveName(""); }
-                }}
-                placeholder={t.preset_name}
-                className="flex-1 border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-sm bg-[var(--color-input-bg)] outline-none focus:border-accent"
-              />
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={!saveName.trim()}
-                className="text-accent hover:text-accent/80 transition-colors disabled:opacity-40"
-                aria-label={t.save}
-              >
-                <Save size={14} />
-              </button>
-            </div>
+            <AddRow
+              className="px-2 py-1"
+              placeholder={t.preset_name}
+              buttonLabel={t.save}
+              autoFocus
+              onAdd={handleSave}
+              onKeyDown={(e) => {
+                // preventDefault: Esc cancels the name field, not the whole menu
+                if (e.key === "Escape") { e.preventDefault(); setSaving(false); }
+              }}
+            />
           ) : (
-            <button
-              type="button"
-              onClick={() => setSaving(true)}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
-            >
-              <Save size={14} className="text-muted" />
+            <MenuItem icon={ICONS.saveLayout} onClick={() => setSaving(true)}>
               {t.save_layout}
-            </button>
+            </MenuItem>
           )}
-        </div>
+        </Popover>
       )}
     </div>
   );
@@ -262,23 +226,22 @@ export function DashboardPage() {
     <DashboardYearContext.Provider value={year}>
     <div ref={containerRef} className="overflow-x-hidden">
       <PageHeader title={t.dashboard}>
-        <select
+        <Select
           value={year}
           onChange={(e) => setYear(Number(e.target.value))}
           aria-label={t.year}
-          className="border border-[var(--color-border-divider)] rounded-lg px-2 py-1 text-sm bg-[var(--color-surface)]"
+          fullWidth={false}
         >
           {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((y) => (
             <option key={y} value={y}>{y}</option>
           ))}
-        </select>
+        </Select>
         <PresetDropdown />
         <Button
           variant="secondary"
-          size="sm"
-          icon={<Plus size={14} />}
+          icon={ICONS.add}
           onClick={() => setShowWidgetPanel(!showWidgetPanel)}
-          className={showWidgetPanel ? "border-accent text-accent bg-accent-light" : ""}
+          className={showWidgetPanel ? "border-accent text-accent-text bg-accent-light" : ""}
         >
           {t.add}
         </Button>
@@ -288,16 +251,11 @@ export function DashboardPage() {
       {showWidgetPanel && (() => {
         const categories = [...new Set(WIDGET_CATALOG.map((e) => e.category))];
         return (
-          <div className="mb-4 bg-[var(--color-surface)] rounded-xl p-4 max-h-[60vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-medium">{t.add}</h2>
-              <button type="button" onClick={() => setShowWidgetPanel(false)} aria-label={t.close} className="text-muted hover:text-[var(--color-text)]">
-                <X size={14} />
-              </button>
-            </div>
+          <Card className="mb-4 max-h-[60vh] overflow-y-auto">
+            <Card.Header title={t.add} onClose={() => setShowWidgetPanel(false)} />
             {categories.map((cat) => (
               <div key={cat} className="mb-3">
-                <div className="text-[10px] text-muted uppercase tracking-wide mb-1.5 capitalize">{cat}</div>
+                <SectionLabel className="mb-1.5">{cat}</SectionLabel>
                 <div className="grid grid-cols-5 gap-2">
                   {WIDGET_CATALOG.filter((e) => e.category === cat).map((entry) => {
                     const label = t[entry.labelKey as keyof typeof t] ?? entry.labelKey;
@@ -310,7 +268,7 @@ export function DashboardPage() {
                         onClick={() => { addWidget(entry.type as WidgetType); setShowWidgetPanel(false); }}
                         className={`text-left px-3 py-2 text-sm rounded-lg transition-colors ${
                           alreadyUsed
-                            ? "text-muted/50 cursor-not-allowed opacity-40"
+                            ? "text-[var(--color-text-faint)] cursor-not-allowed opacity-40"
                             : "hover:bg-[var(--color-hover-row)] bg-[var(--color-input-bg)]"
                         }`}
                       >
@@ -321,7 +279,7 @@ export function DashboardPage() {
                 </div>
               </div>
             ))}
-          </div>
+          </Card>
         );
       })()}
 
@@ -329,9 +287,9 @@ export function DashboardPage() {
       {isFirstRun && (
         <EmptyState
           message={t.first_run_dashboard}
-          icon={<Users size={32} />}
+          icon={ICONS.client}
           action={
-            <Button icon={<Plus size={16} />} onClick={() => navigate("/clients")}>
+            <Button icon={ICONS.add} onClick={() => navigate("/clients")}>
               {t.add_first_client}
             </Button>
           }
@@ -353,22 +311,23 @@ export function DashboardPage() {
           onResizeStop={unlockSelection}
           resizeConfig={{ enabled: true, handles: ["s", "w", "e", "n", "sw", "nw", "se", "ne"] }}
           compactor={verticalCompactor}
-          margin={[12, 12] as [number, number]}
+          margin={[16, 16] as [number, number]}
           autoSize
         >
           {sortedWidgets.map((widget, idx) => (
-            <div key={widget.id} className="stagger-in bg-[var(--color-surface)] rounded-xl overflow-hidden relative group cursor-grab active:cursor-grabbing" style={{ animationDelay: `${idx * 50}ms` }}>
+            <Card key={widget.id} padding="none" className="stagger-in overflow-hidden relative group cursor-grab active:cursor-grabbing" style={{ animationDelay: `${idx * 50}ms` }}>
               {/* Remove button */}
-              <button
-                type="button"
+              <IconButton
+                icon={ICONS.close}
+                label={t.remove}
+                size="xs"
+                tone="danger"
+                reveal
                 onClick={() => removeWidget(widget.id)}
-                className="absolute top-1 right-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-muted hover:text-[var(--color-danger-text)] p-0.5"
-                aria-label={t.remove}
-              >
-                <X size={12} />
-              </button>
-              {renderWidget(widget.type)}
-            </div>
+                className="absolute top-1 right-1 z-10"
+              />
+              <ErrorBoundary FallbackComponent={WidgetErrorFallback}>{renderWidget(widget.type)}</ErrorBoundary>
+            </Card>
           ))}
         </ResponsiveGridLayout>
       )}

@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { Button, FormField, Input, Modal, Select } from "../ui";
-import { Toggle } from "../ui/Toggle";
+import { DatePicker, FormField, FormGrid, FormGridItem, FormModal, Input, Select, Toggle } from "../ui";
 import { useT } from "../../i18n/useT";
 import { useCreateSubscription, useUpdateSubscription } from "../../db/hooks/useUpkeep";
 import { useUnsavedChangesWarning } from "../../hooks/useUnsavedChangesWarning";
@@ -65,19 +64,15 @@ export function SubscriptionForm({ onClose, subscription: s }: Props) {
   };
 
   return (
-    <Modal
+    <FormModal
       open
       onClose={() => void close()}
       title={s ? t.upkeep_edit_subscription : t.upkeep_add_subscription}
-      footer={
-        <div className="flex gap-2 justify-end">
-          <Button variant="secondary" onClick={() => void close()}>{t.cancel}</Button>
-          <Button onClick={save}>{t.save}</Button>
-        </div>
-      }
+      submitLabel={t.save}
+      onSubmit={save}
     >
-      <div className="space-y-3">
-        <FormField label={t.name} required error={error ?? undefined}>
+      <FormGrid cols={2}>
+        <FormField label={t.name} required error={error ?? undefined} span="full">
           <Input value={f.name} onChange={(e) => set("name", e.target.value)} autoFocus />
         </FormField>
         <FormField label={t.upkeep_col_plan}>
@@ -86,33 +81,28 @@ export function SubscriptionForm({ onClose, subscription: s }: Props) {
         <FormField label={t.upkeep_sub_vendor}>
           <Input value={f.vendor} onChange={(e) => set("vendor", e.target.value)} />
         </FormField>
-        <div className="flex gap-2">
-          <FormField label={t.upkeep_sub_renews_on}>
-            <Input type="date" value={f.renewsOn} onChange={(e) => set("renewsOn", e.target.value)} />
-          </FormField>
-          <FormField label={t.upkeep_col_period}>
-            <Select value={f.period} onChange={(e) => set("period", e.target.value as "month" | "year")}>
-              <option value="month">{t.upkeep_period_month}</option>
-              <option value="year">{t.upkeep_period_year}</option>
-            </Select>
-          </FormField>
-        </div>
-        <div className="flex gap-2">
-          <FormField label={t.upkeep_col_cost}>
-            <Input type="number" min={0} step="any" value={f.cost} onChange={(e) => set("cost", e.target.value)} />
-          </FormField>
-          <FormField label={t.currency}>
-            <Input value={f.currency} onChange={(e) => set("currency", e.target.value)} />
-          </FormField>
-        </div>
-        <FormField label={t.upkeep_sub_url}>
+        <FormField label={t.upkeep_sub_renews_on}>
+          <DatePicker value={f.renewsOn} onChange={(v) => set("renewsOn", v ?? "")} />
+        </FormField>
+        <FormField label={t.upkeep_col_period}>
+          <Select value={f.period} onChange={(e) => set("period", e.target.value as "month" | "year")}>
+            <option value="month">{t.upkeep_period_month}</option>
+            <option value="year">{t.upkeep_period_year}</option>
+          </Select>
+        </FormField>
+        <FormField label={t.upkeep_col_cost}>
+          <Input type="number" min={0} step="any" numeric value={f.cost} onChange={(e) => set("cost", e.target.value)} />
+        </FormField>
+        <FormField label={t.currency}>
+          <Input value={f.currency} onChange={(e) => set("currency", e.target.value)} />
+        </FormField>
+        <FormField label={t.upkeep_sub_url} span="full">
           <Input value={f.url} placeholder="https://" onChange={(e) => set("url", e.target.value)} />
         </FormField>
-        <div className="flex items-center gap-2 text-sm">
-          <Toggle checked={f.inCalendar} onChange={(v) => set("inCalendar", v)} ariaLabel={t.upkeep_in_calendar} />
-          <span>{t.upkeep_in_calendar}</span>
-        </div>
-      </div>
-    </Modal>
+        <FormGridItem>
+          <Toggle checked={f.inCalendar} onChange={(v) => set("inCalendar", v)} label={t.upkeep_in_calendar} />
+        </FormGridItem>
+      </FormGrid>
+    </FormModal>
   );
 }

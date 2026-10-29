@@ -1,12 +1,12 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Eye, Pencil, FileOutput, Trash2, Send, ExternalLink, FolderPlus, FileText, Settings2, Download, Mail } from "lucide-react";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { pdf } from "@react-pdf/renderer";
 import { invoke } from "@tauri-apps/api/core";
 import { writeFile } from "@tauri-apps/plugin-fs";
-import { undoable, undoableFromStore } from "../lib/undo";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { undoable, deleteWithUndo } from "../lib/undo";
+import { settleDraftBeforeExport } from "../lib/confirmDraftExport";
+import { useBulkDelete } from "../hooks/useBulkDelete";
 import { pdfFileName } from "../lib/pdfFilename";
 import { orgPaths } from "../lib/orgPaths";
 import { runBulkPdfExport } from "../lib/bulkPdfExport";
@@ -17,22 +17,23 @@ import { getClient, getClientAddresses } from "../db/queries/clients";
 import { getBusinessProfile } from "../db/queries/business-profile";
 import { getProject } from "../db/queries/projects";
 import { QuotePDF } from "../components/quote/QuotePDF";
-import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
+import { SortHeader, sortRows, type SortState } from "../components/ui/SortHeader";
 import { useListNavigation } from "../hooks/useListNavigation";
 import { formatDisplayDate } from "../utils/formatDate";
 import { useT } from "../i18n/useT";
-import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
-import { BulkActionBar } from "../components/BulkActionBar";
-import { SavedFilterBar } from "../components/SavedFilterBar";
+import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu";
+import { BulkActionBar } from "../components/ui/BulkActionBar";
+import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { QuoteToProjectWizard } from "../components/QuoteToProjectWizard";
 import { useTabStore } from "../stores/tab-store";
-import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState } from "../components/ui";
+import { ICONS, PageHeader, SearchBar, Table, TableSkeleton, Button, EmptyState, QueryState, NoResults, Select, IconButton } from "../components/ui";
 import { quoteStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Quote, QuoteStatus, QuoteLineItem } from "../types/quote";
 import type { Client } from "../types/client";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
+import { PILL } from "../components/ui/tokens";
 
 type SortKey = "reference" | "client_name" | "quote_date" | "status" | "total";
 
@@ -78,7 +79,8 @@ async function generateQuotePdfBytes(
 }
 
 export function QuotesPage() {
-  const { data: quotes, isLoading } = useQuotes();
+  const quotesQuery = useQuotes();
+  const { data: quotes } = quotesQuery;
   const { data: clients } = useClients();
   const updateQuote = useUpdateQuote();
 
@@ -131,29 +133,26 @@ export function QuotesPage() {
     }
   };
 
+  const settleDraft = (q: Quote) =>
+    settleDraftBeforeExport(q.reference, () => updateQuote.mutateAsync({ id: q.id, data: { status: "sent" } }));
+
   const doDownloadPdf = async (q: Quote & { client_name: string }) => {
-    if (q.reference.startsWith("DRAFT")) {
-      const proceed = await ask(t.export_draft_warning, { kind: "warning", okLabel: t.download_pdf, cancelLabel: t.cancel });
-      if (!proceed) return;
-    }
-    const toastId = toast.loading(t.generating_pdf);
-    try {
-      const result = await generateQuotePdfBytes(q.id, q.client_id);
-      if (!result) {
-        toast.error(t.quote_not_found, { id: toastId });
-        return;
-      }
-      const blob = new Blob([result.bytes], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = pdfFileName(result.reference, result.client.name);
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast.success(t.download_pdf, { id: toastId });
-    } catch (err) {
-      toast.error(String(err), { id: toastId });
-    }
+    if (!(await settleDraft(q))) return;
+    await notify.progress(
+      t.generating_pdf,
+      (async () => {
+        const result = await generateQuotePdfBytes(q.id, q.client_id);
+        if (!result) throw new Error(t.quote_not_found);
+        const blob = new Blob([result.bytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = pdfFileName(result.reference, result.client.name);
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      })(),
+      { success: t.pdf_downloaded, error: t.failed_to_generate_pdf }
+    );
   };
 
   const handleEmailPdf = async (q: Quote & { client_name: string }) => {
@@ -167,35 +166,29 @@ export function QuotesPage() {
   };
 
   const doEmailPdf = async (q: Quote & { client_name: string }) => {
-    if (q.reference.startsWith("DRAFT")) {
-      const proceed = await ask(t.export_draft_warning, { kind: "warning", okLabel: t.email_pdf, cancelLabel: t.cancel });
-      if (!proceed) return;
-    }
-    const toastId = toast.loading(t.generating_pdf);
-    try {
-      const result = await generateQuotePdfBytes(q.id, q.client_id);
-      if (!result) {
-        toast.error(t.quote_not_found, { id: toastId });
-        return;
-      }
-      const { root } = await orgPaths();
-      const tempPath = `${root}/temp_${pdfFileName(result.reference, result.client.name)}`;
-      await writeFile(tempPath, result.bytes);
+    if (!(await settleDraft(q))) return;
+    await notify.progress(
+      t.generating_pdf,
+      (async () => {
+        const result = await generateQuotePdfBytes(q.id, q.client_id);
+        if (!result) throw new Error(t.quote_not_found);
+        const { root } = await orgPaths();
+        const tempPath = `${root}/temp_${pdfFileName(result.reference, result.client.name)}`;
+        await writeFile(tempPath, result.bytes);
 
-      await invoke("share_pdf_via_mail", {
-        path: tempPath,
-        to: result.client.email ?? "",
-        subject: result.reference,
-      });
-      toast.dismiss(toastId);
-    } catch (err) {
-      toast.error(String(err), { id: toastId });
-    }
+        await invoke("share_pdf_via_mail", {
+          path: tempPath,
+          to: result.client.email ?? "",
+          subject: result.reference,
+        });
+      })(),
+      { success: null, error: t.error_email_pdf }
+    );
   };
 
   const openWizard = async (quote: Quote & { client_name: string }) => {
     if (quote.converted_to_project_id) {
-      toast.info(t.project_already_generated);
+      notify.info(t.project_already_generated);
       return;
     }
     const items = await getQuoteLineItems(quote.id);
@@ -227,9 +220,10 @@ export function QuotesPage() {
   }, [enriched, search, sort, filterConditions, filterLogic]);
 
   // Keyboard row navigation (flat list — every filtered row is visible).
+  const openQuote = useCallback((q: Quote) => navigate(`/quotes/${q.id}/edit`), [navigate]);
   const { focusIdx } = useListNavigation({
     items: filtered,
-    onOpen: useCallback((q: Quote) => navigate(`/quotes/${q.id}/edit`), [navigate]),
+    onOpen: openQuote,
     onMenu: useCallback((q: (typeof filtered)[0], pos: { x: number; y: number }) => setCtxMenu({ ...pos, item: q }), []),
   });
 
@@ -252,11 +246,8 @@ export function QuotesPage() {
     bulk.clearSelection();
   }, [bulk, updateQuote, filtered, t]);
 
-  const bulkDelete = useCallback(async () => {
-    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
-    ([...bulk.selected] as number[]).forEach((id) => deleteQuote.mutate(id));
-    bulk.clearSelection();
-  }, [bulk, deleteQuote, t]);
+  const deleteSelection = useBulkDelete("quotes", (id: number) => deleteQuote.mutateAsync(id));
+  const bulkDelete = () => void deleteSelection([...bulk.selected] as number[], bulk.clearSelection);
 
   const bulkExportPdfs = async () => {
     const docs = ([...bulk.selected] as number[])
@@ -273,21 +264,16 @@ export function QuotesPage() {
     });
   };
 
-  if (isLoading) return (
-    <div>
-      <PageHeader title={t.quotes}>
-        <Button icon={<Plus size={16} />} onClick={() => navigate("/quotes/new")}>
-          {t.new_quote}
-        </Button>
-      </PageHeader>
-      <TableSkeleton columns={5} />
-    </div>
-  );
+  const clearFilters = () => {
+    setSearch("");
+    setFilterConditions([]);
+    setActiveFilterId(null);
+  };
 
   return (
     <div>
       <PageHeader title={t.quotes}>
-        <Button icon={<Plus size={16} />} onClick={() => navigate("/quotes/new")}>
+        <Button icon={ICONS.add} onClick={() => navigate("/quotes/new")}>
           {t.new_quote}
         </Button>
       </PageHeader>
@@ -302,106 +288,104 @@ export function QuotesPage() {
         fields={quoteFields}
       />
 
-      <div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[var(--color-border-header)]">
-              <th className="w-8 px-2 py-2">
-                <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
-              </th>
-              <th className="w-8" />
-              <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
-              <SortHeader label={t.client} sortKey="client_name" current={sort} onSort={setSort} />
-              <SortHeader label={t.date} sortKey="quote_date" current={sort} onSort={setSort} />
-              <SortHeader label={t.status} sortKey="status" current={sort} onSort={setSort} />
-              <SortHeader label={t.amount} sortKey="total" current={sort} onSort={setSort} align="right" />
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((q, qi) => (
-              <tr
-                key={q.id}
-                data-list-row
-                className={`border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md group${qi === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
-                onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: q }); }}
-              >
-                <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="checkbox"
-                    checked={bulk.selected.has(q.id)}
-                    onChange={(e) => bulk.toggleItem(q.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-                    className="accent-[var(--accent)]"
-                  />
-                </td>
-                <td className="w-8 px-1">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setCtxMenu({ x: e.clientX, y: e.clientY, item: q });
-                    }}
-                    className="opacity-60 hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
-                    aria-label={t.more_actions}
-                  >
-                    <Settings2 size={14} />
-                  </button>
-                </td>
-                <td className="px-4 py-2.5">
-                  <span className="font-medium">{q.reference.startsWith("DRAFT") ? t.draft : q.reference}</span>
-                </td>
-                <td className="px-4 py-2.5">{q.client_name}</td>
-                <td className="px-4 py-2.5 text-muted">{formatDisplayDate(q.quote_date)}</td>
-                <td className="px-4 py-2.5">
-                  <select
-                    value={q.status}
-                    onChange={(e) => {
-                      const status = e.target.value as QuoteStatus;
-                      updateQuote.mutate({ id: q.id, data: { status } });
-                    }}
-                    className={`text-xs px-2 py-0.5 rounded-full border-0 appearance-none cursor-pointer ${statusClasses(quoteStatusVariant(q.status))}`}
-                  >
-                    {q.status === "draft" && <option value="draft">{t.draft}</option>}
-                    <option value="sent">{t.sent}</option>
-                    <option value="accepted">{t.accepted}</option>
-                    <option value="rejected">{t.rejected}</option>
-                    <option value="expired">{t.expired}</option>
-                  </select>
-                </td>
-                <td className="px-4 py-2.5 text-right font-medium">
-                  CHF {q.total.toFixed(2)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {filtered.length === 0 && !isLoading && (
-          <EmptyState
-            message={(quotes?.length ?? 0) === 0 ? t.no_quotes_yet : t.no_matching_quotes}
-            icon={<FileText size={32} />}
-            action={(quotes?.length ?? 0) === 0 ? (
-              <Button icon={<Plus size={16} />} onClick={() => navigate("/quotes/new")}>
-                {t.new_quote}
-              </Button>
-            ) : undefined}
-          />
-        )}
-      </div>
+      <QueryState query={quotesQuery} skeleton={<TableSkeleton columns={7} />} errorMessage={t.load_error_quotes}>
+      {(all) => (
+      <Table>
+        <Table.Head>
+          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} label={t.select_all} />
+          <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
+          <SortHeader label={t.client} sortKey="client_name" current={sort} onSort={setSort} />
+          <SortHeader label={t.date} sortKey="quote_date" current={sort} onSort={setSort} />
+          <SortHeader label={t.status} sortKey="status" current={sort} onSort={setSort} />
+          <SortHeader label={t.amount} sortKey="total" current={sort} onSort={setSort} align="right" />
+          <Table.ActionsTh />
+        </Table.Head>
+        <Table.Body>
+          {filtered.map((q, qi) => (
+            <Table.Row
+              key={q.id}
+              data-list-row
+              focused={qi === focusIdx}
+              selected={bulk.selected.has(q.id)}
+              onOpen={() => openQuote(q)}
+              onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: q }); }}
+            >
+              <Table.Select checked={bulk.selected.has(q.id)} onToggle={(shift) => bulk.toggleItem(q.id, shift)} label={t.select_row.replace("{name}", q.reference)} />
+              <Table.Td>
+                <span className="font-medium">{q.reference.startsWith("DRAFT") ? t.draft : q.reference}</span>
+              </Table.Td>
+              <Table.Td>{q.client_name}</Table.Td>
+              <Table.Td muted>{formatDisplayDate(q.quote_date)}</Table.Td>
+              <Table.Td>
+                <Select
+                  value={q.status}
+                  aria-label={`${t.status}: ${q.reference}`}
+                  onChange={(e) => {
+                    const status = e.target.value as QuoteStatus;
+                    updateQuote.mutate({ id: q.id, data: { status } });
+                  }}
+                  variant="bare"
+                  fullWidth={false}
+                  className={`${PILL} ${statusClasses(quoteStatusVariant(q.status))}`}
+                >
+                  {q.status === "draft" && <option value="draft">{t.draft}</option>}
+                  <option value="sent">{t.sent}</option>
+                  <option value="accepted">{t.accepted}</option>
+                  <option value="rejected">{t.rejected}</option>
+                  <option value="expired">{t.expired}</option>
+                </Select>
+              </Table.Td>
+              <Table.Td numeric className="font-medium">
+                CHF {q.total.toFixed(2)}
+              </Table.Td>
+              <Table.Actions>
+                <IconButton
+                  size="xs"
+                  icon={ICONS.more}
+                  label={t.more_actions}
+                  onClick={(e) => setCtxMenu({ x: e.clientX, y: e.clientY, item: q })}
+                />
+              </Table.Actions>
+            </Table.Row>
+          ))}
+          {filtered.length === 0 && (
+            <Table.Empty colSpan={7}>
+              {all.length === 0 ? (
+                <EmptyState
+                  message={t.no_quotes_yet}
+                  icon={ICONS.quote}
+                  action={
+                    <Button icon={ICONS.add} onClick={() => navigate("/quotes/new")}>
+                      {t.new_quote}
+                    </Button>
+                  }
+                />
+              ) : (
+                <NoResults message={t.no_matching_quotes} onClear={clearFilters} />
+              )}
+            </Table.Empty>
+          )}
+        </Table.Body>
+      </Table>
+      )}
+      </QueryState>
       {ctxMenu && (
         <ContextMenu
           x={ctxMenu.x}
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
-            { label: t.edit, icon: <Pencil size={14} />, onClick: () => navigate(`/quotes/${ctxMenu.item.id}/edit`) },
-            { label: t.preview_pdf, icon: <Eye size={14} />, onClick: () => navigate(`/quotes/${ctxMenu.item.id}/preview`) },
-            { label: t.download_pdf, icon: <Download size={14} />, onClick: () => handleDownloadPdf(ctxMenu.item) },
-            { label: t.email_pdf, icon: <Mail size={14} />, onClick: () => handleEmailPdf(ctxMenu.item) },
-            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/quotes/${ctxMenu.item.id}/edit`, ctxMenu.item.reference.startsWith("DRAFT") ? t.draft : ctxMenu.item.reference) },
+            { label: t.edit, icon: ICONS.edit, onClick: () => navigate(`/quotes/${ctxMenu.item.id}/edit`) },
+            { label: t.preview_pdf, icon: ICONS.preview, onClick: () => navigate(`/quotes/${ctxMenu.item.id}/preview`) },
+            { label: t.download_pdf, icon: ICONS.download, onClick: () => handleDownloadPdf(ctxMenu.item) },
+            { label: t.email_pdf, icon: ICONS.email, onClick: () => handleEmailPdf(ctxMenu.item) },
+            { label: t.open_in_new_tab, icon: ICONS.newTab, onClick: () => openTab(`/quotes/${ctxMenu.item.id}/edit`, ctxMenu.item.reference.startsWith("DRAFT") ? t.draft : ctxMenu.item.reference) },
             { label: "", divider: true, onClick: () => {} },
-            ...(ctxMenu.item.status === "draft" ? [{ label: t.mark_sent, icon: <Send size={14} />, onClick: () => updateQuote.mutate({ id: ctxMenu.item.id, data: { status: "sent" as QuoteStatus } }) }] : []),
-            ...(!ctxMenu.item.converted_to_invoice_id ? [{ label: t.convert_to_invoice, icon: <FileOutput size={14} />, onClick: () => navigate(`/invoices/new?from_quote=${ctxMenu.item.id}`) }] : []),
-            ...(ctxMenu.item.status === "accepted" && !ctxMenu.item.converted_to_project_id ? [{ label: t.generate_project, icon: <FolderPlus size={14} />, onClick: () => openWizard(ctxMenu.item) }] : []),
+            ...(ctxMenu.item.status === "draft" ? [{ label: t.mark_sent, icon: ICONS.send, onClick: () => updateQuote.mutate({ id: ctxMenu.item.id, data: { status: "sent" as QuoteStatus } }) }] : []),
+            ...(!ctxMenu.item.converted_to_invoice_id ? [{ label: t.convert_to_invoice, icon: ICONS.convertToInvoice, onClick: () => navigate(`/invoices/new?from_quote=${ctxMenu.item.id}`) }] : []),
+            ...(ctxMenu.item.status === "accepted" && !ctxMenu.item.converted_to_project_id ? [{ label: t.generate_project, icon: ICONS.newProject, onClick: () => openWizard(ctxMenu.item) }] : []),
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteQuote.mutate(ctxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_quote_deleted) }) },
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => deleteWithUndo(deleteQuote, ctxMenu.item.id, t.toast_quote_deleted) },
           ]}
         />
       )}
@@ -410,9 +394,9 @@ export function QuotesPage() {
         count={bulk.count}
         onClear={bulk.clearSelection}
         actions={[
-          { label: t.mark_sent, icon: <Send size={14} />, onClick: bulkMarkSent },
-          { label: t.export_pdfs, icon: <Download size={14} />, onClick: bulkExportPdfs },
-          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+          { label: t.mark_sent, icon: ICONS.send, onClick: bulkMarkSent },
+          { label: t.export_pdfs, icon: ICONS.download, onClick: bulkExportPdfs },
+          { label: t.delete, icon: ICONS.delete, onClick: bulkDelete, danger: true },
         ]}
       />
       {wizardQuote && (

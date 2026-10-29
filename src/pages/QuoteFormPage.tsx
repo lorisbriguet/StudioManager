@@ -1,21 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Eye } from "lucide-react";
-import { Button, Input, Select, FormField } from "../components/ui";
+import { ICONS, Button, DatePicker, Input, PageHeader, Select, FormField, FieldError, FormLayout, FormGrid, FormActions, Textarea } from "../components/ui";
 import * as v from "../lib/validate";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { addDays, format } from "date-fns";
 import { useQuote, useCreateQuote, useUpdateQuote } from "../db/hooks/useQuotes";
 import { useInvoiceTemplates, useDefaultTemplate } from "../db/hooks/useInvoiceTemplates";
 import { useClients, useClientAddresses } from "../db/hooks/useClients";
 import { useProjects } from "../db/hooks/useProjects";
 import { getQuoteLineItems } from "../db/queries/quotes";
-import { logError } from "../lib/log";
 import { useT } from "../i18n/useT";
 import { useActivities } from "../db/hooks/useActivities";
 import type { Activity } from "../types/activity";
 import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel, round2 } from "../lib/lineItems";
 import { LineItemsTable } from "../components/shared/LineItemsTable";
+import { GlobalRateControl, TemplateField } from "../components/shared/DocumentFields";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { confirmIfDirty } from "../lib/dirty-guard";
 
@@ -134,8 +133,7 @@ export function QuoteFormPage() {
           );
         }
       }).catch((e) => {
-        logError("Failed to load line items:", e);
-        toast.error(t.failed_load_line_items);
+        notify.error(t.failed_load_line_items, e);
       }).finally(() => {
         setTimeout(() => { formLoadedRef.current = true; }, 0);
       });
@@ -247,10 +245,9 @@ export function QuoteFormPage() {
           {
             onSuccess: () => {
               setFormDirty(false);
-              toast.success(t.quote_updated);
+              notify.success(t.quote_updated);
               navigate("/quotes");
             },
-            onError: (e) => toast.error(String(e)),
           }
         );
       } else {
@@ -288,57 +285,44 @@ export function QuoteFormPage() {
           {
             onSuccess: () => {
               setFormDirty(false);
-              toast.success(t.quote_created);
+              notify.success(t.quote_created);
               navigate("/quotes");
             },
-            onError: (e) => toast.error(String(e)),
           }
         );
       }
     } catch (e) {
-      toast.error(String(e));
+      notify.error(t.error_save_quote, e);
     }
   };
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="sm" onClick={async () => { if (await confirmIfDirty("/quotes")) navigate("/quotes"); }} icon={<ArrowLeft size={18} />} aria-label={t.back} />
-        <h1 className="text-xl font-semibold">
-          {isEdit ? t.edit_quote : t.new_quote}
-        </h1>
-      </div>
+      <PageHeader
+        title={isEdit ? t.edit_quote : t.new_quote}
+        back={async () => { if (await confirmIfDirty("/quotes")) navigate("/quotes"); }}
+      />
 
-      {/* Dirty tracking on change only. React's onChange already fires per keystroke
-          for text fields; listening to `input` as well made the first <select> pick
-          re-render the form before WebKit's `change`, reverting the controlled value. */}
-      <div className="space-y-4 max-w-3xl" onChange={markDirty}>
+      {/* Dirty tracking: text fields bubble their change events up to this div.
+          Select is a custom dropdown that sends no DOM event, so each Select's
+          onChange calls markDirty() itself. */}
+      <FormLayout onChange={markDirty}>
         {/* Template selector */}
         {invoiceTemplates && invoiceTemplates.length > 0 && (
-          <div className="max-w-xs">
-            <label className="block text-xs font-medium text-muted mb-1">
-              {t.select_invoice_template}
-            </label>
-            <Select
-              value={templateId ?? ""}
-              onChange={(e) => setTemplateId(e.target.value ? Number(e.target.value) : null)}
-              className="py-2"
-            >
-              <option value="">{t.none}</option>
-              {invoiceTemplates.map((tmpl) => (
-                <option key={tmpl.id} value={tmpl.id}>
-                  {tmpl.name}{tmpl.is_default ? " (default)" : ""}
-                </option>
-              ))}
-            </Select>
-          </div>
+          <FormGrid cols={2}>
+            <TemplateField
+              templates={invoiceTemplates}
+              value={templateId}
+              onChange={(id) => { markDirty(); setTemplateId(id); }}
+            />
+          </FormGrid>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <FormGrid cols={2}>
           <FormField label={t.client} required error={errors.client_id}>
             <Select
               value={clientId}
-              onChange={(e) => {
+              onChange={(e) => { markDirty();
                 setClientId(e.target.value);
                 setBillingAddressId(null);
                 setProjectId(null);
@@ -348,7 +332,6 @@ export function QuoteFormPage() {
                 clearError("client_id");
               }}
               onBlur={() => setFieldError("client_id", v.validateField(clientId, quoteSchema.client_id))}
-              className="py-2"
             >
               <option value="">{t.select_client}</option>
               {clients?.map((c) => (
@@ -360,8 +343,7 @@ export function QuoteFormPage() {
             <FormField label={t.billing_address}>
               <Select
                 value={billingAddressId ?? ""}
-                onChange={(e) => setBillingAddressId(e.target.value ? Number(e.target.value) : null)}
-                className="py-2"
+                onChange={(e) => { markDirty(); setBillingAddressId(e.target.value ? Number(e.target.value) : null); }}
               >
                 <option value="">{t.main_address}</option>
                 {clientAddresses?.map((a) => (
@@ -375,8 +357,7 @@ export function QuoteFormPage() {
           <FormField label={t.project_optional}>
             <Select
               value={projectId ?? ""}
-              onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
-              className="py-2"
+              onChange={(e) => { markDirty(); setProjectId(e.target.value ? Number(e.target.value) : null); }}
             >
               <option value="">{t.none}</option>
               {clientProjects?.map((p) => (
@@ -385,21 +366,18 @@ export function QuoteFormPage() {
             </Select>
           </FormField>
           <FormField label={t.date} required error={errors.quote_date}>
-            <Input
-              type="date"
-              value={quoteDate}
-              onChange={(e) => { setQuoteDate(e.target.value); clearError("quote_date"); }}
-              onBlur={() => setFieldError("quote_date", v.validateField(quoteDate, quoteSchema.quote_date))}
-              className="py-2"
+            <DatePicker
+              value={quoteDate || null}
+              onChange={(d) => { markDirty(); setQuoteDate(d ?? ""); clearError("quote_date"); }}
+              onBlur={(d) => setFieldError("quote_date", v.validateField(d ?? "", quoteSchema.quote_date))}
             />
           </FormField>
           <FormField label={t.activity}>
             <Select
               value={activityId !== null ? String(activityId) : activity ? "legacy" : ""}
-              onChange={(e) => {
+              onChange={(e) => { markDirty();
                 setActivityId(e.target.value === "legacy" || e.target.value === "" ? null : Number(e.target.value));
               }}
-              className="py-2"
             >
               {(activityList ?? []).map((a) => (
                 <option key={a.id} value={String(a.id)}>{activityName(a)}</option>
@@ -410,62 +388,35 @@ export function QuoteFormPage() {
               {activityId === null && !activity && <option value="" />}
             </Select>
           </FormField>
-          <FormField label={t.assignment} className="col-span-2">
+          <FormField label={t.assignment} span="full">
             <Input
               value={assignment}
               onChange={(e) => setAssignment(e.target.value)}
-              className="py-2"
               placeholder={t.description_work}
             />
           </FormField>
-        </div>
+        </FormGrid>
 
         {/* Global rate toggle */}
-        <div className="flex items-center gap-3 mb-2">
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              checked={useGlobalRate}
-              onChange={(e) => {
-                setUseGlobalRate(e.target.checked);
-                if (e.target.checked && globalRate > 0) {
-                  applyGlobalRate(globalRate);
-                }
-              }}
-              className="accent-[var(--accent)]"
-            />
-            {t.apply_global_rate}
-          </label>
-          {useGlobalRate && (
-            <>
-              <Input
-                type="number"
-                value={globalRate || ""}
-                onChange={(e) => {
-                  const rate = e.target.value ? Number(e.target.value) : 0;
-                  setGlobalRate(rate);
-                  applyGlobalRate(rate);
-                }}
-                placeholder={t.global_rate}
-                fullWidth={false}
-                className="w-28 text-right"
-              />
-              <select
-                value={globalUnit}
-                onChange={(e) => {
-                  setGlobalUnit(e.target.value);
-                  if (globalRate > 0) applyGlobalRate(globalRate, e.target.value);
-                }}
-                className="border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm bg-[var(--color-surface)]"
-              >
-                <option value="hours">{t.hours}</option>
-                <option value="days">{t.days}</option>
-                <option value="units">{t.units}</option>
-                <option value="flat">{t.flat_rate}</option>
-              </select>
-            </>
-          )}
-        </div>
+        <GlobalRateControl
+          enabled={useGlobalRate}
+          rate={globalRate}
+          unit={globalUnit}
+          onEnabledChange={(checked) => {
+            setUseGlobalRate(checked);
+            if (checked && globalRate > 0) {
+              applyGlobalRate(globalRate);
+            }
+          }}
+          onRateChange={(rate) => {
+            setGlobalRate(rate);
+            applyGlobalRate(rate);
+          }}
+          onUnitChange={(unit) => { markDirty();
+            setGlobalUnit(unit);
+            if (globalRate > 0) applyGlobalRate(globalRate, unit);
+          }}
+        />
 
         <LineItemsTable
           items={items}
@@ -485,24 +436,21 @@ export function QuoteFormPage() {
 
         {/* Phase 2 E2 — summary error for the line-items region (not per-cell) */}
         {errors.line_items && (
-          <p role="alert" className="text-xs text-danger-text">
+          <FieldError className="mt-0">
             {errors.line_items}
-          </p>
+          </FieldError>
         )}
 
         <FormField label={t.notes}>
-          <textarea
+          <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-            className="w-full border border-[var(--color-border-divider)] rounded-lg px-3 py-2 text-sm bg-[var(--color-surface)]"
           />
         </FormField>
 
-        <div className="flex gap-2">
+        <FormActions>
           <Button
             variant="secondary"
-            size="lg"
             onClick={async () => {
               if (await confirmIfDirty("/quotes")) navigate("/quotes");
             }}
@@ -512,8 +460,7 @@ export function QuoteFormPage() {
           {isEdit && (
             <Button
               variant="secondary"
-              size="lg"
-              icon={<Eye size={14} />}
+              icon={ICONS.preview}
               // Preview renders the SAVED quote, so unsaved edits would be
               // silently dropped — prompt as a stopgap. Proper phase-2 fix:
               // save-then-preview.
@@ -525,14 +472,13 @@ export function QuoteFormPage() {
             </Button>
           )}
           <Button
-            size="lg"
             onClick={save}
             disabled={createQuote.isPending || updateQuote.isPending}
           >
             {isEdit ? t.update_quote : t.create_quote}
           </Button>
-        </div>
-      </div>
+        </FormActions>
+      </FormLayout>
     </div>
   );
 }

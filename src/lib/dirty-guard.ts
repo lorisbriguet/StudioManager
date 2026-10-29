@@ -1,5 +1,5 @@
-import { ask } from "@tauri-apps/plugin-dialog";
-import { getLabels } from "./notifyError";
+import { confirm } from "./confirm";
+import { getLabels } from "./notify";
 
 /**
  * Central registry of "unsaved changes" guards.
@@ -67,18 +67,19 @@ export async function confirmIfDirty(targetPath?: string): Promise<boolean> {
     // Read labels per prompt (not at module load) so a mid-session
     // language switch takes effect.
     const t = getLabels();
-    const confirmed = await ask(t.unsaved_changes_message, {
+    const confirmed = await confirm({
       title: t.unsaved_changes,
-      kind: "warning",
-      okLabel: t.leave,
+      message: t.unsaved_changes_message,
+      confirmLabel: t.leave,
       cancelLabel: t.stay,
+      tone: "danger",
     });
     if (confirmed) {
       for (const g of dirty) g.markClean();
     }
     return confirmed;
   } catch {
-    // Fail closed: if the native dialog errors, treat it as "stay" so no
+    // Fail closed: if the dialog errors, treat it as "stay" so no
     // unhandled rejection reaches the void call sites and nothing is lost.
     return false;
   } finally {

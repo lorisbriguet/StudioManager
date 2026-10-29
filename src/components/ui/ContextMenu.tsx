@@ -1,8 +1,22 @@
-import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { MENU_DIVIDER, MENU_ITEM, MENU_TONE } from "./Dropdown";
+import { Popover } from "./Popover";
+import { useT } from "../../i18n/useT";
+import { ICON_SIZE, renderIcon, type IconProp } from "./icons";
 
+/**
+ * ContextMenu — the right-click menu, at the cursor. See DESIGN-SYSTEM.md, "Dropdown".
+ *
+ *   {menu && <ContextMenu x={menu.x} y={menu.y} items={[…]} onClose={() => setMenu(null)} />}
+ *
+ * Built on Popover (`at`), so it stays in the window, closes on a click
+ * outside and on Esc, and Esc never closes a surrounding Modal. Focus moves
+ * to the first enabled item and back to where it was on close.
+ */
 export interface ContextMenuItem {
   label: string;
-  icon?: React.ReactNode;
+  /** A lucide component (drawn at 14px) or an element. */
+  icon?: IconProp;
   onClick: () => void;
   danger?: boolean;
   disabled?: boolean;
@@ -14,6 +28,8 @@ interface ContextMenuProps {
   y: number;
   items: ContextMenuItem[];
   onClose: () => void;
+  /** Name of the menu, e.g. the row it acts on. Default: t.actions. */
+  "aria-label"?: string;
 }
 
 function getEnabledItems(menu: HTMLElement) {
@@ -22,10 +38,12 @@ function getEnabledItems(menu: HTMLElement) {
   );
 }
 
-export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
+export function ContextMenu({ x, y, items, onClose, "aria-label": label }: ContextMenuProps) {
+  const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const capturedRef = useRef(false);
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
 
   // Capture the pre-open focused element at first render, before focus moves
   // into the menu. The component mounts fresh on each open, so first render is
@@ -36,39 +54,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     previouslyFocusedRef.current = active instanceof HTMLElement ? active : null;
   }
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    const keyHandler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("keydown", keyHandler);
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("keydown", keyHandler);
-    };
-  }, [onClose]);
-
-  // Keep menu within viewport
-  useEffect(() => {
-    if (!ref.current) return;
-    const rect = ref.current.getBoundingClientRect();
-    const el = ref.current;
-    if (rect.right > window.innerWidth) {
-      el.style.left = `${x - rect.width}px`;
-    }
-    if (rect.bottom > window.innerHeight) {
-      el.style.top = `${y - rect.height}px`;
-    }
-  }, [x, y]);
-
   // Move focus into the menu on open; restore it on close/unmount.
-  // preventScroll: the menu is positioned at the cursor, focusing it must not
-  // scroll the page.
   useEffect(() => {
     const menu = ref.current;
     if (menu) {
@@ -152,50 +138,53 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
         onClose();
         break;
       }
-      // Escape is handled by the document-level listener above.
+      // Escape: Popover closes the menu and stops it at the menu.
     }
   };
 
   return (
-    <div
-      ref={ref}
-      role="menu"
-      tabIndex={-1}
-      onKeyDown={handleKeyDown}
-      className="fixed z-50 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[160px] animate-in fade-in duration-100 outline-none"
-      style={{ left: x, top: y }}
-    >
-      {items.map((item, i) => {
-        if (item.divider) {
+    <Popover at={{ x, y }} onClose={onClose} onKeyDown={handleKeyDown} autoFocus={false}>
+      <div ref={ref} role="menu" aria-label={label ?? t.actions} tabIndex={-1} className="flex flex-col outline-none">
+        {items.map((item, i) => {
+          if (item.divider) {
+            return <div key={i} role="separator" className={MENU_DIVIDER} />;
+          }
+          // Same tones as Dropdown rows. Here the active row is the focused one;
+          // hovering a row focuses it, as Dropdown's hover moves its active row.
+          const isActive = i === focusedIndex;
+          const tone = item.disabled
+            ? MENU_TONE.disabled
+            : item.danger
+              ? isActive ? MENU_TONE.dangerActive : MENU_TONE.danger
+              : isActive ? MENU_TONE.active : MENU_TONE.base;
           return (
-            <div
+            <button
               key={i}
-              role="separator"
-              className="my-1 border-t border-[var(--color-border-divider)]"
-            />
+              type="button"
+              role="menuitem"
+              tabIndex={-1}
+              onClick={() => activate(item)}
+              onFocus={() => setFocusedIndex(i)}
+              onBlur={() => setFocusedIndex((cur) => (cur === i ? null : cur))}
+              onMouseMove={(e) => {
+                if (!item.disabled && document.activeElement !== e.currentTarget) {
+                  e.currentTarget.focus({ preventScroll: true });
+                }
+              }}
+              disabled={item.disabled}
+              className={`${MENU_ITEM} ${tone}`}
+            >
+              {item.icon != null && item.icon !== false && (
+                <span className={`w-4 h-4 flex items-center justify-center shrink-0 ${item.danger ? "" : "text-muted"}`}>
+                  {renderIcon(item.icon, ICON_SIZE.menu)}
+                </span>
+              )}
+              <span className="flex-1 min-w-0 truncate">{item.label}</span>
+            </button>
           );
-        }
-        return (
-          <button
-            key={i}
-            role="menuitem"
-            tabIndex={-1}
-            onClick={() => activate(item)}
-            disabled={item.disabled}
-            className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left transition-colors outline-none ${
-              item.disabled
-                ? "text-muted opacity-50 cursor-not-allowed"
-                : item.danger
-                  ? "text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)] focus-visible:bg-[var(--color-danger-bg)]"
-                  : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] focus-visible:bg-[var(--color-hover-row)]"
-            }`}
-          >
-            {item.icon && <span className="w-4 h-4 flex items-center justify-center">{item.icon}</span>}
-            {item.label}
-          </button>
-        );
-      })}
-    </div>
+        })}
+      </div>
+    </Popover>
   );
 }
 

@@ -1,14 +1,13 @@
 import { useState, useEffect } from "react";
-import { X, Plus, Trash2, Calendar, Link, Unlink } from "lucide-react";
-import { Button } from "../ui";
-import { toast } from "sonner";
+import { Ban } from "lucide-react";
+import { Checkbox, Button, Select, Input, FormModal, Tooltip, FormField, FormGrid, FormGroup, ICONS, ICON_SIZE } from "../ui";
+import { notify } from "../../lib/notify";
 import type { WorkloadColumn, WorkloadColumnType, SelectOption } from "../../types/workload";
-import { getStoredTagColor, normalizeTagColorName, TAG_COLOR_NAMES } from "../../lib/tagColors";
-import { useAppStore } from "../../stores/app-store";
 import { COLUMN_ICONS, COLUMN_ICON_NAMES } from "./columnIcons";
 import { evaluateFormula } from "../../lib/formulaEval";
 import { useT } from "../../i18n/useT";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useSetCustomListItems } from "../../db/hooks/useCustomLists";
+import { OptionsEditor } from "../shared/OptionsEditor";
 
 interface Props {
   column: WorkloadColumn | null; // null = creating new
@@ -30,7 +29,6 @@ const COLUMN_TYPES: { value: WorkloadColumnType; label: string }[] = [
 
 export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDelete, onClose }: Props) {
   const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
   const isNew = column === null;
 
   const [name, setName] = useState(column?.name ?? "");
@@ -40,13 +38,8 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
   const [options, setOptions] = useState<SelectOption[]>(column?.options ?? []);
   const [formula, setFormula] = useState(column?.formula ?? "");
   const [calendarColor, setCalendarColor] = useState(column?.calendarColor ?? false);
-  const [newOptValue, setNewOptValue] = useState("");
-  const [newOptColor, setNewOptColor] = useState("gray");
   const [formulaError, setFormulaError] = useState("");
   const [linkedListId, setLinkedListId] = useState<number | undefined>(column?.linked_list_id);
-  const [showImportListDropdown, setShowImportListDropdown] = useState(false);
-  const [saveAsListName, setSaveAsListName] = useState("");
-  const [showSaveAsListInput, setShowSaveAsListInput] = useState(false);
   const [importListId, setImportListId] = useState<number | null>(null);
 
   const { data: customLists } = useCustomLists();
@@ -60,7 +53,6 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
     setOptions(importListItems.map((i) => ({ value: i.value, color: i.color ?? "gray" })));
     setLinkedListId(importListId);
     setImportListId(null);
-    setShowImportListDropdown(false);
   }, [importListItems, importListId]);
 
   const validateFormula = (f: string): string => {
@@ -116,329 +108,142 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
     onClose();
   };
 
-  const addOption = () => {
-    const val = newOptValue.trim();
-    if (!val || options.some((o) => o.value === val)) return;
-    setOptions([...options, { value: val, color: newOptColor }]);
-    setNewOptValue("");
-  };
-
-  const handleSaveAsList = async () => {
-    const name = saveAsListName.trim();
-    if (!name || options.length === 0) return;
-    const id = await createCustomList.mutateAsync(name);
+  const handleSaveAsList = async (listName: string) => {
+    const id = await createCustomList.mutateAsync(listName);
     await setCustomListItems.mutateAsync({ listId: id, items: options.map((o) => ({ value: o.value, color: o.color })) });
-    setShowSaveAsListInput(false);
-    setSaveAsListName("");
-    toast.success(t.list_created ?? "List created");
+    notify.success(t.list_created);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-[var(--color-surface)] rounded-xl shadow-2xl w-full max-w-md border border-[var(--color-border-divider)] overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-divider)]">
-          <h3 className="text-sm font-medium">
-            {isNew ? t.add_column : t.edit_column}
-          </h3>
-          <button onClick={onClose} aria-label={t.close} className="text-muted hover:text-[var(--color-text-secondary)]">
-            <X size={16} />
-          </button>
-        </div>
+    <FormModal
+      open
+      onClose={onClose}
+      title={isNew ? t.add_column : t.edit_column}
+      submitLabel={t.save}
+      onSubmit={handleSave}
+      submitDisabled={!name.trim() || (type === "formula" && !!formulaError && !!formula.trim())}
+      destructive={
+        !isNew && onDelete ? (
+          <Button
+            variant="danger"
+            icon={ICONS.delete}
+            onClick={() => {
+              onDelete();
+              onClose();
+            }}
+          >
+            {t.delete_column}
+          </Button>
+        ) : undefined
+      }
+    >
+      <FormGrid cols={1}>
+        {/* Name */}
+        <FormField label={t.name}>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+          />
+        </FormField>
 
-        <div className="p-4 space-y-3">
-          {/* Name */}
-          <div>
-            <label className="text-xs text-muted block mb-1">{t.name}</label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
-              className="w-full border border-[var(--color-border-divider)] rounded-md px-3 py-2 text-sm"
-              autoFocus
-            />
-          </div>
+        {/* Type */}
+        <FormField label={t.type}>
+          <Select
+            value={type}
+            onChange={(e) => setType(e.target.value as WorkloadColumnType)}
+          >
+            {COLUMN_TYPES.map((ct) => (
+              <option key={ct.value} value={ct.value}>
+                {ct.label}
+              </option>
+            ))}
+          </Select>
+        </FormField>
 
-          {/* Type */}
-          <div>
-            <label className="text-xs text-muted block mb-1">{t.type}</label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value as WorkloadColumnType)}
-              className="w-full border border-[var(--color-border-divider)] rounded-md px-3 py-2 text-sm"
-            >
-              {COLUMN_TYPES.map((ct) => (
-                <option key={ct.value} value={ct.value}>
-                  {ct.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Icon */}
-          <div>
-            <label className="text-xs text-muted block mb-1">{t.icon}</label>
-            <div className="flex items-center gap-3">
-              <div className="flex-1 border border-[var(--color-border-divider)] rounded-md overflow-hidden">
-                <div className="flex flex-wrap gap-0.5 p-1.5 max-h-24 overflow-y-auto">
+        {/* Icon */}
+        <FormGroup label={t.icon}>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 border border-[var(--color-border-divider)] rounded-md overflow-hidden">
+              <div className="flex flex-wrap gap-0.5 p-1.5 max-h-24 overflow-y-auto">
+                <Tooltip content={t.none}>
                   <button
+                    type="button"
                     onClick={() => { setIcon(""); setIconOnly(false); }}
-                    className={`p-1 rounded-md ${!icon ? "bg-accent text-white" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
-                    title={t.none}
+                    className={`p-1 rounded-md ${!icon ? "bg-accent text-on-accent" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
                     aria-label={t.none}
                   >
-                    <X size={14} />
+                    <Ban size={ICON_SIZE.menu} />
                   </button>
-                  {COLUMN_ICON_NAMES.map((name) => {
-                    const Icon = COLUMN_ICONS[name];
-                    return (
+                </Tooltip>
+                {COLUMN_ICON_NAMES.map((name) => {
+                  const Icon = COLUMN_ICONS[name];
+                  return (
+                    <Tooltip key={name} content={name}>
                       <button
-                        key={name}
+                        type="button"
                         onClick={() => setIcon(name)}
-                        className={`p-1 rounded-md ${icon === name ? "bg-accent text-white" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
-                        title={name}
+                        className={`p-1 rounded-md ${icon === name ? "bg-accent text-on-accent" : "hover:bg-[var(--color-hover-row)] text-muted"}`}
                         aria-label={name}
                       >
-                        <Icon size={14} />
+                        <Icon size={ICON_SIZE.menu} />
                       </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-            {icon && (
-              <label className="flex items-center gap-2 mt-2 text-xs text-muted cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={iconOnly}
-                  onChange={(e) => setIconOnly(e.target.checked)}
-                  className="rounded"
-                />
-                {t.icon_only}
-              </label>
-            )}
-          </div>
-
-          {/* Calendar color toggle (select/multi_select only) */}
-          {(type === "select" || type === "multi_select") && (
-            <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
-              <input
-                type="checkbox"
-                checked={calendarColor}
-                onChange={(e) => setCalendarColor(e.target.checked)}
-                className="rounded"
-              />
-              <Calendar size={14} className="shrink-0" />
-              {t.calendar_color_column}
-            </label>
-          )}
-
-          {/* Formula */}
-          {type === "formula" && (
-            <div>
-              <label className="text-xs text-muted block mb-1">{t.formula}</label>
-              <input
-                value={formula}
-                onChange={(e) => handleFormulaChange(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
-                placeholder="e.g. og_scope ? hours : 0"
-                className={`w-full border rounded-md px-3 py-2 text-sm font-mono ${formulaError ? "border-[var(--color-danger-text)]" : "border-[var(--color-border-divider)]"}`}
-              />
-              {formulaError ? (
-                <p className="text-[10px] text-[var(--color-danger-text)] mt-1">{formulaError}</p>
-              ) : (
-                <p className="text-[10px] text-muted mt-1">{t.formula_help}</p>
-              )}
-            </div>
-          )}
-
-          {/* Select options */}
-          {(type === "select" || type === "multi_select") && (
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-muted">{t.options}</label>
-                {linkedListId ? (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-accent flex items-center gap-0.5">
-                      <Link size={11} />
-                      {(customLists ?? []).find((l) => l.id === linkedListId)?.name ?? ""}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="link"
-                      size="sm"
-                      icon={<Unlink size={12} />}
-                      onClick={() => setLinkedListId(undefined)}
-                      className="text-muted hover:text-[var(--color-danger-text)]"
-                    >
-                      {t.unlink_list}
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <Button
-                      type="button"
-                      variant="link"
-                      size="sm"
-                      icon={<Link size={12} />}
-                      onClick={() => setShowImportListDropdown((v) => !v)}
-                    >
-                      {t.import_from_list}
-                    </Button>
-                    {showImportListDropdown && (
-                      <div className="absolute right-0 top-full mt-1 z-[10000] bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-lg shadow-lg py-1 min-w-[150px]">
-                        {(customLists ?? []).length === 0 ? (
-                          <p className="text-xs text-muted px-3 py-1.5">{t.no_lists}</p>
-                        ) : (
-                          (customLists ?? []).map((list) => (
-                            <button
-                              key={list.id}
-                              type="button"
-                              onClick={() => setImportListId(list.id)}
-                              className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-hover-row)]"
-                            >
-                              {list.name}
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="space-y-1.5 mb-2">
-                {options.map((opt, i) => {
-                  const c = getStoredTagColor(opt.color, darkMode);
-                  return (
-                    <div key={i} className="flex items-center gap-2">
-                      <span
-                        style={{ background: c.bg, color: c.text }}
-                        className="px-2 py-0.5 rounded-full text-xs"
-                      >
-                        {opt.value}
-                      </span>
-                      <select
-                        value={normalizeTagColorName(opt.color)}
-                        onChange={(e) => {
-                          if (linkedListId) return;
-                          const next = [...options];
-                          next[i] = { ...next[i], color: e.target.value };
-                          setOptions(next);
-                        }}
-                        disabled={!!linkedListId}
-                        className="text-xs border border-[var(--color-border-divider)] rounded-lg px-1 py-0.5 disabled:opacity-60"
-                      >
-                        {TAG_COLOR_NAMES.map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </select>
-                      {!linkedListId && (
-                        <button
-                          onClick={() => setOptions(options.filter((_, j) => j !== i))}
-                          className="text-muted hover:text-[var(--color-danger-text)] ml-auto"
-                          aria-label={t.delete}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
+                    </Tooltip>
                   );
                 })}
               </div>
-              {!linkedListId && (
-                <>
-                  <div className="flex gap-2 mb-2">
-                    <input
-                      value={newOptValue}
-                      onChange={(e) => setNewOptValue(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && addOption()}
-                      placeholder={t.new_option}
-                      className="flex-1 border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm"
-                    />
-                    <select
-                      value={newOptColor}
-                      onChange={(e) => setNewOptColor(e.target.value)}
-                      className="text-sm border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5"
-                    >
-                      {TAG_COLOR_NAMES.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={addOption}
-                      className="p-1.5 text-muted hover:text-accent"
-                      aria-label={t.new_option}
-                    >
-                      <Plus size={16} />
-                    </button>
-                  </div>
-                  <div className="border-t border-[var(--color-border-divider)] pt-2">
-                    {showSaveAsListInput ? (
-                      <div className="flex gap-2">
-                        <input
-                          value={saveAsListName}
-                          onChange={(e) => setSaveAsListName(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === "Enter") handleSaveAsList(); if (e.key === "Escape") setShowSaveAsListInput(false); }}
-                          placeholder={t.list_name}
-                          className="flex-1 border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm"
-                          autoFocus
-                        />
-                        <button type="button" onClick={handleSaveAsList} className="px-3 text-sm text-accent hover:underline">{t.save}</button>
-                        <button type="button" onClick={() => setShowSaveAsListInput(false)} aria-label={t.cancel} className="px-2 text-muted hover:text-[var(--color-text-secondary)]"><X size={14} /></button>
-                      </div>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="link"
-                        size="sm"
-                        icon={<Link size={12} />}
-                        onClick={() => setShowSaveAsListInput(true)}
-                        className="text-muted hover:text-accent"
-                      >
-                        {t.save_as_list}
-                      </Button>
-                    )}
-                  </div>
-                </>
-              )}
             </div>
+          </div>
+          {icon && (
+            <Checkbox
+              label={t.icon_only}
+              checked={iconOnly}
+              onChange={(e) => setIconOnly(e.target.checked)}
+              className="mt-2"
+            />
           )}
-        </div>
+        </FormGroup>
 
-        <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--color-border-divider)]">
-          <div>
-            {!isNew && onDelete && (
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  onDelete();
-                  onClose();
-                }}
-                className="text-[var(--color-danger-text)] hover:text-red-700"
-              >
-                {t.delete_column}
-              </Button>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              onClick={onClose}
-            >
-              {t.cancel}
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={!name.trim() || (type === "formula" && !!formulaError && !!formula.trim())}
-            >
-              {t.save}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
+        {/* Calendar color toggle (select/multi_select only) */}
+        {(type === "select" || type === "multi_select") && (
+          <Checkbox
+            label={
+              <span className="inline-flex items-center gap-2">
+                <ICONS.calendar size={ICON_SIZE.menu} className="shrink-0" />
+                {t.calendar_color_column}
+              </span>
+            }
+            checked={calendarColor}
+            onChange={(e) => setCalendarColor(e.target.checked)}
+          />
+        )}
+
+        {/* Formula */}
+        {type === "formula" && (
+          <FormField label={t.formula} error={formulaError || undefined} hint={t.formula_help}>
+            <Input
+              value={formula}
+              onChange={(e) => handleFormulaChange(e.target.value)}
+              placeholder="e.g. og_scope ? hours : 0"
+              className="font-mono"
+            />
+          </FormField>
+        )}
+
+        {/* Select options */}
+        {(type === "select" || type === "multi_select") && (
+          <OptionsEditor
+            label={t.options}
+            options={options}
+            onChange={(next) => setOptions(next.map((o) => ({ value: o.value, color: o.color ?? "gray" })))}
+            lists={customLists}
+            linkedListId={linkedListId}
+            onLink={setImportListId}
+            onUnlink={() => setLinkedListId(undefined)}
+            onSaveAsList={handleSaveAsList}
+          />
+        )}
+      </FormGrid>
+    </FormModal>
   );
 }

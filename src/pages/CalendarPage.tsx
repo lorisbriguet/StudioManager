@@ -1,14 +1,14 @@
 import { useMemo, useCallback, useState, useRef, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { createPortal } from "react-dom";
+import { IconButton } from "../components/ui/IconButton";
+import { useNavigate } from "react-router-dom";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import type { EventInput, EventContentArg, EventDropArg } from "@fullcalendar/core";
 import type { DateClickArg, EventResizeDoneArg } from "@fullcalendar/interaction";
-import { X, ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "../components/ui";
+import { ICONS, ICON_SIZE } from "../components/ui/icons";
+import { Button, Select, Popover, Input, FormActions, PageHeader, PeekHeader, Callout, FilterChip } from "../components/ui";
 import { useT } from "../i18n/useT";
 import { useTasksWithDueDate, useUpdateTask, useUpdateSubtask, useCreateTask, useCreateSubtask, useTasksByProject } from "../db/hooks/useTasks";
 import { useProjects, useUpdateProject } from "../db/hooks/useProjects";
@@ -27,6 +27,8 @@ import { effectiveDue } from "../lib/upkeep/schedule";
 import { upkeepEventTitle } from "../lib/upkeep/calendar";
 import type { WorkloadColumn } from "../types/workload";
 import { DEFAULT_WORKLOAD_COLUMNS } from "../types/workload";
+import { SegmentedControl } from "../components/ui/SegmentedControl";
+import { MENU_ITEM } from "../components/ui/Dropdown";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 function toDateStr(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
@@ -83,7 +85,6 @@ function getTaskEventColor(
   projectId: number,
   workloadCellsJson: string,
   wlConfigs: Map<number, WorkloadColumn[]> | undefined,
-  dark: boolean,
 ): { backgroundColor: string; textColor: string } | null {
   const columns = wlConfigs?.get(projectId) ?? DEFAULT_WORKLOAD_COLUMNS;
   const col = findCalendarColorColumn(columns);
@@ -103,7 +104,8 @@ function getTaskEventColor(
   const tagName = Array.isArray(value) ? value[0] : String(value);
   if (!tagName) return null;
 
-  const color = getTagColor(String(tagName), dark);
+  // CSS variable strings: FullCalendar puts them in the event's inline style
+  const color = getTagColor(String(tagName));
   return { backgroundColor: color.bg, textColor: color.text };
 }
 
@@ -120,7 +122,6 @@ export function CalendarPage() {
   const createTask = useCreateTask();
   const navigate = useNavigate();
   const projectOpenMode = useAppStore((s) => s.projectOpenMode);
-  const darkMode = useAppStore((s) => s.darkMode);
   const { data: wlConfigs } = useAllProjectWorkloadConfigs();
   const { data: upkeepItems } = useActiveUpkeepItems();
   const { data: upkeepMachines } = useMachines();
@@ -172,7 +173,7 @@ export function CalendarPage() {
       const projectName = projects?.find((p) => p.id === t.project_id)?.name ?? "";
       const prio = effectivePriority(t.priority, t.due_date, t.end_date);
       const prioClass = `fc-priority-${prio}`;
-      const tagColor = getTaskEventColor(t.project_id, t.workload_cells, wlConfigs, darkMode);
+      const tagColor = getTaskEventColor(t.project_id, t.workload_cells, wlConfigs);
       if (t.start_time) {
         items.push({
           id: `t-${t.id}`,
@@ -273,7 +274,7 @@ export function CalendarPage() {
 
     // Studio upkeep: next due dates of active items, and subscription renewals
     if (showUpkeep) {
-      const color = getNamedTagColor("teal", darkMode);
+      const color = getNamedTagColor("teal");
       const byId = new Map((upkeepMachines ?? []).map((m) => [m.id, m]));
       for (const it of upkeepItems ?? []) {
         const machine = byId.get(it.machine_id);
@@ -309,7 +310,7 @@ export function CalendarPage() {
     }
 
     return items;
-  }, [tasks, subtasks, projects, invoices, quotes, t, wlConfigs, darkMode, showUpkeep, showRenewals, upkeepItems, upkeepMachines, upkeepSubs]);
+  }, [tasks, subtasks, projects, invoices, quotes, t, wlConfigs, showUpkeep, showRenewals, upkeepItems, upkeepMachines, upkeepSubs]);
 
   const handleEventChange = useCallback((event: EventDropArg["event"], revert?: () => void) => {
     const { type, itemId } = event.extendedProps;
@@ -441,7 +442,7 @@ export function CalendarPage() {
     return (
       <div className={`${wrap ? "whitespace-normal break-words" : "truncate"} text-xs leading-tight px-1 ${done ? "line-through opacity-60" : ""}`}>
         {isSubtask && <span className="opacity-60">↳ </span>}
-        {isDeadline && <span className="font-semibold">!</span>}
+        {isDeadline && <ICONS.warning size={ICON_SIZE.pill} className="inline align-[-1px] mr-0.5" />}
         {(isInvoice || isQuote) && <span className="font-semibold mr-0.5">$</span>}
         {arg.timeText && <span className="font-medium mr-1">{arg.timeText}</span>}
         <span>{arg.event.title}</span>
@@ -495,54 +496,39 @@ export function CalendarPage() {
     <div ref={calContainerRef} className="flex h-full -m-8">
       <div className="min-w-0 flex-1 p-8">
         {/* Custom toolbar */}
-        <div className="flex items-center gap-3 mb-4">
-          <button onClick={calPrev} aria-label={t.previous} className="p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors">
-            <ChevronLeft size={18} />
-          </button>
-          <button onClick={calNext} aria-label={t.next} className="p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors">
-            <ChevronRight size={18} />
-          </button>
-          <button onClick={calToday} className="px-3 py-1 text-xs border border-[var(--color-input-border)] rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:border-[#444] transition-colors">
-            {t.today}
-          </button>
-          <h1 className="text-xl font-semibold tracking-tight">{calTitle}</h1>
-          <div className="ml-auto flex items-center gap-1">
-            <button
-              type="button"
-              aria-pressed={showUpkeep}
-              onClick={() => toggleFlag("calendarShowUpkeep", !showUpkeep, setShowUpkeep)}
-              className={`px-3 py-1 text-xs rounded-md transition-colors ${showUpkeep ? "bg-accent-light text-accent font-medium" : "border border-[var(--color-input-border)] text-muted hover:text-[var(--color-text-secondary)]"}`}
-            >
+        <PageHeader
+          title={calTitle}
+          leading={<>
+            <IconButton icon={ICONS.prev} label={t.previous} onClick={calPrev} />
+            <IconButton icon={ICONS.next} label={t.next} onClick={calNext} />
+            <Button variant="outline" onClick={calToday}>
+              {t.today}
+            </Button>
+          </>}
+          actions={<>
+            <FilterChip active={showUpkeep} onClick={() => toggleFlag("calendarShowUpkeep", !showUpkeep, setShowUpkeep)}>
               {t.upkeep_cal_filter_upkeep}
-            </button>
-            <button
-              type="button"
-              aria-pressed={showRenewals}
-              onClick={() => toggleFlag("calendarShowRenewals", !showRenewals, setShowRenewals)}
-              className={`px-3 py-1 text-xs rounded-md transition-colors ${showRenewals ? "bg-accent-light text-accent font-medium" : "border border-[var(--color-input-border)] text-muted hover:text-[var(--color-text-secondary)]"}`}
-            >
+            </FilterChip>
+            <FilterChip active={showRenewals} onClick={() => toggleFlag("calendarShowRenewals", !showRenewals, setShowRenewals)}>
               {t.upkeep_cal_filter_renewals}
-            </button>
-            <span className="w-px h-4 bg-[var(--color-border-divider)] mx-1" />
-            <button
-              onClick={() => calSetView("dayGridMonth")}
-              className={`px-3 py-1 text-xs rounded-md transition-colors ${calView === "dayGridMonth" ? "bg-accent-light text-accent font-medium" : "border border-[var(--color-input-border)] text-muted hover:text-[var(--color-text-secondary)]"}`}
-            >
-              {t.month}
-            </button>
-            <button
-              onClick={() => calSetView("timeGridWeek")}
-              className={`px-3 py-1 text-xs rounded-md transition-colors ${calView === "timeGridWeek" ? "bg-accent-light text-accent font-medium" : "border border-[var(--color-input-border)] text-muted hover:text-[var(--color-text-secondary)]"}`}
-            >
-              {t.week}
-            </button>
-          </div>
-        </div>
+            </FilterChip>
+            <span className="w-px h-4 bg-[var(--color-border-divider)] mx-1" aria-hidden />
+            <SegmentedControl
+              aria-label={t.calendar}
+              value={calView === "timeGridWeek" ? "timeGridWeek" : "dayGridMonth"}
+              onChange={calSetView}
+              options={[
+                { value: "dayGridMonth", label: t.month },
+                { value: "timeGridWeek", label: t.week },
+              ]}
+            />
+          </>}
+        />
         {/* First-run hint: the calendar feeds off dated tasks/subtasks */}
         {tasks !== undefined && subtasks !== undefined && tasks.length === 0 && subtasks.length === 0 && (
-          <div className="mb-3 px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border-divider)] text-xs text-muted text-center">
+          <Callout tone="info" className="mb-3">
             {t.first_run_calendar}
-          </div>
+          </Callout>
         )}
         <div className="fc-studio">
           <FullCalendar
@@ -590,7 +576,7 @@ export function CalendarPage() {
           className="shrink-0 w-[5px] cursor-col-resize relative group"
         >
           <div className="absolute inset-y-0 left-1/2 w-px bg-[var(--color-border-divider)] -translate-x-1/2" />
-          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-accent/20 transition-opacity" />
+          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-accent-handle transition-opacity" />
         </div>
         <div
           ref={peekRef}
@@ -598,23 +584,9 @@ export function CalendarPage() {
           style={closingPeek ? undefined : { width: `${peekWidth}%`, minWidth: 0 }}
           onAnimationEnd={() => { if (closingPeek) { setPeekId(null); setClosingPeek(false); } }}
         >
+          <PeekHeader onClose={handleClosePeek} onOpenFull={() => navigate(`/projects/${peekId}`)} />
           <div className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <Link
-              to={`/projects/${peekId}`}
-              className="text-xs text-accent hover:underline"
-            >
-              {t.open_full_page}
-            </Link>
-            <button
-              onClick={handleClosePeek}
-              className="text-muted hover:text-[var(--color-text-secondary)]"
-              aria-label={t.close}
-            >
-              <X size={16} />
-            </button>
-          </div>
-          <ProjectDetailContent projectId={peekId} compact />
+            <ProjectDetailContent projectId={peekId} compact />
           </div>
         </div>
         </>
@@ -644,7 +616,6 @@ export function QuickCreatePopup({
   const [projectId, setProjectId] = useState<number | "">(projects.length > 0 ? projects[0].id : "");
   const [selectedTask, setSelectedTask] = useState<{ id: number; title: string } | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const popoverRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const subtaskRef = useRef<HTMLInputElement>(null);
 
@@ -655,30 +626,8 @@ export function QuickCreatePopup({
   ) ?? [];
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
     if (selectedTask) subtaskRef.current?.focus();
   }, [selectedTask]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onClose]);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onClose]);
 
   const handleSubmit = () => {
     if (!projectId) return;
@@ -705,60 +654,49 @@ export function QuickCreatePopup({
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
-  // Position: clamp to viewport
-  let top = pos.top + 8;
-  const popoverH = selectedTask ? 220 : 180;
-  if (top + popoverH > window.innerHeight) {
-    top = pos.top - popoverH - 8;
-  }
-  let left = pos.left - 130;
-  if (left < 8) left = 8;
-  if (left + 260 > window.innerWidth) left = window.innerWidth - 268;
-
   const timeLabel = startTime ?? t.all_day;
   const canSubmit = selectedTask ? !!subtaskTitle.trim() && !!projectId : !!title.trim() && !!projectId;
 
-  return createPortal(
-    <div
-      ref={popoverRef}
-      className="fixed z-[9999] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] p-3 w-[260px]"
-      style={{ top, left }}
+  return (
+    <Popover
+      // Centred under the clicked point; Popover flips and clamps to the window.
+      at={{ x: pos.left - 130, y: pos.top + 6 }}
+      onClose={() => onClose()}
+      padding="content"
+      className="w-[260px]"
+      aria-label={t.quick_create}
     >
       <div className="text-xs text-muted mb-2">
         {date} · {timeLabel}
       </div>
-      <select
+      <Select
         value={projectId}
+        aria-label={t.project}
         onChange={(e) => {
           setProjectId(e.target.value ? Number(e.target.value) : "");
           setSelectedTask(null);
           setSubtaskTitle("");
           setTitle("");
         }}
-        className="w-full bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-lg px-2 py-1.5 text-xs focus-accent mb-2"
+        className="mb-2"
       >
         <option value="">{t.select_project}</option>
         {projects.map((p) => (
           <option key={p.id} value={p.id}>{p.name}</option>
         ))}
-      </select>
+      </Select>
 
       {/* Task name with autocomplete */}
       <div className="relative mb-2">
         {selectedTask ? (
-          <div className="flex items-center gap-1 border border-accent/30 bg-accent-light rounded-lg px-2 py-1.5">
+          <div className="flex items-center gap-1 border border-accent-border bg-accent-light rounded-lg px-2 py-1.5">
             <span className="text-xs flex-1 truncate">{selectedTask.title}</span>
-            <button
-              onClick={handleClearTask}
-              className="text-muted hover:text-[var(--color-text)] shrink-0"
-              aria-label={t.remove}
-            >
-              <X size={12} />
-            </button>
+            <IconButton icon={ICONS.close} label={t.remove} size="xs" onClick={handleClearTask} />
           </div>
         ) : (
-          <input
+          <Input
             ref={inputRef}
+            data-autofocus
             value={title}
             onChange={(e) => {
               setTitle(e.target.value);
@@ -777,28 +715,43 @@ export function QuickCreatePopup({
               }
             }}
             placeholder={t.new_task}
-            className="w-full bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-lg px-2 py-1.5 text-xs focus-accent"
+            aria-label={t.new_task}
           />
         )}
         {!selectedTask && showSuggestions && suggestions.length > 0 && (
-          <div className="absolute z-10 top-full left-0 right-0 mt-0.5 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 max-h-32 overflow-y-auto">
-            {suggestions.map((task) => (
+          // Nested panel: typing stays in the input, a pick does not close the quick-create popup.
+          <Popover
+            anchor={inputRef}
+            autoFocus={false}
+            matchWidth
+            onClose={() => setShowSuggestions(false)}
+            role="listbox"
+            className="max-h-40 overflow-y-auto"
+          >
+            {suggestions.map((task, i) => (
               <button
                 key={task.id}
                 type="button"
+                role="option"
+                aria-selected={i === 0}
+                tabIndex={-1}
+                // Keep focus (and the caret) in the input.
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => handleSelectTask(task)}
-                className="w-full text-left px-2 py-1.5 text-xs hover:bg-[var(--color-hover-row)] truncate"
+                className={`${MENU_ITEM} cursor-pointer text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text)] ${
+                  i === 0 ? "bg-[var(--color-hover-row)] text-[var(--color-text)]" : ""
+                }`}
               >
-                {task.title}
+                <span className="truncate">{task.title}</span>
               </button>
             ))}
-          </div>
+          </Popover>
         )}
       </div>
 
       {/* Subtask name when existing task selected */}
       {selectedTask && (
-        <input
+        <Input
           ref={subtaskRef}
           value={subtaskTitle}
           onChange={(e) => setSubtaskTitle(e.target.value)}
@@ -806,19 +759,19 @@ export function QuickCreatePopup({
             if (e.key === "Enter") handleSubmit();
           }}
           placeholder={t.new_subtask}
-          className="w-full bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-lg px-2 py-1.5 text-xs focus-accent mb-2"
+          aria-label={t.new_subtask}
+          className="mb-2"
         />
       )}
 
-      <div className="flex justify-end gap-1.5">
-        <Button variant="ghost" size="sm" onClick={onClose}>
+      <FormActions>
+        <Button variant="secondary" onClick={onClose}>
           {t.cancel}
         </Button>
-        <Button size="sm" onClick={handleSubmit} disabled={!canSubmit}>
+        <Button onClick={handleSubmit} disabled={!canSubmit}>
           {t.add}
         </Button>
-      </div>
-    </div>,
-    document.body
+      </FormActions>
+    </Popover>
   );
 }

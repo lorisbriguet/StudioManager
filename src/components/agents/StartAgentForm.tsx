@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { startAgent, startFolders, type StartFolder } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
-import { Button, FormField, Input, Select } from "../ui";
+import { Button, FormActions, FormField, FormGrid, FormLayout, Input, Select, Textarea } from "../ui";
 import { ModelMenu } from "./ModelMenu";
 
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -73,8 +73,8 @@ export function StartAgentForm({ onStarted, onCancel }: StartAgentFormProps) {
   };
 
   return (
-    <form
-      className="max-w-xl space-y-4"
+    <FormLayout
+      as="form"
       onSubmit={(e) => {
         e.preventDefault();
         if (valid && !busy) void submit();
@@ -91,15 +91,9 @@ export function StartAgentForm({ onStarted, onCancel }: StartAgentFormProps) {
         </Select>
       </FormField>
       <FormField label={t.agents_task}>
-        <textarea
-          value={task}
-          maxLength={8000}
-          rows={5}
-          onChange={(e) => changeTask(e.target.value)}
-          className="w-full bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-lg px-3 py-2 text-sm focus-accent"
-        />
+        <Textarea value={task} maxLength={8000} rows={5} onChange={(e) => changeTask(e.target.value)} />
       </FormField>
-      <div className="grid grid-cols-[auto_1fr] gap-3">
+      <FormGrid>
         <FormField label={t.agents_model}>
           <ModelMenu label={t.agents_model} value={model} onChange={setModel} />
         </FormField>
@@ -113,20 +107,20 @@ export function StartAgentForm({ onStarted, onCancel }: StartAgentFormProps) {
             }}
           />
         </FormField>
-      </div>
+      </FormGrid>
       {error && (
         <p role="alert" className="text-sm text-[var(--color-danger-text)]">
           {error}
         </p>
       )}
-      <div className="flex gap-2">
+      <FormActions>
+        <Button variant="secondary" onClick={onCancel}>
+          {t.cancel}
+        </Button>
         <Button type="submit" disabled={!valid} loading={busy}>
           {t.agents_start}
         </Button>
-        <Button type="button" variant="ghost" onClick={onCancel}>
-          {t.cancel}
-        </Button>
-      </div>
-    </form>
+      </FormActions>
+    </FormLayout>
   );
 }

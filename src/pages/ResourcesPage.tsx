@@ -1,13 +1,9 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { Plus, Search, ExternalLink, Trash2, X } from "lucide-react";
-import { PageHeader, Button, EmptyState, FormField } from "../components/ui";
+import { ICONS, ICON_SIZE, PageHeader, Button, EmptyState, QueryState, NoResults, FormField, Select, IconButton, Tag, FilterChip, Input, Callout, FormGrid, FormModal, Table, TableSkeleton, SearchBar } from "../components/ui";
+import { TagInput } from "../components/shared/TagInput";
 import * as v from "../lib/validate";
-import { Skeleton } from "../components/ui/Skeleton";
-import { SavedFilterBar } from "../components/SavedFilterBar";
-import { getTagColor, getNamedTagColor } from "../lib/tagColors";
-import { useAppStore } from "../stores/app-store";
-import { toast } from "sonner";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { SavedFilterBar } from "../components/shared/SavedFilterBar";
+import { notify } from "../lib/notify";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
 import {
   useResources,
@@ -17,12 +13,13 @@ import {
   useDeleteResource,
 } from "../db/hooks/useResources";
 import { getResourceTags } from "../db/queries/resources";
-import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
-import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
-import { BulkActionBar } from "../components/BulkActionBar";
+import { SortHeader, sortRows, type SortState } from "../components/ui/SortHeader";
+import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu";
+import { BulkActionBar } from "../components/ui/BulkActionBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
+import { useBulkDelete } from "../hooks/useBulkDelete";
 import { useT } from "../i18n/useT";
-import { logError } from "../lib/log";
+import { undoableFromStore, undoTop } from "../lib/undo";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
@@ -38,8 +35,8 @@ interface ResourceRow {
 
 export function ResourcesPage() {
   const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
-  const { data: resources, isLoading } = useResources();
+  const resourcesQuery = useResources();
+  const { data: resources } = resourcesQuery;
   const { data: allTags } = useAllTags();
   const createResource = useCreateResource();
   const updateResource = useUpdateResource();
@@ -104,20 +101,16 @@ export function ResourcesPage() {
 
   const bulk = useBulkSelect(filtered);
 
-  const bulkDelete = useCallback(async () => {
-    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
-    const ids = [...bulk.selected] as number[];
-    ids.forEach((id) => deleteResource.mutate(id));
-    bulk.clearSelection();
-  }, [bulk, deleteResource, t]);
+  const deleteSelection = useBulkDelete("resources", (id: number) => deleteResource.mutateAsync(id));
+  const bulkDelete = () => void deleteSelection([...bulk.selected] as number[], bulk.clearSelection);
 
-  const handleDelete = async (id: number, name: string) => {
+  const handleDelete = async (id: number) => {
+    const before = undoTop();
     try {
       await deleteResource.mutateAsync(id);
-      toast.success(`${t.delete}: ${name}`);
-    } catch (err) {
-      logError("Delete resource failed:", err);
-      toast.error(t.delete_failed);
+      undoableFromStore(t.toast_resource_deleted, before);
+    } catch {
+      // reported by the mutation
     }
   };
 
@@ -127,34 +120,21 @@ export function ResourcesPage() {
       u = "https://" + u;
     }
     openUrl(u).catch((err) => {
-      logError("Open URL failed:", err);
-      toast.error(t.failed_to_open_url);
+      notify.error(t.failed_to_open_url, err);
     });
   };
 
-  if (isLoading) return (
-    <div>
-      <PageHeader title={t.resources}>
-        <Button icon={<Plus size={16} />} onClick={() => {}}>{t.new_resource}</Button>
-      </PageHeader>
-      <div className="space-y-3 mt-4">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-4 px-3 py-2">
-            <Skeleton width={16} height={16} rounded="sm" />
-            <Skeleton width="30%" height={14} />
-            <Skeleton width="15%" height={14} />
-            <Skeleton width="10%" height={14} />
-            <Skeleton width="20%" height={14} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  const clearFilters = () => {
+    setSearch("");
+    setTagFilter(null);
+    setFilterConditions([]);
+    setActiveFilterId(null);
+  };
 
   return (
     <div>
       <PageHeader title={t.resources}>
-        <Button icon={<Plus size={16} />} onClick={() => setShowForm(!showForm)}>
+        <Button icon={ICONS.add} onClick={() => setShowForm(!showForm)}>
           {t.new_resource}
         </Button>
       </PageHeader>
@@ -163,14 +143,14 @@ export function ResourcesPage() {
         <NewResourceForm
           allTags={allTags ?? []}
           existingUrls={rows.map((r) => ({ url: r.url, name: r.name }))}
+          saving={createResource.isPending}
           onSubmit={async (data) => {
             try {
               await createResource.mutateAsync(data);
               setShowForm(false);
-              toast.success(t.save);
-            } catch (err) {
-              logError("Create resource failed:", err);
-              toast.error(t.create_failed);
+              notify.success(t.resource_saved);
+            } catch {
+              // reported by the mutation
             }
           }}
           onCancel={() => setShowForm(false)}
@@ -179,35 +159,24 @@ export function ResourcesPage() {
 
       {/* Search + tag filter */}
       <div className="flex items-center gap-3 mb-4">
-        <div className="relative flex-1 max-w-xs">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
-          <input
-            type="text"
-            placeholder={t.search_resources}
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setActiveFilterId(null); }}
-            className="w-full pl-8 pr-3 py-1.5 border border-[var(--color-input-border)] rounded-lg text-sm"
-          />
-        </div>
+        <SearchBar
+          placeholder={t.search_resources}
+          value={search}
+          onChange={(v) => { setSearch(v); setActiveFilterId(null); }}
+          className="flex-1 max-w-xs"
+        />
         {(allTags ?? []).length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">
             {(allTags ?? []).map((tag) => {
-              const c = getTagColor(tag, darkMode);
               const active = tagFilter === tag;
               return (
-                <button
+                <FilterChip
                   key={tag}
+                  tag={tag}
+                  active={active}
+                  activeIcon={<ICONS.close size={ICON_SIZE.pill} />}
                   onClick={() => { setTagFilter(active ? null : tag); setActiveFilterId(null); }}
-                  style={{
-                    background: active ? c.bg : "transparent",
-                    color: active ? c.text : "var(--color-muted)",
-                    borderColor: active ? c.text : "var(--color-border-divider)",
-                  }}
-                  className="px-2 py-0.5 text-xs rounded-full font-medium border transition-colors flex items-center gap-1"
-                >
-                  {tag}
-                  {active && <X size={10} />}
-                </button>
+                />
               );
             })}
           </div>
@@ -223,60 +192,63 @@ export function ResourcesPage() {
         fields={resourceFields}
       />
 
-      {filtered.length === 0 ? (
-        <EmptyState
-          message={rows.length === 0 ? t.no_resources_yet : t.no_matching_resources}
-          action={rows.length === 0 ? (
-            <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>
-              {t.new_resource}
-            </Button>
-          ) : undefined}
-        />
-      ) : (
-        <div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--color-border-header)]">
-                <th className="w-8 px-2 py-2">
-                  <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
-                </th>
-                <SortHeader<SortKey> label={t.name} sortKey="name" current={sort} onSort={setSort} />
-                <th className="text-left px-3 py-2 font-medium text-xs text-muted">{t.type}</th>
-                <SortHeader<SortKey> label={t.price_label} sortKey="price" current={sort} onSort={setSort} />
-                <th className="text-left px-3 py-2 font-medium text-xs text-muted">{t.link}</th>
-                <th className="w-10" />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((r) => (
-                <ResourceTableRow
-                  key={r.id}
-                  resource={r}
-                  allTags={allTags ?? []}
-                  isEditing={editingId === r.id}
-                  isSelected={bulk.selected.has(r.id)}
-                  onToggleSelect={(shiftKey) => bulk.toggleItem(r.id, shiftKey)}
-                  onStartEdit={() => setEditingId(r.id)}
-                  onCancelEdit={() => setEditingId(null)}
-                  onSave={async (data, tags) => {
-                    try {
-                      await updateResource.mutateAsync({ id: r.id, data, tags });
-                      setEditingId(null);
-                      toast.success(t.save);
-                    } catch (err) {
-                      logError("Update resource failed:", err);
-                      toast.error(t.update_failed);
-                    }
-                  }}
-                  onDelete={() => handleDelete(r.id, r.name)}
-                  onOpenUrl={() => handleOpenUrl(r.url)}
-                  onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: r }); }}
+      <QueryState query={resourcesQuery} skeleton={<TableSkeleton columns={6} />} errorMessage={t.load_error_resources}>
+      {() => (
+      <Table>
+        <Table.Head>
+          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} label={t.select_all} />
+          <SortHeader<SortKey> label={t.name} sortKey="name" current={sort} onSort={setSort} />
+          <Table.Th>{t.type}</Table.Th>
+          <SortHeader<SortKey> label={t.price_label} sortKey="price" current={sort} onSort={setSort} />
+          <Table.Th>{t.link}</Table.Th>
+          <Table.ActionsTh />
+        </Table.Head>
+        <Table.Body>
+          {filtered.map((r) => (
+            <ResourceTableRow
+              key={r.id}
+              resource={r}
+              allTags={allTags ?? []}
+              isEditing={editingId === r.id}
+              isSelected={bulk.selected.has(r.id)}
+              onToggleSelect={(shiftKey) => bulk.toggleItem(r.id, shiftKey)}
+              onStartEdit={() => setEditingId(r.id)}
+              onCancelEdit={() => setEditingId(null)}
+              onSave={async (data, tags) => {
+                try {
+                  await updateResource.mutateAsync({ id: r.id, data, tags });
+                  setEditingId(null);
+                  notify.success(t.resource_saved);
+                } catch {
+                  // reported by the mutation
+                }
+              }}
+              onDelete={() => handleDelete(r.id)}
+              onOpenUrl={() => handleOpenUrl(r.url)}
+              onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: r }); }}
+            />
+          ))}
+          {filtered.length === 0 && (
+            <Table.Empty colSpan={6}>
+              {rows.length === 0 ? (
+                <EmptyState
+                  icon={ICONS.resource}
+                  message={t.no_resources_yet}
+                  action={
+                    <Button icon={ICONS.add} onClick={() => setShowForm(true)}>
+                      {t.new_resource}
+                    </Button>
+                  }
                 />
-              ))}
-            </tbody>
-          </table>
-        </div>
+              ) : (
+                <NoResults message={t.no_matching_resources} onClear={clearFilters} />
+              )}
+            </Table.Empty>
+          )}
+        </Table.Body>
+      </Table>
       )}
+      </QueryState>
 
       <div className="text-xs text-muted mt-3">
         {filtered.length} {filtered.length === 1 ? t.resources_count_singular : t.resources_count_plural}
@@ -287,10 +259,10 @@ export function ResourcesPage() {
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
-            ...(ctxMenu.item.url ? [{ label: t.open_link, icon: <ExternalLink size={14} />, onClick: () => handleOpenUrl(ctxMenu.item.url) }] : []),
+            ...(ctxMenu.item.url ? [{ label: t.open_link, icon: ICONS.openExternal, onClick: () => handleOpenUrl(ctxMenu.item.url) }] : []),
             { label: t.edit, onClick: () => setEditingId(ctxMenu.item.id) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => handleDelete(ctxMenu.item.id, ctxMenu.item.name) },
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => handleDelete(ctxMenu.item.id) },
           ]}
         />
       )}
@@ -298,7 +270,7 @@ export function ResourcesPage() {
         count={bulk.count}
         onClear={bulk.clearSelection}
         actions={[
-          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+          { label: t.delete, icon: ICONS.delete, onClick: bulkDelete, danger: true },
         ]}
       />
     </div>
@@ -325,18 +297,19 @@ function NewResourceForm({
   existingUrls,
   onSubmit,
   onCancel,
+  saving,
 }: {
   allTags: string[];
   existingUrls: { url: string; name: string }[];
   onSubmit: (data: { name: string; url: string; price: string; tags: string[] }) => void;
   onCancel: () => void;
+  /** The create is in flight: blocks a second Save / Enter. */
+  saving: boolean;
 }) {
   const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [price, setPrice] = useState("");
-  const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [errors, setErrors] = useState<Partial<Record<ResourceFormField, string>>>({});
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
@@ -370,132 +343,74 @@ function NewResourceForm({
     return false;
   };
 
-  const addTag = (tag: string) => {
-    const trimmed = tag.trim();
-    if (trimmed && !tags.includes(trimmed)) {
-      setTags([...tags, trimmed]);
+  const submit = () => {
+    const errs = v.validateForm({ name, url }, resourceSchema);
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+    const data = { name: name.trim(), url: url.trim(), price, tags };
+    if (!checkDuplicate(data)) {
+      onSubmit(data);
     }
-    setTagInput("");
   };
 
   return (
-    <div className="rounded-xl p-4 mb-4 bg-[var(--color-surface)]">
-      <div className="grid grid-cols-4 gap-3">
+    <FormModal open onClose={onCancel} title={t.new_resource} submitLabel={t.save} onSubmit={submit} submitting={saving}>
+      <FormGrid cols={2}>
         <FormField label={t.name} required error={errors.name}>
-          <input
+          <Input
             type="text"
             value={name}
             onChange={(e) => { setName(e.target.value); clearError("name"); }}
             onBlur={() => validateOnBlur("name")}
-            className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-1.5 text-sm"
             autoFocus
           />
         </FormField>
         <FormField label={t.url_label} required error={errors.url}>
-          <input
-            type="text"
+          <Input
+            type="url"
             value={url}
             onChange={(e) => { setUrl(e.target.value); clearError("url"); }}
             onBlur={() => validateOnBlur("url")}
-            className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-1.5 text-sm"
           />
         </FormField>
         <FormField label={t.price_label}>
-          <select
+          <Select
             value={price}
             onChange={(e) => setPrice(e.target.value)}
-            className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-1.5 text-sm"
           >
             <option value="">{t.price_label}</option>
             <option value="free">{t.price_free}</option>
             <option value="paid">{t.price_paid}</option>
-          </select>
+          </Select>
         </FormField>
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <FormField label={t.tags}>
-              <input
-                type="text"
-                placeholder={t.add_tag}
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === ",") {
-                    e.preventDefault();
-                    addTag(tagInput);
-                  }
-                }}
-                list="tag-suggestions"
-                className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-1.5 text-sm"
-              />
-            </FormField>
-            <datalist id="tag-suggestions">
-              {allTags.filter((t) => !tags.includes(t)).map((t) => (
-                <option key={t} value={t} />
-              ))}
-            </datalist>
-          </div>
-        </div>
-      </div>
-      {tags.length > 0 && (
-        <div className="flex gap-1.5 mt-2 flex-wrap">
-          {tags.map((tag) => {
-            const c = getTagColor(tag, darkMode);
-            return (
-              <span
-                key={tag}
-                style={{ background: c.bg, color: c.text }}
-                className="px-2 py-0.5 text-xs rounded-full font-medium flex items-center gap-1"
-              >
-                {tag}
-                <button onClick={() => setTags(tags.filter((t) => t !== tag))} aria-label={`${t.remove_tag} ${tag}`}>
-                  <X size={10} />
-                </button>
-              </span>
-            );
-          })}
-        </div>
-      )}
+        <FormField label={t.tags}>
+          <TagInput value={tags} onChange={setTags} suggestions={allTags} />
+        </FormField>
+      </FormGrid>
       {duplicateWarning && (
-        <div className="flex items-center gap-2 p-3 mt-2 bg-[var(--color-warning-bg)] border border-[var(--color-border-header)] rounded-md text-sm">
-          <span className="text-[var(--color-warning-text)] font-medium">{t.possible_duplicate}:</span>
-          <span className="text-[var(--color-warning-text)] flex-1">{t.resource_duplicate_warning.replace("{name}", duplicateWarning)}</span>
-          <button
-            onClick={() => { if (pendingSubmit) { onSubmit(pendingSubmit); } setDuplicateWarning(null); setPendingSubmit(null); }}
-            className="text-xs px-2 py-1 rounded-md bg-[var(--color-warning-text)] text-white hover:opacity-80 shrink-0"
-          >
-            {t.save_anyway}
-          </button>
-          <button
-            onClick={() => { setDuplicateWarning(null); setPendingSubmit(null); }}
-            className="text-xs text-[var(--color-warning-text)] hover:opacity-70 shrink-0"
-          >
-            {t.cancel}
-          </button>
-        </div>
-      )}
-      <div className="flex gap-2 mt-3">
-        <button
-          onClick={() => {
-            const errs = v.validateForm({ name, url }, resourceSchema);
-            setErrors(errs);
-            if (Object.keys(errs).length > 0) return;
-            const data = { name: name.trim(), url: url.trim(), price, tags };
-            if (!checkDuplicate(data)) {
-              onSubmit(data);
-            }
-          }}
-          className="px-3 py-1.5 bg-accent text-white text-sm rounded-md hover:bg-accent-hover disabled:opacity-50"
+        <Callout
+          tone="warning"
+          action={
+            <>
+              <Button
+                onClick={() => { if (pendingSubmit) { onSubmit(pendingSubmit); } setDuplicateWarning(null); setPendingSubmit(null); }}
+              >
+                {t.save_anyway}
+              </Button>
+              <Button variant="secondary" onClick={() => { setDuplicateWarning(null); setPendingSubmit(null); }}>
+                {t.cancel}
+              </Button>
+            </>
+          }
         >
-          {t.save}
-        </button>
-        <button onClick={onCancel} className="px-3 py-1.5 text-sm text-muted hover:text-[var(--color-text)]">
-          {t.cancel}
-        </button>
-      </div>
-    </div>
+          <span className="font-medium">{t.possible_duplicate}:</span>{" "}
+          {t.resource_duplicate_warning.replace("{name}", duplicateWarning)}
+        </Callout>
+      )}
+    </FormModal>
   );
 }
+
 
 function ResourceTableRow({
   resource,
@@ -523,12 +438,10 @@ function ResourceTableRow({
   onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
   const [name, setName] = useState(resource.name);
   const [url, setUrl] = useState(resource.url);
   const [price, setPrice] = useState(resource.price);
   const [tags, setTags] = useState(resource.tags);
-  const [tagInput, setTagInput] = useState("");
   const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingRef = useRef(false);
 
@@ -573,151 +486,85 @@ function ResourceTableRow({
 
   if (isEditing) {
     return (
-      <tr
-        className="border-b border-[var(--color-border-divider)] bg-accent-light/30"
+      <Table.Row
+        selected={isSelected}
+        className="bg-accent-tint"
         onBlur={handleBlur}
         onFocus={handleFocus}
       >
-        <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={(e) => onToggleSelect(e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-            className="accent-[var(--accent)]"
-          />
-        </td>
-        <td className="px-3 py-2">
-          <input
+        <Table.Select checked={isSelected} onToggle={onToggleSelect} label={t.select_row.replace("{name}", resource.name)} />
+        <Table.Td>
+          <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-sm w-full"
+            aria-label={t.name}
             autoFocus
           />
-        </td>
-        <td className="px-3 py-2">
-          <div className="flex flex-wrap gap-1 items-center">
-            {tags.map((tag) => {
-              const c = getTagColor(tag, darkMode);
-              return (
-                <span key={tag} style={{ background: c.bg, color: c.text }} className="px-2 py-0.5 text-xs rounded-full font-medium flex items-center gap-1">
-                  {tag}
-                  <button onClick={() => setTags(tags.filter((t) => t !== tag))} aria-label={`${t.remove_tag} ${tag}`}><X size={10} /></button>
-                </span>
-              );
-            })}
-            <input
-              type="text"
-              placeholder={t.add_tag}
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === ",") {
-                  e.preventDefault();
-                  const trimmed = tagInput.trim();
-                  if (trimmed && !tags.includes(trimmed)) setTags([...tags, trimmed]);
-                  setTagInput("");
-                }
-              }}
-              list={`edit-tag-suggestions-${resource.id}`}
-              className="border-none outline-none text-xs w-16 bg-transparent"
-            />
-            <datalist id={`edit-tag-suggestions-${resource.id}`}>
-              {allTags.filter((t) => !tags.includes(t)).map((t) => (
-                <option key={t} value={t} />
-              ))}
-            </datalist>
-          </div>
-        </td>
-        <td className="px-3 py-2">
-          <select value={price} onChange={(e) => setPrice(e.target.value)} className="border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-sm">
+        </Table.Td>
+        <Table.Td>
+          <TagInput value={tags} onChange={setTags} suggestions={allTags} variant="bare" width="xs" />
+        </Table.Td>
+        <Table.Td>
+          <Select value={price} onChange={(e) => setPrice(e.target.value)} fullWidth={false} aria-label={t.price_label}>
             <option value="">—</option>
             <option value="free">{t.price_free}</option>
             <option value="paid">{t.price_paid}</option>
-          </select>
-        </td>
-        <td className="px-3 py-2">
-          <input
+          </Select>
+        </Table.Td>
+        <Table.Td>
+          <Input
+            type="url"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            className="border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-sm w-full"
+            aria-label={t.url_label}
           />
-        </td>
-        <td className="px-3 py-2">
-          <div className="flex gap-1">
-            <button
-              onClick={() => { if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current); doSave(); }}
-              className="text-xs text-accent hover:underline"
-            >
-              {t.save}
-            </button>
-            <button onClick={() => { if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current); onCancelEdit(); }} className="text-xs text-muted hover:text-[var(--color-text)]">
-              {t.cancel}
-            </button>
-          </div>
-        </td>
-      </tr>
+        </Table.Td>
+        <Table.Actions always>
+          <IconButton size="xs" icon={ICONS.save} label={t.save} color="accent" onClick={() => { if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current); doSave(); }} />
+          <IconButton size="xs" icon={ICONS.close} label={t.cancel} onClick={() => { if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current); onCancelEdit(); }} />
+        </Table.Actions>
+      </Table.Row>
     );
   }
 
   return (
-    <tr
-      className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] group cursor-pointer transition-colors"
-      onDoubleClick={onStartEdit}
+    <Table.Row
+      selected={isSelected}
+      onOpen={onStartEdit}
       onContextMenu={onContextMenu}
     >
-      <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={(e) => onToggleSelect(e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-          className="accent-[var(--accent)]"
-        />
-      </td>
-      <td className="px-3 py-2 font-medium">{resource.name}</td>
-      <td className="px-3 py-2">
-        <div className="flex flex-wrap gap-1">
-          {resource.tags.map((tag) => {
-            const c = getTagColor(tag, darkMode);
-            return (
-              <span key={tag} style={{ background: c.bg, color: c.text }} className="px-2 py-0.5 text-xs rounded-full font-medium">
-                {tag}
-              </span>
-            );
-          })}
-        </div>
-      </td>
-      <td className="px-3 py-2">
-        {resource.price && (() => {
-          const c = getNamedTagColor(resource.price === "free" ? "green" : "red", darkMode);
-          return (
-            <span style={{ background: c.bg, color: c.text }} className="px-2 py-0.5 text-xs rounded-full font-medium">
-              {resource.price === "free" ? t.price_free : t.price_paid}
-            </span>
-          );
-        })()}
-      </td>
-      <td className="px-3 py-2">
+      <Table.Select checked={isSelected} onToggle={onToggleSelect} label={t.select_row.replace("{name}", resource.name)} />
+      <Table.Td className="font-medium">{resource.name}</Table.Td>
+      <Table.Td>
+        <TagInput value={resource.tags} onChange={() => {}} readOnly />
+      </Table.Td>
+      <Table.Td>
+        {resource.price && (
+          <Tag name={resource.price} color={resource.price === "free" ? "green" : "red"}>
+            {resource.price === "free" ? t.price_free : t.price_paid}
+          </Tag>
+        )}
+      </Table.Td>
+      <Table.Td>
         {resource.url && (
           <Button
             variant="link"
-            size="sm"
-            icon={<ExternalLink size={12} />}
-            onClick={(e) => { e.stopPropagation(); onOpenUrl(); }}
+            icon={ICONS.openExternal}
+            onClick={onOpenUrl}
             className="max-w-[300px] truncate"
           >
             {resource.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
           </Button>
         )}
-      </td>
-      <td className="px-3 py-2">
-        <button
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="text-danger opacity-0 group-hover:opacity-100 transition-opacity"
-          aria-label={t.delete}
-        >
-          <Trash2 size={14} />
-        </button>
-      </td>
-    </tr>
+      </Table.Td>
+      <Table.Actions>
+        <IconButton size="xs"
+          icon={ICONS.delete}
+          label={t.delete}
+          tone="danger"
+          onClick={onDelete}
+        />
+      </Table.Actions>
+    </Table.Row>
   );
 }

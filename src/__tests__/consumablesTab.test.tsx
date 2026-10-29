@@ -36,6 +36,7 @@ vi.mock("../db/hooks/useExpenses", () => ({
 }));
 
 import { ConsumablesTab } from "../components/upkeep/ConsumablesTab";
+import { pickOption } from "./fixtures/dropdown";
 
 const t = uiLabels.EN;
 
@@ -88,7 +89,7 @@ describe("ConsumablesTab", () => {
     renderTab();
     fireEvent.click(screen.getAllByRole("button", { name: t.upkeep_log_usage })[0]);
     fireEvent.change(screen.getByLabelText(t.upkeep_amount), { target: { value: "0.2" } });
-    fireEvent.change(screen.getByLabelText(t.project), { target: { value: "5" } });
+    pickOption(screen.getByLabelText(t.project), "Brand site");
     fireEvent.click(screen.getByRole("button", { name: t.save }));
     await waitFor(() => expect(logUsage).toHaveBeenCalled());
     expect(logUsage.mock.calls[0][0]).toMatchObject({ id: 1, amount: 0.2, projectId: 5 });

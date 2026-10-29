@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { File, FileText, Maximize2 } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import type { WikiArticleWithTags } from "../../types/wiki";
 import {
@@ -13,14 +12,14 @@ import {
 } from "../../lib/wikiGraph";
 import { GraphView } from "./GraphView";
 import { colorFor } from "./wikiColors";
-import { Button, PANEL_TOP_BAR, SectionLabel, TabItem } from "../ui";
+import { Button, PANEL_TOP_BAR, TabItem, IconButton, SectionLabel, Tooltip, EmptyState, Card, ICONS, ICON_SIZE } from "../ui";
 import { useProjectDoc, type ProjectDoc } from "../../db/hooks/useProjectDocs";
 
 function SnippetText({ s }: { s: Snippet }) {
   return (
     <span className="block mt-1 text-xs leading-relaxed text-muted">
       {s.before}
-      <mark className="bg-accent-light text-accent rounded-md px-0.5">{s.mark}</mark>
+      <mark className="bg-accent-light text-accent-text rounded px-0.5">{s.mark}</mark>
       {s.after}
     </span>
   );
@@ -36,8 +35,6 @@ function localGraph(graph: ReturnType<typeof buildWikiGraph>, id: number) {
   };
 }
 
-/** Panel cards (backlinks, mentions): the compact card of DESIGN-SYSTEM.md. */
-const CARD = "w-full text-left px-3 py-2.5 rounded-xl bg-[var(--color-surface)] transition-colors";
 /** One-line rows (outgoing links, outline). */
 const ROW =
   "w-full flex items-center gap-1.5 h-7 px-2 rounded-md text-sm text-left text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors";
@@ -45,7 +42,7 @@ const ROW =
 function PanelTabs({ tab, onTab }: { tab: "links" | "outline"; onTab: (tab: "links" | "outline") => void }) {
   const t = useT();
   return (
-    <div role="tablist" aria-label={t.wiki_side_panel} className={`${PANEL_TOP_BAR} px-1.5 border-[var(--color-border-header)]`}>
+    <div role="tablist" aria-label={t.wiki_side_panel} className={`${PANEL_TOP_BAR} px-1.5 border-[var(--color-border)]`}>
       <TabItem role="tab" label={t.wiki_links} active={tab === "links"} onActivate={() => onTab("links")} />
       <TabItem role="tab" label={t.wiki_outline} active={tab === "outline"} onActivate={() => onTab("outline")} />
     </div>
@@ -54,20 +51,24 @@ function PanelTabs({ tab, onTab }: { tab: "links" | "outline"; onTab: (tab: "lin
 
 function OutlineList({ outline, onOutline }: { outline: OutlineItem[]; onOutline: (headingIndex: number) => void }) {
   const t = useT();
-  if (outline.length === 0) return <p className="text-xs text-muted">{t.wiki_no_headings}</p>;
   return (
     <>
-      {outline.map((h) => (
-        <button
-          key={h.index}
-          type="button"
-          onClick={() => onOutline(h.index)}
-          className="block w-full h-7 px-2 rounded-md text-sm text-left truncate text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors"
-          style={{ paddingLeft: 8 + (h.level - 1) * 12 }}
-        >
-          {h.text}
-        </button>
-      ))}
+      <SectionLabel className="mb-2">{t.wiki_outline}</SectionLabel>
+      {outline.length === 0 ? (
+        <EmptyState size="sm" message={t.wiki_no_headings} />
+      ) : (
+        outline.map((h) => (
+          <button
+            key={h.index}
+            type="button"
+            onClick={() => onOutline(h.index)}
+            className={`${ROW} block truncate`}
+            style={{ paddingLeft: 8 + (h.level - 1) * 12 }}
+          >
+            {h.text}
+          </button>
+        ))
+      )}
     </>
   );
 }
@@ -92,18 +93,9 @@ function LocalGraph({
   const t = useT();
   return (
     <section aria-label={t.wiki_local_graph}>
-      <div className="flex items-center justify-between mb-2">
-        <SectionLabel className="">{t.wiki_local_graph}</SectionLabel>
-        <button
-          type="button"
-          onClick={onOpenGraph}
-          className="text-muted hover:text-[var(--color-text-secondary)] transition-colors"
-          aria-label={t.wiki_open_graph}
-          title={t.wiki_open_graph}
-        >
-          <Maximize2 size={14} />
-        </button>
-      </div>
+      <SectionLabel as="span" className="mb-2" action={<IconButton icon={ICONS.maximize} label={t.wiki_open_graph} onClick={onOpenGraph} />}>
+        {t.wiki_local_graph}
+      </SectionLabel>
       <div className="h-44 rounded-xl border border-[var(--color-border-divider)] bg-[var(--color-bg)]">
         <GraphView
           compact
@@ -120,6 +112,38 @@ function LocalGraph({
         />
       </div>
     </section>
+  );
+}
+
+/** An article that links here, with up to two snippets: an inset card. */
+function SourceCard({
+  src,
+  snippets,
+  colors,
+  projectName,
+  onClick,
+}: {
+  src: WikiArticleWithTags;
+  snippets: Snippet[];
+  colors: Map<number, string>;
+  /** Shown on the right when the source is in another project. */
+  projectName?: string | null;
+  onClick: (e: React.MouseEvent) => void;
+}) {
+  const t = useT();
+  return (
+    <Tooltip content={t.wiki_new_tab_hint}>
+      <Card as="button" tone="inset" padding="sm" interactive onClick={onClick} className="w-full text-left">
+        <span className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-text)]">
+          <span aria-hidden="true" className="dot-sm shrink-0" style={{ background: colorFor(colors, src.project_id) }} />
+          <span className="truncate">{src.title}</span>
+          {projectName && <span className="ml-auto text-xs font-normal text-muted truncate">{projectName}</span>}
+        </span>
+        {snippets.slice(0, 2).map((s, i) => (
+          <SnippetText key={i} s={s} />
+        ))}
+      </Card>
+    </Tooltip>
   );
 }
 
@@ -193,35 +217,25 @@ export function WikiSidePanel({
           />
 
           <section aria-label={t.wiki_backlinks}>
-            <SectionLabel>
+            <SectionLabel className="mb-2">
               {t.wiki_backlinks} · {backlinks.length}
             </SectionLabel>
             {backlinks.length === 0 ? (
-              <p className="text-xs text-muted">{t.wiki_no_backlinks}</p>
+              <EmptyState size="sm" message={t.wiki_no_backlinks} />
             ) : (
               <div className="space-y-1.5">
                 {backlinks.map((b) => {
                   const src = byId.get(b.sourceId);
                   if (!src) return null;
                   return (
-                    <button
+                    <SourceCard
                       key={b.sourceId}
-                      type="button"
+                      src={src}
+                      snippets={b.snippets}
+                      colors={colors}
+                      projectName={src.project_id !== article.project_id ? src.project_name : null}
                       onClick={open(b.sourceId)}
-                      title={t.wiki_new_tab_hint}
-                      className={`${CARD} hover:bg-[var(--color-hover-row)]`}
-                    >
-                      <span className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-text)]">
-                        <span aria-hidden="true" className="dot-sm shrink-0" style={{ background: colorFor(colors, src.project_id) }} />
-                        <span className="truncate">{src.title}</span>
-                        {src.project_name && src.project_id !== article.project_id && (
-                          <span className="ml-auto text-xs font-normal text-muted truncate">{src.project_name}</span>
-                        )}
-                      </span>
-                      {b.snippets.slice(0, 2).map((s, i) => (
-                        <SnippetText key={i} s={s} />
-                      ))}
-                    </button>
+                    />
                   );
                 })}
               </div>
@@ -229,19 +243,19 @@ export function WikiSidePanel({
           </section>
 
           <section aria-label={t.wiki_outgoing}>
-            <SectionLabel>
+            <SectionLabel className="mb-2">
               {t.wiki_outgoing} · {outgoing.length + outgoingFiles.length}
             </SectionLabel>
             {outgoing.length + outgoingFiles.length === 0 ? (
-              <p className="text-xs text-muted">{t.wiki_no_outgoing}</p>
+              <EmptyState size="sm" message={t.wiki_no_outgoing} />
             ) : (
               <>
                 {outgoing.map(([id, count]) => {
                   const dst = byId.get(id);
                   if (!dst) return null;
                   return (
-                    <button key={id} type="button" onClick={open(id)} title={t.wiki_new_tab_hint} className={ROW}>
-                      <FileText size={14} className="shrink-0 text-muted" />
+                    <button key={id} type="button" onClick={open(id)} className={ROW}>
+                      <ICONS.goToLinked size={ICON_SIZE.menu} className="shrink-0 text-muted" />
                       <span className="flex-1 truncate">{dst.title}</span>
                       {dst.project_id !== article.project_id && dst.project_name && (
                         <span className="text-xs text-muted truncate max-w-24">{dst.project_name}</span>
@@ -255,10 +269,9 @@ export function WikiSidePanel({
                     key={key}
                     type="button"
                     onClick={(e) => onOpenFile?.(key, e.metaKey || e.ctrlKey)}
-                    title={t.wiki_new_tab_hint}
                     className={ROW}
                   >
-                    <File size={14} className="shrink-0 text-muted" />
+                    <ICONS.file size={ICON_SIZE.menu} className="shrink-0 text-muted" />
                     <span className="flex-1 truncate">{docsByKey.get(key)?.rel ?? key.split(":").slice(2).join(":")}</span>
                   </button>
                 ))}
@@ -268,7 +281,7 @@ export function WikiSidePanel({
 
           {unlinked.length > 0 && (
             <section aria-label={t.wiki_unlinked}>
-              <SectionLabel>
+              <SectionLabel className="mb-2">
                 {t.wiki_unlinked} · {unlinked.length}
               </SectionLabel>
               <div className="space-y-1.5">
@@ -276,21 +289,20 @@ export function WikiSidePanel({
                   const src = byId.get(u.sourceId);
                   if (!src) return null;
                   return (
-                    <div key={u.sourceId} className={CARD}>
+                    <Card key={u.sourceId} tone="dashed" padding="sm">
                       <button
                         type="button"
                         onClick={open(u.sourceId)}
-                        title={t.wiki_new_tab_hint}
-                        className="flex items-center gap-1.5 max-w-full text-sm font-medium text-left text-[var(--color-text)] hover:text-accent transition-colors"
+                        className="flex items-center gap-1.5 max-w-full text-sm font-medium text-left text-[var(--color-text)] hover:underline"
                       >
                         <span aria-hidden="true" className="dot-sm shrink-0" style={{ background: colorFor(colors, src.project_id) }} />
                         <span className="truncate">{src.title}</span>
                       </button>
                       <SnippetText s={u.snippet} />
-                      <Button variant="link" size="sm" onClick={() => onLinkIt(u.sourceId)} className="mt-1.5">
+                      <Button variant="link" onClick={() => onLinkIt(u.sourceId)} className="mt-1.5">
                         {t.wiki_link_it}
                       </Button>
-                    </div>
+                    </Card>
                   );
                 })}
               </div>
@@ -357,32 +369,24 @@ export function DocSidePanel({
               />
             )}
             <section aria-label={t.wiki_linked_from}>
-              <SectionLabel>
+              <SectionLabel className="mb-2">
                 {t.wiki_linked_from} · {linkedFrom.length}
               </SectionLabel>
               {linkedFrom.length === 0 ? (
-                <p className="text-xs text-muted">{t.wiki_no_file_links}</p>
+                <EmptyState size="sm" message={t.wiki_no_file_links} />
               ) : (
                 <div className="space-y-1.5">
                   {linkedFrom.map((b) => {
                     const src = byId.get(b.sourceId);
                     if (!src) return null;
                     return (
-                      <button
+                      <SourceCard
                         key={b.sourceId}
-                        type="button"
+                        src={src}
+                        snippets={b.snippets}
+                        colors={colors}
                         onClick={(e) => onOpen(b.sourceId, e.metaKey || e.ctrlKey)}
-                        title={t.wiki_new_tab_hint}
-                        className={`${CARD} hover:bg-[var(--color-hover-row)]`}
-                      >
-                        <span className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-text)]">
-                          <span aria-hidden="true" className="dot-sm shrink-0" style={{ background: colorFor(colors, src.project_id) }} />
-                          <span className="truncate">{src.title}</span>
-                        </span>
-                        {b.snippets.slice(0, 2).map((s, i) => (
-                          <SnippetText key={i} s={s} />
-                        ))}
-                      </button>
+                      />
                     );
                   })}
                 </div>
@@ -390,7 +394,7 @@ export function DocSidePanel({
             </section>
             {linkedFiles.length > 0 && (
               <section aria-label={t.wiki_outgoing}>
-                <SectionLabel>
+                <SectionLabel className="mb-2">
                   {t.wiki_outgoing} · {linkedFiles.length}
                 </SectionLabel>
                 {linkedFiles.map((d) => (
@@ -398,10 +402,9 @@ export function DocSidePanel({
                     key={d.key}
                     type="button"
                     onClick={(e) => onOpenFile(d.key, e.metaKey || e.ctrlKey)}
-                    title={t.wiki_new_tab_hint}
                     className={ROW}
                   >
-                    <File size={14} className="shrink-0 text-muted" />
+                    <ICONS.file size={ICON_SIZE.menu} className="shrink-0 text-muted" />
                     <span className="flex-1 truncate">{d.rel}</span>
                   </button>
                 ))}

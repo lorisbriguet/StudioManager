@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { pickOption } from "./fixtures/dropdown";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NamedTable } from "../components/NamedTable";
@@ -187,6 +188,11 @@ describe("NamedTable checkbox cell", () => {
     expect(updateRowMutate).toHaveBeenCalledWith({ id: 1, data: { col_checkbox: true } });
   });
 
+  it("is named after its column", () => {
+    renderTable(makeTable(), [makeRow({ col_checkbox: false })]);
+    expect(screen.getByRole("checkbox", { name: "Done" })).toBeInTheDocument();
+  });
+
   it("toggles from true back to false", () => {
     renderTable(makeTable(), [makeRow({ col_checkbox: true })]);
     const checkbox = screen.getByRole("checkbox") as HTMLInputElement;
@@ -197,35 +203,47 @@ describe("NamedTable checkbox cell", () => {
   });
 });
 
+describe("NamedTable header", () => {
+  it("the rename pencil is revealed by hovering its own header row, or by keyboard focus", () => {
+    renderTable(makeTable(), []);
+    const pencil = screen.getByRole("button", { name: "Rename" });
+    expect(pencil.className).toContain("group-hover/item:opacity-100");
+    expect(pencil.className).toContain("focus-visible:opacity-100");
+    expect(pencil.closest(".group\\/item")).not.toBeNull();
+    expect(screen.getByRole("heading", { level: 3, name: /My Table/ })).toBeInTheDocument();
+  });
+});
+
 describe("NamedTable select cell", () => {
   it("renders an empty placeholder option plus each column option, selected from the row value", () => {
     renderTable(makeTable(), [makeRow({ col_select: "Doing" })]);
-    const select = screen.getByDisplayValue("Doing") as HTMLSelectElement;
-    expect(select.tagName).toBe("SELECT");
-    const optionLabels = Array.from(select.options).map((o) => o.textContent);
+    const select = screen.getAllByRole("combobox").find((el) => el.textContent === "Doing")!;
+    fireEvent.click(select);
+    const optionLabels = screen.getAllByRole("option").map((o) => o.textContent);
     expect(optionLabels).toEqual(["—", "Todo", "Doing", "Done"]);
+    expect(screen.getByRole("option", { name: "Doing" })).toHaveAttribute("aria-selected", "true");
   });
 
   it("changing the selection calls updateRow.mutate with the new value", () => {
     renderTable(makeTable(), [makeRow({ col_select: "Todo" })]);
-    const select = screen.getByDisplayValue("Todo") as HTMLSelectElement;
-    fireEvent.change(select, { target: { value: "Done" } });
+    const select = screen.getAllByRole("combobox").find((el) => el.textContent === "Todo")!;
+    pickOption(select, "Done");
 
     expect(updateRowMutate).toHaveBeenCalledWith({ id: 1, data: { col_select: "Done" } });
   });
 });
 
 describe("NamedTable date cell", () => {
-  it("renders a native date input bound to the row value", () => {
+  it("renders a date field bound to the row value, in the app format", () => {
     renderTable(makeTable(), [makeRow({ col_date: "2026-03-15" })]);
-    const input = screen.getByDisplayValue("2026-03-15") as HTMLInputElement;
-    expect(input.type).toBe("date");
+    const input = screen.getByRole("textbox", { name: "Due" }) as HTMLInputElement;
+    expect(input.value).toBe("15.03.2026");
   });
 
   it("changing it commits immediately via updateRow.mutate (no edit/commit step)", () => {
     renderTable(makeTable(), [makeRow({ col_date: "2026-03-15" })]);
-    const input = screen.getByDisplayValue("2026-03-15");
-    fireEvent.change(input, { target: { value: "2026-04-01" } });
+    const input = screen.getByRole("textbox", { name: "Due" });
+    fireEvent.change(input, { target: { value: "01.04.2026" } });
 
     expect(updateRowMutate).toHaveBeenCalledWith({ id: 1, data: { col_date: "2026-04-01" } });
   });
@@ -352,10 +370,11 @@ describe("NamedTable column editor popover", () => {
 
     fireEvent.click(screen.getByText("Delete column"));
 
-    expect(updateTableMutate).toHaveBeenCalledWith({
-      id: 1,
-      data: { column_config: COLUMNS.slice(1) },
-    });
+    // Second argument: the onSuccess that offers Undo.
+    expect(updateTableMutate).toHaveBeenCalledWith(
+      { id: 1, data: { column_config: COLUMNS.slice(1) } },
+      expect.objectContaining({ onSuccess: expect.any(Function) })
+    );
     expect(screen.queryByDisplayValue("Name")).not.toBeInTheDocument();
   });
 

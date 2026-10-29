@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, FormField, Input, Modal, Select } from "../ui";
+import { FormField, FormGrid, FormModal, Input, Select } from "../ui";
 import { useT } from "../../i18n/useT";
 import { useCreateConsumable, useMachines, useUpdateConsumable } from "../../db/hooks/useUpkeep";
 import { useUnsavedChangesWarning } from "../../hooks/useUnsavedChangesWarning";
@@ -64,53 +64,45 @@ export function ConsumableForm({ onClose, consumable }: Props) {
   };
 
   return (
-    <Modal
+    <FormModal
       open
       onClose={() => void close()}
       title={consumable ? t.upkeep_edit_consumable : t.upkeep_add_consumable}
-      footer={
-        <div className="flex gap-2 justify-end">
-          <Button variant="secondary" onClick={() => void close()}>{t.cancel}</Button>
-          <Button onClick={save}>{t.save}</Button>
-        </div>
-      }
+      submitLabel={t.save}
+      onSubmit={save}
     >
-      <div className="space-y-3">
-        <FormField label={t.name} required error={error ?? undefined}>
+      <FormGrid cols={3}>
+        <FormField label={t.name} required error={error ?? undefined} span="full">
           <Input value={f.name} onChange={(e) => set("name")(e.target.value)} autoFocus />
         </FormField>
-        <div className="flex gap-2">
-          <FormField label={t.upkeep_stock}>
-            <Input type="number" min={0} step="any" value={f.stock} onChange={(e) => set("stock")(e.target.value)} />
-          </FormField>
-          <FormField label={t.unit}>
-            <Input value={f.unit} placeholder="pcs" onChange={(e) => set("unit")(e.target.value)} />
-          </FormField>
-          <FormField label={t.upkeep_reorder_level}>
-            <Input type="number" min={0} step="any" value={f.reorder} onChange={(e) => set("reorder")(e.target.value)} />
-          </FormField>
-        </div>
-        <FormField label={t.upkeep_col_for}>
+        <FormField label={t.upkeep_stock}>
+          <Input type="number" min={0} step="any" numeric value={f.stock} onChange={(e) => set("stock")(e.target.value)} />
+        </FormField>
+        <FormField label={t.unit}>
+          <Input value={f.unit} placeholder="pcs" onChange={(e) => set("unit")(e.target.value)} />
+        </FormField>
+        <FormField label={t.upkeep_reorder_level}>
+          <Input type="number" min={0} step="any" numeric value={f.reorder} onChange={(e) => set("reorder")(e.target.value)} />
+        </FormField>
+        <FormField label={t.upkeep_col_for} span="full">
           <Select value={f.machine} onChange={(e) => set("machine")(e.target.value)}>
             <option value="">{t.upkeep_any_machine}</option>
             {machines.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </Select>
         </FormField>
-        <FormField label={t.upkeep_col_supplier}>
+        <FormField label={t.upkeep_col_supplier} span="full">
           <Input value={f.supplier} onChange={(e) => set("supplier")(e.target.value)} />
         </FormField>
-        <FormField label={t.upkeep_product_url}>
+        <FormField label={t.upkeep_product_url} span="full">
           <Input value={f.url} placeholder="https://" onChange={(e) => set("url")(e.target.value)} />
         </FormField>
-        <div className="flex gap-2">
-          <FormField label={t.upkeep_unit_price}>
-            <Input type="number" min={0} step="any" value={f.price} onChange={(e) => set("price")(e.target.value)} />
-          </FormField>
-          <FormField label={t.currency}>
-            <Input value={f.currency} onChange={(e) => set("currency")(e.target.value)} />
-          </FormField>
-        </div>
-      </div>
-    </Modal>
+        <FormField label={t.upkeep_unit_price} span={2}>
+          <Input type="number" min={0} step="any" numeric value={f.price} onChange={(e) => set("price")(e.target.value)} />
+        </FormField>
+        <FormField label={t.currency}>
+          <Input value={f.currency} onChange={(e) => set("currency")(e.target.value)} />
+        </FormField>
+      </FormGrid>
+    </FormModal>
   );
 }

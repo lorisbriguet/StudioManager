@@ -1,11 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import * as q from "../queries/projects";
 import * as tq from "../queries/tasks";
 import * as wq from "../queries/workload";
 import type { Project } from "../../types/project";
 import { useUndoStore } from "../../stores/undo-store";
-import { getLabels } from "../../lib/notifyError";
+import { getLabels } from "../../lib/notify";
 
 export function useProjects() {
   return useQuery({ queryKey: ["projects"], queryFn: q.getProjects });
@@ -30,6 +29,7 @@ export function useProject(id: number) {
 export function useCreateProject() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_project" },
     mutationFn: async (data: Omit<Project, "id" | "created_at" | "updated_at">) => {
       const id = await q.createProject(data);
       useUndoStore.getState().push({
@@ -46,13 +46,13 @@ export function useCreateProject() {
       return id;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useUpdateProject() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_project" },
     mutationFn: async ({
       id,
       data,
@@ -91,13 +91,13 @@ export function useUpdateProject() {
         qc.invalidateQueries({ queryKey: ["subtasks"] });
       }
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useDeleteProject() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_delete_project" },
     mutationFn: async (id: number) => {
       const prev = await q.getProject(id);
       // Snapshot tasks, subtasks, and workload rows before cascade delete destroys them
@@ -157,13 +157,13 @@ export function useDeleteProject() {
       qc.invalidateQueries({ queryKey: ["workload-rows"] });
       qc.invalidateQueries({ queryKey: ["workload-config"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useCreateProjectFromQuote() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_generate_project" },
     mutationFn: async (data: Parameters<typeof q.createProjectFromQuote>[0]) => {
       const projectId = await q.createProjectFromQuote(data);
       useUndoStore.getState().push({
@@ -185,6 +185,5 @@ export function useCreateProjectFromQuote() {
       qc.invalidateQueries({ queryKey: ["workload-rows"] });
       qc.invalidateQueries({ queryKey: ["quotes"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }

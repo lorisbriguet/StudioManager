@@ -1,9 +1,8 @@
-import { useState, useMemo, useCallback } from "react";
-import { Link } from "react-router-dom";
-import { ChevronRight, Plus, GripVertical, Trash2, ExternalLink, Play, Square, CheckCircle } from "lucide-react";
-import { toast } from "sonner";
-import { undoable, undoableFromStore } from "../lib/undo";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { IconButton } from "../components/ui/IconButton";
+import { Link, useNavigate } from "react-router-dom";
+import { ChevronRight } from "lucide-react";
+import { deleteWithUndo, undoable } from "../lib/undo";
 import {
   DndContext,
   closestCenter,
@@ -26,20 +25,22 @@ import { useQuery } from "@tanstack/react-query";
 import { useProjects } from "../db/hooks/useProjects";
 import { useClients } from "../db/hooks/useClients";
 import { TaskDatePicker } from "../components/TaskDatePicker";
-import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
-import { BulkActionBar } from "../components/BulkActionBar";
-import { SavedFilterBar } from "../components/SavedFilterBar";
+import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu";
+import { BulkActionBar } from "../components/ui/BulkActionBar";
+import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
+import { useBulkDelete } from "../hooks/useBulkDelete";
 import { useListNavigation } from "../hooks/useListNavigation";
 import { useTabStore } from "../stores/tab-store";
 import { useOrgStore } from "../stores/org-store";
 import { useTimerActions } from "../hooks/useTimerActions";
 import { useT } from "../i18n/useT";
-import { PageHeader, SearchBar, TableSkeleton, EmptyState } from "../components/ui";
+import { ICONS, ICON_SIZE, Checkbox, Button, Dropdown, PageHeader, SearchBar, EmptyState, QueryError, NoResults, ListSkeleton, Select, FilterChip, AddRow, InlineRename, DragHandle } from "../components/ui";
 import { taskStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Task, Subtask, TaskStatus } from "../types/task";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
+import { PILL } from "../components/ui/tokens";
 
 export function TasksPage() {
   const t = useT();
@@ -49,7 +50,11 @@ export function TasksPage() {
   // EmptyState below reads this filtered source: if every task in the DB
   // belongs to a cancelled/completed project, the page shows "no tasks yet" —
   // sensible, since nothing actionable exists and no groups render.
-  const { data: tasks, isLoading } = useVisibleTasks();
+  const tasksQuery = useVisibleTasks();
+  const navigate = useNavigate();
+  const { data: tasks } = tasksQuery;
+  // First run: the project picked from the empty state's "New task" gets an empty group (its add-task row).
+  const [startProjectId, setStartProjectId] = useState<number | null>(null);
   const { data: projects } = useProjects();
   const { data: clients } = useClients();
   const { data: subtasks } = useQuery({ queryKey: ["subtasks"], queryFn: getAllSubtasks });
@@ -64,8 +69,6 @@ export function TasksPage() {
   const [search, setSearch] = useState("");
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
-  const [newSubtaskText, setNewSubtaskText] = useState<Record<number, string>>({});
-  const [newTaskText, setNewTaskText] = useState<Record<number, string>>({});
   const [editingTask, setEditingTask] = useState<number | null>(null);
   const [editingSubtask, setEditingSubtask] = useState<number | null>(null);
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState<Task> | null>(null);
@@ -142,6 +145,10 @@ export function TasksPage() {
       arr.push(tk);
       groups.set(tk.project_id, arr);
     }
+    // The first-run group only while there is no task at all and nothing filters the list
+    // (a "done" filter would hide the new task as soon as it's added).
+    const unfiltered = !q && filterConditions.length === 0 && filter !== "done";
+    if (startProjectId != null && tasks.length === 0 && unfiltered) groups.set(startProjectId, []);
     const result = Array.from(groups.entries()).map(([projectId, items]) => ({
       projectId,
       projectName: projectName(projectId),
@@ -156,7 +163,12 @@ export function TasksPage() {
       });
     }
     return result;
-  }, [tasks, projectName, clientForProject, filter, search, projectOrder, filterConditions, filterLogic]);
+  }, [tasks, projectName, clientForProject, filter, search, projectOrder, filterConditions, filterLogic, startProjectId]);
+
+  // The first task is in: the placeholder group has done its job.
+  useEffect(() => {
+    if (startProjectId != null && tasks && tasks.length > 0) setStartProjectId(null);
+  }, [tasks, startProjectId]);
 
   const flatTasks = useMemo(() => grouped.flatMap((g) => g.tasks), [grouped]);
   const bulk = useBulkSelect(flatTasks);
@@ -204,12 +216,8 @@ export function TasksPage() {
     bulk.clearSelection();
   }, [bulk, updateTask, flatTasks, t]);
 
-  const bulkDelete = useCallback(async () => {
-    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
-    const ids = [...bulk.selected] as number[];
-    ids.forEach((id) => deleteTask.mutate(id));
-    bulk.clearSelection();
-  }, [bulk, deleteTask, t]);
+  const deleteSelection = useBulkDelete("tasks", (id: number) => deleteTask.mutateAsync(id));
+  const bulkDelete = () => void deleteSelection([...bulk.selected] as number[], bulk.clearSelection);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -242,12 +250,25 @@ export function TasksPage() {
     { value: "done", label: t.done },
   ];
 
-  if (isLoading) return (
+  if (tasks === undefined) return (
     <div>
       <PageHeader title={t.tasks} />
-      <TableSkeleton columns={5} />
+      {tasksQuery.isError ? (
+        <QueryError message={t.load_error_tasks} onRetry={tasksQuery.refetch} retrying={tasksQuery.isFetching} />
+      ) : (
+        <ListSkeleton rows={8} />
+      )}
     </div>
   );
+
+  const clearFilters = () => {
+    setSearch("");
+    setFilter("all");
+    setFilterConditions([]);
+    setActiveFilterId(null);
+    setStartProjectId(null);
+  };
+  const activeProjects = (projects ?? []).filter((p) => p.status === "active");
 
   return (
     <div>
@@ -256,17 +277,13 @@ export function TasksPage() {
       <div className="flex items-center gap-4 mb-4">
         <div className="flex gap-2">
           {statusTabs.map((tab) => (
-            <button
+            <FilterChip
               key={tab.value}
+              active={filter === tab.value}
               onClick={() => { setFilter(tab.value); setActiveFilterId(null); setFilterConditions([]); }}
-              className={`px-3 py-1 text-xs rounded-full border ${
-                filter === tab.value
-                  ? "bg-accent text-white border-accent"
-                  : "border-[var(--color-input-border)] text-muted hover:bg-[var(--color-hover-row)]"
-              }`}
             >
               {tab.label}
-            </button>
+            </FilterChip>
           ))}
         </div>
         <SearchBar
@@ -292,10 +309,10 @@ export function TasksPage() {
           <SortableProjectGroup key={g.projectId} id={g.projectId}>
             {({ attributes, listeners }) => (<>
             <div
-              className="px-4 py-2 border-b border-[var(--color-border-header)] flex items-center gap-2 select-none"
+              className="px-4 py-2 border-b border-[var(--color-border)] flex items-center gap-2 select-none"
               onContextMenu={(e) => { e.preventDefault(); setHeaderCtxMenu({ x: e.clientX, y: e.clientY, item: { projectId: g.projectId, projectName: g.projectName } }); }}
             >
-              <DragHandle attributes={attributes} listeners={listeners} />
+              <DragHandle {...attributes} {...listeners} className="-my-1 p-0.5" />
               <button
                 onClick={() => {
                   const next = new Set(collapsedProjects);
@@ -307,13 +324,13 @@ export function TasksPage() {
                 className="flex items-center gap-2 flex-1 text-left"
               >
               <ChevronRight
-                size={14}
+                size={ICON_SIZE.menu}
                 className={`text-muted transition-transform shrink-0 ${collapsedProjects.has(g.projectId) ? "" : "rotate-90"}`}
               />
               <Link
                 to={`/projects/${g.projectId}`}
                 onClick={(e) => e.stopPropagation()}
-                className="text-sm font-medium text-accent hover:underline"
+                className="text-sm font-medium text-accent-text hover:underline"
               >
                 {g.projectName}
               </Link>
@@ -334,29 +351,26 @@ export function TasksPage() {
                   <div key={tk.id} data-task-row>
                     <div
                       data-list-row
-                      className={`flex items-center gap-3 px-4 py-2.5 group/task${taskIdxById.get(tk.id) === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
+                      className={`flex items-center gap-3 px-4 py-2.5 group/task${taskIdxById.get(tk.id) === focusIdx ? " focus-row" : ""}`}
                       onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: tk }); }}
                     >
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={bulk.selected.has(tk.id)}
                         onChange={(e) => bulk.toggleItem(tk.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
                         onClick={(e) => e.stopPropagation()}
-                        className="accent-[var(--accent)] shrink-0"
+                        className="shrink-0"
+                        aria-label={t.select_row.replace("{name}", tk.title)}
                       />
-                      <button
+                      <IconButton
                         onClick={() => toggleTaskExpanded(tk.id)}
-                        className="text-muted hover:text-[var(--color-text-secondary)] p-0.5"
-                        aria-label={isExpanded ? t.collapse : t.expand}
-                      >
-                        <ChevronRight
-                          size={14}
-                          className={`transition-transform ${isExpanded ? "rotate-90" : ""}`}
-                        />
-                      </button>
-                      <input
-                        type="checkbox"
+                        size="xs"
+                        label={isExpanded ? t.collapse : t.expand}
+                        icon={ChevronRight}
+                        iconClassName={`transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                      />
+                      <Checkbox
                         checked={tk.status === "done"}
+                        aria-label={`${t.mark_done}: ${tk.title}`}
                         onChange={(e) => {
                           if (e.target.checked) e.target.classList.add("check-pop");
                           const newStatus = tk.status === "done" ? "todo" : "done";
@@ -374,24 +388,17 @@ export function TasksPage() {
                           updateTask.mutate({ id: tk.id, data: { status: newStatus } });
                         }}
                         onAnimationEnd={(e) => (e.target as HTMLElement).classList.remove("check-pop")}
-                        className="rounded"
                       />
                       {editingTask === tk.id ? (
-                        <input
-                          autoFocus
-                          defaultValue={tk.title}
-                          onBlur={(e) => {
-                            const val = e.target.value.trim();
-                            if (val && val !== tk.title) {
-                              updateTask.mutate({ id: tk.id, data: { title: val } });
-                            }
+                        <InlineRename
+                          value={tk.title}
+                          label={t.rename}
+                          onSave={(title) => {
+                            updateTask.mutate({ id: tk.id, data: { title } });
                             setEditingTask(null);
                           }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                            if (e.key === "Escape") setEditingTask(null);
-                          }}
-                          className="flex-1 text-sm border border-[var(--color-input-border)] rounded-lg px-1 py-0.5"
+                          onCancel={() => setEditingTask(null)}
+                          className="flex-1 text-sm"
                         />
                       ) : (
                         <span
@@ -408,19 +415,22 @@ export function TasksPage() {
                           {doneSubtasks}/{taskSubs.length}
                         </span>
                       )}
-                      <select
+                      <Select
                         value={tk.status}
+                        aria-label={`${t.status}: ${tk.title}`}
                         onChange={(e) =>
                           updateTask.mutate({
                             id: tk.id,
                             data: { status: e.target.value as TaskStatus },
                           })
                         }
-                        className={`px-2 py-1 text-xs rounded-full border-0 appearance-none cursor-pointer ${statusClasses(taskStatusVariant(tk.status))}`}
+                        variant="bare"
+                        fullWidth={false}
+                        className={`${PILL} ${statusClasses(taskStatusVariant(tk.status))}`}
                       >
                         <option value="todo">{t.todo}</option>
                         <option value="done">{t.done}</option>
-                      </select>
+                      </Select>
                       <TaskDatePicker
                         dueDate={tk.due_date}
                         endDate={tk.end_date}
@@ -428,38 +438,35 @@ export function TasksPage() {
                         endTime={tk.end_time}
                         reminder={tk.reminder}
                         onChange={(vals) => updateTask.mutate({ id: tk.id, data: vals })}
-                        compact
                       />
-                      <button
+                      <IconButton
+                        icon={activeTimer?.taskId === tk.id ? ICONS.stopTimer : ICONS.startTimer}
+                        label={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
+                        size="xs"
+                        tone="accent"
+                        color={activeTimer?.taskId === tk.id ? "danger" : undefined}
                         onClick={() => handleTimerToggle(tk.id, tk.project_id)}
-                        className={`p-0.5 transition-opacity ${
+                        className={
                           activeTimer?.taskId === tk.id
-                            ? "text-[var(--color-danger-text)]"
-                            : "opacity-0 group-hover/task:opacity-100 text-muted hover:text-accent"
-                        }`}
-                        title={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
-                        aria-label={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
-                      >
-                        {activeTimer?.taskId === tk.id ? <Square size={14} /> : <Play size={14} />}
-                      </button>
-                      <button
-                        onClick={() => deleteTask.mutate(tk.id, {
-                          onSuccess: () => undoableFromStore(t.toast_task_deleted),
-                        })}
-                        className="opacity-0 group-hover/task:opacity-100 text-muted hover:text-[var(--color-danger-text)] transition-opacity p-0.5"
-                        title={t.delete}
-                        aria-label={t.delete}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                            ? ""
+                            : "opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100"
+                        }
+                      />
+                      <IconButton size="xs"
+                        onClick={() => deleteWithUndo(deleteTask, tk.id, t.toast_task_deleted)}
+                        icon={ICONS.delete}
+                        label={t.delete}
+                        tone="danger"
+                        reveal="task"
+                      />
                     </div>
                     {isExpanded && (
                       <div className="ml-12 mr-4 border-l border-[var(--color-border-divider)] pl-3 pb-2 mb-1">
                         {filteredSubs.map((s) => (
                           <div key={s.id} data-task-row className="flex items-center gap-2 py-1 group/sub" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setSubCtxMenu({ x: e.clientX, y: e.clientY, item: s }); }}>
-                            <input
-                              type="checkbox"
+                            <Checkbox
                               checked={s.status === "done"}
+                              aria-label={`${t.mark_done}: ${s.title}`}
                               onChange={(e) => {
                                 if (e.target.checked) e.target.classList.add("check-pop");
                                 const newStatus = s.status === "done" ? "todo" : "done";
@@ -477,24 +484,17 @@ export function TasksPage() {
                                 updateSubtask.mutate({ id: s.id, data: { status: newStatus } });
                               }}
                               onAnimationEnd={(e) => (e.target as HTMLElement).classList.remove("check-pop")}
-                              className="rounded"
                             />
                             {editingSubtask === s.id ? (
-                              <input
-                                autoFocus
-                                defaultValue={s.title}
-                                onBlur={(e) => {
-                                  const val = e.target.value.trim();
-                                  if (val && val !== s.title) {
-                                    updateSubtask.mutate({ id: s.id, data: { title: val } });
-                                  }
+                              <InlineRename
+                                value={s.title}
+                                label={t.rename}
+                                onSave={(title) => {
+                                  updateSubtask.mutate({ id: s.id, data: { title } });
                                   setEditingSubtask(null);
                                 }}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                                  if (e.key === "Escape") setEditingSubtask(null);
-                                }}
-                                className="flex-1 text-xs border border-[var(--color-input-border)] rounded-lg px-1 py-0.5"
+                                onCancel={() => setEditingSubtask(null)}
+                                className="flex-1 text-xs"
                               />
                             ) : (
                               <span
@@ -513,169 +513,87 @@ export function TasksPage() {
                               endTime={s.end_time}
                               reminder={s.reminder}
                               onChange={(vals) => updateSubtask.mutate({ id: s.id, data: vals })}
-                              compact
                             />
-                            <button
-                              onClick={() => deleteSubtask.mutate(s.id, {
-                                onSuccess: () => undoableFromStore(t.toast_subtask_deleted),
-                              })}
-                              className="opacity-0 group-hover/sub:opacity-100 text-muted hover:text-[var(--color-danger-text)] transition-opacity p-0.5"
-                              title={t.delete}
-                              aria-label={t.delete}
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                            <IconButton size="xs"
+                              onClick={() => deleteWithUndo(deleteSubtask, s.id, t.toast_subtask_deleted)}
+                              icon={ICONS.delete}
+                              label={t.delete}
+                              tone="danger"
+                              reveal="sub"
+                            />
                           </div>
                         ))}
-                        <div className="flex gap-1.5 mt-1">
-                          <input
-                            placeholder={t.new_subtask}
-                            value={newSubtaskText[tk.id] ?? ""}
-                            onChange={(e) =>
-                              setNewSubtaskText({ ...newSubtaskText, [tk.id]: e.target.value })
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                const text = (newSubtaskText[tk.id] ?? "").trim();
-                                if (!text) return;
-                                createSubtask.mutate(
-                                  {
-                                    task_id: tk.id,
-                                    title: text,
-                                    status: "todo",
-                                    due_date: null,
-                                    end_date: null,
-                                    start_time: null,
-                                    end_time: null,
-                                    reminder: null,
-                                    sort_order: taskSubs.length,
-                                  },
-                                  {
-                                    onSuccess: () =>
-                                      setNewSubtaskText({ ...newSubtaskText, [tk.id]: "" }),
-                                    onError: (err) =>
-                                      toast.error(t.subtask_create_failed.replace("{error}", String(err))),
-                                  }
-                                );
-                              }
-                            }}
-                            className="flex-1 border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-xs"
-                          />
-                          <button
-                            onClick={() => {
-                              const text = (newSubtaskText[tk.id] ?? "").trim();
-                              if (!text) return;
-                              createSubtask.mutate(
-                                {
-                                  task_id: tk.id,
-                                  title: text,
-                                  status: "todo",
-                                  due_date: null,
-                                  end_date: null,
-                                  start_time: null,
-                                  end_time: null,
-                                  reminder: null,
-                                  sort_order: taskSubs.length,
-                                },
-                                {
-                                  onSuccess: () =>
-                                    setNewSubtaskText({ ...newSubtaskText, [tk.id]: "" }),
-                                  onError: (err) =>
-                                    toast.error(t.subtask_create_failed.replace("{error}", String(err))),
-                                }
-                              );
-                            }}
-                            className="p-1 text-muted hover:text-accent"
-                            aria-label={t.new_subtask}
-                          >
-                            <Plus size={14} />
-                          </button>
-                        </div>
+                        <AddRow
+                          className="mt-1"
+                          placeholder={t.new_subtask}
+                          onAdd={(title) =>
+                            createSubtask.mutateAsync({
+                              task_id: tk.id,
+                              title,
+                              status: "todo",
+                              due_date: null,
+                              end_date: null,
+                              start_time: null,
+                              end_time: null,
+                              reminder: null,
+                              sort_order: taskSubs.length,
+                            })
+                          }
+                        />
                       </div>
                     )}
                   </div>
                 );
               })}
             </div>}
-            {!collapsedProjects.has(g.projectId) && <div className="flex gap-2 px-4 py-2 border-t border-[var(--color-border-divider)]">
-              <input
+            {!collapsedProjects.has(g.projectId) && (
+              <AddRow
+                className="px-4 py-2 border-t border-[var(--color-border-divider)]"
                 placeholder={t.new_task}
-                value={newTaskText[g.projectId] ?? ""}
-                onChange={(e) =>
-                  setNewTaskText({ ...newTaskText, [g.projectId]: e.target.value })
-                }
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    if (createTask.isPending) return;
-                    const text = (newTaskText[g.projectId] ?? "").trim();
-                    if (!text) return;
-                    createTask.mutate(
-                      {
-                        project_id: g.projectId,
-                        title: text,
-                        description: "",
-                        status: "todo",
-                        priority: "low",
-                        due_date: null,
-                        end_date: null,
-                        start_time: null,
-                        end_time: null,
-                        reminder: null,
-                        scheduled_start: null,
-                        scheduled_end: null,
-
-                        notes: "",
-                        sort_order: g.tasks.length,
-                      },
-                      {
-                        onSuccess: () =>
-                          setNewTaskText({ ...newTaskText, [g.projectId]: "" }),
-                      }
-                    );
-                  }
+                onAdd={(title) => {
+                  // A second Enter while the first create is in flight adds nothing.
+                  if (createTask.isPending) return false;
+                  return createTask.mutateAsync({
+                    project_id: g.projectId,
+                    title,
+                    description: "",
+                    status: "todo",
+                    priority: "low",
+                    due_date: null,
+                    end_date: null,
+                    start_time: null,
+                    end_time: null,
+                    reminder: null,
+                    scheduled_start: null,
+                    scheduled_end: null,
+                    notes: "",
+                    sort_order: g.tasks.length,
+                  });
                 }}
-                className="flex-1 border border-[var(--color-input-border)] rounded-lg px-3 py-1.5 text-sm"
               />
-              <button
-                onClick={() => {
-                  const text = (newTaskText[g.projectId] ?? "").trim();
-                  if (!text) return;
-                  createTask.mutate(
-                    {
-                      project_id: g.projectId,
-                      title: text,
-                      description: "",
-                      status: "todo",
-                      priority: "low",
-                      due_date: null,
-                      end_date: null,
-                      start_time: null,
-                      end_time: null,
-                      reminder: null,
-                      scheduled_start: null,
-                      scheduled_end: null,
-
-                      notes: "",
-                      sort_order: g.tasks.length,
-                    },
-                    {
-                      onSuccess: () =>
-                        setNewTaskText({ ...newTaskText, [g.projectId]: "" }),
-                    }
-                  );
-                }}
-                className="p-1.5 text-muted hover:text-accent"
-                aria-label={t.new_task}
-              >
-                <Plus size={16} />
-              </button>
-            </div>}
+            )}
             </>)}
           </SortableProjectGroup>
         ))}
-        {grouped.length === 0 && !isLoading && (
-          <EmptyState message={(tasks?.length ?? 0) === 0 ? t.no_tasks_yet : t.no_matching_tasks} icon={<CheckCircle size={32} />} />
-        )}
+        {grouped.length === 0 && (tasks.length === 0 ? (
+          <EmptyState
+            icon={ICONS.task}
+            message={t.no_tasks_yet}
+            hint={t.no_tasks_yet_hint}
+            action={
+              activeProjects.length > 0 ? (
+                <Dropdown
+                  trigger={<Button icon={ICONS.add}>{t.new_task}</Button>}
+                  items={activeProjects.map((p) => ({ label: p.name, onSelect: () => setStartProjectId(p.id) }))}
+                />
+              ) : (
+                <Button icon={ICONS.add} onClick={() => navigate("/projects")}>{t.new_project}</Button>
+              )
+            }
+          />
+        ) : (
+          <NoResults message={t.no_matching_tasks} onClear={clearFilters} />
+        ))}
       </div>
       </SortableContext>
       </DndContext>
@@ -686,9 +604,9 @@ export function TasksPage() {
           onClose={() => setCtxMenu(null)}
           items={[
             { label: ctxMenu.item.status === "done" ? t.todo : t.done, onClick: () => updateTask.mutate({ id: ctxMenu.item.id, data: { status: ctxMenu.item.status === "done" ? "todo" : "done" } }) },
-            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/projects/${ctxMenu.item.project_id}`, projectName(ctxMenu.item.project_id)) },
+            { label: t.open_in_new_tab, icon: ICONS.newTab, onClick: () => openTab(`/projects/${ctxMenu.item.project_id}`, projectName(ctxMenu.item.project_id)) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteTask.mutate(ctxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_task_deleted) }) },
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => deleteWithUndo(deleteTask, ctxMenu.item.id, t.toast_task_deleted) },
           ]}
         />
       )}
@@ -700,7 +618,7 @@ export function TasksPage() {
           items={[
             { label: subCtxMenu.item.status === "done" ? t.todo : t.done, onClick: () => updateSubtask.mutate({ id: subCtxMenu.item.id, data: { status: subCtxMenu.item.status === "done" ? "todo" : "done" } }) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteSubtask.mutate(subCtxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_subtask_deleted) }) },
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => deleteWithUndo(deleteSubtask, subCtxMenu.item.id, t.toast_subtask_deleted) },
           ]}
         />
       )}
@@ -710,7 +628,7 @@ export function TasksPage() {
           y={headerCtxMenu.y}
           onClose={() => setHeaderCtxMenu(null)}
           items={[
-            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/projects/${headerCtxMenu.item.projectId}`, headerCtxMenu.item.projectName) },
+            { label: t.open_in_new_tab, icon: ICONS.newTab, onClick: () => openTab(`/projects/${headerCtxMenu.item.projectId}`, headerCtxMenu.item.projectName) },
           ]}
         />
       )}
@@ -718,8 +636,8 @@ export function TasksPage() {
         count={bulk.count}
         onClear={bulk.clearSelection}
         actions={[
-          { label: t.mark_done, icon: <CheckCircle size={14} />, onClick: bulkMarkDone },
-          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+          { label: t.mark_done, icon: ICONS.markDone, onClick: bulkMarkDone },
+          { label: t.delete, icon: ICONS.delete, onClick: bulkDelete, danger: true },
         ]}
       />
     </div>
@@ -744,18 +662,3 @@ function SortableProjectGroup({ id, children }: { id: number; children: (dragHan
     </div>
   );
 }
-
-function DragHandle({ attributes, listeners }: { attributes: SortableReturn["attributes"]; listeners: SortableReturn["listeners"] }) {
-  const t = useT();
-  return (
-    <div
-      {...attributes}
-      {...listeners}
-      className="cursor-grab text-muted hover:text-[var(--color-text-secondary)] shrink-0 -my-1 p-0.5"
-      aria-label={t.drag_to_reorder}
-    >
-      <GripVertical size={14} />
-    </div>
-  );
-}
-

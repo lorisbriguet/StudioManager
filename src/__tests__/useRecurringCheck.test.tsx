@@ -8,7 +8,7 @@ import { useOrgStore } from "../stores/org-store";
 import { getDueTemplates, updateRecurringTemplate } from "../db/queries/recurring";
 import { getInvoice, getInvoiceLineItems, createInvoiceWithLineItems } from "../db/queries/invoices";
 import { todayLocalISO } from "../utils/localDate";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 
 // Controllable clock: the focus re-check compares "today" against the last
 // run day, so tests must be able to move the calendar forward.
@@ -37,15 +37,9 @@ vi.mock("../lib/log", () => ({
   logInfo: vi.fn(),
   logDebug: vi.fn(),
 }));
-vi.mock("sonner", () => ({
-  toast: {
-    info: vi.fn(),
-    warning: vi.fn(),
-    error: vi.fn(),
-    success: vi.fn(),
-    loading: vi.fn(),
-    dismiss: vi.fn(),
-  },
+vi.mock("../lib/notify", async (orig) => ({
+  ...(await orig<typeof import("../lib/notify")>()),
+  ...(await import("../__mocks__/notify")).notifyMockModule(),
 }));
 
 const baseInvoice = {
@@ -111,7 +105,7 @@ describe("useRecurringCheck", () => {
     renderHook(() => useRecurringCheck(), { wrapper });
 
     await waitFor(() => {
-      expect(toast.info).toHaveBeenCalled();
+      expect(notify.info).toHaveBeenCalled();
     });
     // ~3-4 periods depending on day-of-month; every draft persisted its advance
     const drafts = vi.mocked(createInvoiceWithLineItems).mock.calls.length;
@@ -132,7 +126,7 @@ describe("useRecurringCheck", () => {
     renderHook(() => useRecurringCheck(), { wrapper });
 
     await waitFor(() => {
-      expect(toast.warning).toHaveBeenCalled();
+      expect(notify.warning).toHaveBeenCalled();
     });
     expect(vi.mocked(createInvoiceWithLineItems).mock.calls.length).toBe(60);
   });
@@ -192,7 +186,7 @@ describe("useRecurringCheck", () => {
     renderHook(() => useRecurringCheck(), { wrapper });
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalled();
+      expect(notify.error).toHaveBeenCalled();
     });
     expect(createInvoiceWithLineItems).not.toHaveBeenCalled();
   });

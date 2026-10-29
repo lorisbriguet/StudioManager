@@ -1,22 +1,24 @@
 import { useState, useEffect, useCallback } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
-import { toast } from "sonner";
-import { FolderOpen, HardDrive, RotateCcw, FlaskConical, Camera, Settings2, Palette, SlidersHorizontal, CalendarDays, LayoutList, Tags, Download, Archive, Shield, X, Clock, Store, Building2, Database as DatabaseIcon, Bot, Wrench } from "lucide-react";
+import { notify } from "../lib/notify";
+import { HardDrive, RotateCcw, FlaskConical, Camera, LayoutList, Tags, Archive, Shield, Store, type LucideIcon } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
-import { open, ask } from "@tauri-apps/plugin-dialog";
+import { open } from "@tauri-apps/plugin-dialog";
 import { purgeAllCalendarEvents, syncAllExisting, listWritableCalendars } from "../lib/appleCalendar";
 import { syncAllUpkeepEvents } from "../lib/upkeep/calendar";
 import { createBackup, listBackups, restoreFromBackup, RestoreError, validateBackupPath, isBackupRunning, setBackupRunning, isScopeDenied } from "../lib/backup";
 import { resetDb } from "../db";
-import { enterTestMode, exitTestMode, enterPresentationMode, exitPresentationMode } from "../lib/modes";
+import { enterTestMode, enterPresentationMode } from "../lib/modes";
+import { useExitMode } from "../hooks/useExitMode";
+import { useConfirm } from "../lib/confirm";
 import { useAppStore, ACCENT_PRESETS, type DateFormatOption, type ProjectOpenMode } from "../stores/app-store";
 import { THEMES } from "../lib/themes";
 import { useT } from "../i18n/useT";
 import type { AppLanguage } from "../i18n/ui";
 import { UpdateChecker } from "../components/UpdateChecker";
 import { WorkloadTemplateManager } from "../components/workload/WorkloadTemplateManager";
-import { Input, Select, Button } from "../components/ui";
+import { ICONS, ICON_SIZE, Input, Select, Button, IconButton, SectionLabel, SidebarTitle, SettingRow, SettingsCard, NavItem, Tooltip, FieldError, Spinner } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
 import { UpkeepSettingsCard } from "../components/settings/UpkeepSettingsCard";
@@ -26,7 +28,6 @@ import { RoutinesCard } from "../components/settings/RoutinesCard";
 import { OrganisationsCard } from "../components/settings/OrganisationsCard";
 import { DemoDataCard } from "../components/settings/DemoDataCard";
 import { isDemoBuild } from "../lib/demoBuild";
-import { SettingRow, SettingsCard } from "../components/settings/SettingsPrimitives";
 import { AccentColorPicker } from "../components/settings/AccentColorPicker";
 import { SuppliersManager } from "../components/settings/SuppliersManager";
 import { ExpenseCategoryManager } from "../components/settings/ExpenseCategoryManager";
@@ -76,6 +77,9 @@ export function SettingsPage() {
   const [syncing, setSyncing] = useState(false);
   const [backing, setBacking] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  // Inline errors for the backup folders and the target calendar
+  const [backupDirError, setBackupDirError] = useState<{ which: "primary" | "secondary"; message: string } | null>(null);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
   const [availableBackups, setAvailableBackups] = useState<string[]>([]);
   const [selectedBackup, setSelectedBackup] = useState("");
   const [loadingBackups, setLoadingBackups] = useState(false);
@@ -98,6 +102,8 @@ export function SettingsPage() {
   const testMode = useAppStore((s) => s.testMode);
   const presentationMode = useAppStore((s) => s.presentationMode);
   const [togglingTestMode, setTogglingTestMode] = useState(false);
+  const { exitMode, exiting } = useExitMode();
+  const confirm = useConfirm();
   const [togglingPresentation, setTogglingPresentation] = useState(false);
   const [snapshotting, setSnapshotting] = useState(false);
   const [restoringSnapshot, setRestoringSnapshot] = useState(false);
@@ -124,87 +130,58 @@ export function SettingsPage() {
     setTogglingTestMode(true);
     try {
       await enterTestMode();
-      toast.success(t.toast_test_mode_entered);
+      notify.success(t.toast_test_mode_entered);
     } catch (e) {
-      logError("Enter test mode failed:", e);
-      toast.error(`${t.toast_test_mode_failed}: ${String(e)}`);
+      notify.error(t.toast_test_mode_failed, e);
     } finally {
       setTogglingTestMode(false);
     }
   };
 
-  const handleExitTestMode = async () => {
-    const confirmed = await ask(t.test_mode_confirm_exit, { kind: "warning" });
-    if (!confirmed) return;
-    setTogglingTestMode(true);
-    try {
-      await exitTestMode();
-      toast.success(t.toast_test_mode_exited);
-      setTimeout(() => window.location.reload(), 500);
-    } catch (e) {
-      logError("Exit test mode failed:", e);
-      toast.error(`${t.toast_test_mode_failed}: ${String(e)}`);
-    } finally {
-      setTogglingTestMode(false);
-    }
-  };
 
   const handleEnterPresentation = async () => {
     setTogglingPresentation(true);
     try {
       await enterPresentationMode();
-      toast.success(t.toast_presentation_entered);
+      notify.success(t.toast_presentation_entered);
       setTimeout(() => window.location.reload(), 500);
     } catch (e) {
-      logError("Enter presentation mode failed:", e);
-      toast.error(`${t.toast_presentation_failed}: ${String(e)}`);
+      notify.error(t.toast_presentation_failed, e);
     } finally {
       setTogglingPresentation(false);
     }
   };
 
-  const handleExitPresentation = async () => {
-    const confirmed = await ask(t.presentation_mode_confirm_exit, { kind: "warning" });
-    if (!confirmed) return;
-    setTogglingPresentation(true);
-    try {
-      await exitPresentationMode();
-      toast.success(t.toast_presentation_exited);
-      setTimeout(() => window.location.reload(), 500);
-    } catch (e) {
-      logError("Exit presentation mode failed:", e);
-      toast.error(`${t.toast_presentation_failed}: ${String(e)}`);
-    } finally {
-      setTogglingPresentation(false);
-    }
-  };
 
   const handleCreateSnapshot = async () => {
     setSnapshotting(true);
     try {
       await invoke<string>("snapshot_db");
       setHasSnapshotFile(true);
-      toast.success(t.toast_snapshot_created);
+      notify.success(t.toast_snapshot_created);
     } catch (e) {
-      logError("Snapshot failed:", e);
-      toast.error(`${t.toast_snapshot_failed}: ${String(e)}`);
+      notify.error(t.toast_snapshot_failed, e);
     } finally {
       setSnapshotting(false);
     }
   };
 
   const handleRestoreSnapshot = async () => {
-    const confirmed = await ask(t.restore_snapshot_confirm, { kind: "warning" });
+    const confirmed = await confirm({
+      title: t.restore_snapshot_title,
+      message: t.restore_snapshot_confirm,
+      confirmLabel: t.restore,
+      tone: "danger",
+    });
     if (!confirmed) return;
     setRestoringSnapshot(true);
     try {
       await invoke("restore_snapshot");
       await resetDb();
-      toast.success(t.toast_snapshot_restored);
+      notify.success(t.toast_snapshot_restored);
       setTimeout(() => window.location.reload(), 1500);
     } catch (e) {
-      logError("Restore snapshot failed:", e);
-      toast.error(`${t.toast_snapshot_failed}: ${String(e)}`);
+      notify.error(t.toast_snapshot_restore_failed, e);
     } finally {
       setRestoringSnapshot(false);
     }
@@ -218,10 +195,9 @@ export function SettingsPage() {
       try {
         await purgeAllCalendarEvents();
         const count = (await syncAllExisting()) + (await syncAllUpkeepEvents());
-        if (count > 0) toast.success(t.synced_events.replace("{count}", String(count)));
+        if (count > 0) notify.success(t.synced_events.replace("{count}", String(count)));
       } catch (e) {
-        logError("Sync failed:", e);
-        toast.error(t.toast_failed_sync);
+        notify.error(t.toast_failed_sync, e);
       } finally {
         setSyncing(false);
       }
@@ -235,22 +211,21 @@ export function SettingsPage() {
     const dir = await open({ directory: true, recursive: true, title: t.backup_directory });
     if (typeof dir === "string") {
       const writable = await validateBackupPath(dir);
+      const which = secondary ? "secondary" : "primary";
       if (!writable) {
-        toast.error(t.backup_path_not_writable);
+        setBackupDirError({ which, message: t.backup_path_not_writable });
         return;
       }
+      setBackupDirError(null);
       if (secondary) setBackupPath2(dir);
       else setBackupPath(dir);
     }
   };
 
   const runBackup = async () => {
-    if (!backupPath) {
-      toast.error(t.toast_backup_dir_first);
-      return;
-    }
+    if (!backupPath) return; // the button is disabled without a folder
     if (isBackupRunning()) {
-      toast.error(t.backup_already_running);
+      notify.info(t.backup_already_running);
       return;
     }
     setBacking(true);
@@ -260,13 +235,9 @@ export function SettingsPage() {
       if (backupPath2) {
         await createBackup(backupPath2, maxBackups);
       }
-      toast.success(t.backup_created.replace("{name}", path.split("/").pop() ?? ""));
+      notify.success(t.backup_created.replace("{name}", path.split("/").pop() ?? ""));
     } catch (e) {
-      toast.error(
-        isScopeDenied(e)
-          ? t.backup_path_not_allowed
-          : t.backup_failed.replace("{error}", String(e))
-      );
+      notify.error(isScopeDenied(e) ? t.backup_path_not_allowed : t.backup_failed, e);
     } finally {
       setBacking(false);
       setBackupRunning(false);
@@ -281,7 +252,7 @@ export function SettingsPage() {
       setAvailableBackups(backups);
       setSelectedBackup(backups[0] ?? "");
     } catch (e) {
-      if (isScopeDenied(e)) toast.error(t.backup_path_not_allowed);
+      if (isScopeDenied(e)) notify.error(t.backup_path_not_allowed, e);
       setAvailableBackups([]);
     } finally {
       setLoadingBackups(false);
@@ -289,65 +260,68 @@ export function SettingsPage() {
   };
 
   const runRestore = async () => {
-    if (!backupPath || !selectedBackup) {
-      toast.error(t.toast_set_backup_dir);
-      return;
-    }
-    const confirmed = await ask(t.restore_confirm, { kind: "warning" });
+    if (!backupPath || !selectedBackup) return; // the button is disabled until both are set
+    const confirmed = await confirm({
+      title: t.restore_backup_title.replace("{name}", selectedBackup),
+      message: t.restore_confirm,
+      confirmLabel: t.restore,
+      tone: "danger",
+    });
     if (!confirmed) return;
     setRestoring(true);
     try {
       const { warnings, valuesDefaulted, safetyBackup } = await restoreFromBackup(`${backupPath}/${selectedBackup}`);
       if (warnings.length > 0) {
-        toast.warning(`${t.restore_warnings} ${warnings.join(", ")}`, { duration: 8000 });
+        notify.warning(t.restore_warnings, { description: warnings.join(", ") });
       }
-      let successMsg = valuesDefaulted > 0
-        ? `${t.toast_restore_success} ${t.restore_values_defaulted.replace("{count}", String(valuesDefaulted))}`
-        : t.toast_restore_success;
-      successMsg += ` ${t.restore_safety_created.replace("{name}", safetyBackup)}`;
-      toast.success(successMsg);
+      const details = [
+        valuesDefaulted > 0 ? t.restore_values_defaulted.replace("{count}", String(valuesDefaulted)) : null,
+        t.restore_safety_created.replace("{name}", safetyBackup),
+      ];
+      notify.success(t.toast_restore_success, { description: details.filter(Boolean).join(" ") });
       setTimeout(() => window.location.reload(), 1500);
     } catch (e) {
       // Restore runs in a single transaction — on failure it rolled back
+      // (the raw cause, e.g. RestoreError.detail, is in the log and behind "Details")
+      const noChanges = { description: t.restore_no_changes };
       if (e instanceof RestoreError) {
-        const base = e.code === "backup_empty" ? t.restore_backup_empty : t.restore_safety_backup_failed;
-        toast.error(e.detail ? `${base} (${e.detail})` : base, { duration: 10000 });
+        notify.error(e.code === "backup_empty" ? t.restore_backup_empty : t.restore_safety_backup_failed, e.detail ?? e, noChanges);
       } else if (isScopeDenied(e)) {
-        toast.error(`${t.backup_path_not_allowed} ${t.restore_no_changes}`, { duration: 10000 });
+        notify.error(t.backup_path_not_allowed, e, noChanges);
       } else {
-        toast.error(`${t.toast_restore_failed}: ${String(e)}. ${t.restore_no_changes}`, { duration: 10000 });
+        notify.error(t.toast_restore_failed, e, noChanges);
       }
     } finally {
       setRestoring(false);
     }
   };
 
-  const categorySections: { label: string; items: { key: SettingsCategory; label: string; icon: React.ReactNode }[] }[] = [
+  const categorySections: { label: string; items: { key: SettingsCategory; label: string; icon: LucideIcon }[] }[] = [
     {
       label: t.settings_group_preferences,
       items: [
-        { key: "general", label: t.general, icon: <Settings2 size={14} /> },
-        { key: "appearance", label: t.appearance, icon: <Palette size={14} /> },
-        { key: "behavior", label: t.behavior, icon: <SlidersHorizontal size={14} /> },
-        { key: "calendar", label: t.calendar_sync, icon: <CalendarDays size={14} /> },
-        { key: "agents", label: t.agents, icon: <Bot size={14} /> },
-        { key: "upkeep", label: t.upkeep_settings, icon: <Wrench size={14} /> },
-        { key: "workload", label: t.workload_templates, icon: <LayoutList size={14} /> },
+        { key: "general", label: t.general, icon: ICONS.settings },
+        { key: "appearance", label: t.appearance, icon: ICONS.appearance },
+        { key: "behavior", label: t.behavior, icon: ICONS.behavior },
+        { key: "calendar", label: t.calendar_sync, icon: ICONS.calendar },
+        { key: "agents", label: t.agents, icon: ICONS.agents },
+        { key: "upkeep", label: t.upkeep_settings, icon: ICONS.upkeep },
+        { key: "workload", label: t.workload_templates, icon: LayoutList },
       ],
     },
     {
       label: t.settings_group_data,
       items: [
-        { key: "organisations", label: t.organisations, icon: <Building2 size={14} /> },
-        { key: "categories", label: t.expense_categories, icon: <Tags size={14} /> },
-        { key: "suppliers", label: t.suppliers, icon: <Store size={14} /> },
-        { key: "lists", label: t.custom_lists, icon: <LayoutList size={14} /> },
-        { key: "time_entries", label: t.time_entries_management, icon: <Clock size={14} /> },
-        { key: "backup", label: t.backup, icon: <Archive size={14} /> },
+        { key: "organisations", label: t.organisations, icon: ICONS.organisation },
+        { key: "categories", label: t.expense_categories, icon: Tags },
+        { key: "suppliers", label: t.suppliers, icon: Store },
+        { key: "lists", label: t.custom_lists, icon: LayoutList },
+        { key: "time_entries", label: t.time_entries_management, icon: ICONS.time },
+        { key: "backup", label: t.backup, icon: Archive },
         ...(isDemoBuild()
           ? [
-              { key: "sandbox" as const, label: t.test_mode, icon: <Shield size={14} /> },
-              { key: "demo_data" as const, label: t.demo_data, icon: <DatabaseIcon size={14} /> },
+              { key: "sandbox" as const, label: t.test_mode, icon: Shield },
+              { key: "demo_data" as const, label: t.demo_data, icon: ICONS.demoData },
             ]
           : []),
       ],
@@ -355,7 +329,7 @@ export function SettingsPage() {
     {
       label: t.settings_group_app,
       items: [
-        { key: "updates", label: t.updates, icon: <Download size={14} /> },
+        { key: "updates", label: t.updates, icon: ICONS.updates },
       ],
     },
   ];
@@ -393,27 +367,21 @@ export function SettingsPage() {
     <div className="flex gap-0 flex-1 min-h-0 -m-8">
       {/* Category sidebar */}
       <div className="w-48 shrink-0 border-r border-[var(--color-border-divider)] py-5">
-        <h1 className="text-sm font-semibold px-5 mb-4 text-muted uppercase tracking-wider">{t.settings}</h1>
-        <nav className="space-y-3 px-1">
+        <SidebarTitle className="px-5 mb-4">{t.settings}</SidebarTitle>
+        <nav aria-label={t.settings} className="space-y-3 px-1">
           {categorySections.map((section) => (
             <div key={section.label}>
-              <div className="text-[10px] font-medium uppercase tracking-widest text-muted px-3 mb-1">{section.label}</div>
-              <div className="space-y-px">
+              <SectionLabel className="px-3 mb-1">{section.label}</SectionLabel>
+              <div className="space-y-px px-1">
                 {section.items.map((cat) => (
-                  <button
+                  <NavItem
                     key={cat.key}
-                    type="button"
+                    active={activeCategory === cat.key}
+                    icon={cat.icon}
                     onClick={() => setActiveCategory(cat.key)}
-                    className={`w-full text-left px-3 py-1.5 mx-1 rounded-md text-xs transition-colors flex items-center gap-2 ${
-                      activeCategory === cat.key
-                        ? "bg-accent-light text-accent font-medium"
-                        : "text-muted hover:bg-[var(--color-hover-row)]"
-                    }`}
-                    style={{ width: "calc(100% - 8px)" }}
                   >
-                    {cat.icon}
                     {cat.label}
-                  </button>
+                  </NavItem>
                 ))}
               </div>
             </div>
@@ -467,21 +435,26 @@ export function SettingsPage() {
               <SettingsCard title={t.wiki}>
               <SettingRow label={t.reset_user_guide} desc={t.reset_user_guide_desc}>
                 <Button
-                  variant="ghost"
-                  size="sm"
+                  variant="outline"
                   onClick={async () => {
-                    if (!(await ask(t.reset_user_guide_confirm ?? "Reset the User Guide to default? This will delete the current guide and re-create it.", { kind: "warning" }))) return;
+                    const ok = await confirm({
+                      title: t.reset_user_guide_title,
+                      message: t.reset_user_guide_confirm,
+                      confirmLabel: t.reset_user_guide_btn,
+                      tone: "danger",
+                    });
+                    if (!ok) return;
                     try {
                       const db = await import("../db").then((m) => m.getDb());
                       const { resetUserGuide } = await import("../db/seeds/user-guide");
                       await resetUserGuide(db);
-                      toast.success(t.reset_user_guide_done ?? "User Guide reset");
+                      notify.success(t.reset_user_guide_done);
                     } catch (e) {
-                      toast.error(String(e));
+                      notify.error(t.error_reset_user_guide, e);
                     }
                   }}
                 >
-                  {t.reset_user_guide_btn ?? "Reset"}
+                  {t.reset_user_guide_btn}
                 </Button>
               </SettingRow>
               </SettingsCard>
@@ -494,29 +467,29 @@ export function SettingsPage() {
                 <div className="text-sm mb-2">{t.theme}</div>
                 <div className="grid grid-cols-5 gap-2">
                   {THEMES.map((theme) => (
-                    <button
-                      key={theme.id}
-                      type="button"
-                      onClick={() => setTheme(theme.id)}
-                      className={`flex flex-col rounded-lg overflow-hidden border-2 transition-colors ${
-                        themeId === theme.id
-                          ? "border-accent shadow-sm"
-                          : "border-[var(--color-border-divider)] hover:border-[var(--color-input-border)]"
-                      }`}
-                      title={theme.name}
-                    >
-                      <div className="flex h-10" style={{ background: theme.colors.bg }}>
-                        <div className="w-3 shrink-0" style={{ background: theme.colors.sidebar, borderRight: `1px solid ${theme.colors.sidebarBorder}` }} />
-                        <div className="flex-1 p-1 flex flex-col gap-0.5 justify-center">
-                          <div className="h-1 w-3/4 rounded-full" style={{ background: theme.colors.accent }} />
-                          <div className="h-1 w-1/2 rounded-full opacity-40" style={{ background: theme.colors.textMuted }} />
-                          <div className="h-1 w-2/3 rounded-full opacity-25" style={{ background: theme.colors.textMuted }} />
+                    <Tooltip key={theme.id} content={theme.name}>
+                      <button
+                        type="button"
+                        onClick={() => setTheme(theme.id)}
+                        className={`flex flex-col rounded-lg overflow-hidden border-2 transition-colors ${
+                          themeId === theme.id
+                            ? "border-accent shadow-control"
+                            : "border-[var(--color-border-divider)] hover:border-[var(--color-input-border)]"
+                        }`}
+                      >
+                        <div className="flex h-10" style={{ background: theme.colors.bg }}>
+                          <div className="w-3 shrink-0" style={{ background: theme.colors.sidebar, borderRight: `1px solid ${theme.colors.sidebarBorder}` }} />
+                          <div className="flex-1 p-1 flex flex-col gap-0.5 justify-center">
+                            <div className="h-1 w-3/4 rounded-full" style={{ background: theme.colors.accent }} />
+                            <div className="h-1 w-1/2 rounded-full opacity-40" style={{ background: theme.colors.textMuted }} />
+                            <div className="h-1 w-2/3 rounded-full opacity-25" style={{ background: theme.colors.textMuted }} />
+                          </div>
                         </div>
-                      </div>
-                      <div className="text-[10px] text-center py-0.5 truncate px-1" style={{ background: theme.colors.surface, color: theme.colors.text }}>
-                        {theme.name}
-                      </div>
-                    </button>
+                        <div className="text-[10px] text-center py-0.5 truncate px-1" style={{ background: theme.colors.surface, color: theme.colors.text }}>
+                          {theme.name}
+                        </div>
+                      </button>
+                    </Tooltip>
                   ))}
                 </div>
               </div>
@@ -577,13 +550,16 @@ export function SettingsPage() {
                 <div className="flex items-center gap-2">
                   <Select
                     value={calendarName}
-                    onChange={(e) => setCalendarName(e.target.value)}
+                    aria-label={t.target_calendar}
+                    onChange={(e) => { setCalendarName(e.target.value); setCalendarError(null); }}
+                    aria-invalid={calendarError ? true : undefined}
+                    aria-describedby={calendarError ? "calendar-error" : undefined}
                     onFocus={() => {
                       if (availableCalendars.length === 0 && !loadingCalendars) {
                         setLoadingCalendars(true);
                         listWritableCalendars()
                           .then(setAvailableCalendars)
-                          .catch(() => toast.error(t.toast_failed_calendars))
+                          .catch((e) => notify.error(t.toast_failed_calendars, e))
                           .finally(() => setLoadingCalendars(false));
                       }
                     }}
@@ -597,8 +573,9 @@ export function SettingsPage() {
                       <option value={calendarName}>{calendarName}</option>
                     )}
                   </Select>
-                  {loadingCalendars && <span className="text-xs text-muted">{t.loading}</span>}
+                  {loadingCalendars && <Spinner size={12} />}
                 </div>
+                {calendarError && <FieldError id="calendar-error" className="text-right">{calendarError}</FieldError>}
               </SettingRow>
               <SettingRow label={t.sync_to_apple} desc={t.calendar_hint}>
                 <Toggle
@@ -607,7 +584,7 @@ export function SettingsPage() {
                   ariaLabel={t.sync_to_apple}
                   onChange={(_v: boolean) => {
                     if (!calendarName && !calendarSync) {
-                      toast.error(t.toast_select_calendar);
+                      setCalendarError(t.toast_select_calendar);
                       return;
                     }
                     handleCalendarToggle();
@@ -649,9 +626,9 @@ export function SettingsPage() {
           )}
 
           {activeCategory === "time_entries" && (
-            <section className="rounded-xl bg-[var(--color-surface)] border border-[var(--color-border-divider)] px-4 pt-3 pb-1">
+            <SettingsCard>
               <TimeEntriesManager />
-            </section>
+            </SettingsCard>
           )}
 
           {activeCategory === "updates" && (
@@ -666,15 +643,15 @@ export function SettingsPage() {
               <SettingRow label={t.test_mode}>
                 {testMode ? (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-[var(--color-warning-text)] font-medium flex items-center gap-1"><FlaskConical size={12} /> {t.test_mode_active}</span>
-                    <button type="button" onClick={handleExitTestMode} disabled={togglingTestMode} className="px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
+                    <span className="text-xs text-[var(--color-warning-text)] font-medium flex items-center gap-1"><FlaskConical size={ICON_SIZE.control} /> {t.test_mode_active}</span>
+                    <Button variant="danger" onClick={() => void exitMode("test")} disabled={togglingTestMode || exiting === "test"}>
                       {t.exit_test_mode}
-                    </button>
+                    </Button>
                   </div>
                 ) : (
-                  <button type="button" onClick={handleEnterTestMode} disabled={togglingTestMode} className="flex items-center gap-1 px-2.5 py-1 bg-[var(--color-warning-text)] text-white text-xs rounded-md hover:opacity-90 disabled:opacity-50">
-                    <FlaskConical size={12} />
-                    {togglingTestMode ? t.loading : t.enter_test_mode}
+                  <button type="button" onClick={handleEnterTestMode} disabled={togglingTestMode} className="flex items-center gap-1 px-2.5 py-1 bg-[var(--color-banner-test)] text-on-banner text-xs rounded-md hover:opacity-90 disabled:opacity-50">
+                    {togglingTestMode ? <Spinner size={12} tone="current" /> : <FlaskConical size={ICON_SIZE.control} />}
+                    {t.enter_test_mode}
                   </button>
                 )}
               </SettingRow>
@@ -685,13 +662,14 @@ export function SettingsPage() {
                 {presentationMode ? (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-[var(--color-indigo-text)] font-medium">{t.presentation_active}</span>
-                    <button type="button" onClick={handleExitPresentation} disabled={togglingPresentation} className="px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
+                    <Button variant="danger" onClick={() => void exitMode("presentation")} disabled={togglingPresentation || exiting === "presentation"}>
                       {t.exit_presentation_mode}
-                    </button>
+                    </Button>
                   </div>
                 ) : (
-                  <button type="button" onClick={handleEnterPresentation} disabled={togglingPresentation || testMode} className="flex items-center gap-1 px-2.5 py-1 bg-[var(--color-indigo-text)] text-white text-xs rounded-md hover:opacity-90 disabled:opacity-50">
-                    {togglingPresentation ? t.loading : t.enter_presentation_mode}
+                  <button type="button" onClick={handleEnterPresentation} disabled={togglingPresentation || testMode} className="flex items-center gap-1 px-2.5 py-1 bg-[var(--color-banner-presentation)] text-on-banner text-xs rounded-md hover:opacity-90 disabled:opacity-50">
+                    {togglingPresentation && <Spinner size={12} tone="current" />}
+                    {t.enter_presentation_mode}
                   </button>
                 )}
               </SettingRow>
@@ -705,37 +683,40 @@ export function SettingsPage() {
               <SettingRow label={t.backup_directory}>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-muted truncate max-w-[180px]" title={backupPath}>{backupPath || t.not_set}</span>
-                  <Button type="button" variant="ghost" size="sm" icon={<FolderOpen size={12} />} onClick={() => browseBackupDir()}>
+                  <Button type="button" variant="outline" icon={ICONS.openFolder} onClick={() => browseBackupDir()}>
                     {t.browse}
                   </Button>
                 </div>
+                {backupDirError?.which === "primary" && <FieldError className="text-right">{backupDirError.message}</FieldError>}
               </SettingRow>
               <SettingRow label={t.backup_directory_2}>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-muted truncate max-w-[180px]" title={backupPath2}>{backupPath2 || t.not_set}</span>
-                  <Button type="button" variant="ghost" size="sm" icon={<FolderOpen size={12} />} onClick={() => browseBackupDir(true)}>
+                  <Button type="button" variant="outline" icon={ICONS.openFolder} onClick={() => browseBackupDir(true)}>
                     {t.browse}
                   </Button>
                   {backupPath2 && (
-                    <button type="button" onClick={() => setBackupPath2("")} aria-label={t.remove} className="text-muted hover:text-[var(--color-text)]"><X size={12} /></button>
+                    <IconButton icon={ICONS.close} label={t.remove} size="xs" onClick={() => setBackupPath2("")} />
                   )}
                 </div>
+                {backupDirError?.which === "secondary" && <FieldError className="text-right">{backupDirError.message}</FieldError>}
               </SettingRow>
               <SettingRow label={t.keep_last_n}>
                 <Input
-                  type="number"
+                  numeric
                   min={1}
                   max={50}
                   value={maxBackups}
                   onChange={(e) => setMaxBackups(Math.max(1, Number(e.target.value) || 5))}
-                  fullWidth={false}
-                  className="w-16"
+                  width="xs"
+                  aria-label={t.keep_last_n}
                 />
               </SettingRow>
               <SettingRow label={t.auto_backup_interval}>
                 <div className="flex items-center gap-2">
                   <Select
                     value={autoBackupInterval}
+                    aria-label={t.auto_backup_interval}
                     onChange={(e) => setAutoBackupInterval(Number(e.target.value))}
                     fullWidth={false}
                   >
@@ -753,7 +734,7 @@ export function SettingsPage() {
                 </div>
               </SettingRow>
               <div className="py-3 flex items-center gap-2">
-                <Button type="button" size="sm" icon={<HardDrive size={12} />} onClick={runBackup} disabled={backing || !backupPath}>
+                <Button type="button" icon={HardDrive} onClick={runBackup} disabled={backing || !backupPath}>
                   {backing ? t.backing_up : t.backup_now}
                 </Button>
               </div>
@@ -764,6 +745,7 @@ export function SettingsPage() {
                 <div className="flex items-center gap-1.5">
                   <Select
                     value={selectedBackup}
+                    aria-label={t.select_backup}
                     onChange={(e) => setSelectedBackup(e.target.value)}
                     onFocus={() => {
                       if (availableBackups.length === 0 && !loadingBackups) loadBackupList();
@@ -775,14 +757,15 @@ export function SettingsPage() {
                     {availableBackups.length === 0 && !loadingBackups && (
                       <option value="">{backupPath ? t.select_backup : t.toast_set_backup_dir}</option>
                     )}
-                    {loadingBackups && <option value="">{t.loading}</option>}
+                    {loadingBackups && <option value="">{t.select_backup}</option>}
                     {availableBackups.map((name) => (
                       <option key={name} value={name}>{name.replace("backup-", "")}</option>
                     ))}
                   </Select>
-                  <button type="button" onClick={runRestore} disabled={restoring || !selectedBackup || !backupPath} className="flex items-center gap-1 px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
-                    <RotateCcw size={12} /> {restoring ? t.restoring : t.restore}
-                  </button>
+                  {loadingBackups && <Spinner size={12} />}
+                  <Button variant="danger" icon={RotateCcw} onClick={runRestore} disabled={restoring || !selectedBackup || !backupPath}>
+                    {restoring ? t.restoring : t.restore}
+                  </Button>
                 </div>
               </SettingRow>
               </SettingsCard>
@@ -790,12 +773,12 @@ export function SettingsPage() {
               <SettingsCard title={t.snapshot} desc={t.snapshot_desc}>
               <SettingRow label={t.snapshot}>
                 <div className="flex items-center gap-2">
-                  <Button type="button" size="sm" icon={<Camera size={12} />} onClick={handleCreateSnapshot} disabled={snapshotting || testMode}>
-                    {snapshotting ? t.loading : t.create_snapshot}
+                  <Button type="button" icon={Camera} onClick={handleCreateSnapshot} loading={snapshotting} disabled={testMode}>
+                    {t.create_snapshot}
                   </Button>
-                  <button type="button" onClick={handleRestoreSnapshot} disabled={restoringSnapshot || !hasSnapshotFile || testMode} className="flex items-center gap-1 px-2.5 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)] disabled:opacity-50">
-                    <RotateCcw size={12} /> {restoringSnapshot ? t.loading : t.restore_snapshot}
-                  </button>
+                  <Button variant="danger" icon={RotateCcw} onClick={handleRestoreSnapshot} loading={restoringSnapshot} disabled={!hasSnapshotFile || testMode}>
+                    {t.restore_snapshot}
+                  </Button>
                   {!hasSnapshotFile && <span className="text-xs text-muted">{t.no_snapshot_available}</span>}
                 </div>
               </SettingRow>

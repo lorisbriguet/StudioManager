@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, RotateCcw, Waypoints } from "lucide-react";
-import { Button, EmptyState, SearchBar, SectionLabel } from "../ui";
+import { Button, Card, EmptyState, IconButton, SearchBar, SectionLabel, POPOVER_SURFACE } from "../ui";
 import { Toggle } from "../ui/Toggle";
 import { useT } from "../../i18n/useT";
 import { useOrgStore } from "../../stores/org-store";
@@ -161,9 +161,9 @@ export function WikiGraph({
         <div className="h-full flex items-center justify-center">
           <EmptyState
             message={t.wiki_graph_empty}
-            icon={<Waypoints size={32} />}
+            icon={Waypoints}
             action={
-              <Button variant="secondary" icon={<RotateCcw size={14} />} onClick={resetFilters}>
+              <Button variant="secondary" icon={RotateCcw} onClick={resetFilters}>
                 {t.wiki_graph_reset_filters}
               </Button>
             }
@@ -186,20 +186,20 @@ export function WikiGraph({
 
       <section
         aria-label={t.wiki_graph_settings}
-        className="absolute top-4 right-4 w-64 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] p-3 space-y-3"
+        className={`${POPOVER_SURFACE} absolute top-4 right-4 w-64 p-3 space-y-3`}
       >
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold tracking-tight">{t.wiki_graph_settings}</span>
-          <button
-            type="button"
-            onClick={() => set("settingsOpen")(!settingsOpen)}
-            className="text-muted hover:text-[var(--color-text-secondary)] transition-colors"
-            aria-label={t.wiki_graph_settings}
-            aria-expanded={settingsOpen}
-          >
-            {settingsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
-        </div>
+        <Card.Header
+          className=""
+          title={t.wiki_graph_settings}
+          action={
+            <IconButton
+              icon={settingsOpen ? ChevronUp : ChevronDown}
+              label={t.wiki_graph_settings}
+              aria-expanded={settingsOpen}
+              onClick={() => set("settingsOpen")(!settingsOpen)}
+            />
+          }
+        />
 
         {settingsOpen && (
           <>

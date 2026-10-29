@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { ask } from "@tauri-apps/plugin-dialog";
-import { SettingRow, SettingsCard } from "./SettingsPrimitives";
+import { SettingRow, SettingsCard } from "../ui/Settings";
 import { Toggle } from "../ui/Toggle";
 import { Button } from "../ui/Button";
+import { FormActions } from "../ui/Form";
+import { useConfirm } from "../../lib/confirm";
 import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
 import {
@@ -21,6 +22,7 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export function AgentsCard() {
   const t = useT();
+  const confirm = useConfirm();
   const setStoreEnabled = useAppStore((s) => s.setAgentsEnabled);
   const [info, setInfo] = useState<AgentsInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -108,7 +110,7 @@ export function AgentsCard() {
   /** The menu bar went off: offer to remove StudioManager's status line, when there is one. */
   const offerRemoval = async () => {
     if (!line?.present) return;
-    if (!(await ask(t.agents_status_line_remove_ask, { kind: "warning" }))) return;
+    if (!(await confirm({ title: t.agents_status_line_remove_ask, confirmLabel: t.agents_status_line_remove }))) return;
     setLineNote(null);
     setLineError(null);
     try {
@@ -162,10 +164,10 @@ export function AgentsCard() {
         <SettingRow label={t.agents_status_line} desc={t.agents_status_line_desc}>
           <div className="flex gap-2">
             {canSetUp && (
-              <Button size="sm" variant="secondary" onClick={() => void startLine("install")}>{t.agents_status_line_setup}</Button>
+              <Button variant="secondary" onClick={() => void startLine("install")}>{t.agents_status_line_setup}</Button>
             )}
             {line?.present && (
-              <Button size="sm" variant="secondary" onClick={() => void startLine("remove")}>{t.agents_status_line_remove}</Button>
+              <Button variant="secondary" onClick={() => void startLine("remove")}>{t.agents_status_line_remove}</Button>
             )}
           </div>
         </SettingRow>
@@ -174,15 +176,15 @@ export function AgentsCard() {
         <div className="rounded-lg border border-[var(--color-border-divider)] p-3 my-2">
           <p className="text-xs text-muted mb-1">{t.agents_status_line_preview_hint}</p>
           {lineMode === "install" && line?.replacesOther && (
-            <p role="alert" className="text-xs text-warning mb-1">
+            <p role="alert" className="text-xs text-warning-text mb-1">
               {t.agents_status_line_replaces.replace("{command}", line.current ?? "")}
             </p>
           )}
           <pre data-testid="status-line-preview" className="text-xs overflow-auto max-h-48 whitespace-pre-wrap">{shown}</pre>
-          <div className="flex gap-2 mt-2">
-            <Button size="sm" onClick={() => void confirmLine()}>{t.agent_access_confirm}</Button>
-            <Button size="sm" variant="ghost" onClick={() => setLineMode(null)}>{t.agent_access_cancel}</Button>
-          </div>
+          <FormActions className="mt-2">
+            <Button variant="secondary" onClick={() => setLineMode(null)}>{t.agent_access_cancel}</Button>
+            <Button onClick={() => void confirmLine()}>{t.agent_access_confirm}</Button>
+          </FormActions>
         </div>
       )}
       {lineNote && <p className="text-xs text-muted py-1">{lineNote}</p>}

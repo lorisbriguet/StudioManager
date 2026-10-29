@@ -1,8 +1,11 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { IconButton } from "../components/ui/IconButton";
 import { useForm } from "react-hook-form";
-import { Plus, X, Palette, Trash2, Building2, Landmark, FileText, AlertTriangle } from "lucide-react";
+import { Landmark, type LucideIcon } from "lucide-react";
+import { ICONS, ICON_SIZE } from "../components/ui/icons";
 import { isUntranslatedActivity } from "../lib/activityNudge";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
+import { deleteWithUndo } from "../lib/undo";
 import {
   useBusinessProfile,
   useUpdateBusinessProfile,
@@ -12,7 +15,7 @@ import { useActivities, useCreateActivity, useUpdateActivity, useDeleteActivity 
 import type { Activity } from "../types/activity";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Button, FormField, Input, PageSpinner } from "../components/ui";
+import { Button, FormField, FormLayout, FormSection, FormGrid, FormGroup, FormActions, Input, DetailSkeleton, EmptyState, QueryError, SectionLabel, SidebarTitle, FORM_GAP, FORM_WIDTH, FIELD_LABEL } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { TemplateEditor } from "../components/invoice/TemplateEditor";
 import {
@@ -20,6 +23,7 @@ import {
   useDeleteInvoiceTemplate,
 } from "../db/hooks/useInvoiceTemplates";
 import type { InvoiceTemplate } from "../types/invoice-template";
+import { NavItem } from "../components/ui/NavItem";
 
 type FormData = Omit<BusinessProfile, "id">;
 
@@ -47,7 +51,7 @@ const bankFields: { key: keyof FormData; labelKey: UIKey }[] = [
 ];
 
 export function ProfilePage() {
-  const { data: profile, isLoading } = useBusinessProfile();
+  const { data: profile, isLoading, isError: profileError, isFetching: profileFetching, refetch: refetchProfile } = useBusinessProfile();
   const updateProfile = useUpdateBusinessProfile();
   // Phase 2 E3: this stays a react-hook-form form — FormField is wired
   // presentationally around register (label/id association, error passthrough).
@@ -96,17 +100,16 @@ export function ProfilePage() {
         vat_exempt: data.vat_exempt ? 1 : 0,
       },
       {
-        onSuccess: () => toast.success(t.toast_profile_saved),
-        onError: (err) => toast.error(`${t.failed_save_profile}: ${String(err)}`),
+        onSuccess: () => notify.success(t.toast_profile_saved),
       }
     );
   };
 
-  const categories = useMemo<Array<{ key: ProfileCategory; label: string; icon?: React.ReactNode }>>(() => [
-    { key: "business", label: t.business_profile, icon: <Building2 size={14} /> },
-    { key: "bank", label: t.bank_details, icon: <Landmark size={14} /> },
-    { key: "invoicing", label: t.invoice_defaults, icon: <FileText size={14} /> },
-    { key: "templates", label: t.templates, icon: <Palette size={14} /> },
+  const categories = useMemo<Array<{ key: ProfileCategory; label: string; icon: LucideIcon }>>(() => [
+    { key: "business", label: t.business_profile, icon: ICONS.organisation },
+    { key: "bank", label: t.bank_details, icon: Landmark },
+    { key: "invoicing", label: t.invoice_defaults, icon: ICONS.invoice },
+    { key: "templates", label: t.templates, icon: ICONS.invoiceTemplates },
   ], [t]);
 
   // Keyboard navigation for profile sidebar
@@ -136,31 +139,28 @@ export function ProfilePage() {
     return () => window.removeEventListener("keydown", handleProfileKeyDown);
   }, [handleProfileKeyDown]);
 
-  if (isLoading) return <PageSpinner />;
+  if (isLoading) return <DetailSkeleton blocks={4} />;
+  if (profileError && profile === undefined) return <QueryError message={t.load_error_profile} onRetry={refetchProfile} retrying={profileFetching} />;
 
   return (
     <div className="flex gap-0 -m-8" style={{ height: "calc(100vh - 80px)" }}>
       {/* Category sidebar */}
       <div className="w-56 shrink-0 border-r border-[var(--color-border-divider)] py-6">
-        <h1 className="text-xl font-semibold px-6 mb-6">{t.profile}</h1>
-        <nav className="space-y-0.5 px-3">
+        <SidebarTitle className="px-6 mb-6">{t.profile}</SidebarTitle>
+        <nav aria-label={t.profile} className="space-y-0.5 px-3">
           {categories.map((cat) => (
-            <button
+            <NavItem
               key={cat.key}
-              type="button"
+              size="md"
+              active={activeCategory === cat.key}
+              icon={cat.icon}
               onClick={() => {
                 setActiveCategory(cat.key);
                 setEditingTemplate(null);
               }}
-              className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 ${
-                activeCategory === cat.key
-                  ? "bg-accent-light text-accent font-medium"
-                  : "text-muted hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text)]"
-              }`}
             >
-              {cat.icon && <span className="shrink-0">{cat.icon}</span>}
               {cat.label}
-            </button>
+            </NavItem>
           ))}
         </nav>
       </div>
@@ -177,20 +177,22 @@ export function ProfilePage() {
             </div>
           ) : (
             <div className="p-8">
-              <div className="flex items-center justify-between mb-4 max-w-lg">
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
-                  {t.templates}
-                </h2>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  icon={<Plus size={14} />}
-                  onClick={() => setEditingTemplate("new")}
-                >
-                  {t.new_invoice_template}
-                </Button>
-              </div>
-              <div className="space-y-1.5 max-w-lg">
+              <SectionLabel
+                as="h2"
+                className={`mb-3 ${FORM_WIDTH}`}
+                action={
+                  <Button
+                    variant="secondary"
+                    icon={ICONS.add}
+                    onClick={() => setEditingTemplate("new")}
+                  >
+                    {t.new_invoice_template}
+                  </Button>
+                }
+              >
+                {t.templates}
+              </SectionLabel>
+              <div className={`space-y-1.5 ${FORM_WIDTH}`}>
                 {invoiceTemplates && invoiceTemplates.length > 0 ? (
                   invoiceTemplates.map((tmpl) => (
                     <div
@@ -199,7 +201,7 @@ export function ProfilePage() {
                     >
                       <button
                         type="button"
-                        className="flex-1 text-left text-sm hover:text-accent"
+                        className="flex-1 text-left text-sm hover:text-accent-text"
                         onClick={() => setEditingTemplate(tmpl)}
                       >
                         <span>{tmpl.name}</span>
@@ -207,23 +209,17 @@ export function ProfilePage() {
                           <span className="ml-2 text-xs text-muted">(default)</span>
                         )}
                       </button>
-                      <button
-                        type="button"
+                      <IconButton size="xs"
+                        icon={ICONS.delete}
+                        label={t.delete_template}
+                        tone="danger"
                         disabled={!!tmpl.is_default}
-                        onClick={() => {
-                          deleteTemplate.mutate(tmpl.id, {
-                            onError: (e) => toast.error(String(e)),
-                          });
-                        }}
-                        className="text-muted hover:text-[var(--color-danger-text)] disabled:opacity-30"
-                        aria-label={t.delete_template}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                        onClick={() => deleteWithUndo(deleteTemplate, tmpl.id, t.invoice_template_deleted)}
+                      />
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-muted">{t.no_templates}</p>
+                  <EmptyState size="sm" message={t.no_invoice_templates} />
                 )}
               </div>
             </div>
@@ -231,67 +227,49 @@ export function ProfilePage() {
         </div>
       ) : (
       <div className="flex-1 overflow-y-auto p-8">
-        <form onSubmit={handleSubmit(onSubmit)} className="max-w-2xl space-y-8">
+        <FormLayout as="form" onSubmit={handleSubmit(onSubmit)}>
           {activeCategory === "business" && (
-            <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted mb-4">
-                {t.business_profile}
-              </h2>
-              <div className="grid grid-cols-2 gap-4 max-w-lg">
+            <FormSection title={t.business_profile}>
+              <FormGrid cols={2}>
                 {profileFields.map(({ key, labelKey, type }) => (
                   <FormField
                     key={key}
                     label={t[labelKey]}
                     error={rhfErrors[key]?.message}
-                    className={key === "address" ? "col-span-2" : ""}
+                    span={key === "address" ? "full" : undefined}
                   >
                     <Input {...register(key)} type={type ?? "text"} />
                   </FormField>
                 ))}
-              </div>
-              <Button type="submit" className="mt-6" disabled={updateProfile.isPending}>
-                {updateProfile.isPending ? t.saving : t.save}
-              </Button>
-            </section>
+              </FormGrid>
+            </FormSection>
           )}
 
           {activeCategory === "bank" && (
-            <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted mb-4">
-                {t.bank_details}
-              </h2>
-              <div className="grid grid-cols-2 gap-4 max-w-lg">
+            <FormSection title={t.bank_details}>
+              <FormGrid cols={2}>
                 {bankFields.map(({ key, labelKey }) => (
                   <FormField
                     key={key}
                     label={t[labelKey]}
                     error={rhfErrors[key]?.message}
-                    className={key === "bank_address" || key === "iban" || key === "qr_iban" ? "col-span-2" : ""}
+                    span={key === "bank_address" || key === "iban" || key === "qr_iban" ? "full" : undefined}
                   >
                     <Input {...register(key)} type="text" />
                   </FormField>
                 ))}
-              </div>
-              <Button type="submit" className="mt-6" disabled={updateProfile.isPending}>
-                {updateProfile.isPending ? t.saving : t.save}
-              </Button>
-            </section>
+              </FormGrid>
+            </FormSection>
           )}
 
           {activeCategory === "invoicing" && (
-            <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted mb-4">
-                {t.invoice_defaults}
-              </h2>
-              <div className="space-y-4 max-w-lg">
+            <FormSection title={t.invoice_defaults}>
+              <FormGrid cols={1}>
                 {/* Activities list */}
-                <div>
-                  <label className="block text-xs font-medium text-muted mb-1">
-                    {t.activities}
-                  </label>
-                  <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center text-xs text-muted mb-1">
-                    <span>{t.activity_name_fr}</span>
-                    <span>{t.activity_name_en}</span>
+                <FormGroup label={t.activities}>
+                  <div className={`grid grid-cols-[1fr_1fr_auto] ${FORM_GAP} items-center mb-1`}>
+                    <span className={FIELD_LABEL}>{t.activity_name_fr}</span>
+                    <span className={FIELD_LABEL}>{t.activity_name_en}</span>
                     <span className="w-[14px]" />
                   </div>
                   <div className="space-y-1.5 mb-2">
@@ -300,61 +278,60 @@ export function ProfilePage() {
                         key={a.id}
                         activity={a}
                         onSave={(name_fr, name_en) => updateActivityMut.mutate({ id: a.id, name_fr, name_en })}
-                        onDelete={() => deleteActivityMut.mutate(a.id)}
+                        onDelete={() => deleteWithUndo(deleteActivityMut, a.id, t.activity_deleted)}
                         removeLabel={t.remove}
                       />
                     ))}
                   </div>
-                  <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                  <div className={`grid grid-cols-[1fr_1fr_auto] ${FORM_GAP} items-center`}>
                     <Input
                       value={newFr}
                       onChange={(e) => setNewFr(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addNewActivity(); } }}
                       placeholder={t.activity_name_fr}
+                      aria-label={t.activity_name_fr}
                     />
                     <Input
                       value={newEn}
                       onChange={(e) => setNewEn(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addNewActivity(); } }}
                       placeholder={t.activity_name_en}
+                      aria-label={t.activity_name_en}
                     />
-                    <button
-                      type="button"
-                      onClick={addNewActivity}
-                      className="p-2 text-muted hover:text-accent"
-                      aria-label={t.add_activity}
-                    >
-                      <Plus size={16} />
-                    </button>
+                    <IconButton icon={ICONS.add} label={t.add_activity} tone="accent" onClick={addNewActivity} />
                   </div>
-                </div>
+                </FormGroup>
 
                 {/* Payment terms */}
-                <FormField
-                  label={t.payment_terms_days}
-                  error={rhfErrors.default_payment_terms_days?.message}
-                >
-                  <Input
-                    {...register("default_payment_terms_days", { valueAsNumber: true })}
-                    type="number"
-                  />
-                </FormField>
+                <FormGrid cols={2}>
+                  <FormField
+                    label={t.payment_terms_days}
+                    error={rhfErrors.default_payment_terms_days?.message}
+                  >
+                    <Input
+                      {...register("default_payment_terms_days", { valueAsNumber: true })}
+                      numeric
+                    />
+                  </FormField>
+                </FormGrid>
 
-                <div className="flex items-center gap-2">
+                <div>
                   <Toggle
                     checked={!!watch("vat_exempt")}
                     onChange={(v) => setValue("vat_exempt", v ? 1 : 0)}
-                    ariaLabel={t.vat_exempt}
+                    label={t.vat_exempt}
                   />
-                  <label className="text-sm">{t.vat_exempt}</label>
                 </div>
-              </div>
-              <Button type="submit" className="mt-6" disabled={updateProfile.isPending}>
-                {updateProfile.isPending ? t.saving : t.save}
-              </Button>
-            </section>
+              </FormGrid>
+            </FormSection>
           )}
-        </form>
+
+          <FormActions>
+            <Button type="submit" disabled={updateProfile.isPending}>
+              {updateProfile.isPending ? t.saving : t.save}
+            </Button>
+          </FormActions>
+        </FormLayout>
       </div>
       )}
     </div>
@@ -389,9 +366,9 @@ export function ActivityRow({
   const untranslated = isUntranslatedActivity({ name_fr: fr, name_en: en });
 
   return (
-    <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
-      <Input value={fr} onChange={(e) => setFr(e.target.value)} onBlur={commit} />
-      <Input value={en} onChange={(e) => setEn(e.target.value)} onBlur={commit} />
+    <div className={`grid grid-cols-[1fr_1fr_auto] ${FORM_GAP} items-center`}>
+      <Input value={fr} onChange={(e) => setFr(e.target.value)} onBlur={commit} aria-label={t.activity_name_fr} />
+      <Input value={en} onChange={(e) => setEn(e.target.value)} onBlur={commit} aria-label={t.activity_name_en} />
       <div className="flex items-center gap-1">
         {untranslated && (
           <span
@@ -399,17 +376,10 @@ export function ActivityRow({
             aria-label={t.activity_untranslated}
             className="text-[var(--color-warning-text)]"
           >
-            <AlertTriangle size={13} />
+            <ICONS.warning size={ICON_SIZE.control} />
           </span>
         )}
-        <button
-          type="button"
-          onClick={onDelete}
-          className="text-muted hover:text-[var(--color-danger-text)]"
-          aria-label={removeLabel}
-        >
-          <X size={14} />
-        </button>
+        <IconButton icon={ICONS.close} label={removeLabel} tone="danger" onClick={onDelete} />
       </div>
     </div>
   );

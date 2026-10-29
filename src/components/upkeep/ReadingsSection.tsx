@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { toast } from "sonner";
-import { Badge, Button, FormField, Input, MeterBar, Select } from "../ui";
+import { Badge, Button, FIELD_LABEL, FormField, Input, ProgressBar, Select, Table } from "../ui";
+import { notify } from "../../lib/notify";
 import { useT } from "../../i18n/useT";
 import {
   useConnections,
@@ -26,10 +26,10 @@ function diskAgeYears(d: MachineDisk, now = Date.now()): number {
   return Number.isFinite(seen) ? Math.max(0, (now - seen) / 3_600_000 / HOURS_PER_YEAR) : 0;
 }
 
-function ageColor(years: number): string {
-  if (years >= DRIVE_LIFE_YEARS) return "var(--color-danger-text)";
-  if (years >= DRIVE_LIFE_YEARS * 0.6) return "var(--color-warning-text)";
-  return "var(--color-success-text)";
+function ageTone(years: number): "danger" | "warning" | "success" {
+  if (years >= DRIVE_LIFE_YEARS) return "danger";
+  if (years >= DRIVE_LIFE_YEARS * 0.6) return "warning";
+  return "success";
 }
 
 /** Name and unit of a usage metric; unknown metrics show their key. */
@@ -46,31 +46,30 @@ function Disks({ machineId }: { machineId: number }) {
   if (disks.length === 0) return null;
   return (
     <div>
-      <div className="text-xs text-muted mb-1">{t.upkeep_disks}</div>
-      <table className="w-full text-sm">
-        <tbody>
+      <div className={`${FIELD_LABEL} mb-1`}>{t.upkeep_disks}</div>
+      <Table density="compact">
+        <Table.Body>
           {disks.map((d) => {
             const years = diskAgeYears(d);
+            const age = t.upkeep_disk_age_years.replace("{n}", fmt(years));
             return (
-              <tr key={d.id} className="border-b border-[var(--color-border-divider)]">
-                <td className="px-2 py-2 font-medium whitespace-nowrap">{d.slot}</td>
-                <td className="px-2 py-2 text-muted">{d.model ?? ""}</td>
-                <td className="px-2 py-2">
+              <Table.Row key={d.id}>
+                <Table.Td className="font-medium whitespace-nowrap">{d.slot}</Table.Td>
+                <Table.Td muted>{d.model ?? ""}</Table.Td>
+                <Table.Td>
                   <Badge variant={diskHealthVariant(d.health)}>{t[`upkeep_disk_health_${d.health}` as const]}</Badge>
-                </td>
-                <td className="px-2 py-2">
+                </Table.Td>
+                <Table.Td>
                   <div className="flex items-center gap-2.5">
-                    <MeterBar className="w-[120px]" pct={(years / DRIVE_LIFE_YEARS) * 100} color={ageColor(years)} label={t.upkeep_disk_age_years.replace("{n}", fmt(years))} />
-                    <span className="text-xs text-muted tabular-nums whitespace-nowrap">
-                      {t.upkeep_disk_age_years.replace("{n}", fmt(years))}
-                    </span>
+                    <ProgressBar className="w-[120px]" value={(years / DRIVE_LIFE_YEARS) * 100} tone={ageTone(years)} aria-label={age} />
+                    <span className="text-xs text-muted tabular-nums whitespace-nowrap">{age}</span>
                   </div>
-                </td>
-              </tr>
+                </Table.Td>
+              </Table.Row>
             );
           })}
-        </tbody>
-      </table>
+        </Table.Body>
+      </Table>
     </div>
   );
 }
@@ -92,15 +91,14 @@ function ManualReading({ machine }: { machine: Machine }) {
         <Input
           type="number"
           min={0}
-          fullWidth={false}
-          className="w-32"
-          aria-label={t.upkeep_current_reading}
+          width="md"
+          numeric
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") save(); }}
         />
       </FormField>
-      <Button size="sm" variant="secondary" disabled={!valid} loading={record.isPending} onClick={save}>
+      <Button variant="secondary" disabled={!valid} loading={record.isPending} onClick={save}>
         {t.upkeep_current_reading_save}
       </Button>
     </div>
@@ -130,7 +128,7 @@ function LinkForm({ machine, needsBaseline }: { machine: Machine; needsBaseline:
       setDevices(list);
       setDeviceId(list[0]?.device_id ?? "");
     } catch (e) {
-      toast.error(connectionErrorText(e, t));
+      notify.error(connectionErrorText(e, t), e);
     } finally {
       setFinding(false);
     }
@@ -138,7 +136,7 @@ function LinkForm({ machine, needsBaseline }: { machine: Machine; needsBaseline:
 
   return (
     <div className="space-y-2">
-      <div className="text-xs text-muted">{t.upkeep_link_connection}</div>
+      <div className={FIELD_LABEL}>{t.upkeep_link_connection}</div>
       <div className="flex flex-wrap items-end gap-2">
         <Select
           fullWidth={false}
@@ -149,7 +147,7 @@ function LinkForm({ machine, needsBaseline }: { machine: Machine; needsBaseline:
           <option value="">{t.upkeep_link_connection}</option>
           {connections.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
         </Select>
-        <Button size="sm" variant="secondary" disabled={!conn} loading={finding} onClick={() => void find()}>
+        <Button variant="secondary" disabled={!conn} loading={finding} onClick={() => void find()}>
           {t.upkeep_find_devices}
         </Button>
       </div>
@@ -166,12 +164,11 @@ function LinkForm({ machine, needsBaseline }: { machine: Machine; needsBaseline:
           </FormField>
           {askBaseline && (
             <FormField label={t.upkeep_reading_baseline}>
-              <Input type="number" min={0} fullWidth={false} className="w-32" value={baseline}
+              <Input type="number" min={0} width="md" numeric value={baseline}
                 onChange={(e) => setBaseline(e.target.value)} />
             </FormField>
           )}
           <Button
-            size="sm"
             disabled={!deviceId}
             loading={link.isPending}
             onClick={() => link.mutate({
@@ -225,10 +222,10 @@ export function ReadingsSection({ machine, items }: { machine: Machine; items: U
               {conn.failing_since ? t.upkeep_connection_failing : t.upkeep_connection_ok}
             </Badge>
           )}
-          <Button size="sm" variant="secondary" loading={syncNow.isPending} onClick={() => syncNow.mutate(conn.id)}>
+          <Button variant="secondary" loading={syncNow.isPending} onClick={() => syncNow.mutate(conn.id)}>
             {t.upkeep_sync_now}
           </Button>
-          <Button size="sm" variant="ghost"
+          <Button variant="outline"
             onClick={() => link.mutate({ id: machine.id, connection_id: null, device_id: null, reading_baseline: machine.reading_baseline, linked_at: null })}>
             {t.upkeep_unlink}
           </Button>

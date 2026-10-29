@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import type { Agent, Group } from "../../lib/agents";
 import { agentGroupVariant } from "../../lib/statusColors";
-import { Badge } from "../ui";
+import { Badge, ICON_SIZE, SECTION_LABEL } from "../ui";
 import { useT } from "../../i18n/useT";
 import type { UIKey } from "../../i18n/ui";
 import { GROUPS } from "./useAgents";
@@ -103,9 +103,9 @@ export function AgentList({ byGroup, selectedId, onSelect, compact, renderExtra 
                   type="button"
                   aria-expanded={open}
                   onClick={() => toggle(g)}
-                  className={`w-full flex items-center gap-2 pl-3 py-1.5 text-[10px] font-medium uppercase tracking-widest text-left ${GROUP_STYLE[g].text}`}
+                  className={`w-full flex items-center gap-2 pl-3 py-1.5 text-left ${SECTION_LABEL}`}
                 >
-                  <ChevronRight size={14} className={`shrink-0 text-muted transition-transform ${open ? "rotate-90" : ""}`} />
+                  <ChevronRight size={ICON_SIZE.menu} className={`shrink-0 text-muted transition-transform ${open ? "rotate-90" : ""}`} />
                   <span className={`dot ${GROUP_STYLE[g].dot}`} aria-hidden />
                   <span className="truncate">{t[GROUP_KEYS[g]]}</span>
                 </button>

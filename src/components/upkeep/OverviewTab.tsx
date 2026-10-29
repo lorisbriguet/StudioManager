@@ -1,32 +1,25 @@
 import { Link } from "react-router-dom";
-import { Wrench } from "lucide-react";
-import { Badge, Card, MeterBar } from "../ui";
+import { Badge, CARD_GAP, CARD_LINK, CARD_STACK, Card, EmptyState, ICONS, ICON_SIZE, ProgressBar } from "../ui";
 import { DueList } from "./DueList";
-import { SectionTitle } from "./SectionTitle";
 import { useMachines, useUpkeepOverview } from "../../db/hooks/useUpkeep";
 import { useT } from "../../i18n/useT";
 import { machineStatusVariant } from "../../lib/statusColors";
 import { formatDisplayDate } from "../../utils/formatDate";
 import type { Machine } from "../../types/upkeep";
 
-function Quiet({ children }: { children: string }) {
-  return <p className="text-sm text-muted py-2">{children}</p>;
-}
-
 function MachineCard({ machine, nextTitle }: { machine: Machine; nextTitle: string | null }) {
   const t = useT();
   const sub = [machine.kind, machine.location].filter(Boolean).join(" · ");
   return (
-    <Link
-      to={`/upkeep/machines/${machine.id}`}
-      className="block rounded-xl bg-[var(--color-surface)] p-4 hover:bg-[var(--color-hover-row)] transition-colors"
-    >
+    <Card interactive="link">
       <div className="flex items-center gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-input-bg)] text-[var(--color-text-secondary)]">
-          <Wrench size={18} strokeWidth={1.5} />
+          <ICONS.upkeep size={ICON_SIZE.menu} />
         </span>
         <div className="min-w-0">
-          <div className="text-sm font-medium truncate">{machine.name}</div>
+          <h3 className="text-sm font-medium truncate">
+            <Link to={`/upkeep/machines/${machine.id}`} className={CARD_LINK}>{machine.name}</Link>
+          </h3>
           {sub && <div className="text-xs text-muted truncate">{sub}</div>}
         </div>
       </div>
@@ -36,7 +29,7 @@ function MachineCard({ machine, nextTitle }: { machine: Machine; nextTitle: stri
         </Badge>
         {nextTitle && <span className="text-xs text-muted truncate">{nextTitle}</span>}
       </div>
-    </Link>
+    </Card>
   );
 }
 
@@ -49,27 +42,28 @@ export function OverviewTab() {
   for (const r of due) if (!nextByMachine.has(r.machine.id)) nextByMachine.set(r.machine.id, r.item.title);
 
   return (
-    <div className="space-y-6">
-      <Card padding={false}>
-        <div className="px-4 pt-4">
-          <SectionTitle>{t.upkeep_due_soon}</SectionTitle>
-        </div>
+    <div className={CARD_STACK}>
+      <Card padding="none">
+        <Card.Header title={t.upkeep_due_soon} className="px-4 pt-4 mb-3" />
         {due.length === 0 ? (
-          <div className="px-4 pb-3"><Quiet>{t.upkeep_nothing_due}</Quiet></div>
+          <EmptyState size="sm" icon={ICONS.done} message={t.upkeep_nothing_due} />
         ) : (
           <DueList rows={due} />
         )}
       </Card>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className={`grid ${CARD_GAP} md:grid-cols-2`}>
         <Card>
-          <SectionTitle aside={
-            <Link to="/upkeep?tab=consumables" className="text-xs text-accent hover:underline">
-              {t.upkeep_all_consumables}
-            </Link>
-          }>{t.upkeep_low_stock}</SectionTitle>
+          <Card.Header
+            title={t.upkeep_low_stock}
+            action={
+              <Link to="/upkeep?tab=consumables" className="text-xs text-accent-text hover:underline">
+                {t.upkeep_all_consumables}
+              </Link>
+            }
+          />
           {lowStock.length === 0 ? (
-            <Quiet>{t.upkeep_low_stock_empty}</Quiet>
+            <EmptyState size="sm" message={t.upkeep_low_stock_empty} />
           ) : (
             <ul className="space-y-3">
               {lowStock.map((c) => (
@@ -78,7 +72,7 @@ export function OverviewTab() {
                     <span>{c.name}</span>
                     <span className="text-xs text-muted tabular-nums">{c.stock} / {c.reorder_level} {c.unit}</span>
                   </div>
-                  <MeterBar className="mt-1 w-full" pct={(c.stock / c.reorder_level) * 100} color="var(--color-danger)" />
+                  <ProgressBar className="mt-1" value={(c.stock / c.reorder_level) * 100} tone="danger" aria-label={c.name} />
                 </li>
               ))}
             </ul>
@@ -86,9 +80,9 @@ export function OverviewTab() {
         </Card>
 
         <Card>
-          <SectionTitle>{t.upkeep_warranty_renewals}</SectionTitle>
+          <Card.Header title={t.upkeep_warranty_renewals} />
           {endingSoon.length === 0 ? (
-            <Quiet>{t.upkeep_warranty_renewals_empty}</Quiet>
+            <EmptyState size="sm" message={t.upkeep_warranty_renewals_empty} />
           ) : (
             <ul className="space-y-2">
               {endingSoon.map((e) => (
@@ -108,14 +102,14 @@ export function OverviewTab() {
       </div>
 
       <Card>
-        <SectionTitle>{t.upkeep_replacements}</SectionTitle>
+        <Card.Header title={t.upkeep_replacements} />
         {replacements.length === 0 ? (
-          <Quiet>{t.upkeep_replacements_empty}</Quiet>
+          <EmptyState size="sm" message={t.upkeep_replacements_empty} />
         ) : (
           <ul className="space-y-2">
             {replacements.map((r) => (
               <li key={r.machine.id} className="flex items-center justify-between text-sm">
-                <Link to={`/upkeep/machines/${r.machine.id}`} className="hover:text-accent">{r.machine.name}</Link>
+                <Link to={`/upkeep/machines/${r.machine.id}`} className="hover:text-accent-text">{r.machine.name}</Link>
                 <span className="text-xs text-muted">{t.upkeep_replace_around.replace("{year}", String(r.year))}</span>
               </li>
             ))}
@@ -124,15 +118,19 @@ export function OverviewTab() {
         </Card>
 
       <section>
-        <SectionTitle aside={
-          <Link to="/upkeep?tab=machines" className="text-xs text-accent hover:underline">
-            {t.upkeep_see_all}
-          </Link>
-        }>{t.upkeep_machines_count.replace("{count}", String(machines.length))}</SectionTitle>
+        <Card.Header
+          title={t.upkeep_tab_machines}
+          count={machines.length}
+          action={
+            <Link to="/upkeep?tab=machines" className="text-xs text-accent-text hover:underline">
+              {t.upkeep_see_all}
+            </Link>
+          }
+        />
         {machines.length === 0 ? (
-          <Quiet>{t.upkeep_no_machines}</Quiet>
+          <EmptyState size="sm" icon={ICONS.upkeep} message={t.upkeep_no_machines} />
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className={`grid ${CARD_GAP} sm:grid-cols-2 xl:grid-cols-3`}>
             {machines.map((m) => (
               <MachineCard key={m.id} machine={m} nextTitle={nextByMachine.get(m.id) ?? null} />
             ))}

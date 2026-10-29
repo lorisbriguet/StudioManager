@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { useAppStore } from "../stores/app-store";
+import { uiLabels } from "../i18n/ui";
 import { useOrgStore } from "../stores/org-store";
 import { buildUpkeepOverview } from "../lib/upkeep/overview";
 import type { UpkeepOverview } from "../lib/upkeep/overview";
@@ -31,6 +32,7 @@ vi.mock("../lib/upkeep/calendar", () => ({ syncAllUpkeepEvents: (opts?: unknown)
 
 import { UpkeepWidget } from "../components/upkeep/UpkeepWidget";
 import { UpkeepSettingsCard } from "../components/settings/UpkeepSettingsCard";
+import { pickOption } from "./fixtures/dropdown";
 
 const empty: UpkeepOverview = { due: [], lowStock: [], endingSoon: [], replacements: [], overdueCount: 0 };
 
@@ -91,7 +93,7 @@ describe("UpkeepSettingsCard", () => {
   it("writes upkeepAlertDefault and re-syncs existing calendar events", () => {
     useAppStore.setState({ upkeepAlertDefault: "day_9am" });
     render(<UpkeepSettingsCard />);
-    fireEvent.change(screen.getByLabelText("Calendar alert"), { target: { value: "week_before" } });
+    pickOption(screen.getByLabelText("Calendar alert"), uiLabels.EN.upkeep_alert_week_before);
     expect(useAppStore.getState().upkeepAlertDefault).toBe("week_before");
     expect(syncAll).toHaveBeenCalledTimes(1);
     expect(syncAll).toHaveBeenCalledWith({ forceDefaultAlert: true });

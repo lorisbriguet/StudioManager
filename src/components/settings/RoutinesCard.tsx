@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react";
-import { SettingRow, SettingsCard } from "./SettingsPrimitives";
-import { ask } from "@tauri-apps/plugin-dialog";
-import { BAR_ICON_BUTTON, Button, FormField, Input, Select } from "../ui";
+import { SettingRow, SettingsCard } from "../ui/Settings";
+import { Button, FIELD_LABEL, FormActions, FormField, FormLayout, ICONS, IconButton, Input, Radio, SectionLabel, Select, Textarea } from "../ui";
+import { useConfirm } from "../../lib/confirm";
 import { ModelMenu } from "../agents/ModelMenu";
 import { slugifyName } from "../agents/StartAgentForm";
 import { useT } from "../../i18n/useT";
@@ -11,40 +10,35 @@ import { getRoutines, saveRoutines, type Routine, type Routines, type Section } 
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-const TEXTAREA =
-  "w-full bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-lg px-3 py-2 text-sm focus-accent";
-
 function folderText(f: StartFolder): string {
   const l = f.label;
   return l ? `${l.orgName} › ${l.clientName} › ${l.projectName} — ${f.path}` : f.path;
 }
 
-/** A row of exclusive choices (native radios, so keyboard and screen readers just work). */
+/** A labelled row of exclusive choices (shared Radio, one name, so arrows move between them). */
 function Choices<T extends string>({
   name,
+  label,
   value,
   options,
   onChange,
 }: {
   name: string;
+  label: string;
   value: T;
   options: { value: T; label: string }[];
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-1">
-      {options.map((o) => (
-        <label key={o.value} className="inline-flex items-center gap-1.5 text-sm">
-          <input
-            type="radio"
-            name={name}
-            checked={value === o.value}
-            onChange={() => onChange(o.value)}
-            className="accent-[var(--color-accent)]"
-          />
-          {o.label}
-        </label>
-      ))}
+    <div role="radiogroup" aria-label={label}>
+      <div className={`${FIELD_LABEL} mb-1`} aria-hidden>
+        {label}
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
+        {options.map((o) => (
+          <Radio key={o.value} name={name} label={o.label} checked={value === o.value} onChange={() => onChange(o.value)} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -84,8 +78,11 @@ function SectionForm({
   };
 
   return (
-    <form
-      className="space-y-3 pb-3"
+    <FormLayout
+      as="form"
+      dense
+      capped={false}
+      className="pb-3"
       onSubmit={(e) => {
         e.preventDefault();
         submit();
@@ -95,7 +92,7 @@ function SectionForm({
         <Input value={name} onChange={(e) => setName(e.target.value)} />
       </FormField>
       <div className="space-y-2">
-        <div className="text-xs text-muted">{t.routines_links}</div>
+        <div className={FIELD_LABEL}>{t.routines_links}</div>
         {links.map((l, i) => (
           <div key={i} className="flex items-center gap-2">
             <Input
@@ -110,12 +107,10 @@ function SectionForm({
               value={l.target}
               onChange={(e) => setLink(i, { target: e.target.value })}
             />
-            <button type="button" className={BAR_ICON_BUTTON} aria-label={t.delete} onClick={() => setLinks(links.filter((_, j) => j !== i))}>
-              <Trash2 size={14} />
-            </button>
+            <IconButton icon={ICONS.delete} label={t.delete} size="xs" onClick={() => setLinks(links.filter((_, j) => j !== i))} />
           </div>
         ))}
-        <Button type="button" size="sm" variant="ghost" onClick={() => setLinks([...links, { label: "", target: "" }])}>
+        <Button variant="outline" icon={ICONS.add} onClick={() => setLinks([...links, { label: "", target: "" }])}>
           {t.routines_add_link}
         </Button>
       </div>
@@ -124,15 +119,13 @@ function SectionForm({
           {error}
         </p>
       )}
-      <div className="flex gap-2">
-        <Button type="submit" size="sm">
-          {t.save}
-        </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
+      <FormActions>
+        <Button variant="secondary" onClick={onCancel}>
           {t.cancel}
         </Button>
-      </div>
-    </form>
+        <Button type="submit">{t.save}</Button>
+      </FormActions>
+    </FormLayout>
   );
 }
 
@@ -220,8 +213,11 @@ function RoutineForm({
   };
 
   return (
-    <form
-      className="space-y-3 pb-3"
+    <FormLayout
+      as="form"
+      dense
+      capped={false}
+      className="pb-3"
       onSubmit={(e) => {
         e.preventDefault();
         submit();
@@ -233,10 +229,9 @@ function RoutineForm({
       <FormField label={t.routines_idle_hint}>
         <Input value={idleHint} onChange={(e) => setIdleHint(e.target.value)} />
       </FormField>
-      <div>
-        <div className="text-xs text-muted mb-1">{t.routines_kind}</div>
-        <Choices
+      <Choices
           name="routine-kind"
+          label={t.routines_kind}
           value={kind}
           onChange={setKind}
           options={[
@@ -244,7 +239,6 @@ function RoutineForm({
             { value: "command", label: t.routines_kind_command },
           ]}
         />
-      </div>
 
       {kind === "agent" ? (
         <>
@@ -272,10 +266,9 @@ function RoutineForm({
               />
             </FormField>
           </div>
-          <div>
-            <div className="text-xs text-muted mb-1">{t.routines_prompt_kind}</div>
-            <Choices
+          <Choices
               name="routine-prompt-kind"
+              label={t.routines_prompt_kind}
               value={promptKind}
               onChange={setPromptKind}
               options={[
@@ -283,12 +276,11 @@ function RoutineForm({
                 { value: "file", label: t.routines_prompt_file },
               ]}
             />
-          </div>
           <FormField label={promptKind === "file" ? t.routines_prompt_path : t.agents_task} required error={errors.prompt}>
             {promptKind === "file" ? (
               <Input value={prompt} onChange={(e) => setPrompt(e.target.value)} />
             ) : (
-              <textarea className={TEXTAREA} rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+              <Textarea rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
             )}
           </FormField>
         </>
@@ -298,7 +290,7 @@ function RoutineForm({
             <Input value={program} onChange={(e) => setProgram(e.target.value)} />
           </FormField>
           <FormField label={t.routines_args}>
-            <textarea className={TEXTAREA} rows={3} value={argsText} onChange={(e) => setArgsText(e.target.value)} />
+            <Textarea rows={3} value={argsText} onChange={(e) => setArgsText(e.target.value)} />
           </FormField>
           <FormField label={t.routines_cwd} required error={errors.cwd}>
             <Input value={cwd} onChange={(e) => setCwd(e.target.value)} />
@@ -309,10 +301,9 @@ function RoutineForm({
       <FormField label={t.routines_result_link}>
         <Input value={resultLink} onChange={(e) => setResultLink(e.target.value)} />
       </FormField>
-      <div>
-        <div className="text-xs text-muted mb-1">{t.routines_schedule}</div>
-        <Choices
+      <Choices
           name="routine-schedule"
+          label={t.routines_schedule}
           value={days}
           onChange={setDays}
           options={[
@@ -321,7 +312,6 @@ function RoutineForm({
             { value: "weekdays", label: t.routines_schedule_weekdays },
           ]}
         />
-      </div>
       {days !== "none" && (
         <FormField label={t.routines_schedule_time} className="w-32">
           <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
@@ -333,15 +323,13 @@ function RoutineForm({
           {error}
         </p>
       )}
-      <div className="flex gap-2">
-        <Button type="submit" size="sm">
-          {t.save}
-        </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
+      <FormActions>
+        <Button variant="secondary" onClick={onCancel}>
           {t.cancel}
         </Button>
-      </div>
-    </form>
+        <Button type="submit">{t.save}</Button>
+      </FormActions>
+    </FormLayout>
   );
 }
 
@@ -365,6 +353,7 @@ function blankRoutine(sectionId: string): Routine {
  *  saved at once through `routines_save` (Rust validates); its error shows inline. */
 export function RoutinesCard() {
   const t = useT();
+  const confirm = useConfirm();
   const [data, setData] = useState<Routines | null>(null);
   const [editing, setEditing] = useState<Editing>(null);
   const [error, setError] = useState<string | null>(null);
@@ -412,7 +401,7 @@ export function RoutinesCard() {
 
   const deleteSection = async (s: Section) => {
     if (!data) return;
-    if (!(await ask(t.routines_delete_section_confirm.replace("{name}", s.name), { kind: "warning" }))) return;
+    if (!(await confirm({ title: t.routines_delete_section_confirm.replace("{name}", s.name), confirmLabel: t.delete, tone: "danger" }))) return;
     const id = s.id;
     void save({
       sections: data.sections.filter((s) => s.id !== id),
@@ -422,7 +411,7 @@ export function RoutinesCard() {
 
   const deleteRoutine = async (r: Routine) => {
     if (!data) return;
-    if (!(await ask(t.routines_delete_confirm.replace("{title}", r.title), { kind: "warning" }))) return;
+    if (!(await confirm({ title: t.routines_delete_confirm.replace("{title}", r.title), confirmLabel: t.delete, tone: "danger" }))) return;
     void save({ ...data, routines: data.routines.filter((x) => x.id !== r.id) });
   };
 
@@ -481,58 +470,50 @@ export function RoutinesCard() {
         const rows = data.routines.filter((r) => r.sectionId === s.id);
         return (
           <div key={s.id} className="pb-2">
-            <div className="flex items-center justify-between pt-2">
-              <div className="text-[10px] font-medium uppercase tracking-widest text-muted">{s.name}</div>
-              <div className="flex items-center">
-                <button
-                  type="button" className={BAR_ICON_BUTTON} aria-label={`${t.routines_move_up}: ${s.name}`}
-                  disabled={si === 0}
-                  onClick={() => void save({ ...data, sections: moved(data.sections, si, si - 1) })}
-                >
-                  <ArrowUp size={14} />
-                </button>
-                <button
-                  type="button" className={BAR_ICON_BUTTON} aria-label={`${t.routines_move_down}: ${s.name}`}
-                  disabled={si === data.sections.length - 1}
-                  onClick={() => void save({ ...data, sections: moved(data.sections, si, si + 1) })}
-                >
-                  <ArrowDown size={14} />
-                </button>
-                <button type="button" className={BAR_ICON_BUTTON} aria-label={`${t.edit} ${s.name}`} onClick={() => setEditing({ type: "section", id: s.id })}>
-                  <Pencil size={14} />
-                </button>
-                <button type="button" className={BAR_ICON_BUTTON} aria-label={`${t.delete} ${s.name}`} onClick={() => void deleteSection(s)}>
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
+            <SectionLabel
+              as="h3"
+              className="pt-2"
+              action={
+                <div className="flex items-center">
+                  <IconButton
+                    icon={ICONS.moveUp}
+                    label={`${t.routines_move_up}: ${s.name}`}
+                    size="xs"
+                    disabled={si === 0}
+                    onClick={() => void save({ ...data, sections: moved(data.sections, si, si - 1) })}
+                  />
+                  <IconButton
+                    icon={ICONS.moveDown}
+                    label={`${t.routines_move_down}: ${s.name}`}
+                    size="xs"
+                    disabled={si === data.sections.length - 1}
+                    onClick={() => void save({ ...data, sections: moved(data.sections, si, si + 1) })}
+                  />
+                  <IconButton icon={ICONS.edit} label={`${t.edit} ${s.name}`} size="xs" onClick={() => setEditing({ type: "section", id: s.id })} />
+                  <IconButton icon={ICONS.delete} label={`${t.delete} ${s.name}`} size="xs" onClick={() => void deleteSection(s)} />
+                </div>
+              }
+            >
+              {s.name}
+            </SectionLabel>
             {rows.map((r, ri) => (
               <SettingRow key={r.id} label={r.title} desc={summary(r)}>
                 <div className="flex items-center">
-                  <button type="button" className={BAR_ICON_BUTTON} aria-label={`${t.routines_move_up}: ${r.title}`} disabled={ri === 0} onClick={() => moveRoutine(r, -1)}>
-                    <ArrowUp size={14} />
-                  </button>
-                  <button
-                    type="button" className={BAR_ICON_BUTTON} aria-label={`${t.routines_move_down}: ${r.title}`}
+                  <IconButton icon={ICONS.moveUp} label={`${t.routines_move_up}: ${r.title}`} size="xs" disabled={ri === 0} onClick={() => moveRoutine(r, -1)} />
+                  <IconButton
+                    icon={ICONS.moveDown}
+                    label={`${t.routines_move_down}: ${r.title}`}
+                    size="xs"
                     disabled={ri === rows.length - 1}
                     onClick={() => moveRoutine(r, 1)}
-                  >
-                    <ArrowDown size={14} />
-                  </button>
-                  <button type="button" className={BAR_ICON_BUTTON} aria-label={`${t.edit} ${r.title}`} onClick={() => setEditing({ type: "routine", id: r.id, sectionId: s.id })}>
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    type="button" className={BAR_ICON_BUTTON} aria-label={`${t.delete} ${r.title}`}
-                    onClick={() => void deleteRoutine(r)}
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  />
+                  <IconButton icon={ICONS.edit} label={`${t.edit} ${r.title}`} size="xs" onClick={() => setEditing({ type: "routine", id: r.id, sectionId: s.id })} />
+                  <IconButton icon={ICONS.delete} label={`${t.delete} ${r.title}`} size="xs" onClick={() => void deleteRoutine(r)} />
                 </div>
               </SettingRow>
             ))}
             <div className="pt-2">
-              <Button size="sm" variant="ghost" onClick={() => setEditing({ type: "routine", id: "", sectionId: s.id })}>
+              <Button variant="outline" icon={ICONS.add} onClick={() => setEditing({ type: "routine", id: "", sectionId: s.id })}>
                 {t.routines_add_routine}
               </Button>
             </div>
@@ -540,7 +521,7 @@ export function RoutinesCard() {
         );
       })}
       <div className="pt-1 pb-3">
-        <Button size="sm" variant="secondary" onClick={() => setEditing({ type: "section", id: "" })}>
+        <Button variant="secondary" icon={ICONS.add} onClick={() => setEditing({ type: "section", id: "" })}>
           {t.routines_add_section}
         </Button>
       </div>

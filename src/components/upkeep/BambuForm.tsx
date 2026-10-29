@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, FormField, Input, Select } from "../ui";
+import { Button, FormActions, FormField, FormLayout, Input, Select } from "../ui";
 import { useT } from "../../i18n/useT";
 import { useUnsavedChangesWarning } from "../../hooks/useUnsavedChangesWarning";
 import {
@@ -92,7 +92,7 @@ export function BambuForm({ onDone, onCancel, connection }: ConnectionFormProps)
   const primary = step === "code" ? sendCode : signIn;
 
   return (
-    <div className="space-y-3">
+    <FormLayout dense capped={false}>
       {step === "account" && (
         <>
           <p className="text-xs text-muted">{t.upkeep_bambu_note}</p>
@@ -144,10 +144,10 @@ export function BambuForm({ onDone, onCancel, connection }: ConnectionFormProps)
         </>
       )}
 
-      <div className="flex gap-2 justify-end pt-1">
+      <FormActions>
         <Button variant="secondary" onClick={onCancel}>{t.cancel}</Button>
         <Button loading={busy} onClick={primary}>{t.upkeep_bambu_sign_in}</Button>
-      </div>
-    </div>
+      </FormActions>
+    </FormLayout>
   );
 }

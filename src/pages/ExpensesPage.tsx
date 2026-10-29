@@ -1,16 +1,14 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { Plus, Paperclip, Eye, ChevronRight, Upload, Trash2, CheckCircle, CalendarCheck, Receipt, Settings2, XCircle, Pencil } from "lucide-react";
-import { Button, Input, Select, FormField, PageHeader, SearchBar, TableSkeleton, EmptyState, Card, Modal } from "../components/ui";
+import { Paperclip, CalendarCheck } from "lucide-react";
+import { ICONS, ICON_SIZE, Button, DatePicker, Input, Select, FormField, FormGrid, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, QueryState, NoResults, Spinner, Popover, IconButton, Tag, Callout, Tooltip } from "../components/ui";
 import * as v from "../lib/validate";
-import { undoableFromStore } from "../lib/undo";
-import { SavedFilterBar } from "../components/SavedFilterBar";
-import { getTagColor, getNamedTagColor } from "../lib/tagColors";
-import { useAppStore } from "../stores/app-store";
-import { toast } from "sonner";
+import { deleteWithUndo } from "../lib/undo";
+import { SavedFilterBar } from "../components/shared/SavedFilterBar";
+import { ReceiptNote } from "../components/shared/ReceiptNote";
+import { notify } from "../lib/notify";
 import { format } from "date-fns";
 import { formatDisplayDate } from "../utils/formatDate";
 import { todayLocalISO } from "../utils/localDate";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { copyFile, mkdir, exists } from "@tauri-apps/plugin-fs";
 import { orgPaths } from "../lib/orgPaths";
 import { attachReceipt as attachReceiptFlow, sanitizeSegment } from "../lib/attachReceipt";
@@ -24,15 +22,17 @@ import {
   useDeleteExpense,
   useDuplicateCheck,
 } from "../db/hooks/useExpenses";
-import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
-import { BulkActionBar } from "../components/BulkActionBar";
+import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu";
+import { MENU_ITEM } from "../components/ui/Dropdown";
+import { BulkActionBar } from "../components/ui/BulkActionBar";
 import { useReceiptDrop } from "../hooks/useReceiptDrop";
 import { useListNavigation } from "../hooks/useListNavigation";
 import { useDetectedFields } from "../hooks/useDetectedFields";
 import { useBulkSelect } from "../hooks/useBulkSelect";
+import { useBulkDelete } from "../hooks/useBulkDelete";
 import type { Expense } from "../types/expense";
 import { getNextExpenseReference } from "../db/queries/expenses";
-import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
+import { SortHeader, sortRows, type SortState } from "../components/ui/SortHeader";
 import { useT } from "../i18n/useT";
 import { type ExtractedExpenseData } from "../lib/expenseParse";
 import { logError } from "../lib/log";
@@ -44,8 +44,8 @@ type SortKey = "reference" | "supplier" | "category_code" | "invoice_date" | "am
 
 export function ExpensesPage() {
   const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
-  const { data: expenses, isLoading } = useExpenses();
+  const expensesQuery = useExpenses();
+  const { data: expenses } = expensesQuery;
   const { data: categories } = useExpenseCategories();
   const { data: pastSuppliers } = useDistinctSuppliers();
   const createExpense = useCreateExpense();
@@ -85,11 +85,6 @@ export function ExpensesPage() {
 
   const categoryName = (code: string) => categoryMap.get(code)?.name_fr ?? code;
 
-  const categoryColor = (code: string) => {
-    const cat = categoryMap.get(code);
-    if (cat?.color) return getNamedTagColor(cat.color, darkMode);
-    return getTagColor(code, darkMode);
-  };
 
   const filtered = useMemo(() => {
     if (!expenses) return [];
@@ -132,31 +127,28 @@ export function ExpensesPage() {
     (exp: Expense, pos: { x: number; y: number }) => setCtxMenu({ ...pos, item: exp }),
     []
   );
+  const openExpenseMenu = useCallback((exp: Expense) => {
+    const el = document.querySelectorAll("[data-list-row]")[rowIdxById.get(exp.id) ?? 0];
+    const r = el?.getBoundingClientRect();
+    openRowMenu(exp, { x: r ? r.left + 32 : 80, y: r ? r.bottom : 80 });
+  }, [openRowMenu, rowIdxById]);
   const { focusIdx } = useListNavigation({
     items: visibleRows,
-    onOpen: useCallback((exp: Expense) => {
-      const el = document.querySelectorAll("[data-list-row]")[rowIdxById.get(exp.id) ?? 0];
-      const r = el?.getBoundingClientRect();
-      openRowMenu(exp, { x: r ? r.left + 32 : 80, y: r ? r.bottom : 80 });
-    }, [openRowMenu, rowIdxById]),
+    onOpen: openExpenseMenu,
     onMenu: openRowMenu,
     enabled: preview === null,
   });
 
   const bulk = useBulkSelect(filtered);
 
-  const bulkDelete = useCallback(async () => {
-    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
-    const ids = [...bulk.selected] as number[];
-    ids.forEach((id) => deleteExpense.mutate(id));
-    bulk.clearSelection();
-  }, [bulk, deleteExpense, t]);
+  const deleteSelection = useBulkDelete("expenses", (id: number) => deleteExpense.mutateAsync(id));
+  const bulkDelete = () => void deleteSelection([...bulk.selected] as number[], bulk.clearSelection);
 
   const saveEditDate = () => {
     if (!editDateExpense) return;
     updateExpense.mutate(
       { id: editDateExpense.id, data: { paid_date: editDateValue || null } },
-      { onSuccess: () => { toast.success(editDateValue ? t.paid_date_updated : t.marked_as_unpaid); setEditDateExpense(null); } }
+      { onSuccess: () => { notify.success(editDateValue ? t.paid_date_updated : t.marked_as_unpaid); setEditDateExpense(null); } }
     );
   };
 
@@ -183,26 +175,23 @@ export function ExpensesPage() {
       (destPath) =>
         updateExpense.mutate(
           { id: expenseId, data: { receipt_path: destPath } },
-          { onSuccess: () => toast.success(t.receipt_attached) }
+          { onSuccess: () => notify.success(t.receipt_attached) }
         ),
-      () => toast.error(t.attach_failed)
+      (err) => notify.error(t.attach_failed, err)
     );
 
-  if (isLoading) return (
-    <div className="relative">
-      <PageHeader title={t.expenses}>
-        <Button icon={<Plus size={16} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
-      </PageHeader>
-      <TableSkeleton columns={7} />
-    </div>
-  );
+  const clearFilters = () => {
+    setSearch("");
+    setFilterConditions([]);
+    setActiveFilterId(null);
+  };
 
   return (
     <div className="relative">
       {isDragging && (
-        <div className="absolute inset-0 z-40 flex items-center justify-center bg-accent/10 border-2 border-dashed border-accent rounded-lg pointer-events-none">
-          <div className="flex flex-col items-center gap-2 text-accent">
-            <Upload size={32} />
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-accent-tint-strong border-2 border-dashed border-accent rounded-lg pointer-events-none">
+          <div className="flex flex-col items-center gap-2 text-accent-text">
+            <ICONS.upload size={ICON_SIZE.empty} />
             <span className="text-sm font-medium">{t.drop_pdf_hint}</span>
           </div>
         </div>
@@ -210,15 +199,15 @@ export function ExpensesPage() {
 
       {parsing && (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-[var(--color-surface)]/60 backdrop-blur-sm rounded-lg">
-          <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-input-border)] shadow-sm">
-            <div className="h-4 w-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-muted">{t.analyzing_receipt}</span>
+          <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] shadow-menu">
+            <Spinner label={t.analyzing_receipt} />
+            <span className="text-sm text-muted" aria-hidden="true">{t.analyzing_receipt}</span>
           </div>
         </div>
       )}
 
       <PageHeader title={t.expenses}>
-        <Button icon={<Plus size={16} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
+        <Button icon={ICONS.add} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
       </PageHeader>
 
       <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); setFilterConditions([]); }} placeholder={t.search_expenses} className="w-64 mb-4" />
@@ -262,7 +251,7 @@ export function ExpensesPage() {
               { ...data, reference, receipt_path: receiptPath },
               {
                 onSuccess: () => {
-                  toast.success(t.expense_created);
+                  notify.success(t.expense_created);
                   setShowForm(false);
                   setPrefill(null);
                 },
@@ -273,146 +262,119 @@ export function ExpensesPage() {
         />
       )}
 
-      <div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[var(--color-border-header)]">
-              <th className="w-8 px-2 py-2">
-                <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
-              </th>
-              <th className="w-8" />
-              <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
-              <SortHeader label={t.supplier} sortKey="supplier" current={sort} onSort={setSort} />
-              <SortHeader label={t.category} sortKey="category_code" current={sort} onSort={setSort} />
-              <SortHeader label={t.date} sortKey="invoice_date" current={sort} onSort={setSort} />
-              <SortHeader label={t.paid} sortKey="paid_date" current={sort} onSort={setSort} />
-              <th className="px-4 py-2.5 font-medium text-muted text-left">{t.receipt}</th>
-              <SortHeader label={t.amount} sortKey="amount" current={sort} onSort={setSort} align="right" />
-            </tr>
-          </thead>
-          <tbody>
-            {groupedByYear.map(([year, yearExpenses]) => {
-              const isOpen = expandedYears.has(year);
-              const yearTotal = yearExpenses.reduce((s, e) => s + e.amount, 0);
-              return (
-                <React.Fragment key={year}>
-                  <tr
-                    className="border-b border-[var(--color-border-divider)] cursor-pointer hover:bg-[var(--color-hover-row)] rounded-md"
-                    onClick={() => toggleYear(year)}
-                  >
-                    <td colSpan={9} className="px-4 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <ChevronRight
-                          size={14}
-                          className={`text-muted transition-transform ${isOpen ? "rotate-90" : ""}`}
-                        />
-                        <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{year}</span>
-                        <span className="text-xs text-muted">
-                          {yearExpenses.length} {yearExpenses.length !== 1 ? t.expenses_count_plural : t.expenses_count_singular}
-                        </span>
-                        <span className="ml-auto text-sm font-medium">
-                          CHF {yearTotal.toFixed(2)}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                  {isOpen &&
-                    yearExpenses.map((exp) => (
-                      <tr
-                        key={exp.id}
-                        data-list-row
-                        className={`border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md group${rowIdxById.get(exp.id) === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
-                        onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: exp }); }}
-                      >
-                        <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={bulk.selected.has(exp.id)}
-                            onChange={(e) => bulk.toggleItem(exp.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-                            className="accent-[var(--accent)]"
-                          />
-                        </td>
-                        <td className="w-8 px-1">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCtxMenu({ x: e.clientX, y: e.clientY, item: exp });
-                            }}
-                            className="opacity-60 hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
-                            aria-label={t.more_actions}
-                          >
-                            <Settings2 size={14} />
-                          </button>
-                        </td>
-                        <td className="px-4 py-2.5 font-medium">{exp.reference}</td>
-                        <td className="px-4 py-2.5">{exp.supplier}</td>
-                        <td className="px-4 py-2.5">
-                          {(() => { const c = categoryColor(exp.category_code); return (
-                            <span style={{ background: c.bg, color: c.text }} className="px-2 py-0.5 text-xs rounded-full font-medium">
-                              {exp.category_code}
-                            </span>
-                          ); })()}
-                          <span className="ml-1 text-xs text-muted">{categoryName(exp.category_code)}</span>
-                        </td>
-                        <td className="px-4 py-2.5 text-muted">{formatDisplayDate(exp.invoice_date)}</td>
-                        <td className={`px-4 py-2.5 ${exp.paid_date ? "text-[var(--color-success-text)]" : "text-[var(--color-danger-text)]"}`}>
-                          {exp.paid_date ? formatDisplayDate(exp.paid_date) : "\u2014"}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          {exp.receipt_path ? (
-                            <div className="flex items-center gap-2">
+      <QueryState query={expensesQuery} skeleton={<TableSkeleton columns={9} />} errorMessage={t.load_error_expenses}>
+      {(all) => (
+      <Table>
+        <Table.Head>
+          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} label={t.select_all} />
+          <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
+          <SortHeader label={t.supplier} sortKey="supplier" current={sort} onSort={setSort} />
+          <SortHeader label={t.category} sortKey="category_code" current={sort} onSort={setSort} />
+          <SortHeader label={t.date} sortKey="invoice_date" current={sort} onSort={setSort} />
+          <SortHeader label={t.paid} sortKey="paid_date" current={sort} onSort={setSort} />
+          <Table.Th>{t.receipt}</Table.Th>
+          <SortHeader label={t.amount} sortKey="amount" current={sort} onSort={setSort} align="right" />
+          <Table.ActionsTh />
+        </Table.Head>
+        <Table.Body>
+          {groupedByYear.map(([year, yearExpenses]) => {
+            const isOpen = expandedYears.has(year);
+            const yearTotal = yearExpenses.reduce((s, e) => s + e.amount, 0);
+            return (
+              <React.Fragment key={year}>
+                <Table.Group
+                  colSpan={9}
+                  label={year}
+                  count={`${yearExpenses.length} ${yearExpenses.length !== 1 ? t.expenses_count_plural : t.expenses_count_singular}`}
+                  total={`CHF ${yearTotal.toFixed(2)}`}
+                  open={isOpen}
+                  onToggle={() => toggleYear(year)}
+                />
+                {isOpen &&
+                  yearExpenses.map((exp) => (
+                    <Table.Row
+                      key={exp.id}
+                      data-list-row
+                      focused={rowIdxById.get(exp.id) === focusIdx}
+                      selected={bulk.selected.has(exp.id)}
+                      onOpen={(e) => openRowMenu(exp, { x: e.clientX, y: e.clientY })}
+                      onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: exp }); }}
+                    >
+                      <Table.Select checked={bulk.selected.has(exp.id)} onToggle={(shift) => bulk.toggleItem(exp.id, shift)} label={t.select_row.replace("{name}", exp.reference || exp.supplier)} />
+                      <Table.Td className="font-medium">{exp.reference}</Table.Td>
+                      <Table.Td>{exp.supplier}</Table.Td>
+                      <Table.Td>
+                        <Tag name={exp.category_code} color={categoryMap.get(exp.category_code)?.color || undefined} />
+                        <span className="ml-1 text-xs text-muted">{categoryName(exp.category_code)}</span>
+                      </Table.Td>
+                      <Table.Td muted>{formatDisplayDate(exp.invoice_date)}</Table.Td>
+                      <Table.Td className={exp.paid_date ? "text-[var(--color-success-text)]" : "text-[var(--color-danger-text)]"}>
+                        {exp.paid_date ? formatDisplayDate(exp.paid_date) : "\u2014"}
+                      </Table.Td>
+                      <Table.Td>
+                        {exp.receipt_path ? (
+                          <div className="flex items-center gap-2">
+                            <Tooltip content={t.preview_receipt}>
                               <Button
                                 variant="link"
-                                size="sm"
-                                icon={<Eye size={14} />}
+                                icon={ICONS.preview}
                                 onClick={() => setPreview({ path: exp.receipt_path!, reference: exp.reference })}
-                                title={t.preview_receipt}
                               >
                                 {t.view}
                               </Button>
-                              <span className="text-xs text-success flex items-center gap-1">
-                                <Paperclip size={12} />
-                              </span>
-                            </div>
-                          ) : (
-                            <Button
-                              variant="link"
-                              size="sm"
-                              icon={<Paperclip size={12} />}
-                              onClick={() => attachReceipt(exp.id, exp.reference, exp.supplier)}
-                            >
-                              {t.attach}
-                            </Button>
-                          )}
-                        </td>
-                        <td className="px-4 py-2.5 text-right font-medium">
-                          CHF {exp.amount.toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-        {filtered.length === 0 && !isLoading && (
-          <EmptyState
-            message={(expenses?.length ?? 0) === 0 ? (t.no_expenses_yet ?? "No expenses yet") : (t.no_matching_expenses ?? "No matching expenses")}
-            icon={<Receipt size={32} />}
-            action={(expenses?.length ?? 0) === 0 ? (
-              <Button icon={<Plus size={16} />} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
-            ) : undefined}
-          />
-        )}
-      </div>
+                            </Tooltip>
+                            <span className="text-xs text-success-text flex items-center gap-1">
+                              <Paperclip size={ICON_SIZE.control} />
+                            </span>
+                          </div>
+                        ) : (
+                          <Button
+                            variant="link"
+                            icon={Paperclip}
+                            onClick={() => attachReceipt(exp.id, exp.reference, exp.supplier)}
+                          >
+                            {t.attach}
+                          </Button>
+                        )}
+                      </Table.Td>
+                      <Table.Td numeric className="font-medium">
+                        CHF {exp.amount.toFixed(2)}
+                      </Table.Td>
+                      <Table.Actions>
+                        <IconButton size="xs"
+                          icon={ICONS.more}
+                          label={t.more_actions}
+                          onClick={(e) => setCtxMenu({ x: e.clientX, y: e.clientY, item: exp })}
+                        />
+                      </Table.Actions>
+                    </Table.Row>
+                  ))}
+              </React.Fragment>
+            );
+          })}
+          {filtered.length === 0 && (
+            <Table.Empty colSpan={9}>
+              {all.length === 0 ? (
+                <EmptyState
+                  message={t.no_expenses_yet}
+                  icon={ICONS.expense}
+                  action={<Button icon={ICONS.add} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>}
+                />
+              ) : (
+                <NoResults message={t.no_matching_expenses} onClear={clearFilters} />
+              )}
+            </Table.Empty>
+          )}
+        </Table.Body>
+      </Table>
+      )}
+      </QueryState>
 
       {preview && (
         <ReceiptPreview
           path={preview.path}
           reference={preview.reference}
           onClose={() => setPreview(null)}
-          bgClassName="bg-[var(--color-surface)]"
-          roundedClassName="rounded-xl"
         />
       )}
       {ctxMenu && (
@@ -423,40 +385,38 @@ export function ExpensesPage() {
           items={[
             ...(!ctxMenu.item.paid_date
               ? [
-                  { label: t.mark_as_paid_today, icon: <CheckCircle size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: todayLocalISO() } }, { onSuccess: () => toast.success(t.marked_as_paid) }) },
-                  { label: t.mark_as_paid_at_invoice_date, icon: <CalendarCheck size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: ctxMenu.item.invoice_date } }, { onSuccess: () => toast.success(t.marked_as_paid) }) },
+                  { label: t.mark_as_paid_today, icon: ICONS.markPaid, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: todayLocalISO() } }, { onSuccess: () => notify.success(t.marked_as_paid) }) },
+                  { label: t.mark_as_paid_at_invoice_date, icon: CalendarCheck, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: ctxMenu.item.invoice_date } }, { onSuccess: () => notify.success(t.marked_as_paid) }) },
                 ]
-              : [{ label: t.mark_as_unpaid, icon: <XCircle size={14} />, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: null } }, { onSuccess: () => toast.success(t.marked_as_unpaid) }) }]),
-            { label: t.edit_paid_date, icon: <Pencil size={14} />, onClick: () => { setEditDateValue(ctxMenu.item.paid_date ?? format(new Date(), "yyyy-MM-dd")); setEditDateExpense(ctxMenu.item); } },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteExpense.mutate(ctxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_expense_deleted) }) },
+              : [{ label: t.mark_as_unpaid, icon: ICONS.markUnpaid, onClick: () => updateExpense.mutate({ id: ctxMenu.item.id, data: { paid_date: null } }, { onSuccess: () => notify.success(t.marked_as_unpaid) }) }]),
+            { label: t.edit_paid_date, icon: ICONS.edit, onClick: () => { setEditDateValue(ctxMenu.item.paid_date ?? format(new Date(), "yyyy-MM-dd")); setEditDateExpense(ctxMenu.item); } },
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => deleteWithUndo(deleteExpense, ctxMenu.item.id, t.toast_expense_deleted) },
           ]}
         />
       )}
-      <Modal
+      <FormModal
         open={!!editDateExpense}
         onClose={() => setEditDateExpense(null)}
         title={t.edit_paid_date}
-        footer={
-          <div className="flex gap-2 justify-end">
-            <Button variant="secondary" onClick={() => setEditDateExpense(null)}>{t.cancel}</Button>
-            <Button onClick={saveEditDate}>{t.save}</Button>
-          </div>
-        }
+        size="sm"
+        submitLabel={t.save}
+        onSubmit={saveEditDate}
+        submitting={updateExpense.isPending}
       >
-        <Input
-          type="date"
-          fullWidth
-          value={editDateValue}
-          onChange={(e) => setEditDateValue(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") saveEditDate(); }}
-          autoFocus
-        />
-      </Modal>
+        <FormField label={t.date}>
+          <DatePicker
+            fullWidth
+            value={editDateValue || null}
+            onChange={(v) => setEditDateValue(v ?? "")}
+            autoFocus
+          />
+        </FormField>
+      </FormModal>
       <BulkActionBar
         count={bulk.count}
         onClear={bulk.clearSelection}
         actions={[
-          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+          { label: t.delete, icon: ICONS.delete, onClick: bulkDelete, danger: true },
         ]}
       />
     </div>
@@ -531,7 +491,7 @@ export function NewExpenseForm({
     };
   });
   const [errors, setErrors] = useState<Partial<Record<ExpenseFormField, string>>>({});
-  const { undetect, resetDetected, detectedBadge, detectedClass } =
+  const { undetect, resetDetected, detectedBadge, isDetected } =
     useDetectedFields<DetectableExpenseField>(() => detectedFields(prefill));
 
   const setFieldError = (field: ExpenseFormField, msg: string | null) =>
@@ -584,6 +544,8 @@ export function NewExpenseForm({
   // Set on suggestion mousedown (which fires before the input's blur) so the
   // blur handler does not validate the stale pre-selection supplier value.
   const pickingSuggestionRef = useRef(false);
+  const focusedOnceRef = useRef(false);
+  const supplierInputRef = useRef<HTMLInputElement>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<{ supplier: string; amount: number; date: string } | null>(null);
   const duplicateCheck = useDuplicateCheck();
 
@@ -627,15 +589,26 @@ export function NewExpenseForm({
     undetect("amount");
   };
 
+  const submit = () => {
+    const errs = v.validateForm(
+      { supplier: form.supplier, amount: fieldValue("amount"), invoice_date: form.invoice_date },
+      expenseSchema
+    );
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+    // DB failures surface via the mutation's onError toast (backstop).
+    onSave({
+      ...form,
+      due_date: prefill?.due_date ?? null,
+      paid_date: null,
+      receipt_path: null,
+    });
+  };
+
   return (
-    <Card className="mb-6 space-y-3">
-      {prefill?.receiptPath && (
-        <div className="flex items-center gap-2 text-xs text-success">
-          <Paperclip size={12} />
-          <span>{t.receipt_will_be_attached} {prefill.receiptPath.split("/").pop()}</span>
-        </div>
-      )}
-      <div className="grid grid-cols-2 gap-3">
+    <FormModal open onClose={onCancel} title={t.new_expense} submitLabel={t.save} onSubmit={submit}>
+      {prefill?.receiptPath && <ReceiptNote path={prefill.receiptPath} />}
+      <FormGrid cols={2}>
         <div className="relative">
           <FormField
             label={t.supplier}
@@ -644,6 +617,7 @@ export function NewExpenseForm({
             badge={detectedBadge("supplier", () => setForm((f) => ({ ...f, supplier: "" })))}
           >
             <Input
+              ref={supplierInputRef}
               value={form.supplier}
               onChange={(e) => {
                 setForm({ ...form, supplier: e.target.value });
@@ -651,18 +625,34 @@ export function NewExpenseForm({
                 clearError("supplier");
                 undetect("supplier");
               }}
-              onFocus={() => setShowSuggestions(true)}
+              autoFocus
+              // Not on the autoFocus when the dialog opens: the list would cover the form.
+              onFocus={() => {
+                if (focusedOnceRef.current) setShowSuggestions(true);
+                focusedOnceRef.current = true;
+              }}
+              // Suggestions are mouse-only, so Enter submits the form; close them first.
+              onKeyDown={(e) => { if (e.key === "Enter") setShowSuggestions(false); }}
               onBlur={() => {
                 setTimeout(() => setShowSuggestions(false), 200);
                 if (!pickingSuggestionRef.current) validateOnBlur("supplier");
                 pickingSuggestionRef.current = false;
               }}
-              className={`py-2 ${detectedClass("supplier")}`}
+              detected={isDetected("supplier")}
               autoComplete="off"
             />
           </FormField>
           {showSuggestions && suggestions.length > 0 && (
-            <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-[var(--color-surface)] border border-[var(--color-input-border)] rounded-xl shadow-lg max-h-48 overflow-y-auto">
+            <Popover
+              anchor={supplierInputRef}
+              onClose={() => setShowSuggestions(false)}
+              autoFocus={false}
+              role="group"
+              aria-label={t.supplier}
+              matchWidth
+              padding="menu"
+              className="max-h-48 overflow-y-auto"
+            >
               {suggestions.map((s) => (
                 <button
                   key={s.supplier}
@@ -671,7 +661,7 @@ export function NewExpenseForm({
                     pickingSuggestionRef.current = true;
                     selectSupplier(s);
                   }}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-hover-row)] flex items-center justify-between"
+                  className={`${MENU_ITEM} justify-between cursor-pointer hover:bg-[var(--color-hover-row)]`}
                 >
                   <span>{s.supplier}</span>
                   <span className="text-xs text-muted">
@@ -679,14 +669,13 @@ export function NewExpenseForm({
                   </span>
                 </button>
               ))}
-            </div>
+            </Popover>
           )}
         </div>
         <FormField label={t.category}>
           <Select
             value={form.category_code}
             onChange={(e) => setForm({ ...form, category_code: e.target.value })}
-            className="py-2"
           >
             {categories.map((c) => (
               <option key={c.code} value={c.code}>
@@ -703,16 +692,15 @@ export function NewExpenseForm({
             setForm((f) => ({ ...f, invoice_date: format(new Date(), "yyyy-MM-dd") }))
           )}
         >
-          <Input
-            type="date"
-            value={form.invoice_date}
-            onChange={(e) => {
-              setForm({ ...form, invoice_date: e.target.value });
+          <DatePicker
+            value={form.invoice_date || null}
+            onChange={(v) => {
+              setForm({ ...form, invoice_date: v ?? "" });
               clearError("invoice_date");
               undetect("invoice_date");
             }}
             onBlur={() => validateOnBlur("invoice_date")}
-            className={`py-2 ${detectedClass("invoice_date")}`}
+            detected={isDetected("invoice_date")}
           />
         </FormField>
         <FormField
@@ -722,8 +710,9 @@ export function NewExpenseForm({
           badge={detectedBadge("amount", () => setForm((f) => ({ ...f, amount: 0 })))}
         >
           <Input
-            type="number"
+            numeric
             step="0.01"
+            unit="CHF"
             value={form.amount || ""}
             onChange={(e) => {
               setForm({ ...form, amount: Number(e.target.value) });
@@ -734,42 +723,16 @@ export function NewExpenseForm({
               checkForDuplicates();
               validateOnBlur("amount");
             }}
-            className={`py-2 ${detectedClass("amount")}`}
+            detected={isDetected("amount")}
           />
         </FormField>
-      </div>
+      </FormGrid>
       {duplicateWarning && (
-        <div className="flex items-center gap-2 p-3 bg-[var(--color-warning-bg)] border border-[var(--color-border-header)] rounded-md text-sm">
-          <span className="text-[var(--color-warning-text)] font-medium">{t.possible_duplicate}:</span>
-          <span className="text-[var(--color-warning-text)]">
-            {duplicateWarning.supplier} — {duplicateWarning.amount.toFixed(2)} CHF ({formatDisplayDate(duplicateWarning.date)})
-          </span>
-        </div>
+        <Callout tone="warning">
+          <span className="font-medium">{t.possible_duplicate}:</span>{" "}
+          {duplicateWarning.supplier} — {duplicateWarning.amount.toFixed(2)} CHF ({formatDisplayDate(duplicateWarning.date)})
+        </Callout>
       )}
-      <div className="flex gap-2">
-        <Button variant="secondary" onClick={onCancel}>
-          {t.cancel}
-        </Button>
-        <Button
-          onClick={() => {
-            const errs = v.validateForm(
-              { supplier: form.supplier, amount: fieldValue("amount"), invoice_date: form.invoice_date },
-              expenseSchema
-            );
-            setErrors(errs);
-            if (Object.keys(errs).length > 0) return;
-            // DB failures surface via the mutation's onError toast (backstop).
-            onSave({
-              ...form,
-              due_date: prefill?.due_date ?? null,
-              paid_date: null,
-              receipt_path: null,
-            });
-          }}
-        >
-          {t.save}
-        </Button>
-      </div>
-    </Card>
+    </FormModal>
   );
 }

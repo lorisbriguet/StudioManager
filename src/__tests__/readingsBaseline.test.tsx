@@ -22,6 +22,7 @@ vi.mock("../lib/upkeep/connections", () => ({
 }));
 
 import { ReadingsSection } from "../components/upkeep/ReadingsSection";
+import { pickOption } from "./fixtures/dropdown";
 
 const t = uiLabels.EN;
 
@@ -42,8 +43,8 @@ const machine: Machine = {
   reading_baseline: null, linked_at: null, created_at: "", updated_at: "",
 };
 
-async function findDevices(connId: number) {
-  fireEvent.change(screen.getByLabelText(t.upkeep_link_connection), { target: { value: String(connId) } });
+async function findDevices(connLabel: string) {
+  pickOption(screen.getByLabelText(t.upkeep_link_connection), connLabel);
   fireEvent.click(screen.getByRole("button", { name: t.upkeep_find_devices }));
   await screen.findByLabelText(t.upkeep_device);
 }
@@ -57,7 +58,7 @@ describe("linking a machine to a device", () => {
   it("a Bambu printer asks for its hour counter today, with a one-line explanation", async () => {
     connections = [conn({})];
     render(<ReadingsSection machine={machine} items={[]} />);
-    await findDevices(2);
+    await findDevices("Bambu");
     expect(screen.getByText(t.upkeep_reading_baseline_desc)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(t.upkeep_reading_baseline), { target: { value: "412.5" } });
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_link }));
@@ -84,7 +85,7 @@ describe("linking a machine to a device", () => {
   it("a NAS without usage items doesn't ask for one", async () => {
     connections = [conn({ id: 3, kind: "synology", label: "NAS", region: null })];
     render(<ReadingsSection machine={machine} items={[]} />);
-    await findDevices(3);
+    await findDevices("NAS");
     expect(screen.queryByLabelText(t.upkeep_reading_baseline)).toBeNull();
   });
 });

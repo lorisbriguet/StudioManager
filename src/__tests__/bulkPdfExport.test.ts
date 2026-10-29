@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ask, open } from "@tauri-apps/plugin-dialog";
+import { open } from "@tauri-apps/plugin-dialog";
+import { confirm } from "../lib/confirm";
 import { writeFile } from "@tauri-apps/plugin-fs";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { runBulkPdfExport } from "../lib/bulkPdfExport";
 
 // plugin-dialog and plugin-fs both alias to the same catch-all mock module,
@@ -15,28 +16,25 @@ vi.mock("../lib/log", () => ({
   logDebug: vi.fn(),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({
-  ask: vi.fn(),
   open: vi.fn(),
   writeFile: vi.fn(),
 }));
-vi.mock("sonner", () => ({
-  toast: {
-    info: vi.fn(),
-    loading: vi.fn(),
-    success: vi.fn(),
-    warning: vi.fn(),
-    error: vi.fn(),
-    dismiss: vi.fn(),
-  },
+// The draft warning is the app's ConfirmDialog; answer it from the test.
+vi.mock("../lib/confirm", () => ({ confirm: vi.fn() }));
+vi.mock("../lib/notify", async (orig) => ({
+  ...(await orig<typeof import("../lib/notify")>()),
+  ...(await import("../__mocks__/notify")).notifyMockModule(),
 }));
 
 const LABELS = {
   export_pdfs: "Export PDFs",
   bulk_export_draft_warning: "Includes drafts",
+  bulk_export_draft_title: "Export drafts?",
   pdf_generation_busy: "Busy",
   bulk_export_progress: "{n}/{total}",
   bulk_export_done: "Done {n}",
   bulk_export_partial: "Partial {n}/{total}",
+  failed_to_generate_pdf: "PDF failed",
   cancel: "Cancel",
 };
 
@@ -44,12 +42,12 @@ const bytes = new Uint8Array([1]);
 const okResult = (reference: string) => ({ bytes, reference, client: { name: "ACME" } });
 
 beforeEach(() => {
-  vi.mocked(ask).mockReset().mockResolvedValue(true);
+  vi.mocked(confirm).mockReset().mockResolvedValue(true);
   vi.mocked(open).mockReset().mockResolvedValue("/out");
   vi.mocked(writeFile).mockReset().mockResolvedValue(undefined);
-  vi.mocked(toast.info).mockReset();
-  vi.mocked(toast.success).mockReset();
-  vi.mocked(toast.warning).mockReset();
+  vi.mocked(notify.info).mockReset();
+  vi.mocked(notify.success).mockReset();
+  vi.mocked(notify.warning).mockReset();
 });
 
 describe("runBulkPdfExport", () => {
@@ -70,7 +68,7 @@ describe("runBulkPdfExport", () => {
     });
     const paths = vi.mocked(writeFile).mock.calls.map((c) => c[0]);
     expect(paths).toEqual(["/out/DRAFT_ACME.pdf", "/out/DRAFT_ACME_2.pdf"]);
-    expect(toast.success).toHaveBeenCalled();
+    expect(notify.success).toHaveBeenCalled();
     expect(busyIds.size).toBe(0);
     expect(onDone).toHaveBeenCalled();
   });
@@ -86,13 +84,13 @@ describe("runBulkPdfExport", () => {
       logLabel: "invoice",
       onDone: vi.fn(),
     });
-    expect(toast.info).toHaveBeenCalled();
-    expect(ask).not.toHaveBeenCalled();
+    expect(notify.info).toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalled();
     expect(writeFile).not.toHaveBeenCalled();
   });
 
   it("stops cleanly when the draft warning is declined", async () => {
-    vi.mocked(ask).mockResolvedValue(false);
+    vi.mocked(confirm).mockResolvedValue(false);
     await runBulkPdfExport({
       docs: [{ id: 1, reference: "DRAFT-x" }],
       busyIds: new Set<number>(),
@@ -140,7 +138,7 @@ describe("runBulkPdfExport", () => {
       onDone: vi.fn(),
     });
     expect(vi.mocked(writeFile).mock.calls).toHaveLength(1);
-    expect(toast.warning).toHaveBeenCalled();
+    expect(notify.warning).toHaveBeenCalled();
     expect(busyIds.size).toBe(0);
   });
 });

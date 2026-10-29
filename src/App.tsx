@@ -3,7 +3,6 @@ import { useEffect, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "react-error-boundary";
-import { Toaster, toast } from "sonner";
 import { ErrorFallback } from "./components/ErrorFallback";
 import { MainLayout } from "./components/layout/MainLayout";
 import { GlobalShortcuts } from "./components/GlobalShortcuts";
@@ -40,11 +39,12 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { CommandPalette } from "./components/CommandPalette";
+import { ConfirmHost } from "./components/ui/ConfirmDialog";
 import { QuickTimerModal } from "./components/QuickTimerModal";
 import { OrgGate } from "./components/OrgGate";
 import { MenuBarApp } from "./menubar/MenuBarApp";
 import { useFollowAppSettings } from "./menubar/useFollowAppSettings";
-import { PageSpinner } from "./components/ui";
+import { PageSpinner, Toaster } from "./components/ui";
 import { useOverdueCheck } from "./hooks/useOverdueCheck";
 import { useUpkeepCheck } from "./hooks/useUpkeepCheck";
 import { useRecurringCheck } from "./hooks/useRecurringCheck";
@@ -53,9 +53,10 @@ import { useGuideUpdateCheck } from "./hooks/useGuideUpdateCheck";
 import { useErrorNotifications } from "./hooks/useErrorNotifications";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useUndoStore } from "./stores/undo-store";
+import { useConfirmStore } from "./stores/confirm-store";
 import { useAppStore } from "./stores/app-store";
 import { useOrgStore } from "./stores/org-store";
-import { getLabels, notifyError } from "./lib/notifyError";
+import { getLabels, notify } from "./lib/notify";
 import { requestNotificationPermission } from "./lib/nativeNotification";
 import { getAgentsEnabled } from "./lib/agents";
 
@@ -101,6 +102,8 @@ function StartupChecks() {
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       // Rich-text editors (e.g. Wiki): let the editor handle its own undo/redo
       if (target?.isContentEditable || target?.closest?.('[contenteditable="true"]')) return;
+      // A confirm dialog or modal is open: undoing behind it would change what it is about.
+      if (useConfirmStore.getState().queue.length > 0 || document.querySelector('[aria-modal="true"]')) return;
 
       const store = useUndoStore.getState();
       // Read labels per keypress (not from the mount-time closure) so a
@@ -120,10 +123,10 @@ function StartupChecks() {
           if (action.redo) {
             store.insertUndo({ label: action.label, execute: action.redo, redo: action.execute }, 0);
           }
-          toast.success(`${t.redo_prefix} ${action.label}`);
+          notify.success(t.redone_named.replace("{label}", action.label));
         }).catch((err) => {
           store.pushRedo(action);
-          notifyError(t.redo_failed, err);
+          notify.error(t.redo_failed, err);
         });
       } else {
         // Undo: Cmd+Z
@@ -141,10 +144,10 @@ function StartupChecks() {
             window.history.pushState({}, "", action.redirectTo);
             window.dispatchEvent(new PopStateEvent("popstate"));
           }
-          toast.success(`${t.undo_prefix} ${action.label}`);
+          notify.success(t.undone_named.replace("{label}", action.label));
         }).catch((err) => {
           store.insertUndo(action, 0);
-          notifyError(t.undo_failed, err);
+          notify.error(t.undo_failed, err);
         });
       }
     };
@@ -181,7 +184,7 @@ function MenuBarShell() {
       <ErrorBoundary FallbackComponent={ErrorFallback}>
         <MenuBarApp />
       </ErrorBoundary>
-      <Toaster position="bottom-right" />
+      <Toaster />
     </QueryClientProvider>
   );
 }
@@ -236,7 +239,8 @@ function MainApp() {
           </ErrorBoundary>
         </BrowserRouter>
       </OrgGate>
-      <Toaster position="bottom-right" />
+      <ConfirmHost />
+      <Toaster />
       <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
     </QueryClientProvider>
   );

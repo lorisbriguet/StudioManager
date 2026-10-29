@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import * as q from "../queries/connections";
 import { updateMachine } from "../queries/machines";
 import { recordManualReading, runConnectionSyncs, saveConnectionSecret } from "../../lib/upkeep/connections";
@@ -47,7 +46,6 @@ export function useCreateConnection() {
       return id;
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -59,7 +57,6 @@ export function useUpdateConnection() {
       if (secret) await saveConnectionSecret(id, secret);
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -69,7 +66,6 @@ export function useDeleteConnection() {
     mutationFn: q.deleteConnection,
     // Refresh either way: a failed Keychain delete keeps the row, and the list must show it.
     onSettled: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -78,7 +74,6 @@ export function useSyncNow() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (connectionId?: number) => runConnectionSyncs(qc, { force: true, connectionId }),
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -95,7 +90,6 @@ export function useLinkMachine() {
       linked_at: string | null;
     }) => updateMachine(id, { connection_id, device_id, reading_baseline, linked_at }),
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -104,6 +98,5 @@ export function useRecordManualReading() {
   return useMutation({
     mutationFn: ({ machine, value }: { machine: Machine; value: number }) => recordManualReading(machine, value),
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }

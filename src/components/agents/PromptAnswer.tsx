@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { answerPrompt, getPrompt, type Prompt } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
-import { Button } from "../ui";
+import { Button, Card } from "../ui";
 
 const POLL_MS = 2000;
 // Free-text and chat entries of a question: only the terminal can answer these.
@@ -82,19 +82,24 @@ export function PromptAnswer({ shortId, onOpenTerminal }: PromptAnswerProps) {
   const terminalHint = (
     <div className="flex items-center gap-3">
       <span className="text-sm text-muted">{t.agents_answer_in_terminal}</span>
-      <Button variant="ghost" size="sm" onClick={() => onOpenTerminal(shortId)}>
+      <Button variant="outline" onClick={() => onOpenTerminal(shortId)}>
         {t.agents_open_terminal}
       </Button>
     </div>
   );
 
-  if (!prompt) return <div className="rounded-xl border border-[var(--color-border-divider)] p-3">{terminalHint}</div>;
+  if (!prompt)
+    return (
+      <Card tone="inset" padding="sm">
+        {terminalHint}
+      </Card>
+    );
 
   const buttons = prompt.options.filter((o) => !TERMINAL_ONLY.has(o.label.trim().toLowerCase()));
   const hasTerminalOnly = buttons.length < prompt.options.length || buttons.length === 0;
 
   return (
-    <div className="rounded-xl border border-[var(--color-border-divider)] p-3 space-y-3">
+    <Card tone="inset" padding="sm" className="space-y-3">
       {prompt.detail && (
         <pre className="text-xs font-mono whitespace-pre-wrap break-words bg-[var(--color-input-bg)] rounded-lg p-2">
           {prompt.detail}
@@ -105,8 +110,7 @@ export function PromptAnswer({ shortId, onOpenTerminal }: PromptAnswerProps) {
         {buttons.map((o) => (
           <Button
             key={o.number}
-            variant={o.selected ? "primary" : "ghost"}
-            size="sm"
+            variant={o.selected ? "primary" : "outline"}
             disabled={answering}
             onClick={() => void answer(o.number, o.label)}
           >
@@ -120,6 +124,6 @@ export function PromptAnswer({ shortId, onOpenTerminal }: PromptAnswerProps) {
         </p>
       )}
       {hasTerminalOnly && terminalHint}
-    </div>
+    </Card>
   );
 }

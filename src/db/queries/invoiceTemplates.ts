@@ -1,4 +1,5 @@
 import { getDb, validateFields, TransactionBatch } from "../index";
+import { AppError } from "../../lib/errors";
 import type { InvoiceTemplate } from "../../types/invoice-template";
 
 export async function getInvoiceTemplates(): Promise<InvoiceTemplate[]> {
@@ -82,7 +83,7 @@ export async function deleteInvoiceTemplate(id: number): Promise<void> {
   );
   if (rows.length === 0) return;
   if (rows[0].is_default === 1) {
-    throw new Error("Cannot delete the default template");
+    throw new AppError("error_template_default", "Cannot delete the default template");
   }
   await db.execute("DELETE FROM invoice_templates WHERE id = $1", [id]);
 }

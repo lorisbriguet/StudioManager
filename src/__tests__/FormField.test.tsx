@@ -80,9 +80,10 @@ describe("FormField", () => {
       </FormField>
     );
     const select = screen.getByLabelText("Language");
-    expect(select.tagName).toBe("SELECT");
+    expect(select).toHaveAttribute("role", "combobox");
+    expect(select).toHaveTextContent("FR");
     expect(select).toHaveAttribute("aria-invalid", "true");
     expect(select.className).toContain("aria-[invalid=true]:border-danger-text");
-    expect(select.className).toContain("rounded-lg");
+    expect(select.className).toContain("rounded-md");
   });
 });

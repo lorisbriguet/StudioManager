@@ -1,8 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { createPortal } from "react-dom";
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ExternalLink, FolderOpen } from "lucide-react";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { useProject, useUpdateProject } from "../db/hooks/useProjects";
 import { useClient } from "../db/hooks/useClients";
 import { useTasksByProject, useSubtasksByProject } from "../db/hooks/useTasks";
@@ -17,15 +15,17 @@ import {
 import type { WorkloadColumn } from "../types/workload";
 import { DEFAULT_WORKLOAD_COLUMNS } from "../types/workload";
 import type { ProjectStatus } from "../types/project";
-import { ContextMenu, type ContextMenuState } from "./ContextMenu";
+import { ContextMenu, type ContextMenuState } from "./ui/ContextMenu";
 import { useInvoices, useInvoicesByProject, useUpdateInvoice } from "../db/hooks/useInvoices";
 import { useQuotes, useQuotesByProject, useUpdateQuote } from "../db/hooks/useQuotes";
-import { Badge, Button, PageSpinner, MeterBar } from "./ui";
+import { Badge, Button, DatePicker, ICONS, PageHeader, Select, Textarea, EmptyState, QueryError, DetailSkeleton, ListSkeleton } from "./ui";
+import { ProgressBar } from "./ui/Feedback";
 import { invoiceStatusVariant, quoteStatusVariant } from "../lib/statusColors";
 import { useTabStore } from "../stores/tab-store";
 import { open as openDirectory } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { useT } from "../i18n/useT";
+import { undoableFromStore, undoTop } from "../lib/undo";
 import { ProjectResources } from "./project/ProjectResources";
 import { ProjectWikiBlock } from "./project/ProjectWikiBlock";
 import { ProjectTasksSection } from "./project/ProjectTasksSection";
@@ -34,11 +34,17 @@ import { EquipmentBlock } from "./upkeep/EquipmentBlock";
 
 interface Props {
   projectId: number;
+  /** In a peek panel: the title is a level-2 h2 (the host page owns the h1). */
   compact?: boolean;
+  /** Full page: the header's back button. */
+  onBack?: () => void;
+  /** Full page: extra header actions after the status (delete). */
+  actions?: ReactNode;
 }
 
-export function ProjectDetailContent({ projectId, compact }: Props) {
-  const { data: project, isLoading } = useProject(projectId);
+export function ProjectDetailContent({ projectId, compact, onBack, actions }: Props) {
+  const projectQuery = useProject(projectId);
+  const { data: project } = projectQuery;
   const { data: client } = useClient(project?.client_id ?? "");
   const { data: tasks } = useTasksByProject(projectId);
   const updateProject = useUpdateProject();
@@ -100,15 +106,37 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
   const handleDeleteColumn = useCallback(() => {
     if (editingColumn === null) return;
     const next = wlColumns.filter((_, i) => i !== editingColumn.index);
-    setWlConfig.mutate({ templateId: wlTemplateId, columns: next });
-  }, [wlColumns, wlTemplateId, editingColumn, setWlConfig]);
+    // The config mutation pushes its own undo entry.
+    const before = undoTop();
+    setWlConfig.mutate(
+      { templateId: wlTemplateId, columns: next },
+      { onSuccess: () => undoableFromStore(t.column_deleted, before) }
+    );
+  }, [wlColumns, wlTemplateId, editingColumn, setWlConfig, t]);
 
   useEffect(() => {
     if (project) setStatus(project.status);
   }, [project]);
 
-  if (isLoading) return <PageSpinner />;
-  if (!project) return <div className="text-muted text-sm">{t.no_projects}</div>;
+  // A bad id never runs the query: straight to "not found".
+  if (project === undefined && projectId) {
+    return projectQuery.isError ? (
+      <QueryError message={t.load_error_project} onRetry={projectQuery.refetch} retrying={projectQuery.isFetching} />
+    ) : (
+      <DetailSkeleton />
+    );
+  }
+  if (!project) {
+    return (
+      <EmptyState
+        size={compact ? "sm" : "lg"}
+        icon={ICONS.project}
+        message={t.project_not_found}
+        hint={t.not_found_hint}
+        action={compact ? undefined : <Button variant="secondary" onClick={onBack ?? (() => navigate("/projects"))}>{t.back_to_projects}</Button>}
+      />
+    );
+  }
 
   const totalCount = tasks?.length ?? 0;
   // Weighted progress: each task = 1/totalTasks weight, subdivided by subtasks
@@ -133,8 +161,9 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
       case "notes":
         return (
           <div>
-            <textarea
+            <Textarea
               placeholder={t.notes}
+              aria-label={t.notes}
               defaultValue={project.notes ?? ""}
               onBlur={(e) => {
                 const val = e.target.value;
@@ -142,8 +171,6 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                   updateProject.mutate({ id: projectId, data: { notes: val } });
                 }
               }}
-              className="w-full border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-3 py-2 text-sm resize-vertical min-h-[60px] max-h-[60vh] placeholder:text-muted"
-              style={{ fieldSizing: "content" } as React.CSSProperties}
             />
           </div>
         );
@@ -156,15 +183,14 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
               projectId={projectId}
               onEditColumn={(col, idx) => setEditingColumn({ column: col, index: idx })}
             />
-            {editingColumn !== null && createPortal(
+            {editingColumn !== null && (
               <WorkloadColumnEditor
                 column={editingColumn.column}
                 existingKeys={wlColumns.map((c) => c.key)}
                 onSave={handleSaveColumn}
                 onDelete={editingColumn.column ? handleDeleteColumn : undefined}
                 onClose={() => setEditingColumn(null)}
-              />,
-              document.body
+              />
             )}
           </>
         );
@@ -175,8 +201,10 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
       case "invoices":
         return (
           <div className="text-sm">
-            {(!projectInvoices || projectInvoices.length === 0) ? (
-              <div className="text-muted">{t.no_invoices_yet}</div>
+            {projectInvoices === undefined ? (
+              <ListSkeleton size="sm" rows={2} />
+            ) : projectInvoices.length === 0 ? (
+              <EmptyState size="sm" icon={ICONS.invoice} message={t.no_invoices_yet} />
             ) : (
               <div className="divide-y divide-[var(--color-border-divider)]">
                 {projectInvoices.map((inv) => (
@@ -194,13 +222,13 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
             )}
             {unlinkedInvoices.length > 0 && (
               <div className="mt-2">
-                <select
+                <Select
                   value=""
+                  aria-label={t.link_invoice.replace(/\.+$/, "")}
                   onChange={(e) => {
                     const id = Number(e.target.value);
                     if (id) updateInvoice.mutate({ id, data: { project_id: projectId } });
                   }}
-                  className="text-xs border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1 w-full"
                 >
                   <option value="">{t.link_invoice}</option>
                   {unlinkedInvoices.map((inv) => (
@@ -208,7 +236,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                       {inv.reference.startsWith("DRAFT") ? t.draft : inv.reference} — {inv.total.toFixed(2)} CHF
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
             )}
           </div>
@@ -216,8 +244,10 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
       case "quotes":
         return (
           <div className="text-sm">
-            {(!projectQuotes || projectQuotes.length === 0) ? (
-              <div className="text-muted">{t.no_quotes_yet}</div>
+            {projectQuotes === undefined ? (
+              <ListSkeleton size="sm" rows={2} />
+            ) : projectQuotes.length === 0 ? (
+              <EmptyState size="sm" icon={ICONS.quote} message={t.no_quotes_yet} />
             ) : (
               <div className="divide-y divide-[var(--color-border-divider)]">
                 {projectQuotes.map((qt) => (
@@ -235,13 +265,13 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
             )}
             {unlinkedQuotes.length > 0 && (
               <div className="mt-2">
-                <select
+                <Select
                   value=""
+                  aria-label={t.link_quote.replace(/\.+$/, "")}
                   onChange={(e) => {
                     const id = Number(e.target.value);
                     if (id) updateQuote.mutate({ id, data: { project_id: projectId } });
                   }}
-                  className="text-xs border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1 w-full"
                 >
                   <option value="">{t.link_quote}</option>
                   {unlinkedQuotes.map((qt) => (
@@ -249,7 +279,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
                       {qt.reference.startsWith("DRAFT") ? t.draft : qt.reference} — {qt.total.toFixed(2)} CHF
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
             )}
           </div>
@@ -265,71 +295,74 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
 
   return (
       <div>
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex-1 min-w-0">
-            <h2 className={compact ? "text-base font-semibold tracking-tight" : "text-xl font-semibold tracking-tight"}>
-              {project.name}
-            </h2>
-            {client && (
-              <Link to={`/clients/${client.id}`} className="text-xs text-muted hover:text-accent">
-                {client.name}
-              </Link>
-            )}
-          </div>
-          <select
+        <PageHeader
+          as={compact ? "h2" : "h1"}
+          title={project.name}
+          back={onBack}
+          meta={client && (
+            <Link to={`/clients/${client.id}`} className="hover:text-accent-text">
+              {client.name}
+            </Link>
+          )}
+          actions={<>
+          <Select
             value={status}
+            aria-label={t.status}
             onChange={(e) => {
               const v = e.target.value as ProjectStatus;
               setStatus(v);
               updateProject.mutate(
                 { id: projectId, data: { status: v } },
-                { onSuccess: () => toast.success(t.toast_status_updated) }
+                { onSuccess: () => notify.success(t.status_updated) }
               );
             }}
-            className="border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-2 py-1 text-xs"
+            fullWidth={false}
           >
             <option value="active">{t.active}</option>
             <option value="completed">{t.completed}</option>
             <option value="on_hold">{t.on_hold}</option>
             <option value="cancelled">{t.cancelled}</option>
-          </select>
-        </div>
+          </Select>
+          {actions}
+          </>}
+        />
 
         <div className="flex items-center gap-4 mb-4 text-xs">
           <div className="flex items-center gap-2">
             <span className="text-muted">{t.start}</span>
-            <input
-              type="date"
-              value={project.start_date ?? ""}
-              onChange={(e) =>
+            <DatePicker
+              variant="bare"
+              fullWidth={false}
+              value={project.start_date || null}
+              onChange={(v) =>
                 updateProject.mutate({
                   id: projectId,
-                  data: { start_date: e.target.value || null },
+                  data: { start_date: v },
                 })
               }
-              className="bg-transparent border-none text-xs text-muted cursor-pointer hover:text-[var(--color-text-secondary)]"
+              aria-label={t.start}
             />
           </div>
           <div className="flex items-center gap-2">
             <span className="text-muted">{t.deadline}</span>
-            <input
-              type="date"
-              value={project.deadline ?? ""}
-              onChange={(e) =>
+            <DatePicker
+              variant="bare"
+              fullWidth={false}
+              value={project.deadline || null}
+              onChange={(v) =>
                 updateProject.mutate({
                   id: projectId,
-                  data: { deadline: e.target.value || null },
+                  data: { deadline: v },
                 })
               }
-              className="bg-transparent border-none text-xs text-muted cursor-pointer hover:text-[var(--color-text-secondary)]"
+              aria-label={t.deadline}
             />
           </div>
           {project.folder_path ? (
             <Button
               variant="link"
-              size="sm"
-              icon={<FolderOpen size={12} />}
-              onClick={() => invoke("open_in_finder", { path: project.folder_path! }).catch(() => toast.error(t.failed_open_folder))}
+              icon={ICONS.openFolder}
+              onClick={() => invoke("open_in_finder", { path: project.folder_path! }).catch((e) => notify.error(t.failed_open_folder, e))}
               className="text-muted hover:text-[var(--color-text-secondary)] cursor-pointer"
             >
               {t.folder}
@@ -337,8 +370,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
           ) : (
             <Button
               variant="link"
-              size="sm"
-              icon={<FolderOpen size={12} />}
+              icon={ICONS.openFolder}
               onClick={async () => {
                 const dir = await openDirectory({ directory: true, title: t.set_folder });
                 if (typeof dir === "string") {
@@ -353,16 +385,10 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
         </div>
 
         {totalCount > 0 && (
-          <div className="mb-4">
-            <div className="flex justify-between text-xs text-muted mb-1">
-              <span>{t.progress}</span>
-              <span>{progress}%</span>
-            </div>
-            <MeterBar pct={progress} color="var(--color-accent)" />
-          </div>
+          <ProgressBar value={progress} label={t.progress} showValue className="mb-4" />
         )}
 
-        <ProjectBlockLayout project={project} projectId={projectId} renderBlock={renderBlock} />
+        <ProjectBlockLayout project={project} projectId={projectId} renderBlock={renderBlock} headingAs={compact ? "h3" : "h2"} />
 
         {sectionCtxMenu && (
           <ContextMenu
@@ -370,7 +396,7 @@ export function ProjectDetailContent({ projectId, compact }: Props) {
             y={sectionCtxMenu.y}
             onClose={() => setSectionCtxMenu(null)}
             items={[
-              { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/projects/${projectId}`, project?.name ?? "") },
+              { label: t.open_in_new_tab, icon: ICONS.newTab, onClick: () => openTab(`/projects/${projectId}`, project?.name ?? "") },
             ]}
           />
         )}

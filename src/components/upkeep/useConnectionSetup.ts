@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { notify } from "../../lib/notify";
 import { useT } from "../../i18n/useT";
 import { useCreateConnection, useDeleteConnection, useUpdateConnection } from "../../db/hooks/useConnections";
 import { getConnection, type ConnectionInput } from "../../db/queries/connections";
@@ -87,7 +87,7 @@ export function useConnectionSetup(connection: Connection | undefined, onDone: (
         const devices = await testConnection(conn);
         ran = true;
         doneRef.current = true;
-        toast.success(t.upkeep_connection_test_ok.replace("{count}", String(devices.length)));
+        notify.success(t.upkeep_connection_test_ok.replace("{count}", String(devices.length)));
         onDone();
       } catch (e) {
         ran = !isRefusedByApp(e);

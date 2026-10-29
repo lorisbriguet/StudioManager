@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
+import { IconButton } from "../components/ui/IconButton";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, Plus, Trash2, Eye, Pencil } from "lucide-react";
-import { toast } from "sonner";
-import { Button, Input, PageSpinner, Card } from "../components/ui";
+import { notify } from "../lib/notify";
+import { ICONS, Checkbox, Button, Input, PageHeader, EmptyState, QueryError, DetailSkeleton, ListSkeleton, Card, Select, SectionLabel, Textarea, ConfirmButton, FormField, FormGrid, FormActions, FormLayout, CARD_GAP, CARD_STACK } from "../components/ui";
 import { useTabStore } from "../stores/tab-store";
 import {
   useClient,
@@ -22,13 +22,14 @@ import { useInvoicesByClient } from "../db/hooks/useInvoices";
 import { useT } from "../i18n/useT";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { ClientTimeline } from "../components/ClientTimeline";
-import { ContextMenu } from "../components/ContextMenu";
-import { undoableFromStore } from "../lib/undo";
+import { ContextMenu } from "../components/ui/ContextMenu";
+import { deleteWithUndo, undoableFromStore, undoTop } from "../lib/undo";
 import type { Client, ClientContact, ClientAddress } from "../types/client";
 
 export function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { data: client, isLoading } = useClient(id!);
+  const clientQuery = useClient(id!);
+  const { data: client } = clientQuery;
   const { data: projects } = useProjectsByClient(id!);
   const { data: invoices } = useInvoicesByClient(id!);
   const { data: contacts } = useClientContacts(id!);
@@ -41,7 +42,6 @@ export function ClientDetailPage() {
 
   const [form, setForm] = useState<Partial<Client>>({});
   const [dirty, setDirty] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Warn before leaving with unsaved edits (anchor clicks, back/forward,
   // window close, and programmatic navigations via the dirty-guard registry)
@@ -77,112 +77,94 @@ export function ClientDetailPage() {
       { id, data },
       {
         onSuccess: () => {
-          toast.success(t.client_updated);
+          notify.success(t.client_updated);
           setDirty(false);
         },
       }
     );
   };
 
-  if (isLoading) return <PageSpinner />;
-  if (!client) return <div className="text-muted text-sm">{t.client_not_found}</div>;
+  if (client === undefined && id) {
+    return clientQuery.isError ? (
+      <QueryError message={t.load_error_client} onRetry={clientQuery.refetch} retrying={clientQuery.isFetching} />
+    ) : (
+      <DetailSkeleton />
+    );
+  }
+  if (!client) {
+    return (
+      <EmptyState
+        icon={ICONS.client}
+        message={t.client_not_found}
+        hint={t.not_found_hint}
+        action={<Button variant="secondary" onClick={() => navigate("/clients")}>{t.back_to_clients}</Button>}
+      />
+    );
+  }
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(-1)} aria-label={t.back} className="text-muted hover:text-[var(--color-text)]">
-          <ArrowLeft size={18} />
-        </button>
-        <h1 className="text-xl font-semibold">{client.name}</h1>
-        <div className="ml-auto flex items-center gap-2">
+      <PageHeader
+        title={client.name}
+        back={() => navigate(-1)}
+        actions={<>
           {dirty && (
-            <Button size="md" icon={<Save size={14} />} onClick={save}>
+            <Button icon={ICONS.save} onClick={save}>
               {t.save}
             </Button>
           )}
-          {confirmDelete ? (
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-[var(--color-danger-text)]">{t.confirm_delete_client}</span>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => {
-                  deleteClient.mutate(id!, {
-                    onSuccess: () => {
-                      undoableFromStore(t.toast_client_deleted);
-                      navigate("/clients");
-                    },
-                  });
-                }}
-              >
-                {t.delete}
-              </Button>
-              <Button variant="secondary" size="sm" onClick={() => setConfirmDelete(false)}>
-                {t.cancel}
-              </Button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setConfirmDelete(true)}
-              className="p-1.5 text-muted hover:text-[var(--color-danger-text)]"
-              title={t.delete}
-              aria-label={t.delete}
-            >
-              <Trash2 size={16} />
-            </button>
-          )}
-        </div>
-      </div>
+          <ConfirmButton
+            label={t.delete}
+            question={t.confirm_delete_client}
+            icon={ICONS.delete}
+            variant="danger"
+            onConfirm={() => deleteWithUndo(deleteClient, id!, t.toast_client_deleted, () => navigate("/clients"))}
+          />
+        </>}
+      />
 
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-2 space-y-4">
+      <div className={`grid grid-cols-3 ${CARD_GAP}`}>
+        <div className={`col-span-2 ${CARD_STACK}`}>
           <Section title={t.details}>
-            <div className="grid grid-cols-2 gap-3">
+            <FormGrid cols={2}>
               <Field label={t.display_name} value={form.name ?? ""} onBlur={(v) => saveField("name", v)} />
-              <div>
-                <label className="block text-xs font-medium text-muted mb-1">{t.language}</label>
-                <select
+              <FormField label={t.language}>
+                <Select
                   value={form.language ?? "FR"}
                   onChange={(e) => { update("language", e.target.value); saveField("language", e.target.value); }}
-                  className="w-full border border-[var(--color-border-divider)] rounded-lg px-3 py-2 text-sm bg-[var(--color-surface)]"
                 >
                   <option value="FR">{t.french}</option>
                   <option value="EN">{t.english}</option>
-                </select>
-              </div>
-            </div>
+                </Select>
+              </FormField>
+            </FormGrid>
             <div className="flex items-center gap-3 mt-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={!!form.has_discount}
-                  onChange={(e) => {
-                    const v = e.target.checked ? 1 : 0;
-                    update("has_discount", v);
-                    saveField("has_discount", v);
-                    if (v && !form.discount_rate) {
-                      update("discount_rate", 0.1);
-                      saveField("discount_rate", 0.1);
-                    }
-                  }}
-                />
-                <span className="text-sm">{t.cultural_discount}</span>
-              </label>
+              <Checkbox
+                label={t.cultural_discount}
+                checked={!!form.has_discount}
+                onChange={(e) => {
+                  const v = e.target.checked ? 1 : 0;
+                  update("has_discount", v);
+                  saveField("has_discount", v);
+                  if (v && !form.discount_rate) {
+                    update("discount_rate", 0.1);
+                    saveField("discount_rate", 0.1);
+                  }
+                }}
+              />
               {!!form.has_discount && (
-                <div className="flex items-center gap-1">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={Math.round((form.discount_rate ?? 0.1) * 100)}
-                    onChange={(e) => update("discount_rate", Number(e.target.value) / 100)}
-                    onBlur={(e) => saveField("discount_rate", Number(e.target.value) / 100)}
-                    fullWidth={false}
-                    className="w-16 px-2 py-1 text-center"
-                  />
-                  <span className="text-sm text-muted">%</span>
-                </div>
+                <Input
+                  numeric
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={Math.round((form.discount_rate ?? 0.1) * 100)}
+                  onChange={(e) => update("discount_rate", Number(e.target.value) / 100)}
+                  onBlur={(e) => saveField("discount_rate", Number(e.target.value) / 100)}
+                  unit="%"
+                  width="sm"
+                  aria-label={t.cultural_discount}
+                />
               )}
             </div>
           </Section>
@@ -192,59 +174,44 @@ export function ClientDetailPage() {
           <AddressesSection clientId={id!} addresses={addresses ?? []} client={client} />
 
           <Section title={t.notes}>
-            <textarea
+            <Textarea
               value={form.notes ?? ""}
               onChange={(e) => update("notes", e.target.value)}
               onBlur={(e) => saveField("notes", e.target.value)}
-              rows={3}
-              className="w-full border border-[var(--color-border-divider)] rounded-lg px-3 py-2 text-sm bg-[var(--color-surface)]"
+              aria-label={t.notes}
             />
           </Section>
         </div>
 
-        <div className="space-y-4">
-          <Section title={`${t.projects} (${projects?.length ?? 0})`}>
+        <div className={CARD_STACK}>
+          <Section title={t.projects} count={projects?.length ?? 0}>
             {projects?.map((p) => (
               <Link
                 key={p.id}
                 to={`/projects/${p.id}`}
-                className="block py-1.5 text-sm text-accent hover:underline"
+                className="block py-1.5 text-sm text-accent-text hover:underline"
               >
                 {p.name}
                 <span className="ml-2 text-xs text-muted">{p.status}</span>
               </Link>
             ))}
-            {(!projects || projects.length === 0) && (
-              <div className="text-sm text-muted">{t.no_projects}</div>
-            )}
+            {projects === undefined && <ListSkeleton size="sm" rows={2} />}
+            {projects?.length === 0 && <EmptyState size="sm" icon={ICONS.project} message={t.no_projects_for_client} />}
           </Section>
 
-          <Section title={`${t.invoices} (${invoices?.length ?? 0})`}>
+          <Section title={t.invoices} count={invoices?.length ?? 0}>
             {invoices?.map((inv) => (
               <div key={inv.id} className="flex items-center justify-between py-1.5 text-sm group">
                 <span>{inv.reference}</span>
                 <div className="flex items-center gap-2">
                   <span className="text-muted">CHF {inv.total.toFixed(2)}</span>
-                  <Link
-                    to={`/invoices/${inv.id}/preview`}
-                    className="opacity-0 group-hover:opacity-100 text-muted hover:text-accent transition-opacity"
-                    title={t.preview}
-                  >
-                    <Eye size={14} />
-                  </Link>
-                  <Link
-                    to={`/invoices/${inv.id}/edit`}
-                    className="opacity-0 group-hover:opacity-100 text-muted hover:text-accent transition-opacity"
-                    title={t.edit}
-                  >
-                    <Pencil size={14} />
-                  </Link>
+                  <IconButton to={`/invoices/${inv.id}/preview`} icon={ICONS.preview} label={t.preview} size="xs" tone="accent" reveal />
+                  <IconButton to={`/invoices/${inv.id}/edit`} icon={ICONS.edit} label={t.edit} size="xs" tone="accent" reveal />
                 </div>
               </div>
             ))}
-            {(!invoices || invoices.length === 0) && (
-              <div className="text-sm text-muted">{t.no_invoices}</div>
-            )}
+            {invoices === undefined && <ListSkeleton size="sm" rows={2} />}
+            {invoices?.length === 0 && <EmptyState size="sm" icon={ICONS.invoice} message={t.no_invoices_for_client} />}
           </Section>
 
           <Section title={t.client_activity}>
@@ -298,7 +265,7 @@ function ContactsSection({
       { client_id: clientId, ...d },
       {
         onSuccess: () => {
-          toast.success(t.contact_added);
+          notify.success(t.contact_added);
           setDrafts((prev) => prev.filter((_, i) => i !== idx));
         },
       }
@@ -350,100 +317,111 @@ function ContactsSection({
 
   const removeContact = (contact: ClientContact) => {
     if (editingId === contact.id) setEditingId(null);
+    const before = undoTop();
     deleteContact.mutate(
       { id: contact.id, clientId },
-      { onSuccess: () => undoableFromStore(t.contact_removed) }
+      { onSuccess: () => undoableFromStore(t.contact_removed, before) }
     );
   };
 
   return (
     <Card>
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-medium">{t.contacts}</h2>
-        <Button variant="link" size="sm" icon={<Plus size={14} />} onClick={addDraft} className="hover:text-accent-hover">
-          {t.add}
-        </Button>
-      </div>
+      <Card.Header
+        title={t.contacts}
+        count={contacts.length}
+        variant="label"
+        action={
+          <Button variant="link" icon={ICONS.add} onClick={addDraft} className="hover:text-accent-hover">
+            {t.add}
+          </Button>
+        }
+      />
 
       {contacts.length === 0 && drafts.length === 0 && (
-        <div className="text-sm text-muted">{t.no_contacts}</div>
+        <EmptyState
+          size="sm"
+          icon={ICONS.contact}
+          message={t.no_contacts}
+          action={<Button variant="secondary" icon={ICONS.add} onClick={addDraft}>{t.add_contact}</Button>}
+        />
       )}
 
       <div className="space-y-2">
         {contacts.map((c) => (
           editingId === c.id ? (
-            <div
-              key={c.id}
-              className="border border-[var(--color-input-border)] rounded-xl bg-[var(--color-surface)] p-3 space-y-2"
-            >
-              <div className="grid grid-cols-3 gap-2">
-                <MiniField
-                  label={t.first_name}
-                  value={editForm.first_name}
-                  onChange={(v) => setEditForm((prev) => ({ ...prev, first_name: v }))}
-                  onBlurCb={() => handleEditBlur(c)}
-                  onFocusCb={handleEditFocus}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") cancelEdit();
-                    if (e.key === "Enter") saveEdit(c);
-                  }}
-                />
-                <MiniField
-                  label={t.last_name}
-                  value={editForm.last_name}
-                  onChange={(v) => setEditForm((prev) => ({ ...prev, last_name: v }))}
-                  onBlurCb={() => handleEditBlur(c)}
-                  onFocusCb={handleEditFocus}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") cancelEdit();
-                    if (e.key === "Enter") saveEdit(c);
-                  }}
-                />
-                <MiniField
-                  label={t.role}
-                  value={editForm.role}
-                  onChange={(v) => setEditForm((prev) => ({ ...prev, role: v }))}
-                  onBlurCb={() => handleEditBlur(c)}
-                  onFocusCb={handleEditFocus}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") cancelEdit();
-                    if (e.key === "Enter") saveEdit(c);
-                  }}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <MiniField
-                  label={t.email}
-                  value={editForm.email}
-                  onChange={(v) => setEditForm((prev) => ({ ...prev, email: v }))}
-                  onBlurCb={() => handleEditBlur(c)}
-                  onFocusCb={handleEditFocus}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") cancelEdit();
-                    if (e.key === "Enter") saveEdit(c);
-                  }}
-                />
-                <MiniField
-                  label={t.phone}
-                  value={editForm.phone}
-                  onChange={(v) => setEditForm((prev) => ({ ...prev, phone: v }))}
-                  onBlurCb={() => handleEditBlur(c)}
-                  onFocusCb={handleEditFocus}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") cancelEdit();
-                    if (e.key === "Enter") saveEdit(c);
-                  }}
-                />
-              </div>
-              <div className="flex gap-2 justify-end">
-                <button onClick={cancelEdit} className="text-xs text-muted hover:text-danger">{t.cancel}</button>
-                <button onClick={() => saveEdit(c)} className="text-xs text-accent hover:text-accent-hover font-medium">{t.save}</button>
-              </div>
-            </div>
+            <Card key={c.id} tone="inset" padding="sm">
+              <FormLayout dense capped={false}>
+                <FormGrid cols={3}>
+                  <MiniField
+                    label={t.first_name}
+                    value={editForm.first_name}
+                    onChange={(v) => setEditForm((prev) => ({ ...prev, first_name: v }))}
+                    onBlurCb={() => handleEditBlur(c)}
+                    onFocusCb={handleEditFocus}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") cancelEdit();
+                      if (e.key === "Enter") saveEdit(c);
+                    }}
+                  />
+                  <MiniField
+                    label={t.last_name}
+                    value={editForm.last_name}
+                    onChange={(v) => setEditForm((prev) => ({ ...prev, last_name: v }))}
+                    onBlurCb={() => handleEditBlur(c)}
+                    onFocusCb={handleEditFocus}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") cancelEdit();
+                      if (e.key === "Enter") saveEdit(c);
+                    }}
+                  />
+                  <MiniField
+                    label={t.role}
+                    value={editForm.role}
+                    onChange={(v) => setEditForm((prev) => ({ ...prev, role: v }))}
+                    onBlurCb={() => handleEditBlur(c)}
+                    onFocusCb={handleEditFocus}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") cancelEdit();
+                      if (e.key === "Enter") saveEdit(c);
+                    }}
+                  />
+                </FormGrid>
+                <FormGrid cols={2}>
+                  <MiniField
+                    label={t.email}
+                    value={editForm.email}
+                    onChange={(v) => setEditForm((prev) => ({ ...prev, email: v }))}
+                    onBlurCb={() => handleEditBlur(c)}
+                    onFocusCb={handleEditFocus}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") cancelEdit();
+                      if (e.key === "Enter") saveEdit(c);
+                    }}
+                  />
+                  <MiniField
+                    label={t.phone}
+                    value={editForm.phone}
+                    onChange={(v) => setEditForm((prev) => ({ ...prev, phone: v }))}
+                    onBlurCb={() => handleEditBlur(c)}
+                    onFocusCb={handleEditFocus}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") cancelEdit();
+                      if (e.key === "Enter") saveEdit(c);
+                    }}
+                  />
+                </FormGrid>
+                <FormActions>
+                  <Button variant="secondary" onClick={cancelEdit}>{t.cancel}</Button>
+                  <Button onClick={() => saveEdit(c)}>{t.save}</Button>
+                </FormActions>
+              </FormLayout>
+            </Card>
           ) : (
-            <div
+            <Card
               key={c.id}
-              className="relative border border-[var(--color-border-divider)] rounded-xl bg-[var(--color-surface)] px-3 py-2.5 group cursor-default"
+              tone="inset"
+              padding="sm"
+              className="relative group cursor-default"
               onContextMenu={(e) => {
                 e.preventDefault();
                 setContextMenu({ x: e.clientX, y: e.clientY, contactId: c.id });
@@ -463,14 +441,13 @@ function ContactsSection({
                   {c.phone && <span className="text-xs text-muted">{c.phone}</span>}
                 </div>
               )}
-              <button
+              <IconButton size="xs"
+                icon={ICONS.edit}
+                label={t.edit}
                 onClick={() => startEditing(c)}
-                className="absolute top-2.5 right-2.5 opacity-60 hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
-                aria-label={t.edit}
-              >
-                <Pencil size={14} />
-              </button>
-            </div>
+                className="absolute top-3 right-3 opacity-60 hover:opacity-100"
+              />
+            </Card>
           )
         ))}
 
@@ -483,7 +460,7 @@ function ContactsSection({
             items={[
               {
                 label: t.edit,
-                icon: <Pencil size={14} />,
+                icon: ICONS.edit,
                 onClick: () => {
                   const contact = contacts.find((c) => c.id === contextMenu.contactId);
                   if (contact) startEditing(contact);
@@ -492,7 +469,7 @@ function ContactsSection({
               { label: "", divider: true, onClick: () => {} },
               {
                 label: t.delete,
-                icon: <Trash2 size={14} />,
+                icon: ICONS.delete,
                 danger: true,
                 onClick: () => {
                   const contact = contacts.find((c) => c.id === contextMenu.contactId);
@@ -504,74 +481,63 @@ function ContactsSection({
         )}
 
         {drafts.map((d, idx) => (
-          <div
-            key={`draft-${idx}`}
-            className="border border-dashed border-[var(--color-input-border)] rounded-xl p-3 space-y-2"
-          >
-            <div className="grid grid-cols-3 gap-2">
-              <MiniField
-                label={t.first_name}
-                value={d.first_name}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, first_name: v } : x))
-                  )
-                }
-              />
-              <MiniField
-                label={t.last_name}
-                value={d.last_name}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, last_name: v } : x))
-                  )
-                }
-              />
-              <MiniField
-                label={t.role}
-                value={d.role}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, role: v } : x))
-                  )
-                }
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <MiniField
-                label={t.email}
-                value={d.email}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, email: v } : x))
-                  )
-                }
-              />
-              <MiniField
-                label={t.phone}
-                value={d.phone}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, phone: v } : x))
-                  )
-                }
-              />
-            </div>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => removeDraft(idx)}
-                className="text-xs text-muted hover:text-danger"
-              >
-                {t.cancel}
-              </button>
-              <button
-                onClick={() => saveDraft(idx)}
-                className="text-xs text-accent hover:text-accent-hover font-medium"
-              >
-                {t.save}
-              </button>
-            </div>
-          </div>
+          <Card key={`draft-${idx}`} tone="dashed" padding="sm">
+            <FormLayout dense capped={false}>
+              <FormGrid cols={3}>
+                <MiniField
+                  label={t.first_name}
+                  value={d.first_name}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, first_name: v } : x))
+                    )
+                  }
+                />
+                <MiniField
+                  label={t.last_name}
+                  value={d.last_name}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, last_name: v } : x))
+                    )
+                  }
+                />
+                <MiniField
+                  label={t.role}
+                  value={d.role}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, role: v } : x))
+                    )
+                  }
+                />
+              </FormGrid>
+              <FormGrid cols={2}>
+                <MiniField
+                  label={t.email}
+                  value={d.email}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, email: v } : x))
+                    )
+                  }
+                />
+                <MiniField
+                  label={t.phone}
+                  value={d.phone}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, phone: v } : x))
+                    )
+                  }
+                />
+              </FormGrid>
+              <FormActions>
+                <Button variant="secondary" onClick={() => removeDraft(idx)}>{t.cancel}</Button>
+                <Button onClick={() => saveDraft(idx)}>{t.save}</Button>
+              </FormActions>
+            </FormLayout>
+          </Card>
         ))}
       </div>
     </Card>
@@ -630,30 +596,34 @@ function AddressCard({
 
   if (editing) {
     return (
-      <div className="rounded-xl bg-[var(--color-surface)] p-3 space-y-2">
-        <div className="grid grid-cols-2 gap-2">
-          <MiniField label={t.label} value={form.label} onChange={(v) => setForm({ ...form, label: v })} onKeyDown={fieldKeys} />
-          <MiniField label={t.billing_name} value={form.billing_name} onChange={(v) => setForm({ ...form, billing_name: v })} onKeyDown={fieldKeys} />
-          <MiniField label={t.address_line_1} value={form.address_line1} onChange={(v) => setForm({ ...form, address_line1: v })} onKeyDown={fieldKeys} />
-          <MiniField label={t.address_line_2} value={form.address_line2} onChange={(v) => setForm({ ...form, address_line2: v })} onKeyDown={fieldKeys} />
-          <MiniField label={t.postal_city} value={form.postal_city} onChange={(v) => setForm({ ...form, postal_city: v })} onKeyDown={fieldKeys} />
-        </div>
-        <div className="flex gap-2 justify-end">
-          <button onClick={cancel} className="text-xs text-muted hover:text-[var(--color-text-secondary)]">{t.cancel}</button>
-          <button onClick={save} className="text-xs text-accent hover:text-accent-hover">{t.save}</button>
-        </div>
-      </div>
+      <Card tone="inset" padding="sm">
+        <FormLayout dense capped={false}>
+          <FormGrid cols={2}>
+            <MiniField label={t.label} value={form.label} onChange={(v) => setForm({ ...form, label: v })} onKeyDown={fieldKeys} />
+            <MiniField label={t.billing_name} value={form.billing_name} onChange={(v) => setForm({ ...form, billing_name: v })} onKeyDown={fieldKeys} />
+            <MiniField label={t.address_line_1} value={form.address_line1} onChange={(v) => setForm({ ...form, address_line1: v })} onKeyDown={fieldKeys} />
+            <MiniField label={t.address_line_2} value={form.address_line2} onChange={(v) => setForm({ ...form, address_line2: v })} onKeyDown={fieldKeys} />
+            <MiniField label={t.postal_city} value={form.postal_city} onChange={(v) => setForm({ ...form, postal_city: v })} onKeyDown={fieldKeys} />
+          </FormGrid>
+          <FormActions>
+            <Button variant="secondary" onClick={cancel}>{t.cancel}</Button>
+            <Button onClick={save}>{t.save}</Button>
+          </FormActions>
+        </FormLayout>
+      </Card>
     );
   }
 
   return (
-    <div
-      className="rounded-xl bg-[var(--color-surface)] p-3 group relative"
+    <Card
+      tone="inset"
+      padding="sm"
+      className="group relative"
       onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); }}
     >
       <div className="flex items-start justify-between">
         <div>
-          {a.label && <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{a.label}</span>}
+          {a.label && <SectionLabel as="span">{a.label}</SectionLabel>}
           <div className="mt-1 text-sm">
             {a.billing_name && <div className="font-medium">{a.billing_name}</div>}
             {a.address_line1 && <div className="text-muted">{a.address_line1}</div>}
@@ -661,13 +631,7 @@ function AddressCard({
             {a.postal_city && <div className="text-muted">{a.postal_city}</div>}
           </div>
         </div>
-        <button
-          onClick={() => setEditing(true)}
-          className="opacity-60 hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
-          aria-label={t.edit}
-        >
-          <Pencil size={14} />
-        </button>
+        <IconButton icon={ICONS.edit} label={t.edit} onClick={() => setEditing(true)} className="opacity-60 hover:opacity-100" />
       </div>
       {ctxMenu && (
         <ContextMenu
@@ -675,12 +639,12 @@ function AddressCard({
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
-            { label: t.edit, icon: <Pencil size={14} />, onClick: () => setEditing(true) },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: onDelete },
+            { label: t.edit, icon: ICONS.edit, onClick: () => setEditing(true) },
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: onDelete },
           ]}
         />
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -713,7 +677,7 @@ function AddressesSection({
       { client_id: clientId, ...d },
       {
         onSuccess: () => {
-          toast.success(t.address_added);
+          notify.success(t.address_added);
           setDrafts((prev) => prev.filter((_, i) => i !== idx));
         },
       }
@@ -736,26 +700,30 @@ function AddressesSection({
   };
 
   const removeAddress = (addr: ClientAddress) => {
+    const before = undoTop();
     deleteAddress.mutate(
       { id: addr.id, clientId },
-      { onSuccess: () => undoableFromStore(t.address_removed) }
+      { onSuccess: () => undoableFromStore(t.address_removed, before) }
     );
   };
 
   return (
     <Card>
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-medium">{t.billing_addresses}</h2>
-        <Button variant="link" size="sm" icon={<Plus size={14} />} onClick={addDraft} className="hover:text-accent-hover">
-          {t.add}
-        </Button>
-      </div>
+      <Card.Header
+        title={t.billing_addresses}
+        variant="label"
+        action={
+          <Button variant="link" icon={ICONS.add} onClick={addDraft} className="hover:text-accent-hover">
+            {t.add}
+          </Button>
+        }
+      />
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {/* Main address — read-only card from client fields */}
         {(client.address_line1 || client.postal_city) && (
-          <div className="border border-[var(--color-border-divider)] rounded-xl bg-[var(--color-surface)] p-3 opacity-80">
-            <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{t.main_address}</span>
+          <Card tone="inset" padding="sm" className="opacity-80">
+            <SectionLabel as="span">{t.main_address}</SectionLabel>
             <div className="mt-1 text-sm">
               {(client.billing_name || client.name) && (
                 <div className="font-medium">{client.billing_name || client.name}</div>
@@ -764,7 +732,7 @@ function AddressesSection({
               {client.address_line2 && <div className="text-muted">{client.address_line2}</div>}
               {client.postal_city && <div className="text-muted">{client.postal_city}</div>}
             </div>
-          </div>
+          </Card>
         )}
 
         {addresses.map((a) => (
@@ -778,72 +746,61 @@ function AddressesSection({
         ))}
 
         {drafts.map((d, idx) => (
-          <div
-            key={`draft-addr-${idx}`}
-            className="border border-dashed border-[var(--color-input-border)] rounded-xl p-3 space-y-2"
-          >
-            <div className="grid grid-cols-2 gap-2">
-              <MiniField
-                label={t.label}
-                value={d.label}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, label: v } : x))
-                  )
-                }
-              />
-              <MiniField
-                label={t.billing_name}
-                value={d.billing_name}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, billing_name: v } : x))
-                  )
-                }
-              />
-              <MiniField
-                label={t.address_line_1}
-                value={d.address_line1}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, address_line1: v } : x))
-                  )
-                }
-              />
-              <MiniField
-                label={t.address_line_2}
-                value={d.address_line2}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, address_line2: v } : x))
-                  )
-                }
-              />
-              <MiniField
-                label={t.postal_city}
-                value={d.postal_city}
-                onChange={(v) =>
-                  setDrafts((prev) =>
-                    prev.map((x, i) => (i === idx ? { ...x, postal_city: v } : x))
-                  )
-                }
-              />
-            </div>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => removeDraft(idx)}
-                className="text-xs text-muted hover:text-danger"
-              >
-                {t.cancel}
-              </button>
-              <button
-                onClick={() => saveDraft(idx)}
-                className="text-xs text-accent hover:text-accent-hover font-medium"
-              >
-                {t.save}
-              </button>
-            </div>
-          </div>
+          <Card key={`draft-addr-${idx}`} tone="dashed" padding="sm">
+            <FormLayout dense capped={false}>
+              <FormGrid cols={2}>
+                <MiniField
+                  label={t.label}
+                  value={d.label}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, label: v } : x))
+                    )
+                  }
+                />
+                <MiniField
+                  label={t.billing_name}
+                  value={d.billing_name}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, billing_name: v } : x))
+                    )
+                  }
+                />
+                <MiniField
+                  label={t.address_line_1}
+                  value={d.address_line1}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, address_line1: v } : x))
+                    )
+                  }
+                />
+                <MiniField
+                  label={t.address_line_2}
+                  value={d.address_line2}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, address_line2: v } : x))
+                    )
+                  }
+                />
+                <MiniField
+                  label={t.postal_city}
+                  value={d.postal_city}
+                  onChange={(v) =>
+                    setDrafts((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, postal_city: v } : x))
+                    )
+                  }
+                />
+              </FormGrid>
+              <FormActions>
+                <Button variant="secondary" onClick={() => removeDraft(idx)}>{t.cancel}</Button>
+                <Button onClick={() => saveDraft(idx)}>{t.save}</Button>
+              </FormActions>
+            </FormLayout>
+          </Card>
         ))}
       </div>
     </Card>
@@ -852,10 +809,10 @@ function AddressesSection({
 
 /* ── Shared UI ── */
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
   return (
     <Card>
-      <h2 className="text-xs font-semibold uppercase tracking-wider text-muted mb-3">{title}</h2>
+      <Card.Header title={title} count={count} variant="label" />
       {children}
     </Card>
   );
@@ -884,17 +841,15 @@ function Field({
   };
 
   return (
-    <div>
-      <label className="block text-xs font-medium text-muted mb-1">{label}</label>
+    <FormField label={label}>
       <Input
         value={local}
         onFocus={() => { focusedRef.current = true; }}
         onChange={(e) => setLocal(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
-        className="py-2"
       />
-    </div>
+    </FormField>
   );
 }
 
@@ -922,8 +877,7 @@ function MiniField({
   }, [value]);
 
   return (
-    <div>
-      <label className="block text-[10px] text-muted mb-0.5">{label}</label>
+    <FormField label={label}>
       <Input
         value={local}
         onChange={(e) => {
@@ -936,9 +890,8 @@ function MiniField({
         }}
         onFocus={onFocusCb}
         onKeyDown={onKeyDown}
-        className="px-2 py-1"
       />
-    </div>
+    </FormField>
   );
 }
 

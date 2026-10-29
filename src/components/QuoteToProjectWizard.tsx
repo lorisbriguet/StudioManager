@@ -1,9 +1,8 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, addMonths } from "date-fns";
-import { Check } from "lucide-react";
-import { toast } from "sonner";
-import { Button, FormField, Modal } from "./ui";
+import { notify } from "../lib/notify";
+import { Checkbox, Button, DatePicker, FormField, FormGrid, ICONS, ICON_SIZE, Input, Modal, Textarea } from "./ui";
 import * as v from "../lib/validate";
 import { useT } from "../i18n/useT";
 import { useCreateProjectFromQuote } from "../db/hooks/useProjects";
@@ -95,7 +94,7 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
       tasks: included,
     });
 
-    toast.success(t.project_generated);
+    notify.success(t.project_generated);
     onClose();
     navigate(`/projects/${projectId}`);
   };
@@ -103,7 +102,44 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
   const steps = [t.step_review_items, t.step_project_details, t.step_confirm];
 
   return (
-    <Modal open={open} onClose={onClose} title={t.generate_project_from_quote} size="lg">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={t.generate_project_from_quote}
+      size="md"
+      footer={
+        <>
+          <Button
+            variant="secondary"
+            onClick={() => (step === 0 ? onClose() : setStep(step - 1))}
+          >
+            {step === 0 ? t.cancel : t.back}
+          </Button>
+          {step < 2 ? (
+            <Button
+              onClick={() => {
+                if (step === 1) {
+                  const errs = v.validateForm({ name: projectName, deadline }, wizardSchema);
+                  setErrors(errs);
+                  if (Object.keys(errs).length > 0) return;
+                }
+                setStep(step + 1);
+              }}
+              disabled={step === 0 && includedCount === 0}
+            >
+              {t.next}
+            </Button>
+          ) : (
+            <Button
+              onClick={handleCreate}
+              disabled={!projectName.trim() || createProject.isPending}
+            >
+              {t.confirm_create_project}
+            </Button>
+          )}
+        </>
+      }
+    >
       {/* Step indicator */}
       <div className="flex items-center gap-2 mb-5">
         {steps.map((label, i) => (
@@ -111,13 +147,13 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
             <div
               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
                 i < step
-                  ? "bg-[var(--accent)] text-white"
+                  ? "bg-accent text-on-accent"
                   : i === step
-                  ? "bg-[var(--accent)] text-white"
+                  ? "bg-accent text-on-accent"
                   : "bg-[var(--color-input-bg)] text-muted"
               }`}
             >
-              {i < step ? <Check size={12} /> : i + 1}
+              {i < step ? <ICONS.selected size={ICON_SIZE.control} /> : i + 1}
             </div>
             <span className={`text-xs ${i === step ? "font-medium" : "text-muted"}`}>
               {label}
@@ -142,28 +178,27 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
                 task.included ? "" : "opacity-40"
               }`}
             >
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={task.included}
                 onChange={(e) => updateTask(i, { included: e.target.checked })}
-                className="accent-[var(--accent)]"
+                aria-label={`${t.include}: ${task.title}`}
               />
-              <input
+              <Input
                 type="text"
                 value={task.title}
                 onChange={(e) => updateTask(i, { title: e.target.value })}
-                className="text-sm border border-[var(--color-input-border)] rounded-lg px-2 py-1"
+                aria-label={t.task_name}
               />
-              <input
-                type="number"
+              <Input
+                numeric
                 value={task.plannedMinutes ?? ""}
                 onChange={(e) =>
                   updateTask(i, {
                     plannedMinutes: e.target.value ? Number(e.target.value) : null,
                   })
                 }
-                placeholder={t.minutes_short}
-                className="text-sm border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-right"
+                unit={t.minutes_short}
+                aria-label={t.planned_time}
               />
             </div>
           ))}
@@ -172,34 +207,29 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
 
       {/* Step 2: Project details */}
       {step === 1 && (
-        <div className="space-y-3">
+        <FormGrid cols={1}>
           <FormField label={t.project_name} required error={errors.name}>
-            <input
+            <Input
               type="text"
               value={projectName}
               onChange={(e) => { setProjectName(e.target.value); clearError("name"); }}
               onBlur={() => validateOnBlur("name")}
-              className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-2 text-sm"
             />
           </FormField>
           <FormField label={t.project_deadline} required error={errors.deadline}>
-            <input
-              type="date"
-              value={deadline}
-              onChange={(e) => { setDeadline(e.target.value); clearError("deadline"); }}
+            <DatePicker
+              value={deadline || null}
+              onChange={(v) => { setDeadline(v ?? ""); clearError("deadline"); }}
               onBlur={() => validateOnBlur("deadline")}
-              className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-2 text-sm"
             />
           </FormField>
           <FormField label={t.notes}>
-            <textarea
+            <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              className="w-full border border-[var(--color-input-border)] rounded-lg px-3 py-2 text-sm"
             />
           </FormField>
-        </div>
+        </FormGrid>
       )}
 
       {/* Step 3: Confirm */}
@@ -217,37 +247,6 @@ export function QuoteToProjectWizard({ open, onClose, quote, lineItems, clientNa
         </div>
       )}
 
-      {/* Navigation */}
-      <div className="flex justify-between mt-5">
-        <Button
-          variant="secondary"
-          onClick={() => (step === 0 ? onClose() : setStep(step - 1))}
-        >
-          {step === 0 ? t.cancel : t.back}
-        </Button>
-        {step < 2 ? (
-          <Button
-            onClick={() => {
-              if (step === 1) {
-                const errs = v.validateForm({ name: projectName, deadline }, wizardSchema);
-                setErrors(errs);
-                if (Object.keys(errs).length > 0) return;
-              }
-              setStep(step + 1);
-            }}
-            disabled={step === 0 && includedCount === 0}
-          >
-            {t.next}
-          </Button>
-        ) : (
-          <Button
-            onClick={handleCreate}
-            disabled={!projectName.trim() || createProject.isPending}
-          >
-            {t.confirm_create_project}
-          </Button>
-        )}
-      </div>
     </Modal>
   );
 }

@@ -8,14 +8,14 @@ vi.mock("../lib/log", () => ({
   logInfo: vi.fn(),
 }));
 
-vi.mock("../lib/notifyError", () => ({
-  notifyError: vi.fn(),
-  getLabels: () => new Proxy({}, { get: (_t, k) => String(k) }),
+vi.mock("../lib/notify", async (orig) => ({
+  ...(await orig<typeof import("../lib/notify")>()),
+  ...(await import("../__mocks__/notify")).notifyMockModule(),
 }));
 
 import { useOrgStore, prefsFromLocalStorage } from "../stores/org-store";
 import { useAppStore } from "../stores/app-store";
-import { notifyError } from "../lib/notifyError";
+import { notify } from "../lib/notify";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 import type { Registry } from "../lib/orgs";
 
@@ -29,7 +29,7 @@ beforeEach(() => {
   localStorage.clear();
   clearInvokedCommands();
   useOrgStore.setState({ organisations: [], activeId: "", loaded: false });
-  vi.mocked(notifyError).mockClear();
+  vi.mocked(notify.error).mockClear();
 });
 afterEach(() => setInvokeHandler(null));
 
@@ -128,7 +128,7 @@ describe("org store", () => {
     });
     useOrgStore.getState().applyRegistry(reg({ showIncome: true, showTasksPage: true, showTimeOverview: true, calendarSync: false, calendarName: "StudioManager", backupPath: "", exportLanguage: "FR" }));
     await useOrgStore.getState().savePrefs({ showIncome: false });
-    expect(notifyError).toHaveBeenCalledTimes(1);
+    expect(notify.error).toHaveBeenCalledTimes(1);
     expect(useAppStore.getState().showIncome).toBe(false);
   });
 

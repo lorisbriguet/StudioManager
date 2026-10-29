@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import * as m from "../queries/machines";
 import * as u from "../queries/upkeepItems";
 import * as c from "../queries/consumables";
@@ -9,7 +8,7 @@ import { useAppStore } from "../../stores/app-store";
 import { todayLocalISO } from "../../utils/localDate";
 import { buildUpkeepOverview, type UpkeepOverview } from "../../lib/upkeep/overview";
 import { useUndoStore } from "../../stores/undo-store";
-import { getLabels } from "../../lib/notifyError";
+import { getLabels } from "../../lib/notify";
 import {
   removeItemEvents,
   removeSubscriptionEvent,
@@ -38,7 +37,7 @@ function useInvalidate() {
 }
 
 // Calendar work is fire-and-forget: the save never waits for (or fails
-// because of) Apple Calendar; failures surface once through notifyError.
+// because of) Apple Calendar; failures surface once through notify.error.
 
 /** After a machine edit: a rename re-titles its events; retiring removes them, un-retiring brings them back. */
 function syncMachineCalendar(id: number, prev: Machine | null, data: Partial<MachineInput>) {
@@ -175,7 +174,6 @@ export function useCreateMachine() {
       return id;
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -208,7 +206,6 @@ export function useUpdateMachine() {
       }
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -240,7 +237,6 @@ export function useDeleteMachine() {
       }
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -254,7 +250,6 @@ export function useSetMachineProjects() {
       invalidate();
       qc.invalidateQueries({ queryKey: ["machines", "project"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -266,7 +261,6 @@ export function useAddMachineFile() {
     onSuccess: (_, { machineId }) => {
       qc.invalidateQueries({ queryKey: ["machines", machineId, "files"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -277,7 +271,6 @@ export function useRemoveMachineFile() {
     onSuccess: (_, { machineId }) => {
       qc.invalidateQueries({ queryKey: ["machines", machineId, "files"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -288,7 +281,6 @@ export function useAddServiceLog() {
     onSuccess: (_, entry) => {
       qc.invalidateQueries({ queryKey: ["service-log", entry.machine_id] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -315,7 +307,6 @@ export function useCreateUpkeepItem() {
       return id;
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -349,7 +340,6 @@ export function useUpdateUpkeepItem() {
       }
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -379,7 +369,6 @@ export function useDeleteUpkeepItem() {
       }
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -391,7 +380,6 @@ export function useArchiveUpkeepItem() {
       void syncItemCalendar(id);
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -408,7 +396,6 @@ export function useMarkUpkeepDone() {
       invalidate();
       qc.invalidateQueries({ queryKey: ["service-log", item.machine_id] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -451,7 +438,6 @@ export function useCreateConsumable() {
       return id;
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -480,7 +466,6 @@ export function useUpdateConsumable() {
       }
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -518,7 +503,6 @@ export function useDeleteConsumable() {
       }
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -531,7 +515,6 @@ export function useLogConsumableUsage() {
       qc.invalidateQueries({ queryKey: ["consumables"] });
       qc.invalidateQueries({ queryKey: ["project-material-cost", projectId] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -540,7 +523,6 @@ export function useRestockConsumable() {
   return useMutation({
     mutationFn: ({ id, amount }: { id: number; amount: number }) => c.restockConsumable(id, amount),
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -583,7 +565,6 @@ export function useCreateSubscription() {
       return id;
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -616,7 +597,6 @@ export function useUpdateSubscription() {
       }
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -644,7 +624,6 @@ export function useCancelSubscription() {
       }
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -679,7 +658,6 @@ export function useDeleteSubscription() {
       }
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -693,7 +671,6 @@ export function useApplyRenewals() {
       return count;
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -703,7 +680,6 @@ export function useDecideRenewal() {
     mutationFn: ({ id, decision, expenseId }: { id: number; decision: "added" | "skipped"; expenseId?: number }) =>
       s.decideRenewal(id, decision, expenseId),
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
@@ -715,7 +691,6 @@ export function useSnoozeUpkeep() {
       void syncItemCalendar(id);
     },
     onSuccess: invalidate,
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 

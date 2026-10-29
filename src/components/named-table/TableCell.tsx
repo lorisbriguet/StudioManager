@@ -1,13 +1,12 @@
 import type { RefObject } from "react";
-import { X } from "lucide-react";
-import { getTagColor } from "../../lib/tagColors";
+import { Tag } from "../ui/Tag";
+import { Select } from "../ui/Select";
 import type { TableColumnDef, ProjectTableRow } from "../../types/project-table";
 
+import { Checkbox, DatePicker, Input } from "../ui";
 interface Props {
   row: ProjectTableRow;
   col: TableColumnDef;
-  darkMode: boolean;
-  t: Record<string, string>;
   /** True when this exact (row, col) pair is the one being edited. */
   isEditing: boolean;
   editValue: string;
@@ -27,8 +26,6 @@ interface Props {
 export function TableCell({
   row,
   col,
-  darkMode,
-  t,
   isEditing,
   editValue,
   cellInputRef,
@@ -41,25 +38,26 @@ export function TableCell({
   switch (col.type) {
     case "checkbox":
       return (
-        <input
-          type="checkbox"
+        <Checkbox
           checked={!!row.data[col.id]}
           onChange={() => onChange({ ...row.data, [col.id]: !row.data[col.id] })}
-          className="accent-[var(--accent)]"
+          aria-label={col.name}
         />
       );
     case "select":
       return (
-        <select
+        <Select
           value={(row.data[col.id] as string) ?? ""}
           onChange={(e) => onChange({ ...row.data, [col.id]: e.target.value })}
-          className="text-xs bg-transparent border-0 outline-none cursor-pointer"
+          variant="bare"
+          fullWidth={false}
+          aria-label={col.name}
         >
           <option value="">—</option>
           {(col.options ?? []).map((opt) => (
             <option key={opt} value={opt}>{opt}</option>
           ))}
-        </select>
+        </Select>
       );
     case "tags": {
       const selected = (row.data[col.id] as string[] | undefined) ?? [];
@@ -72,27 +70,15 @@ export function TableCell({
       };
       return (
         <div className="flex flex-wrap gap-1 items-center">
-          {selected.map((tag) => {
-            const color = getTagColor(tag, darkMode);
-            return (
-              <span
-                key={tag}
-                style={{ background: color.bg, color: color.text }}
-                className="px-1.5 py-0.5 text-[10px] rounded-full flex items-center gap-0.5"
-              >
-                {tag}
-                <button type="button" onClick={() => removeTag(tag)} aria-label={`${t.remove_tag} ${tag}`} className="hover:text-danger">
-                  <X size={10} />
-                </button>
-              </span>
-            );
-          })}
+          {selected.map((tag) => (
+            <Tag key={tag} name={tag} size="xs" onRemove={() => removeTag(tag)} />
+          ))}
           {available.map((opt) => (
             <button
               key={opt}
               type="button"
               onClick={() => addTag(opt)}
-              className="px-1.5 py-0.5 rounded-full text-[10px] bg-[var(--color-input-bg)] text-muted hover:text-accent hover:bg-accent-light transition-colors"
+              className="px-1.5 py-0.5 rounded-full text-[10px] bg-[var(--color-input-bg)] text-muted hover:text-accent-text hover:bg-accent-light transition-colors"
             >
               + {opt}
             </button>
@@ -102,19 +88,20 @@ export function TableCell({
     }
     case "date":
       return (
-        <input
-          type="date"
-          value={(row.data[col.id] as string) ?? ""}
-          onChange={(e) => onChange({ ...row.data, [col.id]: e.target.value })}
-          className="text-xs bg-transparent border-0 outline-none"
+        <DatePicker variant="bare" fullWidth={false}
+          value={(row.data[col.id] as string) || null}
+          onChange={(v) => onChange({ ...row.data, [col.id]: v ?? "" })}
+          aria-label={col.name}
         />
       );
     default:
       if (isEditing) {
         return (
-          <input
+          <Input variant="inline"
             ref={cellInputRef}
             type={col.type === "number" ? "number" : "text"}
+            numeric={col.type === "number"}
+            aria-label={col.name}
             value={editValue}
             onChange={(e) => onEditValueChange(e.target.value)}
             onBlur={onCommitEdit}
@@ -122,13 +109,12 @@ export function TableCell({
               if (e.key === "Enter") onCommitEdit();
               if (e.key === "Escape") onCancelEdit();
             }}
-            className="w-full bg-transparent border-b border-accent outline-none text-sm"
           />
         );
       }
       return (
         <span
-          className="cursor-pointer hover:text-accent block truncate"
+          className="cursor-pointer hover:text-accent-text block truncate"
           onDoubleClick={onStartEdit}
         >
           {row.data[col.id] != null ? String(row.data[col.id]) : <span className="text-muted">—</span>}

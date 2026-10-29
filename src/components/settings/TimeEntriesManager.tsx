@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { X, Pencil, Trash2, Check } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useTimeEntriesWithDetails, useUpdateTimeEntry, useDeleteTimeEntry } from "../../db/hooks/useTimeEntries";
 import { useProjects } from "../../db/hooks/useProjects";
-import { Button } from "../ui";
-import { SectionHeader } from "./SettingsPrimitives";
+import { deleteWithUndo } from "../../lib/undo";
+import { Button, DatePicker, ICONS, Select, IconButton, Input, Table, TableSkeleton, FormField, FORM_GAP, EmptyState, NoResults, QueryError } from "../ui";
+import { SectionHeader } from "../ui/Settings";
 
 function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -27,9 +27,8 @@ export function TimeEntriesManager() {
     minutes: 0,
     description: "",
   });
-  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
-  const { data: entries, isLoading } = useTimeEntriesWithDetails(
+  const { data: entries, isError, isFetching, refetch } = useTimeEntriesWithDetails(
     startDate || undefined,
     endDate || undefined,
     projectFilter
@@ -59,53 +58,43 @@ export function TimeEntriesManager() {
     );
   };
 
-  const handleDelete = (id: number) => {
-    deleteEntry.mutate(id, { onSuccess: () => setConfirmDeleteId(null) });
-  };
+  const handleDelete = (id: number) => deleteWithUndo(deleteEntry, id, t.time_entry_deleted);
 
   return (
     <div>
       <SectionHeader title={t.time_entries_management} />
 
       {/* Filters */}
-      <div className="flex flex-wrap items-end gap-3 mb-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted">{t.start}</label>
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1 text-xs text-[var(--color-text)]"
+      <div className={`flex flex-wrap items-end ${FORM_GAP} mb-4`}>
+        <FormField label={t.start}>
+          <DatePicker fullWidth={false}
+            value={startDate || null}
+            onChange={(v) => setStartDate(v ?? "")}
           />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted">{t.end_date}</label>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1 text-xs text-[var(--color-text)]"
+        </FormField>
+        <FormField label={t.end_date}>
+          <DatePicker fullWidth={false}
+            value={endDate || null}
+            onChange={(v) => setEndDate(v ?? "")}
           />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted">{t.filter_by_project}</label>
-          <select
+        </FormField>
+        <FormField label={t.filter_by_project}>
+          <Select
             value={projectFilter ?? ""}
             onChange={(e) => setProjectFilter(e.target.value ? Number(e.target.value) : undefined)}
-            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-2 py-1 text-xs text-[var(--color-text)]"
+            fullWidth={false}
           >
             <option value="">{t.all_projects}</option>
             {(projects ?? []).map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
-          </select>
-        </div>
+          </Select>
+        </FormField>
         {(startDate || endDate || projectFilter) && (
           <Button
             type="button"
             variant="link"
-            size="sm"
-            icon={<X size={12} />}
+            icon={ICONS.close}
             onClick={() => { setStartDate(""); setEndDate(""); setProjectFilter(undefined); }}
             className="self-end pb-1 text-muted hover:text-[var(--color-text)]"
           >
@@ -115,157 +104,120 @@ export function TimeEntriesManager() {
       </div>
 
       {/* Table */}
-      {isLoading ? (
-        <p className="text-xs text-muted py-4">{t.loading}</p>
-      ) : rows.length === 0 ? (
-        <p className="text-xs text-muted py-4">{t.no_entries_found}</p>
+      {entries === undefined && isError ? (
+        <QueryError message={t.load_error_time_entries} onRetry={refetch} retrying={isFetching} />
+      ) : entries === undefined ? (
+        <TableSkeleton columns={5} rows={6} density="compact" />
       ) : (
-        <div className="rounded-xl border border-[var(--color-border-divider)] overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-[var(--color-border-divider)] bg-[var(--color-surface)]">
-                <th className="text-left px-3 py-2 font-medium text-muted w-[130px]">{t.date}</th>
-                <th className="text-left px-3 py-2 font-medium text-muted">{t.project}</th>
-                <th className="text-left px-3 py-2 font-medium text-muted">{t.tasks}</th>
-                <th className="text-left px-3 py-2 font-medium text-muted w-[150px]">{t.duration}</th>
-                <th className="text-left px-3 py-2 font-medium text-muted w-full">{t.description}</th>
-                <th className="px-3 py-2 w-16" />
-              </tr>
-            </thead>
-            <tbody>
+          <Table density="compact">
+            <Table.Head>
+              <Table.Th className="w-[130px]">{t.date}</Table.Th>
+              <Table.Th>{t.project}</Table.Th>
+              <Table.Th>{t.tasks}</Table.Th>
+              <Table.Th numeric className="w-[150px]">{t.duration}</Table.Th>
+              <Table.Th className="w-full">{t.description}</Table.Th>
+              <Table.ActionsTh />
+            </Table.Head>
+            <Table.Body>
               {rows.map((entry) => (
-                <tr key={entry.id} className="border-b border-[var(--color-border-divider)] last:border-0 hover:bg-[var(--color-hover-row)]">
+                <Table.Row key={entry.id}>
                   {editingId === entry.id ? (
                     <>
-                      <td className="px-3 py-1.5">
-                        <input
-                          type="date"
-                          value={editForm.date}
-                          onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
-                          className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-full min-w-[110px]"
+                      <Table.Td>
+                        <DatePicker
+                          aria-label={t.date}
+                          value={editForm.date || null}
+                          onChange={(v) => setEditForm({ ...editForm, date: v ?? "" })}
+                          className="min-w-[110px]"
                         />
-                      </td>
-                      <td className="px-3 py-1.5 text-muted">{entry.project_name}</td>
-                      <td className="px-3 py-1.5 text-muted">{entry.task_title ?? "—"}</td>
-                      <td className="px-3 py-1.5">
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
+                      </Table.Td>
+                      <Table.Td muted>{entry.project_name}</Table.Td>
+                      <Table.Td muted>{entry.task_title ?? "—"}</Table.Td>
+                      <Table.Td numeric>
+                        <div className="flex items-center justify-end gap-1">
+                          <Input
+                            numeric
                             min={0}
                             max={23}
                             value={editForm.hours}
                             onChange={(e) => setEditForm({ ...editForm, hours: Math.max(0, Number(e.target.value)) })}
-                            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-14"
+                            unit="h"
+                            width="xs"
+                            aria-label={`${t.duration}, ${t.hours}`}
                           />
-                          <span className="text-muted">h</span>
-                          <input
-                            type="number"
+                          <Input
+                            numeric
                             min={0}
                             max={59}
                             value={editForm.minutes}
                             onChange={(e) => setEditForm({ ...editForm, minutes: Math.max(0, Math.min(59, Number(e.target.value))) })}
-                            className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-14"
+                            unit="m"
+                            width="xs"
+                            aria-label={`${t.duration}, ${t.minutes}`}
                           />
-                          <span className="text-muted">m</span>
                         </div>
-                      </td>
-                      <td className="px-3 py-1.5">
-                        <input
+                      </Table.Td>
+                      <Table.Td>
+                        <Input
                           type="text"
                           value={editForm.description}
                           onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                          className="border border-[var(--color-input-border)] bg-[var(--color-input-bg)] rounded-lg px-1.5 py-1 text-xs w-full min-w-[200px]"
+                          className="min-w-[200px]"
                           placeholder={t.description}
+                          aria-label={t.description}
                         />
-                      </td>
-                      <td className="px-3 py-1.5">
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={saveEdit}
-                            disabled={updateEntry.isPending}
-                            className="p-1 text-accent hover:bg-accent-light rounded-md"
-                            title={t.save}
-                            aria-label={t.save}
-                          >
-                            <Check size={13} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingId(null)}
-                            className="p-1 text-muted hover:bg-[var(--color-hover-row)] rounded-md"
-                            title={t.cancel}
-                            aria-label={t.cancel}
-                          >
-                            <X size={13} />
-                          </button>
-                        </div>
-                      </td>
+                      </Table.Td>
+                      <Table.Actions always>
+                        <IconButton size="xs"
+                          icon={ICONS.save}
+                          label={t.save}
+                          color="accent"
+                          onClick={saveEdit}
+                          disabled={updateEntry.isPending}
+                        />
+                        <IconButton size="xs" icon={ICONS.close} label={t.cancel} onClick={() => setEditingId(null)} />
+                      </Table.Actions>
                     </>
                   ) : (
                     <>
-                      <td className="px-3 py-2 tabular-nums">{entry.date}</td>
-                      <td className="px-3 py-2">{entry.project_name}</td>
-                      <td className="px-3 py-2 text-muted">{entry.task_title ?? "—"}</td>
-                      <td className="px-3 py-2 tabular-nums">{formatDuration(entry.duration_minutes)}</td>
-                      <td className="px-3 py-2 text-muted max-w-[320px] truncate" title={entry.description}>{entry.description || "—"}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => startEdit(entry)}
-                            className="p-1 text-muted hover:text-[var(--color-text)] hover:bg-[var(--color-hover-row)] rounded-md"
-                            title={t.edit_entry}
-                            aria-label={t.edit_entry}
-                          >
-                            <Pencil size={12} />
-                          </button>
-                          {confirmDeleteId === entry.id ? (
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleDelete(entry.id)}
-                                disabled={deleteEntry.isPending}
-                                className="px-1.5 py-0.5 bg-[var(--color-danger)] text-white rounded-md text-[10px] hover:opacity-80"
-                              >
-                                {t.delete}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmDeleteId(null)}
-                                className="p-1 text-muted hover:bg-[var(--color-hover-row)] rounded-md"
-                                aria-label={t.cancel}
-                              >
-                                <X size={12} />
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteId(entry.id)}
-                              className="p-1 text-muted hover:text-[var(--color-danger-text)] hover:bg-[var(--color-hover-row)] rounded-md"
-                              title={t.delete}
-                              aria-label={t.delete}
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
+                      <Table.Td className="tabular-nums">{entry.date}</Table.Td>
+                      <Table.Td>{entry.project_name}</Table.Td>
+                      <Table.Td muted>{entry.task_title ?? "—"}</Table.Td>
+                      <Table.Td numeric>{formatDuration(entry.duration_minutes)}</Table.Td>
+                      <Table.Td muted className="max-w-[320px] truncate" title={entry.description}>{entry.description || "—"}</Table.Td>
+                      <Table.Actions>
+                        <IconButton icon={ICONS.edit} label={t.edit_entry} size="xs" onClick={() => startEdit(entry)} />
+                        <IconButton
+                          icon={ICONS.delete}
+                          label={t.delete}
+                          size="xs"
+                          tone="danger"
+                          disabled={deleteEntry.isPending}
+                          onClick={() => handleDelete(entry.id)}
+                        />
+                      </Table.Actions>
                     </>
                   )}
-                </tr>
+                </Table.Row>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Total */}
-      {rows.length > 0 && (
-        <div className="mt-3 text-xs text-muted text-right">
-          {t.total_hours}: <span className="font-medium text-[var(--color-text)]">{formatDuration(totalMinutes)}</span>
-        </div>
+              {rows.length === 0 && (
+                <Table.Empty colSpan={6}>
+                  {startDate || endDate || projectFilter ? (
+                    <NoResults size="sm" message={t.no_entries_found} onClear={() => { setStartDate(""); setEndDate(""); setProjectFilter(undefined); }} />
+                  ) : (
+                    <EmptyState size="sm" icon={ICONS.time} message={t.no_time_entries_yet} />
+                  )}
+                </Table.Empty>
+              )}
+            </Table.Body>
+            {rows.length > 0 && (
+              <Table.Foot>
+                <Table.Td colSpan={3} muted>{t.total_hours}</Table.Td>
+                <Table.Td numeric>{formatDuration(totalMinutes)}</Table.Td>
+                <Table.Td colSpan={2} />
+              </Table.Foot>
+            )}
+          </Table>
       )}
     </div>
   );

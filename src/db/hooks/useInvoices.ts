@@ -1,12 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import * as q from "../queries/invoices";
 import { getNextInvoiceReference } from "../queries/invoices";
 import { isDraftReference } from "../../types/invoice";
 import type { Invoice, InvoiceLineItem } from "../../types/invoice";
 import { useUndoStore } from "../../stores/undo-store";
 import { generateAndStoreInvoicePdf } from "../../lib/invoicePdfStore";
-import { getLabels, notifyError } from "../../lib/notifyError";
+import { getLabels, notify } from "../../lib/notify";
+import { AppError } from "../../lib/errors";
 
 export function useInvoices() {
   return useQuery({ queryKey: ["invoices"], queryFn: q.getInvoices });
@@ -47,6 +47,7 @@ export function useInvoiceLineItems(invoiceId: number) {
 export function useCreateInvoice() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_invoice" },
     mutationFn: async ({ data, lineItems }: {
       data: Omit<Invoice, "id" | "created_at" | "updated_at">;
       lineItems: Omit<InvoiceLineItem, "id" | "invoice_id">[];
@@ -77,6 +78,7 @@ export function useCreateInvoice() {
 export function useUpdateInvoice() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_invoice" },
     mutationFn: async ({
       id,
       data,
@@ -99,7 +101,7 @@ export function useUpdateInvoice() {
 
       // Prevent changing back to draft once it's been set to another status
       if (data.status === "draft" && prev && prev.status !== "draft") {
-        throw new Error("Cannot revert to draft status");
+        throw new AppError("error_revert_to_draft", "Cannot revert to draft status");
       }
 
       await q.updateInvoiceWithLineItems(id, data, lineItems);
@@ -107,15 +109,14 @@ export function useUpdateInvoice() {
       // Auto-generate PDF when invoice is not a draft
       const finalStatus = data.status ?? prev?.status;
       if (finalStatus && finalStatus !== "draft") {
-        const toastId = toast.loading(getLabels().generating_pdf);
-        try {
-          await generateAndStoreInvoicePdf(id);
-          toast.dismiss(toastId);
-          qc.invalidateQueries({ queryKey: ["invoices"] });
-        } catch (e) {
-          toast.dismiss(toastId);
-          notifyError(getLabels().pdf_generation_failed, e);
-        }
+        // A failed PDF doesn't fail the save: it is reported on its own.
+        const t = getLabels();
+        const generated = await notify.progress(
+          t.generating_pdf,
+          generateAndStoreInvoicePdf(id).then(() => true),
+          { success: null, error: t.failed_to_generate_pdf }
+        );
+        if (generated) qc.invalidateQueries({ queryKey: ["invoices"] });
       }
 
       if (prev) {
@@ -156,6 +157,7 @@ export function useUpdateInvoice() {
 export function useDeleteInvoice() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_delete_invoice" },
     mutationFn: async (id: number) => {
       const prev = await q.getInvoice(id);
       // Only drafts are deletable — an invoice that ever had a real
@@ -195,6 +197,5 @@ export function useDeleteInvoice() {
       qc.invalidateQueries({ queryKey: ["invoices"] });
       qc.invalidateQueries({ queryKey: ["finance"] });
     },
-    onError: (e) => toast.error(String(e)),
   });
 }

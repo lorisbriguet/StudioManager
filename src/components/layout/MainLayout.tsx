@@ -7,10 +7,10 @@ import { useMenuBarNavigate } from "../../hooks/useMenuBarNavigate";
 import { useAppStore } from "../../stores/app-store";
 import { useOrgStore } from "../../stores/org-store";
 import { useT } from "../../i18n/useT";
-import { ask } from "@tauri-apps/plugin-dialog";
-import { exitTestMode as exitTestModeShared, exitPresentationMode as exitPresentationModeShared } from "../../lib/modes";
-import { toast } from "sonner";
-import { X } from "lucide-react";
+import { useExitMode } from "../../hooks/useExitMode";
+import { ICONS, ICON_SIZE } from "../ui/icons";
+import { ErrorBoundary } from "react-error-boundary";
+import { ErrorFallback } from "../ErrorFallback";
 
 export function MainLayout() {
   const testMode = useAppStore((s) => s.testMode);
@@ -26,59 +26,44 @@ export function MainLayout() {
   // does not mirror one onto the other.
   useWindowTitle(orgName);
 
-  const exitTestMode = async () => {
-    const confirmed = await ask(t.test_mode_confirm_exit, { kind: "warning" });
-    if (!confirmed) return;
-    try {
-      await exitTestModeShared();
-      toast.success(t.toast_test_mode_exited);
-      setTimeout(() => window.location.reload(), 500);
-    } catch {
-      toast.error(t.toast_test_mode_failed);
-    }
-  };
-
-  const exitPresentationMode = async () => {
-    const confirmed = await ask(t.presentation_mode_confirm_exit, { kind: "warning" });
-    if (!confirmed) return;
-    try {
-      await exitPresentationModeShared();
-      toast.success(t.toast_presentation_exited);
-      setTimeout(() => window.location.reload(), 500);
-    } catch {
-      toast.error(String(t.toast_presentation_failed));
-    }
-  };
+  const { exitMode, exiting } = useExitMode();
 
   return (
     <div className="flex h-full">
       <Sidebar />
       <main className="flex-1 overflow-hidden flex flex-col">
         {testMode && (
-          <div className="bg-[var(--color-banner-test)] text-white text-sm font-semibold py-1.5 px-4 shrink-0 flex items-center justify-center gap-3">
+          <div className="bg-[var(--color-banner-test)] text-on-banner text-sm font-semibold py-1.5 px-4 shrink-0 flex items-center justify-center gap-3">
             <span>{t.test_mode_banner}{" "}{t.mode_in_organisation.replace("{name}", orgName)}</span>
             <button
-              onClick={exitTestMode}
+              type="button"
+              onClick={() => void exitMode("test")}
+              disabled={exiting === "test"}
               className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[var(--color-banner-test-hover)] hover:opacity-80 text-xs"
             >
-              <X size={12} /> {t.exit_test_mode}
+              <ICONS.close size={ICON_SIZE.control} /> {t.exit_test_mode}
             </button>
           </div>
         )}
         {presentationMode && (
-          <div className="bg-[var(--color-banner-presentation)] text-white text-sm font-semibold py-1.5 px-4 shrink-0 flex items-center justify-center gap-3">
+          <div className="bg-[var(--color-banner-presentation)] text-on-banner text-sm font-semibold py-1.5 px-4 shrink-0 flex items-center justify-center gap-3">
             <span>{t.presentation_mode_banner}{" "}{t.mode_in_organisation.replace("{name}", orgName)}</span>
             <button
-              onClick={exitPresentationMode}
+              type="button"
+              onClick={() => void exitMode("presentation")}
+              disabled={exiting === "presentation"}
               className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[var(--color-banner-presentation-hover)] hover:opacity-80 text-xs"
             >
-              <X size={12} /> {t.exit_presentation_mode}
+              <ICONS.close size={ICON_SIZE.control} /> {t.exit_presentation_mode}
             </button>
           </div>
         )}
         <TabBar />
         <div key={location.pathname} className="page-transition p-8 w-full flex-1 overflow-y-auto flex flex-col min-h-0 bg-[var(--color-bg)]">
-          <Outlet />
+          {/* Per page: a crash keeps the sidebar and tabs; navigating away resets it. */}
+          <ErrorBoundary FallbackComponent={ErrorFallback} resetKeys={[location.pathname]}>
+            <Outlet />
+          </ErrorBoundary>
         </div>
       </main>
     </div>

@@ -1,8 +1,6 @@
 import { useState, useMemo, useRef, useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Plus, X, Eye, Trash2, ExternalLink, Maximize2, FolderOpen, Play, Pause, CheckCircle } from "lucide-react";
-import { toast } from "sonner";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { useNavigate } from "react-router-dom";
+import { notify } from "../lib/notify";
 import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from "../db/hooks/useProjects";
 import { useClients } from "../db/hooks/useClients";
 import { useAllTasks } from "../db/hooks/useTasks";
@@ -11,9 +9,9 @@ import { useQuery } from "@tanstack/react-query";
 import type { Subtask } from "../types/task";
 import { useAppStore } from "../stores/app-store";
 import { useTabStore } from "../stores/tab-store";
-import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
-import { BulkActionBar } from "../components/BulkActionBar";
-import { SavedFilterBar } from "../components/SavedFilterBar";
+import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu";
+import { BulkActionBar } from "../components/ui/BulkActionBar";
+import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useListNavigation } from "../hooks/useListNavigation";
 import { formatDisplayDate } from "../utils/formatDate";
@@ -22,19 +20,14 @@ import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Button, Badge, Card, PageHeader, SearchBar, TableSkeleton, Input, EmptyState, MeterBar } from "../components/ui";
-import { undoable, undoableFromStore } from "../lib/undo";
+import { ICONS, Checkbox, Button, Badge, PageHeader, SearchBar, DatePicker, Input, FormField, FormGrid, FormModal, EmptyState, QueryState, CardGridSkeleton, Select, FilterChip, ProgressBar, PeekHeader, HEADING_2, Card, CARD_GAP, CARD_LINK, CARD_CONTROL, revealClass } from "../components/ui";
+import { undoable, deleteWithUndo } from "../lib/undo";
+import { confirmDelete } from "../lib/confirm";
+import { useBulkDelete } from "../hooks/useBulkDelete";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
-import type { BadgeVariant } from "../components/ui/Badge";
-
-const statusBadgeVariant: Record<ProjectStatus, BadgeVariant> = {
-  active: "accent",
-  completed: "success",
-  on_hold: "warning",
-  cancelled: "neutral",
-};
+import { projectStatusVariant } from "../lib/statusColors";
 
 const statusKeys: Record<ProjectStatus, UIKey> = {
   active: "active",
@@ -46,7 +39,8 @@ const statusKeys: Record<ProjectStatus, UIKey> = {
 const priorityRank: Record<TaskPriority, number> = { low: 0, medium: 1, high: 2 };
 
 export function ProjectsPage() {
-  const { data: projects, isLoading } = useProjects();
+  const projectsQuery = useProjects();
+  const { data: projects } = projectsQuery;
   const { data: clients } = useClients();
   const { data: allTasks } = useAllTasks();
   const { data: allSubtasks } = useQuery({ queryKey: ["subtasks"], queryFn: getAllSubtasks });
@@ -216,12 +210,11 @@ export function ProjectsPage() {
     bulk.clearSelection();
   }, [bulk, updateProject, projects, t]);
 
-  const bulkDelete = useCallback(async () => {
-    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
-    const ids = [...bulk.selected] as number[];
-    ids.forEach((id) => deleteProject.mutate(id));
-    bulk.clearSelection();
-  }, [bulk, deleteProject, t]);
+  // Cascading (a project takes its tasks with it): ask first, then Undo.
+  const deleteSelection = useBulkDelete("projects", (id: number) => deleteProject.mutateAsync(id), {
+    message: t.delete_projects_cascade,
+  });
+  const bulkDelete = () => void deleteSelection([...bulk.selected] as number[], bulk.clearSelection);
 
   const handleProjectClick = useCallback((projectId: number) => {
     if (projectOpenMode === "peek") {
@@ -256,38 +249,30 @@ export function ProjectsPage() {
     cancelled: t.cancelled,
   };
 
-  if (isLoading) return (
-    <div className="flex flex-1 min-h-0 -m-8">
-      <div className="min-w-0 overflow-y-auto flex-1 p-8">
-        <PageHeader title={t.projects}>
-          <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>{t.new_project}</Button>
-        </PageHeader>
-        <TableSkeleton columns={4} />
-      </div>
-    </div>
-  );
+  const clearFilters = () => {
+    setSearch("");
+    setFilter("all");
+    setFilterConditions([]);
+    setActiveFilterId(null);
+  };
 
   return (
     <div ref={containerRef} className="flex flex-1 min-h-0 -m-8">
       <div className="min-w-0 overflow-y-auto flex-1 p-8">
         <PageHeader title={t.projects}>
-          <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>{t.new_project}</Button>
+          <Button icon={ICONS.add} onClick={() => setShowForm(true)}>{t.new_project}</Button>
         </PageHeader>
 
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <div className="flex flex-wrap gap-2">
             {(["all", "active", "completed", "on_hold", "cancelled"] as const).map((s) => (
-              <button
+              <FilterChip
                 key={s}
+                active={filter === s}
                 onClick={() => { setFilter(s); setActiveFilterId(null); setFilterConditions([]); }}
-                className={`px-3 py-1 text-xs rounded-full border ${
-                  filter === s
-                    ? "bg-accent text-white border-accent"
-                    : "border-[var(--color-input-border)] text-muted hover:bg-[var(--color-hover-row)]"
-                }`}
               >
                 {filterLabels[s]}
-              </button>
+              </FilterChip>
             ))}
           </div>
           <SearchBar
@@ -313,7 +298,7 @@ export function ProjectsPage() {
             onSave={(data) => {
               createProject.mutate(data, {
                 onSuccess: () => {
-                  toast.success(t.toast_project_created);
+                  notify.success(t.toast_project_created);
                   setShowForm(false);
                 },
               });
@@ -322,39 +307,53 @@ export function ProjectsPage() {
           />
         )}
 
-        <div className="grid gap-4 p-px" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+        <QueryState
+          query={projectsQuery}
+          skeleton={<CardGridSkeleton />}
+          errorMessage={t.load_error_projects}
+          empty={
+            <EmptyState
+              icon={ICONS.project}
+              message={t.no_projects}
+              action={<Button icon={ICONS.add} onClick={() => setShowForm(true)}>{t.new_project}</Button>}
+            />
+          }
+          noResults={filtered.length === 0 ? { message: t.no_matching_projects, onClear: clearFilters } : undefined}
+        >
+        {() => (
+        <div className={`grid ${CARD_GAP} p-px`} style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
           {filtered.map((p, pi) => {
             const stats = taskStats[p.id] ?? { total: 0, pct: 0, maxPriority: "low" as TaskPriority };
             const pct = stats.pct;
 
             return (
-              <div
+              <Card
                 key={p.id}
                 data-list-row
-                onClick={() => handleProjectClick(p.id)}
+                // The title is the button (stretched over the card); the checkbox sits above it.
+                interactive="link"
+                selected={peekId === p.id || bulk.selected.has(p.id)}
                 onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: { id: p.id, name: p.name } }); }}
-                className={`group block rounded-xl p-4 transition-all cursor-pointer ${
-                  peekId === p.id
-                    ? "bg-[var(--color-hover-row)] outline outline-1 outline-accent"
-                    : bulk.selected.has(p.id)
-                      ? "bg-[var(--color-hover-row)] outline outline-1 outline-accent"
-                      : "bg-[var(--color-surface)] hover:bg-[var(--color-hover-row)]"
-                }${pi === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
+                className={`group${pi === focusIdx ? " focus-row" : ""}`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={bulk.selected.has(p.id)}
+                      aria-label={t.select_row.replace("{name}", p.name)}
                       onChange={(e) => bulk.toggleItem(p.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
                       onClick={(e) => e.stopPropagation()}
-                      className={`accent-[var(--accent)] shrink-0 transition-opacity ${
-                        bulk.selected.has(p.id) || bulk.count > 0 ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                      className={`${CARD_CONTROL} shrink-0 transition-opacity ${
+                        bulk.selected.has(p.id) || bulk.count > 0 ? "opacity-100" : `${revealClass(true)} focus-within:opacity-100`
                       }`}
                     />
-                    <h3 className="text-sm font-medium leading-tight truncate">{p.name}</h3>
+                    <h2 className={`${HEADING_2} leading-tight truncate`}>
+                      <button type="button" className={`${CARD_LINK} truncate max-w-full`} onClick={() => handleProjectClick(p.id)}>
+                        {p.name}
+                      </button>
+                    </h2>
                   </div>
-                  <Badge variant={statusBadgeVariant[p.status]} className="shrink-0 ml-2">
+                  <Badge variant={projectStatusVariant(p.status)} className="shrink-0 ml-2">
                     {t[statusKeys[p.status]]}
                   </Badge>
                 </div>
@@ -362,13 +361,12 @@ export function ProjectsPage() {
                 <div className="text-xs text-muted mb-3">{clientName(p.client_id)}</div>
 
                 {stats.total > 0 && (
-                  <div className="mb-3">
-                    <div className="flex justify-between text-xs text-muted mb-1">
-                      <span>{stats.total} {t.tasks.toLowerCase()}</span>
-                      <span>{pct}%</span>
-                    </div>
-                    <MeterBar pct={pct} color="var(--color-accent)" />
-                  </div>
+                  <ProgressBar
+                    value={pct}
+                    label={`${stats.total} ${t.tasks.toLowerCase()}`}
+                    showValue
+                    className="mb-3"
+                  />
                 )}
                 {stats.total === 0 && (
                   <div className="text-xs text-muted mb-3">{t.no_tasks}</div>
@@ -382,21 +380,12 @@ export function ProjectsPage() {
                     }`} />
                   )}
                 </div>
-              </div>
+              </Card>
             );
           })}
-          {filtered.length === 0 && (
-            <div className="col-span-full">
-              <EmptyState
-                icon={<FolderOpen size={32} />}
-                message={(projects?.length ?? 0) === 0 ? t.no_projects : t.no_matching_projects}
-                action={(projects?.length ?? 0) === 0 ? (
-                  <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>{t.new_project}</Button>
-                ) : undefined}
-              />
-            </div>
-          )}
         </div>
+        )}
+        </QueryState>
       </div>
 
       {ctxMenu && (
@@ -405,10 +394,14 @@ export function ProjectsPage() {
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
-            { label: t.view_details, icon: <Eye size={14} />, onClick: () => navigate(`/projects/${ctxMenu.item.id}`) },
-            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/projects/${ctxMenu.item.id}`, ctxMenu.item.name) },
+            { label: t.view_details, icon: ICONS.preview, onClick: () => navigate(`/projects/${ctxMenu.item.id}`) },
+            { label: t.open_in_new_tab, icon: ICONS.newTab, onClick: () => openTab(`/projects/${ctxMenu.item.id}`, ctxMenu.item.name) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteProject.mutate(ctxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_project_deleted) }) },
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: async () => {
+              const project = ctxMenu.item;
+              if (!(await confirmDelete(project.name, t.delete_project_cascade))) return;
+              deleteWithUndo(deleteProject, project.id, t.toast_project_deleted);
+            } },
           ]}
         />
       )}
@@ -422,7 +415,7 @@ export function ProjectsPage() {
           className="shrink-0 w-[5px] cursor-col-resize relative group"
         >
           <div className="absolute inset-y-0 left-1/2 w-px bg-[var(--color-border-divider)] -translate-x-1/2" />
-          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-accent/20 transition-opacity" />
+          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-accent-handle transition-opacity" />
         </div>
         <div
           ref={peekRef}
@@ -431,23 +424,7 @@ export function ProjectsPage() {
           onClick={(e) => e.stopPropagation()}
           onAnimationEnd={() => { if (closingPeek) { setPeekId(null); setClosingPeek(false); } }}
         >
-          <div className="flex items-center gap-1 p-2 border-b border-[var(--color-border-header)]">
-            <button
-              onClick={handleClosePeek}
-              className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
-              aria-label={t.close}
-            >
-              <X size={14} />
-            </button>
-            <div className="flex-1" />
-            <Link
-              to={`/projects/${peekId}`}
-              className="p-1.5 rounded-md text-[var(--color-muted)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]"
-              title={t.open_full_page}
-            >
-              <Maximize2 size={14} />
-            </Link>
-          </div>
+          <PeekHeader onClose={handleClosePeek} onOpenFull={() => navigate(`/projects/${peekId}`)} />
           <div className="p-4">
             <ProjectDetailContent key={peekId} projectId={peekId} compact />
           </div>
@@ -459,10 +436,10 @@ export function ProjectsPage() {
         count={bulk.count}
         onClear={bulk.clearSelection}
         actions={[
-          { label: t.mark_active, icon: <Play size={14} />, onClick: () => bulkSetStatus("active") },
-          { label: t.mark_completed, icon: <CheckCircle size={14} />, onClick: () => bulkSetStatus("completed") },
-          { label: t.mark_on_hold, icon: <Pause size={14} />, onClick: () => bulkSetStatus("on_hold") },
-          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+          { label: t.mark_active, icon: ICONS.markActive, onClick: () => bulkSetStatus("active") },
+          { label: t.mark_completed, icon: ICONS.markDone, onClick: () => bulkSetStatus("completed") },
+          { label: t.mark_on_hold, icon: ICONS.onHold, onClick: () => bulkSetStatus("on_hold") },
+          { label: t.delete, icon: ICONS.delete, onClick: bulkDelete, danger: true },
         ]}
       />
     </div>
@@ -498,57 +475,60 @@ function NewProjectForm({
     notes: "",
   });
   const t = useT();
+  const [errors, setErrors] = useState<{ name?: string; client_id?: string }>({});
+
+  // No validate schema here: two required checks, shown under their fields.
+  const submit = () => {
+    const next = {
+      name: form.name.trim() ? undefined : t.toast_name_required,
+      client_id: form.client_id ? undefined : t.toast_select_client,
+    };
+    setErrors(next);
+    if (next.name || next.client_id) return;
+    onSave({
+      ...form,
+      start_date: form.start_date || null,
+      deadline: form.deadline || null,
+      layout_config: null,
+      folder_path: null,
+    });
+  };
 
   return (
-    <Card className="mb-6 space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <Input
-          placeholder={`${t.project_name} *`}
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-        />
-        <select
-          value={form.client_id}
-          onChange={(e) => setForm({ ...form, client_id: e.target.value })}
-          className="border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-3 py-1.5 text-sm"
-        >
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <Input
-          type="date"
-          value={form.start_date}
-          onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-        />
-        <Input
-          type="date"
-          value={form.deadline}
-          onChange={(e) => setForm({ ...form, deadline: e.target.value })}
-        />
-      </div>
-      <div className="flex gap-2">
-        <Button
-          onClick={() => {
-            if (!form.name.trim()) return toast.error(t.toast_name_required);
-            if (!form.client_id) return toast.error(t.toast_select_client);
-            onSave({
-              ...form,
-              start_date: form.start_date || null,
-              deadline: form.deadline || null,
-              layout_config: null,
-              folder_path: null,
-            });
-          }}
-        >
-          {t.save}
-        </Button>
-        <Button variant="secondary" onClick={onCancel}>
-          {t.cancel}
-        </Button>
-      </div>
-    </Card>
+    <FormModal open onClose={onCancel} title={t.new_project} submitLabel={t.save} onSubmit={submit}>
+      <FormGrid cols={2}>
+        <FormField label={t.project_name} required error={errors.name}>
+          <Input
+            autoFocus
+            value={form.name}
+            onChange={(e) => { setForm({ ...form, name: e.target.value }); setErrors((er) => ({ ...er, name: undefined })); }}
+          />
+        </FormField>
+        <FormField label={t.client} required error={errors.client_id}>
+          <Select
+            value={form.client_id}
+            onChange={(e) => { setForm({ ...form, client_id: e.target.value }); setErrors((er) => ({ ...er, client_id: undefined })); }}
+          >
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+        <FormField label={t.start}>
+          <DatePicker
+            value={form.start_date || null}
+            onChange={(v) => setForm({ ...form, start_date: v ?? "" })}
+          />
+        </FormField>
+        <FormField label={t.deadline}>
+          <DatePicker
+            value={form.deadline || null}
+            onChange={(v) => setForm({ ...form, deadline: v ?? "" })}
+          />
+        </FormField>
+      </FormGrid>
+    </FormModal>
   );
 }

@@ -1,9 +1,9 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
-import { Scan, ZoomIn, ZoomOut } from "lucide-react";
+import { ZoomIn, ZoomOut } from "lucide-react";
 import { useT } from "../../i18n/useT";
-import { BAR_ICON_BUTTON } from "../ui";
 import { createSim, layoutGraph, placeLabels, type Point, type Sim, type SimNode } from "../../lib/wikiGraph";
 import { colorFor } from "./wikiColors";
+import { IconButton, ICONS } from "../ui";
 
 export interface GraphNodeInput {
   id: number;
@@ -297,8 +297,6 @@ export function GraphView({
     })
   );
 
-  const iconBtn = `${BAR_ICON_BUTTON} p-1.5`;
-
   // Arrow keys walk the dots in title order; only one dot is a tab stop.
   const keyOrder = useMemo(() => [...nodes].sort((a, b) => a.title.localeCompare(b.title)).map((n) => n.id), [nodes]);
   const tabStop =
@@ -435,16 +433,10 @@ export function GraphView({
       </svg>
 
       {!compact && (
-        <div className="absolute left-4 bottom-4 flex gap-0.5 p-0.5 rounded-lg border border-[var(--color-border-header)] bg-[var(--color-surface)]">
-          <button onClick={() => zoomAt(0.8)} className={iconBtn} aria-label={t.wiki_graph_zoom_in} title={t.wiki_graph_zoom_in}>
-            <ZoomIn size={16} />
-          </button>
-          <button onClick={() => zoomAt(1.25)} className={iconBtn} aria-label={t.wiki_graph_zoom_out} title={t.wiki_graph_zoom_out}>
-            <ZoomOut size={16} />
-          </button>
-          <button onClick={() => setView(null)} className={iconBtn} aria-label={t.wiki_graph_fit} title={t.wiki_graph_fit}>
-            <Scan size={16} />
-          </button>
+        <div className="absolute left-4 bottom-4 flex gap-0.5 p-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+          <IconButton icon={ZoomIn} label={t.wiki_graph_zoom_in} onClick={() => zoomAt(0.8)} />
+          <IconButton icon={ZoomOut} label={t.wiki_graph_zoom_out} onClick={() => zoomAt(1.25)} />
+          <IconButton icon={ICONS.fit} label={t.wiki_graph_fit} onClick={() => setView(null)} />
         </div>
       )}
     </div>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, FormField, Input } from "../ui";
+import { Button, FIELD_LABEL, FormActions, FormField, FormGrid, FormLayout, HEADING_2, Input } from "../ui";
 import { useT } from "../../i18n/useT";
 import { useUnsavedChangesWarning } from "../../hooks/useUnsavedChangesWarning";
 import { saveConnectionSecret } from "../../lib/upkeep/connections";
@@ -115,14 +115,14 @@ export function SynologyForm({ onDone, onCancel, connection }: ConnectionFormPro
       : { label: t.upkeep_syno_connect, run: connect };
 
   return (
-    <div className="space-y-3">
+    <FormLayout dense capped={false}>
       {step === "account" && (
         <>
           <FormField label={t.upkeep_connection_label}>
             <Input value={f.label} onChange={(e) => set("label", e.target.value)} />
           </FormField>
-          <div className="flex gap-2">
-            <FormField label={t.upkeep_syno_host} required>
+          <FormGrid cols={3}>
+            <FormField label={t.upkeep_syno_host} required span={2}>
               <Input
                 value={f.host}
                 placeholder={t.upkeep_syno_host_placeholder}
@@ -133,7 +133,7 @@ export function SynologyForm({ onDone, onCancel, connection }: ConnectionFormPro
             <FormField label={t.upkeep_syno_port}>
               <Input type="number" min={1} max={65535} value={f.port} onChange={(e) => set("port", e.target.value)} />
             </FormField>
-          </div>
+          </FormGrid>
           <FormField label={t.upkeep_syno_account} required>
             <Input value={f.account} autoComplete="off" onChange={(e) => set("account", e.target.value)} />
           </FormField>
@@ -153,10 +153,10 @@ export function SynologyForm({ onDone, onCancel, connection }: ConnectionFormPro
 
       {step === "cert" && (
         <div className="space-y-2">
-          <div className="text-sm font-medium">{t.upkeep_syno_cert_title}</div>
+          <h3 className={HEADING_2}>{t.upkeep_syno_cert_title}</h3>
           <p className="text-sm text-muted">{t.upkeep_syno_cert_desc}</p>
           <p className="text-sm text-muted">{t.upkeep_syno_cert_host_hint}</p>
-          <div className="text-xs text-muted">{t.upkeep_syno_cert_fingerprint}</div>
+          <div className={FIELD_LABEL}>{t.upkeep_syno_cert_fingerprint}</div>
           <p className="text-xs font-mono break-all">{formatFingerprint(fingerprint)}</p>
         </div>
       )}
@@ -189,10 +189,10 @@ export function SynologyForm({ onDone, onCancel, connection }: ConnectionFormPro
         </>
       )}
 
-      <div className="flex gap-2 justify-end pt-1">
+      <FormActions>
         <Button variant="secondary" onClick={onCancel}>{t.cancel}</Button>
         <Button loading={busy} onClick={primary.run}>{primary.label}</Button>
-      </div>
-    </div>
+      </FormActions>
+    </FormLayout>
   );
 }

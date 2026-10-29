@@ -10,6 +10,7 @@ import type { MonthlyData } from "../../db/queries/finance";
 import type { BusinessProfile } from "../../types/business-profile";
 import type { AppLanguage } from "../../i18n/ui";
 import { getExportLabels, getMonthNames } from "../../i18n/export-labels";
+import { PDF } from "../pdf/pdfPalette";
 
 export interface PLPDFProps {
   year: number;
@@ -35,7 +36,7 @@ const s = StyleSheet.create({
     paddingTop: 40,
     paddingBottom: 40,
     paddingHorizontal: 50,
-    color: "#1a1a1a",
+    color: PDF.ink,
   },
   headerRow: {
     flexDirection: "row",
@@ -49,7 +50,7 @@ const s = StyleSheet.create({
   },
   businessInfo: {
     fontSize: 8,
-    color: "#666",
+    color: PDF.muted,
     lineHeight: 1.5,
   },
   title: {
@@ -59,7 +60,7 @@ const s = StyleSheet.create({
   },
   subtitle: {
     fontSize: 9,
-    color: "#666",
+    color: PDF.muted,
     marginBottom: 30,
   },
   sectionTitle: {
@@ -75,7 +76,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 4,
   },
   rowAlt: {
-    backgroundColor: "#f8f8f8",
+    backgroundColor: PDF.stripe,
   },
   rowLabel: {
     fontSize: 9,
@@ -90,16 +91,16 @@ const s = StyleSheet.create({
     fontFamily: "Helvetica-Bold",
   },
   negativeValue: {
-    color: "#dc2626",
+    color: PDF.danger,
   },
   separator: {
     borderBottomWidth: 1,
-    borderBottomColor: "#ddd",
+    borderBottomColor: PDF.rule,
     marginVertical: 4,
   },
   grandSeparator: {
     borderBottomWidth: 2,
-    borderBottomColor: "#1a1a1a",
+    borderBottomColor: PDF.ink,
     marginTop: 6,
     marginBottom: 6,
   },
@@ -125,13 +126,13 @@ const s = StyleSheet.create({
   tableHeader: {
     flexDirection: "row",
     borderBottomWidth: 1,
-    borderBottomColor: "#ddd",
+    borderBottomColor: PDF.rule,
     paddingBottom: 4,
     marginBottom: 2,
   },
   thText: {
     fontSize: 7,
-    color: "#999",
+    color: PDF.faint,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
@@ -149,7 +150,7 @@ const s = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 4,
     borderTopWidth: 1,
-    borderTopColor: "#ddd",
+    borderTopColor: PDF.rule,
     marginTop: 2,
   },
   cellText: {
@@ -161,7 +162,7 @@ const s = StyleSheet.create({
     left: 50,
     right: 50,
     fontSize: 7,
-    color: "#999",
+    color: PDF.faint,
     textAlign: "center",
   },
 });

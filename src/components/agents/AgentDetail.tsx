@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, ImagePlus, X } from "lucide-react";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { ArrowUp, ImagePlus } from "lucide-react";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { dismissAgent, deleteAgent, saveImage, sendMessage, stopAgent, switchModel, type Agent } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
-import { Badge, Button, PANEL_TOP_BAR } from "../ui";
+import { Badge, Button, HEADING_2, ICONS, IconButton, PANEL_TOP_BAR, Textarea } from "../ui";
+import { useConfirm } from "../../lib/confirm";
 import { agentLabel, GROUP_LABEL_KEYS, GROUP_STYLE } from "./AgentList";
 import { agentGroupVariant } from "../../lib/statusColors";
 import { Conversation } from "./Conversation";
@@ -54,6 +54,7 @@ interface AgentDetailProps {
 
 export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: AgentDetailProps) {
   const t = useT();
+  const confirm = useConfirm();
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -174,12 +175,12 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
   };
 
   const stop = async () => {
-    if (!shortId || !(await ask(t.agents_stop_confirm, { kind: "warning" }))) return;
+    if (!shortId || !(await confirm({ title: t.agents_stop_confirm, confirmLabel: t.agents_stop, tone: "danger" }))) return;
     await run(() => stopAgent(shortId));
   };
 
   const remove = async () => {
-    if (!shortId || !(await ask(t.agents_delete_confirm, { kind: "warning" }))) return;
+    if (!shortId || !(await confirm({ title: t.agents_delete_confirm, confirmLabel: t.agents_delete, tone: "danger" }))) return;
     await run(async () => {
       await deleteAgent(shortId);
       onDeleted?.();
@@ -194,26 +195,26 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className={`${PANEL_TOP_BAR} gap-2 px-5 border-[var(--color-border-divider)]`}>
-        <h2 className="text-sm font-semibold tracking-tight truncate">{agent.name}</h2>
+      <div className={`${PANEL_TOP_BAR} gap-2 px-5 border-[var(--color-border)]`}>
+        <h2 className={`${HEADING_2} truncate`}>{agent.name}</h2>
         <Badge variant={agentGroupVariant(agent.group)} className="shrink-0 gap-1.5">
           <span className={`dot ${GROUP_STYLE[agent.group].dot}`} aria-hidden />
           {t[GROUP_LABEL_KEYS[agent.group]]}
         </Badge>
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="secondary" size="sm" disabled={!shortId} onClick={() => void stop()}>
+          <Button variant="secondary" disabled={!shortId} onClick={() => void stop()}>
             {t.agents_stop}
           </Button>
-          <Button variant="danger" size="sm" disabled={!shortId} onClick={() => void remove()}>
+          <Button variant="danger" disabled={!shortId} onClick={() => void remove()}>
             {t.agents_delete}
           </Button>
           {agent.group === "needs-you" && (
-            <Button variant="ghost" size="sm" onClick={() => void run(() => dismissAgent(agent.sessionId))}>
+            <Button variant="outline" onClick={() => void run(() => dismissAgent(agent.sessionId))}>
               {t.agents_dismiss}
             </Button>
           )}
           {shortId && (
-            <Button variant="ghost" size="sm" onClick={() => onOpenTerminal(shortId)}>
+            <Button variant="outline" onClick={() => onOpenTerminal(shortId)}>
               {t.agents_open_terminal}
             </Button>
           )}
@@ -261,29 +262,25 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
               {images.map((a) => (
                 <div key={a.url} className="relative group">
                   <img src={a.url} alt={a.file.name} className="size-14 rounded-lg object-cover border border-[var(--color-input-border)]" />
-                  <button
-                    type="button"
-                    aria-label={t.agents_remove_image}
+                  <IconButton
+                    icon={ICONS.close}
+                    label={t.agents_remove_image}
+                    size="xs"
                     onClick={() => removeImage(a.url)}
-                    className="absolute -top-1.5 -right-1.5 grid place-items-center size-5 rounded-full bg-[var(--color-surface)] border border-[var(--color-input-border)] text-muted hover:text-[var(--color-text)]"
-                  >
-                    <X size={12} />
-                  </button>
+                    className="absolute! -top-1.5 -right-1.5 rounded-full! bg-[var(--color-surface)] border border-[var(--color-input-border)]"
+                  />
                 </div>
               ))}
             </div>
           )}
           <div className="flex items-end gap-1.5">
-          <button
-            type="button"
-            aria-label={t.agents_attach_image}
-            title={t.agents_attach_image}
+          <IconButton
+            icon={ImagePlus}
+            label={t.agents_attach_image}
             disabled={!canSend}
             onClick={() => fileInput.current?.click()}
-            className="shrink-0 grid place-items-center size-8 rounded-lg text-muted hover:text-[var(--color-text)] hover:bg-[var(--color-hover-row)] disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <ImagePlus size={16} />
-          </button>
+            className="shrink-0 mb-0.5"
+          />
           <input
             ref={fileInput}
             type="file"
@@ -295,9 +292,11 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
               e.target.value = "";
             }}
           />
-          <textarea
+          <Textarea
+            variant="bare"
             value={text}
             rows={1}
+            maxRows={8}
             maxLength={20000}
             disabled={!canSend}
             placeholder={t.agents_message_placeholder}
@@ -316,14 +315,13 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
                 void send();
               }
             }}
-            style={{ fieldSizing: "content" } as React.CSSProperties}
-            className="flex-1 resize-none bg-transparent! border-0 p-0 py-1.5 text-sm leading-relaxed outline-none min-h-8 max-h-48 overflow-y-auto placeholder:text-muted disabled:cursor-not-allowed disabled:placeholder:opacity-50"
+            fullWidth={false}
+            className="flex-1 border-0! bg-transparent! disabled:cursor-not-allowed"
           />
           <Button
-            size="sm"
-            className="shrink-0 size-8 justify-center"
+            className="shrink-0 justify-center"
             aria-label={t.agents_send}
-            icon={<ArrowUp size={16} />}
+            icon={ArrowUp}
             loading={sending}
             disabled={!canSend || (text.trim() === "" && images.length === 0)}
             onClick={() => void send()}

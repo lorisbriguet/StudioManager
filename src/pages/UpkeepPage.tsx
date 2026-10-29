@@ -25,7 +25,7 @@ export function UpkeepPage() {
   return (
     <div>
       <PageHeader title={t.upkeep} />
-      <div role="tablist" className="flex items-center gap-1 mb-6 border-b border-[var(--color-border-header)]">
+      <div role="tablist" aria-label={t.upkeep} className="flex items-center gap-1 mb-6 border-b border-[var(--color-border)]">
         {TABS.map((k) => (
           <TabItem
             key={k}

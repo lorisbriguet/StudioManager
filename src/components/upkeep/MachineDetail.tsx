@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Archive, Check, Pencil, Plus, Trash2, X } from "lucide-react";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { Archive } from "lucide-react";
 import { readFile } from "@tauri-apps/plugin-fs";
-import { Badge, Button, Card, FormField, Input, Modal, Select } from "../ui";
-import { Toggle } from "../ui/Toggle";
+import {
+  Badge, Button, Card, DatePicker, EmptyState, FIELD_LABEL, FormField, FormGrid, FormModal, ICONS, IconButton,
+  Input, PageHeader, PanelTitle, Select, Table, Tag, Toggle,
+} from "../ui";
 import { MachineForm } from "./MachineForm";
 import { MachineExpenseRow } from "./MachineExpenseRow";
 import { FilesSection, ServiceLogSection } from "./MachineLogSections";
-import { SectionTitle } from "./SectionTitle";
 import { UpkeepItemForm } from "./UpkeepItemForm";
 import { ReadingsSection } from "./ReadingsSection";
 import { repeatsLabel } from "./DueList";
@@ -30,6 +30,7 @@ import { dueStateVariant, machineStatusVariant } from "../../lib/statusColors";
 import { dueState, effectiveDue } from "../../lib/upkeep/schedule";
 import { formatDisplayDate } from "../../utils/formatDate";
 import { todayLocalISO } from "../../utils/localDate";
+import { useConfirm } from "../../lib/confirm";
 import type { Machine, MachineStatus, UpkeepItem } from "../../types/upkeep";
 
 const STATUSES: MachineStatus[] = ["working", "attention", "broken", "lent", "retired"];
@@ -37,14 +38,11 @@ const STATUSES: MachineStatus[] = ["working", "attention", "broken", "lent", "re
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-xs text-muted mb-0.5">{label}</div>
+      <div className={`${FIELD_LABEL} mb-0.5`}>{label}</div>
       <div className="text-sm">{children}</div>
     </div>
   );
 }
-
-const iconBtn =
-  "p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors";
 
 function MachinePhoto({ path }: { path: string }) {
   const [src, setSrc] = useState<string | null>(null);
@@ -56,7 +54,7 @@ function MachinePhoto({ path }: { path: string }) {
     return () => { if (url) URL.revokeObjectURL(url); };
   }, [path]);
   if (!src) return null;
-  return <img src={src} alt="" className="h-16 w-16 rounded-lg object-cover shrink-0" />;
+  return <img src={src} alt="" className="h-12 w-12 rounded-lg object-cover shrink-0" />;
 }
 
 function LentDialog({ machine, onCancel, onSave }: {
@@ -66,37 +64,27 @@ function LentDialog({ machine, onCancel, onSave }: {
 }) {
   const t = useT();
   const [to, setTo] = useState(machine.lent_to ?? "");
-  const [until, setUntil] = useState(machine.lent_until ?? "");
+  const [until, setUntil] = useState<string | null>(machine.lent_until ?? null);
   const [error, setError] = useState<string>();
   const save = () => {
     if (!to.trim()) { setError(t.upkeep_lent_to_required); return; }
     onSave(to.trim(), until || null);
   };
   return (
-    <Modal
-      open
-      onClose={onCancel}
-      title={t.machine_status_lent}
-      footer={
-        <div className="flex gap-2 justify-end">
-          <Button variant="secondary" onClick={onCancel}>{t.cancel}</Button>
-          <Button onClick={save}>{t.save}</Button>
-        </div>
-      }
-    >
-      <div className="space-y-3">
+    <FormModal open size="sm" onClose={onCancel} title={t.machine_status_lent} submitLabel={t.save} onSubmit={save}>
+      <FormGrid cols={1}>
         <FormField label={t.upkeep_lent_to} required error={error}>
           <Input value={to} autoFocus onChange={(e) => { setTo(e.target.value); setError(undefined); }} />
         </FormField>
         <FormField label={t.upkeep_lent_until}>
-          <Input type="date" value={until} onChange={(e) => setUntil(e.target.value)} />
+          <DatePicker value={until} onChange={setUntil} />
         </FormField>
-      </div>
-    </Modal>
+      </FormGrid>
+    </FormModal>
   );
 }
 
-function ProjectsSection({ machineId }: { machineId: number }) {
+function ProjectsSection({ machineId, headingAs }: { machineId: number; headingAs: "h2" | "h3" }) {
   const t = useT();
   const { data: ids = [] } = useMachineProjectIds(machineId);
   const { data: projects = [] } = useProjects();
@@ -105,20 +93,15 @@ function ProjectsSection({ machineId }: { machineId: number }) {
   const rest = projects.filter((p) => !ids.includes(p.id));
   return (
     <section>
-      <SectionTitle>{t.upkeep_linked_projects}</SectionTitle>
+      <PanelTitle as={headingAs} title={t.upkeep_linked_projects} className="mb-3" />
       <div className="flex flex-wrap items-center gap-2">
         {linked.map((p) => (
-          <span key={p.id} className="inline-flex items-center gap-1 rounded-full bg-[var(--color-input-bg)] px-2.5 py-0.5 text-xs">
-            {p.name}
-            <button
-              type="button"
-              aria-label={`${t.upkeep_unlink_project} ${p.name}`}
-              className="text-muted hover:text-[var(--color-text-secondary)]"
-              onClick={() => setProjects.mutate({ id: machineId, projectIds: ids.filter((i) => i !== p.id) })}
-            >
-              <X size={12} />
-            </button>
-          </span>
+          <Tag
+            key={p.id}
+            name={p.name}
+            color="gray"
+            onRemove={() => setProjects.mutate({ id: machineId, projectIds: ids.filter((i) => i !== p.id) })}
+          />
         ))}
         {rest.length > 0 && (
           <Select
@@ -139,14 +122,21 @@ function ProjectsSection({ machineId }: { machineId: number }) {
   );
 }
 
-/** Full machine detail; used by the peek panel (`compact`) and the machine page. */
-export function MachineDetail({ machineId, compact = false, onDeleted }: {
+/**
+ * Full machine detail; used by the peek panel (`compact`: the title is an h2,
+ * the host page owns the h1) and the machine page (`onBack`: the page's h1
+ * with its back button).
+ */
+export function MachineDetail({ machineId, compact = false, onDeleted, onBack }: {
   machineId: number;
   compact?: boolean;
   onDeleted?: () => void;
+  onBack?: () => void;
 }) {
   const t = useT();
   const navigate = useNavigate();
+  const confirm = useConfirm();
+  const h = compact ? "h3" : "h2";
   const { data: machine } = useMachine(machineId);
   const { data: items = [] } = useUpkeepItems(machineId);
   const updateMachine = useUpdateMachine();
@@ -188,7 +178,7 @@ export function MachineDetail({ machineId, compact = false, onDeleted }: {
   };
 
   const remove = async () => {
-    if (!(await ask(t.upkeep_delete_machine_confirm, { kind: "warning" }))) return;
+    if (!(await confirm({ title: t.upkeep_delete_machine_confirm, confirmLabel: t.delete, tone: "danger" }))) return;
     deleteMachine.mutate(machine.id, {
       onSuccess: () => { onDeleted?.(); navigate("/upkeep?tab=machines"); },
     });
@@ -196,21 +186,18 @@ export function MachineDetail({ machineId, compact = false, onDeleted }: {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start gap-4">
-        {machine.photo_path && <MachinePhoto path={machine.photo_path} />}
-        <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-semibold truncate">{machine.name}</h2>
-          {sub && <div className="text-sm text-muted truncate">{sub}</div>}
-        </div>
-        <div className="flex items-center gap-1">
-          <button type="button" className={iconBtn} aria-label={t.edit} title={t.edit} onClick={() => setEditing(true)}>
-            <Pencil size={16} />
-          </button>
-          <button type="button" className={iconBtn} aria-label={t.delete} title={t.delete} onClick={() => void remove()}>
-            <Trash2 size={16} />
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        as={compact ? "h2" : "h1"}
+        className="mb-0!"
+        title={machine.name}
+        meta={sub || undefined}
+        back={onBack}
+        leading={machine.photo_path ? <MachinePhoto path={machine.photo_path} /> : undefined}
+        actions={<>
+          <IconButton icon={ICONS.edit} label={t.edit} onClick={() => setEditing(true)} />
+          <IconButton icon={ICONS.delete} label={t.delete} tone="danger" onClick={() => void remove()} />
+        </>}
+      />
 
       <div className="flex items-center gap-3">
         <Badge variant={machineStatusVariant(status)}>{t[`machine_status_${status}` as const]}</Badge>
@@ -226,7 +213,7 @@ export function MachineDetail({ machineId, compact = false, onDeleted }: {
       {status === "retired" && <p className="text-sm text-muted">{t.upkeep_retired_note}</p>}
 
       <section>
-        <SectionTitle>{t.upkeep_details}</SectionTitle>
+        <PanelTitle as={h} title={t.upkeep_details} className="mb-3" />
       <Card>
         <div className={`grid gap-4 ${compact ? "grid-cols-2" : "grid-cols-2 md:grid-cols-4"}`}>
           <Fact label={t.upkeep_bought}>
@@ -239,8 +226,7 @@ export function MachineDetail({ machineId, compact = false, onDeleted }: {
           <Fact label={t.upkeep_replace_around_label}>
             <Input
               type="number"
-              fullWidth={false}
-              className="w-24"
+              width="sm"
               aria-label={t.upkeep_replace_around_label}
               disabled={boughtYear == null}
               value={yearDraft ?? (replaceYear ?? "")}
@@ -254,72 +240,67 @@ export function MachineDetail({ machineId, compact = false, onDeleted }: {
       </section>
 
       <section>
-        <SectionTitle aside={
-          <Button size="sm" variant="secondary" icon={<Plus size={14} />} onClick={() => setItemForm({})}>
-            {t.upkeep_add_item}
-          </Button>
-        }>{t.upkeep_schedule}</SectionTitle>
+        <PanelTitle
+          as={h}
+          title={t.upkeep_schedule}
+          className="mb-3"
+          action={
+            <Button variant="secondary" icon={ICONS.add} onClick={() => setItemForm({})}>
+              {t.upkeep_add_item}
+            </Button>
+          }
+        />
         {active.length === 0 ? (
-          <p className="text-sm text-muted">{t.upkeep_schedule_empty}</p>
+          <EmptyState size="sm" message={t.upkeep_schedule_empty} />
         ) : (
-          <table className="w-full text-sm">
-            <tbody>
+          <Table density="compact">
+            <Table.Body>
               {active.map((it) => {
                 const state = dueState(it, today, soonDays);
                 const due = effectiveDue(it);
                 return (
-                  <tr key={it.id} className="border-b border-[var(--color-border-divider)]">
-                    <td className="px-2 py-2 font-medium">{it.title}</td>
-                    <td className="px-2 py-2 text-muted">{repeatsLabel(it, t)}</td>
-                    <td className="px-2 py-2 tabular-nums whitespace-nowrap">{due ? formatDisplayDate(due) : ""}</td>
-                    <td className="px-2 py-2">
+                  <Table.Row key={it.id}>
+                    <Table.Td className="font-medium">{it.title}</Table.Td>
+                    <Table.Td muted>{repeatsLabel(it, t)}</Table.Td>
+                    <Table.Td className="tabular-nums whitespace-nowrap">{due ? formatDisplayDate(due) : ""}</Table.Td>
+                    <Table.Td>
                       {(state === "overdue" || state === "soon") && (
                         <Badge variant={dueStateVariant(state)}>
                           {state === "overdue" ? t.overdue : t.upkeep_status_soon}
                         </Badge>
                       )}
-                    </td>
-                    <td className="px-2 py-2">
-                      <div className="flex items-center gap-2 text-xs text-muted whitespace-nowrap">
-                        {t.upkeep_in_calendar}
-                        <Toggle
-                          checked={it.in_calendar === 1}
-                          ariaLabel={t.upkeep_in_calendar}
-                          onChange={(on) => updateItem.mutate({ id: it.id, data: { in_calendar: on ? 1 : 0 } })}
-                        />
-                      </div>
-                    </td>
-                    <td className="px-2 py-2">
-                      <div className="flex items-center justify-end gap-1">
-                        <button type="button" className={iconBtn} aria-label={t.upkeep_mark_done} title={t.upkeep_mark_done}
-                          onClick={() => markDone.mutate({ id: it.id, doneOn: today, reading: null })}>
-                          <Check size={16} />
-                        </button>
-                        <button type="button" className={iconBtn} aria-label={t.edit} title={t.edit} onClick={() => setItemForm({ item: it })}>
-                          <Pencil size={16} />
-                        </button>
-                        <button type="button" className={iconBtn} aria-label={t.upkeep_archive} title={t.upkeep_archive}
-                          onClick={() => archiveItem.mutate(it.id)}>
-                          <Archive size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                    </Table.Td>
+                    <Table.Td className="whitespace-nowrap">
+                      <Toggle
+                        size="sm"
+                        checked={it.in_calendar === 1}
+                        label={<span className="text-xs text-muted">{t.upkeep_in_calendar}</span>}
+                        ariaLabel={t.upkeep_in_calendar}
+                        onChange={(on) => updateItem.mutate({ id: it.id, data: { in_calendar: on ? 1 : 0 } })}
+                      />
+                    </Table.Td>
+                    <Table.Actions>
+                      <IconButton size="xs" icon={ICONS.markDone} label={t.upkeep_mark_done}
+                        onClick={() => markDone.mutate({ id: it.id, doneOn: today, reading: null })} />
+                      <IconButton size="xs" icon={ICONS.edit} label={t.edit} onClick={() => setItemForm({ item: it })} />
+                      <IconButton size="xs" icon={Archive} label={t.upkeep_archive} onClick={() => archiveItem.mutate(it.id)} />
+                    </Table.Actions>
+                  </Table.Row>
                 );
               })}
-            </tbody>
-          </table>
+            </Table.Body>
+          </Table>
         )}
       </section>
 
       <section>
-        <SectionTitle>{t.upkeep_readings}</SectionTitle>
+        <PanelTitle as={h} title={t.upkeep_readings} className="mb-3" />
         <ReadingsSection machine={machine} items={active} />
       </section>
 
-      <FilesSection machineId={machine.id} />
-      <ServiceLogSection machineId={machine.id} />
-      <ProjectsSection machineId={machine.id} />
+      <FilesSection machineId={machine.id} headingAs={h} />
+      <ServiceLogSection machineId={machine.id} headingAs={h} />
+      <ProjectsSection machineId={machine.id} headingAs={h} />
 
       {askLent && (
         <LentDialog

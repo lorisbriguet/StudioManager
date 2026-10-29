@@ -92,10 +92,10 @@ describe("ClientsPage arrow-key navigation", () => {
     renderRoute(<ClientsPage />, "/clients", "/clients/:id", "client-detail");
 
     const rowA = (await screen.findByText("Alpha Co")).closest("tr")!;
-    expect(rowA.className).not.toContain("ring-2");
+    expect(rowA.className).not.toContain("focus-row");
 
     fireEvent.keyDown(window, { key: "ArrowDown" });
-    expect(rowA.className).toContain("ring-2");
+    expect(rowA.className).toContain("focus-row");
 
     fireEvent.keyDown(window, { key: " " });
     expect(await screen.findByRole("menuitem", { name: /view details/i })).toBeInTheDocument();
@@ -121,10 +121,10 @@ describe("ProjectsPage arrow-key navigation", () => {
 
     const cardA = (await screen.findByText("Website Revamp")).closest("[data-list-row]") as HTMLElement | null;
     expect(cardA).not.toBeNull();
-    expect(cardA!.className).not.toContain("ring-2");
+    expect(cardA!.className).not.toContain("focus-row");
 
     fireEvent.keyDown(window, { key: "ArrowDown" });
-    expect(cardA!.className).toContain("ring-2");
+    expect(cardA!.className).toContain("focus-row");
 
     fireEvent.keyDown(window, { key: "Enter" });
     expect(await screen.findByTestId("project-detail")).toBeInTheDocument();
@@ -148,14 +148,15 @@ describe("ProjectsPage arrow-key navigation", () => {
     renderRoute(<ProjectsPage />, "/projects", "/projects/:id", "project-detail");
 
     const cardA = (await screen.findByText("Website Revamp")).closest("[data-list-row]") as HTMLElement;
-    fireEvent.click(cardA);
+    // The card's title is its button, stretched over the card (Card interactive="link").
+    fireEvent.click(screen.getByRole("button", { name: "Website Revamp" }));
 
-    // Peek panel open — its "open full page" link only renders inside it.
-    await screen.findByTitle("Open full page");
-    expect(cardA.className).not.toContain("ring-2");
+    // Peek panel open — its "open full page" button only renders inside it.
+    await screen.findByRole("button", { name: "Open full page" });
+    expect(cardA.className).not.toContain("focus-row");
 
     fireEvent.keyDown(window, { key: "ArrowDown" });
-    expect(cardA.className).not.toContain("ring-2");
+    expect(cardA.className).not.toContain("focus-row");
   });
 });
 
@@ -241,20 +242,20 @@ describe("TasksPage arrow-key navigation", () => {
 
     const rowA1 = screen.getByText("Task A1").closest("[data-list-row]") as HTMLElement;
     const rowA2 = screen.getByText("Task A2").closest("[data-list-row]") as HTMLElement;
-    expect(rowA1.className).not.toContain("ring-2");
+    expect(rowA1.className).not.toContain("focus-row");
 
     fireEvent.keyDown(window, { key: "ArrowDown" });
-    expect(rowA1.className).toContain("ring-2");
+    expect(rowA1.className).toContain("focus-row");
 
     fireEvent.keyDown(window, { key: "ArrowDown" });
-    expect(rowA2.className).toContain("ring-2");
-    expect(rowA1.className).not.toContain("ring-2");
+    expect(rowA2.className).toContain("focus-row");
+    expect(rowA1.className).not.toContain("focus-row");
 
     // Two more ArrowDown presses: Project B's tasks are excluded from the
     // cycle entirely, so focus clamps on Task A2 instead of moving into them.
     fireEvent.keyDown(window, { key: "ArrowDown" });
     fireEvent.keyDown(window, { key: "ArrowDown" });
-    expect(rowA2.className).toContain("ring-2");
+    expect(rowA2.className).toContain("focus-row");
 
     // Enter opens the focused task — it expands to reveal its subtask composer.
     expect(screen.queryByPlaceholderText("New subtask...")).not.toBeInTheDocument();
@@ -307,10 +308,10 @@ describe("IncomePage arrow-key navigation — receipt preview overlay", () => {
 
     // Preview overlay open — its header shows the reference.
     await screen.findByRole("heading", { name: "INC-0001" });
-    expect(row.className).not.toContain("ring-2");
+    expect(row.className).not.toContain("focus-row");
 
     fireEvent.keyDown(window, { key: "ArrowDown" });
-    expect(row.className).not.toContain("ring-2");
+    expect(row.className).not.toContain("focus-row");
   });
 });
 
@@ -353,9 +354,9 @@ describe("ExpensesPage arrow-key navigation — receipt preview overlay", () => 
     fireEvent.click(screen.getByRole("button", { name: /^view$/i }));
 
     await screen.findByRole("heading", { name: "EXP-0001" });
-    expect(row.className).not.toContain("ring-2");
+    expect(row.className).not.toContain("focus-row");
 
     fireEvent.keyDown(window, { key: "ArrowDown" });
-    expect(row.className).not.toContain("ring-2");
+    expect(row.className).not.toContain("focus-row");
   });
 });

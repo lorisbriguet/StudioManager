@@ -12,6 +12,7 @@ export function useBusinessProfile() {
 export function useUpdateBusinessProfile() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_profile" },
     mutationFn: (data: Partial<Omit<BusinessProfile, "id">>) =>
       q.updateBusinessProfile(data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["business-profile"] }),

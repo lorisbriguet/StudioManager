@@ -39,7 +39,7 @@ export function MenuBarApp() {
   const labels: Record<Tab, string> = { agents: t.agents, usage: t.menubar_usage, day: t.menubar_day };
 
   const openApp = (
-    <Button size="sm" variant="ghost" onClick={() => void openMainWindow()}>
+    <Button variant="outline" onClick={() => void openMainWindow()}>
       {t.menubar_open_app}
     </Button>
   );
@@ -51,7 +51,7 @@ export function MenuBarApp() {
 
   return (
     <div className="h-screen flex flex-col bg-[var(--color-bg)] text-[var(--color-text)] overflow-hidden">
-      <div role="tablist" aria-label="StudioManager" className={`${PANEL_TOP_BAR} px-1.5 border-[var(--color-border-header)]`}>
+      <div role="tablist" aria-label="StudioManager" className={`${PANEL_TOP_BAR} px-1.5 border-[var(--color-border)]`}>
         {TABS.map((id) => (
           <TabItem key={id} role="tab" label={labels[id]} active={tab === id} onActivate={() => choose(id)} />
         ))}
@@ -69,7 +69,7 @@ export function MenuBarApp() {
           </div>
           <BottomBar className={tab === "agents" ? "justify-between" : "justify-end"}>
             {tab === "agents" && (
-              <Button size="sm" variant="ghost" onClick={() => void openMainWindow({ newAgent: true })}>
+              <Button variant="outline" onClick={() => void openMainWindow({ newAgent: true })}>
                 {t.agents_new}
               </Button>
             )}

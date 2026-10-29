@@ -1,9 +1,13 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 
 vi.mock("../lib/log", () => ({ logError: vi.fn(), logWarn: vi.fn(), logInfo: vi.fn(), logDebug: vi.fn() }));
-vi.mock("../lib/notifyError", async () => {
+vi.mock("../lib/notify", async (orig) => {
   const { uiLabels } = await vi.importActual<typeof import("../i18n/ui")>("../i18n/ui");
-  return { notifyError: vi.fn(), getLabels: () => uiLabels.EN };
+  return {
+    ...(await orig<typeof import("../lib/notify")>()),
+    ...(await import("../__mocks__/notify")).notifyMockModule(),
+    getLabels: () => uiLabels.EN,
+  };
 });
 vi.mock("../lib/upkeep/calendar", () => ({ syncItemCalendar: vi.fn(async () => {}) }));
 

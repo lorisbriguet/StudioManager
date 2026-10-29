@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { SwissQRBill } from "swissqrbill/pdf";
 
 // Mutable state the hoisted @react-pdf/renderer mock reads/writes, plus the
@@ -60,15 +60,9 @@ vi.mock("@react-pdf/renderer", () => {
   };
 });
 
-vi.mock("sonner", () => ({
-  toast: {
-    error: vi.fn(),
-    success: vi.fn(),
-    warning: vi.fn(),
-    info: vi.fn(),
-    loading: vi.fn(),
-    dismiss: vi.fn(),
-  },
+vi.mock("../lib/notify", async (orig) => ({
+  ...(await orig<typeof import("../lib/notify")>()),
+  ...(await import("../__mocks__/notify")).notifyMockModule(),
 }));
 
 vi.mock("../lib/log", () => ({
@@ -88,7 +82,7 @@ beforeEach(() => {
   useAppStore.setState({ language: "EN" });
   painterState.calls = [];
   painterState.failOn = null;
-  vi.mocked(toast.error).mockClear();
+  vi.mocked(notify.error).mockClear();
 });
 
 afterEach(() => {
@@ -108,7 +102,7 @@ describe("QRBillCanvas", () => {
     // The QR code modules themselves are drawn as rects.
     expect(calledMethods.has("rect")).toBe(true);
 
-    expect(toast.error).not.toHaveBeenCalled();
+    expect(notify.error).not.toHaveBeenCalled();
   });
 
   it("notifies the user and restores isSpaceSufficient when a draw call throws", () => {
@@ -122,9 +116,10 @@ describe("QRBillCanvas", () => {
     render(<QRBillCanvas data={validData} language="EN" />);
 
     expect(painterState.calls.length).toBeGreaterThan(0);
-    expect(toast.error).toHaveBeenCalledTimes(1);
-    expect(toast.error).toHaveBeenCalledWith(
-      "The QR payment slip could not be generated for this invoice."
+    expect(notify.error).toHaveBeenCalledTimes(1);
+    expect(notify.error).toHaveBeenCalledWith(
+      "Couldn't generate the QR payment slip for this invoice",
+      expect.any(Error)
     );
 
     // Pins defect 2: a failed attachTo must not leave the process-wide

@@ -52,6 +52,7 @@ vi.mock("../db/hooks/useExpenses", () => ({
 }));
 
 import { MachineDetail } from "../components/upkeep/MachineDetail";
+import { pickOption } from "./fixtures/dropdown";
 
 const t = uiLabels.EN;
 
@@ -106,14 +107,14 @@ describe("MachineDetail", () => {
   it("setting status Retired shows the reminders-stop note", () => {
     renderDetail();
     expect(screen.queryByText(t.upkeep_retired_note)).toBeNull();
-    fireEvent.change(screen.getByLabelText(t.upkeep_col_status), { target: { value: "retired" } });
+    pickOption(screen.getByLabelText(t.upkeep_col_status), t.machine_status_retired);
     expect(updateMachine).toHaveBeenCalledWith({ id: 1, data: { status: "retired" } });
     expect(screen.getByText(t.upkeep_retired_note)).toBeInTheDocument();
   });
 
   it("Lent out asks for who before saving", () => {
     renderDetail();
-    fireEvent.change(screen.getByLabelText(t.upkeep_col_status), { target: { value: "lent" } });
+    pickOption(screen.getByLabelText(t.upkeep_col_status), t.machine_status_lent);
     expect(updateMachine).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: t.save }));
     expect(updateMachine).not.toHaveBeenCalled();
@@ -164,7 +165,7 @@ describe("MachineDetail", () => {
     expect(screen.getByText(t.upkeep_connected_to.replace("{label}", "Studio NAS"))).toBeInTheDocument();
     expect(screen.getByText(/timeout/)).toBeInTheDocument();
     expect(screen.getByText(t.upkeep_disk_health_warning)).toBeInTheDocument();
-    expect(screen.getByRole("meter", { name: t.upkeep_disk_age_years.replace("{n}", "2") })).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: t.upkeep_disk_age_years.replace("{n}", "2") })).toBeInTheDocument();
     expect(screen.queryByLabelText(t.upkeep_current_reading)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_sync_now }));
     expect(syncNow).toHaveBeenCalledWith(2);

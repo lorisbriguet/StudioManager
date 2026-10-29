@@ -1,6 +1,12 @@
 import { useEffect, useRef, useId, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ICONS } from "./icons";
 import { useT } from "../../i18n/useT";
+import { IconButton } from "./IconButton";
+import { PanelTitle } from "./PanelTitle";
+import { FORM_ACTIONS, SURFACE } from "./tokens";
+
+export type ModalSize = "sm" | "md" | "full";
 
 interface ModalProps {
   open: boolean;
@@ -8,19 +14,52 @@ interface ModalProps {
   title?: string;
   children: ReactNode;
   footer?: ReactNode;
-  size?: "sm" | "md" | "lg";
+  /** sm 400px (confirms, prompts, 1–3 fields) · md 560px (record forms, editors, palettes) · full (viewers). */
+  size?: ModalSize;
+  /** top: palette-style dialogs (command palette, quick timer) sit at 20% from the top. */
+  position?: "center" | "top";
+  /** false: the content lays itself out edge to edge (no body padding). */
+  padding?: boolean;
+  /** Accessible name when there is no visible title. */
+  "aria-label"?: string;
 }
 
-const sizeClasses = {
-  sm: "max-w-sm",
-  md: "max-w-md",
-  lg: "max-w-lg",
+// Every size caps at 85% of the window: the header and footer stay put and
+// only the body scrolls.
+const sizeClasses: Record<ModalSize, string> = {
+  sm: "max-w-[400px] max-h-[85vh]",
+  md: "max-w-[560px] max-h-[85vh]",
+  /** viewers (receipts, PDFs): 80% × 85% of the window, content fills it */
+  full: "w-[80vw]! max-w-none h-[85vh]",
 };
 
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+// Every part skips tabindex="-1": a roving-tabindex day or segment is not a tab stop.
+const NOT_SKIPPED = ':not([tabindex="-1"])';
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled]):not([type=hidden])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]",
+]
+  .map((s) => `${s}${NOT_SKIPPED}`)
+  .join(", ");
 
-export function Modal({ open, onClose, title, children, footer, size = "sm" }: ModalProps) {
+/** Tab stops inside `root`, in DOM order, without hidden ones (display:none, a collapsed section). */
+function tabStops(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(isShown);
+}
+
+function isShown(el: HTMLElement): boolean {
+  // Browsers: no offsetParent means display:none here or above (fixed elements excepted).
+  if (el.offsetParent !== undefined) return el.offsetParent !== null || getComputedStyle(el).position === "fixed";
+  // DOMs without layout (tests): walk up for display:none.
+  for (let n: HTMLElement | null = el; n; n = n.parentElement) if (getComputedStyle(n).display === "none") return false;
+  return true;
+}
+
+export function Modal({ open, onClose, title, children, footer, size = "sm", position = "center", padding = true, ...aria }: ModalProps) {
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -40,7 +79,12 @@ export function Modal({ open, onClose, title, children, footer, size = "sm" }: M
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      // Only the topmost dialog closes (a confirmation opened over a form).
+      // Portals mount on <body> in opening order, so the newest is last.
+      const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+      if (dialogs.length > 0 && dialogs[dialogs.length - 1] !== ref.current) return;
+      onClose();
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -81,7 +125,7 @@ export function Modal({ open, onClose, title, children, footer, size = "sm" }: M
     if (e.key !== "Tab") return;
     const dialog = ref.current;
     if (!dialog) return;
-    const focusables = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+    const focusables = tabStops(dialog);
     if (focusables.length === 0) {
       e.preventDefault();
       dialog.focus();
@@ -103,9 +147,13 @@ export function Modal({ open, onClose, title, children, footer, size = "sm" }: M
 
   if (!open) return null;
 
-  return (
+  // On <body>: a dialog opened inside a transformed panel (the side peek keeps
+  // a transform from its enter animation) would otherwise be trapped and clipped.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-in fade-in"
+      className={`fixed inset-0 z-50 flex justify-center bg-scrim animate-in fade-in ${
+        position === "top" ? "items-start pt-[20vh]" : "items-center"
+      }`}
       onClick={onClose}
     >
       <div
@@ -113,28 +161,29 @@ export function Modal({ open, onClose, title, children, footer, size = "sm" }: M
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
+        aria-label={title ? undefined : aria["aria-label"]}
         tabIndex={-1}
-        className={`bg-[var(--color-surface)] rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.5)] w-full ${sizeClasses[size]} mx-4 overflow-hidden modal-animate outline-none`}
+        className={`${SURFACE} shadow-modal w-full ${sizeClasses[size]} mx-4 flex flex-col overflow-hidden modal-animate outline-none`}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleTrapKeyDown}
       >
         {title && (
-          <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--color-border-divider)]">
-            <h3 id={titleId} className="text-sm font-medium">{title}</h3>
-            <button onClick={onClose} className="text-muted hover:text-[var(--color-text-secondary)]" aria-label={t.close}>
-              <X size={16} />
-            </button>
-          </div>
+          <PanelTitle
+            as="h2"
+            id={titleId}
+            title={title}
+            action={<IconButton icon={ICONS.close} label={t.close} onClick={onClose} />}
+            className="shrink-0 px-5 py-3 border-b border-[var(--color-border-divider)]"
+          />
         )}
-        <div className={title ? "p-5" : "p-6"}>
-          {children}
-        </div>
+        <div className={`flex-1 min-h-0 overflow-y-auto ${padding ? "p-5" : "flex flex-col"}`}>{children}</div>
         {footer && (
-          <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-[var(--color-border-divider)]">
+          <div className={`${FORM_ACTIONS} shrink-0 px-5 py-3 border-t border-[var(--color-border-divider)]`}>
             {footer}
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { Link2, Receipt, Unlink } from "lucide-react";
-import { Button, Select } from "../ui";
+import { Button, ICONS, ICON_SIZE, IconButton, Select } from "../ui";
 import { PrefilledExpenseModal } from "./PrefilledExpenseModal";
 import { useT } from "../../i18n/useT";
 import { useUpdateMachine } from "../../db/hooks/useUpkeep";
@@ -26,17 +25,14 @@ export function MachineExpenseRow({ machine }: { machine: Machine }) {
       </div>
       {machine.expense_id != null ? (
         <div className="flex items-center gap-2 text-xs">
-          <Receipt size={14} className="text-muted" />
+          <ICONS.expense size={ICON_SIZE.control} className="text-muted" />
           <span>{linked ? `${linked.reference} · ${linked.supplier}` : t.upkeep_expense_linked}</span>
-          <button
-            type="button"
-            aria-label={t.upkeep_unlink_expense}
-            title={t.upkeep_unlink_expense}
-            className="p-1 rounded-md text-muted hover:bg-[var(--color-hover-row)]"
+          <IconButton
+            size="xs"
+            icon={ICONS.unlink}
+            label={t.upkeep_unlink_expense}
             onClick={() => update.mutate({ id: machine.id, data: { expense_id: null } })}
-          >
-            <Unlink size={14} />
-          </button>
+          />
         </div>
       ) : (
         <div className="flex items-center gap-2">
@@ -58,18 +54,17 @@ export function MachineExpenseRow({ machine }: { machine: Machine }) {
               ))}
             </Select>
           ) : (
-            <Button size="sm" variant="secondary" icon={<Link2 size={14} />} onClick={() => setPicking(true)}>
+            <Button variant="secondary" icon={ICONS.link} onClick={() => setPicking(true)}>
               {t.upkeep_link_expense}
             </Button>
           )}
-          <Button size="sm" variant="secondary" icon={<Receipt size={14} />} onClick={() => setCreating(true)}>
+          <Button variant="secondary" icon={ICONS.expense} onClick={() => setCreating(true)}>
             {t.upkeep_create_expense}
           </Button>
         </div>
       )}
       {creating && (
         <PrefilledExpenseModal
-          title={t.upkeep_create_expense}
           supplier={machine.supplier ?? undefined}
           amount={machine.price ?? undefined}
           date={machine.purchase_date ?? todayLocalISO()}

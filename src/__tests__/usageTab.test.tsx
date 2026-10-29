@@ -1,14 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { ReactNode } from "react";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import { MeterBar } from "../components/ui";
+import { ProgressBar } from "../components/ui";
 import { UsageTab } from "../menubar/UsageTab";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 import { useAppStore } from "../stores/app-store";
 import type { Activity, UsageLimits } from "../lib/usage";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("../lib/notify", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  notify: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
+}));
 
 // happy-dom has no layout, so ResponsiveContainer would render nothing.
 vi.mock("recharts", async (orig) => ({
@@ -84,16 +87,16 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("MeterBar", () => {
-  const fill = () => screen.getByRole("meter").firstElementChild as HTMLElement;
+describe("ProgressBar with a fill colour (usage meters)", () => {
+  const fill = () => screen.getByRole("progressbar").firstElementChild as HTMLElement;
 
   it("clamps the value to 0-100 and shows a non-number as empty", () => {
-    const { rerender } = render(<MeterBar pct={140} color="var(--color-accent)" label="Weekly" />);
+    const { rerender } = render(<ProgressBar value={140} color="var(--color-accent)" aria-label="Weekly" />);
     expect(fill().style.width).toBe("100%");
-    rerender(<MeterBar pct={-5} color="var(--color-accent)" label="Weekly" />);
+    rerender(<ProgressBar value={-5} color="var(--color-accent)" aria-label="Weekly" />);
     expect(fill().style.width).toBe("0%");
-    expect(screen.getByRole("meter")).toHaveAttribute("aria-valuenow", "0");
-    rerender(<MeterBar pct={NaN} color="var(--color-accent)" label="Weekly" />);
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0");
+    rerender(<ProgressBar value={NaN} color="var(--color-accent)" aria-label="Weekly" />);
     expect(fill().style.width).toBe("0%");
   });
 });
@@ -110,16 +113,16 @@ describe("UsageTab", () => {
     expect(hit.className).toContain("text-[var(--color-warning-text)]");
     expect(screen.getByText("Weekly, Opus")).toBeInTheDocument();
     expect(screen.queryByText(/On pace for 44/)).toBeNull();
-    const bars = screen.getAllByRole("meter");
+    const bars = screen.getAllByRole("progressbar");
     expect(bars.map((b) => b.getAttribute("aria-valuenow"))).toEqual(["62", "81", "44"]);
-    expect((bars[1].firstElementChild as HTMLElement).style.background).toBe("var(--color-warning)");
+    expect((bars[1].firstElementChild as HTMLElement).style.backgroundColor).toBe("var(--color-warning)");
   });
 
   it("shows the empty state when the status line is not set up", async () => {
     serve({ meters: [], setUp: false, savedAt: null });
     render(<UsageTab trailing={null} />);
     expect(await screen.findByText(/Set up plan limits in Settings/)).toBeInTheDocument();
-    expect(screen.queryByRole("meter")).toBeNull();
+    expect(screen.queryByRole("progressbar")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
     expect(invokedCommands.find((c) => c.cmd === "menubar_open_main")?.args).toMatchObject({ settings: "agents" });
   });
@@ -138,7 +141,7 @@ describe("UsageTab", () => {
     expect(await screen.findByText("1 h 05")).toBeInTheDocument();
     expect(screen.getByText("35 min")).toBeInTheDocument();
     expect(screen.getByText("A guide from agent activity, not a timesheet.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Week" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Week" }));
     expect(screen.getAllByText("2 h 05")).toHaveLength(2); // client and its only project
     expect(screen.queryByText("1 h 05")).toBeNull();
   });
@@ -151,7 +154,7 @@ describe("UsageTab", () => {
     expect(clipboard.writeText).toHaveBeenCalledWith(
       "Alpha  1 h 05\n  Site  35 min\n  App  30 min\nOther  20 min\n  Notes  20 min",
     );
-    fireEvent.click(screen.getByRole("button", { name: "Week" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Week" }));
     fireEvent.click(screen.getByRole("button", { name: "Copy as text" }));
     expect(clipboard.writeText).toHaveBeenLastCalledWith("Alpha  2 h 05\n  Site  2 h 05");
   });
@@ -162,9 +165,9 @@ describe("UsageTab", () => {
     render(<UsageTab trailing={null} />);
     await screen.findByText("1 h 05");
     fireEvent.click(screen.getByRole("button", { name: "Copy as text" }));
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Clipboard blocked"));
+    await waitFor(() => expect(notify.error).toHaveBeenCalledWith("Couldn't copy", expect.any(Error)));
     fireEvent.click(screen.getByRole("button", { name: "Copy as text" }));
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Copied"));
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith("Copied"));
   });
 
   it("refreshes limits every 30 s and activity every 60 s, and stops on unmount", async () => {

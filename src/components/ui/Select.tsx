@@ -1,30 +1,93 @@
-import { forwardRef, type CSSProperties, type SelectHTMLAttributes } from "react";
+import {
+  Children,
+  Fragment,
+  isValidElement,
+  type ChangeEvent,
+  type ReactNode,
+} from "react";
+import { DropdownSelect, type DropdownOption } from "./Dropdown";
 
-interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
+/**
+ * Select — the app's select field, drawn with DropdownSelect (no native
+ * <select> popup). It keeps the native API so call sites read like a
+ * <select>: <option>/<optgroup> children, a string `value`, and
+ * `onChange(e)` with `e.target.value`.
+ *
+ *   <Select value={currency} onChange={(e) => setCurrency(e.target.value)}>
+ *     <option value="CHF">CHF</option>
+ *     <option value="EUR">EUR</option>
+ *   </Select>
+ *
+ * Need icons, descriptions, multi-select or create-from-search? Use
+ * DropdownSelect directly with an `options` array.
+ */
+export interface SelectProps {
+  value?: string | number | null;
+  onChange?: (e: ChangeEvent<HTMLSelectElement>) => void;
+  children?: ReactNode;
   fullWidth?: boolean;
+  className?: string;
+  disabled?: boolean;
+  id?: string;
+  name?: string;
+  title?: string;
+  placeholder?: string;
+  /** bare: no fill, for table cells */
+  variant?: "default" | "bare";
+  /** Muted label inside the trigger, before the value ("Status:"). */
+  prefix?: string;
+  searchable?: boolean;
+  align?: "start" | "end";
+  defaultOpen?: boolean;
+  autoFocus?: boolean;
+  onBlur?: () => void;
+  onFocus?: () => void;
+  "aria-label"?: string;
+  "aria-labelledby"?: string;
+  "aria-required"?: boolean | "true" | "false";
+  "aria-invalid"?: boolean | "true" | "false";
+  "aria-describedby"?: string;
+  "data-testid"?: string;
 }
 
-export const Select = forwardRef<HTMLSelectElement, SelectProps>(
-  ({ className = "", fullWidth = true, children, style, ...props }, ref) => {
-    const chevronStyle: CSSProperties = {
-      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
-      backgroundRepeat: "no-repeat",
-      backgroundPosition: "right 0.5rem center",
-      ...style,
-    };
-    return (
-      <select
-        ref={ref}
-        className={`bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-lg px-3 py-2 text-sm focus-accent appearance-none pr-8 ${
-          fullWidth ? "w-full" : ""
-        } ${className}`}
-        style={chevronStyle}
-        {...props}
-      >
-        {children}
-      </select>
-    );
-  }
-);
+function textOf(node: ReactNode): string {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  if (isValidElement(node)) return textOf((node.props as { children?: ReactNode }).children);
+  return "";
+}
 
-Select.displayName = "Select";
+/** Reads <option> / <optgroup> children (fragments and arrays included) into options. */
+export function optionsFromChildren(children: ReactNode, group?: string, out: DropdownOption[] = []) {
+  Children.forEach(children, (child) => {
+    if (!isValidElement(child)) return;
+    const p = child.props as { children?: ReactNode; value?: string | number; label?: string; disabled?: boolean };
+    if (child.type === Fragment) optionsFromChildren(p.children, group, out);
+    else if (child.type === "optgroup") optionsFromChildren(p.children, p.label, out);
+    else if (child.type === "option") {
+      const label = textOf(p.children);
+      out.push({ value: String(p.value ?? label), label, disabled: p.disabled, group });
+    }
+  });
+  return out;
+}
+
+export function Select({ value, onChange, children, name, placeholder, ...rest }: SelectProps) {
+  const options = optionsFromChildren(children);
+  const current = value == null ? "" : String(value);
+  // Like a native select: an unmatched value shows the first option.
+  const matched = options.some((o) => o.value === current);
+  return (
+    <DropdownSelect
+      {...rest}
+      options={options}
+      value={matched ? current : (options[0]?.value ?? "")}
+      placeholder={placeholder}
+      onChange={(v) => {
+        const target = { value: v, name: name ?? "" };
+        onChange?.({ target, currentTarget: target } as unknown as ChangeEvent<HTMLSelectElement>);
+      }}
+    />
+  );
+}

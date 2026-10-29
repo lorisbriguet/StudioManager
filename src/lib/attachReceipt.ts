@@ -20,7 +20,7 @@ export async function attachReceipt(
   reference: string,
   label: string,
   update: (destPath: string) => void,
-  onError: () => void
+  onError: (err: unknown) => void
 ): Promise<void> {
   try {
     const selected = await open({
@@ -39,7 +39,7 @@ export async function attachReceipt(
     const destPath = `${receiptsDir}/${safeRef}_${safeLabel}.${ext}`;
     await copyFile(filePath, destPath);
     update(destPath);
-  } catch {
-    onError();
+  } catch (e) {
+    onError(e);
   }
 }

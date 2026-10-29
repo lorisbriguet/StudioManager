@@ -1,14 +1,17 @@
 import { useMemo, useState } from "react";
-import { ImagePlus, X } from "lucide-react";
+import { ImagePlus } from "lucide-react";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { copyFile, exists, mkdir } from "@tauri-apps/plugin-fs";
-import { Button, FormField, Input, Modal, Select } from "../ui";
+import {
+  Button, Card, Checkbox, DatePicker, FIELD_LABEL, FormField, FormGrid, FormGridItem, FormGroup, FormModal, ICONS,
+  IconButton, Input, Select,
+} from "../ui";
 import { useT } from "../../i18n/useT";
 import { useCreateMachine, useUpdateMachine } from "../../db/hooks/useUpkeep";
 import { useUnsavedChangesWarning } from "../../hooks/useUnsavedChangesWarning";
 import { confirmIfDirty } from "../../lib/dirty-guard";
 import { sanitizeSegment } from "../../lib/attachReceipt";
-import { notifyError } from "../../lib/notifyError";
+import { notify } from "../../lib/notify";
 import { orgPaths } from "../../lib/orgPaths";
 import { MACHINE_TEMPLATES, templateByKey } from "../../lib/upkeep/templates";
 import type { IntervalUnit, Machine, MachineInput, MachineTemplateItemInput } from "../../types/upkeep";
@@ -118,7 +121,7 @@ export function MachineForm({ onClose, machine, onSaved }: Props) {
       });
       if (typeof picked === "string") { setPhoto(picked); setPhotoSource(picked); }
     } catch (e) {
-      notifyError(t.upkeep_photo_failed, e);
+      notify.error(t.upkeep_photo_failed, e);
     }
   };
 
@@ -165,27 +168,23 @@ export function MachineForm({ onClose, machine, onSaved }: Props) {
         onClose();
       }
     } catch (e) {
-      notifyError(t.upkeep_photo_failed, e);
+      notify.error(t.upkeep_photo_failed, e);
       setSaving(false);
     }
   };
 
   return (
-    <Modal
+    <FormModal
       open
       onClose={() => void close()}
       title={machine ? t.upkeep_edit_machine : t.upkeep_add_machine}
-      size="lg"
-      footer={
-        <div className="flex gap-2 justify-end">
-          <Button variant="secondary" onClick={() => void close()}>{t.cancel}</Button>
-          <Button onClick={() => void save()} disabled={saving}>{t.save}</Button>
-        </div>
-      }
+      submitLabel={t.save}
+      submitting={saving}
+      onSubmit={() => void save()}
     >
-      <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+      <FormGrid cols={2}>
         {!machine && (
-          <FormField label={t.upkeep_template}>
+          <FormField label={t.upkeep_template} span="full">
             <Select value={f.template} onChange={(e) => pickTemplate(e.target.value)}>
               <option value="">{t.none}</option>
               {MACHINE_TEMPLATES.map((tpl) => (
@@ -195,22 +194,21 @@ export function MachineForm({ onClose, machine, onSaved }: Props) {
           </FormField>
         )}
         {rows.length > 0 && (
-          <div className="rounded-lg border border-[var(--color-border-divider)] p-3 space-y-2">
-            <div className="text-xs text-muted">{t.upkeep_template_items}</div>
+          <FormGridItem>
+          <Card tone="inset" padding="sm" className="space-y-2">
+            <div className={FIELD_LABEL}>{t.upkeep_template_items}</div>
             {rows.map((r, i) => (
               <div key={i} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  className="accent-[var(--accent)]"
+                <Checkbox
                   checked={r.on}
                   aria-label={r.title}
                   onChange={(e) => setRow(i, { on: e.target.checked })}
                 />
-                <Input value={r.title} onChange={(e) => setRow(i, { title: e.target.value })} />
+                <Input value={r.title} aria-label={t.name} onChange={(e) => setRow(i, { title: e.target.value })} />
                 {r.schedule === "interval" ? (
                   <>
                     <Input
-                      type="number" min={1} fullWidth={false} className="w-16"
+                      type="number" min={1} width="xs" numeric
                       aria-label={t.upkeep_every}
                       value={r.n} onChange={(e) => setRow(i, { n: e.target.value })}
                     />
@@ -224,7 +222,7 @@ export function MachineForm({ onClose, machine, onSaved }: Props) {
                 ) : (
                   <>
                     <Input
-                      type="number" min={1} fullWidth={false} className="w-20"
+                      type="number" min={1} width="xs" numeric
                       aria-label={t.upkeep_every_hours}
                       value={r.every} onChange={(e) => setRow(i, { every: e.target.value })}
                     />
@@ -233,9 +231,9 @@ export function MachineForm({ onClose, machine, onSaved }: Props) {
                 )}
               </div>
             ))}
-          </div>
+          </Card>
+          </FormGridItem>
         )}
-        <div className="grid grid-cols-2 gap-3">
           <FormField label={t.name} required error={nameError}>
             <Input value={f.name} onChange={(e) => { set("name", e.target.value); setNameError(undefined); }} autoFocus />
           </FormField>
@@ -255,44 +253,38 @@ export function MachineForm({ onClose, machine, onSaved }: Props) {
             <Input value={f.location} onChange={(e) => set("location", e.target.value)} />
           </FormField>
           <FormField label={t.upkeep_bought}>
-            <Input type="date" value={f.purchase_date} onChange={(e) => set("purchase_date", e.target.value)} />
+            <DatePicker value={f.purchase_date || null} onChange={(v) => set("purchase_date", v ?? "")} />
           </FormField>
           <FormField label={t.supplier}>
             <Input value={f.supplier} onChange={(e) => set("supplier", e.target.value)} />
           </FormField>
           <FormField label={t.upkeep_price}>
-            <Input type="number" min={0} step="0.01" value={f.price} onChange={(e) => set("price", e.target.value)} />
+            <Input type="number" min={0} step="0.01" numeric value={f.price} onChange={(e) => set("price", e.target.value)} />
           </FormField>
           <FormField label={t.upkeep_warranty_until}>
-            <Input type="date" value={f.warranty_until} onChange={(e) => set("warranty_until", e.target.value)} />
+            <DatePicker value={f.warranty_until || null} onChange={(v) => set("warranty_until", v ?? "")} />
           </FormField>
           <FormField label={t.upkeep_lifespan_years}>
-            <Input type="number" min={1} value={f.lifespan} onChange={(e) => set("lifespan", e.target.value)} />
+            <Input type="number" min={1} numeric value={f.lifespan} onChange={(e) => set("lifespan", e.target.value)} />
           </FormField>
-          <div>
-            <div className="text-sm font-medium mb-1.5">{t.upkeep_photo}</div>
+          <FormGroup label={t.upkeep_photo}>
             <div className="flex items-center gap-2">
-              <Button variant="secondary" icon={<ImagePlus size={14} />} onClick={() => void choosePhoto()}>
+              <Button variant="secondary" icon={ImagePlus} onClick={() => void choosePhoto()}>
                 {photo ? t.upkeep_photo_change : t.upkeep_photo_add}
               </Button>
               {photo && (
-                <button
-                  type="button"
-                  aria-label={t.upkeep_photo_remove}
-                  title={t.upkeep_photo_remove}
+                <IconButton
+                  icon={ICONS.close}
+                  label={t.upkeep_photo_remove}
                   onClick={() => { setPhoto(null); setPhotoSource(null); }}
-                  className="p-1 rounded-md text-muted hover:bg-[var(--color-hover-row)]"
-                >
-                  <X size={14} />
-                </button>
+                />
               )}
             </div>
-          </div>
-        </div>
-        <FormField label={t.upkeep_notes}>
+          </FormGroup>
+        <FormField label={t.upkeep_notes} span="full">
           <Input value={f.notes} onChange={(e) => set("notes", e.target.value)} />
         </FormField>
-      </div>
-    </Modal>
+      </FormGrid>
+    </FormModal>
   );
 }

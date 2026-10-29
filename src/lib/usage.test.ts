@@ -9,7 +9,7 @@ describe("usageWindowLabel", () => {
     expect(usageWindowLabel("seven_day", EN)).toBe("Weekly, all models");
     expect(usageWindowLabel("seven_day_opus", EN)).toBe("Weekly, Opus");
     expect(usageWindowLabel("seven_day_claude_design", EN)).toBe("Weekly, Claude Design");
-    expect(usageWindowLabel("five_hour", FR)).toBe("Fenetre de 5 heures");
+    expect(usageWindowLabel("five_hour", FR)).toBe(FR.usage_window_five_hour);
     expect(usageWindowLabel("seven_day_opus", FR)).toBe("Hebdo, Opus");
   });
 

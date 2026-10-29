@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { Input, Select } from "../ui";
+import { CARD_STACK, Input, Select, SettingRow, SettingsCard } from "../ui";
 import { ConnectionsCard } from "../upkeep/ConnectionsCard";
-import { SettingRow, SettingsCard } from "./SettingsPrimitives";
 import { logError } from "../../lib/log";
 import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
@@ -34,8 +33,8 @@ function DaysInput({ label, value, onCommit }: { label: string; value: number; o
         if (n !== null) onCommit(n);
       }}
       onBlur={() => setDraft(String(value))}
-      fullWidth={false}
-      className="w-24"
+      width="sm"
+      numeric
     />
   );
 }
@@ -66,7 +65,7 @@ export function UpkeepSettingsCard() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className={CARD_STACK}>
       <SettingsCard title={t.upkeep_settings_reminders}>
         <SettingRow label={t.upkeep_settings_alert} desc={t.upkeep_settings_alert_desc}>
           <Select

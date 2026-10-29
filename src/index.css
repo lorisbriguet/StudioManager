@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
-
+/* Colour tokens: see DESIGN-SYSTEM.md (CSS Tokens). No literal colours in
+   components: every colour is one of these variables. Themes
+   (src/lib/themeTokens.ts) override them inline on <html>. */
 @theme {
   --color-sidebar: #f8f8f8;
   --color-sidebar-border: #e5e5e5;
@@ -12,20 +13,23 @@
   --color-danger: #dc2626;
   --color-success: #16a34a;
   --color-warning: #d97706;
-  --color-success-bg: #dcfce7;
-  --color-success-text: #15803d;
-  --color-warning-bg: #fef9c3;
-  --color-warning-text: #a16207;
-  --color-danger-bg: #fee2e2;
-  --color-danger-text: #dc2626;
-  --color-info-bg: #dbeafe;
-  --color-info-text: #1d4ed8;
+  /* Status pills alias the tag palette (below), so they follow .dark */
+  --color-success-bg: var(--color-tag-green-bg);
+  --color-success-text: var(--color-tag-green-text);
+  --color-warning-bg: var(--color-tag-yellow-bg);
+  --color-warning-text: var(--color-tag-yellow-text);
+  --color-danger-bg: var(--color-tag-red-bg);
+  --color-danger-text: var(--color-tag-red-text);
+  --color-info-bg: var(--color-tag-blue-bg);
+  --color-info-text: var(--color-tag-blue-text);
   --color-indigo-bg: #e0e7ff;
   --color-indigo-text: #4338ca;
-  --color-banner-test: #f59e0b;
-  --color-banner-test-hover: #d97706;
-  --color-banner-presentation: #6366f1;
-  --color-banner-presentation-hover: #4f46e5;
+  /* Mode banners: deep enough for white text (on-banner, 4.5:1) */
+  --color-banner-test: #b45309;
+  --color-banner-test-hover: #92400e;
+  --color-banner-presentation: #4f46e5;
+  --color-banner-presentation-hover: #4338ca;
+  --color-on-banner: #ffffff;
   --color-chart-1: #2563eb;
   --color-chart-2: #16a34a;
   --color-chart-3: #d97706;
@@ -38,12 +42,97 @@
   --color-text: #111827;
   --color-text-secondary: #374151;
   --color-surface: #ffffff;
-  --color-border: #e5e5e5;
-  --color-border-divider: #f7f7f7;
-  --color-border-header: #f0f0f0;
+  /* Borders by role: divider (rows, sections) < border (surface edge:
+     cards, menus, dialogs, table header) < input-border (control edge) */
+  --color-border-divider: #f3f3f3;
+  --color-border: #e8e8e8;
+  --color-input-border: #d4d4d4;
   --color-input-bg: #f5f5f5;
-  --color-input-border: #e5e5e5;
   --color-hover-row: #f8f8f8;
+  /* Checkbox edge: 3:1 against surface and input-bg (a control boundary,
+     unlike field borders, which the field's own fill already outlines) */
+  --color-checkbox-border: #949494;
+  /* A control raised over its track (segmented-control thumb) */
+  --color-raised: var(--color-surface);
+  /* Text on a coloured fill: white or near-black, whichever contrasts more
+     (themeTokens onColorFor; applyAccentColor recomputes on-accent). */
+  --color-on-accent: #ffffff;
+  --color-on-danger: #ffffff;
+  /* Faint text: disabled glyphs only (under 4.5:1, never for content) */
+  --color-text-faint: color-mix(in srgb, var(--color-muted) 60%, transparent);
+  /* Accent as TEXT (links, active nav, accent badges): the accent darkened
+     toward the text colour so it reads 4.5:1 on bg and on accent tints.
+     Fills, borders and rings keep --color-accent. */
+  --color-accent-text: color-mix(in srgb, var(--color-accent) 60%, var(--color-text));
+  /* Accent derivatives, so they follow the accent at runtime */
+  --color-accent-border: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  --color-focus-ring: color-mix(in srgb, var(--color-accent) 50%, transparent);
+  /* Overlays */
+  --color-scrim: rgba(0, 0, 0, 0.4);
+  --color-overlay-hover: rgba(0, 0, 0, 0.1);
+}
+
+/* ─── Tag palette ───
+   The 9 tag colours. lib/tagColors.ts returns var(--color-tag-…) strings, so
+   tags, status pills and calendar events follow .dark without JS. Declared
+   before .dark (same specificity, so .dark wins). */
+:root {
+  --color-tag-blue-bg: #dbeafe;    --color-tag-blue-text: #1d4ed8;
+  --color-tag-purple-bg: #ede9fe;  --color-tag-purple-text: #6d28d9;
+  --color-tag-green-bg: #dcfce7;   --color-tag-green-text: #15803d;
+  --color-tag-red-bg: #fee2e2;     --color-tag-red-text: #b91c1c;
+  --color-tag-yellow-bg: #fef3c7;  --color-tag-yellow-text: #92400e;
+  --color-tag-cyan-bg: #cffafe;    --color-tag-cyan-text: #0e7490;
+  --color-tag-orange-bg: #ffedd5;  --color-tag-orange-text: #c2410c;
+  --color-tag-teal-bg: #ccfbf1;    --color-tag-teal-text: #0f766e;
+  --color-tag-gray-bg: #f3f4f6;    --color-tag-gray-text: #5f6672;
+}
+
+/* ─── Shadows, tints, focus ───
+   Kept out of @theme so the values are read at runtime: shadows change
+   with .dark and tints follow the theme's accent. */
+:root {
+  /* Buttons, segmented-control thumb */
+  --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.08);
+  /* Toggle knob: white on any track, so its own edge carries it */
+  --shadow-knob: 0 1px 3px rgba(0, 0, 0, 0.3), 0 0 0 0.5px rgba(0, 0, 0, 0.12);
+  /* Dropdowns, context menus, tooltips, chart tooltips, floating bars */
+  --shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06);
+  /* Modals */
+  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+@utility shadow-control {
+  box-shadow: var(--shadow-control);
+}
+@utility shadow-knob {
+  box-shadow: var(--shadow-knob);
+}
+@utility shadow-menu {
+  box-shadow: var(--shadow-menu);
+}
+@utility shadow-modal {
+  box-shadow: var(--shadow-modal);
+}
+/* Accent tints. 5%: selected row in a menu, today in the calendar. */
+@utility bg-accent-tint {
+  background-color: color-mix(in srgb, var(--color-accent) 5%, transparent);
+}
+/* 10%: hovered selected row, drop zones, calendar events */
+@utility bg-accent-tint-strong {
+  background-color: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+/* 25%: resize handles (panel resizers, column resize) */
+@utility bg-accent-handle {
+  background-color: color-mix(in srgb, var(--color-accent) 25%, transparent);
+}
+/* Keyboard-focused row in a list (Table, Sidebar, Projects, Tasks): an
+   inset ring in the focus-ring colour. */
+@utility focus-row {
+  box-shadow: inset 0 0 0 2px var(--color-focus-ring);
+}
+/* useListNavigation moves DOM focus onto the row; focus-row is its ring. */
+[data-list-row]:focus {
+  outline: none;
 }
 
 body {
@@ -51,15 +140,9 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
-  background: #ffffff;
-  color: #111827;
+  background: var(--color-bg);
+  color: var(--color-text);
   overflow: hidden;
-}
-
-.dark body,
-.dark > body {
-  background: #111111;
-  color: #e5e5e5;
 }
 
 #root {
@@ -67,29 +150,19 @@ body {
   width: 100vw;
 }
 
-[cmdk-group-heading] {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-muted);
-  padding: 6px 8px;
-}
-
 /* ─── Dark mode ─── */
 .dark {
   color-scheme: dark;
 
-  --color-gray-50: #1a1a1a;
-  --color-gray-100: #252525;
-  --color-gray-200: #333333;
-  --color-gray-300: #484848;
-  --color-gray-400: #5c5c5c;
-  --color-gray-500: #7a7a7a;
-  --color-gray-600: #a8a8a8;
-  --color-gray-700: #d4d4d4;
-  --color-gray-800: #e5e5e5;
-  --color-gray-900: #f5f5f5;
-  --color-gray-950: #fafafa;
+  --color-tag-blue-bg: #1a2332;    --color-tag-blue-text: #60a5fa;
+  --color-tag-purple-bg: #1e1b2e;  --color-tag-purple-text: #a78bfa;
+  --color-tag-green-bg: #052e16;   --color-tag-green-text: #4ade80;
+  --color-tag-red-bg: #2a1215;     --color-tag-red-text: #f87171;
+  --color-tag-yellow-bg: #1c1917;  --color-tag-yellow-text: #fbbf24;
+  --color-tag-cyan-bg: #0c1a2e;    --color-tag-cyan-text: #38bdf8;
+  --color-tag-orange-bg: #2a1a0e;  --color-tag-orange-text: #fb923c;
+  --color-tag-teal-bg: #042f2e;    --color-tag-teal-text: #2dd4bf;
+  --color-tag-gray-bg: #1a1a1a;    --color-tag-gray-text: #a8a8a8;
 
   --color-sidebar: #161616;
   --color-sidebar-border: #333333;
@@ -103,42 +176,46 @@ body {
   --color-chart-6: #22d3ee;
   --color-chart-7: #f472b6;
   --color-chart-8: #a3e635;
-  --color-success-bg: #052e16;
-  --color-success-text: #4ade80;
-  --color-warning-bg: #1c1917;
-  --color-warning-text: #fbbf24;
-  --color-danger-bg: #2a1215;
-  --color-danger-text: #f87171;
-  --color-info-bg: #0c1a2e;
-  --color-info-text: #38bdf8;
   --color-indigo-bg: #1a1a2e;
   --color-indigo-text: #818cf8;
-  --color-banner-test: #d97706;
-  --color-banner-test-hover: #b45309;
-  --color-banner-presentation: #4f46e5;
-  --color-banner-presentation-hover: #4338ca;
+  --color-danger: #ef4444;
+  /* #ef4444 reads better with near-black than white (onColorFor) */
+  --color-on-danger: #111827;
+  --color-checkbox-border: #6b6b6b;
+  /* Lighter than the surface, so a thumb shows over its track */
+  --color-raised: color-mix(in srgb, var(--color-text) 10%, var(--color-surface));
+  --color-accent-text: color-mix(in srgb, var(--color-accent) 60%, white);
   --color-bg: #111111;
   --color-text: #e5e5e5;
   --color-text-secondary: #d4d4d4;
   --color-surface: #161616;
-  --color-border: #333333;
-  --color-border-divider: #1f1f1f;
-  --color-border-header: #2a2a2a;
+  --color-border-divider: #1e1e1e;
+  --color-border: #2a2a2a;
+  --color-input-border: #3a3a3a;
   --color-input-bg: #1a1a1a;
-  --color-input-border: #2a2a2a;
   --color-hover-row: #1a1a1a;
+  --color-overlay-hover: rgba(255, 255, 255, 0.12);
+  --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.4);
+  /* A faint light edge: a dark shadow alone doesn't show on a dark page */
+  --shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
-.dark input,
-.dark select:not(.appearance-none),
-.dark textarea {
-  background-color: #1a1a1a;
-  color: #e5e5e5;
-}
+/* Defaults for native fields in dark mode. In the base layer, so the field
+   tokens (bg-transparent on bare/inline fields, placeholder:text-muted) win. */
+@layer base {
+  .dark input,
+  .dark select:not(.appearance-none),
+  .dark textarea {
+    background-color: var(--color-input-bg);
+    color: var(--color-text);
+  }
 
-.dark input::placeholder,
-.dark textarea::placeholder {
-  color: #525252;
+  /* Muted, like light-mode placeholders (text-faint is for disabled only) */
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    color: var(--color-muted);
+  }
 }
 
 /* ─── Indicator dots (status, priority, legend) ─── */
@@ -148,7 +225,7 @@ body {
 /* ─── Focus ring that follows accent at runtime ─── */
 .focus-accent:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 1px var(--color-surface, #fff), 0 0 0 3px color-mix(in srgb, var(--color-accent) 50%, transparent);
+  box-shadow: 0 0 0 1px var(--color-surface), 0 0 0 3px var(--color-focus-ring);
 }
 
 /* Global keyboard-focus visibility for raw buttons and button-like elements.
@@ -157,17 +234,41 @@ body {
 button:focus-visible:not(.focus-accent),
 [role="button"]:focus-visible:not(.focus-accent) {
   outline: none;
-  box-shadow: 0 0 0 1px var(--color-surface, #fff), 0 0 0 3px color-mix(in srgb, var(--color-accent) 50%, transparent);
+  box-shadow: 0 0 0 1px var(--color-surface), 0 0 0 3px var(--color-focus-ring);
+}
+
+/* Card interactive="link": the title button/link stretches over the whole
+   card (click anywhere), and the card shows its focus ring. Controls in the
+   card sit above it with CARD_CONTROL (relative z-10). */
+.card-link {
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+}
+.card-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 0.75rem; /* the card's rounded-xl */
+}
+.card-link.card-link:focus-visible {
+  box-shadow: none;
+}
+.card-link:focus-visible::after {
+  box-shadow: 0 0 0 1px var(--color-surface), 0 0 0 3px var(--color-focus-ring);
 }
 
 /* ─── FullCalendar overrides ─── */
 .fc-studio .fc {
   --fc-border-color: var(--color-border-divider);
   --fc-today-bg-color: transparent;
-  --fc-now-indicator-color: #dc2626;
+  --fc-page-bg-color: var(--color-bg);
+  --fc-neutral-bg-color: var(--color-input-bg);
+  --fc-now-indicator-color: var(--color-danger);
   --fc-event-border-color: transparent;
-  --fc-event-bg-color: color-mix(in srgb, var(--color-accent) 15%, white);
-  --fc-event-text-color: var(--color-accent);
+  /* Plain events: the 10% accent tint over the page, accent text */
+  --fc-event-bg-color: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg));
+  --fc-event-text-color: var(--color-accent-text);
   font-size: 13px;
   border-radius: 0;
   overflow: visible;
@@ -190,7 +291,7 @@ button:focus-visible:not(.focus-accent),
 
 .fc-studio .fc .fc-button-primary:hover {
   background: var(--color-hover-row);
-  border-color: var(--color-border-header);
+  border-color: var(--color-input-border);
   color: var(--color-text);
 }
 
@@ -198,7 +299,7 @@ button:focus-visible:not(.focus-accent),
 .fc-studio .fc .fc-button-primary:active {
   background: var(--color-accent);
   border-color: var(--color-accent);
-  color: white;
+  color: var(--color-on-accent);
 }
 
 .fc-studio .fc .fc-col-header-cell {
@@ -243,12 +344,9 @@ button:focus-visible:not(.focus-accent),
   font-weight: 600;
 }
 
+/* Same 5% as the bg-accent-tint utility */
 .fc-studio .fc .fc-day-today {
   background: color-mix(in srgb, var(--color-accent) 5%, transparent) !important;
-}
-
-.fc-studio .fc .fc-timegrid-col.fc-day-today {
-  background: color-mix(in srgb, var(--color-accent) 5%, transparent);
 }
 
 /* Other month days: faded */
@@ -272,39 +370,25 @@ button:focus-visible:not(.focus-accent),
   cursor: ns-resize !important;
 }
 
-.fc-studio .fc .fc-event.fc-priority-high {
-  --fc-event-bg-color: #fef2f2;
-  --fc-event-text-color: #dc2626;
+/* Event kinds take the status colours (which alias the tag palette, so they
+   follow .dark and themes). */
+.fc-studio .fc .fc-event.fc-priority-high,
+.fc-studio .fc .fc-event.fc-deadline,
+.fc-studio .fc .fc-event.fc-invoice-overdue {
+  --fc-event-bg-color: var(--color-danger-bg);
+  --fc-event-text-color: var(--color-danger-text);
 }
 
-.fc-studio .fc .fc-event.fc-priority-medium {
-  --fc-event-bg-color: #fefce8;
-  --fc-event-text-color: #ca8a04;
+.fc-studio .fc .fc-event.fc-priority-medium,
+.fc-studio .fc .fc-event.fc-invoice-sent,
+.fc-studio .fc .fc-event.fc-quote-expiry {
+  --fc-event-bg-color: var(--color-warning-bg);
+  --fc-event-text-color: var(--color-warning-text);
 }
 
 .fc-studio .fc .fc-event.fc-done {
-  --fc-event-bg-color: #f0fdf4;
-  --fc-event-text-color: #16a34a;
-}
-
-.fc-studio .fc .fc-event.fc-deadline {
-  --fc-event-bg-color: #fef2f2;
-  --fc-event-text-color: #b91c1c;
-}
-
-.fc-studio .fc .fc-event.fc-invoice-overdue {
-  --fc-event-bg-color: #fef2f2;
-  --fc-event-text-color: #dc2626;
-}
-
-.fc-studio .fc .fc-event.fc-invoice-sent {
-  --fc-event-bg-color: #fefce8;
-  --fc-event-text-color: #ca8a04;
-}
-
-.fc-studio .fc .fc-event.fc-quote-expiry {
-  --fc-event-bg-color: #fefce8;
-  --fc-event-text-color: #ca8a04;
+  --fc-event-bg-color: var(--color-success-bg);
+  --fc-event-text-color: var(--color-success-text);
 }
 
 .fc-studio .fc .fc-timegrid-slot {
@@ -334,84 +418,25 @@ button:focus-visible:not(.focus-accent),
   border-radius: 0;
 }
 
-/* Title left-aligned with spacing after nav buttons */
-.fc-studio .fc .fc-toolbar-title {
-  font-size: 16px;
-  font-weight: 600;
-  margin-left: 8px !important;
-}
-
 .fc-studio .fc .fc-daygrid-more-link {
   font-size: 10px;
   color: var(--color-muted);
 }
 
-/* Dark mode */
+/* Dark mode: a 10% tint is too faint on a dark page, so plain events mix
+   more accent and lift their text toward the page text. */
 .dark .fc-studio .fc {
-  --fc-border-color: var(--color-border-divider);
-  --fc-today-bg-color: transparent;
-  --fc-page-bg-color: #111111;
-  --fc-neutral-bg-color: #1a1a1a;
-  --fc-event-bg-color: color-mix(in srgb, var(--color-accent) 25%, #1a1a1a);
-  --fc-event-text-color: color-mix(in srgb, var(--color-accent) 60%, white);
+  --fc-event-bg-color: color-mix(in srgb, var(--color-accent) 25%, var(--color-bg));
+  --fc-event-text-color: color-mix(in srgb, var(--color-accent) 60%, var(--color-text));
 }
 
 .dark .fc-studio .fc .fc-button-primary {
-  background: transparent;
-  border-color: var(--color-border-header);
-  color: var(--color-muted);
+  border-color: var(--color-border);
 }
 
 .dark .fc-studio .fc .fc-button-primary:hover {
-  background: var(--color-hover-row);
-  border-color: #444;
+  border-color: var(--color-input-border);
   color: var(--color-text-secondary);
-}
-
-.dark .fc-studio .fc .fc-button-primary.fc-button-active,
-.dark .fc-studio .fc .fc-button-primary:active {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: white;
-}
-
-.dark .fc-studio .fc .fc-col-header-cell {
-  color: var(--color-muted);
-}
-
-.dark .fc-studio .fc .fc-event.fc-priority-high {
-  --fc-event-bg-color: #451a1a;
-  --fc-event-text-color: #fca5a5;
-}
-
-.dark .fc-studio .fc .fc-event.fc-priority-medium {
-  --fc-event-bg-color: #422006;
-  --fc-event-text-color: #fde68a;
-}
-
-.dark .fc-studio .fc .fc-event.fc-done {
-  --fc-event-bg-color: #052e16;
-  --fc-event-text-color: #86efac;
-}
-
-.dark .fc-studio .fc .fc-event.fc-deadline {
-  --fc-event-bg-color: #451a1a;
-  --fc-event-text-color: #fca5a5;
-}
-
-.dark .fc-studio .fc .fc-event.fc-invoice-overdue {
-  --fc-event-bg-color: #451a1a;
-  --fc-event-text-color: #fca5a5;
-}
-
-.dark .fc-studio .fc .fc-event.fc-invoice-sent {
-  --fc-event-bg-color: #422006;
-  --fc-event-text-color: #fde68a;
-}
-
-.dark .fc-studio .fc .fc-event.fc-quote-expiry {
-  --fc-event-bg-color: #422006;
-  --fc-event-text-color: #fde68a;
 }
 
 /* ─── Animation tokens ─── */
@@ -429,6 +454,24 @@ button:focus-visible:not(.focus-accent),
 }
 .reduce-motion { --duration-fast: 0ms; --duration-normal: 0ms; --duration-slow: 0ms; }
 .reduce-motion .skeleton { animation: none; }
+
+/* Reduced motion, everywhere: animations end at once, transitions are instant,
+   scrolling jumps. Spinners keep turning (they show work, not decoration). */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.animate-spin), *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+.reduce-motion *:not(.animate-spin), .reduce-motion *::before, .reduce-motion *::after,
+.reduce-motion {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0ms !important;
+  scroll-behavior: auto !important;
+}
 
 /* ─── Global transitions (Notion-like smooth feel) ─── */
 table tbody tr {
@@ -486,12 +529,6 @@ button, a, select, [role="button"] {
 /* Status pill crossfade */
 .status-transition {
   transition: background-color var(--duration-normal) ease, color var(--duration-normal) ease;
-}
-
-/* Toast slide-in */
-@keyframes toast-in {
-  from { opacity: 0; transform: translateX(100%); }
-  to { opacity: 1; transform: translateX(0); }
 }
 
 /* Modal open */
@@ -582,7 +619,7 @@ button, a, select, [role="button"] {
   transition: box-shadow var(--duration-fast) ease, transform var(--duration-fast) ease;
 }
 .drag-lift:active, .drag-lift.dragging {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  box-shadow: var(--shadow-menu);
   transform: scale(1.02);
 }
 
@@ -594,9 +631,11 @@ button, a, select, [role="button"] {
   line-height: 1.7;
   color: var(--color-text);
 }
-.tiptap-editor .ProseMirror h1 { font-size: 1.5em; font-weight: 600; margin: 1em 0 0.5em; }
-.tiptap-editor .ProseMirror h2 { font-size: 1.25em; font-weight: 600; margin: 0.8em 0 0.4em; }
-.tiptap-editor .ProseMirror h3 { font-size: 1.1em; font-weight: 600; margin: 0.6em 0 0.3em; }
+/* Prose headings sit below the article title (20px, the page h1): content, not
+   app chrome, so they step down 15 / 14 / 13px. Also used by DocView (.wiki-doc). */
+.tiptap-editor .ProseMirror h1 { font-size: 15px; line-height: 1.4; font-weight: 600; margin: 1.4em 0 0.5em; }
+.tiptap-editor .ProseMirror h2 { font-size: 14px; line-height: 1.4; font-weight: 600; margin: 1.2em 0 0.4em; }
+.tiptap-editor .ProseMirror h3 { font-size: 13px; line-height: 1.4; font-weight: 600; margin: 1em 0 0.3em; }
 .tiptap-editor .ProseMirror ul { list-style: disc; padding-left: 1.5em; margin: 0.5em 0; }
 .tiptap-editor .ProseMirror ol { list-style: decimal; padding-left: 1.5em; margin: 0.5em 0; }
 .tiptap-editor .ProseMirror a {
@@ -625,9 +664,9 @@ button, a, select, [role="button"] {
 .tiptap-editor .ProseMirror pre code { border: 0; padding: 0; background: none; }
 /* Project files shown in the wiki (rendered Markdown, read-only) */
 .wiki-doc table { border-collapse: collapse; margin: 0.8em 0; font-size: 13px; width: 100%; }
-.wiki-doc th { text-align: left; font-weight: 600; border-bottom: 1px solid var(--color-border-header); padding: 6px 10px; }
+.wiki-doc th { text-align: left; font-weight: 600; border-bottom: 1px solid var(--color-border); padding: 6px 10px; }
 .wiki-doc td { border-bottom: 1px solid var(--color-border-divider); padding: 6px 10px; vertical-align: top; }
-.wiki-doc blockquote { border-left: 2px solid var(--color-border-header); padding-left: 12px; color: var(--color-text-secondary); margin: 0.6em 0; }
+.wiki-doc blockquote { border-left: 2px solid var(--color-border); padding-left: 12px; color: var(--color-text-secondary); margin: 0.6em 0; }
 .wiki-doc li > input[type="checkbox"] { margin-right: 6px; vertical-align: -1px; }
 .wiki-doc p { margin: 0.5em 0; }
 .tiptap-editor .ProseMirror hr { border: none; border-top: 1px solid var(--color-border-divider); margin: 1em 0; }
@@ -641,10 +680,11 @@ button, a, select, [role="button"] {
 
 /* ─── Dashboard grid overrides ─── */
 .react-grid-item.react-grid-placeholder {
-  background: var(--color-accent);
-  opacity: 0.08;
+  /* react-grid-layout sets its own background and opacity: override both */
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent) !important;
+  opacity: 1 !important;
   border-radius: 8px;
-  border: 2px dashed var(--color-accent);
+  border: 2px dashed var(--color-accent-border);
 }
 
 .react-grid-item.react-draggable-dragging {
@@ -672,13 +712,13 @@ body.grid-interacting input {
 .agent-markdown ul { list-style: disc; padding-left: 1.4em; }
 .agent-markdown ol { list-style: decimal; padding-left: 1.4em; }
 .agent-markdown li + li { margin-top: 0.25em; }
-.agent-markdown a { color: var(--color-accent); text-decoration: underline; }
+.agent-markdown a { color: var(--color-accent-text); text-decoration: underline; }
 .agent-markdown strong { font-weight: 600; }
 .agent-markdown blockquote { border-left: 2px solid var(--color-input-border); padding-left: 0.9em; color: var(--color-text-secondary); }
 .agent-markdown code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88em; background: var(--color-input-bg); border-radius: 6px; padding: 0.1em 0.35em; }
-.agent-markdown pre { background: var(--color-input-bg); border: 1px solid var(--color-input-border); border-radius: 8px; padding: 0.75em 1em; overflow-x: auto; }
+.agent-markdown pre { background: var(--color-input-bg); border: 1px solid var(--color-border); border-radius: 8px; padding: 0.75em 1em; overflow-x: auto; }
 .agent-markdown pre code { background: none; padding: 0; font-size: 0.85em; }
 .agent-markdown table { border-collapse: collapse; font-size: 0.95em; display: block; overflow-x: auto; }
-.agent-markdown th, .agent-markdown td { border: 1px solid var(--color-input-border); padding: 0.3em 0.6em; text-align: left; }
+.agent-markdown th, .agent-markdown td { border: 1px solid var(--color-border); padding: 0.3em 0.6em; text-align: left; }
 .agent-markdown th { font-weight: 600; background: var(--color-input-bg); }
-.agent-markdown hr { border: 0; border-top: 1px solid var(--color-input-border); }
+.agent-markdown hr { border: 0; border-top: 1px solid var(--color-border-divider); }

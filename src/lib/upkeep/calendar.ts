@@ -5,7 +5,7 @@ import {
 } from "../appleCalendar";
 import { useAppStore } from "../../stores/app-store";
 import { useOrgStore } from "../../stores/org-store";
-import { notifyError, getLabels } from "../notifyError";
+import { notify, getLabels } from "../notify";
 import { effectiveDue, shouldMoveEvent } from "./schedule";
 import { getMachine } from "../../db/queries/machines";
 import { getUpkeepItem, getUpkeepItems, setItemCalendarEvent } from "../../db/queries/upkeepItems";
@@ -16,7 +16,7 @@ import type { Machine, Subscription, UpkeepAlert, UpkeepItem } from "../../types
  * Upkeep items and subscriptions in Apple Calendar: one all-day event per
  * item for its NEXT due date, with a display alarm, so the reminder fires even
  * when the app is closed. Every function here swallows calendar failures
- * (one notifyError) and returns the ids to persist, so a save never fails
+ * (one notify.error) and returns the ids to persist, so a save never fails
  * because of the calendar. Test and presentation modes never touch Apple
  * Calendar: their databases are copies or demos, the calendar is the real one.
  */
@@ -46,7 +46,7 @@ export interface SyncOptions {
 type ItemEventIds = Pick<UpkeepItem, "calendar_event_id" | "calendar_event_date">;
 type SubscriptionEventIds = Pick<Subscription, "calendar_event_id">;
 
-const notifyFailure = (e: unknown) => notifyError(getLabels().calendar_sync_failed, e);
+const notifyFailure = (e: unknown) => notify.error(getLabels().calendar_sync_failed, e);
 
 /** Test or presentation mode: leave the real Apple Calendar alone. */
 function calendarOff(): boolean {

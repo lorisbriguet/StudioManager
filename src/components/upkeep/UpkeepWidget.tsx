@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { Badge } from "../ui";
+import { Badge, EmptyState, ICONS, SectionLabel } from "../ui";
+import { WidgetShell, WidgetTitle } from "../dashboard/WidgetShell";
 import { DueList } from "./DueList";
 import { usePendingRenewals, useUpkeepOverview } from "../../db/hooks/useUpkeep";
 import { useT } from "../../i18n/useT";
@@ -15,21 +16,21 @@ export function UpkeepWidget() {
   const nothing = due.length === 0 && lowStock.length === 0 && endingSoon.length === 0 && pending.length === 0;
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h2 className="text-sm font-medium mb-3">{t.upkeep_widget}</h2>
+    <WidgetShell>
+      <WidgetTitle>{t.upkeep_widget}</WidgetTitle>
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-3">
-        {nothing && <div className="text-xs text-muted">{t.upkeep_widget_empty}</div>}
+        {nothing && <EmptyState size="sm" icon={ICONS.done} message={t.upkeep_widget_empty} />}
 
         {due.length > 0 && (
           <section>
-            <h3 className="mb-1 text-[10px] font-medium uppercase tracking-widest text-muted">{t.upkeep_due_soon}</h3>
+            <SectionLabel as="h3" className="mb-1">{t.upkeep_due_soon}</SectionLabel>
             <DueList rows={due} compact />
           </section>
         )}
 
         {pending.length > 0 && (
           <section>
-            <h3 className="mb-1 text-[10px] font-medium uppercase tracking-widest text-muted">{t.upkeep_widget_pending}</h3>
+            <SectionLabel as="h3" className="mb-1">{t.upkeep_widget_pending}</SectionLabel>
             <ul className="space-y-1">
               {pending.map((r) => (
                 <li key={r.id}>
@@ -50,12 +51,17 @@ export function UpkeepWidget() {
 
         {lowStock.length > 0 && (
           <section>
-            <div className="flex items-center justify-between mb-1">
-  <h3 className="text-[10px] font-medium uppercase tracking-widest text-muted">{t.upkeep_low_stock}</h3>
-              <Link to="/upkeep?tab=consumables" className="text-xs text-accent hover:underline">
-                {t.upkeep_all_consumables}
-              </Link>
-            </div>
+            <SectionLabel
+              as="h3"
+              className="mb-1"
+              action={
+                <Link to="/upkeep?tab=consumables" className="text-xs text-accent-text hover:underline">
+                  {t.upkeep_all_consumables}
+                </Link>
+              }
+            >
+              {t.upkeep_low_stock}
+            </SectionLabel>
             <ul className="space-y-1">
               {lowStock.map((c) => (
                 <li key={c.id} className="flex items-center justify-between text-sm">
@@ -71,7 +77,7 @@ export function UpkeepWidget() {
 
         {endingSoon.length > 0 && (
           <section>
-            <h3 className="mb-1 text-[10px] font-medium uppercase tracking-widest text-muted">{t.upkeep_warranty_renewals}</h3>
+            <SectionLabel as="h3" className="mb-1">{t.upkeep_warranty_renewals}</SectionLabel>
             <ul className="space-y-1">
               {endingSoon.map((e) => (
                 <li key={`${e.kind}-${e.name}-${e.date}`} className="flex items-center justify-between gap-3 text-sm">
@@ -88,6 +94,6 @@ export function UpkeepWidget() {
           </section>
         )}
       </div>
-    </div>
+    </WidgetShell>
   );
 }

@@ -1,5 +1,7 @@
-import type { ReactNode } from "react";
-import { X, Pin } from "lucide-react";
+import { X } from "lucide-react";
+import { IconButton } from "./IconButton";
+import { MUTED_INTERACTIVE } from "./tokens";
+import { ICONS, ICON_SIZE, renderIcon, type IconProp } from "./icons";
 
 /**
  * One tab, as in the app's tab bar: an accent underline on the active tab,
@@ -7,27 +9,23 @@ import { X, Pin } from "lucide-react";
  * look the same. A non-interactive container holds two sibling buttons
  * (activate, close): a button inside a button is invalid.
  */
-export function TabItem({
-  label,
-  active,
-  onActivate,
-  onClose,
-  closeLabel,
-  pinned = false,
-  icon,
-  role,
-}: {
+type TabItemProps = {
   label: string;
   active: boolean;
   onActivate: () => void;
-  /** Omit for tabs that can't be closed. Middle-click closes too. */
-  onClose?: () => void;
-  closeLabel?: string;
   pinned?: boolean;
-  icon?: ReactNode;
+  /** A lucide component (drawn at 14px) or an element. */
+  icon?: IconProp;
   /** "tab" inside a role="tablist"; the app's page tabs are links to pages. */
   role?: "tab";
-}) {
+} & (
+  /** Omit both for tabs that can't be closed. */
+  | { onClose?: undefined; closeLabel?: undefined }
+  /** Closable (middle-click closes too); the close button needs a name. */
+  | { onClose: () => void; closeLabel: string }
+);
+
+export function TabItem({ label, active, onActivate, onClose, closeLabel, pinned = false, icon, role }: TabItemProps) {
   return (
     <div
       onAuxClick={(e) => {
@@ -39,7 +37,7 @@ export function TabItem({
       className={`flex items-center gap-1.5 px-3.5 py-2 text-sm shrink-0 border-b-2 transition-colors group select-none ${
         active
           ? "border-accent text-[var(--color-text)] font-medium"
-          : "border-transparent text-muted hover:text-[var(--color-text-secondary)]"
+          : `border-transparent ${MUTED_INTERACTIVE}`
       }`}
     >
       <button
@@ -48,25 +46,25 @@ export function TabItem({
         role={role}
         aria-selected={role === "tab" ? active : undefined}
         aria-current={role === "tab" ? undefined : active ? "page" : undefined}
-        className="flex items-center gap-1.5 cursor-pointer min-w-0"
+        className="flex items-center gap-1.5 cursor-pointer min-w-0 rounded focus-accent"
       >
-        {pinned && <Pin size={10} className="text-muted shrink-0" />}
-        {icon}
+        {pinned && <ICONS.pin size={ICON_SIZE.pill} className="text-muted shrink-0" />}
+        {renderIcon(icon, ICON_SIZE.menu, { className: "shrink-0" })}
         <span className="max-w-[160px] truncate">{label}</span>
       </button>
       {onClose && !pinned && (
-        <button
-          type="button"
-          aria-label={closeLabel}
-          title={closeLabel}
+        <IconButton
+          icon={X}
+          label={closeLabel}
+          size="xs"
+          tone="danger"
+          reveal
           onClick={(e) => {
             e.stopPropagation();
             onClose();
           }}
-          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-[var(--color-danger-text)] shrink-0 ml-0.5"
-        >
-          <X size={12} />
-        </button>
+          className="ml-0.5"
+        />
       )}
     </div>
   );

@@ -1,4 +1,6 @@
-import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { MUTED_INTERACTIVE, TABLE_TH, TABLE_X } from "./tokens";
+import { ICONS, ICON_SIZE } from "./icons";
+import { useTableDensity } from "./Table";
 
 export type SortDir = "asc" | "desc";
 export type SortState<K extends string = string> = { key: K; dir: SortDir };
@@ -17,28 +19,34 @@ export function SortHeader<K extends string>({
   align?: "left" | "right";
 }) {
   const active = current.key === sortKey;
+  const density = useTableDensity();
   return (
     <th
-      className={`${align === "right" ? "text-right" : "text-left"} px-4 py-2 text-xs font-medium text-muted select-none cursor-pointer hover:text-[var(--color-text-secondary)] transition-colors`}
-      onClick={() =>
-        onSort({
-          key: sortKey,
-          dir: active && current.dir === "asc" ? "desc" : "asc",
-        })
-      }
+      scope="col"
+      aria-sort={active ? (current.dir === "asc" ? "ascending" : "descending") : "none"}
+      className={`${TABLE_TH} ${TABLE_X[density]} ${align === "right" ? "text-right" : "text-left"}`}
     >
-      <span className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() =>
+          onSort({
+            key: sortKey,
+            dir: active && current.dir === "asc" ? "desc" : "asc",
+          })
+        }
+        className={`focus-accent inline-flex items-center gap-1 rounded font-medium cursor-pointer transition-colors ${MUTED_INTERACTIVE}`}
+      >
         {label}
         {active ? (
           current.dir === "asc" ? (
-            <ArrowUp size={12} />
+            <ICONS.sortAsc size={ICON_SIZE.control} />
           ) : (
-            <ArrowDown size={12} />
+            <ICONS.sortDesc size={ICON_SIZE.control} />
           )
         ) : (
-          <ArrowUpDown size={12} className="opacity-30" />
+          <ICONS.sortNone size={ICON_SIZE.control} className="opacity-30" />
         )}
-      </span>
+      </button>
     </th>
   );
 }

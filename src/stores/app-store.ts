@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { AppLanguage } from "../i18n/ui";
 import { getThemeById } from "../lib/themes";
+import { isDefaultTheme, onColorFor, THEME_TOKEN_NAMES, themeTokens } from "../lib/themeTokens";
 import type { ThemeDefinition } from "../types/theme";
 import type { UpkeepAlert } from "../types/upkeep";
 import { useOrgStore } from "./org-store";
@@ -39,7 +40,7 @@ export const ACCENT_PRESETS: AccentPreset[] = [
   { name: "Cyan",    color: "#0891b2", light: "#cffafe", darkLight: "#083344" },
   // Earthy / Pastel
   { name: "Terracotta", color: "#b45939", light: "#fbe9e1", darkLight: "#3b1a0e" },
-  { name: "Clay",       color: "#a0755a", light: "#f5ebe3", darkLight: "#2e1e12" },
+  { name: "Clay",       color: "#8a6249", light: "#f5ebe3", darkLight: "#2e1e12" },
   { name: "Sage",       color: "#6b8f71", light: "#e8f0e9", darkLight: "#1a2e1c" },
   { name: "Olive",      color: "#7c8a3e", light: "#f0f2e0", darkLight: "#262b10" },
   { name: "Sand",       color: "#b59e6c", light: "#f7f2e8", darkLight: "#302612" },
@@ -50,58 +51,34 @@ export const ACCENT_PRESETS: AccentPreset[] = [
   { name: "Stone",      color: "#8a8578", light: "#f2f0ed", darkLight: "#252420" },
 ];
 
-function applyAccentColor(color: string, light: string, darkLight: string) {
+/** Sets the accent and its on-accent text (near-black on a light accent). */
+export function applyAccentColor(color: string, light: string, darkLight: string) {
   const el = document.documentElement;
   el.style.setProperty("--color-accent", color);
   el.style.setProperty("--color-accent-light", light);
   el.style.setProperty("--color-accent-dark-light", darkLight);
+  el.style.setProperty("--color-on-accent", onColorFor(color));
 }
 
-function applyThemeColors(theme: ThemeDefinition) {
+/**
+ * Applies a theme: the dark class and the full colour token set as inline
+ * custom properties on <html> (lib/themeTokens.ts). The two default themes
+ * clear the overrides instead, so src/index.css applies and the dark-mode
+ * toggle keeps working; only their accent is set.
+ */
+export function applyThemeColors(theme: ThemeDefinition) {
   const el = document.documentElement;
   const c = theme.colors;
 
-  // Apply dark/light class
   el.classList.toggle("dark", theme.mode === "dark");
+  for (const name of THEME_TOKEN_NAMES) el.style.removeProperty(name);
 
-  // Body colors
-  document.body.style.background = c.bg;
-  document.body.style.color = c.text;
-
-  // CSS custom properties
-  el.style.setProperty("--color-sidebar", c.sidebar);
-  el.style.setProperty("--color-sidebar-border", c.sidebarBorder);
-  el.style.setProperty("--color-accent", c.accent);
-  el.style.setProperty("--color-accent-light", c.accentLight);
-  el.style.setProperty("--color-accent-hover", c.accentHover);
-  el.style.setProperty("--color-accent-dark-light", c.accentLight);
-  el.style.setProperty("--color-muted", c.textMuted);
-  el.style.setProperty("--color-success", c.success);
-  el.style.setProperty("--color-warning", c.warning);
-  el.style.setProperty("--color-danger", c.danger);
-  el.style.setProperty("--color-surface", c.surface);
-  el.style.setProperty("--color-border", c.border);
-  el.style.setProperty("--color-chart-1", c.chart1);
-  el.style.setProperty("--color-chart-2", c.chart2);
-  el.style.setProperty("--color-chart-3", c.chart3);
-  el.style.setProperty("--color-chart-4", c.chart4);
-  el.style.setProperty("--color-chart-5", c.chart5);
-  el.style.setProperty("--color-chart-6", c.chart6);
-  el.style.setProperty("--color-chart-7", c.chart7);
-  el.style.setProperty("--color-chart-8", c.chart8);
-
-  // Dark mode gray overrides for non-default themes
-  if (theme.mode === "dark") {
-    el.style.setProperty("--color-gray-50", c.bg);
-    el.style.setProperty("--color-gray-100", c.surface);
-    el.style.setProperty("--color-gray-200", c.border);
-    el.style.setProperty("--color-gray-300", c.sidebarBorder);
-  } else {
-    // Light theme: remove any dark-mode gray overrides that may linger from a previous dark theme
-    el.style.removeProperty("--color-gray-50");
-    el.style.removeProperty("--color-gray-100");
-    el.style.removeProperty("--color-gray-200");
-    el.style.removeProperty("--color-gray-300");
+  if (isDefaultTheme(theme)) {
+    applyAccentColor(c.accent, c.accentLight, c.accentLight);
+    return;
+  }
+  for (const [name, value] of Object.entries(themeTokens(theme))) {
+    el.style.setProperty(name, value);
   }
 }
 

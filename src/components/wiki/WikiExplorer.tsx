@@ -1,24 +1,15 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import {
-  ChevronDown,
-  ChevronRight,
-  ChevronsDownUp,
-  FileText,
-  File,
-  Plus,
-  Trash2,
-  Waypoints,
-  ArrowUpRight,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronsDownUp, Waypoints } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useOrgStore } from "../../stores/org-store";
 import { useWikiFolders } from "../../db/hooks/useWiki";
-import { BAR_ICON_BUTTON, BottomBar, PageHeader, SearchBar } from "../ui";
-import { ContextMenu, type ContextMenuItem } from "../ContextMenu";
+import { BottomBar, SearchBar, IconButton, SectionLabel, Tooltip, ICONS, ICON_SIZE } from "../ui";
 import type { WikiArticleWithTags } from "../../types/wiki";
 import type { ProjectDoc } from "../../db/hooks/useProjectDocs";
 import type { WikiRef } from "../../lib/wikiTabs";
 import { colorFor } from "./wikiColors";
+import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
+import { navItemClass } from "../ui/NavItem";
 
 interface Group {
   key: string;
@@ -82,7 +73,13 @@ export function WikiExplorer({
   onNewArticle,
   onOpenGraph,
   onDeleteArticle,
+  pageHeading = false,
 }: {
+  /**
+   * Nothing open that has its own h1 (graph, empty state): the "Wiki" label is
+   * the page h1. With an article or file open, its title is the h1 and this is an h2.
+   */
+  pageHeading?: boolean;
   articles: WikiArticleWithTags[];
   docs?: ProjectDoc[];
   /** The open article's id or file's key. */
@@ -148,12 +145,7 @@ export function WikiExplorer({
     (d: ProjectDoc) => !query || d.rel.toLowerCase().includes(query) || d.title.toLowerCase().includes(query),
     [query]
   );
-  const rowClass = (active: boolean) =>
-    `w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-left transition-colors ${
-      active
-        ? "bg-accent-light text-accent font-medium"
-        : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]"
-    }`;
+  const rowClass = (active: boolean) => navItemClass({ active });
   const openMenu = (ref: WikiRef) => (e: React.MouseEvent) => {
     e.preventDefault();
     setMenu({ ref, x: e.clientX, y: e.clientY });
@@ -188,11 +180,11 @@ export function WikiExplorer({
     .filter(({ list, files }) => !query || list.length > 0 || files.length > 0);
 
   const menuItems = (ref: WikiRef): ContextMenuItem[] => [
-    { label: t.wiki_open_new_tab, icon: <ArrowUpRight size={14} />, onClick: () => onOpen(ref, true) },
+    { label: t.wiki_open_new_tab, icon: ICONS.newTab, onClick: () => onOpen(ref, true) },
     ...(typeof ref === "number"
       ? [
           { label: "", onClick: () => {}, divider: true },
-          { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => onDeleteArticle(ref) },
+          { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => onDeleteArticle(ref) },
         ]
       : []),
   ];
@@ -203,18 +195,12 @@ export function WikiExplorer({
       className="w-60 shrink-0 flex flex-col min-h-0 border-r border-[var(--color-border-divider)]"
     >
       <div className="px-3 pt-5 pb-2 space-y-3">
-        <PageHeader title={t.wiki} className="px-2" />
+        <SectionLabel as={pageHeading ? "h1" : "h2"} className="px-2">{t.wiki}</SectionLabel>
         <SearchBar value={search} onChange={setSearch} placeholder={t.search_articles} className="w-full" />
         <div className="flex items-center gap-1 px-1">
-          <button onClick={() => onNewArticle(null)} disabled={creating} className={BAR_ICON_BUTTON} aria-label={t.new_article} title={t.new_article}>
-            <Plus size={14} />
-          </button>
-          <button onClick={() => setOpen(new Set())} className={BAR_ICON_BUTTON} aria-label={t.wiki_collapse_all} title={t.wiki_collapse_all}>
-            <ChevronsDownUp size={14} />
-          </button>
-          <button onClick={onOpenGraph} className={`${BAR_ICON_BUTTON} ml-auto`} aria-label={t.wiki_open_graph} title={t.wiki_open_graph}>
-            <Waypoints size={14} />
-          </button>
+          <IconButton icon={ICONS.add} label={t.new_article} onClick={() => onNewArticle(null)} disabled={creating} />
+          <IconButton icon={ChevronsDownUp} label={t.wiki_collapse_all} onClick={() => setOpen(new Set())} />
+          <IconButton icon={Waypoints} label={t.wiki_open_graph} onClick={onOpenGraph} className="ml-auto" />
         </div>
       </div>
 
@@ -244,25 +230,23 @@ export function WikiExplorer({
                   className="flex-1 min-w-0 flex items-center gap-2 py-1.5 pl-3 pr-1 text-sm font-medium text-left text-[var(--color-text)]"
                 >
                   {isOpen ? (
-                    <ChevronDown size={14} className="shrink-0 text-muted" />
+                    <ChevronDown size={ICON_SIZE.menu} className="shrink-0 text-muted" />
                   ) : (
-                    <ChevronRight size={14} className="shrink-0 text-muted" />
+                    <ChevronRight size={ICON_SIZE.menu} className="shrink-0 text-muted" />
                   )}
                   <span aria-hidden="true" className="dot shrink-0" style={{ background: colorFor(colors, g.projectId) }} />
                   <span className="flex-1 truncate">{g.name}</span>
                   <span className="text-xs font-normal text-muted">{list.length + files.length}</span>
                 </button>
                 {g.projectId != null && (
-                  <button
+                  <IconButton size="xs"
+                    icon={ICONS.add}
+                    label={`${t.new_article}: ${g.name}`}
+                    reveal
                     onClick={() => onNewArticle(g.projectId)}
                     disabled={creating}
-                    type="button"
-                    className="mr-2 text-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-[var(--color-text-secondary)] transition-colors"
-                    aria-label={`${t.new_article}: ${g.name}`}
-                    title={t.new_article}
-                  >
-                    <Plus size={14} />
-                  </button>
+                    className="mr-2"
+                  />
                 )}
               </div>
               {isOpen && (
@@ -284,7 +268,7 @@ export function WikiExplorer({
                         type="button"
                         className={rowClass(active)}
                       >
-                        <FileText size={14} className={`shrink-0 ${active ? "" : "text-muted"}`} />
+                        <ICONS.wikiArticle size={ICON_SIZE.menu} className="shrink-0" />
                         <span className="flex-1 truncate">{a.title}</span>
                       </button>
                     );
@@ -300,20 +284,19 @@ export function WikiExplorer({
                         aria-expanded={filesOpen}
                         className="w-full flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-md text-sm text-left text-muted hover:bg-[var(--color-hover-row)]"
                       >
-                        {filesOpen ? <ChevronDown size={14} className="shrink-0" /> : <ChevronRight size={14} className="shrink-0" />}
+                        {filesOpen ? <ChevronDown size={ICON_SIZE.menu} className="shrink-0" /> : <ChevronRight size={ICON_SIZE.menu} className="shrink-0" />}
                         <span className="flex-1">{t.wiki_files}</span>
                         <span className="text-xs">{files.length}</span>
                       </button>
                       {filesOpen && (
                         <div role="group" className="ml-4.5 pl-1 border-l border-[var(--color-border-divider)] space-y-px">
                           {files.map((d) => (
+                            <Tooltip key={d.key} content={d.title !== d.rel ? `${d.rel} — ${d.title}` : d.rel}>
                             <button
-                              key={d.key}
                               type="button"
                               data-tree-item
                               role="treeitem"
                               aria-level={3}
-                              title={d.title !== d.rel ? `${d.rel} — ${d.title}` : d.rel}
                               onClick={(e) => onOpen(d.key, e.metaKey || e.ctrlKey)}
                               onAuxClick={(e) => {
                                 if (e.button === 1) onOpen(d.key, true);
@@ -322,9 +305,10 @@ export function WikiExplorer({
                               aria-current={d.key === activeRef ? "page" : undefined}
                               className={rowClass(d.key === activeRef)}
                             >
-                              <File size={14} className={`shrink-0 ${d.key === activeRef ? "" : "text-muted"}`} />
+                              <ICONS.file size={ICON_SIZE.menu} className="shrink-0" />
                               <span className="flex-1 truncate">{d.rel}</span>
                             </button>
+                            </Tooltip>
                           ))}
                         </div>
                       )}

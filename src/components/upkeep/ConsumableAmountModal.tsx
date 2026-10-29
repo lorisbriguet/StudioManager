@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, FormField, Input, Modal, Select } from "../ui";
+import { DatePicker, FormField, FormGrid, FormModal, Input, Select } from "../ui";
 import { useT } from "../../i18n/useT";
 import { useLogConsumableUsage, useRestockConsumable } from "../../db/hooks/useUpkeep";
 import { useProjects } from "../../db/hooks/useProjects";
@@ -44,29 +44,28 @@ export function ConsumableAmountModal({ mode, consumable: c, onClose, onRestocke
   };
 
   return (
-    <Modal
+    <FormModal
       open
+      size="sm"
       onClose={onClose}
       title={`${mode === "usage" ? t.upkeep_log_usage : t.upkeep_restock} · ${c.name}`}
-      footer={
-        <div className="flex gap-2 justify-end">
-          <Button variant="secondary" onClick={onClose}>{t.cancel}</Button>
-          <Button onClick={() => void save()}>{t.save}</Button>
-        </div>
-      }
+      submitLabel={t.save}
+      submitting={logUsage.isPending || restock.isPending}
+      onSubmit={() => void save()}
     >
-      <div className="space-y-3">
+      <FormGrid cols={1}>
         <FormField label={t.upkeep_amount} error={error ?? undefined}>
           <Input
             type="number"
             min={0}
             step="any"
+            numeric
+            unit={c.unit}
             value={amount}
             autoFocus
             onChange={(e) => { setAmount(e.target.value); setError(null); }}
           />
         </FormField>
-        <div className="text-xs text-muted -mt-2">{c.unit}</div>
         {mode === "usage" && (
           <>
             <FormField label={t.project}>
@@ -76,11 +75,11 @@ export function ConsumableAmountModal({ mode, consumable: c, onClose, onRestocke
               </Select>
             </FormField>
             <FormField label={t.date}>
-              <Input type="date" value={usedOn} onChange={(e) => setUsedOn(e.target.value)} />
+              <DatePicker value={usedOn} onChange={(v) => setUsedOn(v ?? todayLocalISO())} />
             </FormField>
           </>
         )}
-      </div>
-    </Modal>
+      </FormGrid>
+    </FormModal>
   );
 }

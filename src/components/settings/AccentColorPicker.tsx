@@ -1,4 +1,5 @@
 import type { AccentPreset } from "../../stores/app-store";
+import { Tooltip } from "../ui/Tooltip";
 
 export function AccentColorPicker({
   presets,
@@ -14,16 +15,17 @@ export function AccentColorPicker({
       {presets.map((preset) => {
         const isActive = value.color.toLowerCase() === preset.color.toLowerCase();
         return (
-          <button
-            key={preset.color}
-            type="button"
-            onClick={() => onChange(preset)}
-            title={preset.name}
-            className={`w-6 h-6 rounded-full transition-transform hover:scale-110 ${
-              isActive ? "ring-2 ring-white ring-offset-2 ring-offset-[var(--color-bg)]" : ""
-            }`}
-            style={{ backgroundColor: preset.color }}
-          />
+          <Tooltip key={preset.color} content={preset.name}>
+            <button
+              type="button"
+              onClick={() => onChange(preset)}
+              aria-label={preset.name}
+              className={`w-6 h-6 rounded-full transition-transform hover:scale-110 ${
+                isActive ? "ring-2 ring-[var(--color-text)] ring-offset-2 ring-offset-[var(--color-bg)]" : ""
+              }`}
+              style={{ backgroundColor: preset.color }}
+            />
+          </Tooltip>
         );
       })}
     </div>

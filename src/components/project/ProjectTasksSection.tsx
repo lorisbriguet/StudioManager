@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
-import { ChevronRight, Trash2, Play, Square, Plus } from "lucide-react";
-import { toast } from "sonner";
+import { ChevronRight } from "lucide-react";
+import { deleteWithUndo } from "../../lib/undo";
 import {
   DndContext,
   closestCenter,
@@ -30,6 +30,7 @@ import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
 import { PriorityBadge } from "./PriorityBadge";
 import { SortableSubtaskRow } from "./SortableSubtaskRow";
+import { AddRow, Checkbox, ICONS, IconButton, FilterChip, InlineRename, EmptyState } from "../ui";
 
 export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
   projectId: number;
@@ -54,21 +55,17 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
   );
 
   const [taskFilter, setTaskFilter] = useState<"todo" | "done" | "all">("todo");
-  const [newTask, setNewTask] = useState("");
   const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
-  const [newSubtaskText, setNewSubtaskText] = useState<Record<number, string>>({});
   const [editingTask, setEditingTask] = useState<number | null>(null);
   const [editingSubtask, setEditingSubtask] = useState<number | null>(null);
   const [hoveredSubtask, setHoveredSubtask] = useState<number | null>(null);
 
   const totalCount = tasks.length;
 
-  const addTask = () => {
-    if (!newTask.trim()) return;
-    createTask.mutate(
-      {
+  const addTask = (title: string) =>
+    createTask.mutateAsync({
         project_id: projectId,
-        title: newTask.trim(),
+        title,
         description: "",
         status: "todo",
         priority: "low",
@@ -81,10 +78,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
         scheduled_end: null,
         notes: "",
         sort_order: totalCount,
-      },
-      { onSuccess: () => setNewTask("") }
-    );
-  };
+      });
 
   const handleTimerToggle = useCallback(async (taskId: number) => {
     await toggleTimer(taskId, projectId, project.name);
@@ -95,33 +89,14 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
       <div className="flex justify-end mb-2">
         <div className="flex gap-1">
           {(["todo", "done", "all"] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setTaskFilter(f)}
-              className={`px-2 py-0.5 text-xs rounded-full border ${
-                taskFilter === f
-                  ? "bg-accent text-white border-accent"
-                  : "border-[var(--color-input-border)] text-muted hover:bg-[var(--color-hover-row)]"
-              }`}
-            >
+            <FilterChip key={f} active={taskFilter === f} onClick={() => setTaskFilter(f)}>
               {f === "todo" ? t.todo : f === "done" ? t.done : t.all}
-            </button>
+            </FilterChip>
           ))}
         </div>
       </div>
 
-      <div className="flex gap-2 mb-3">
-        <input
-          placeholder={t.new_task}
-          value={newTask}
-          onChange={(e) => setNewTask(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") addTask(); }}
-          className="flex-1 border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-3 py-1.5 text-sm"
-        />
-        <button onClick={addTask} aria-label={t.new_task} className="p-1.5 text-muted hover:text-accent">
-          <Plus size={16} />
-        </button>
-      </div>
+      <AddRow className="mb-3" placeholder={t.new_task} onAdd={addTask} />
 
       <div className="space-y-0.5">
         {tasks.filter((tk) => taskFilter === "all" ? true : taskFilter === "done" ? tk.status === "done" : tk.status !== "done").map((tk) => {
@@ -133,42 +108,37 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
           return (
             <div key={tk.id}>
               <div className="flex items-center gap-2 py-1.5 group/task">
-                <button
+                <IconButton
                   onClick={() => {
                     const next = new Set(expandedTasks);
                     if (next.has(tk.id)) next.delete(tk.id);
                     else next.add(tk.id);
                     setExpandedTasks(next);
                   }}
-                  className="text-muted hover:text-[var(--color-text-secondary)] p-0.5"
-                  aria-label={isExpanded ? t.collapse : t.expand}
-                >
-                  <ChevronRight size={14} className={`transition-transform ${isExpanded ? "rotate-90" : ""}`} />
-                </button>
-                <input
-                  type="checkbox"
+                  size="xs"
+                  label={isExpanded ? t.collapse : t.expand}
+                  icon={ChevronRight}
+                  iconClassName={`transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                />
+                <Checkbox
                   checked={tk.status === "done"}
+                  aria-label={`${t.mark_done}: ${tk.title}`}
                   onChange={(e) => {
                     if (e.target.checked) e.target.classList.add("check-pop");
                     updateTask.mutate({ id: tk.id, data: { status: tk.status === "done" ? "todo" : "done" } });
                   }}
                   onAnimationEnd={(e) => (e.target as HTMLElement).classList.remove("check-pop")}
-                  className="rounded"
                 />
                 {editingTask === tk.id ? (
-                  <input
-                    autoFocus
-                    defaultValue={tk.title}
-                    onBlur={(e) => {
-                      const val = e.target.value.trim();
-                      if (val && val !== tk.title) updateTask.mutate({ id: tk.id, data: { title: val } });
+                  <InlineRename
+                    value={tk.title}
+                    label={t.rename}
+                    onSave={(title) => {
+                      updateTask.mutate({ id: tk.id, data: { title } });
                       setEditingTask(null);
                     }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                      if (e.key === "Escape") setEditingTask(null);
-                    }}
-                    className="flex-1 text-sm border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-1 py-0.5"
+                    onCancel={() => setEditingTask(null)}
+                    className="flex-1 text-sm"
                   />
                 ) : (
                   <span
@@ -190,28 +160,27 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                   dueDate={tk.due_date} endDate={tk.end_date} startTime={tk.start_time}
                   endTime={tk.end_time} reminder={tk.reminder}
                   onChange={(vals) => updateTask.mutate({ id: tk.id, data: vals })}
-                  compact
                 />
-                <button
+                <IconButton
+                  icon={activeTimer?.taskId === tk.id ? ICONS.stopTimer : ICONS.startTimer}
+                  label={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
+                  size="xs"
+                  tone="accent"
+                  color={activeTimer?.taskId === tk.id ? "danger" : undefined}
                   onClick={() => handleTimerToggle(tk.id)}
-                  className={`shrink-0 p-0.5 transition-opacity ${
+                  className={
                     activeTimer?.taskId === tk.id
-                      ? "text-[var(--color-danger-text)]"
-                      : "opacity-0 pointer-events-none group-hover/task:opacity-100 group-hover/task:pointer-events-auto text-muted hover:text-accent"
-                  }`}
-                  title={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
-                  aria-label={activeTimer?.taskId === tk.id ? t.stop_timer : t.start_timer}
-                >
-                  {activeTimer?.taskId === tk.id ? <Square size={14} /> : <Play size={14} />}
-                </button>
-                <button
-                  onClick={() => deleteTask.mutate(tk.id, { onSuccess: () => toast.success(t.toast_task_deleted) })}
-                  className="shrink-0 opacity-0 pointer-events-none group-hover/task:opacity-100 group-hover/task:pointer-events-auto text-muted hover:text-[var(--color-danger-text)] transition-opacity p-0.5"
-                  title={t.delete}
-                  aria-label={t.delete}
-                >
-                  <Trash2 size={14} />
-                </button>
+                      ? ""
+                      : "opacity-0 pointer-events-none group-hover/task:opacity-100 group-hover/task:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto"
+                  }
+                />
+                <IconButton size="xs"
+                  icon={ICONS.delete}
+                  label={t.delete}
+                  tone="danger"
+                  onClick={() => deleteWithUndo(deleteTask, tk.id, t.toast_task_deleted)}
+                  reveal="task" className="pointer-events-none group-hover/task:pointer-events-auto"
+                />
               </div>
               {isExpanded && (
                 <div className="ml-9 border-l border-[var(--color-border-divider)] pl-3 pb-1">
@@ -233,30 +202,25 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                   <SortableContext items={filteredSubtasks.map((s) => s.id)} strategy={verticalListSortingStrategy}>
                   {filteredSubtasks.map((s) => (
                     <SortableSubtaskRow key={s.id} id={s.id} hovered={hoveredSubtask === s.id} onHoverChange={setHoveredSubtask}>
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={s.status === "done"}
+                        aria-label={`${t.mark_done}: ${s.title}`}
                         onChange={(e) => {
                           if (e.target.checked) e.target.classList.add("check-pop");
                           updateSubtask.mutate({ id: s.id, data: { status: s.status === "done" ? "todo" : "done" } });
                         }}
                         onAnimationEnd={(e) => (e.target as HTMLElement).classList.remove("check-pop")}
-                        className="rounded"
                       />
                       {editingSubtask === s.id ? (
-                        <input
-                          autoFocus
-                          defaultValue={s.title}
-                          onBlur={(e) => {
-                            const val = e.target.value.trim();
-                            if (val && val !== s.title) updateSubtask.mutate({ id: s.id, data: { title: val } });
+                        <InlineRename
+                          value={s.title}
+                          label={t.rename}
+                          onSave={(title) => {
+                            updateSubtask.mutate({ id: s.id, data: { title } });
                             setEditingSubtask(null);
                           }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                            if (e.key === "Escape") setEditingSubtask(null);
-                          }}
-                          className="flex-1 text-xs border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-1 py-0.5"
+                          onCancel={() => setEditingSubtask(null)}
+                          className="flex-1 text-xs"
                         />
                       ) : (
                         <span
@@ -270,59 +234,34 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                         dueDate={s.due_date} endDate={s.end_date} startTime={s.start_time}
                         endTime={s.end_time} reminder={s.reminder}
                         onChange={(vals) => updateSubtask.mutate({ id: s.id, data: vals })}
-                        compact
                       />
-                      <button
-                        onClick={() => deleteSubtask.mutate(s.id, { onSuccess: () => toast.success(t.toast_subtask_deleted) })}
-                        className="shrink-0 opacity-0 pointer-events-none group-hover/sub:opacity-100 group-hover/sub:pointer-events-auto text-muted hover:text-[var(--color-danger-text)] transition-opacity p-0.5"
-                        title={t.delete}
-                        aria-label={t.delete}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      <IconButton size="xs"
+                        icon={ICONS.delete}
+                        label={t.delete}
+                        tone="danger"
+                        onClick={() => deleteWithUndo(deleteSubtask, s.id, t.toast_subtask_deleted)}
+                        reveal="sub" className="pointer-events-none group-hover/sub:pointer-events-auto"
+                      />
                     </SortableSubtaskRow>
                   ))}
                   </SortableContext>
                   </DndContext>
-                  <div className="flex gap-1.5 mt-1">
-                    <input
-                      placeholder={t.new_subtask}
-                      value={newSubtaskText[tk.id] ?? ""}
-                      onChange={(e) => setNewSubtaskText({ ...newSubtaskText, [tk.id]: e.target.value })}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          const text = (newSubtaskText[tk.id] ?? "").trim();
-                          if (!text) return;
-                          createSubtask.mutate(
-                            { task_id: tk.id, title: text, status: "todo", due_date: null, end_date: null, start_time: null, end_time: null, reminder: null, sort_order: subtasks.length },
-                            { onSuccess: () => setNewSubtaskText({ ...newSubtaskText, [tk.id]: "" }), onError: (err) => toast.error(t.subtask_create_failed.replace("{error}", String(err))) }
-                          );
-                        }
-                      }}
-                      className="flex-1 border border-[var(--color-input-border)] bg-[var(--color-input)] rounded-lg px-2 py-1 text-xs"
-                    />
-                    <button
-                      onClick={() => {
-                        const text = (newSubtaskText[tk.id] ?? "").trim();
-                        if (!text) return;
-                        createSubtask.mutate(
-                          { task_id: tk.id, title: text, status: "todo", due_date: null, end_date: null, start_time: null, end_time: null, reminder: null, sort_order: subtasks.length },
-                          { onSuccess: () => setNewSubtaskText({ ...newSubtaskText, [tk.id]: "" }), onError: (err) => toast.error(t.subtask_create_failed.replace("{error}", String(err))) }
-                        );
-                      }}
-                      className="p-1 text-muted hover:text-accent"
-                      aria-label={t.new_subtask}
-                    >
-                      <Plus size={14} />
-                    </button>
-                  </div>
+                  <AddRow
+                    className="mt-1"
+                    placeholder={t.new_subtask}
+                    onAdd={(title) =>
+                      createSubtask.mutateAsync({ task_id: tk.id, title, status: "todo", due_date: null, end_date: null, start_time: null, end_time: null, reminder: null, sort_order: subtasks.length })
+                    }
+                  />
                 </div>
               )}
             </div>
           );
         })}
-        {tasks.length === 0 && (
-          <div className="text-sm text-muted py-4 text-center">{t.no_tasks_yet}</div>
+        {tasks.length === 0 ? (
+          <EmptyState size="sm" icon={ICONS.task} message={t.no_tasks_yet} />
+        ) : taskFilter !== "all" && tasks.every((tk) => (tk.status === "done") !== (taskFilter === "done")) && (
+          <EmptyState size="sm" message={taskFilter === "todo" ? t.project_tasks_all_done : t.project_tasks_none_done} />
         )}
       </div>
     </div>

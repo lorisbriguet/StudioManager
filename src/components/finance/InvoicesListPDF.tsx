@@ -9,6 +9,7 @@ import type { Invoice } from "../../types/invoice";
 import type { BusinessProfile } from "../../types/business-profile";
 import type { AppLanguage } from "../../i18n/ui";
 import { getExportLabels } from "../../i18n/export-labels";
+import { PDF } from "../pdf/pdfPalette";
 
 export interface Props {
   year: number;
@@ -32,7 +33,7 @@ const s = StyleSheet.create({
     paddingTop: 40,
     paddingBottom: 40,
     paddingHorizontal: 40,
-    color: "#1a1a1a",
+    color: PDF.ink,
   },
   headerRow: {
     flexDirection: "row",
@@ -46,7 +47,7 @@ const s = StyleSheet.create({
   },
   businessInfo: {
     fontSize: 8,
-    color: "#666",
+    color: PDF.muted,
     lineHeight: 1.5,
   },
   title: {
@@ -57,13 +58,13 @@ const s = StyleSheet.create({
   tableHeader: {
     flexDirection: "row",
     borderBottomWidth: 1.5,
-    borderBottomColor: "#1a1a1a",
+    borderBottomColor: PDF.ink,
     paddingBottom: 5,
     marginBottom: 2,
   },
   thText: {
     fontSize: 7,
-    color: "#666",
+    color: PDF.muted,
     textTransform: "uppercase",
     letterSpacing: 0.5,
     fontFamily: "Helvetica-Bold",
@@ -72,10 +73,10 @@ const s = StyleSheet.create({
     flexDirection: "row",
     paddingVertical: 4,
     borderBottomWidth: 0.5,
-    borderBottomColor: "#e5e5e5",
+    borderBottomColor: PDF.ruleLight,
   },
   rowAlt: {
-    backgroundColor: "#f8f8f8",
+    backgroundColor: PDF.stripe,
   },
   cell: {
     fontSize: 8,
@@ -90,7 +91,7 @@ const s = StyleSheet.create({
   totalRow: {
     flexDirection: "row",
     borderTopWidth: 1.5,
-    borderTopColor: "#1a1a1a",
+    borderTopColor: PDF.ink,
     paddingTop: 6,
     marginTop: 4,
   },
@@ -99,17 +100,17 @@ const s = StyleSheet.create({
     fontSize: 9,
     paddingHorizontal: 2,
   },
-  statusPaid: { color: "#16a34a" },
-  statusOverdue: { color: "#dc2626" },
-  statusSent: { color: "#d97706" },
-  statusDraft: { color: "#6b7280" },
+  statusPaid: { color: PDF.success },
+  statusOverdue: { color: PDF.danger },
+  statusSent: { color: PDF.warning },
+  statusDraft: { color: PDF.neutral },
   footer: {
     position: "absolute",
     bottom: 30,
     left: 40,
     right: 40,
     fontSize: 7,
-    color: "#999",
+    color: PDF.faint,
     textAlign: "center",
   },
 });

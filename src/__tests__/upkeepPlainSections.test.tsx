@@ -105,7 +105,7 @@ import { SubscriptionsTab } from "../components/upkeep/SubscriptionsTab";
 const t = uiLabels.EN;
 const wrap = (ui: React.ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>);
 const noToggle = () => expect(screen.queryByRole("button", { name: /collapse|expand/i })).toBeNull();
-const heading = (name: string) => expect(screen.getByRole("heading", { name })).toBeInTheDocument();
+const heading = (name: string | RegExp) => expect(screen.getByRole("heading", { name })).toBeInTheDocument();
 
 beforeEach(() => {
   useAppStore.setState({ language: "EN" });
@@ -117,7 +117,7 @@ afterEach(cleanup);
 describe("upkeep screens: plain sections", () => {
   it("Overview: section headings, no collapse toggle", () => {
     wrap(<OverviewTab />);
-    for (const name of [t.upkeep_due_soon, t.upkeep_low_stock, t.upkeep_warranty_renewals, t.upkeep_replacements, "Machines · 1"]) {
+    for (const name of [t.upkeep_due_soon, t.upkeep_low_stock, t.upkeep_warranty_renewals, t.upkeep_replacements, /^Machines\s*1$/]) {
       heading(name);
     }
     noToggle();

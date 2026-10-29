@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { ChevronDown, ChevronRight, GripVertical, Plus, X, Columns2, Maximize2 } from "lucide-react";
+import { useMemo } from "react";
+import { ChevronDown, ChevronRight, Columns2 } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -17,6 +17,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useUpdateProject } from "../db/hooks/useProjects";
 import { useT } from "../i18n/useT";
+import { Card, CARD_GAP, CARD_STACK, DragHandle, Dropdown, ICONS, ICON_SIZE, IconButton, type PanelTitleProps } from "./ui";
 import type { LayoutConfig, LayoutBlock, BlockType, Project } from "../types/project";
 import { STANDARD_LAYOUT } from "../types/project";
 
@@ -24,6 +25,8 @@ interface Props {
   project: Project;
   projectId: number;
   renderBlock: (type: BlockType) => React.ReactNode;
+  /** The blocks' heading level: h2 on the full page, h3 in a peek panel (under the h2 project title). */
+  headingAs?: PanelTitleProps["as"];
 }
 
 const ALL_BLOCKS: BlockType[] = ["tasks", "workload", "resources", "notes", "named_tables", "invoices", "quotes", "wiki", "equipment"];
@@ -47,9 +50,10 @@ interface SortableBlockProps {
   onRemove: (type: BlockType) => void;
   onToggleWidth: (type: BlockType) => void;
   t: Record<string, string>;
+  headingAs: PanelTitleProps["as"];
 }
 
-function SortableBlock({ block, renderBlock, onToggleCollapse, onRemove, onToggleWidth, t }: SortableBlockProps) {
+function SortableBlock({ block, renderBlock, onToggleCollapse, onRemove, onToggleWidth, t, headingAs }: SortableBlockProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.type });
 
   const style = {
@@ -62,42 +66,27 @@ function SortableBlock({ block, renderBlock, onToggleCollapse, onRemove, onToggl
   const isHalf = block.width === "half";
 
   return (
-    <div ref={setNodeRef} style={style} className="group bg-[var(--color-surface)] rounded-xl p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <div
-          {...attributes}
-          {...listeners}
-          className="cursor-grab text-[var(--color-muted)] hover:text-[var(--color-text-secondary)] opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-          aria-label={t.drag_to_reorder}
-        >
-          <GripVertical size={14} />
-        </div>
-        <button onClick={() => onToggleCollapse(block.type)} aria-label={isCollapsed ? t.expand : t.collapse} className="text-[var(--color-muted)] hover:text-[var(--color-text-secondary)]">
-          {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-        </button>
-        <h3 className="text-xs font-semibold tracking-tight">
-          {t[block.type] ?? BLOCK_LABELS[block.type]}
-        </h3>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
-          <button
-            onClick={() => onToggleWidth(block.type)}
-            className="text-[var(--color-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
-            title={t.width}
-            aria-label={t.width}
-          >
-            {isHalf ? <Maximize2 size={12} /> : <Columns2 size={12} />}
-          </button>
-          <button
-            onClick={() => onRemove(block.type)}
-            className="text-[var(--color-muted)] hover:text-[var(--color-danger-text)] transition-colors"
-            title={t.delete}
-            aria-label={t.delete}
-          >
-            <X size={12} />
-          </button>
-        </div>
-      </div>
-      {!isCollapsed && renderBlock(block.type)}
+    <div ref={setNodeRef} style={style} className="group">
+      <Card>
+        <Card.Header
+          className={isCollapsed ? "" : "mb-3"}
+          title={t[block.type] ?? BLOCK_LABELS[block.type]}
+          as={headingAs}
+          icon={
+            <>
+              <DragHandle {...attributes} {...listeners} reveal />
+              <IconButton icon={isCollapsed ? ChevronRight : ChevronDown} label={isCollapsed ? t.expand : t.collapse} onClick={() => onToggleCollapse(block.type)} />
+            </>
+          }
+          action={
+            <span className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+              <IconButton icon={isHalf ? ICONS.maximize : Columns2} label={t.width} size="xs" onClick={() => onToggleWidth(block.type)} />
+              <IconButton icon={ICONS.close} label={t.delete} size="xs" tone="danger" onClick={() => onRemove(block.type)} />
+            </span>
+          }
+        />
+        {!isCollapsed && renderBlock(block.type)}
+      </Card>
     </div>
   );
 }
@@ -128,7 +117,7 @@ function groupBlocksIntoRows(layout: LayoutConfig): { blocks: LayoutBlock[]; isG
   return rows;
 }
 
-export function ProjectBlockLayout({ project, projectId, renderBlock }: Props) {
+export function ProjectBlockLayout({ project, projectId, renderBlock, headingAs = "h2" }: Props) {
   const t = useT();
   const updateProject = useUpdateProject();
 
@@ -145,8 +134,6 @@ export function ProjectBlockLayout({ project, projectId, renderBlock }: Props) {
     }
     return STANDARD_LAYOUT;
   }, [project.layout_config]);
-
-  const [showAddMenu, setShowAddMenu] = useState(false);
 
   const saveLayout = (newLayout: LayoutConfig) => {
     updateProject.mutate({ id: projectId, data: { layout_config: JSON.stringify(newLayout) } });
@@ -167,7 +154,6 @@ export function ProjectBlockLayout({ project, projectId, renderBlock }: Props) {
   const addBlock = (type: BlockType) => {
     const newLayout = [...layout, { type }];
     saveLayout(newLayout);
-    setShowAddMenu(false);
   };
 
   const toggleWidth = (type: BlockType) => {
@@ -194,13 +180,13 @@ export function ProjectBlockLayout({ project, projectId, renderBlock }: Props) {
   const rows = groupBlocksIntoRows(layout);
 
   return (
-    <div className="space-y-4">
+    <div className={CARD_STACK}>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={layout.map((b) => b.type)} strategy={verticalListSortingStrategy}>
           {rows.map((row) => {
             if (row.isGrid) {
               return (
-                <div key={row.blocks.map((b) => b.type).join("-")} className="grid grid-cols-2 gap-4">
+                <div key={row.blocks.map((b) => b.type).join("-")} className={`grid grid-cols-2 ${CARD_GAP}`}>
                   {row.blocks.map((block) => (
                     <SortableBlock
                       key={block.type}
@@ -210,6 +196,7 @@ export function ProjectBlockLayout({ project, projectId, renderBlock }: Props) {
                       onRemove={removeBlock}
                       onToggleWidth={toggleWidth}
                       t={t as unknown as Record<string, string>}
+                headingAs={headingAs}
                     />
                   ))}
                 </div>
@@ -225,6 +212,7 @@ export function ProjectBlockLayout({ project, projectId, renderBlock }: Props) {
                 onRemove={removeBlock}
                 onToggleWidth={toggleWidth}
                 t={t as unknown as Record<string, string>}
+                headingAs={headingAs}
               />
             );
           })}
@@ -232,27 +220,20 @@ export function ProjectBlockLayout({ project, projectId, renderBlock }: Props) {
       </DndContext>
 
       {availableBlocks.length > 0 && (
-        <div className="relative">
-          <button
-            onClick={() => setShowAddMenu(!showAddMenu)}
-            className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-accent transition-colors w-full justify-center py-2 rounded-xl border border-dashed border-[var(--color-input-border)]"
-          >
-            <Plus size={14} /> {t.add_block}
-          </button>
-          {showAddMenu && (
-            <div className="absolute z-20 bottom-full mb-1 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[160px]">
-              {availableBlocks.map((type) => (
-                <button
-                  key={type}
-                  onClick={() => addBlock(type)}
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-hover-row)]"
-                >
-                  {BLOCK_LABELS[type]}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <Dropdown
+          className="w-full"
+          trigger={
+            <Card
+              as="button"
+              tone="dashed"
+              padding="sm"
+              className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-accent-text transition-colors w-full justify-center"
+            >
+              <ICONS.add size={ICON_SIZE.menu} /> {t.add_block}
+            </Card>
+          }
+          items={availableBlocks.map((type) => ({ label: BLOCK_LABELS[type], onSelect: () => addBlock(type) }))}
+        />
       )}
     </div>
   );

@@ -1,22 +1,16 @@
 import { useEffect, useRef } from "react";
-import { toast } from "sonner";
 import { useAppStore } from "../stores/app-store";
 import { createBackup, isBackupRunning, setBackupRunning, isScopeDenied } from "../lib/backup";
 import { createNotification } from "../db/queries/notifications";
 import { queryClient } from "../lib/queryClient";
 import { logError } from "../lib/log";
-import { notifyError, getLabels } from "../lib/notifyError";
+import { getLabels, notify } from "../lib/notify";
 import { sendNativeNotification } from "../lib/nativeNotification";
 
 /** Distinguish fs-scope denials (stored backup dir no longer accessible)
  *  from ordinary backup failures for a clearer user message. */
 function backupErrorLabel(e: unknown): string {
-  return isScopeDenied(e)
-    ? getLabels().backup_path_not_allowed
-    : // Interpolated message: exempt from notifyError's fixed-label dedupe
-      // contract — bounded by the failureNotifiedRef latch (one toast per
-      // failure streak).
-      getLabels().backup_failed.replace("{error}", String(e));
+  return isScopeDenied(e) ? getLabels().backup_path_not_allowed : getLabels().auto_backup_failed;
 }
 
 export function useAutoBackup() {
@@ -56,14 +50,15 @@ export function useAutoBackup() {
                 logError("Auto-backup (secondary) failed:", e);
                 if (!failureNotifiedRef.current) {
                   failureNotifiedRef.current = true;
-                  notifyError(backupErrorLabel(e), e);
+                  notify.error(backupErrorLabel(e), e);
                 }
               }
             }
             if (!secondaryFailed) failureNotifiedRef.current = false;
             setLastAutoBackup(Date.now());
             const fileName = path.split("/").pop() ?? "backup";
-            toast.success(getLabels().auto_backup_completed.replace("{file}", fileName));
+            // No toast for a routine background backup: the notification
+            // centre and the native notification record it.
             await createNotification({
               type: "info",
               title: getLabels().auto_backup_title,
@@ -78,7 +73,7 @@ export function useAutoBackup() {
             logError("Auto-backup failed:", e);
             if (!failureNotifiedRef.current) {
               failureNotifiedRef.current = true;
-              notifyError(backupErrorLabel(e), e);
+              notify.error(backupErrorLabel(e), e);
             }
           })
           .finally(() => {

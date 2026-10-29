@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Plus, Trash2, Copy, Pencil } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "../ui";
+import { notify } from "../../lib/notify";
+import { Button, Card, Tag, InlineRename, EmptyState, ICONS } from "../ui";
 import {
   useWorkloadTemplates,
   useCreateWorkloadTemplate,
@@ -11,13 +10,13 @@ import {
 import { WorkloadColumnEditor } from "./WorkloadColumnEditor";
 import { DEFAULT_WORKLOAD_COLUMNS } from "../../types/workload";
 import type { WorkloadColumn } from "../../types/workload";
-import { getStoredTagColor } from "../../lib/tagColors";
-import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
+import { IconButton } from "../ui/IconButton";
+import { pushUndoable } from "../../lib/undo";
+import type { WorkloadTemplate } from "../../types/workload";
 
 export function WorkloadTemplateManager() {
   const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
   const { data: templates } = useWorkloadTemplates();
   const createTemplate = useCreateWorkloadTemplate();
   const updateTemplate = useUpdateWorkloadTemplate();
@@ -25,7 +24,6 @@ export function WorkloadTemplateManager() {
 
   const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
   const [renamingId, setRenamingId] = useState<number | null>(null);
-  const [renameValue, setRenameValue] = useState("");
   const [editingColumn, setEditingColumn] = useState<{
     column: WorkloadColumn | null;
     index: number;
@@ -38,7 +36,7 @@ export function WorkloadTemplateManager() {
       { name: t.new_template, columns: DEFAULT_WORKLOAD_COLUMNS },
       {
         onSuccess: (id) => {
-          toast.success(t.toast_created);
+          notify.success(t.workload_template_created);
           setEditingTemplateId(id);
         },
       }
@@ -48,25 +46,28 @@ export function WorkloadTemplateManager() {
   const handleDuplicate = (tpl: typeof templates extends (infer T)[] | undefined ? T : never) => {
     if (!tpl) return;
     createTemplate.mutate(
-      { name: `${tpl.name} (copy)`, columns: tpl.columns },
-      { onSuccess: () => toast.success(t.toast_created) }
+      { name: t.copy_of_name.replace("{name}", tpl.name), columns: tpl.columns },
+      { onSuccess: () => notify.success(t.template_duplicated) }
     );
   };
 
-  const handleDelete = (id: number) => {
-    deleteTemplate.mutate(id, {
+  // No question: Undo re-creates the template with its columns.
+  const handleDelete = (tpl: WorkloadTemplate) => {
+    deleteTemplate.mutate(tpl.id, {
       onSuccess: () => {
-        toast.success(t.toast_deleted);
-        if (editingTemplateId === id) setEditingTemplateId(null);
+        if (editingTemplateId === tpl.id) setEditingTemplateId(null);
+        pushUndoable(t.workload_template_deleted, {
+          label: `${t.undo_delete_workload_template} "${tpl.name}"`,
+          execute: async () => {
+            await createTemplate.mutateAsync({ name: tpl.name, columns: tpl.columns });
+          },
+        });
       },
     });
   };
 
-  const handleRenameCommit = (id: number) => {
-    const val = renameValue.trim();
-    if (val) {
-      updateTemplate.mutate({ id, name: val });
-    }
+  const handleRenameCommit = (id: number, name: string) => {
+    updateTemplate.mutate({ id, name });
     setRenamingId(null);
   };
 
@@ -89,15 +90,30 @@ export function WorkloadTemplateManager() {
 
   const handleDeleteColumn = () => {
     if (!editingTemplate || !editingColumn) return;
-    const next = editingTemplate.columns.filter((_, i) => i !== editingColumn.index);
-    updateTemplate.mutate({ id: editingTemplate.id, columns: next });
+    const { id, columns: prev } = editingTemplate;
+    const next = prev.filter((_, i) => i !== editingColumn.index);
+    updateTemplate.mutate(
+      { id, columns: next },
+      {
+        onSuccess: () =>
+          pushUndoable(t.column_deleted, {
+            label: t.undo_delete_column,
+            execute: async () => {
+              await updateTemplate.mutateAsync({ id, columns: prev });
+            },
+            redo: async () => {
+              await updateTemplate.mutateAsync({ id, columns: next });
+            },
+          }),
+      }
+    );
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted">{t.workload_templates_desc}</p>
-        <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={handleCreate}>
+        <Button variant="primary" icon={ICONS.add} onClick={handleCreate}>
           {t.new_template}
         </Button>
       </div>
@@ -105,69 +121,50 @@ export function WorkloadTemplateManager() {
       {/* Template list */}
       <div className="space-y-2">
         {templates?.map((tpl) => (
-          <div
+          <Card
             key={tpl.id}
-            className={`border rounded-lg overflow-hidden transition-colors ${
-              editingTemplateId === tpl.id
-                ? "border-accent"
-                : "border-[var(--color-border-divider)]"
-            }`}
+            tone="inset"
+            padding="none"
+            selected={editingTemplateId === tpl.id}
+            className="overflow-hidden"
           >
-            {/* Template header */}
-            <div className="flex items-center gap-2 px-3 py-2 bg-[var(--color-surface)]">
-              {renamingId === tpl.id ? (
-                <input
-                  autoFocus
-                  value={renameValue}
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  onBlur={() => handleRenameCommit(tpl.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleRenameCommit(tpl.id);
-                    if (e.key === "Escape") setRenamingId(null);
-                  }}
-                  className="flex-1 text-sm border border-[var(--color-border-divider)] rounded-lg px-2 py-0.5 bg-transparent"
+            <Card.Header
+              as="h3"
+              className="px-3 py-2"
+              count={tpl.columns.length}
+              action={
+                <>
+                  <IconButton size="xs"
+                    icon={ICONS.edit}
+                    label={t.rename}
+                    tone="accent"
+                    onClick={() => setRenamingId(tpl.id)}
+                  />
+                  <IconButton size="xs" icon={ICONS.duplicate} label={t.duplicate} tone="accent" onClick={() => handleDuplicate(tpl)} />
+                  <IconButton size="xs" icon={ICONS.delete} label={t.delete} tone="danger" onClick={() => handleDelete(tpl)} />
+                </>
+              }
+              title={renamingId === tpl.id ? (
+                <InlineRename
+                  value={tpl.name}
+                  label={t.rename}
+                  onSave={(name) => handleRenameCommit(tpl.id, name)}
+                  onCancel={() => setRenamingId(null)}
+                  className="flex-1"
                 />
               ) : (
                 <button
+                  type="button"
+                  aria-expanded={editingTemplateId === tpl.id}
                   onClick={() => setEditingTemplateId(
                     editingTemplateId === tpl.id ? null : tpl.id
                   )}
-                  className="flex-1 text-left text-sm font-medium hover:text-accent"
+                  className="text-left hover:text-accent-text"
                 >
                   {tpl.name}
-                  <span className="ml-2 text-xs text-muted font-normal">
-                    ({tpl.columns.length} {t.columns})
-                  </span>
                 </button>
               )}
-              <button
-                onClick={() => {
-                  setRenamingId(tpl.id);
-                  setRenameValue(tpl.name);
-                }}
-                className="p-1 text-muted hover:text-accent"
-                title={t.rename}
-                aria-label={t.rename}
-              >
-                <Pencil size={12} />
-              </button>
-              <button
-                onClick={() => handleDuplicate(tpl)}
-                className="p-1 text-muted hover:text-accent"
-                title={t.duplicate}
-                aria-label={t.duplicate}
-              >
-                <Copy size={12} />
-              </button>
-              <button
-                onClick={() => handleDelete(tpl.id)}
-                className="p-1 text-muted hover:text-[var(--color-danger-text)]"
-                title={t.delete}
-                aria-label={t.delete}
-              >
-                <Trash2 size={12} />
-              </button>
-            </div>
+            />
 
             {/* Expanded column list */}
             {editingTemplateId === tpl.id && (
@@ -182,18 +179,9 @@ export function WorkloadTemplateManager() {
                     {(col.type === "select" || col.type === "multi_select") &&
                       col.options && (
                         <div className="flex gap-0.5 flex-1 overflow-hidden">
-                          {col.options.slice(0, 4).map((opt) => {
-                            const c = getStoredTagColor(opt.color, darkMode);
-                            return (
-                              <span
-                                key={opt.value}
-                                style={{ background: c.bg, color: c.text }}
-                                className="px-1.5 py-0 rounded-full text-[10px]"
-                              >
-                                {opt.value}
-                              </span>
-                            );
-                          })}
+                          {col.options.slice(0, 4).map((opt) => (
+                            <Tag key={opt.value} name={opt.value} color={opt.color} size="xs" />
+                          ))}
                           {col.options.length > 4 && (
                             <span className="text-muted">
                               +{col.options.length - 4}
@@ -206,35 +194,34 @@ export function WorkloadTemplateManager() {
                         {col.formula}
                       </span>
                     )}
-                    <button
+                    <IconButton
+                      size="xs"
+                      icon={ICONS.edit}
+                      label={t.edit}
+                      tone="accent"
+                      reveal="col"
                       onClick={() => setEditingColumn({ column: col, index: ci })}
-                      className="ml-auto opacity-0 group-hover/col:opacity-100 p-0.5 text-muted hover:text-accent"
-                      aria-label={t.edit}
-                    >
-                      <Pencil size={12} />
-                    </button>
+                      className="ml-auto"
+                    />
                   </div>
                 ))}
                 <Button
                   variant="link"
-                  size="sm"
-                  icon={<Plus size={12} />}
+                  icon={ICONS.add}
                   onClick={() =>
                     setEditingColumn({ column: null, index: tpl.columns.length })
                   }
-                  className="py-1 text-muted hover:text-accent"
+                  className="py-1 text-muted hover:text-accent-text"
                 >
                   {t.add_column}
                 </Button>
               </div>
             )}
-          </div>
+          </Card>
         ))}
 
         {(!templates || templates.length === 0) && (
-          <p className="text-xs text-muted py-4 text-center">
-            {t.no_templates}
-          </p>
+          <EmptyState size="sm" message={t.no_workload_templates} />
         )}
       </div>
 

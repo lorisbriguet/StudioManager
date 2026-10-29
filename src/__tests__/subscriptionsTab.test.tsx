@@ -34,6 +34,8 @@ vi.mock("../db/hooks/useExpenses", () => ({
 }));
 
 import { SubscriptionsTab } from "../components/upkeep/SubscriptionsTab";
+import { format } from "date-fns";
+import { useAppStore } from "../stores/app-store";
 
 const t = uiLabels.EN;
 
@@ -77,7 +79,8 @@ describe("SubscriptionsTab", () => {
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_renewal_add }));
     expect(await screen.findByDisplayValue("Adobe")).toBeInTheDocument();
     expect(screen.getByDisplayValue("840")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("2026-10-01")).toBeInTheDocument();
+    // The date field shows the date in the app's format.
+    expect(screen.getByDisplayValue(format(new Date(2026, 9, 1), useAppStore.getState().dateFormat))).toBeInTheDocument();
   });
 
   it("cancelling the expense form leaves the renewal pending", async () => {

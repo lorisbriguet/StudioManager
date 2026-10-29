@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { toast } from "sonner";
-import { BottomBar, Button, EmptyState, MeterBar, SectionLabel, TabItem } from "../components/ui";
+import { BottomBar, Button, EmptyState, ProgressBar, SectionLabel, SegmentedControl } from "../components/ui";
+import { notify } from "../lib/notify";
 import { useT } from "../i18n/useT";
 import { useAppStore } from "../stores/app-store";
 import { useChartTheme } from "../hooks/useChartTheme";
@@ -98,7 +98,7 @@ function MeterRow({ meter, locale }: { meter: Meter; locale: string }) {
         <span>{name}</span>
         <span className="text-xs text-muted">{`${percent}% · ${resets}`}</span>
       </div>
-      <MeterBar pct={meter.percent} color={meterColor(meter.percent)} label={name} />
+      <ProgressBar value={meter.percent} color={meterColor(meter.percent)} aria-label={name} />
       {pace &&
         (hitsFull ? (
           <div className="text-xs mt-1 text-[var(--color-warning-text)]">
@@ -135,7 +135,7 @@ function TokensChart({ activity, locale }: { activity: Activity; locale: string 
       <div data-legend className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-muted">
         {activity.clients.map((c, i) => (
           <span key={c} className="flex items-center gap-1.5">
-            <i className="inline-block w-2 h-2 rounded-sm" style={{ background: color(i) }} />
+            <span className="dot" style={{ background: color(i) }} aria-hidden />
             {c}
           </span>
         ))}
@@ -198,14 +198,14 @@ export function UsageTab({ trailing }: { trailing: ReactNode }) {
       <div className="flex-1 min-h-0 overflow-y-auto">
         {limits && (
           <section className="px-4 py-3 border-b border-[var(--color-border-divider)]">
-            <SectionLabel>{t.usage_plan_limits}</SectionLabel>
+            <SectionLabel as="h2" className="mb-2">{t.usage_plan_limits}</SectionLabel>
             {limits.setUp ? (
               limits.meters.map((m) => <MeterRow key={m.window} meter={m} locale={locale} />)
             ) : (
               <EmptyState
                 message={t.usage_not_set_up}
                 action={
-                  <Button size="sm" variant="secondary" onClick={() => void openMainWindow({ settings: "agents" })}>
+                  <Button variant="secondary" onClick={() => void openMainWindow({ settings: "agents" })}>
                     {t.routines_open_settings}
                   </Button>
                 }
@@ -215,18 +215,23 @@ export function UsageTab({ trailing }: { trailing: ReactNode }) {
         )}
         {activity && (
           <section className="px-4 py-3 border-b border-[var(--color-border-divider)]">
-            <SectionLabel>{t.usage_tokens_week}</SectionLabel>
+            <SectionLabel as="h2" className="mb-2">{t.usage_tokens_week}</SectionLabel>
             <TokensChart activity={activity} locale={locale} />
           </section>
         )}
         {activity && (
           <section className="px-4 py-3">
-            <div className="flex items-end justify-between mb-2">
-              <SectionLabel className="mb-0">{t.usage_agent_time}</SectionLabel>
-              <div className="flex">
-                <TabItem label={t.usage_today} active={period === "today"} onActivate={() => setPeriod("today")} />
-                <TabItem label={t.usage_week} active={period === "week"} onActivate={() => setPeriod("week")} />
-              </div>
+            <div className="flex items-center justify-between mb-2">
+              <SectionLabel as="h2">{t.usage_agent_time}</SectionLabel>
+              <SegmentedControl
+                aria-label={t.usage_agent_time}
+                value={period}
+                onChange={setPeriod}
+                options={[
+                  { value: "today", label: t.usage_today },
+                  { value: "week", label: t.usage_week },
+                ]}
+              />
             </div>
             {rows.length > 0 ? <TimeRows rows={rows} /> : <div className="text-xs text-muted">{t.usage_time_none}</div>}
             <div className="text-xs mt-1.5 text-muted">{t.usage_time_note}</div>
@@ -235,14 +240,13 @@ export function UsageTab({ trailing }: { trailing: ReactNode }) {
       </div>
       <BottomBar className="justify-between">
         <Button
-          size="sm"
-          variant="ghost"
+          variant="outline"
           disabled={rows.length === 0}
           onClick={() =>
             void navigator.clipboard
               .writeText(timeAsText(rows))
-              .then(() => toast.success(t.copied))
-              .catch((e: unknown) => toast.error(e instanceof Error ? e.message : String(e)))
+              .then(() => notify.success(t.copied))
+              .catch((e: unknown) => notify.error(t.error_copy, e))
           }
         >
           {t.usage_copy_text}

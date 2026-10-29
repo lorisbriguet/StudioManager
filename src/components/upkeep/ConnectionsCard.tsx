@@ -1,9 +1,7 @@
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
-import { ask } from "@tauri-apps/plugin-dialog";
-import { toast } from "sonner";
-import { Badge, Button, FormField, Modal, Select } from "../ui";
-import { SettingRow, SettingsCard } from "../settings/SettingsPrimitives";
+import { Badge, Button, EmptyState, FormField, FormGrid, ICONS, IconButton, Modal, Select, SettingRow, SettingsCard } from "../ui";
+import { notify } from "../../lib/notify";
+import { useConfirm } from "../../lib/confirm";
 import { useT } from "../../i18n/useT";
 import { useConnections, useDeleteConnection, useSyncNow } from "../../db/hooks/useConnections";
 import { connectionErrorText, connectionStatusText, testConnection } from "../../lib/upkeep/connections";
@@ -20,13 +18,9 @@ function AddConnectionDialog({ onClose }: { onClose: () => void }) {
       open
       onClose={onClose}
       title={t.upkeep_connection_add}
-      footer={Form ? undefined : (
-        <div className="flex justify-end">
-          <Button variant="secondary" onClick={onClose}>{t.cancel}</Button>
-        </div>
-      )}
+      footer={Form ? undefined : <Button variant="secondary" onClick={onClose}>{t.cancel}</Button>}
     >
-      <div className="space-y-3">
+      <FormGrid cols={1}>
         <FormField label={t.upkeep_connection_kind}>
           <Select value={kind} onChange={(e) => setKind(e.target.value as ConnectionKind)}>
             {CONNECTION_KINDS.map((k) => (
@@ -37,7 +31,7 @@ function AddConnectionDialog({ onClose }: { onClose: () => void }) {
         {Form ? <Form onDone={onClose} onCancel={onClose} /> : (
           <p className="text-sm text-muted">{t.upkeep_connection_form_soon}</p>
         )}
-      </div>
+      </FormGrid>
     </Modal>
   );
 }
@@ -48,22 +42,24 @@ function ConnectionRow({ c }: { c: Connection }) {
   const remove = useDeleteConnection();
   const [testing, setTesting] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
+  const confirm = useConfirm();
   const Form = CONNECTION_FORMS[c.kind];
 
   const test = async () => {
     setTesting(true);
     try {
       const devices = await testConnection(c);
-      toast.success(t.upkeep_connection_test_ok.replace("{count}", String(devices.length)));
+      notify.success(t.upkeep_connection_test_ok.replace("{count}", String(devices.length)));
     } catch (e) {
-      toast.error(connectionErrorText(e, t));
+      // The connector's own words (translated, or already redacted by Rust).
+      notify.error(connectionErrorText(e, t), e);
     } finally {
       setTesting(false);
     }
   };
 
   const onRemove = async () => {
-    if (!(await ask(t.upkeep_connection_remove_confirm, { kind: "warning" }))) return;
+    if (!(await confirm({ title: t.upkeep_connection_remove_confirm, confirmLabel: t.remove, tone: "danger" }))) return;
     remove.mutate(c.id);
   };
 
@@ -78,19 +74,18 @@ function ConnectionRow({ c }: { c: Connection }) {
             {c.failing_since ? t.upkeep_connection_failing : t.upkeep_connection_ok}
           </Badge>
         )}
-        <Button size="sm" variant="secondary" loading={testing} onClick={() => void test()}>
+        <Button variant="secondary" loading={testing} onClick={() => void test()}>
           {t.upkeep_connection_test}
         </Button>
-        <Button size="sm" variant="secondary" loading={syncNow.isPending} onClick={() => syncNow.mutate(c.id)}>
+        <Button variant="secondary" loading={syncNow.isPending} onClick={() => syncNow.mutate(c.id)}>
           {t.upkeep_sync_now}
         </Button>
         {Form && (
-          <Button size="sm" variant="secondary" onClick={() => setReconnecting(true)}>
+          <Button variant="secondary" onClick={() => setReconnecting(true)}>
             {t.upkeep_connection_reconnect}
           </Button>
         )}
-        <Button size="sm" variant="ghost" icon={<Trash2 size={14} />} aria-label={t.remove} title={t.remove}
-          onClick={() => void onRemove()} />
+        <IconButton icon={ICONS.delete} label={t.remove} tone="danger" onClick={() => void onRemove()} />
       </div>
       {Form && reconnecting && (
         <Modal open onClose={() => setReconnecting(false)} title={t.upkeep_connection_reconnect}>
@@ -114,12 +109,12 @@ export function ConnectionsCard() {
   return (
     <SettingsCard title={t.upkeep_connections} desc={t.upkeep_connections_desc}>
       {connections.length === 0 ? (
-        <p className="text-sm text-muted py-2">{t.upkeep_connections_empty}</p>
+        <EmptyState size="sm" message={t.upkeep_connections_empty} />
       ) : (
         connections.map((c) => <ConnectionRow key={c.id} c={c} />)
       )}
-      <div className="pt-3">
-        <Button size="sm" variant="secondary" icon={<Plus size={14} />} onClick={() => setAdding(true)}>
+      <div className="py-3">
+        <Button variant="secondary" icon={ICONS.add} onClick={() => setAdding(true)}>
           {t.upkeep_connection_add}
         </Button>
       </div>

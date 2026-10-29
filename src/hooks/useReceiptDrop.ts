@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { extractPdfText, extractImageText } from "../lib/pdfExtract";
 import { parseExpenseFromText, type ExtractedExpenseData } from "../lib/expenseParse";
@@ -34,7 +34,7 @@ export function useReceiptDrop({
   const handleDroppedFile = useCallback(async (filePath: string) => {
     const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
     if (ext !== "pdf" && !IMAGE_EXTS.includes(ext)) {
-      toast.error(t.unsupported_file);
+      notify.error(t.unsupported_file);
       return;
     }
     setParsing(true);

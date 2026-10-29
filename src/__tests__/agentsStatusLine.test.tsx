@@ -5,8 +5,12 @@ import { useAppStore } from "../stores/app-store";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 
 const ask = vi.fn<(...args: unknown[]) => Promise<boolean>>(async () => false);
-// Same aliased mock file as invoke: spread the original so only `ask` changes.
-vi.mock("@tauri-apps/plugin-dialog", async (importOriginal) => ({ ...(await importOriginal<object>()), ask: (...a: unknown[]) => ask(...a) }));
+// The app's ConfirmDialog (useConfirm), answered by the test: `ask` gets its options.
+vi.mock("../lib/confirm", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useConfirm: () => (...a: unknown[]) => ask(...a),
+}));
+const askedTitle = (i = 0) => (ask.mock.calls[i][0] as { title: string }).title;
 
 const NEXT = '{\n  "model": "opus",\n  "statusLine": {\n    "type": "command",\n    "command": "\'/x/studiomanager-mcp\' --statusline"\n  }\n}\n';
 const REMOVE_NEXT = '{\n  "model": "opus"\n}\n';
@@ -89,7 +93,7 @@ describe("AgentsCard plan-limits status line", () => {
     await screen.findByRole("button", { name: "Remove" });
     fireEvent.click(screen.getByRole("switch", { name: "Show in menu bar" }));
     await waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
-    expect(String(ask.mock.calls[0][0])).toBe("Also remove the plan-limits status line?");
+    expect(askedTitle()).toBe("Also remove the plan-limits status line?");
     await waitFor(() =>
       expect(invokedCommands.find((c) => c.cmd === "agents_status_line_remove")?.args).toEqual({ expected: REMOVE_NEXT }),
     );
@@ -120,7 +124,7 @@ describe("AgentsCard plan-limits status line", () => {
     await screen.findByRole("button", { name: "Remove" });
     fireEvent.click(screen.getByRole("switch", { name: "Show the Agents page" }));
     await waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
-    expect(String(ask.mock.calls[0][0])).toBe("Also remove the plan-limits status line?");
+    expect(askedTitle()).toBe("Also remove the plan-limits status line?");
     await waitFor(() =>
       expect(invokedCommands.find((c) => c.cmd === "agents_status_line_remove")?.args).toEqual({ expected: REMOVE_NEXT }),
     );

@@ -15,6 +15,7 @@ vi.mock("../db/hooks/useConnections", () => ({
 vi.mock("../hooks/useUnsavedChangesWarning", () => ({ useUnsavedChangesWarning: () => {} }));
 
 import { ConnectionsCard } from "../components/upkeep/ConnectionsCard";
+import { pickOption } from "./fixtures/dropdown";
 
 const t = uiLabels.EN;
 
@@ -30,7 +31,7 @@ describe("ConnectionsCard", () => {
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_connection_add }));
     // Each kind has its setup form.
     expect(screen.getByText(t.upkeep_syno_account_note)).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText(t.upkeep_connection_kind), { target: { value: "bambu_cloud" } });
+    pickOption(screen.getByLabelText(t.upkeep_connection_kind), t.upkeep_connection_kind_bambu_cloud);
     expect(screen.getByText(t.upkeep_bambu_note)).toBeInTheDocument();
   });
 

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as q from "../queries/workload";
 import type { WorkloadColumn } from "../../types/workload";
 import { useUndoStore } from "../../stores/undo-store";
-import { getLabels } from "../../lib/notifyError";
+import { getLabels } from "../../lib/notify";
 
 // ── Templates ──────────────────────────────────────────────
 
@@ -16,6 +16,7 @@ export function useWorkloadTemplates() {
 export function useCreateWorkloadTemplate() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_template" },
     mutationFn: (data: { name: string; columns: WorkloadColumn[] }) =>
       q.createWorkloadTemplate(data.name, data.columns),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["workload-templates"] }),
@@ -25,6 +26,7 @@ export function useCreateWorkloadTemplate() {
 export function useUpdateWorkloadTemplate() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_template" },
     mutationFn: (data: {
       id: number;
       name?: string;
@@ -37,6 +39,7 @@ export function useUpdateWorkloadTemplate() {
 export function useDeleteWorkloadTemplate() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_delete_template" },
     mutationFn: (id: number) => q.deleteWorkloadTemplate(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["workload-templates"] }),
   });
@@ -54,6 +57,7 @@ export function useWorkloadRows(projectId: number) {
 export function useCreateWorkloadRow() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_row" },
     mutationFn: async (data: {
       project_id: number;
       title?: string;
@@ -81,6 +85,7 @@ export function useCreateWorkloadRow() {
 export function useUpdateWorkloadRow(projectId: number) {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_row" },
     mutationFn: async (data: {
       id: number;
       title?: string;
@@ -124,6 +129,7 @@ export function useUpdateWorkloadRow(projectId: number) {
 export function useReorderWorkloadRows(projectId: number) {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_row" },
     mutationFn: (orderedIds: number[]) => q.reorderWorkloadRows(orderedIds),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ["workload-rows", projectId] }),
@@ -133,6 +139,7 @@ export function useReorderWorkloadRows(projectId: number) {
 export function useDeleteWorkloadRow(projectId: number) {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_delete_row" },
     mutationFn: async (id: number) => {
       const prev = await q.getWorkloadRow(id);
       await q.deleteWorkloadRow(id);
@@ -171,6 +178,7 @@ export function useProjectWorkloadConfig(projectId: number) {
 export function useSetProjectWorkloadConfig(projectId: number) {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_workload" },
     mutationFn: async (data: {
       templateId: number | null;
       columns: WorkloadColumn[];

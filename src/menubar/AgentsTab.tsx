@@ -1,5 +1,5 @@
-import { Bot } from "lucide-react";
-import { EmptyState } from "../components/ui";
+
+import { EmptyState, ICONS } from "../components/ui";
 import { AgentList } from "../components/agents/AgentList";
 import { PromptAnswer } from "../components/agents/PromptAnswer";
 import { useAgents } from "../components/agents/useAgents";
@@ -16,7 +16,7 @@ export function AgentsTab() {
   const { agents, byGroup } = useAgents();
 
   if (agents.length === 0) {
-    return <EmptyState icon={<Bot size={32} />} message={t.agents_empty} />;
+    return <EmptyState icon={ICONS.agents} message={t.agents_empty} />;
   }
 
   const open = (sessionId: string) => void openMainWindow({ agent: sessionId });

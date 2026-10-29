@@ -1,16 +1,15 @@
 import { useState, useEffect } from "react";
-import { toast } from "sonner";
-import { ask } from "@tauri-apps/plugin-dialog";
-import { Trash2, Check, Plus } from "lucide-react";
+import { notify } from "../../lib/notify";
+import { undoableFromStore, undoTop } from "../../lib/undo";
+import { ListChecks } from "lucide-react";
 import { useT } from "../../i18n/useT";
-import { useAppStore } from "../../stores/app-store";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useUpdateCustomList, useDeleteCustomList, useSetCustomListItems } from "../../db/hooks/useCustomLists";
-import { getStoredTagColor, normalizeTagColorName, TAG_COLOR_NAMES } from "../../lib/tagColors";
-import { Button } from "../ui";
+import { AddRow, Button, ICONS, IconButton, InlineRename, FormActions, FORM_GAP, EmptyState } from "../ui";
+import { navItemClass } from "../ui/NavItem";
+import { OptionsEditor } from "../shared/OptionsEditor";
 
 export function CustomListsManager() {
   const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
   const { data: lists } = useCustomLists();
   const createList = useCreateCustomList();
   const updateList = useUpdateCustomList();
@@ -21,14 +20,10 @@ export function CustomListsManager() {
   const { data: items } = useCustomListItems(selectedId);
 
   const [renamingId, setRenamingId] = useState<number | null>(null);
-  const [renameValue, setRenameValue] = useState("");
-  const [newListName, setNewListName] = useState("");
   const [addingList, setAddingList] = useState(false);
 
   // Local editable items for the selected list
   const [localItems, setLocalItems] = useState<{ value: string; color: string }[]>([]);
-  const [newItemValue, setNewItemValue] = useState("");
-  const [newItemColor, setNewItemColor] = useState("gray");
   const [dirty, setDirty] = useState(false);
 
   // Sync local items when selection or remote items change
@@ -37,56 +32,45 @@ export function CustomListsManager() {
     setDirty(false);
   }, [items, selectedId]);
 
-  const handleCreateList = async () => {
-    const name = newListName.trim();
-    if (!name) return;
-    const id = await createList.mutateAsync(name);
-    setNewListName("");
-    setAddingList(false);
-    setSelectedId(id);
-    toast.success(t.list_created);
+  // A failed mutation is already reported by the mutation cache: the catches
+  // only keep the rejection from going unhandled.
+  const handleCreateList = async (name: string) => {
+    try {
+      const id = await createList.mutateAsync(name);
+      setAddingList(false);
+      setSelectedId(id);
+      notify.success(t.list_created);
+    } catch {
+      // reported by the mutation
+    }
   };
 
+  // No question: Undo puts the list and its items back.
   const handleDeleteList = async (id: number) => {
-    const confirmed = await ask(t.delete_list_confirm, { kind: "warning" });
-    if (!confirmed) return;
-    await deleteList.mutateAsync(id);
+    const before = undoTop();
+    try {
+      await deleteList.mutateAsync(id);
+    } catch {
+      return; // reported by the mutation
+    }
     if (selectedId === id) setSelectedId(null);
-    toast.success(t.list_deleted);
+    undoableFromStore(t.list_deleted, before);
   };
 
-  const commitRename = async () => {
-    if (renamingId === null) return;
-    const name = renameValue.trim();
-    if (name) await updateList.mutateAsync({ id: renamingId, name });
-    setRenamingId(null);
-  };
-
-  const addItem = () => {
-    const val = newItemValue.trim();
-    if (!val) return;
-    setLocalItems([...localItems, { value: val, color: newItemColor }]);
-    setNewItemValue("");
-    setDirty(true);
-  };
-
-  const removeItem = (idx: number) => {
-    setLocalItems(localItems.filter((_, i) => i !== idx));
-    setDirty(true);
-  };
-
-  const updateItemColor = (idx: number, color: string) => {
-    const next = [...localItems];
-    next[idx] = { ...next[idx], color };
-    setLocalItems(next);
-    setDirty(true);
+  const commitRename = async (id: number, name: string) => {
+    try {
+      await updateList.mutateAsync({ id, name });
+      setRenamingId(null);
+    } catch {
+      // reported by the mutation
+    }
   };
 
   const saveItems = async () => {
     if (selectedId === null) return;
     await setItems.mutateAsync({ listId: selectedId, items: localItems });
     setDirty(false);
-    toast.success(t.list_saved);
+    notify.success(t.list_saved);
   };
 
   const allLists = lists ?? [];
@@ -97,59 +81,45 @@ export function CustomListsManager() {
       <div className="w-48 shrink-0 border-r border-[var(--color-border-divider)] pr-4">
         <div className="space-y-px">
           {allLists.length === 0 && !addingList && (
-            <p className="text-xs text-muted py-2">{t.no_lists}</p>
+            <EmptyState size="sm" message={t.no_lists} />
           )}
           {allLists.map((list) => (
-            <div key={list.id} className={`flex items-center gap-1 rounded-md px-2 py-1.5 group cursor-pointer ${selectedId === list.id ? "bg-accent-light text-accent" : "hover:bg-[var(--color-hover-row)]"}`}>
+            <div key={list.id} className={`${navItemClass({ active: selectedId === list.id })} group cursor-pointer`}>
               {renamingId === list.id ? (
-                <input
-                  value={renameValue}
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  onBlur={commitRename}
-                  onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenamingId(null); }}
-                  className="flex-1 text-xs bg-transparent border-b border-accent outline-none"
-                  autoFocus
+                <InlineRename
+                  value={list.name}
+                  label={t.rename}
+                  onSave={(name) => commitRename(list.id, name)}
+                  onCancel={() => setRenamingId(null)}
+                  className="flex-1 text-xs"
                 />
               ) : (
                 <span
                   className="flex-1 text-xs truncate"
                   onClick={() => setSelectedId(list.id)}
-                  onDoubleClick={() => { setRenamingId(list.id); setRenameValue(list.name); }}
+                  onDoubleClick={() => setRenamingId(list.id)}
                 >
                   {list.name}
                 </span>
               )}
-              <button
-                type="button"
-                onClick={() => handleDeleteList(list.id)}
-                className="opacity-0 group-hover:opacity-100 text-muted hover:text-[var(--color-danger-text)] shrink-0"
-                aria-label={t.delete}
-              >
-                <Trash2 size={11} />
-              </button>
+              <IconButton icon={ICONS.delete} label={t.delete} size="xs" tone="danger" reveal onClick={() => handleDeleteList(list.id)} />
             </div>
           ))}
         </div>
         {addingList ? (
-          <div className="mt-2 flex gap-1">
-            <input
-              value={newListName}
-              onChange={(e) => setNewListName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleCreateList(); if (e.key === "Escape") setAddingList(false); }}
-              placeholder={t.list_name}
-              className="flex-1 border border-[var(--color-input-border)] rounded-lg px-2 py-1 text-xs"
-              autoFocus
-            />
-            <button type="button" onClick={handleCreateList} aria-label={t.create} className="px-2 py-1 bg-accent text-white text-xs rounded-md hover:bg-accent-hover">
-              <Check size={12} />
-            </button>
-          </div>
+          <AddRow
+            className="mt-2"
+            placeholder={t.list_name}
+            buttonLabel={t.create}
+            onAdd={handleCreateList}
+            onKeyDown={(e) => { if (e.key === "Escape") setAddingList(false); }}
+            autoFocus
+          />
         ) : (
           <Button
             type="button"
             variant="link"
-            size="sm"
-            icon={<Plus size={12} />}
+            icon={ICONS.add}
             onClick={() => setAddingList(true)}
             className="mt-2 w-full px-2 py-1"
           >
@@ -161,67 +131,23 @@ export function CustomListsManager() {
       {/* Right: items for selected list */}
       <div className="flex-1">
         {selectedId === null ? (
-          <p className="text-xs text-muted py-2">{allLists.length > 0 ? t.select_list_to_edit : ""}</p>
+          allLists.length > 0 && <EmptyState size="sm" icon={ListChecks} message={t.select_list_to_edit} />
         ) : (
-          <div>
-            <div className="space-y-1.5 mb-3">
-              {localItems.map((item, i) => {
-                const c = getStoredTagColor(item.color, darkMode);
-                return (
-                <div key={i} className="flex items-center gap-2">
-                  <div className="flex-1 min-w-0">
-                    <span
-                      style={{ background: c.bg, color: c.text }}
-                      className="inline-block max-w-full truncate align-middle px-2 py-0.5 rounded-full text-xs"
-                    >
-                      {item.value}
-                    </span>
-                  </div>
-                  <select
-                    value={normalizeTagColorName(item.color)}
-                    onChange={(e) => updateItemColor(i, e.target.value)}
-                    className="text-xs border border-[var(--color-border-divider)] rounded-lg px-1 py-1"
-                  >
-                    {TAG_COLOR_NAMES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                  <button type="button" onClick={() => removeItem(i)} aria-label={t.delete} className="text-muted hover:text-[var(--color-danger-text)]">
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-                );
-              })}
-            </div>
-            <div className="flex gap-2 mb-3">
-              <input
-                value={newItemValue}
-                onChange={(e) => setNewItemValue(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addItem()}
-                placeholder={t.new_list_item}
-                className="flex-1 border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm"
-              />
-              <select
-                value={newItemColor}
-                onChange={(e) => setNewItemColor(e.target.value)}
-                className="text-sm border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5"
-              >
-                {TAG_COLOR_NAMES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-              <button type="button" onClick={addItem} aria-label={t.new_list_item} className="p-1.5 text-muted hover:text-accent">
-                <Plus size={16} />
-              </button>
-            </div>
+          <div className={`flex flex-col ${FORM_GAP}`}>
+            <OptionsEditor
+              options={localItems}
+              onChange={(next) => {
+                setLocalItems(next.map((i) => ({ value: i.value, color: i.color ?? "gray" })));
+                setDirty(true);
+              }}
+              addLabel={t.new_list_item}
+            />
             {dirty && (
-              <button
-                type="button"
-                onClick={saveItems}
-                className="px-3 py-1.5 bg-accent text-white text-xs rounded-md hover:bg-accent-hover"
-              >
-                {t.save}
-              </button>
+              <FormActions>
+                <Button variant="primary" onClick={saveItems}>
+                  {t.save}
+                </Button>
+              </FormActions>
             )}
           </div>
         )}

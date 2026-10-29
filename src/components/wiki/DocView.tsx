@@ -1,14 +1,18 @@
-import { ChevronLeft, ChevronRight, FolderOpen } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
-import { toast } from "sonner";
+import { notify } from "../../lib/notify";
 import { useT } from "../../i18n/useT";
-import { logError } from "../../lib/log";
 import { parseWikiArticleId, parseWikiFileKey } from "../../lib/wikiLinks";
 import { useProjectDoc, type ProjectDoc } from "../../db/hooks/useProjectDocs";
 import type { WikiRef } from "../../lib/wikiTabs";
-import { BAR_ICON_BUTTON, EmptyState, PANEL_TOP_BAR } from "../ui";
+import { EmptyState, PANEL_TOP_BAR, IconButton, HEADING_1, ICONS } from "../ui";
 import { Skeleton } from "../ui/Skeleton";
+
+/** True when the rendered Markdown opens with its own level-1 title (`# …`). */
+function startsWithH1(html: string): boolean {
+  return /^\s*<h1[\s>]/i.test(html);
+}
 
 /**
  * A project's Markdown file, read-only, straight from disk. The HTML comes
@@ -27,6 +31,7 @@ export function DocView({
   const t = useT();
   const { data: content, isLoading, isError } = useProjectDoc(doc);
   const path = `${doc.folder.replace(/\/$/, "")}/${doc.rel}`;
+  const fileName = doc.rel.split("/").pop() ?? doc.rel;
 
   const handleClick = (e: React.MouseEvent) => {
     const anchor = (e.target as HTMLElement).closest("a");
@@ -40,38 +45,28 @@ export function DocView({
     if (id !== null) return onOpenRef(id, newTab);
     if (/^https?:\/\//i.test(href)) {
       openUrl(href).catch((err) => {
-        logError("Open URL failed:", err);
-        toast.error(t.failed_to_open_url);
+        notify.error(t.failed_to_open_url, err);
       });
     }
   };
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className={`${PANEL_TOP_BAR} gap-1 px-3 border-[var(--color-border-header)]`}>
-        <button type="button" onClick={nav.onBack} disabled={!nav.canBack} className={BAR_ICON_BUTTON} aria-label={t.wiki_back} title={t.wiki_back}>
-          <ChevronLeft size={14} />
-        </button>
-        <button type="button" onClick={nav.onForward} disabled={!nav.canForward} className={BAR_ICON_BUTTON} aria-label={t.wiki_forward} title={t.wiki_forward}>
-          <ChevronRight size={14} />
-        </button>
+      <div className={`${PANEL_TOP_BAR} gap-1 px-3 border-[var(--color-border)]`}>
+        <IconButton icon={ChevronLeft} label={t.wiki_back} onClick={nav.onBack} disabled={!nav.canBack} />
+        <IconButton icon={ChevronRight} label={t.wiki_forward} onClick={nav.onForward} disabled={!nav.canForward} />
         <div className="flex-1 min-w-0 text-center text-xs text-muted truncate">
           {doc.projectName} <span className="opacity-50">/</span> <span className="text-[var(--color-text)]">{doc.rel}</span>
         </div>
-        <button
-          type="button"
+        <IconButton
+          icon={ICONS.openFolder}
+          label={t.wiki_show_in_finder}
           onClick={() =>
             invoke("open_in_finder", { path }).catch((err) => {
-              logError("Show in Finder failed:", err);
-              toast.error(t.failed_open_folder);
+              notify.error(t.failed_open_folder, err);
             })
           }
-          className={BAR_ICON_BUTTON}
-          aria-label={t.wiki_show_in_finder}
-          title={t.wiki_show_in_finder}
-        >
-          <FolderOpen size={14} />
-        </button>
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto px-8 py-8">
@@ -86,9 +81,13 @@ export function DocView({
           ) : isError || !content ? (
             <EmptyState message={t.wiki_file_unreadable} />
           ) : (
-            <div className="tiptap-editor is-reading" onClick={handleClick}>
-              <div className="ProseMirror wiki-doc" dangerouslySetInnerHTML={{ __html: content.html }} />
-            </div>
+            <>
+              {/* The page's h1, like an article title, unless the file opens with its own `# …`. */}
+              {!startsWithH1(content.html) && <h1 className={`${HEADING_1} mb-3`}>{fileName}</h1>}
+              <div className="tiptap-editor is-reading" onClick={handleClick}>
+                <div className="ProseMirror wiki-doc" dangerouslySetInnerHTML={{ __html: content.html }} />
+              </div>
+            </>
           )}
         </div>
       </div>

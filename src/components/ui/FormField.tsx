@@ -1,4 +1,5 @@
 import { cloneElement, useId, type ReactElement, type ReactNode } from "react";
+import { FIELD_LABEL, FORM_SPAN, type FormSpan } from "./tokens";
 
 /**
  * FormField — labeled form control with inline validation (Phase 2 E1).
@@ -9,7 +10,8 @@ import { cloneElement, useId, type ReactElement, type ReactNode } from "react";
  *                        with useId; targeted by the visible <label htmlFor>
  *   - `aria-required`    "true" when `required` is set
  *   - `aria-invalid`     "true" when `error` is set
- *   - `aria-describedby` points at the error line when `error` is set
+ *   - `aria-describedby` the child's own ids, then the hint, then the error
+ *                        line (merged, never replaced)
  *   - danger border      appends `aria-[invalid=true]:border-danger-text` to the
  *                        child's className, so the border turns to the danger
  *                        token exactly while the field is in error
@@ -25,7 +27,11 @@ import { cloneElement, useId, type ReactElement, type ReactNode } from "react";
  *     <Input value={form.name} onChange={...} onBlur={...} />
  *   </FormField>
  *
- * Not for checkboxes/toggles — those keep their inline-label pattern.
+ * `hint` is a muted line under the field. The error takes its place on screen
+ * while there is one; the hint stays in the DOM (sr-only) and stays linked.
+ * `span` makes the field take 2–4 columns, or the whole row, of a FormGrid.
+ *
+ * Not for checkboxes/toggles — give those their own `label`.
  *
  * Test authors: on a required field the label's text content is "Name*", so
  * getByLabelText("Name") (exact match) fails — and aria-hidden does not fix
@@ -49,27 +55,36 @@ interface FormFieldProps {
   className?: string;
   /** Optional chip rendered right-aligned on the label row (e.g. DetectedBadge). */
   badge?: ReactNode;
+  /** Help under the field. */
+  hint?: ReactNode;
+  /** Columns taken in a FormGrid. */
+  span?: FormSpan;
 }
 
-export function FormField({ label, children, error, required = false, className = "", badge }: FormFieldProps) {
+export function FormField({ label, children, error, required = false, className = "", badge, hint, span }: FormFieldProps) {
   const generatedId = useId();
   const fieldId = children.props.id ?? generatedId;
   const errorId = `${fieldId}-error`;
+  const hintId = `${fieldId}-hint`;
+  // The child's own description first, then the hint, then the error: none replaces another.
+  const describedBy =
+    [children.props["aria-describedby"], hint ? hintId : undefined, error ? errorId : undefined].filter(Boolean).join(" ") ||
+    undefined;
   const control = cloneElement(children, {
     id: fieldId,
     "aria-required": required || undefined,
     "aria-invalid": error ? true : undefined,
-    "aria-describedby": error ? errorId : undefined,
+    "aria-describedby": describedBy,
     className: `${children.props.className ?? ""} aria-[invalid=true]:border-danger-text`.trim(),
   });
   const labelEl = (
-    <label htmlFor={fieldId} className={`block text-xs text-muted ${badge ? "" : "mb-1"}`}>
+    <label htmlFor={fieldId} className={`${FIELD_LABEL} ${badge ? "" : "mb-1"}`}>
       {label}
-      {required && <span aria-hidden="true" className="text-accent ml-0.5">*</span>}
+      {required && <span aria-hidden="true" className="text-accent-text ml-0.5">*</span>}
     </label>
   );
   return (
-    <div className={className}>
+    <div className={`${span ? FORM_SPAN[span] : ""} ${className}`.trim() || undefined}>
       {badge ? (
         <div className="flex items-center justify-between mb-1">
           {labelEl}
@@ -79,11 +94,26 @@ export function FormField({ label, children, error, required = false, className 
         labelEl
       )}
       {control}
-      {error && (
-        <p id={errorId} role="alert" className="mt-1 text-xs text-danger-text">
-          {error}
+      {hint && (
+        // While there is an error the hint is only read out (the error takes its place on screen).
+        <p id={hintId} className={error ? "sr-only" : "mt-1 text-xs text-muted"}>
+          {hint}
         </p>
       )}
+      {error && <FieldError id={errorId}>{error}</FieldError>}
     </div>
+  );
+}
+
+/**
+ * The red error line under a field, announced to screen readers. FormField
+ * draws it; use it alone for an error without a visible label (a row rename,
+ * the line-items check). Link it from the field with aria-describedby.
+ */
+export function FieldError({ id, className = "", children }: { id?: string; className?: string; children: ReactNode }) {
+  return (
+    <p id={id} role="alert" className={`mt-1 text-xs text-danger-text ${className}`}>
+      {children}
+    </p>
   );
 }

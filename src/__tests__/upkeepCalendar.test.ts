@@ -7,9 +7,13 @@ vi.mock("../lib/log", () => ({
   logDebug: vi.fn(),
 }));
 
-vi.mock("../lib/notifyError", async () => {
+vi.mock("../lib/notify", async (orig) => {
   const { uiLabels } = await vi.importActual<typeof import("../i18n/ui")>("../i18n/ui");
-  return { notifyError: vi.fn(), getLabels: () => uiLabels.EN };
+  return {
+    ...(await orig<typeof import("../lib/notify")>()),
+    ...(await import("../__mocks__/notify")).notifyMockModule(),
+    getLabels: () => uiLabels.EN,
+  };
 });
 
 import {
@@ -30,7 +34,7 @@ import { setSubscriptionCalendarEvent } from "../db/queries/subscriptions";
 import { getDb } from "../db";
 import { executedStatements, clearExecutedStatements, setSelectHandler } from "../__mocks__/tauri-sql";
 import { useAppStore } from "../stores/app-store";
-import { notifyError } from "../lib/notifyError";
+import { notify } from "../lib/notify";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands, setBatchFailure } from "../__mocks__/tauri-api";
 import { useOrgStore } from "../stores/org-store";
 import type { Machine, Subscription, UpkeepItem } from "../types/upkeep";
@@ -72,7 +76,7 @@ const calls = (cmd: string) => invokedCommands.filter((c) => c.cmd === cmd);
 
 beforeEach(() => {
   clearInvokedCommands();
-  vi.mocked(notifyError).mockClear();
+  vi.mocked(notify.error).mockClear();
   useAppStore.setState({ calendarSync: true, calendarName: "TestCal", upkeepAlertDefault: "day_9am" });
   setInvokeHandler((cmd) => (cmd === "calendar_create_event" ? "NEW-UID" : null));
 });
@@ -179,7 +183,7 @@ describe("syncItemEvent", () => {
     setInvokeHandler(() => { throw new Error("Calendar not authorised"); });
     const ids = await syncItemEvent(item(), machine());
     expect(ids).toEqual({ calendar_event_id: null, calendar_event_date: null });
-    expect(notifyError).toHaveBeenCalledTimes(1);
+    expect(notify.error).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the old ids when moving fails", async () => {
@@ -189,7 +193,7 @@ describe("syncItemEvent", () => {
       machine()
     );
     expect(ids).toEqual({ calendar_event_id: "E1", calendar_event_date: "2026-11-10" });
-    expect(notifyError).toHaveBeenCalledTimes(1);
+    expect(notify.error).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -223,7 +227,7 @@ describe("syncSubscriptionEvent", () => {
   it("returns null and notifies once when create fails", async () => {
     setInvokeHandler(() => { throw new Error("nope"); });
     expect(await syncSubscriptionEvent(sub())).toEqual({ calendar_event_id: null });
-    expect(notifyError).toHaveBeenCalledTimes(1);
+    expect(notify.error).toHaveBeenCalledTimes(1);
   });
 });
 

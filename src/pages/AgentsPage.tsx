@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Bot, Plus } from "lucide-react";
 import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
-import { Button, EmptyState, PageHeader, PANEL_TOP_BAR } from "../components/ui";
+import { Button, EmptyState, ICONS, PageHeader, PANEL_TOP_BAR, SidebarTitle } from "../components/ui";
 import { useAgents } from "../components/agents/useAgents";
 import { AgentList } from "../components/agents/AgentList";
 import { AgentDetail } from "../components/agents/AgentDetail";
@@ -44,7 +43,7 @@ export function AgentsPage() {
     return (
       <div>
         <PageHeader title={t.agents} />
-        <EmptyState icon={<Bot size={32} />} message={t.agents_off} />
+        <EmptyState icon={ICONS.agents} message={t.agents_off} />
       </div>
     );
   }
@@ -60,14 +59,14 @@ export function AgentsPage() {
   return (
     <div className="flex flex-1 min-h-0 -m-8">
       <aside className="w-72 shrink-0 flex flex-col min-h-0 border-r border-[var(--color-border-divider)]">
-        <div className={`${PANEL_TOP_BAR} pl-5 pr-3 justify-between border-[var(--color-border-divider)]`}>
-          <h1 className="text-sm font-semibold text-muted uppercase tracking-wider">{t.agents}</h1>
-          <Button size="sm" variant="ghost" icon={<Plus size={14} />} onClick={() => setStarting(true)}>
+        <div className={`${PANEL_TOP_BAR} pl-5 pr-3 justify-between border-[var(--color-border)]`}>
+          <SidebarTitle className="truncate">{t.agents}</SidebarTitle>
+          <Button variant="outline" icon={ICONS.add} onClick={() => setStarting(true)}>
             {t.agents_new}
           </Button>
         </div>
         {agents.length === 0 ? (
-          <EmptyState icon={<Bot size={32} />} message={t.agents_empty} />
+          <EmptyState icon={ICONS.agents} message={t.agents_empty} />
         ) : (
           <AgentList byGroup={byGroup} selectedId={selectedId} onSelect={select} />
         )}
@@ -102,7 +101,7 @@ export function AgentsPage() {
             )}
           </>
         ) : (
-          <EmptyState icon={<Bot size={32} />} message={t.agents_select_hint} />
+          <EmptyState icon={ICONS.agents} message={t.agents_select_hint} />
         )}
       </div>
     </div>

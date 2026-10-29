@@ -106,7 +106,8 @@ describe("StartAgentForm", () => {
 
   async function setup() {
     render(<StartAgentForm onStarted={() => {}} onCancel={() => {}} />);
-    await screen.findByRole("option", { name: /Org › Client › Project/ });
+    // The folder field (a DropdownSelect) shows the first folder once they have loaded.
+    await screen.findByText(/Org › Client › Project/);
   }
 
   it("slugifies names", () => {
@@ -176,7 +177,7 @@ describe("AgentsPage selection of a new agent", () => {
       </MemoryRouter>,
     );
     fireEvent.click(await screen.findByLabelText("Model"));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Opus 5.5" }));
+    fireEvent.click(screen.getByRole("option", { name: "Opus 5.5" }));
     await waitFor(() => expect(invokedCommands.some((c) => c.cmd === "agents_switch_model")).toBe(true));
     await emit("agents:changed", [old, next]);
     const row = await screen.findByRole("button", { name: /new-agent/ });

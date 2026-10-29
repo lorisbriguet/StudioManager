@@ -4,7 +4,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { listen } from "@tauri-apps/api/event";
 import { useT } from "../../i18n/useT";
-import { Button, PANEL_TOP_BAR } from "../ui";
+import { Button, Card, PANEL_TOP_BAR } from "../ui";
 import {
   AGENTS_TERM,
   AGENTS_TERM_EXIT,
@@ -169,17 +169,17 @@ export function TerminalPanel({ shortId, onClose }: TerminalPanelProps) {
   }, [shortId]);
 
   return (
-    <div className="rounded-xl border border-[var(--color-border-divider)] bg-[var(--color-surface)] overflow-hidden flex flex-col h-72 shrink-0">
-      <div className={`${PANEL_TOP_BAR} justify-between px-3 border-[var(--color-border-divider)]`}>
+    <Card tone="inset" padding="none" className="overflow-hidden flex flex-col h-72 shrink-0">
+      <div className={`${PANEL_TOP_BAR} justify-between px-3 border-[var(--color-border)]`}>
         <span className="text-sm text-muted">
           {ended ? t.agents_terminal_closed : shortId}
         </span>
-        <Button variant="ghost" size="sm" onClick={onClose}>
+        <Button variant="outline" onClick={onClose}>
           {t.agents_terminal_close}
         </Button>
       </div>
       {error && <p role="alert" className="p-3 text-sm text-[var(--color-danger-text)]">{error}</p>}
       <div ref={host} className={error ? "hidden" : "flex-1 min-h-0 p-2 overflow-hidden"} />
-    </div>
+    </Card>
   );
 }

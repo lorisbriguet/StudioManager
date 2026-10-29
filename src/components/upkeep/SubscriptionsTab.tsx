@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
-import { ask } from "@tauri-apps/plugin-dialog";
-import { Pencil, Plus, Trash2, XCircle } from "lucide-react";
-import { Badge, Button, EmptyState } from "../ui";
+import { Badge, Button, Callout, EmptyState, ICONS, IconButton, Table } from "../ui";
+import { useConfirm } from "../../lib/confirm";
 import { PrefilledExpenseModal } from "./PrefilledExpenseModal";
 import { SubscriptionForm } from "./SubscriptionForm";
 import { useT } from "../../i18n/useT";
@@ -20,6 +19,7 @@ import type { Subscription } from "../../types/upkeep";
 /** Subscriptions table, yearly total per currency and the renewals waiting for an expenses answer. */
 export function SubscriptionsTab() {
   const t = useT();
+  const confirm = useConfirm();
   const { data: subs = [] } = useSubscriptions();
   const { data: pending = [] } = usePendingRenewals();
   const decide = useDecideRenewal();
@@ -29,18 +29,15 @@ export function SubscriptionsTab() {
   const [adding, setAdding] = useState<PendingRenewal | null>(null);
 
   const totals = useMemo(() => [...yearlyTotal(subs).entries()], [subs]);
-  const head = "px-4 py-2.5 text-left text-xs font-normal text-muted border-b border-[var(--color-border-header)] whitespace-nowrap";
-  const cell = "px-4 py-2.5";
-  const iconBtn = "p-1.5 rounded-md text-[var(--color-muted)] hover:bg-[var(--color-hover-row)] hover:text-[var(--color-text-secondary)]";
 
   const yearly = (s: Subscription) => (s.period === "month" ? s.cost * 12 : s.cost);
 
   const doCancel = async (s: Subscription) => {
-    if (!(await ask(t.upkeep_sub_cancel_confirm, { kind: "warning" }))) return;
+    if (!(await confirm({ title: t.upkeep_sub_cancel_confirm, confirmLabel: t.upkeep_sub_cancel, tone: "danger" }))) return;
     cancel.mutate(s.id);
   };
   const remove = async (s: Subscription) => {
-    if (!(await ask(t.upkeep_sub_delete_confirm, { kind: "warning" }))) return;
+    if (!(await confirm({ title: t.upkeep_sub_delete_confirm, confirmLabel: t.delete, tone: "danger" }))) return;
     del.mutate(s.id);
   };
 
@@ -49,21 +46,21 @@ export function SubscriptionsTab() {
       {pending.length > 0 && (
         <div className="space-y-2">
           {pending.map((r) => (
-            <div
+            <Callout
               key={r.id}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--color-warning-bg)] text-[var(--color-warning-text)] text-sm"
+              tone="warning"
+              action={<>
+                <span className="text-xs tabular-nums">{formatDisplayDate(r.renewed_on)}</span>
+                <Button onClick={() => setAdding(r)}>{t.upkeep_renewal_add}</Button>
+                <Button variant="secondary" onClick={() => decide.mutate({ id: r.id, decision: "skipped" })}>
+                  {t.upkeep_renewal_skip}
+                </Button>
+              </>}
             >
-              <span className="flex-1">
-                {t.upkeep_renewed_add
-                  .replace("{name}", r.name)
-                  .replace("{amount}", formatMoney(r.amount, r.currency))}
-              </span>
-              <span className="text-xs tabular-nums">{formatDisplayDate(r.renewed_on)}</span>
-              <Button size="sm" onClick={() => setAdding(r)}>{t.upkeep_renewal_add}</Button>
-              <Button size="sm" variant="secondary" onClick={() => decide.mutate({ id: r.id, decision: "skipped" })}>
-                {t.upkeep_renewal_skip}
-              </Button>
-            </div>
+              {t.upkeep_renewed_add
+                .replace("{name}", r.name)
+                .replace("{amount}", formatMoney(r.amount, r.currency))}
+            </Callout>
           ))}
         </div>
       )}
@@ -74,81 +71,64 @@ export function SubscriptionsTab() {
             <div key={cur}>{t.upkeep_yearly_total.replace("{amount}", formatMoney(amount, cur))}</div>
           ))}
         </div>
-        <Button icon={<Plus size={14} />} onClick={() => setEditing("new")}>{t.upkeep_add_subscription}</Button>
+        <Button icon={ICONS.add} onClick={() => setEditing("new")}>{t.upkeep_add_subscription}</Button>
       </div>
 
-      {subs.length === 0 ? (
-        <EmptyState message={t.upkeep_subs_empty} />
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr>
-                <th className={head}>{t.name}</th>
-                <th className={head}>{t.upkeep_col_renews}</th>
-                <th className={head}>{t.upkeep_col_period}</th>
-                <th className={`${head} text-right`}>{t.upkeep_col_cost}</th>
-                <th className={`${head} text-right`}>{t.upkeep_col_per_year}</th>
-                <th className={head}>{t.upkeep_col_status}</th>
-                <th className={head} />
-              </tr>
-            </thead>
-            <tbody>
-              {subs.map((s) => {
-                const off = s.status === "cancelled";
-                return (
-                  <tr
-                    key={s.id}
-                    className={`border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] transition-colors ${off ? "opacity-50" : ""}`}
-                  >
-                    <td className={cell}>
-                      <div className="font-medium">{s.name}</div>
-                      {s.plan && <div className="text-xs text-muted">{s.plan}</div>}
-                    </td>
-                    <td className={`${cell} tabular-nums`}>{off ? "" : formatDisplayDate(s.renews_on)}</td>
-                    <td className={`${cell} text-muted`}>
-                      {s.period === "month" ? t.upkeep_period_month : t.upkeep_period_year}
-                    </td>
-                    <td className={`${cell} text-right tabular-nums`}>{formatMoney(s.cost, s.currency)}</td>
-                    <td className={`${cell} text-right tabular-nums`}>{formatMoney(yearly(s), s.currency)}</td>
-                    <td className={cell}>
-                      <Badge variant={off ? "neutral" : "success"}>{off ? t.cancelled : t.active}</Badge>
-                    </td>
-                    <td className={cell}>
-                      <div className="flex items-center justify-end gap-1">
-                        <button type="button" className={iconBtn} aria-label={t.edit} title={t.edit} onClick={() => setEditing(s)}>
-                          <Pencil size={14} />
-                        </button>
-                        {!off && (
-                          <button
-                            type="button"
-                            className={iconBtn}
-                            aria-label={t.upkeep_sub_cancel}
-                            title={t.upkeep_sub_cancel}
-                            onClick={() => void doCancel(s)}
-                          >
-                            <XCircle size={14} />
-                          </button>
-                        )}
-                        <button type="button" className={iconBtn} aria-label={t.delete} title={t.delete} onClick={() => void remove(s)}>
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <Table>
+        <Table.Head>
+          <Table.Th>{t.name}</Table.Th>
+          <Table.Th>{t.upkeep_col_renews}</Table.Th>
+          <Table.Th>{t.upkeep_col_period}</Table.Th>
+          <Table.Th numeric>{t.upkeep_col_cost}</Table.Th>
+          <Table.Th numeric>{t.upkeep_col_per_year}</Table.Th>
+          <Table.Th>{t.upkeep_col_status}</Table.Th>
+          <Table.ActionsTh />
+        </Table.Head>
+        <Table.Body>
+          {subs.map((s) => {
+            const off = s.status === "cancelled";
+            return (
+              <Table.Row key={s.id} className={off ? "opacity-50" : ""}>
+                <Table.Td>
+                  <div className="font-medium">{s.name}</div>
+                  {s.plan && <div className="text-xs text-muted">{s.plan}</div>}
+                </Table.Td>
+                <Table.Td className="tabular-nums">{off ? "" : formatDisplayDate(s.renews_on)}</Table.Td>
+                <Table.Td muted>
+                  {s.period === "month" ? t.upkeep_period_month : t.upkeep_period_year}
+                </Table.Td>
+                <Table.Td numeric>{formatMoney(s.cost, s.currency)}</Table.Td>
+                <Table.Td numeric>{formatMoney(yearly(s), s.currency)}</Table.Td>
+                <Table.Td>
+                  <Badge variant={off ? "neutral" : "success"}>{off ? t.cancelled : t.active}</Badge>
+                </Table.Td>
+                <Table.Actions>
+                  <IconButton size="xs" icon={ICONS.edit} label={t.edit} onClick={() => setEditing(s)} />
+                  {!off && (
+                    <IconButton size="xs" icon={ICONS.danger} label={t.upkeep_sub_cancel} onClick={() => void doCancel(s)} />
+                  )}
+                  <IconButton size="xs" icon={ICONS.delete} label={t.delete} tone="danger" onClick={() => void remove(s)} />
+                </Table.Actions>
+              </Table.Row>
+            );
+          })}
+          {subs.length === 0 && (
+            <Table.Empty colSpan={7}>
+              <EmptyState
+                icon={ICONS.recurring}
+                message={t.upkeep_subs_empty}
+                action={<Button icon={ICONS.add} onClick={() => setEditing("new")}>{t.upkeep_add_subscription}</Button>}
+              />
+            </Table.Empty>
+          )}
+        </Table.Body>
+      </Table>
 
       {editing && (
         <SubscriptionForm subscription={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} />
       )}
       {adding && (
         <PrefilledExpenseModal
-          title={t.upkeep_renewal_expense_title}
           supplier={subs.find((s) => s.id === adding.subscription_id)?.vendor ?? adding.name}
           amount={adding.amount}
           date={adding.renewed_on}

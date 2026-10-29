@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { FileText, Link2, Paperclip, Plus, X } from "lucide-react";
+import { Paperclip } from "lucide-react";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { openMachineAttachment } from "../../lib/upkeep/openAttachment";
-import { Button, Input } from "../ui";
-import { SectionTitle } from "./SectionTitle";
+import { Button, DatePicker, EmptyState, ICONS, ICON_SIZE, IconButton, Input, PanelTitle, Table } from "../ui";
 import { useT } from "../../i18n/useT";
 import {
   useAddMachineFile,
@@ -12,15 +11,12 @@ import {
   useRemoveMachineFile,
   useServiceLog,
 } from "../../db/hooks/useUpkeep";
-import { notifyError } from "../../lib/notifyError";
+import { notify } from "../../lib/notify";
 import { formatDisplayDate } from "../../utils/formatDate";
 import { todayLocalISO } from "../../utils/localDate";
 
-const iconBtn =
-  "p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors";
-
 /** Attached files (copied into the org folder) and links, each with a label. */
-export function FilesSection({ machineId }: { machineId: number }) {
+export function FilesSection({ machineId, headingAs = "h2" }: { machineId: number; headingAs?: "h2" | "h3" }) {
   const t = useT();
   const { data: files = [] } = useMachineFiles(machineId);
   const add = useAddMachineFile();
@@ -38,7 +34,7 @@ export function FilesSection({ machineId }: { machineId: number }) {
         file: { label: picked.split("/").pop() ?? picked, kind: "file", path_or_url: picked },
       });
     } catch (e) {
-      notifyError(t.upkeep_file_failed, e);
+      notify.error(t.upkeep_file_failed, e);
     }
   };
 
@@ -51,48 +47,54 @@ export function FilesSection({ machineId }: { machineId: number }) {
 
   return (
     <section>
-      <SectionTitle aside={
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="secondary" icon={<Paperclip size={14} />} onClick={() => void attach()}>
-              {t.upkeep_attach_file}
-            </Button>
-            <Button size="sm" variant="secondary" icon={<Link2 size={14} />} onClick={() => setAdding((a) => !a)}>
-              {t.upkeep_add_link}
-            </Button>
-          </div>
-        }>{t.upkeep_files_links}</SectionTitle>
+      <PanelTitle
+        as={headingAs}
+        title={t.upkeep_files_links}
+        className="mb-3"
+        action={<>
+          <Button variant="secondary" icon={Paperclip} onClick={() => void attach()}>
+            {t.upkeep_attach_file}
+          </Button>
+          <Button variant="secondary" icon={ICONS.link} onClick={() => setAdding((a) => !a)}>
+            {t.upkeep_add_link}
+          </Button>
+        </>}
+      />
       {adding && (
         <div className="flex items-center gap-2 mb-3">
-          <Input placeholder={t.label} value={label} onChange={(e) => setLabel(e.target.value)} />
-          <Input placeholder="https://" value={url} onChange={(e) => setUrl(e.target.value)} />
-          <Button size="sm" onClick={saveLink}>{t.add}</Button>
+          <Input placeholder={t.label} aria-label={t.label} value={label} onChange={(e) => setLabel(e.target.value)} />
+          <Input placeholder="https://" aria-label={t.upkeep_add_link} value={url} onChange={(e) => setUrl(e.target.value)} />
+          <Button onClick={saveLink}>{t.add}</Button>
         </div>
       )}
       {files.length === 0 ? (
-        <p className="text-sm text-muted">{t.upkeep_files_empty}</p>
+        <EmptyState size="sm" message={t.upkeep_files_empty} />
       ) : (
         <ul className="space-y-1">
-          {files.map((f) => (
-            <li key={f.id} className="flex items-center gap-2 text-sm">
-              {f.kind === "link" ? <Link2 size={14} className="text-muted" /> : <FileText size={14} className="text-muted" />}
-              <button
-                type="button"
-                className="truncate text-left hover:text-accent"
-                onClick={() => void openMachineAttachment(f).catch((e) => notifyError(t.upkeep_file_failed, e))}
-              >
-                {f.label}
-              </button>
-              <button
-                type="button"
-                aria-label={t.upkeep_remove_file}
-                title={t.upkeep_remove_file}
-                className={`${iconBtn} ml-auto`}
-                onClick={() => remove.mutate({ fileId: f.id, machineId })}
-              >
-                <X size={14} />
-              </button>
-            </li>
-          ))}
+          {files.map((f) => {
+            const Icon = f.kind === "link" ? ICONS.link : ICONS.document;
+            return (
+              <li key={f.id} className="group flex items-center gap-2 text-sm">
+                <Icon size={ICON_SIZE.control} className="text-muted shrink-0" />
+                <Button
+                  variant="link"
+                  className="truncate text-sm"
+                  onClick={() => void openMachineAttachment(f).catch((e) => notify.error(t.upkeep_file_failed, e))}
+                >
+                  {f.label}
+                </Button>
+                <IconButton
+                  size="xs"
+                  icon={ICONS.close}
+                  label={t.upkeep_remove_file}
+                  tone="danger"
+                  reveal
+                  className="ml-auto"
+                  onClick={() => remove.mutate({ fileId: f.id, machineId })}
+                />
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>
@@ -100,7 +102,7 @@ export function FilesSection({ machineId }: { machineId: number }) {
 }
 
 /** Dated log of what was done; entries come from mark-done or by hand. */
-export function ServiceLogSection({ machineId }: { machineId: number }) {
+export function ServiceLogSection({ machineId, headingAs = "h2" }: { machineId: number; headingAs?: "h2" | "h3" }) {
   const t = useT();
   const { data: log = [] } = useServiceLog(machineId);
   const add = useAddServiceLog();
@@ -121,46 +123,48 @@ export function ServiceLogSection({ machineId }: { machineId: number }) {
     setAdding(false); setWhat(""); setCost(""); setReading("");
   };
 
-  const head = "px-2 py-1.5 text-left text-xs font-normal text-muted border-b border-[var(--color-border-header)]";
   return (
     <section>
-      <SectionTitle aside={
-          <Button size="sm" variant="secondary" icon={<Plus size={14} />} onClick={() => setAdding((a) => !a)}>
+      <PanelTitle
+        as={headingAs}
+        title={t.upkeep_service_log}
+        className="mb-3"
+        action={
+          <Button variant="secondary" icon={ICONS.add} onClick={() => setAdding((a) => !a)}>
             {t.upkeep_log_add}
           </Button>
-        }>{t.upkeep_service_log}</SectionTitle>
+        }
+      />
       {adding && (
         <div className="grid grid-cols-[8rem_1fr_6rem_6rem_auto] gap-2 mb-3 items-center">
-          <Input type="date" aria-label={t.date} value={doneOn} onChange={(e) => setDoneOn(e.target.value)} />
+          <DatePicker aria-label={t.date} value={doneOn} onChange={(v) => setDoneOn(v ?? todayLocalISO())} />
           <Input placeholder={t.upkeep_log_what} aria-label={t.upkeep_log_what} value={what} onChange={(e) => setWhat(e.target.value)} />
-          <Input type="number" min={0} placeholder={t.upkeep_cost} aria-label={t.upkeep_cost} value={cost} onChange={(e) => setCost(e.target.value)} />
-          <Input type="number" min={0} placeholder={t.upkeep_reading} aria-label={t.upkeep_reading} value={reading} onChange={(e) => setReading(e.target.value)} />
-          <Button size="sm" onClick={save}>{t.add}</Button>
+          <Input type="number" min={0} numeric placeholder={t.upkeep_cost} aria-label={t.upkeep_cost} value={cost} onChange={(e) => setCost(e.target.value)} />
+          <Input type="number" min={0} numeric placeholder={t.upkeep_reading} aria-label={t.upkeep_reading} value={reading} onChange={(e) => setReading(e.target.value)} />
+          <Button onClick={save}>{t.add}</Button>
         </div>
       )}
       {log.length === 0 ? (
-        <p className="text-sm text-muted">{t.upkeep_log_empty}</p>
+        <EmptyState size="sm" message={t.upkeep_log_empty} />
       ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr>
-              <th className={head}>{t.date}</th>
-              <th className={head}>{t.upkeep_log_what}</th>
-              <th className={`${head} text-right`}>{t.upkeep_cost}</th>
-              <th className={`${head} text-right`}>{t.upkeep_reading}</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table density="compact">
+          <Table.Head>
+            <Table.Th>{t.date}</Table.Th>
+            <Table.Th>{t.upkeep_log_what}</Table.Th>
+            <Table.Th numeric>{t.upkeep_cost}</Table.Th>
+            <Table.Th numeric>{t.upkeep_reading}</Table.Th>
+          </Table.Head>
+          <Table.Body>
             {log.map((e) => (
-              <tr key={e.id} className="border-b border-[var(--color-border-divider)]">
-                <td className="px-2 py-1.5 tabular-nums whitespace-nowrap">{formatDisplayDate(e.done_on)}</td>
-                <td className="px-2 py-1.5">{e.description}</td>
-                <td className="px-2 py-1.5 text-right tabular-nums text-muted">{e.cost != null ? e.cost.toFixed(2) : ""}</td>
-                <td className="px-2 py-1.5 text-right tabular-nums text-muted">{e.reading ?? ""}</td>
-              </tr>
+              <Table.Row key={e.id}>
+                <Table.Td className="tabular-nums whitespace-nowrap">{formatDisplayDate(e.done_on)}</Table.Td>
+                <Table.Td>{e.description}</Table.Td>
+                <Table.Td numeric muted>{e.cost != null ? e.cost.toFixed(2) : ""}</Table.Td>
+                <Table.Td numeric muted>{e.reading ?? ""}</Table.Td>
+              </Table.Row>
             ))}
-          </tbody>
-        </table>
+          </Table.Body>
+        </Table>
       )}
     </section>
   );

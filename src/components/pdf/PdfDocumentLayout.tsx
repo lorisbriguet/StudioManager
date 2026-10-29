@@ -5,6 +5,7 @@ import type { Client, ClientAddress } from "../../types/client";
 import type { BusinessProfile } from "../../types/business-profile";
 import type { InvoiceTemplate } from "../../types/invoice-template";
 import { createDocumentStyles } from "./documentStyles";
+import { PDF } from "./pdfPalette";
 
 interface PdfLineItem {
   designation: string;
@@ -220,7 +221,7 @@ export function PdfDocumentLayout({
 
           {/* Global rate label */}
           {isGlobalRate && (
-            <Text style={{ fontSize: 8, color: "#666", marginTop: 4, marginBottom: 4 }}>
+            <Text style={{ fontSize: 8, color: PDF.muted, marginTop: 4, marginBottom: 4 }}>
               {t.all_items_at} {formatAmount(lineItems[0].rate!)} / {(t as Record<string, string>)[`unit_${lineItems[0].unit}`] ?? lineItems[0].unit}
             </Text>
           )}

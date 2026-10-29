@@ -1,17 +1,17 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { ask } from "@tauri-apps/plugin-dialog";
-import { toast } from "sonner";
-import { Database as DatabaseIcon } from "lucide-react";
+import { useConfirm } from "../../lib/confirm";
+import { ICONS } from "../ui/icons";
 import { Button } from "../ui/Button";
 import { Select } from "../ui/Select";
 import { getDb } from "../../db";
 import { PERSONAS, PERSONA_IDS, seedPersona, type PersonaId } from "../../db/seeds/personas";
 import { useAppStore } from "../../stores/app-store";
 import { useOrgStore } from "../../stores/org-store";
-import { notifyError } from "../../lib/notifyError";
+import { notify } from "../../lib/notify";
 import { useT } from "../../i18n/useT";
+import { SettingRow, SettingsCard } from "../ui/Settings";
 
 /** Demo build only: replace the active organisation's data with a persona seed. */
 export function DemoDataCard() {
@@ -24,10 +24,16 @@ export function DemoDataCard() {
   const [persona, setPersona] = useState<PersonaId>("designer");
   const [loading, setLoading] = useState(false);
   const blocked = testMode || presentationMode;
+  const confirm = useConfirm();
 
   const load = async () => {
     if (blocked || loading) return;
-    const confirmed = await ask(t.demo_data_confirm.replace("{name}", orgName), { kind: "warning" });
+    const confirmed = await confirm({
+      title: t.demo_data_title.replace("{name}", orgName),
+      message: t.demo_data_confirm.replace("{name}", orgName),
+      confirmLabel: t.demo_data_replace,
+      tone: "danger",
+    });
     if (!confirmed) return;
     setLoading(true);
     try {
@@ -37,33 +43,28 @@ export function DemoDataCard() {
       useAppStore.getState().setShowTasksPage(prefs.showTasksPage);
       queryClient.clear();
       navigate("/");
-      toast.success(t.demo_data_loaded.replace("{name}", orgName));
+      notify.success(t.demo_data_loaded.replace("{name}", orgName));
     } catch (e) {
-      notifyError(t.operation_failed, e);
+      notify.error(t.error_load_demo_data, e);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <section className="rounded-xl bg-[var(--color-surface)] border border-[var(--color-border-divider)] px-4 pt-3 pb-3">
-      <div className="border-b border-[var(--color-border-divider)] pb-2 mb-3">
-        <h2 className="text-[10px] font-medium uppercase tracking-widest text-muted">{t.demo_data}</h2>
-        <p className="text-xs text-muted mt-1 normal-case tracking-normal">{t.demo_data_desc}</p>
-      </div>
-      <div className="flex items-center justify-between gap-3 py-2.5">
-        <label className="text-sm" htmlFor="demo-persona">{t.demo_data_persona}</label>
+    <SettingsCard title={t.demo_data} desc={t.demo_data_desc}>
+      <SettingRow label={t.demo_data_persona} htmlFor="demo-persona">
         <Select id="demo-persona" fullWidth={false} value={persona} onChange={(e) => setPersona(e.target.value as PersonaId)} disabled={loading}>
           {PERSONA_IDS.map((id) => (
             <option key={id} value={id}>{t[PERSONAS[id].labelKey]}</option>
           ))}
         </Select>
-      </div>
-      <div className="pt-1">
-        <Button type="button" size="sm" icon={<DatabaseIcon size={12} />} onClick={() => void load()} disabled={blocked || loading} loading={loading} title={testMode ? t.demo_data_blocked_test : presentationMode ? t.demo_data_blocked_presentation : undefined}>
+      </SettingRow>
+      <div className="pt-1 pb-2">
+        <Button type="button" icon={ICONS.demoData} onClick={() => void load()} disabled={blocked || loading} loading={loading} title={testMode ? t.demo_data_blocked_test : presentationMode ? t.demo_data_blocked_presentation : undefined}>
           {t.demo_data_load}
         </Button>
       </div>
-    </section>
+    </SettingsCard>
   );
 }

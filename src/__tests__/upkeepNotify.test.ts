@@ -1,12 +1,16 @@
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("../lib/notifyError", async () => {
+vi.mock("../lib/notify", async (orig) => {
   const { uiLabels } = await vi.importActual<typeof import("../i18n/ui")>("../i18n/ui");
-  return { notifyError: vi.fn(), getLabels: vi.fn(() => uiLabels.EN) };
+  return {
+    ...(await orig<typeof import("../lib/notify")>()),
+    ...(await import("../__mocks__/notify")).notifyMockModule(),
+    getLabels: vi.fn(() => uiLabels.EN),
+  };
 });
 
 import { planNotifications, type PlanInput } from "../lib/upkeep/notify";
-import { getLabels } from "../lib/notifyError";
+import { getLabels } from "../lib/notify";
 import { updateMachine } from "../db/queries/machines";
 import { executedStatements, clearExecutedStatements } from "../__mocks__/tauri-sql";
 import type {

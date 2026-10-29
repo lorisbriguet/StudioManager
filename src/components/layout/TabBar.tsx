@@ -1,10 +1,10 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { TabItem } from "../ui/TabItem";
 import { useTabStore, predictNextActiveTab, type Tab } from "../../stores/tab-store";
 import { confirmIfDirty } from "../../lib/dirty-guard";
 import { useT } from "../../i18n/useT";
+import { ICONS, IconButton } from "../ui";
 
 export function TabBar() {
   const t = useT();
@@ -78,26 +78,8 @@ export function TabBar() {
     <div className="flex items-center border-b border-[var(--color-border-divider)] bg-[var(--color-bg)] shrink-0" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
       {/* Back / Forward navigation */}
       <div className="flex items-center shrink-0 ml-1.5 gap-0.5">
-        <button
-          type="button"
-          disabled={!canGoBack}
-          onClick={() => navigate(-1)}
-          className="p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
-          title={t.back}
-          aria-label={t.back}
-        >
-          <ChevronLeft size={14} />
-        </button>
-        <button
-          type="button"
-          disabled={!canGoForward}
-          onClick={() => navigate(1)}
-          className="p-1 rounded-md text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
-          title={t.forward}
-          aria-label={t.forward}
-        >
-          <ChevronRight size={14} />
-        </button>
+        <IconButton icon={ICONS.prev} label={t.back} onClick={() => navigate(-1)} disabled={!canGoBack} />
+        <IconButton icon={ICONS.next} label={t.forward} onClick={() => navigate(1)} disabled={!canGoForward} />
       </div>
       <div
         ref={scrollRef}
@@ -115,15 +97,7 @@ export function TabBar() {
           />
         ))}
       </div>
-      <button
-        type="button"
-        onClick={handleNewTab}
-        aria-label={t.new_tab}
-        title={t.new_tab}
-        className="shrink-0 p-1.5 mx-1 text-muted hover:text-[var(--color-text-secondary)] rounded-md transition-colors"
-      >
-        <Plus size={14} />
-      </button>
+      <IconButton icon={ICONS.add} label={t.new_tab} onClick={handleNewTab} className="mx-1" />
     </div>
   );
 }

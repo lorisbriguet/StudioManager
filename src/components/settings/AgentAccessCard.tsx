@@ -2,9 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
-import { SettingRow, SettingsCard } from "./SettingsPrimitives";
+import { SettingRow, SettingsCard } from "../ui/Settings";
 import { Toggle } from "../ui/Toggle";
 import { Button } from "../ui/Button";
+import { SectionLabel } from "../ui/SectionLabel";
+import { Checkbox } from "../ui/Checkbox";
+import { FormActions } from "../ui/Form";
+import { EmptyState } from "../ui/EmptyState";
 import { useOrgStore } from "../../stores/org-store";
 import { useT } from "../../i18n/useT";
 
@@ -130,14 +134,11 @@ export function AgentAccessCard() {
             <ul className="space-y-1">
               {organisations.map((o) => (
                 <li key={o.id}>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={info.orgs[o.id] !== false}
-                      onChange={(e) => void save({ enabled: info.enabled, allowMoney: info.allowMoney, orgs: { ...info.orgs, [o.id]: e.target.checked } })}
-                    />
-                    {o.name}
-                  </label>
+                  <Checkbox
+                    label={o.name}
+                    checked={info.orgs[o.id] !== false}
+                    onChange={(e) => void save({ enabled: info.enabled, allowMoney: info.allowMoney, orgs: { ...info.orgs, [o.id]: e.target.checked } })}
+                  />
                 </li>
               ))}
             </ul>
@@ -152,20 +153,20 @@ export function AgentAccessCard() {
           </SettingRow>
 
           <div className="py-2.5 border-b border-[var(--color-border-divider)]">
-            <div className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1">{t.agent_access_connect}</div>
+            <SectionLabel className="mb-1">{t.agent_access_connect}</SectionLabel>
             {info.claudeDesktopInstalled && (
               <SettingRow label={t.agent_access_claude_desktop}>
-                <Button size="sm" variant="secondary" onClick={() => void startAdd()}>{t.agent_access_add}</Button>
+                <Button variant="secondary" onClick={() => void startAdd()}>{t.agent_access_add}</Button>
               </SettingRow>
             )}
             {preview !== null && (
               <div className="rounded-lg border border-[var(--color-border-divider)] p-3 my-2">
                 <p className="text-xs text-muted mb-1">{t.agent_access_preview_hint}</p>
                 <pre className="text-xs overflow-auto max-h-48 whitespace-pre-wrap">{preview}</pre>
-                <div className="flex gap-2 mt-2">
-                  <Button size="sm" onClick={() => void confirmAdd()}>{t.agent_access_confirm}</Button>
-                  <Button size="sm" variant="ghost" onClick={() => setPreview(null)}>{t.agent_access_cancel}</Button>
-                </div>
+                <FormActions className="mt-2">
+                  <Button variant="secondary" onClick={() => setPreview(null)}>{t.agent_access_cancel}</Button>
+                  <Button onClick={() => void confirmAdd()}>{t.agent_access_confirm}</Button>
+                </FormActions>
               </div>
             )}
             {installed && <p className="text-xs text-muted py-1">{t.agent_access_installed}</p>}
@@ -174,22 +175,22 @@ export function AgentAccessCard() {
               <span className="flex items-center gap-2">
                 {copied === "code" && <span className="text-xs text-muted">{t.agent_access_copied}</span>}
                 {copyError?.key === "code" && <span role="alert" className="text-xs text-danger-text">{copyError.message}</span>}
-                <Button size="sm" variant="secondary" onClick={() => void copy("code", info.claudeCodeCommand)}>{t.agent_access_copy_command}</Button>
+                <Button variant="secondary" onClick={() => void copy("code", info.claudeCodeCommand)}>{t.agent_access_copy_command}</Button>
               </span>
             </SettingRow>
             <SettingRow label={t.agent_access_other}>
               <span className="flex items-center gap-2">
                 {copied === "config" && <span className="text-xs text-muted">{t.agent_access_copied}</span>}
                 {copyError?.key === "config" && <span role="alert" className="text-xs text-danger-text">{copyError.message}</span>}
-                <Button size="sm" variant="secondary" onClick={() => void copy("config", info.genericConfig)}>{t.agent_access_copy_config}</Button>
+                <Button variant="secondary" onClick={() => void copy("config", info.genericConfig)}>{t.agent_access_copy_config}</Button>
               </span>
             </SettingRow>
           </div>
 
           <div className="py-2.5 border-b border-[var(--color-border-divider)]">
-            <div className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1">{t.agent_access_recent}</div>
+            <SectionLabel className="mb-1">{t.agent_access_recent}</SectionLabel>
             {log.length === 0 ? (
-              <p className="text-xs text-muted">{t.agent_access_none}</p>
+              <EmptyState size="sm" message={t.agent_access_none} />
             ) : (
               <ul className="space-y-1">
                 {log.map((l, i) => (
@@ -206,9 +207,9 @@ export function AgentAccessCard() {
       )}
 
       <div className="py-2.5">
-        <button type="button" className="text-xs text-accent hover:underline" onClick={() => void openUrl(HELP_URL)}>
+        <Button type="button" variant="link" onClick={() => void openUrl(HELP_URL)}>
           {t.agent_access_help}
-        </button>
+        </Button>
       </div>
     </SettingsCard>
   );

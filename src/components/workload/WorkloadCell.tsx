@@ -2,9 +2,9 @@ import { useState, useRef, useEffect, useCallback, memo } from "react";
 import type { WorkloadColumn, SelectOption } from "../../types/workload";
 import { SelectTagPicker } from "./SelectTagPicker";
 import { evaluateFormula } from "../../lib/formulaEval";
-import { getStoredTagColor } from "../../lib/tagColors";
-import { useAppStore } from "../../stores/app-store";
+import { Tag } from "../ui/Tag";
 
+import { Checkbox, Input } from "../ui";
 interface Props {
   column: WorkloadColumn;
   value: unknown;
@@ -25,17 +25,18 @@ export const WorkloadCell = memo(function WorkloadCell({
     case "link": // "link" is now just a text column (row IS the task)
       return (
         <TextCell
+          label={column.name}
           value={(value as string) ?? ""}
           onChange={onChange}
         />
       );
     case "number":
       return (
-        <NumberCell value={value as number | undefined} onChange={onChange} />
+        <NumberCell label={column.name} value={value as number | undefined} onChange={onChange} />
       );
     case "checkbox":
       return (
-        <CheckboxCell value={!!value} onChange={onChange} />
+        <CheckboxCell label={column.name} value={!!value} onChange={onChange} />
       );
     case "select":
     case "multi_select":
@@ -65,9 +66,11 @@ function normalizeSelectValue(value: unknown, multi: boolean): string[] {
 // ── Text Cell ──────────────────────────────────────────────
 
 function TextCell({
+  label,
   value,
   onChange,
 }: {
+  label: string;
   value: string;
   onChange: (v: string) => void;
 }) {
@@ -90,8 +93,9 @@ function TextCell({
 
   if (editing) {
     return (
-      <input
+      <Input
         ref={inputRef}
+        aria-label={label}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
@@ -99,7 +103,6 @@ function TextCell({
           if (e.key === "Enter") commit();
           if (e.key === "Escape") setEditing(false);
         }}
-        className="w-full text-sm border border-[var(--color-border-divider)] rounded-lg px-2 py-0.5 outline-none"
       />
     );
   }
@@ -117,9 +120,11 @@ function TextCell({
 // ── Number Cell ────────────────────────────────────────────
 
 function NumberCell({
+  label,
   value,
   onChange,
 }: {
+  label: string;
   value: number | undefined;
   onChange: (v: number) => void;
 }) {
@@ -144,9 +149,10 @@ function NumberCell({
 
   if (editing) {
     return (
-      <input
+      <Input
         ref={inputRef}
-        type="number"
+        numeric
+        aria-label={label}
         step="any"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
@@ -155,7 +161,6 @@ function NumberCell({
           if (e.key === "Enter") commit();
           if (e.key === "Escape") setEditing(false);
         }}
-        className="w-full text-sm border border-[var(--color-border-divider)] rounded-lg px-2 py-0.5 outline-none text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
       />
     );
   }
@@ -173,19 +178,21 @@ function NumberCell({
 // ── Checkbox Cell ──────────────────────────────────────────
 
 function CheckboxCell({
+  label,
   value,
   onChange,
 }: {
+  /** The column's name: the checkbox's accessible name. */
+  label: string;
   value: boolean;
   onChange: (v: boolean) => void;
 }) {
   return (
     <div className="flex justify-center items-center min-h-[28px]">
-      <input
-        type="checkbox"
+      <Checkbox
         checked={value}
+        aria-label={label}
         onChange={() => onChange(!value)}
-        className="rounded cursor-pointer"
       />
     </div>
   );
@@ -208,7 +215,6 @@ function SelectCell({
 }) {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLDivElement>(null);
-  const darkMode = useAppStore((s) => s.darkMode);
 
   return (
     <div ref={anchorRef} className="relative min-h-[28px] flex items-center flex-wrap gap-1">
@@ -219,16 +225,7 @@ function SelectCell({
         {value.length === 0 && <span className="text-muted text-sm">&nbsp;</span>}
         {value.map((v) => {
           const opt = options.find((o) => o.value === v);
-          const c = getStoredTagColor(opt?.color, darkMode);
-          return (
-            <span
-              key={v}
-              style={{ background: c.bg, color: c.text }}
-              className="inline-block px-2 py-0.5 rounded-full text-xs"
-            >
-              {v}
-            </span>
-          );
+          return <Tag key={v} name={v} color={opt?.color ?? null} />;
         })}
       </div>
       {open && (

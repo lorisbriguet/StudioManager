@@ -1,13 +1,14 @@
 import React, { useState, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Eye, ChevronRight, Pencil, Trash2, CheckCircle, Send, Repeat, RefreshCw, X, AlertTriangle, ExternalLink, FileText, Settings2, Download, Mail } from "lucide-react";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { useQueryClient } from "@tanstack/react-query";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { pdf } from "@react-pdf/renderer";
-import { undoable, undoableFromStore } from "../lib/undo";
+import { undoable, deleteWithUndo } from "../lib/undo";
+import { useConfirm } from "../lib/confirm";
+import { settleDraftBeforeExport } from "../lib/confirmDraftExport";
+import { useBulkDelete } from "../hooks/useBulkDelete";
 import { useInvoices, useUpdateInvoice, useDeleteInvoice } from "../db/hooks/useInvoices";
 import { getInvoice, getInvoiceLineItems } from "../db/queries/invoices";
 import { getClient, getClientContacts, getClientAddresses } from "../db/queries/clients";
@@ -21,19 +22,19 @@ import { runBulkPdfExport } from "../lib/bulkPdfExport";
 import { useClients } from "../db/hooks/useClients";
 import { useRecurringTemplates, useCreateRecurringTemplate, useDeleteRecurringTemplate, useUpdateRecurringTemplate } from "../db/hooks/useRecurring";
 import { runRecurringCheck } from "../hooks/useRecurringCheck";
-import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
+import { SortHeader, sortRows, type SortState } from "../components/ui/SortHeader";
 import { formatDisplayDate } from "../utils/formatDate";
 import { todayLocalISO, parseLocalDate } from "../utils/localDate";
 import { advanceDate } from "../utils/recurringDates";
 import { useT } from "../i18n/useT";
-import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
-import { BulkActionBar } from "../components/BulkActionBar";
-import { SavedFilterBar } from "../components/SavedFilterBar";
+import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu";
+import { BulkActionBar } from "../components/ui/BulkActionBar";
+import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useTabStore } from "../stores/tab-store";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { PageHeader, SearchBar, TableSkeleton, Button, EmptyState, Card, Modal, FormField, Input, Select } from "../components/ui";
+import { ICONS, PageHeader, SearchBar, Table, TableSkeleton, Button, EmptyState, QueryState, NoResults, ListSkeleton, Card, FormModal, FormField, FormGrid, DatePicker, Select, IconButton, CountBadge, Toggle } from "../components/ui";
 import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
 import { isDraftReference } from "../types/invoice";
 import type { Invoice, InvoiceStatus } from "../types/invoice";
@@ -41,6 +42,7 @@ import type { Client } from "../types/client";
 import type { RecurringFrequency } from "../types/recurring";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
+import { PILL } from "../components/ui/tokens";
 
 const FREQUENCIES: RecurringFrequency[] = ["monthly", "quarterly", "biannual", "annual"];
 
@@ -100,7 +102,8 @@ async function generateInvoicePdfBytes(
 
 export function InvoicesPage() {
   const t = useT();
-  const { data: invoices, isLoading } = useInvoices();
+  const invoicesQuery = useInvoices();
+  const { data: invoices } = invoicesQuery;
   const { data: clients } = useClients();
   const { data: templates } = useRecurringTemplates();
   const navigate = useNavigate();
@@ -123,7 +126,7 @@ export function InvoicesPage() {
       // runRecurringCheck toasts and refetches by itself when it generates;
       // only the "nothing due" case needs feedback here.
       const generated = await runRecurringCheck(qc);
-      if (generated === 0) toast.info(t.recurring_none_due);
+      if (generated === 0) notify.info(t.recurring_none_due);
     } finally {
       setGeneratingNow(false);
     }
@@ -223,15 +226,15 @@ export function InvoicesPage() {
     [bulk.selected, enriched]
   );
 
-  const bulkDelete = useCallback(async () => {
+  const confirm = useConfirm();
+  const deleteSelection = useBulkDelete("invoices", (id: number) => deleteInvoice.mutateAsync(id));
+  const bulkDelete = () => {
     if (selectionHasNonDraft) {
-      toast.error(t.invoice_delete_only_drafts);
+      notify.error(t.invoice_delete_only_drafts);
       return;
     }
-    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
-    ([...bulk.selected] as number[]).forEach((id) => deleteInvoice.mutate(id));
-    bulk.clearSelection();
-  }, [bulk, deleteInvoice, selectionHasNonDraft, t]);
+    void deleteSelection([...bulk.selected] as number[], bulk.clearSelection);
+  };
 
   const { expandedYears, groupedByYear, toggleYear } = useYearGrouping(
     filtered,
@@ -247,9 +250,10 @@ export function InvoicesPage() {
     () => new Map(visibleRows.map((r, i) => [r.id, i])),
     [visibleRows]
   );
+  const openInvoice = useCallback((inv: Invoice) => navigate(`/invoices/${inv.id}/edit`), [navigate]);
   const { focusIdx } = useListNavigation({
     items: visibleRows,
-    onOpen: useCallback((inv: (typeof visibleRows)[0]) => navigate(`/invoices/${inv.id}/edit`), [navigate]),
+    onOpen: openInvoice,
     onMenu: useCallback((inv: (typeof visibleRows)[0], pos: { x: number; y: number }) => setCtxMenu({ ...pos, item: inv }), []),
   });
 
@@ -268,29 +272,26 @@ export function InvoicesPage() {
     }
   };
 
+  const settleDraft = (inv: Invoice) =>
+    settleDraftBeforeExport(inv.reference, () => updateInvoice.mutateAsync({ id: inv.id, data: { status: "sent" } }));
+
   const doDownloadPdf = async (inv: Invoice & { client_name: string }) => {
-    if (inv.reference.startsWith("DRAFT")) {
-      const proceed = await ask(t.export_draft_warning, { kind: "warning", okLabel: t.download_pdf, cancelLabel: t.cancel });
-      if (!proceed) return;
-    }
-    const toastId = toast.loading(t.generating_pdf);
-    try {
-      const result = await generateInvoicePdfBytes(inv.id, inv.client_id);
-      if (!result) {
-        toast.error(t.invoice_not_found, { id: toastId });
-        return;
-      }
-      const processedBlob = new Blob([result.bytes], { type: "application/pdf" });
-      const url = URL.createObjectURL(processedBlob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = pdfFileName(result.reference, result.client.name);
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast.success(t.download_pdf, { id: toastId });
-    } catch (err) {
-      toast.error(String(err), { id: toastId });
-    }
+    if (!(await settleDraft(inv))) return;
+    await notify.progress(
+      t.generating_pdf,
+      (async () => {
+        const result = await generateInvoicePdfBytes(inv.id, inv.client_id);
+        if (!result) throw new Error(t.invoice_not_found);
+        const processedBlob = new Blob([result.bytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(processedBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = pdfFileName(result.reference, result.client.name);
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      })(),
+      { success: t.pdf_downloaded, error: t.failed_to_generate_pdf }
+    );
   };
 
   const handleEmailPdf = async (inv: Invoice & { client_name: string }) => {
@@ -304,30 +305,24 @@ export function InvoicesPage() {
   };
 
   const doEmailPdf = async (inv: Invoice & { client_name: string }) => {
-    if (inv.reference.startsWith("DRAFT")) {
-      const proceed = await ask(t.export_draft_warning, { kind: "warning", okLabel: t.email_pdf, cancelLabel: t.cancel });
-      if (!proceed) return;
-    }
-    const toastId = toast.loading(t.generating_pdf);
-    try {
-      const result = await generateInvoicePdfBytes(inv.id, inv.client_id);
-      if (!result) {
-        toast.error(t.invoice_not_found, { id: toastId });
-        return;
-      }
-      const { root } = await orgPaths();
-      const tempPath = `${root}/temp_${pdfFileName(result.reference, result.client.name)}`;
-      await writeFile(tempPath, result.bytes);
+    if (!(await settleDraft(inv))) return;
+    await notify.progress(
+      t.generating_pdf,
+      (async () => {
+        const result = await generateInvoicePdfBytes(inv.id, inv.client_id);
+        if (!result) throw new Error(t.invoice_not_found);
+        const { root } = await orgPaths();
+        const tempPath = `${root}/temp_${pdfFileName(result.reference, result.client.name)}`;
+        await writeFile(tempPath, result.bytes);
 
-      await invoke("share_pdf_via_mail", {
-        path: tempPath,
-        to: result.client.email ?? "",
-        subject: result.reference,
-      });
-      toast.dismiss(toastId);
-    } catch (err) {
-      toast.error(String(err), { id: toastId });
-    }
+        await invoke("share_pdf_via_mail", {
+          path: tempPath,
+          to: result.client.email ?? "",
+          subject: result.reference,
+        });
+      })(),
+      { success: null, error: t.error_email_pdf }
+    );
   };
 
   const bulkExportPdfs = async () => {
@@ -385,7 +380,11 @@ export function InvoicesPage() {
     // A manually chosen past date triggers the catch-up loop (one draft per
     // elapsed period) — legitimate for intentional backfill, so warn, don't block.
     if (recNextDue < todayLocalISO()) {
-      const proceed = await ask(t.recurring_past_date_warning, { kind: "warning", okLabel: t.create, cancelLabel: t.cancel });
+      const proceed = await confirm({
+        title: t.recurring_past_date_title,
+        message: t.recurring_past_date_warning,
+        confirmLabel: t.create,
+      });
       if (!proceed) return;
     }
     createTemplate.mutate(
@@ -398,7 +397,7 @@ export function InvoicesPage() {
       },
       {
         onSuccess: () => {
-          toast.success(t.template_created);
+          notify.success(t.template_created);
           setRecurringInv(null);
           setShowRecurring(true);
         },
@@ -436,10 +435,9 @@ export function InvoicesPage() {
       { id: inv.id, data: { reminder_count: newCount, last_reminder_date: today } },
       {
         onSuccess: () => {
-          toast.success(t.reminder_generated);
+          notify.success(t.reminder_generated);
           navigate(`/invoices/${inv.id}/preview`);
         },
-        onError: (e) => toast.error(String(e)),
       }
     );
   };
@@ -448,29 +446,26 @@ export function InvoicesPage() {
     <PageHeader title={t.invoices}>
       <Button
         variant="secondary"
-        icon={<Repeat size={14} />}
+        icon={ICONS.recurring}
         onClick={() => setShowRecurring(!showRecurring)}
-        className={showRecurring ? "border-accent text-accent bg-accent-light" : ""}
+        className={showRecurring ? "border-accent text-accent-text bg-accent-light" : ""}
       >
         {t.recurring}
         {(templates?.length ?? 0) > 0 && (
-          <span className="ml-1 text-xs bg-[var(--color-input-bg)] text-[var(--color-muted)] rounded-full px-1.5 py-0.5">
-            {templates?.length}
-          </span>
+          <CountBadge value={templates?.length ?? 0} className="ml-1" />
         )}
       </Button>
-      <Button icon={<Plus size={16} />} onClick={() => navigate("/invoices/new")}>
+      <Button icon={ICONS.add} onClick={() => navigate("/invoices/new")}>
         {t.new_invoice}
       </Button>
     </PageHeader>
   );
 
-  if (isLoading) return (
-    <div>
-      {header}
-      <TableSkeleton columns={6} />
-    </div>
-  );
+  const clearFilters = () => {
+    setSearch("");
+    setFilterConditions([]);
+    setActiveFilterId(null);
+  };
 
   return (
     <div>
@@ -478,101 +473,85 @@ export function InvoicesPage() {
 
       {/* Recurring templates panel */}
       {showRecurring && (
-        <Card className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-medium">{t.recurring_invoices}</h2>
-            <div className="flex items-center gap-3">
+        <Card className="mb-4">
+          <Card.Header
+            title={t.recurring_invoices}
+            onClose={() => setShowRecurring(false)}
+            action={
               <Button
                 variant="secondary"
-                size="sm"
-                icon={<RefreshCw size={12} />}
+                icon={ICONS.generateNow}
                 loading={generatingNow}
                 onClick={handleGenerateNow}
               >
                 {t.generate_now}
               </Button>
-              <button type="button" onClick={() => setShowRecurring(false)} aria-label={t.close} className="text-muted hover:text-[var(--color-text)]">
-                <X size={14} />
-              </button>
-            </div>
-          </div>
-          {(!templates || templates.length === 0) ? (
-            <div>
-              <p className="text-sm text-muted">{t.no_recurring_templates}</p>
-              <p className="text-sm text-muted mt-1">{t.recurring_empty_hint}</p>
-            </div>
+            }
+          />
+          {templates === undefined ? (
+            <ListSkeleton size="sm" rows={2} />
+          ) : templates.length === 0 ? (
+            <EmptyState size="sm" icon={ICONS.recurring} message={t.no_recurring_templates} hint={t.recurring_empty_hint} />
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--color-border-header)] text-left text-xs text-muted uppercase">
-                  <th className="py-2 pr-2">{t.base_invoice}</th>
-                  <th className="py-2 pr-2">{t.client}</th>
-                  <th className="py-2 pr-2 text-right">{t.amount}</th>
-                  <th className="py-2 pr-2">{t.frequency}</th>
-                  <th className="py-2 pr-2">{t.next_due}</th>
-                  <th className="py-2 pr-2">{t.status}</th>
-                  <th className="py-2 w-16" />
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <Table.Head>
+                <Table.Th>{t.base_invoice}</Table.Th>
+                <Table.Th>{t.client}</Table.Th>
+                <Table.Th numeric>{t.amount}</Table.Th>
+                <Table.Th>{t.frequency}</Table.Th>
+                <Table.Th>{t.next_due}</Table.Th>
+                <Table.Th>{t.status}</Table.Th>
+                <Table.ActionsTh />
+              </Table.Head>
+              <Table.Body>
                 {templates.map((tmpl) => {
                   const baseInv = invoices?.find((i) => i.id === tmpl.base_invoice_id);
                   return (
-                  <tr key={tmpl.id} className="border-b border-[var(--color-border-divider)]">
-                    <td className="py-2 pr-2">
+                  <Table.Row key={tmpl.id}>
+                    <Table.Td>
                       {baseInv ? (isDraftReference(baseInv.reference) ? t.draft : baseInv.reference) : `#${tmpl.base_invoice_id}`}
-                    </td>
-                    <td className="py-2 pr-2">{clientsMap.get(tmpl.client_id) ?? tmpl.client_id}</td>
-                    <td className="py-2 pr-2 text-right">
+                    </Table.Td>
+                    <Table.Td>{clientsMap.get(tmpl.client_id) ?? tmpl.client_id}</Table.Td>
+                    <Table.Td numeric>
                       {baseInv ? `CHF ${(baseInv.chf_equivalent ?? baseInv.total).toFixed(2)}` : "—"}
-                    </td>
-                    <td className="py-2 pr-2">
-                      <select
+                    </Table.Td>
+                    <Table.Td>
+                      <Select
                         value={tmpl.frequency}
+                        aria-label={t.frequency}
                         onChange={(e) =>
                           updateTemplate.mutate({ id: tmpl.id, data: { frequency: e.target.value as RecurringFrequency } })
                         }
-                        className="text-xs border border-[var(--color-input-border)] rounded-lg px-1.5 py-0.5"
+                        fullWidth={false}
                       >
                         {FREQUENCIES.map((f) => (
                           <option key={f} value={f}>{t[f] ?? f}</option>
                         ))}
-                      </select>
-                    </td>
-                    <td className="py-2 pr-2 text-muted">{formatDisplayDate(tmpl.next_due)}</td>
-                    <td className="py-2 pr-2">
-                      <button
-                        type="button"
-                        onClick={() => updateTemplate.mutate({ id: tmpl.id, data: { active: tmpl.active ? 0 : 1 } })}
-                        className={`text-xs px-2 py-0.5 rounded-full ${
-                          tmpl.active
-                            ? "bg-[var(--color-success-bg)] text-[var(--color-success-text)]"
-                            : "bg-[var(--color-input-bg)] text-[var(--color-muted)]"
-                        }`}
-                      >
-                        {tmpl.active ? t.active : t.inactive}
-                      </button>
-                    </td>
-                    <td className="py-2 text-right">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!(await ask(t.confirm_delete_template, { kind: "warning" }))) return;
-                          deleteTemplate.mutate(tmpl.id, {
-                            onSuccess: () => undoableFromStore(t.template_deleted),
-                          });
-                        }}
-                        className="text-muted hover:text-[var(--color-danger-text)]"
-                        aria-label={t.delete_template}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
+                      </Select>
+                    </Table.Td>
+                    <Table.Td muted>{formatDisplayDate(tmpl.next_due)}</Table.Td>
+                    <Table.Td>
+                      <Toggle
+                        size="sm"
+                        checked={!!tmpl.active}
+                        onChange={(on) => updateTemplate.mutate({ id: tmpl.id, data: { active: on ? 1 : 0 } })}
+                        ariaLabel={t.active}
+                      />
+                    </Table.Td>
+                    <Table.Actions>
+                      <IconButton
+                        size="xs"
+                        icon={ICONS.delete}
+                        label={t.delete_template}
+                        tone="danger"
+                        onClick={() => deleteWithUndo(deleteTemplate, tmpl.id, t.template_deleted)}
+                      />
+                    </Table.Actions>
+                  </Table.Row>
                   );
                 })}
-              </tbody>
-            </table>
+              </Table.Body>
+            </Table>
           )}
         </Card>
       )}
@@ -592,83 +571,50 @@ export function InvoicesPage() {
         fields={invoiceFields}
       />
 
-      <div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[var(--color-border-header)]">
-              <th className="w-8 px-2 py-2">
-                <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
-              </th>
-              <th className="w-8" />
-              <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
-              <SortHeader label={t.client} sortKey="client_name" current={sort} onSort={setSort} />
-              <SortHeader label={t.date} sortKey="invoice_date" current={sort} onSort={setSort} />
-              <SortHeader label={t.status} sortKey="status" current={sort} onSort={setSort} />
-              <SortHeader label={t.amount} sortKey="total" current={sort} onSort={setSort} align="right" />
-            </tr>
-          </thead>
-          <tbody>
+      <QueryState query={invoicesQuery} skeleton={<TableSkeleton columns={7} />} errorMessage={t.load_error_invoices}>
+      {(all) => (
+      <Table>
+        <Table.Head>
+          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} label={t.select_all} />
+          <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
+          <SortHeader label={t.client} sortKey="client_name" current={sort} onSort={setSort} />
+          <SortHeader label={t.date} sortKey="invoice_date" current={sort} onSort={setSort} />
+          <SortHeader label={t.status} sortKey="status" current={sort} onSort={setSort} />
+          <SortHeader label={t.amount} sortKey="total" current={sort} onSort={setSort} align="right" />
+          <Table.ActionsTh />
+        </Table.Head>
+        <Table.Body>
             {groupedByYear.map(([year, yearInvoices]) => {
               const isOpen = expandedYears.has(year);
               const yearTotal = yearInvoices.reduce((s, i) => i.status === "cancelled" ? s : s + (i.chf_equivalent ?? i.total), 0);
               return (
                 <React.Fragment key={year}>
-                  <tr
-                    className="border-b border-[var(--color-border-divider)] cursor-pointer hover:bg-[var(--color-hover-row)] rounded-md"
-                    onClick={() => toggleYear(year)}
-                  >
-                    <td colSpan={7} className="px-4 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <ChevronRight
-                          size={14}
-                          className={`text-muted transition-transform ${isOpen ? "rotate-90" : ""}`}
-                        />
-                        <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{year}</span>
-                        <span className="text-xs text-muted">
-                          {yearInvoices.length} {yearInvoices.length !== 1 ? t.invoices_count_plural : t.invoices_count_singular}
-                        </span>
-                        <span className="ml-auto text-sm font-medium">
-                          CHF {yearTotal.toFixed(2)}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
+                  <Table.Group
+                    colSpan={7}
+                    label={year}
+                    count={`${yearInvoices.length} ${yearInvoices.length !== 1 ? t.invoices_count_plural : t.invoices_count_singular}`}
+                    total={`CHF ${yearTotal.toFixed(2)}`}
+                    open={isOpen}
+                    onToggle={() => toggleYear(year)}
+                  />
                   {isOpen &&
                     yearInvoices.map((inv) => (
-                      <tr
+                      <Table.Row
                         key={inv.id}
                         data-list-row
-                        className={`border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md group${rowIdxById.get(inv.id) === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
+                        focused={rowIdxById.get(inv.id) === focusIdx}
+                        selected={bulk.selected.has(inv.id)}
+                        onOpen={() => openInvoice(inv)}
                         onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: inv }); }}
                       >
-                        <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={bulk.selected.has(inv.id)}
-                            onChange={(e) => bulk.toggleItem(inv.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-                            className="accent-[var(--accent)]"
-                          />
-                        </td>
-                        <td className="w-8 px-1">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCtxMenu({ x: e.clientX, y: e.clientY, item: inv });
-                            }}
-                            className="opacity-60 hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
-                            aria-label={t.more_actions}
-                          >
-                            <Settings2 size={14} />
-                          </button>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <span>{inv.reference.startsWith("DRAFT") ? t.draft : inv.reference}</span>
-                        </td>
-                        <td className="px-4 py-2.5">{inv.client_name}</td>
-                        <td className="px-4 py-2.5 text-muted">{formatDisplayDate(inv.invoice_date)}</td>
-                        <td className="px-4 py-2.5">
-                          <select
+                        <Table.Select checked={bulk.selected.has(inv.id)} onToggle={(shift) => bulk.toggleItem(inv.id, shift)} label={t.select_row.replace("{name}", inv.reference)} />
+                        <Table.Td>{inv.reference.startsWith("DRAFT") ? t.draft : inv.reference}</Table.Td>
+                        <Table.Td>{inv.client_name}</Table.Td>
+                        <Table.Td muted>{formatDisplayDate(inv.invoice_date)}</Table.Td>
+                        <Table.Td>
+                          <Select
                             value={inv.status}
+                            aria-label={`${t.status}: ${inv.reference.startsWith("DRAFT") ? t.draft : inv.reference}`}
                             onChange={(e) => {
                               const status = e.target.value as InvoiceStatus;
                               const prevStatus = inv.status;
@@ -688,16 +634,18 @@ export function InvoicesPage() {
                                 }
                               );
                             }}
-                            className={`text-xs px-2 py-0.5 rounded-full border-0 appearance-none cursor-pointer ${statusClasses(invoiceStatusVariant(inv.status), inv.status)}`}
+                            variant="bare"
+                            fullWidth={false}
+                            className={`${PILL} ${statusClasses(invoiceStatusVariant(inv.status), inv.status)}`}
                           >
                             {inv.status === "draft" && <option value="draft">{t.draft}</option>}
                             <option value="sent">{t.sent}</option>
                             <option value="paid">{t.paid}</option>
                             <option value="overdue">{t.overdue}</option>
                             <option value="cancelled">{t.cancelled}</option>
-                          </select>
-                        </td>
-                        <td className="px-4 py-2.5 text-right font-medium">
+                          </Select>
+                        </Table.Td>
+                        <Table.Td numeric className="font-medium">
                           {inv.status === "cancelled" ? (
                             <span className="text-muted">CHF 0.00</span>
                           ) : inv.currency && inv.currency !== "CHF" ? (
@@ -709,45 +657,60 @@ export function InvoicesPage() {
                           ) : (
                             <span>CHF {inv.total.toFixed(2)}</span>
                           )}
-                        </td>
-                      </tr>
+                        </Table.Td>
+                        <Table.Actions>
+                          <IconButton
+                            size="xs"
+                            icon={ICONS.more}
+                            label={t.more_actions}
+                            onClick={(e) => setCtxMenu({ x: e.clientX, y: e.clientY, item: inv })}
+                          />
+                        </Table.Actions>
+                      </Table.Row>
                     ))}
                 </React.Fragment>
               );
             })}
-          </tbody>
-        </table>
-        {filtered.length === 0 && (
-          <EmptyState
-            message={(invoices?.length ?? 0) === 0 ? t.no_invoices_yet : t.no_matching_invoices}
-            icon={<FileText size={32} />}
-            action={(invoices?.length ?? 0) === 0 ? (
-              <Button icon={<Plus size={16} />} onClick={() => navigate("/invoices/new")}>
-                {t.new_invoice}
-              </Button>
-            ) : undefined}
-          />
-        )}
-      </div>
+            {filtered.length === 0 && (
+              <Table.Empty colSpan={7}>
+                {all.length === 0 ? (
+                  <EmptyState
+                    message={t.no_invoices_yet}
+                    icon={ICONS.invoice}
+                    action={
+                      <Button icon={ICONS.add} onClick={() => navigate("/invoices/new")}>
+                        {t.new_invoice}
+                      </Button>
+                    }
+                  />
+                ) : (
+                  <NoResults message={t.no_matching_invoices} onClear={clearFilters} />
+                )}
+              </Table.Empty>
+            )}
+        </Table.Body>
+      </Table>
+      )}
+      </QueryState>
       {ctxMenu && (
         <ContextMenu
           x={ctxMenu.x}
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
-            { label: t.edit, icon: <Pencil size={14} />, onClick: () => navigate(`/invoices/${ctxMenu.item.id}/edit`) },
-            { label: t.preview_pdf, icon: <Eye size={14} />, onClick: () => navigate(`/invoices/${ctxMenu.item.id}/preview`) },
-            { label: t.download_pdf, icon: <Download size={14} />, onClick: () => handleDownloadPdf(ctxMenu.item) },
-            { label: t.email_pdf, icon: <Mail size={14} />, onClick: () => handleEmailPdf(ctxMenu.item) },
-            { label: t.open_in_new_tab, icon: <ExternalLink size={14} />, onClick: () => openTab(`/invoices/${ctxMenu.item.id}/edit`, ctxMenu.item.reference.startsWith("DRAFT") ? t.draft : ctxMenu.item.reference) },
+            { label: t.edit, icon: ICONS.edit, onClick: () => navigate(`/invoices/${ctxMenu.item.id}/edit`) },
+            { label: t.preview_pdf, icon: ICONS.preview, onClick: () => navigate(`/invoices/${ctxMenu.item.id}/preview`) },
+            { label: t.download_pdf, icon: ICONS.download, onClick: () => handleDownloadPdf(ctxMenu.item) },
+            { label: t.email_pdf, icon: ICONS.email, onClick: () => handleEmailPdf(ctxMenu.item) },
+            { label: t.open_in_new_tab, icon: ICONS.newTab, onClick: () => openTab(`/invoices/${ctxMenu.item.id}/edit`, ctxMenu.item.reference.startsWith("DRAFT") ? t.draft : ctxMenu.item.reference) },
             { label: "", divider: true, onClick: () => {} },
-            ...(ctxMenu.item.status === "draft" ? [{ label: t.mark_sent, icon: <Send size={14} />, onClick: () => updateInvoice.mutate({ id: ctxMenu.item.id, data: { status: "sent" } }) }] : []),
-            ...(ctxMenu.item.status !== "paid" && ctxMenu.item.status !== "cancelled" ? [{ label: t.mark_paid, icon: <CheckCircle size={14} />, onClick: () => markPaidToday(ctxMenu.item) }] : []),
-            ...(ctxMenu.item.status !== "draft" && ctxMenu.item.status !== "cancelled" ? [{ label: t.make_recurring, icon: <Repeat size={14} />, onClick: () => openMakeRecurring(ctxMenu.item) }] : []),
-            ...(ctxMenu.item.status === "overdue" ? [{ label: t.generate_reminder, icon: <AlertTriangle size={14} />, onClick: () => handleGenerateReminder(ctxMenu.item) }] : []),
+            ...(ctxMenu.item.status === "draft" ? [{ label: t.mark_sent, icon: ICONS.send, onClick: () => updateInvoice.mutate({ id: ctxMenu.item.id, data: { status: "sent" } }) }] : []),
+            ...(ctxMenu.item.status !== "paid" && ctxMenu.item.status !== "cancelled" ? [{ label: t.mark_paid, icon: ICONS.markPaid, onClick: () => markPaidToday(ctxMenu.item) }] : []),
+            ...(ctxMenu.item.status !== "draft" && ctxMenu.item.status !== "cancelled" ? [{ label: t.make_recurring, icon: ICONS.recurring, onClick: () => openMakeRecurring(ctxMenu.item) }] : []),
+            ...(ctxMenu.item.status === "overdue" ? [{ label: t.generate_reminder, icon: ICONS.reminder, onClick: () => handleGenerateReminder(ctxMenu.item) }] : []),
             ...(isDraftReference(ctxMenu.item.reference) ? [
               { label: "", divider: true, onClick: () => {} },
-              { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteInvoice.mutate(ctxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_invoice_deleted) }) },
+              { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => deleteWithUndo(deleteInvoice, ctxMenu.item.id, t.toast_invoice_deleted) },
             ] : []),
           ]}
         />
@@ -756,28 +719,26 @@ export function InvoicesPage() {
         count={bulk.count}
         onClear={bulk.clearSelection}
         actions={[
-          { label: t.mark_paid, icon: <CheckCircle size={14} />, onClick: bulkMarkPaid },
-          { label: t.mark_sent, icon: <Send size={14} />, onClick: bulkMarkSent },
-          { label: t.export_pdfs, icon: <Download size={14} />, onClick: bulkExportPdfs },
-          ...(selectionHasNonDraft ? [] : [{ label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true }]),
+          { label: t.mark_paid, icon: ICONS.markPaid, onClick: bulkMarkPaid },
+          { label: t.mark_sent, icon: ICONS.send, onClick: bulkMarkSent },
+          { label: t.export_pdfs, icon: ICONS.download, onClick: bulkExportPdfs },
+          ...(selectionHasNonDraft ? [] : [{ label: t.delete, icon: ICONS.delete, onClick: bulkDelete, danger: true }]),
         ]}
       />
-      <Modal
+      <FormModal
         open={recurringInv !== null}
         onClose={() => setRecurringInv(null)}
         title={t.create_recurring}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setRecurringInv(null)}>{t.cancel}</Button>
-            <Button onClick={confirmMakeRecurring} disabled={!recNextDue || createTemplate.isPending}>
-              {t.create}
-            </Button>
-          </>
-        }
+        size="sm"
+        submitLabel={t.create}
+        onSubmit={() => void confirmMakeRecurring()}
+        submitDisabled={!recNextDue}
+        submitting={createTemplate.isPending}
       >
-        <div className="space-y-4">
+        <FormGrid cols={1}>
           <FormField label={t.frequency}>
             <Select
+              autoFocus
               value={recFrequency}
               onChange={(e) => handleRecFrequencyChange(e.target.value as RecurringFrequency)}
             >
@@ -787,14 +748,13 @@ export function InvoicesPage() {
             </Select>
           </FormField>
           <FormField label={t.next_due}>
-            <Input
-              type="date"
-              value={recNextDue}
-              onChange={(e) => { setRecNextDue(e.target.value); setRecNextDueTouched(true); }}
+            <DatePicker
+              value={recNextDue || null}
+              onChange={(v) => { setRecNextDue(v ?? ""); setRecNextDueTouched(true); }}
             />
           </FormField>
-        </div>
-      </Modal>
+        </FormGrid>
+      </FormModal>
     </div>
   );
 }

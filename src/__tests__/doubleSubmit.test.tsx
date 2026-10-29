@@ -86,9 +86,9 @@ describe("ClientsPage quick-create", () => {
     const saveBtn = screen.getByRole("button", { name: /^save$/i });
     fireEvent.click(saveBtn);
 
-    // Wait for the mutation to actually be in flight (button disabled)
-    // before attempting the second click.
-    await waitFor(() => expect(saveBtn).toBeDisabled());
+    // Wait for the mutation to actually be in flight (button busy: aria-disabled,
+    // still focusable) before attempting the second click.
+    await waitFor(() => expect(saveBtn).toHaveAttribute("aria-disabled", "true"));
     fireEvent.click(saveBtn);
 
     await flush();

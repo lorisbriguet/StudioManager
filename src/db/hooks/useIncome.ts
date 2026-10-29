@@ -1,9 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import * as q from "../queries/income";
 import type { Income } from "../../types/income";
 import { useUndoStore } from "../../stores/undo-store";
-import { getLabels } from "../../lib/notifyError";
+import { getLabels } from "../../lib/notify";
 
 export function useIncomes() {
   return useQuery({ queryKey: ["incomes"], queryFn: q.getIncomes });
@@ -12,6 +11,7 @@ export function useIncomes() {
 export function useCreateIncome() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_income" },
     mutationFn: async (data: Omit<Income, "id" | "created_at" | "updated_at">) => {
       const id = await q.createIncome(data);
       useUndoStore.getState().push({
@@ -33,13 +33,13 @@ export function useCreateIncome() {
       qc.invalidateQueries({ queryKey: ["incomes"] });
       qc.invalidateQueries({ queryKey: ["finance"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useUpdateIncome() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_save_income" },
     mutationFn: async ({
       id,
       data,
@@ -73,13 +73,13 @@ export function useUpdateIncome() {
       qc.invalidateQueries({ queryKey: ["incomes"] });
       qc.invalidateQueries({ queryKey: ["finance"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }
 
 export function useDeleteIncome() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorLabel: "error_delete_income" },
     mutationFn: async (id: number) => {
       const prev = await q.getIncomeById(id);
       await q.deleteIncome(id);
@@ -109,6 +109,5 @@ export function useDeleteIncome() {
       qc.invalidateQueries({ queryKey: ["incomes"] });
       qc.invalidateQueries({ queryKey: ["finance"] });
     },
-    onError: (e) => { toast.error(String(e)); },
   });
 }

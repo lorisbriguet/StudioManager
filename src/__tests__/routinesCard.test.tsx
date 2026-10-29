@@ -5,7 +5,12 @@ import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mo
 import type { Routines } from "../lib/routines";
 
 const ask = vi.fn<(...args: unknown[]) => Promise<boolean>>(async () => false);
-vi.mock("@tauri-apps/plugin-dialog", async (importOriginal) => ({ ...(await importOriginal<object>()), ask: (...a: unknown[]) => ask(...a) }));
+// The app's ConfirmDialog (useConfirm), answered by the test: `ask` gets its options.
+vi.mock("../lib/confirm", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useConfirm: () => (...a: unknown[]) => ask(...a),
+}));
+const askedTitle = (i = 0) => (ask.mock.calls[i][0] as { title: string }).title;
 
 const saved: Routines = {
   sections: [{ id: "s1", name: "Morning", links: [] }],
@@ -123,7 +128,7 @@ describe("RoutinesCard", () => {
     render(<RoutinesCard />);
     fireEvent.click(await screen.findByRole("button", { name: "Delete Morning" }));
     await waitFor(() => expect(saveCalls()).toHaveLength(1));
-    expect(String(ask.mock.calls[0][0])).toContain("all its routines");
+    expect(askedTitle()).toContain("all its routines");
     expect(saveCalls()[0].args.routines).toEqual({ sections: [], routines: [] });
   });
 });

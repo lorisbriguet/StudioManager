@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, FormField, Input, Modal, Select } from "../ui";
+import { DatePicker, FormField, FormGrid, FormModal, Input, Select } from "../ui";
 import { useT } from "../../i18n/useT";
 import { useCreateUpkeepItem, useUpdateUpkeepItem } from "../../db/hooks/useUpkeep";
 import { useUnsavedChangesWarning } from "../../hooks/useUnsavedChangesWarning";
@@ -76,23 +76,19 @@ export function UpkeepItemForm({ open, onClose, machineId, item, allowUsage }: P
   };
 
   return (
-    <Modal
+    <FormModal
       open={open}
       onClose={() => void close()}
       title={item ? t.upkeep_edit_item : t.upkeep_add_item}
-      footer={
-        <div className="flex gap-2 justify-end">
-          <Button variant="secondary" onClick={() => void close()}>{t.cancel}</Button>
-          <Button onClick={save}>{t.save}</Button>
-        </div>
-      }
+      submitLabel={t.save}
+      onSubmit={save}
     >
-      <div className="space-y-3">
-        <FormField label={t.upkeep_item_title} required error={error ?? undefined}>
+      <FormGrid cols={2}>
+        <FormField label={t.upkeep_item_title} required error={error ?? undefined} span="full">
           <Input value={title} onChange={(e) => { setTitle(e.target.value); setError(null); }} autoFocus />
         </FormField>
         {allowUsage && (
-          <FormField label={t.upkeep_col_repeats}>
+          <FormField label={t.upkeep_col_repeats} span="full">
             <Select value={schedule} onChange={(e) => setSchedule(e.target.value as "interval" | "usage")}>
               <option value="interval">{t.upkeep_schedule_interval}</option>
               <option value="usage">{t.upkeep_schedule_usage}</option>
@@ -100,30 +96,30 @@ export function UpkeepItemForm({ open, onClose, machineId, item, allowUsage }: P
           </FormField>
         )}
         {schedule === "interval" ? (
-          <div className="flex gap-2">
+          <>
             <FormField label={t.upkeep_every}>
-              <Input type="number" min={1} value={n} onChange={(e) => setN(e.target.value)} />
+              <Input type="number" min={1} numeric value={n} onChange={(e) => setN(e.target.value)} />
             </FormField>
             <FormField label={t.upkeep_unit}>
               <Select value={unit} onChange={(e) => setUnit(e.target.value as IntervalUnit)}>
                 {UNITS.map((u) => <option key={u} value={u}>{t[`upkeep_unit_${u}` as const]}</option>)}
               </Select>
             </FormField>
-          </div>
+          </>
         ) : (
-          <FormField label={t.upkeep_every_hours}>
-            <Input type="number" min={1} value={every} onChange={(e) => setEvery(e.target.value)} />
+          <FormField label={t.upkeep_every_hours} span="full">
+            <Input type="number" min={1} numeric value={every} onChange={(e) => setEvery(e.target.value)} />
           </FormField>
         )}
         {!item && schedule === "interval" && (
-          <FormField label={t.upkeep_start_on}>
-            <Input type="date" value={startOn} onChange={(e) => setStartOn(e.target.value)} />
+          <FormField label={t.upkeep_start_on} span="full">
+            <DatePicker value={startOn} onChange={(v) => setStartOn(v ?? todayLocalISO())} />
           </FormField>
         )}
-        <FormField label={t.upkeep_notes}>
+        <FormField label={t.upkeep_notes} span="full">
           <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
         </FormField>
-      </div>
-    </Modal>
+      </FormGrid>
+    </FormModal>
   );
 }

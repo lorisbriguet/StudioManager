@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { InvoicePreviewPage } from "../pages/InvoicePreviewPage";
 import { useAppStore } from "../stores/app-store";
+import { ConfirmHost } from "../components/ui/ConfirmDialog";
 import { getDb } from "../db";
 import {
   setSelectHandler,
@@ -87,6 +88,7 @@ function renderPage() {
           <Route path="/invoices/:id" element={<InvoicePreviewPage />} />
         </Routes>
       </MemoryRouter>
+      <ConfirmHost />
     </QueryClientProvider>
   );
 }

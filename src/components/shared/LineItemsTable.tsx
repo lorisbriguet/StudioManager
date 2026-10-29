@@ -1,4 +1,3 @@
-import { Plus, Trash2, GripVertical, ChevronUp, ChevronDown } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -10,7 +9,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Button } from "../ui";
+import { Button, Card, DragHandle, ICONS, Select, IconButton, Input, Table } from "../ui";
 import type { LineItem } from "../../lib/lineItems";
 import { useT } from "../../i18n/useT";
 
@@ -77,148 +76,141 @@ export function LineItemsTable({
   };
 
   return (
-    <div className="p-0">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-medium">{t.line_items}</h2>
-        <div className="flex items-center gap-3">
-          {headerActions}
-          <Button variant="link" size="sm" icon={<Plus size={14} />} onClick={onAdd}>
-            {t.add_line}
-          </Button>
-        </div>
-      </div>
+    <div>
+      <Card.Header
+        title={t.line_items}
+        action={
+          <div className="flex items-center gap-3">
+            {headerActions}
+            <Button variant="link" icon={ICONS.add} onClick={onAdd}>
+              {t.add_line}
+            </Button>
+          </div>
+        }
+      />
       {globalRateLabel && (
         <div className="text-xs text-muted mb-2 italic">{globalRateLabel}</div>
       )}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={lineItemIds} strategy={verticalListSortingStrategy}>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-muted">
-                <th className="w-12"></th>
-                <th className="text-left pb-2">{t.designation}</th>
-                {!hideRate && <th className="text-right pb-2 w-24">{t.rate}</th>}
-                {!hideRate && <th className="text-left pb-2 w-24">{t.unit}</th>}
-                <th className="text-right pb-2 w-20">{t.qty}</th>
-                <th className="text-right pb-2 w-28">{t.amount}</th>
-                <th className="w-8"></th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table density="compact">
+            <Table.Head>
+              <Table.Th narrow />
+              <Table.Th>{t.designation}</Table.Th>
+              {!hideRate && <Table.Th numeric className="w-24">{t.rate}</Table.Th>}
+              {!hideRate && <Table.Th className="w-24">{t.unit}</Table.Th>}
+              <Table.Th numeric className="w-20">{t.qty}</Table.Th>
+              <Table.Th numeric className="w-28">{t.amount}</Table.Th>
+              <Table.ActionsTh />
+            </Table.Head>
+            <Table.Body>
               {items.map((item, i) => (
                 <SortableLineItemRow key={item._id} id={item._id}>
-                  <td className="py-1 w-12">
+                  <Table.Td narrow>
                     <div className="flex items-center">
                       <SortableLineItemHandle id={item._id} />
                       <div className="flex flex-col">
-                        <button
-                          type="button"
-                          onClick={() => moveRow(i, i - 1)}
-                          disabled={i === 0}
-                          aria-label={t.move_up}
-                          className="text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none"
-                        >
-                          <ChevronUp size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveRow(i, i + 1)}
-                          disabled={i === items.length - 1}
-                          aria-label={t.move_down}
-                          className="text-muted hover:text-[var(--color-text-secondary)] disabled:opacity-30 disabled:pointer-events-none"
-                        >
-                          <ChevronDown size={14} />
-                        </button>
+                        <IconButton size="xs" icon={ICONS.moveUp} label={t.move_up} onClick={() => moveRow(i, i - 1)} disabled={i === 0} />
+                        <IconButton size="xs" icon={ICONS.moveDown} label={t.move_down} onClick={() => moveRow(i, i + 1)} disabled={i === items.length - 1} />
                       </div>
                     </div>
-                  </td>
-                  <td className="pr-2 py-1">
+                  </Table.Td>
+                  <Table.Td>
                     {renderDesignation ? (
                       renderDesignation(item, i)
                     ) : (
-                      <input
+                      <Input
                         value={item.designation}
                         onChange={(e) => onUpdate(i, "designation", e.target.value)}
-                        className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm"
                         placeholder={t.description}
+                        aria-label={t.designation}
                       />
                     )}
-                  </td>
+                  </Table.Td>
                   {!hideRate && (
-                    <td className="px-1 py-1">
-                      <input
-                        type="number"
+                    <Table.Td numeric>
+                      <Input
+                        numeric
+                        step="0.01"
                         value={item.rate ?? ""}
                         onChange={(e) => onUpdate(i, "rate", e.target.value ? Number(e.target.value) : null)}
-                        className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm text-right"
                         placeholder="0"
+                        aria-label={t.rate}
                       />
-                    </td>
+                    </Table.Td>
                   )}
                   {!hideRate && (
-                    <td className="px-1 py-1">
-                      <select
+                    <Table.Td>
+                      <Select
                         value={item.unit ?? ""}
                         onChange={(e) => onUpdate(i, "unit", e.target.value || null)}
-                        className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm"
+                        aria-label={t.unit}
                       >
                         <option value="">—</option>
                         <option value="hours">{t.hours}</option>
                         <option value="days">{t.days}</option>
                         <option value="units">{t.units}</option>
                         <option value="flat">{t.flat_rate}</option>
-                      </select>
-                    </td>
+                      </Select>
+                    </Table.Td>
                   )}
-                  <td className="px-1 py-1">
-                    <input
-                      type="number"
+                  <Table.Td numeric>
+                    <Input
+                      numeric
                       value={item.quantity}
                       onChange={(e) => onUpdate(i, "quantity", Number(e.target.value))}
-                      className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm text-right"
+                      aria-label={t.qty}
                     />
-                  </td>
-                  <td className="px-1 py-1">
-                    <input
-                      type="number"
+                  </Table.Td>
+                  <Table.Td numeric>
+                    <Input
+                      numeric
+                      step="0.01"
                       value={item.amount}
                       onChange={(e) => onUpdate(i, "amount", Number(e.target.value))}
-                      className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm text-right"
+                      aria-label={t.amount}
                     />
-                  </td>
-                  <td className="pl-1 py-1">
+                  </Table.Td>
+                  <Table.Actions>
                     {items.length > 1 && (
-                      <button onClick={() => onRemove(i)} aria-label={t.delete} className="text-muted hover:text-danger">
-                        <Trash2 size={14} />
-                      </button>
+                      <IconButton size="xs" icon={ICONS.delete} label={t.delete} tone="danger" onClick={() => onRemove(i)} />
                     )}
-                  </td>
+                  </Table.Actions>
                 </SortableLineItemRow>
               ))}
-            </tbody>
-          </table>
+            </Table.Body>
+            {/* Totals: subtotal, discount, total, the labels under the line's fields and the sums under Amount. */}
+            <Table.Foot>
+              <td />
+              <Table.Td colSpan={hideRate ? 2 : 4} className="py-2">
+                <div className="space-y-1">
+                  <div className="text-muted font-normal">{t.subtotal}</div>
+                  {discountRate > 0 && (
+                    <div className="text-muted font-normal">
+                      {t.cultural_discount} ({(discountRate * 100).toFixed(0)}%)
+                    </div>
+                  )}
+                  <div className="font-semibold text-base">{t.total}</div>
+                </div>
+              </Table.Td>
+              <Table.Td numeric className="py-2 whitespace-nowrap">
+                <div className="space-y-1">
+                  <div className="font-normal">{currency} {subtotal.toFixed(2)}</div>
+                  {discountRate > 0 && (
+                    <div className="text-muted font-normal">- {currency} {discountAmount.toFixed(2)}</div>
+                  )}
+                  <div className="font-semibold text-base">{currency} {total.toFixed(2)}</div>
+                </div>
+              </Table.Td>
+              <td />
+            </Table.Foot>
+          </Table>
         </SortableContext>
       </DndContext>
-
-      <div className="border-t border-[var(--color-border-divider)] mt-3 pt-3 space-y-1 text-sm">
-        <div className="flex justify-between">
-          <span className="text-muted">{t.subtotal}</span>
-          <span>{currency} {subtotal.toFixed(2)}</span>
-        </div>
-        {discountRate > 0 && (
-          <div className="flex justify-between text-muted">
-            <span>{t.cultural_discount} ({(discountRate * 100).toFixed(0)}%)</span>
-            <span>- {currency} {discountAmount.toFixed(2)}</span>
-          </div>
-        )}
-        <div className="flex justify-between font-semibold text-base pt-1">
-          <span>{t.total}</span>
-          <span>{currency} {total.toFixed(2)}</span>
-        </div>
-      </div>
     </div>
   );
 }
+
 
 function SortableLineItemRow({ id, children }: { id: number; children: React.ReactNode }) {
   const { setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -230,24 +222,14 @@ function SortableLineItemRow({ id, children }: { id: number; children: React.Rea
   };
 
   return (
-    <tr ref={setNodeRef} style={style}>
+    <Table.Row ref={setNodeRef} style={style}>
       {children}
-    </tr>
+    </Table.Row>
   );
 }
 
 function SortableLineItemHandle({ id }: { id: number }) {
-  const t = useT();
   const { attributes, listeners } = useSortable({ id });
 
-  return (
-    <div
-      {...attributes}
-      {...listeners}
-      className="cursor-grab text-muted hover:text-[var(--color-text-secondary)] flex items-center justify-center"
-      aria-label={t.drag_to_reorder}
-    >
-      <GripVertical size={14} />
-    </div>
-  );
+  return <DragHandle {...attributes} {...listeners} className="flex items-center justify-center" />;
 }

@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { createNotification } from "../db/queries/notifications";
 import { isUserGuideOutdated, USER_GUIDE_VERSION } from "../db/seeds/user-guide";
-import { getLabels } from "../lib/notifyError";
+import { getLabels } from "../lib/notify";
 import { logError } from "../lib/log";
 import { useOrgStore } from "../stores/org-store";
 

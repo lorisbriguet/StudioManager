@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ListTodo, Trash2, ArrowLeft, AlertTriangle, Eye } from "lucide-react";
+import { ListTodo } from "lucide-react";
 import { isUntranslatedActivity } from "../lib/activityNudge";
-import { Button, Input, Select, FormField } from "../components/ui";
+import { ICONS, ICON_SIZE, Button, ConfirmButton, DatePicker, Input, PageHeader, Select, FormField, FieldError, FormLayout, FormGrid, FormActions, Popover, Textarea } from "../components/ui";
+import { deleteWithUndo } from "../lib/undo";
+import { MENU_ITEM } from "../components/ui/Dropdown";
 import * as v from "../lib/validate";
-import { toast } from "sonner";
+import { notify } from "../lib/notify";
 import { addDays, format } from "date-fns";
 import { useT } from "../i18n/useT";
 import { useInvoice, useCreateInvoice, useUpdateInvoice, useDeleteInvoice } from "../db/hooks/useInvoices";
@@ -18,9 +20,9 @@ import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { getQuote, getQuoteLineItems, updateQuote } from "../db/queries/quotes";
 import { useActivities } from "../db/hooks/useActivities";
 import type { Activity } from "../types/activity";
-import { logError } from "../lib/log";
 import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel, round2 } from "../lib/lineItems";
 import { LineItemsTable } from "../components/shared/LineItemsTable";
+import { GlobalRateControl, TemplateField } from "../components/shared/DocumentFields";
 import { currencies, getExchangeRate, toCHF, type Currency } from "../lib/exchangeRate";
 import { useTabStore } from "../stores/tab-store";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
@@ -58,7 +60,6 @@ export function InvoiceFormPage() {
   const updateInvoice = useUpdateInvoice();
   const deleteInvoice = useDeleteInvoice();
   const queryClient = useQueryClient();
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Track whether the user has made any changes to the form
   const [formDirty, setFormDirty] = useState(false);
@@ -181,8 +182,7 @@ export function InvoiceFormPage() {
           );
         }
       }).catch((e) => {
-        logError("Failed to load line items:", e);
-        toast.error(t.failed_load_line_items);
+        notify.error(t.failed_load_line_items, e);
       }).finally(() => {
         // Allow a tick for React to settle before arming dirty tracking
         setTimeout(() => { formLoadedRef.current = true; }, 0);
@@ -258,8 +258,7 @@ export function InvoiceFormPage() {
       }
       setTimeout(() => { formLoadedRef.current = true; }, 0);
     })().catch((e) => {
-      logError("Failed to load quote:", e);
-      toast.error(t.failed_load_line_items);
+      notify.error(t.failed_load_line_items, e);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-fill once per source quote; adding t.* would re-run the pre-fill (and clobber edits) on locale switch. setItems is a stable setState.
   }, [fromQuoteId, isEdit]);
@@ -308,7 +307,7 @@ export function InvoiceFormPage() {
         // as loud as the UI (it could otherwise hold 1 or a stale
         // different-currency rate); safe because override is on, so the
         // auto-calc effect never divides by it.
-        toast.error(t.exchange_rate_unavailable);
+        notify.warning(t.exchange_rate_unavailable);
         setExchangeRate(0);
         setChfEquivalent(0);
         setChfManualOverride(true);
@@ -422,10 +421,9 @@ export function InvoiceFormPage() {
           {
             onSuccess: () => {
               setFormDirty(false);
-              toast.success(t.invoice_updated);
+              notify.success(t.invoice_updated);
               navigate(dest === "preview" ? `/invoices/${invoiceId}/preview` : "/invoices");
             },
-            onError: (e) => toast.error(String(e)),
           }
         );
       } else {
@@ -477,56 +475,44 @@ export function InvoiceFormPage() {
                 queryClient.invalidateQueries({ queryKey: ["quotes"] });
               }
               setFormDirty(false);
-              toast.success(fromQuoteId ? t.quote_converted : t.invoice_created);
+              notify.success(fromQuoteId ? t.quote_converted : t.invoice_created);
               navigate(dest === "preview" ? `/invoices/${invoiceId}/preview` : "/invoices");
             },
-            onError: (e) => toast.error(String(e)),
           }
         );
       }
     } catch (e) {
-      toast.error(String(e));
+      notify.error(t.error_save_invoice, e);
     }
   };
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="sm" onClick={async () => { if (await confirmIfDirty("/invoices")) navigate("/invoices"); }} icon={<ArrowLeft size={18} />} aria-label={t.back} />
-        <h1 className="text-xl font-semibold">
-          {isEdit ? t.edit_invoice : t.new_invoice}
-        </h1>
-      </div>
+      <PageHeader
+        title={isEdit ? t.edit_invoice : t.new_invoice}
+        back={async () => { if (await confirmIfDirty("/invoices")) navigate("/invoices"); }}
+      />
 
-      {/* Dirty tracking on change only. React's onChange already fires per keystroke
-          for text fields; listening to `input` as well made the first <select> pick
-          re-render the form before WebKit's `change`, reverting the controlled value. */}
-      <div className="space-y-4 max-w-3xl" onChange={markDirty}>
+      {/* Dirty tracking: text fields bubble their change events up to this div.
+          Select is a custom dropdown that sends no DOM event, so each Select's
+          onChange calls markDirty() itself. */}
+      <FormLayout onChange={markDirty}>
         {/* Template selector */}
         {invoiceTemplates && invoiceTemplates.length > 0 && (
-          <div className="max-w-xs">
-            <label className="block text-xs font-medium text-muted mb-1">
-              {t.select_invoice_template}
-            </label>
-            <Select
-              value={templateId ?? ""}
-              onChange={(e) => setTemplateId(e.target.value ? Number(e.target.value) : null)}
-            >
-              <option value="">{t.none}</option>
-              {invoiceTemplates.map((tmpl) => (
-                <option key={tmpl.id} value={tmpl.id}>
-                  {tmpl.name}{tmpl.is_default ? " (default)" : ""}
-                </option>
-              ))}
-            </Select>
-          </div>
+          <FormGrid cols={2}>
+            <TemplateField
+              templates={invoiceTemplates}
+              value={templateId}
+              onChange={(id) => { markDirty(); setTemplateId(id); }}
+            />
+          </FormGrid>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <FormGrid cols={2}>
           <FormField label={t.client} required error={errors.client_id}>
             <Select
               value={clientId}
-              onChange={(e) => {
+              onChange={(e) => { markDirty();
                 setClientId(e.target.value);
                 setContactId(null);
                 setBillingAddressId(null);
@@ -547,7 +533,7 @@ export function InvoiceFormPage() {
           <FormField label={t.intended_for}>
             <Select
               value={contactId ?? ""}
-              onChange={(e) => setContactId(e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) => { markDirty(); setContactId(e.target.value ? Number(e.target.value) : null); }}
             >
               <option value="">{t.none}</option>
               {clientContacts?.map((c) => (
@@ -561,7 +547,7 @@ export function InvoiceFormPage() {
             <FormField label={t.billing_address}>
               <Select
                 value={billingAddressId ?? ""}
-                onChange={(e) => setBillingAddressId(e.target.value ? Number(e.target.value) : null)}
+                onChange={(e) => { markDirty(); setBillingAddressId(e.target.value ? Number(e.target.value) : null); }}
               >
                 <option value="">{t.main_address}</option>
                 {clientAddresses?.map((a) => (
@@ -575,7 +561,7 @@ export function InvoiceFormPage() {
           <FormField label={t.project_optional}>
             <Select
               value={projectId ?? ""}
-              onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) => { markDirty(); setProjectId(e.target.value ? Number(e.target.value) : null); }}
             >
               <option value="">{t.none}</option>
               {clientProjects?.map((p) => (
@@ -584,17 +570,30 @@ export function InvoiceFormPage() {
             </Select>
           </FormField>
           <FormField label={t.date} required error={errors.invoice_date}>
-            <Input
-              type="date"
-              value={invoiceDate}
-              onChange={(e) => { setInvoiceDate(e.target.value); clearError("invoice_date"); }}
-              onBlur={() => setFieldError("invoice_date", v.validateField(invoiceDate, invoiceSchema.invoice_date))}
+            <DatePicker
+              value={invoiceDate || null}
+              onChange={(d) => { markDirty(); setInvoiceDate(d ?? ""); clearError("invoice_date"); }}
+              onBlur={(d) => setFieldError("invoice_date", v.validateField(d ?? "", invoiceSchema.invoice_date))}
             />
           </FormField>
-          <FormField label={t.activity}>
+          <FormField
+            label={t.activity}
+            hint={
+              // The EN invoice would print the French name — nudge at the moment of harm
+              selectedClient?.language === "EN" &&
+              (() => {
+                const selected = activityList?.find((a) => a.id === activityId);
+                return selected && isUntranslatedActivity(selected) ? (
+                  <span className="text-[var(--color-warning-text)] inline-flex items-center gap-1">
+                    <ICONS.warning size={ICON_SIZE.control} /> {t.activity_untranslated}
+                  </span>
+                ) : null;
+              })()
+            }
+          >
             <Select
               value={activityId !== null ? String(activityId) : activity ? "legacy" : ""}
-              onChange={(e) => {
+              onChange={(e) => { markDirty();
                 setActivityId(e.target.value === "legacy" || e.target.value === "" ? null : Number(e.target.value));
               }}
             >
@@ -607,16 +606,6 @@ export function InvoiceFormPage() {
               {activityId === null && !activity && <option value="" />}
             </Select>
           </FormField>
-          {/* The EN invoice would print the French name — nudge at the moment of harm */}
-          {selectedClient?.language === "EN" &&
-            (() => {
-              const selected = activityList?.find((a) => a.id === activityId);
-              return selected && isUntranslatedActivity(selected) ? (
-                <p className="col-span-2 -mt-2 text-xs text-[var(--color-warning-text)] flex items-center gap-1">
-                  <AlertTriangle size={12} /> {t.activity_untranslated}
-                </p>
-              ) : null;
-            })()}
           <FormField label={t.assignment}>
             <Input
               value={assignment}
@@ -634,7 +623,7 @@ export function InvoiceFormPage() {
           <FormField label={t.currency}>
             <Select
               value={currency}
-              onChange={(e) => setCurrency(e.target.value as Currency)}
+              onChange={(e) => { markDirty(); setCurrency(e.target.value as Currency); }}
             >
               {currencies.map((c) => (
                 <option key={c} value={c}>{c}</option>
@@ -644,8 +633,9 @@ export function InvoiceFormPage() {
           {currency !== "CHF" && (
             <FormField label={t.chf_equivalent} error={errors.chf_equivalent}>
               <Input
-                type="number"
+                numeric
                 step="0.01"
+                unit="CHF"
                 value={chfEquivalent}
                 onChange={(e) => {
                   setChfEquivalent(Number(e.target.value));
@@ -656,54 +646,29 @@ export function InvoiceFormPage() {
               />
             </FormField>
           )}
-        </div>
+        </FormGrid>
 
         {/* Global rate toggle */}
-        <div className="flex items-center gap-3 mb-2">
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              checked={useGlobalRate}
-              onChange={(e) => {
-                setUseGlobalRate(e.target.checked);
-                if (e.target.checked && globalRate > 0) {
-                  applyGlobalRate(globalRate);
-                }
-              }}
-              className="accent-[var(--accent)]"
-            />
-            {t.apply_global_rate}
-          </label>
-          {useGlobalRate && (
-            <>
-              <Input
-                type="number"
-                value={globalRate || ""}
-                onChange={(e) => {
-                  const rate = e.target.value ? Number(e.target.value) : 0;
-                  setGlobalRate(rate);
-                  applyGlobalRate(rate);
-                }}
-                placeholder={t.global_rate}
-                fullWidth={false}
-                className="w-28 text-right"
-              />
-              <select
-                value={globalUnit}
-                onChange={(e) => {
-                  setGlobalUnit(e.target.value);
-                  if (globalRate > 0) applyGlobalRate(globalRate, e.target.value);
-                }}
-                className="border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm bg-[var(--color-surface)]"
-              >
-                <option value="hours">{t.hours}</option>
-                <option value="days">{t.days}</option>
-                <option value="units">{t.units}</option>
-                <option value="flat">{t.flat_rate}</option>
-              </select>
-            </>
-          )}
-        </div>
+        <GlobalRateControl
+          currency={currency}
+          enabled={useGlobalRate}
+          rate={globalRate}
+          unit={globalUnit}
+          onEnabledChange={(checked) => {
+            setUseGlobalRate(checked);
+            if (checked && globalRate > 0) {
+              applyGlobalRate(globalRate);
+            }
+          }}
+          onRateChange={(rate) => {
+            setGlobalRate(rate);
+            applyGlobalRate(rate);
+          }}
+          onUnitChange={(unit) => { markDirty();
+            setGlobalUnit(unit);
+            if (globalRate > 0) applyGlobalRate(globalRate, unit);
+          }}
+        />
 
         <LineItemsTable
           items={items}
@@ -724,16 +689,15 @@ export function InvoiceFormPage() {
             <div className="flex items-center gap-2">
               {availableTasks.length > 0 && (
                 <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={<ListTodo size={14} />}
+                  variant="outline"
+                  icon={ListTodo}
                   onClick={() => {
                     const existingDesignations = new Set(items.map((i) => i.designation));
                     const newTasks = availableTasks.filter(
                       (tk) => !existingDesignations.has(tk.title)
                     );
                     if (newTasks.length === 0) {
-                      toast.info(t.all_tasks_added);
+                      notify.info(t.all_tasks_added);
                       return;
                     }
                     const newItems = newTasks.map((tk) => makeLineItem({
@@ -744,7 +708,7 @@ export function InvoiceFormPage() {
                     markDirty();
                     clearError("line_items");
                   }}
-                  className="text-accent hover:underline"
+                  className="text-accent-text hover:underline"
                 >
                   {t.add_tasks}
                 </Button>
@@ -754,7 +718,7 @@ export function InvoiceFormPage() {
           renderDesignation={(item, i) => (
             <DesignationInput
               value={item.designation}
-              onChange={(v: string) => { updateItem(i, "designation", v); clearError("line_items"); }}
+              onChange={(v: string) => { updateItem(i, "designation", v); markDirty(); clearError("line_items"); }}
               tasks={availableTasks}
             />
           )}
@@ -762,61 +726,37 @@ export function InvoiceFormPage() {
 
         {/* Phase 2 E2 — summary error for the line-items region (not per-cell) */}
         {errors.line_items && (
-          <p role="alert" className="text-xs text-danger-text">
+          <FieldError className="mt-0">
             {errors.line_items}
-          </p>
+          </FieldError>
         )}
 
         <FormField label={t.notes}>
-          <textarea
+          <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-            className="w-full border border-[var(--color-border-divider)] rounded-lg px-3 py-2 text-sm bg-[var(--color-surface)]"
           />
         </FormField>
 
-        <div className="flex gap-2 justify-end">
-          {isEdit && existingInvoice?.status === "draft" && !showDeleteConfirm && (
-            <Button
-              variant="secondary"
-              size="lg"
-              icon={<Trash2 size={14} />}
-              onClick={() => setShowDeleteConfirm(true)}
-              className="mr-auto text-danger border-danger/30 hover:bg-danger/5"
-            >
-              {t.delete}
-            </Button>
-          )}
-          {showDeleteConfirm && existingInvoice && (
-            <div className="mr-auto flex items-center gap-2">
-              <span className="text-sm text-danger">{t.delete} {existingInvoice.reference}?</span>
-              <Button
-                variant="danger"
-                onClick={() => {
-                  deleteInvoice.mutate(invoiceId, {
-                    onSuccess: () => {
-                      setFormDirty(false);
-                      toast.success(t.delete + " — " + existingInvoice.reference);
-                      navigate("/invoices");
-                    },
-                    onError: (e) => toast.error(String(e)),
-                  });
-                }}
-              >
-                {t.delete}
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => setShowDeleteConfirm(false)}
-              >
-                {t.cancel}
-              </Button>
-            </div>
-          )}
+        <FormActions
+          destructive={
+            isEdit && existingInvoice?.status === "draft" ? (
+              <ConfirmButton
+                label={t.delete}
+                icon={ICONS.delete}
+                question={t.confirm_delete_named.replace("{name}", existingInvoice.reference)}
+                onConfirm={() =>
+                  deleteWithUndo(deleteInvoice, invoiceId, t.toast_invoice_deleted, () => {
+                    setFormDirty(false);
+                    navigate("/invoices");
+                  })
+                }
+              />
+            ) : null
+          }
+        >
           <Button
             variant="secondary"
-            size="lg"
             onClick={async () => {
               if (await confirmIfDirty("/invoices")) navigate("/invoices");
             }}
@@ -825,22 +765,20 @@ export function InvoiceFormPage() {
           </Button>
           <Button
             variant="secondary"
-            size="lg"
-            icon={<Eye size={14} />}
+            icon={ICONS.preview}
             onClick={() => save("preview")}
             disabled={createInvoice.isPending || updateInvoice.isPending}
           >
             {t.save_and_preview}
           </Button>
           <Button
-            size="lg"
             onClick={() => save()}
             disabled={createInvoice.isPending || updateInvoice.isPending}
           >
             {isEdit ? t.update_invoice : t.create_invoice}
           </Button>
-        </div>
-      </div>
+        </FormActions>
+      </FormLayout>
 
     </div>
   );
@@ -857,31 +795,33 @@ function DesignationInput({
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  const ref = useRef<HTMLInputElement>(null);
 
   const filtered = tasks.filter(
     (tk) => tk.title.toLowerCase().includes(value.toLowerCase()) && tk.title !== value
   );
 
   return (
-    <div ref={ref} className="relative">
-      <input
+    <div>
+      <Input
+        ref={ref}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => setOpen(true)}
-        className="w-full border border-[var(--color-border-divider)] rounded-lg px-2 py-1.5 text-sm"
         placeholder={t.description}
+        aria-label={t.designation}
       />
       {open && filtered.length > 0 && (
-        <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-[var(--color-surface)] border border-[var(--color-border-divider)] rounded-lg shadow-lg max-h-40 overflow-y-auto">
+        <Popover
+          anchor={ref}
+          onClose={() => setOpen(false)}
+          autoFocus={false}
+          matchWidth
+          padding="menu"
+          className="max-h-40 overflow-y-auto"
+          role="group"
+          aria-label={t.designation}
+        >
           {filtered.map((tk, idx) => (
             <button
               key={`${tk.title}-${idx}`}
@@ -890,12 +830,12 @@ function DesignationInput({
                 onChange(tk.title);
                 setOpen(false);
               }}
-              className="w-full text-left px-2 py-1.5 text-sm hover:bg-[var(--color-hover-row)]"
+              className={`${MENU_ITEM} cursor-pointer hover:bg-[var(--color-hover-row)]`}
             >
               {tk.title}
             </button>
           ))}
-        </div>
+        </Popover>
       )}
     </div>
   );

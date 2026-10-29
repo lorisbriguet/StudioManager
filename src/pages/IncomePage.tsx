@@ -1,12 +1,11 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
-import { Plus, Paperclip, Eye, ChevronRight, Trash2, Upload, Wallet, Pencil, Settings2 } from "lucide-react";
-import { PageHeader, SearchBar, Button, Card, EmptyState, FormField, Input, Select, TableSkeleton } from "../components/ui";
+import { Paperclip } from "lucide-react";
+import { ICONS, ICON_SIZE, PageHeader, SearchBar, Button, DatePicker, EmptyState, QueryState, NoResults, FormField, FormGrid, FormModal, Input, Select, Table, TableSkeleton, IconButton, Tag } from "../components/ui";
 import * as v from "../lib/validate";
-import { undoableFromStore } from "../lib/undo";
-import { toast } from "sonner";
+import { deleteWithUndo } from "../lib/undo";
+import { notify } from "../lib/notify";
 import { format } from "date-fns";
 import { formatDisplayDate } from "../utils/formatDate";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { copyFile, mkdir, exists } from "@tauri-apps/plugin-fs";
 import { orgPaths } from "../lib/orgPaths";
 import { attachReceipt as attachReceiptFlow, sanitizeSegment } from "../lib/attachReceipt";
@@ -18,18 +17,20 @@ import {
   useDeleteIncome,
 } from "../db/hooks/useIncome";
 import { getNextIncomeReference } from "../db/queries/income";
-import { SortHeader, sortRows, type SortState } from "../components/SortHeader";
-import { ContextMenu, type ContextMenuState } from "../components/ContextMenu";
-import { BulkActionBar } from "../components/BulkActionBar";
+import { SortHeader, sortRows, type SortState } from "../components/ui/SortHeader";
+import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu";
+import { BulkActionBar } from "../components/ui/BulkActionBar";
 import { useReceiptDrop } from "../hooks/useReceiptDrop";
 import { useDetectedFields } from "../hooks/useDetectedFields";
 import { useBulkSelect } from "../hooks/useBulkSelect";
+import { useBulkDelete } from "../hooks/useBulkDelete";
 import { useT } from "../i18n/useT";
 import type { Income } from "../types/income";
 import { logError } from "../lib/log";
 import { useYearGrouping } from "../hooks/useYearGrouping";
 import { useListNavigation } from "../hooks/useListNavigation";
-import { SavedFilterBar } from "../components/SavedFilterBar";
+import { SavedFilterBar } from "../components/shared/SavedFilterBar";
+import { ReceiptNote } from "../components/shared/ReceiptNote";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
@@ -52,7 +53,8 @@ function incomeCategoryLabel(t: ReturnType<typeof useT>, code: string): string {
 
 export function IncomePage() {
   const t = useT();
-  const { data: incomes, isLoading } = useIncomes();
+  const incomesQuery = useIncomes();
+  const { data: incomes } = incomesQuery;
   const createIncome = useCreateIncome();
   const updateIncome = useUpdateIncome();
   const deleteIncome = useDeleteIncome();
@@ -100,12 +102,8 @@ export function IncomePage() {
 
   const bulk = useBulkSelect(filtered);
 
-  const bulkDelete = useCallback(async () => {
-    if (!(await ask(t.confirm_bulk_delete, { kind: "warning" }))) return;
-    const ids = [...bulk.selected] as number[];
-    ids.forEach((id) => deleteIncome.mutate(id));
-    bulk.clearSelection();
-  }, [bulk, deleteIncome, t]);
+  const deleteSelection = useBulkDelete("income", (id: number) => deleteIncome.mutateAsync(id));
+  const bulkDelete = () => void deleteSelection([...bulk.selected] as number[], bulk.clearSelection);
 
   const { expandedYears, groupedByYear, toggleYear } = useYearGrouping(
     filtered,
@@ -128,9 +126,10 @@ export function IncomePage() {
     () => new Map(visibleRows.map((r, i) => [r.id, i])),
     [visibleRows]
   );
+  const openIncome = useCallback((inc: Income) => { setShowForm(false); setEditing(inc); }, []);
   const { focusIdx } = useListNavigation({
     items: visibleRows,
-    onOpen: useCallback((inc: Income) => { setShowForm(false); setEditing(inc); }, []),
+    onOpen: openIncome,
     onMenu: useCallback((inc: Income, pos: { x: number; y: number }) => setCtxMenu({ ...pos, item: inc }), []),
     enabled: preview === null,
   });
@@ -156,35 +155,30 @@ export function IncomePage() {
       (destPath) =>
         updateIncome.mutate(
           { id: incomeId, data: { receipt_path: destPath } },
-          { onSuccess: () => toast.success(t.receipt_attached) }
+          { onSuccess: () => notify.success(t.receipt_attached) }
         ),
-      () => toast.error(t.failed_to_attach_receipt)
+      (err) => notify.error(t.attach_failed, err)
     );
 
-  if (isLoading) return (
-    <div className="relative">
-      <PageHeader title={t.income}>
-        <Button icon={<Plus size={16} />} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
-          {t.new_income}
-        </Button>
-      </PageHeader>
-      <TableSkeleton columns={6} />
-    </div>
-  );
+  const clearFilters = () => {
+    setSearch("");
+    setFilterConditions([]);
+    setActiveFilterId(null);
+  };
 
   return (
     <div className="relative">
       {(isDragging || parsing) && (
-        <div className="absolute inset-0 z-40 flex items-center justify-center bg-accent/10 border-2 border-dashed border-accent rounded-lg pointer-events-none">
-          <div className="flex flex-col items-center gap-2 text-accent">
-            <Upload size={32} />
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-accent-tint-strong border-2 border-dashed border-accent rounded-lg pointer-events-none">
+          <div className="flex flex-col items-center gap-2 text-accent-text">
+            <ICONS.upload size={ICON_SIZE.empty} />
             <span className="text-sm font-medium">{parsing ? t.parsing_receipt : t.drop_pdf_hint}</span>
           </div>
         </div>
       )}
 
       <PageHeader title={t.income}>
-        <Button icon={<Plus size={16} />} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
+        <Button icon={ICONS.add} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
           {t.new_income}
         </Button>
       </PageHeader>
@@ -214,7 +208,7 @@ export function IncomePage() {
                 { id: editing.id, data: fields },
                 {
                   onSuccess: () => {
-                    toast.success(t.toast_income_updated);
+                    notify.success(t.toast_income_updated);
                     setEditing(null);
                   },
                 }
@@ -245,7 +239,7 @@ export function IncomePage() {
               { ...data, reference, receipt_path: receiptPath },
               {
                 onSuccess: () => {
-                  toast.success(t.toast_created);
+                  notify.success(t.toast_created);
                   setShowForm(false);
                   setDroppedReceiptPath(null);
                 },
@@ -256,143 +250,119 @@ export function IncomePage() {
         />
       )}
 
-      <div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[var(--color-border-header)]">
-              <th className="w-8 px-2 py-2">
-                <input type="checkbox" checked={bulk.isAllSelected} onChange={bulk.toggleAll} className="accent-[var(--accent)]" />
-              </th>
-              <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
-              <SortHeader label={t.source} sortKey="source" current={sort} onSort={setSort} />
-              <SortHeader label={t.description} sortKey="category" current={sort} onSort={setSort} />
-              <SortHeader label={t.date} sortKey="date" current={sort} onSort={setSort} />
-              <SortHeader label={t.amount} sortKey="amount" current={sort} onSort={setSort} align="right" />
-              <th className="px-4 py-2.5 font-medium text-muted text-left">{t.receipt}</th>
-              <th className="px-4 py-2.5"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {groupedByYear.map(([year, yearIncomes]) => {
-              const isOpen = expandedYears.has(year);
-              const yearTotal = yearIncomes.reduce((s, i) => s + i.amount, 0);
-              return (
-                <React.Fragment key={year}>
-                  <tr
-                    className="border-b border-[var(--color-border-divider)] cursor-pointer hover:bg-[var(--color-hover-row)] rounded-md"
-                    onClick={() => toggleYear(year)}
-                  >
-                    <td colSpan={8} className="px-4 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <ChevronRight
-                          size={14}
-                          className={`text-muted transition-transform ${isOpen ? "rotate-90" : ""}`}
-                        />
-                        <span className="text-[10px] font-medium uppercase tracking-widest text-muted">{year}</span>
-                        <span className="text-xs text-muted">
-                          {yearIncomes.length} {yearIncomes.length !== 1 ? t.incomes_count_plural : t.incomes_count_singular}
-                        </span>
-                        <span className="ml-auto text-sm font-medium">
-                          CHF {yearTotal.toFixed(2)}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                  {isOpen &&
-                    yearIncomes.map((inc) => (
-                      <tr
-                        key={inc.id}
-                        data-list-row
-                        className={`border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] rounded-md group${rowIdxById.get(inc.id) === focusIdx ? " ring-2 ring-accent/40 ring-inset" : ""}`}
-                        onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: inc }); }}
-                      >
-                        <td className="w-8 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={bulk.selected.has(inc.id)}
-                            onChange={(e) => bulk.toggleItem(inc.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-                            className="accent-[var(--accent)]"
-                          />
-                        </td>
-                        <td className="px-4 py-2.5 font-medium">{inc.reference}</td>
-                        <td className="px-4 py-2.5">{inc.source}</td>
-                        <td className="px-4 py-2.5">
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-[var(--color-input-bg)]">
-                            {incomeCategoryLabel(t, inc.category)}
-                          </span>
-                          {inc.description && (
-                            <span className="ml-1 text-xs text-muted">{inc.description}</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2.5 text-muted">{formatDisplayDate(inc.date)}</td>
-                        <td className="px-4 py-2.5 text-right font-medium">
-                          CHF {inc.amount.toFixed(2)}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          {inc.receipt_path ? (
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="link"
-                                size="sm"
-                                icon={<Eye size={14} />}
-                                onClick={() => setPreview({ path: inc.receipt_path!, reference: inc.reference })}
-                              >
-                                {t.view}
-                              </Button>
-                              <span className="text-xs text-success flex items-center gap-1">
-                                <Paperclip size={12} />
-                              </span>
-                            </div>
-                          ) : (
+      <QueryState query={incomesQuery} skeleton={<TableSkeleton columns={8} />} errorMessage={t.load_error_incomes}>
+      {(all) => (
+      <Table>
+        <Table.Head>
+          <Table.SelectAll all={bulk.isAllSelected} some={bulk.selected.size > 0} onToggle={bulk.toggleAll} label={t.select_all} />
+          <SortHeader label={t.reference} sortKey="reference" current={sort} onSort={setSort} />
+          <SortHeader label={t.source} sortKey="source" current={sort} onSort={setSort} />
+          <SortHeader label={t.description} sortKey="category" current={sort} onSort={setSort} />
+          <SortHeader label={t.date} sortKey="date" current={sort} onSort={setSort} />
+          <SortHeader label={t.amount} sortKey="amount" current={sort} onSort={setSort} align="right" />
+          <Table.Th>{t.receipt}</Table.Th>
+          <Table.ActionsTh />
+        </Table.Head>
+        <Table.Body>
+          {groupedByYear.map(([year, yearIncomes]) => {
+            const isOpen = expandedYears.has(year);
+            const yearTotal = yearIncomes.reduce((s, i) => s + i.amount, 0);
+            return (
+              <React.Fragment key={year}>
+                <Table.Group
+                  colSpan={8}
+                  label={year}
+                  count={`${yearIncomes.length} ${yearIncomes.length !== 1 ? t.incomes_count_plural : t.incomes_count_singular}`}
+                  total={`CHF ${yearTotal.toFixed(2)}`}
+                  open={isOpen}
+                  onToggle={() => toggleYear(year)}
+                />
+                {isOpen &&
+                  yearIncomes.map((inc) => (
+                    <Table.Row
+                      key={inc.id}
+                      data-list-row
+                      focused={rowIdxById.get(inc.id) === focusIdx}
+                      selected={bulk.selected.has(inc.id)}
+                      onOpen={() => openIncome(inc)}
+                      onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: inc }); }}
+                    >
+                      <Table.Select checked={bulk.selected.has(inc.id)} onToggle={(shift) => bulk.toggleItem(inc.id, shift)} label={t.select_row.replace("{name}", inc.reference || inc.source)} />
+                      <Table.Td className="font-medium">{inc.reference}</Table.Td>
+                      <Table.Td>{inc.source}</Table.Td>
+                      <Table.Td>
+                        <Tag name={inc.category}>{incomeCategoryLabel(t, inc.category)}</Tag>
+                        {inc.description && (
+                          <span className="ml-1 text-xs text-muted">{inc.description}</span>
+                        )}
+                      </Table.Td>
+                      <Table.Td muted>{formatDisplayDate(inc.date)}</Table.Td>
+                      <Table.Td numeric className="font-medium">
+                        CHF {inc.amount.toFixed(2)}
+                      </Table.Td>
+                      <Table.Td>
+                        {inc.receipt_path ? (
+                          <div className="flex items-center gap-2">
                             <Button
                               variant="link"
-                              size="sm"
-                              icon={<Paperclip size={12} />}
-                              onClick={() => attachReceipt(inc.id, inc.reference, inc.source)}
+                              icon={ICONS.preview}
+                              onClick={() => setPreview({ path: inc.receipt_path!, reference: inc.reference })}
                             >
-                              {t.attach}
+                              {t.view}
                             </Button>
-                          )}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCtxMenu({ x: e.clientX, y: e.clientY, item: inc });
-                            }}
-                            className="opacity-60 hover:opacity-100 text-muted hover:text-[var(--color-text-secondary)] transition-opacity"
-                            aria-label={t.more_actions}
+                            <span className="text-xs text-success-text flex items-center gap-1">
+                              <Paperclip size={ICON_SIZE.control} />
+                            </span>
+                          </div>
+                        ) : (
+                          <Button
+                            variant="link"
+                            icon={Paperclip}
+                            onClick={() => attachReceipt(inc.id, inc.reference, inc.source)}
                           >
-                            <Settings2 size={14} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-        {filtered.length === 0 && !isLoading && (
-          <EmptyState
-            message={(incomes?.length ?? 0) === 0 ? t.no_incomes_yet : t.no_matching_incomes}
-            icon={<Wallet size={32} />}
-            action={(incomes?.length ?? 0) === 0 ? (
-              <Button icon={<Plus size={16} />} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
-                {t.new_income}
-              </Button>
-            ) : undefined}
-          />
-        )}
-      </div>
+                            {t.attach}
+                          </Button>
+                        )}
+                      </Table.Td>
+                      <Table.Actions>
+                        <IconButton size="xs"
+                          icon={ICONS.more}
+                          label={t.more_actions}
+                          onClick={(e) => setCtxMenu({ x: e.clientX, y: e.clientY, item: inc })}
+                        />
+                      </Table.Actions>
+                    </Table.Row>
+                  ))}
+              </React.Fragment>
+            );
+          })}
+          {filtered.length === 0 && (
+            <Table.Empty colSpan={8}>
+              {all.length === 0 ? (
+                <EmptyState
+                  message={t.no_incomes_yet}
+                  icon={ICONS.income}
+                  action={
+                    <Button icon={ICONS.add} onClick={() => { setDroppedReceiptPath(null); setShowForm(true); }}>
+                      {t.new_income}
+                    </Button>
+                  }
+                />
+              ) : (
+                <NoResults message={t.no_matching_incomes} onClear={clearFilters} />
+              )}
+            </Table.Empty>
+          )}
+        </Table.Body>
+      </Table>
+      )}
+      </QueryState>
 
       {preview && (
         <ReceiptPreview
           path={preview.path}
           reference={preview.reference}
           onClose={() => setPreview(null)}
-          bgClassName="bg-[var(--color-input-bg)]"
-          roundedClassName="rounded-lg"
         />
       )}
       {ctxMenu && (
@@ -401,12 +371,12 @@ export function IncomePage() {
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
-            { label: t.edit, icon: <Pencil size={14} />, onClick: () => { setShowForm(false); setEditing(ctxMenu.item); } },
+            { label: t.edit, icon: ICONS.edit, onClick: () => { setShowForm(false); setEditing(ctxMenu.item); } },
             ctxMenu.item.receipt_path
-              ? { label: t.view, icon: <Eye size={14} />, onClick: () => setPreview({ path: ctxMenu.item.receipt_path!, reference: ctxMenu.item.reference }) }
-              : { label: t.attach, icon: <Paperclip size={14} />, onClick: () => attachReceipt(ctxMenu.item.id, ctxMenu.item.reference, ctxMenu.item.source) },
+              ? { label: t.view, icon: ICONS.preview, onClick: () => setPreview({ path: ctxMenu.item.receipt_path!, reference: ctxMenu.item.reference }) }
+              : { label: t.attach, icon: Paperclip, onClick: () => attachReceipt(ctxMenu.item.id, ctxMenu.item.reference, ctxMenu.item.source) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: <Trash2 size={14} />, danger: true, onClick: () => deleteIncome.mutate(ctxMenu.item.id, { onSuccess: () => undoableFromStore(t.toast_income_deleted) }) },
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => deleteWithUndo(deleteIncome, ctxMenu.item.id, t.toast_income_deleted) },
           ]}
         />
       )}
@@ -414,7 +384,7 @@ export function IncomePage() {
         count={bulk.count}
         onClear={bulk.clearSelection}
         actions={[
-          { label: t.delete, icon: <Trash2 size={14} />, onClick: bulkDelete, danger: true },
+          { label: t.delete, icon: ICONS.delete, onClick: bulkDelete, danger: true },
         ]}
       />
     </div>
@@ -476,7 +446,7 @@ export function NewIncomeForm({
     notes: initial?.notes ?? "",
   });
   const [errors, setErrors] = useState<Partial<Record<IncomeFormField, string>>>({});
-  const { undetect, resetDetected, detectedBadge, detectedClass } =
+  const { undetect, resetDetected, detectedBadge, isDetected } =
     useDetectedFields<DetectableIncomeField>(() => detectedIncomeFields(prefill));
 
   const setFieldError = (field: IncomeFormField, msg: string | null) =>
@@ -518,15 +488,24 @@ export function NewIncomeForm({
     }
   }, [prefill, resetDetected]);
 
+  const submit = () => {
+    const errs = v.validateForm(
+      { source: form.source, amount: fieldValue("amount"), date: form.date },
+      incomeSchema
+    );
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+    // DB failures surface via the mutation's onError toast (backstop).
+    onSave({
+      ...form,
+      receipt_path: null,
+    });
+  };
+
   return (
-    <Card className="mb-6 space-y-3">
-      {droppedReceiptPath && (
-        <div className="flex items-center gap-2 text-xs text-success">
-          <Paperclip size={12} />
-          <span>{t.receipt_will_be_attached} {droppedReceiptPath.split("/").pop()}</span>
-        </div>
-      )}
-      <div className="grid grid-cols-2 gap-3">
+    <FormModal open onClose={onCancel} title={initial ? t.edit : t.new_income} submitLabel={t.save} onSubmit={submit}>
+      {droppedReceiptPath && <ReceiptNote path={droppedReceiptPath} />}
+      <FormGrid cols={2}>
         <FormField
           label={t.source}
           required
@@ -534,6 +513,7 @@ export function NewIncomeForm({
           badge={detectedBadge("source", () => setForm((f) => ({ ...f, source: "" })))}
         >
           <Input
+            autoFocus
             value={form.source}
             onChange={(e) => {
               setForm({ ...form, source: e.target.value });
@@ -541,14 +521,13 @@ export function NewIncomeForm({
               undetect("source");
             }}
             onBlur={() => validateOnBlur("source")}
-            className={detectedClass("source")}
+            detected={isDetected("source")}
           />
         </FormField>
         <FormField label={t.category}>
           <Select
             value={form.category}
             onChange={(e) => setForm({ ...form, category: e.target.value })}
-            className="py-2"
           >
             {INCOME_CATEGORIES.map((c) => (
               <option key={c} value={c}>{incomeCategoryLabel(t, c)}</option>
@@ -569,16 +548,15 @@ export function NewIncomeForm({
             setForm((f) => ({ ...f, date: format(new Date(), "yyyy-MM-dd") }))
           )}
         >
-          <Input
-            type="date"
-            value={form.date}
-            onChange={(e) => {
-              setForm({ ...form, date: e.target.value });
+          <DatePicker
+            value={form.date || null}
+            onChange={(v) => {
+              setForm({ ...form, date: v ?? "" });
               clearError("date");
               undetect("date");
             }}
             onBlur={() => validateOnBlur("date")}
-            className={detectedClass("date")}
+            detected={isDetected("date")}
           />
         </FormField>
         <FormField
@@ -588,8 +566,9 @@ export function NewIncomeForm({
           badge={detectedBadge("amount", () => setForm((f) => ({ ...f, amount: 0 })))}
         >
           <Input
-            type="number"
+            numeric
             step="0.01"
+            unit="CHF"
             value={form.amount || ""}
             onChange={(e) => {
               setForm({ ...form, amount: Number(e.target.value) });
@@ -597,32 +576,10 @@ export function NewIncomeForm({
               undetect("amount");
             }}
             onBlur={() => validateOnBlur("amount")}
-            className={detectedClass("amount")}
+            detected={isDetected("amount")}
           />
         </FormField>
-      </div>
-      <div className="flex gap-2">
-        <Button variant="secondary" onClick={onCancel}>
-          {t.cancel}
-        </Button>
-        <Button
-          onClick={() => {
-            const errs = v.validateForm(
-              { source: form.source, amount: fieldValue("amount"), date: form.date },
-              incomeSchema
-            );
-            setErrors(errs);
-            if (Object.keys(errs).length > 0) return;
-            // DB failures surface via the mutation's onError toast (backstop).
-            onSave({
-              ...form,
-              receipt_path: null,
-            });
-          }}
-        >
-          {t.save}
-        </Button>
-      </div>
-    </Card>
+      </FormGrid>
+    </FormModal>
   );
 }

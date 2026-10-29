@@ -18,7 +18,7 @@ export const PANEL_TOP_BAR = "h-10 shrink-0 flex items-center border-b";
 export function BottomBar({ className = "", ...rest }: HTMLAttributes<HTMLElement>) {
   return (
     <footer
-      className={`${BOTTOM_BAR} gap-4 px-4 border-[var(--color-border-header)] text-xs text-muted ${className}`}
+      className={`${BOTTOM_BAR} gap-4 px-4 border-[var(--color-border)] text-xs text-muted ${className}`}
       {...rest}
     />
   );

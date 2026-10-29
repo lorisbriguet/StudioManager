@@ -1,17 +1,16 @@
 import { useState, useEffect } from "react";
-import { toast } from "sonner";
+import { notify } from "../../lib/notify";
+import { undoableFromStore, undoTop } from "../../lib/undo";
 import { useT } from "../../i18n/useT";
-import { useAppStore } from "../../stores/app-store";
 import { useExpenseCategories, useCreateExpenseCategory, useUpdateExpenseCategory, useDeleteExpenseCategory, isDefaultCategory } from "../../db/hooks/useExpenses";
 import { isCategoryInUse } from "../../db/queries/expenses";
 import type { ExpenseCategory } from "../../types/expense";
 import { getNamedTagColor } from "../../lib/tagColors";
-import { Input, Select } from "../ui";
+import { ICONS, IconButton, Input, Select, Table } from "../ui";
 import { ColorSwatchPicker } from "./ColorSwatchPicker";
 
 export function ExpenseCategoryManager() {
   const t = useT();
-  const darkMode = useAppStore((s) => s.darkMode);
   const { data: categories } = useExpenseCategories();
   const cats = categories ?? [];
   const createCategory = useCreateExpenseCategory();
@@ -43,11 +42,11 @@ export function ExpenseCategoryManager() {
     if (!form.code || !form.name_fr || !form.name_en) return;
     try {
       await createCategory.mutateAsync(form);
-      toast.success(t.toast_category_created);
+      notify.success(t.toast_category_created);
       setAdding(false);
       setForm({ code: "", name_fr: "", name_en: "", pl_section: "operating", color: null });
-    } catch (e) {
-      toast.error(String(e));
+    } catch {
+      // reported by the mutation
     }
   };
 
@@ -56,25 +55,29 @@ export function ExpenseCategoryManager() {
     try {
       const { code: _, ...data } = form;
       await updateCategory.mutateAsync({ code: editingCode, data });
-      toast.success(t.toast_category_updated);
+      notify.success(t.toast_category_updated);
       setEditingCode(null);
-    } catch (e) {
-      toast.error(String(e));
+    } catch {
+      // reported by the mutation
     }
   };
 
   const handleDelete = async (code: string) => {
     if (isDefaultCategory(code)) {
-      toast.error(t.toast_category_default);
+      notify.error(t.toast_category_default);
       return;
     }
+    // Checked first so the user gets the reason, not a generic failure
+    if (await isCategoryInUse(code)) {
+      notify.error(t.toast_category_in_use);
+      return;
+    }
+    const before = undoTop();
     try {
       await deleteCategory.mutateAsync(code);
-      toast.success(t.toast_category_deleted);
-    } catch (e) {
-      const msg = String(e);
-      if (msg.includes("in use")) toast.error(t.toast_category_in_use);
-      else toast.error(msg);
+      undoableFromStore(t.toast_category_deleted, before);
+    } catch {
+      // reported by the mutation
     }
   };
 
@@ -86,138 +89,130 @@ export function ExpenseCategoryManager() {
 
   return (
     <div className="max-w-3xl">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-[var(--color-border-divider)] text-left text-xs text-muted uppercase">
-            <th className="py-2 pr-2 w-20">{t.category_code}</th>
-            <th className="py-2 pr-2">{t.category_name_fr}</th>
-            <th className="py-2 pr-2">{t.category_name_en}</th>
-            <th className="py-2 pr-2 w-32">{t.category_pl_section}</th>
-            <th className="py-2 pr-2 w-40">{t.color}</th>
-            <th className="py-2 w-28" />
-          </tr>
-        </thead>
-        <tbody>
+      <Table density="compact">
+        <Table.Head>
+          <Table.Th className="w-20">{t.category_code}</Table.Th>
+          <Table.Th>{t.category_name_fr}</Table.Th>
+          <Table.Th>{t.category_name_en}</Table.Th>
+          <Table.Th className="w-32">{t.category_pl_section}</Table.Th>
+          <Table.Th className="w-40">{t.color}</Table.Th>
+          <Table.ActionsTh />
+        </Table.Head>
+        <Table.Body>
           {cats.map((cat) => (
-            <tr key={cat.code} className="border-b border-[var(--color-border-divider)]">
+            <Table.Row key={cat.code}>
               {editingCode === cat.code ? (
                 <>
-                  <td className="py-2 pr-2 text-muted">{cat.code}</td>
-                  <td className="py-2 pr-2">
+                  <Table.Td muted>{cat.code}</Table.Td>
+                  <Table.Td>
                     <Input
+                      aria-label={t.category_name_fr}
                       value={form.name_fr}
                       onChange={(e) => setForm({ ...form, name_fr: e.target.value })}
                     />
-                  </td>
-                  <td className="py-2 pr-2">
+                  </Table.Td>
+                  <Table.Td>
                     <Input
+                      aria-label={t.category_name_en}
                       value={form.name_en}
                       onChange={(e) => setForm({ ...form, name_en: e.target.value })}
                     />
-                  </td>
-                  <td className="py-2 pr-2">
+                  </Table.Td>
+                  <Table.Td>
                     <Select
+                      aria-label={t.category_pl_section}
                       value={form.pl_section}
                       onChange={(e) => setForm({ ...form, pl_section: e.target.value as ExpenseCategory["pl_section"] })}
                     >
                       <option value="operating">{t.pl_operating}</option>
                       <option value="social_charges">{t.pl_social_charges}</option>
                     </Select>
-                  </td>
-                  <td className="py-2 pr-2">
+                  </Table.Td>
+                  <Table.Td>
                     <ColorSwatchPicker value={form.color} onChange={(c) => setForm({ ...form, color: c })} />
-                  </td>
-                  <td className="py-2 flex gap-1">
-                    <button type="button" onClick={handleSaveEdit} className="px-2 py-1 bg-accent text-white text-xs rounded-md hover:bg-accent-hover">
-                      {t.save}
-                    </button>
-                    <button type="button" onClick={() => setEditingCode(null)} className="px-2 py-1 border border-[var(--color-input-border)] text-xs rounded-md hover:bg-[var(--color-hover-row)]">
-                      {t.cancel}
-                    </button>
-                  </td>
+                  </Table.Td>
+                  <Table.Actions always>
+                    <IconButton icon={ICONS.save} label={t.save} size="xs" color="accent" onClick={handleSaveEdit} />
+                    <IconButton icon={ICONS.close} label={t.cancel} size="xs" onClick={() => setEditingCode(null)} />
+                  </Table.Actions>
                 </>
               ) : (
                 <>
-                  <td className="py-2 pr-2 font-mono">{cat.code}</td>
-                  <td className="py-2 pr-2">{cat.name_fr}</td>
-                  <td className="py-2 pr-2">{cat.name_en}</td>
-                  <td className="py-2 pr-2 text-muted">
+                  <Table.Td className="font-mono">{cat.code}</Table.Td>
+                  <Table.Td>{cat.name_fr}</Table.Td>
+                  <Table.Td>{cat.name_en}</Table.Td>
+                  <Table.Td muted>
                     {cat.pl_section === "operating" ? t.pl_operating : t.pl_social_charges}
-                  </td>
-                  <td className="py-2 pr-2">
+                  </Table.Td>
+                  <Table.Td>
                     {cat.color ? (() => {
-                      const c = getNamedTagColor(cat.color, darkMode);
+                      const c = getNamedTagColor(cat.color);
                       return (
                         <span
                           className="inline-block w-5 h-5 rounded-full"
-                          style={{ background: c.bg, border: `2px solid ${c.text}40` }}
+                          style={{ background: c.bg, border: `2px solid color-mix(in srgb, ${c.text} 25%, transparent)` }}
                           title={cat.color}
                         />
                       );
                     })() : (
                       <span className="text-xs text-muted">auto</span>
                     )}
-                  </td>
-                  <td className="py-2 flex gap-1">
-                    <button type="button" onClick={() => startEdit(cat)} className="px-2 py-1 border border-[var(--color-input-border)] text-xs rounded-md hover:bg-[var(--color-hover-row)]">
-                      {t.edit}
-                    </button>
+                  </Table.Td>
+                  <Table.Actions>
+                    {/* Default and in-use categories can't be deleted: say why where the delete would be. */}
                     {isDefaultCategory(cat.code) ? (
-                      <span className="px-2 py-1 text-xs text-muted">{t.default_category}</span>
+                      <span className="px-1 text-xs text-muted">{t.default_category}</span>
                     ) : categoryUsage[cat.code] ? (
-                      <span className="px-2 py-1 text-xs text-muted">{t.category_in_use}</span>
-                    ) : (
-                      <button type="button" onClick={() => handleDelete(cat.code)} className="px-2 py-1 border border-[var(--color-danger-text)]/30 text-[var(--color-danger-text)] text-xs rounded-md hover:bg-[var(--color-danger-bg)]">
-                        {t.delete}
-                      </button>
+                      <span className="px-1 text-xs text-muted">{t.category_in_use}</span>
+                    ) : null}
+                    <IconButton icon={ICONS.edit} label={t.edit} size="xs" onClick={() => startEdit(cat)} />
+                    {!isDefaultCategory(cat.code) && !categoryUsage[cat.code] && (
+                      <IconButton icon={ICONS.delete} label={t.delete} size="xs" tone="danger" onClick={() => handleDelete(cat.code)} />
                     )}
-                  </td>
+                  </Table.Actions>
                 </>
               )}
-            </tr>
+            </Table.Row>
           ))}
           {adding && (
-            <tr className="border-b border-[var(--color-border-divider)]">
-              <td className="py-2 pr-2">
+            <Table.Row>
+              <Table.Td>
                 <Input
-                  fullWidth={false}
-                  className="w-16"
+                  width="xs"
+                  aria-label={t.category_code}
                   placeholder="XX"
                   maxLength={4}
                   value={form.code}
                   onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
                 />
-              </td>
-              <td className="py-2 pr-2">
-                <Input value={form.name_fr} onChange={(e) => setForm({ ...form, name_fr: e.target.value })} />
-              </td>
-              <td className="py-2 pr-2">
-                <Input value={form.name_en} onChange={(e) => setForm({ ...form, name_en: e.target.value })} />
-              </td>
-              <td className="py-2 pr-2">
+              </Table.Td>
+              <Table.Td>
+                <Input aria-label={t.category_name_fr} value={form.name_fr} onChange={(e) => setForm({ ...form, name_fr: e.target.value })} />
+              </Table.Td>
+              <Table.Td>
+                <Input aria-label={t.category_name_en} value={form.name_en} onChange={(e) => setForm({ ...form, name_en: e.target.value })} />
+              </Table.Td>
+              <Table.Td>
                 <Select
+                  aria-label={t.category_pl_section}
                   value={form.pl_section}
                   onChange={(e) => setForm({ ...form, pl_section: e.target.value as ExpenseCategory["pl_section"] })}
                 >
                   <option value="operating">{t.pl_operating}</option>
                   <option value="social_charges">{t.pl_social_charges}</option>
                 </Select>
-              </td>
-              <td className="py-2 pr-2">
+              </Table.Td>
+              <Table.Td>
                 <ColorSwatchPicker value={form.color} onChange={(c) => setForm({ ...form, color: c })} />
-              </td>
-              <td className="py-2 flex gap-1">
-                <button type="button" onClick={handleSaveNew} className="px-2 py-1 bg-accent text-white text-xs rounded-md hover:bg-accent-hover">
-                  {t.save}
-                </button>
-                <button type="button" onClick={() => setAdding(false)} className="px-2 py-1 border border-[var(--color-input-border)] text-xs rounded-md hover:bg-[var(--color-hover-row)]">
-                  {t.cancel}
-                </button>
-              </td>
-            </tr>
+              </Table.Td>
+              <Table.Actions always>
+                <IconButton icon={ICONS.save} label={t.save} size="xs" color="accent" onClick={handleSaveNew} />
+                <IconButton icon={ICONS.close} label={t.cancel} size="xs" onClick={() => setAdding(false)} />
+              </Table.Actions>
+            </Table.Row>
           )}
-        </tbody>
-      </table>
+        </Table.Body>
+      </Table>
       {!adding && !editingCode && (
         <button
           type="button"
@@ -225,7 +220,7 @@ export function ExpenseCategoryManager() {
             setAdding(true);
             setForm({ code: "", name_fr: "", name_en: "", pl_section: "operating", color: null });
           }}
-          className="mt-3 px-3 py-1.5 text-sm text-accent border border-accent rounded-md hover:bg-accent-light"
+          className="mt-3 px-3 py-1.5 text-sm text-accent-text border border-accent rounded-md hover:bg-accent-light"
         >
           + {t.add_category}
         </button>
