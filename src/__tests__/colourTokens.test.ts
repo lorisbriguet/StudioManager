@@ -126,10 +126,17 @@ describe("themes", () => {
       for (const [name, value] of Object.entries(tokens)) {
         const fromCss = sheet[name];
         // Only literal colours: aliases and color-mix values aren't comparable
-        if (fromCss && /^#/.test(fromCss) && name !== "--color-accent-light" && name !== "--color-accent-hover") {
+        // Default Dark keeps its own slate accent (applied by applyAccentColor), so the accent isn't compared
+        const ownAccent = id === "default-dark" && name === "--color-accent";
+        if (fromCss && /^#/.test(fromCss) && name !== "--color-accent-light" && name !== "--color-accent-hover" && !ownAccent) {
           expect(value.toLowerCase(), `${id} ${name}`).toBe(fromCss.toLowerCase());
         }
       }
     }
+  });
+
+  it("Default Dark keeps the slate accent", () => {
+    const c = getThemeById("default-dark")!.colors;
+    expect([c.accent, c.accentLight, c.accentHover]).toEqual(["#64748b", "#0f172a", "#475569"]);
   });
 });
