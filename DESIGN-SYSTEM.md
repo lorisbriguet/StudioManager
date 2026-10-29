@@ -2,6 +2,8 @@
 
 Reference guide for all UI patterns, tokens, and conventions. Every new component or page must follow these rules.
 
+To see every component with a live preview, and the deep dive behind each rule, use the [component catalogue](docs/catalogue/README.md).
+
 ---
 
 ## Design Language
