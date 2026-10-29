@@ -36,26 +36,68 @@ static ATTENTION: AtomicBool = AtomicBool::new(false);
 /// would open the panel again instead of closing it.
 static PANEL_BLURRED_AT: AtomicU64 = AtomicU64::new(0);
 const REOPEN_GUARD_MS: u64 = 300;
-/// When the panel was last shown (ms since epoch). Opening it while StudioManager is in the
-/// background brings the app forward, and macOS then hands the focus to the main window if it
-/// is open: a focus loss this soon after showing is that hand-over, not a click elsewhere.
-static PANEL_SHOWN_AT: AtomicU64 = AtomicU64::new(0);
-const ACTIVATION_GRACE_MS: u64 = 600;
+/// Until when (ms since epoch) the main window taking the focus from the panel is macOS
+/// handing it over, not a click. Opening the panel while StudioManager is in the background
+/// with its window open brings the app forward, and macOS then gives the focus to that window
+/// (the #6 bug). Set only in that case, and used once.
+static HANDOVER_UNTIL: AtomicU64 = AtomicU64::new(0);
+/// Generous, for a slow Mac: a click elsewhere hides the panel at once whatever the time, and
+/// only the main window taking the focus is held back.
+const HANDOVER_MS: u64 = 3_000;
 
-/// What the panel does when it loses focus: take it back during the app's activation,
-/// hide otherwise.
+/// What the panel does when it loses focus: take it back from the main window while the app's
+/// activation hands the focus over, hide otherwise (a click in another app, on the desktop, or
+/// in the main window later on).
 #[derive(Debug, PartialEq)]
 pub enum BlurAction {
     Refocus,
     Hide,
 }
 
-pub fn blur_action(now: u64, shown_at: u64) -> BlurAction {
-    if now.saturating_sub(shown_at) < ACTIVATION_GRACE_MS {
+pub fn blur_action(now: u64, handover_until: u64, main_focused: bool) -> BlurAction {
+    if main_focused && now < handover_until {
         BlurAction::Refocus
     } else {
         BlurAction::Hide
     }
+}
+
+/// Dock icon and app menus only while the main window is open; with only the menu bar
+/// (window hidden, menu bar on) StudioManager is an accessory app, so opening the panel does
+/// not bring a window forward or switch the menu bar to the app's menus.
+#[cfg(target_os = "macos")]
+pub fn activation_policy(main_visible: bool, menu_bar_on: bool) -> tauri::ActivationPolicy {
+    if menu_bar_on && !main_visible {
+        tauri::ActivationPolicy::Accessory
+    } else {
+        tauri::ActivationPolicy::Regular
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn apply_policy(app: &AppHandle, main_visible: bool, menu_bar_on: bool) {
+    if let Err(e) = app.set_activation_policy(activation_policy(main_visible, menu_bar_on)) {
+        eprintln!("[menubar] could not set the activation policy: {e}");
+    }
+}
+
+/// Follows the main window: closing it with the menu bar on (it only hides, see `lib.rs`)
+/// makes the app an accessory. Registered once, with the menu bar icon.
+#[cfg(target_os = "macos")]
+fn watch_main(app: &AppHandle) {
+    static WATCHING: AtomicBool = AtomicBool::new(false);
+    let Some(main) = app.get_webview_window("main") else { return };
+    if WATCHING.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    let handle = app.clone();
+    main.on_window_event(move |event| {
+        if let tauri::WindowEvent::CloseRequested { .. } = event {
+            if keep_running(&handle) {
+                apply_policy(&handle, false, true);
+            }
+        }
+    });
 }
 
 /// Whether the app stays alive with its window closed: Agents on and the menu bar on.
@@ -72,6 +114,8 @@ pub fn started_hidden() -> bool {
 
 /// Show and focus the main window (Dock click, panel "open app").
 pub fn show_main(app: &AppHandle) {
+    #[cfg(target_os = "macos")]
+    apply_policy(app, true, true);
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
         let _ = w.unminimize();
@@ -115,6 +159,16 @@ pub fn sync_tray(app: &AppHandle, enabled: bool, _held: &SettingsGuard) {
 
 /// Runs on the main thread (see `sync_tray`).
 fn apply_tray(app: &AppHandle, enabled: bool) {
+    #[cfg(target_os = "macos")]
+    {
+        let main_visible = app
+            .get_webview_window("main")
+            .is_some_and(|w| w.is_visible().unwrap_or(false));
+        apply_policy(app, main_visible, enabled);
+        if enabled {
+            watch_main(app);
+        }
+    }
     if !enabled {
         let _ = app.remove_tray_by_id(TRAY_ID);
         if let Some(w) = app.get_webview_window(PANEL_LABEL) {
@@ -180,22 +234,42 @@ fn ensure_panel(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
         .decorations(false)
         .skip_taskbar(true)
         .always_on_top(true)
+        // Opens over the current Space and over a full-screen app, instead of switching Spaces.
+        .visible_on_all_workspaces(true)
         .shadow(true)
         .visible(false)
         .build()?;
     let panel = w.clone();
     w.on_window_event(move |event| {
         if let tauri::WindowEvent::Focused(false) = event {
-            let now = now_ms();
-            if blur_action(now, PANEL_SHOWN_AT.load(Ordering::Relaxed)) == BlurAction::Refocus {
-                let _ = panel.set_focus();
-                return;
-            }
-            PANEL_BLURRED_AT.store(now, Ordering::Relaxed);
-            let _ = panel.hide();
+            // Decide once macOS has settled who has the focus: while the panel resigns, the
+            // window taking over is not key yet. From another thread the task is queued
+            // (on the main thread it would run at once).
+            let panel = panel.clone();
+            std::thread::spawn(move || {
+                let app = panel.app_handle().clone();
+                let _ = app.clone().run_on_main_thread(move || on_panel_blur(&app, &panel));
+            });
         }
     });
     Ok(w)
+}
+
+/// Runs on the main thread after the panel lost the focus (see `ensure_panel`).
+fn on_panel_blur(app: &AppHandle, panel: &tauri::WebviewWindow) {
+    if panel.is_focused().unwrap_or(false) || !panel.is_visible().unwrap_or(false) {
+        return;
+    }
+    let main_focused = app
+        .get_webview_window("main")
+        .is_some_and(|m| m.is_focused().unwrap_or(false));
+    let now = now_ms();
+    if blur_action(now, HANDOVER_UNTIL.swap(0, Ordering::Relaxed), main_focused) == BlurAction::Refocus {
+        let _ = panel.set_focus();
+        return;
+    }
+    PANEL_BLURRED_AT.store(now, Ordering::Relaxed);
+    let _ = panel.hide();
 }
 
 /// A rectangle in physical pixels: left, top, width, height.
@@ -255,7 +329,11 @@ fn toggle_panel(app: &AppHandle, item: tauri::Rect) {
         let (x, y) = panel_origin(icon, screen, PANEL_WIDTH * scale, scale);
         let _ = panel.set_position(PhysicalPosition::new(x, y));
     }
-    PANEL_SHOWN_AT.store(now_ms(), Ordering::Relaxed);
+    // The main window open behind other apps will take the focus as the app comes forward.
+    let main_in_background = app
+        .get_webview_window("main")
+        .is_some_and(|m| m.is_visible().unwrap_or(false) && !m.is_focused().unwrap_or(false));
+    HANDOVER_UNTIL.store(if main_in_background { now_ms() + HANDOVER_MS } else { 0 }, Ordering::Relaxed);
     let _ = panel.show();
     let _ = panel.set_focus();
 }
@@ -306,13 +384,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn focus_lost_while_the_app_activates_is_taken_back() {
-        // The main window takes the focus right after the panel opens: keep the panel.
-        assert_eq!(blur_action(10_100, 10_000), BlurAction::Refocus);
-        assert_eq!(blur_action(10_599, 10_000), BlurAction::Refocus);
-        // A click elsewhere later closes it.
-        assert_eq!(blur_action(10_600, 10_000), BlurAction::Hide);
-        assert_eq!(blur_action(50_000, 10_000), BlurAction::Hide);
+    fn focus_handed_to_the_main_window_while_the_app_activates_is_taken_back() {
+        // Opened at 10 000 with the main window in the background: the hand-over is expected
+        // until 13 000.
+        let until = 10_000 + HANDOVER_MS;
+        // The main window takes the focus, even late on a slow Mac: keep the panel.
+        assert_eq!(blur_action(10_100, until, true), BlurAction::Refocus);
+        assert_eq!(blur_action(12_999, until, true), BlurAction::Refocus);
+        // A click in Finder (the main window doesn't get the focus) closes it at once.
+        assert_eq!(blur_action(10_100, until, false), BlurAction::Hide);
+        // No hand-over expected (main window hidden or already in front), or used up / late:
+        // a click in the main window closes it.
+        assert_eq!(blur_action(10_100, 0, true), BlurAction::Hide);
+        assert_eq!(blur_action(13_000, until, true), BlurAction::Hide);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn accessory_only_with_the_menu_bar_and_the_window_hidden() {
+        use tauri::ActivationPolicy::{Accessory, Regular};
+        assert!(matches!(activation_policy(false, true), Accessory));
+        assert!(matches!(activation_policy(true, true), Regular));
+        // Menu bar off: always a regular app (the window can't stay hidden then).
+        assert!(matches!(activation_policy(false, false), Regular));
+        assert!(matches!(activation_policy(true, false), Regular));
     }
 
     #[test]

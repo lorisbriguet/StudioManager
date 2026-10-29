@@ -12,14 +12,14 @@ Design and reasons: [the design spec](superpowers/specs/2026-10-28-menu-bar-desi
 With it on:
 
 - StudioManager starts when you log in, with its window hidden. The icon is in the menu bar.
-- Closing the window keeps StudioManager running. Clicking the Dock icon shows the window again.
+- Closing the window keeps StudioManager running. While the window is closed, StudioManager leaves the Dock and the app switcher (Cmd+Tab) and lives in the menu bar only, so opening the panel doesn't bring a window forward or switch the menu bar to its menus. **Open StudioManager** in the panel, or opening the app again from Finder or Spotlight, shows the window and puts the Dock icon back.
 - Cmd+Q quits the app and removes the icon.
 
 The icon turns amber while any agent needs you.
 
 ## The panel
 
-Click the icon to open the panel; click anywhere else to close it. It has three tabs.
+Click the icon to open the panel; click anywhere else to close it. It opens on the Space you are in, also over a full-screen app. It has three tabs.
 
 ### Agents
 
