@@ -2,7 +2,7 @@
 
 use super::cli::{read_settings, timed_out, Cli, CliOutput};
 use super::model::{parse_agents, Agent, Kind};
-use super::projects::read_trusted;
+use super::projects::{is_trusted, read_trusted};
 use super::pty::blocking;
 use super::validate::{valid_model, valid_name, valid_short_id, valid_task};
 use crate::agent_access::write_atomic;
@@ -244,7 +244,7 @@ pub fn start(
     if task.trim().is_empty() || !valid_task(task) {
         return Err("Task must be 1-8000 characters and not start with \"-\"".into());
     }
-    if !trusted.iter().any(|t| trim_slash(t) == trim_slash(folder)) {
+    if !is_trusted(trusted, folder) {
         return Err("Folder not trusted: open it once with Claude Code first".into());
     }
     let since = now_ms();

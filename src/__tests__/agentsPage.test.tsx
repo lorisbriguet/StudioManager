@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { AgentsPage } from "../pages/AgentsPage";
 import { StartAgentForm, slugifyName } from "../components/agents/StartAgentForm";
+import { ConfirmHost } from "../components/ui/ConfirmDialog";
+import { isInside } from "../lib/agents";
 import { useAppStore } from "../stores/app-store";
 import { emit } from "../__mocks__/tauri-event";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
@@ -99,8 +101,8 @@ describe("StartAgentForm", () => {
     setInvokeHandler((cmd) => {
       if (cmd === "agents_start_folders")
         return [
-          { path: "/work/proj", label },
-          { path: "/other", label: null },
+          { path: "/work/proj", label, trusted: true, home: false },
+          { path: "/other", label: null, trusted: true, home: false },
         ];
       if (cmd === "agents_start") return "abcd1234";
       return null;
@@ -159,6 +161,75 @@ describe("StartAgentForm", () => {
     expect(alert).toHaveTextContent("Couldn't start the agent");
     expect(alert).not.toHaveTextContent("Folder is not trusted");
     expect(vi.mocked(logError)).toHaveBeenCalledWith(expect.any(String), "Folder is not trusted");
+  });
+});
+
+describe("StartAgentForm with a folder Claude does not trust yet", () => {
+  function handler(home: boolean, trustError?: string) {
+    clearInvokedCommands();
+    setInvokeHandler((cmd) => {
+      if (cmd === "agents_start_folders")
+        return [{ path: "/Users/me/Code", label: null, trusted: false, home }];
+      if (cmd === "agents_trust_folder") {
+        if (trustError) throw trustError;
+        return "/Users/me/Code";
+      }
+      if (cmd === "agents_start") return "abcd1234";
+      return null;
+    });
+  }
+
+  async function fillAndStart() {
+    render(
+      <>
+        <StartAgentForm onStarted={() => {}} onCancel={() => {}} />
+        <ConfirmHost />
+      </>,
+    );
+    await screen.findByText(/not trusted yet/);
+    fireEvent.change(screen.getByLabelText("Task"), { target: { value: "Do it" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    return screen.findByRole("dialog", { name: "Trust /Users/me/Code for Claude Code?" });
+  }
+
+  it("asks first, then trusts the folder and starts there", async () => {
+    handler(false);
+    const dialog = await fillAndStart();
+    expect(dialog).toHaveTextContent(/every folder inside it/);
+    fireEvent.click(screen.getByRole("button", { name: "Trust and start" }));
+    await waitFor(() => expect(invokedCommands.some((c) => c.cmd === "agents_start")).toBe(true));
+    const cmds = invokedCommands.map((c) => c.cmd);
+    expect(cmds.indexOf("agents_trust_folder")).toBeLessThan(cmds.indexOf("agents_start"));
+    expect(invokedCommands.find((c) => c.cmd === "agents_trust_folder")?.args).toEqual({ folder: "/Users/me/Code" });
+  });
+
+  it("does nothing on Cancel", async () => {
+    handler(false);
+    const dialog = await fillAndStart();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(invokedCommands.some((c) => c.cmd === "agents_trust_folder" || c.cmd === "agents_start")).toBe(false);
+  });
+
+  it("warns that the home folder covers everything in it", async () => {
+    handler(true);
+    const dialog = await fillAndStart();
+    expect(dialog).toHaveTextContent(/home folder/);
+  });
+
+  it("does not start when trusting fails", async () => {
+    handler(false, "Claude Code is saving its settings: try again");
+    await fillAndStart();
+    fireEvent.click(screen.getByRole("button", { name: "Trust and start" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't trust the folder");
+    expect(invokedCommands.some((c) => c.cmd === "agents_start")).toBe(false);
+  });
+
+  it("isInside matches the folder and what it holds, not siblings", () => {
+    expect(isInside("/a/b", "/a/b")).toBe(true);
+    expect(isInside("/a/b/c", "/a/b/")).toBe(true);
+    expect(isInside("/a/bc", "/a/b")).toBe(false);
+    expect(isInside("/a", "/a/b")).toBe(false);
   });
 });
 

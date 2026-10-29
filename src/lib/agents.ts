@@ -217,6 +217,17 @@ export interface Agent {
 export interface StartFolder {
   path: string;
   label: ProjectLabel | null;
+  /** Claude Code trusts it (itself or a folder above it). */
+  trusted: boolean;
+  /** The home folder: trusting it trusts every folder in it. */
+  home: boolean;
+}
+
+/** Whether `path` is `folder` or inside it. */
+export function isInside(path: string, folder: string): boolean {
+  const f = folder.length > 1 ? folder.replace(/\/+$/, "") : folder;
+  const p = path.length > 1 ? path.replace(/\/+$/, "") : path;
+  return p === f || p.startsWith(f.endsWith("/") ? f : `${f}/`);
 }
 
 /** The full agent list; carried by the `agents:changed` event. */
@@ -229,4 +240,12 @@ export function listAgents(): Promise<Agent[]> {
 
 export function startFolders(): Promise<StartFolder[]> {
   return invoke<StartFolder[]>("agents_start_folders");
+}
+
+/**
+ * Trusts `folder` for Claude Code (what answering Yes to Claude's own trust question
+ * does). Only after the person confirmed it. Resolves to the folder as written.
+ */
+export function trustFolder(folder: string): Promise<string> {
+  return invoke<string>("agents_trust_folder", { folder });
 }
