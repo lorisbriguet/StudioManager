@@ -230,7 +230,7 @@ export function InvoicesPage() {
   const deleteSelection = useBulkDelete("invoices", (id: number) => deleteInvoice.mutateAsync(id));
   const bulkDelete = () => {
     if (selectionHasNonDraft) {
-      notify.error(t.invoice_delete_only_drafts);
+      notify.warning(t.invoice_delete_only_drafts);
       return;
     }
     void deleteSelection([...bulk.selected] as number[], bulk.clearSelection);

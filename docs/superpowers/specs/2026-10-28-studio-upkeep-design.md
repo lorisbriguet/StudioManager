@@ -99,12 +99,15 @@ expense prefilled with supplier and price.
 **Subscriptions tab.** Name, plan, renews on, period (monthly or yearly), cost, status (active, cancelled),
 "In calendar" toggle, yearly total in the org's currency. Cancelled ones stay listed, greyed, and never remind.
 
-When an active subscription's renewal date passes, the app moves `renews_on` forward one period on its own
+When an active subscription's renewal date passes, the app moves `renews_on` forward to the next renewal after today on its own
 (and moves its Calendar event), then **asks before touching Expenses** (Loris's choice): "Creative Cloud
 renewed · add CHF 840 to expenses?" with Add (opens a new expense prefilled with vendor, amount, date and
 category; the user saves it) and Skip. The question shows once as a notification and stays on the
 Subscriptions tab and the dashboard widget until answered. Nothing is written to Expenses without that
-click. If the app was closed across several renewals, it asks once per missed renewal.
+click. If the app was closed across several renewals, it asks once, about the latest one: one renewal row
+per subscription per check, so a stale date never queues a question per missed period (changed 2026-10-29,
+full check finding H.3, [PR #12](https://github.com/lorisbriguet/StudioManager/pull/12)). A "renews on" date in the past
+is rolled forward to the next renewal on or after today when the subscription is saved.
 
 **Calendar page** (in-app). Upkeep and renewals show next to tasks and deadlines, each with its own colour and
 a filter chip, as in the mockup.

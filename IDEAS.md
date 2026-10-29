@@ -85,11 +85,17 @@ All 12 checklist items pass after three fixes found by the pass:
 - [x] Test Mode and Presentation Mode are demo-build tools now: their Settings category is hidden in the real app (banners and exit paths stay for anyone mid-mode at update time); the Snapshot card moved under Backup
 - [x] Docs: guide, [README](README.md) and landing page no longer point testers at Presentation Mode
 
-## Next — Agents window (design: [specs/2026-10-28-agents-window-design.md](docs/superpowers/specs/2026-10-28-agents-window-design.md))
+## V3.0.0 — Done (agents, menu bar, studio upkeep, UI library)
 
+Design: [specs/2026-10-28-agents-window-design.md](docs/superpowers/specs/2026-10-28-agents-window-design.md)
+
+- [x] UI component library: every form, table, menu, dialog and input on shared components in `src/components/ui/`; tokens by role, one icon map, a DatePicker you can type in, undo on every reversible delete, toasts and empty/loading/error states ([DESIGN-SYSTEM.md](DESIGN-SYSTEM.md))
+- [x] Studio upkeep: machines, reminders, consumables, subscriptions, warranties, lending; Synology NAS and Bambu Lab connections with secrets in the Keychain ([spec](docs/superpowers/specs/2026-10-28-studio-upkeep-design.md))
 - [x] Settings switch + Agents page: list agents by needs you / working / idle / done, labelled by project; start, read, send, switch model, stop, delete; terminal attached to an agent; Mac notification when one waits ([docs](docs/agents.md))
 - [x] Menu bar: the agent bar inside StudioManager, with plan limits, alerts and a Day tab of routines ([docs](docs/menu-bar.md); design: [specs/2026-10-28-menu-bar-design.md](docs/superpowers/specs/2026-10-28-menu-bar-design.md))
+- [x] Full check of 2026-10-29: all 43 interface findings and the P1/P2 security and backend findings fixed ([report](docs/audits/2026-10-29-full-check.md)); quieter "needs you" notifications, one row per resumed session; menus no longer flash in the corner
 - [ ] Follow-up: Per-window command ACL (AppManifest) so the menu bar panel can only call its own commands
+- [ ] Follow-up: verify the MCP sidecar the app registers (G.9 of the full check)
 
 ## V2.3.0 — Done (wiki vault)
 
@@ -144,6 +150,10 @@ Follow-ups:
 - [ ] Follow-up: the Tasks "+" button and subtask creation share the double-submit pattern that was fixed elsewhere
 - [ ] Follow-up: `NamedTable` has no optimistic cell update - a cell only reflects an edit once the row query refetches (surfaced by the characterisation tests, pre-existing)
 
+## Full check (2026-10-29)
+
+Eight reading passes by separate agents over everything merged since 2026-10-28 (agents page, menu bar, studio upkeep, UI component library, wiki vault, MCP wiki links): three on the interface, five on security and the backend. Full report: [docs/audits/2026-10-29-full-check.md](docs/audits/2026-10-29-full-check.md). Two high findings (an invalid date still submits a form; a link in an agent reply can navigate the webview away), no critical. The 43 interface findings are being fixed on `worktree-ui-fixes`; D.1/D.2 are fixed in PR #7.
+
 ## Audit — round 5, full application (2026-09-28)
 
 Four independent reading passes (correctness/data, security/platform, UI/a11y/perf, tests/tooling) over 51k lines of TypeScript and 2.5k of Rust, plus deterministic tooling. Full report: [docs/audits/2026-09-28-full-audit.md](docs/audits/2026-09-28-full-audit.md). Clean bill on the organisations layer, the data upgrade, SQL parameterisation, capabilities and CSP, the updater chain, and design-system compliance.
@@ -185,7 +195,7 @@ Three-lens audit (correctness/data, security/platform, UI/a11y/perf/tests) after
 - [ ] `pragma_table_info('${table}')` interpolation in `db/index.ts` + `lib/backup.ts` — currently allowlisted/hardcoded (not exploitable), escape or validate as defense-in-depth
 - [ ] Perf: memoize row components + `getTagColor`/`statusClasses` in Invoices/Expenses/NamedTable; consider lazy-loading Settings/Finances routes
 - [ ] Unify receipt-filename sanitization with backup's stronger `safeName()` (shared `lib/pathSafety.ts`)
-- [ ] CSP `connect-src https://github.com` breadth — verify the in-app update check's fetch path before narrowing (naive pinning can break updates)
+- [x] CSP `connect-src https://github.com` breadth — removed (2026-10-29): the update check runs in Rust, the frontend never fetched github.com
 - [ ] Invoice PDF recomputes discount from `subtotal * discount_rate` at render — consider storing `discount_amount`
 
 ## Audit — round 4, exhaustive (2026-08-31)

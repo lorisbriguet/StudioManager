@@ -851,7 +851,9 @@ fn parse_date(s: &str) -> Option<NaiveDate> {
 /// Active upkeep items of machines still in service, with their effective due
 /// date (a later snooze wins over next_due_on; no date, no entry).
 /// Returns `((item title, machine id, machine name), date)`.
-fn upkeep_dues(conn: &Connection) -> R<Vec<((String, i64, String), String)>> {
+type UpkeepDue = ((String, i64, String), String);
+
+fn upkeep_dues(conn: &Connection) -> R<Vec<UpkeepDue>> {
     let mut stmt = db(conn.prepare(
         "SELECT i.title, m.id, m.name, \
                 CASE WHEN i.snooze_until IS NOT NULL AND (i.next_due_on IS NULL OR i.snooze_until > i.next_due_on) \
@@ -888,7 +890,7 @@ pub fn list_machines(conn: &Connection) -> R<Vec<MachineRef>> {
         .and_then(|rows| rows.collect()))?;
     for ((title, id, _), due) in upkeep_dues(conn)? {
         if let Some(m) = machines.iter_mut().find(|m| m.id == id) {
-            let better = m.next_upkeep.as_ref().map_or(true, |n| due < n.due);
+            let better = m.next_upkeep.as_ref().is_none_or(|n| due < n.due);
             if better {
                 m.next_upkeep = Some(NextUpkeep { title, due: due[..10.min(due.len())].to_string() });
             }

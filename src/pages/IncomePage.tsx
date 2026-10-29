@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
-import { Paperclip } from "lucide-react";
 import { ICONS, ICON_SIZE, PageHeader, SearchBar, Button, DatePicker, EmptyState, QueryState, NoResults, FormField, FormGrid, FormModal, Input, Select, Table, TableSkeleton, IconButton, Tag } from "../components/ui";
 import * as v from "../lib/validate";
 import { deleteWithUndo } from "../lib/undo";
@@ -59,6 +58,9 @@ export function IncomePage() {
   const updateIncome = useUpdateIncome();
   const deleteIncome = useDeleteIncome();
   const [showForm, setShowForm] = useState(false);
+  // From the first await (the next reference) to the end of the insert: a
+  // second Enter in that window would create a second income.
+  const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<Income | null>(null);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortState<SortKey>>({ key: "date", dir: "desc" });
@@ -200,6 +202,7 @@ export function IncomePage() {
           droppedReceiptPath={editing ? null : droppedReceiptPath}
           prefill={editing ? null : prefill}
           initial={editing}
+          submitting={saving || updateIncome.isPending}
           onSave={async (data) => {
             if (editing) {
               // Never touch receipt_path on edit — the receipt cell manages it.
@@ -215,36 +218,43 @@ export function IncomePage() {
               );
               return;
             }
-            const reference = await getNextIncomeReference(new Date().getFullYear());
+            setSaving(true);
+            try {
+              const reference = await getNextIncomeReference(new Date().getFullYear());
 
-            let receiptPath = data.receipt_path;
-            if (droppedReceiptPath && !receiptPath) {
-              try {
-                const ext = droppedReceiptPath.split(".").pop() ?? "pdf";
-                const { receiptsDir } = await orgPaths();
-                if (!(await exists(receiptsDir))) {
-                  await mkdir(receiptsDir, { recursive: true });
+              let receiptPath = data.receipt_path;
+              if (droppedReceiptPath && !receiptPath) {
+                try {
+                  const ext = droppedReceiptPath.split(".").pop() ?? "pdf";
+                  const { receiptsDir } = await orgPaths();
+                  if (!(await exists(receiptsDir))) {
+                    await mkdir(receiptsDir, { recursive: true });
+                  }
+                  const safeRef = sanitizeSegment(reference);
+                  const safeSrc = sanitizeSegment(data.source || "");
+                  const destPath = `${receiptsDir}/${safeRef}_${safeSrc}.${ext}`;
+                  await copyFile(droppedReceiptPath, destPath);
+                  receiptPath = destPath;
+                } catch (e) {
+                  logError("Receipt copy failed:", e);
                 }
-                const safeRef = sanitizeSegment(reference);
-                const safeSrc = sanitizeSegment(data.source || "");
-                const destPath = `${receiptsDir}/${safeRef}_${safeSrc}.${ext}`;
-                await copyFile(droppedReceiptPath, destPath);
-                receiptPath = destPath;
-              } catch (e) {
-                logError("Receipt copy failed:", e);
               }
-            }
 
-            createIncome.mutate(
-              { ...data, reference, receipt_path: receiptPath },
-              {
-                onSuccess: () => {
-                  notify.success(t.toast_created);
-                  setShowForm(false);
-                  setDroppedReceiptPath(null);
-                },
-              }
-            );
+              createIncome.mutate(
+                { ...data, reference, receipt_path: receiptPath },
+                {
+                  onSuccess: () => {
+                    notify.success(t.toast_created);
+                    setShowForm(false);
+                    setDroppedReceiptPath(null);
+                  },
+                  onSettled: () => setSaving(false),
+                }
+              );
+            } catch (e) {
+              setSaving(false);
+              throw e;
+            }
           }}
           onCancel={() => { setShowForm(false); setEditing(null); setDroppedReceiptPath(null); setPrefill(null); }}
         />
@@ -311,13 +321,13 @@ export function IncomePage() {
                               {t.view}
                             </Button>
                             <span className="text-xs text-success-text flex items-center gap-1">
-                              <Paperclip size={ICON_SIZE.control} />
+                              <ICONS.attachment size={ICON_SIZE.control} />
                             </span>
                           </div>
                         ) : (
                           <Button
                             variant="link"
-                            icon={Paperclip}
+                            icon={ICONS.attachment}
                             onClick={() => attachReceipt(inc.id, inc.reference, inc.source)}
                           >
                             {t.attach}
@@ -374,7 +384,7 @@ export function IncomePage() {
             { label: t.edit, icon: ICONS.edit, onClick: () => { setShowForm(false); setEditing(ctxMenu.item); } },
             ctxMenu.item.receipt_path
               ? { label: t.view, icon: ICONS.preview, onClick: () => setPreview({ path: ctxMenu.item.receipt_path!, reference: ctxMenu.item.reference }) }
-              : { label: t.attach, icon: Paperclip, onClick: () => attachReceipt(ctxMenu.item.id, ctxMenu.item.reference, ctxMenu.item.source) },
+              : { label: t.attach, icon: ICONS.attachment, onClick: () => attachReceipt(ctxMenu.item.id, ctxMenu.item.reference, ctxMenu.item.source) },
             { label: "", divider: true, onClick: () => {} },
             { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => deleteWithUndo(deleteIncome, ctxMenu.item.id, t.toast_income_deleted) },
           ]}
@@ -418,6 +428,7 @@ export function NewIncomeForm({
   droppedReceiptPath,
   prefill,
   initial,
+  submitting,
   onSave,
   onCancel,
 }: {
@@ -425,6 +436,8 @@ export function NewIncomeForm({
   prefill: { amount?: number; date?: string; source?: string } | null;
   /** When set, the form edits this income instead of creating a new one. */
   initial?: Income | null;
+  /** The save is running (spinner, no second submit). */
+  submitting?: boolean;
   onSave: (data: {
     date: string;
     description: string;
@@ -433,7 +446,7 @@ export function NewIncomeForm({
     source: string;
     receipt_path: string | null;
     notes: string;
-  }) => void;
+  }) => void | Promise<void>;
   onCancel: () => void;
 }) {
   const t = useT();
@@ -496,14 +509,24 @@ export function NewIncomeForm({
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
     // DB failures surface via the mutation's onError toast (backstop).
-    onSave({
+    // Returned so FormModal ignores a second submit while it runs.
+    return onSave({
       ...form,
       receipt_path: null,
     });
   };
 
   return (
-    <FormModal open onClose={onCancel} title={initial ? t.edit : t.new_income} submitLabel={t.save} onSubmit={submit}>
+    <FormModal
+      open
+      onClose={onCancel}
+      title={initial ? t.edit : t.new_income}
+      submitLabel={t.save}
+      onSubmit={submit}
+      submitting={submitting}
+      // Filled from a dropped receipt: a stray backdrop click would lose the scan.
+      dirty={droppedReceiptPath ? true : undefined}
+    >
       {droppedReceiptPath && <ReceiptNote path={droppedReceiptPath} />}
       <FormGrid cols={2}>
         <FormField

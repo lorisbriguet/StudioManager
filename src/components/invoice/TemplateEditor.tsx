@@ -308,7 +308,7 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
                     value={accentColor}
                     onChange={(e) => setAccentColor(e.target.value)}
                     aria-label={t.invoice_template_accent_color}
-                    className="h-[26px] w-10 cursor-pointer rounded-md border border-[var(--color-border-divider)] bg-[var(--color-input-bg)] p-0.5"
+                    className="h-6.5 w-10 cursor-pointer rounded-md border border-[var(--color-input-border)] bg-[var(--color-input-bg)] p-0.5"
                   />
                   <Input
                     value={accentColor}

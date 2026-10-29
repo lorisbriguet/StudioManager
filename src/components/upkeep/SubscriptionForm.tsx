@@ -5,6 +5,8 @@ import { useCreateSubscription, useUpdateSubscription } from "../../db/hooks/use
 import { useUnsavedChangesWarning } from "../../hooks/useUnsavedChangesWarning";
 import { confirmIfDirty } from "../../lib/dirty-guard";
 import { todayLocalISO } from "../../utils/localDate";
+import { formatDisplayDate } from "../../utils/formatDate";
+import { nextRenewalFrom } from "../../lib/upkeep/renewals";
 import type { Subscription } from "../../types/upkeep";
 
 interface Props {
@@ -37,6 +39,11 @@ export function SubscriptionForm({ onClose, subscription: s }: Props) {
   };
 
   const dirty = (Object.keys(initial) as (keyof typeof initial)[]).some((k) => f[k] !== initial[k]);
+  // A past date (the original subscription date, say) is saved as the next
+  // renewal from today, so the check doesn't ask about every period since.
+  const dateChanged = !s || f.renewsOn !== s.renews_on;
+  const renewsOn = f.renewsOn && dateChanged ? nextRenewalFrom(f.renewsOn, f.period, todayLocalISO()) : f.renewsOn;
+  const rolled = renewsOn !== f.renewsOn;
   useUnsavedChangesWarning(dirty);
 
   const close = async () => {
@@ -57,9 +64,11 @@ export function SubscriptionForm({ onClose, subscription: s }: Props) {
       currency: f.currency.trim() || null,
       in_calendar: f.inCalendar ? 1 : 0,
     };
-    // Send the date only when it changed, so an unrelated edit never touches the anchor day.
-    if (s) update.mutate({ id: s.id, data: f.renewsOn !== s.renews_on ? { ...data, renews_on: f.renewsOn } : data });
-    else create.mutate({ ...data, renews_on: f.renewsOn });
+    // Send the date only when it changed, so an unrelated edit never touches
+    // the anchor day. A rolled date keeps the typed day as anchor (a 31st).
+    const date = { renews_on: renewsOn, ...(rolled ? { anchor_day: Number(f.renewsOn.slice(8, 10)) } : {}) };
+    if (s) update.mutate({ id: s.id, data: dateChanged ? { ...data, ...date } : data });
+    else create.mutate({ ...data, ...date });
     onClose();
   };
 
@@ -81,7 +90,10 @@ export function SubscriptionForm({ onClose, subscription: s }: Props) {
         <FormField label={t.upkeep_sub_vendor}>
           <Input value={f.vendor} onChange={(e) => set("vendor", e.target.value)} />
         </FormField>
-        <FormField label={t.upkeep_sub_renews_on}>
+        <FormField
+          label={t.upkeep_sub_renews_on}
+          hint={rolled ? t.upkeep_sub_renews_rolled.replace("{date}", formatDisplayDate(renewsOn)) : undefined}
+        >
           <DatePicker value={f.renewsOn} onChange={(v) => set("renewsOn", v ?? "")} />
         </FormField>
         <FormField label={t.upkeep_col_period}>

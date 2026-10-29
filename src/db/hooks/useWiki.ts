@@ -14,7 +14,7 @@ import {
   getAllWikiTags,
   getWikiArticlesByProject,
 } from "../queries/wiki";
-import { useUndoStore } from "../../stores/undo-store";
+import { snapshotRows, pushRestore } from "../undoRestore";
 import { getLabels } from "../../lib/notify";
 
 // ── Folders ──────────────────────────────────────────────────
@@ -117,37 +117,21 @@ export function useDeleteWikiArticle() {
     qc.invalidateQueries({ queryKey: ["wiki-articles"] });
     qc.invalidateQueries({ queryKey: ["wiki-articles-by-project"] });
     qc.invalidateQueries({ queryKey: ["wiki-tags"] });
+    qc.invalidateQueries({ queryKey: ["wiki-article"] });
+    qc.invalidateQueries({ queryKey: ["wiki-article-tags"] });
   };
   return useMutation({
     meta: { errorLabel: "error_delete_article" },
+    // Undo puts the very same rows back: the id (links in other articles and
+    // open tabs point at it), sort_order, dates, content and tags.
     mutationFn: async (id: number) => {
-      const prev = await getWikiArticle(id);
-      const prevTags = await getWikiArticleTags(id);
+      const snap = await snapshotRows([
+        { table: "wiki_articles", where: "id = $1", params: [id] },
+        { table: "wiki_article_tags", where: "article_id = $1", params: [id] },
+      ]);
       await deleteWikiArticle(id);
-      if (prev) {
-        // The restore assigns a fresh rowid; redo targets exactly that id —
-        // a title+folder lookup could hit a different row with the same title.
-        let restoredId: number | null = null;
-        useUndoStore.getState().push({
-          label: `${getLabels().undo_delete_article} "${prev.title}"`,
-          execute: async () => {
-            restoredId = await createWikiArticle({
-              folder_id: prev.folder_id,
-              project_id: prev.project_id,
-              title: prev.title,
-            });
-            await updateWikiArticle(restoredId, { content: prev.content });
-            await setWikiArticleTags(restoredId, prevTags);
-            invalidate();
-          },
-          redo: async () => {
-            if (restoredId !== null) {
-              await deleteWikiArticle(restoredId);
-              invalidate();
-            }
-          },
-        });
-      }
+      const title = String(snap[0].rows[0]?.title ?? "");
+      pushRestore(`${getLabels().undo_delete_article} "${title}"`, snap, { redo: () => deleteWikiArticle(id), invalidate });
     },
     onSuccess: invalidate,
   });

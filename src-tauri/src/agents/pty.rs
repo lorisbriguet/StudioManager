@@ -8,6 +8,7 @@ use std::io::{Read, Write};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::collections::HashSet;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 
 pub const MAX_TERMINALS: usize = 8;
 /// Pause between the text and the Enter, as a person would type.
@@ -61,24 +62,44 @@ impl Clock for SystemClock {
 }
 
 /// The login environment, resolved on first use and shared with `AgentsState`.
-pub type LoginCache = Arc<Mutex<Option<Arc<LoginEnv>>>>;
+pub type LoginCache = Arc<Mutex<Option<CachedLogin>>>;
+
+/// A login-shell lookup and when it ran.
+pub struct CachedLogin {
+    env: Arc<LoginEnv>,
+    at: Instant,
+}
+
+/// How long a lookup that found no `claude` is trusted before `fresh_login_env` runs the login
+/// shell (up to 10 s, holding the cache) again.
+const MISSING_RECHECK: Duration = Duration::from_secs(30);
 
 pub fn cached_login_env(cache: &LoginCache) -> Arc<LoginEnv> {
     let mut guard = lock(cache);
-    guard.get_or_insert_with(|| Arc::new(super::cli::resolve_login_env())).clone()
+    let resolve = || CachedLogin {
+        env: Arc::new(super::cli::resolve_login_env()),
+        at: Instant::now(),
+    };
+    guard.get_or_insert_with(resolve).env.clone()
 }
 
-/// Like `cached_login_env`, but looks again when the cached lookup found no `claude`, so
-/// installing Claude Code then reopening the settings card is enough.
+/// Like `cached_login_env`, but looks again when the cached lookup found no `claude` and is
+/// over 30 s old, so installing Claude Code then reopening the settings card is enough, while
+/// reopening it in the meantime does not block the poller behind another login shell.
 pub fn fresh_login_env(cache: &LoginCache) -> Arc<LoginEnv> {
-    refresh_login_env(cache, &super::cli::resolve_login_env)
+    refresh_login_env(cache, &super::cli::resolve_login_env, Instant::now())
 }
 
-fn refresh_login_env(cache: &LoginCache, resolve: &dyn Fn() -> LoginEnv) -> Arc<LoginEnv> {
+fn refresh_login_env(
+    cache: &LoginCache,
+    resolve: &dyn Fn() -> LoginEnv,
+    now: Instant,
+) -> Arc<LoginEnv> {
     let mut guard = lock(cache);
     match guard.as_ref() {
-        Some(env) if env.claude.is_some() => env.clone(),
-        _ => guard.insert(Arc::new(resolve())).clone(),
+        Some(c) if c.env.claude.is_some() => c.env.clone(),
+        Some(c) if now.saturating_duration_since(c.at) < MISSING_RECHECK => c.env.clone(),
+        _ => guard.insert(CachedLogin { env: Arc::new(resolve()), at: now }).env.clone(),
     }
 }
 
@@ -365,6 +386,24 @@ impl TerminalHub {
         process.as_mut().ok_or("Terminal closed")?.resize(cols, rows)
     }
 
+    /// A terminal the webview opened (`open`), for its keys and size. Temporary terminals are
+    /// refused: only `send_message` and `prompt::choose` write to them, after their checks.
+    fn panel(&self, term_id: u32) -> Result<Arc<Term>, String> {
+        self.get(term_id).filter(|t| !t.temporary).ok_or_else(|| "Terminal closed".to_string())
+    }
+
+    /// `write`, for `agents_term_write`: refuses temporary terminals.
+    pub fn panel_write(&self, term_id: u32, data: &[u8]) -> Result<(), String> {
+        self.panel(term_id)?;
+        self.write(term_id, data)
+    }
+
+    /// `resize`, for `agents_term_resize`: refuses temporary terminals.
+    pub fn panel_resize(&self, term_id: u32, cols: u16, rows: u16) -> Result<(), String> {
+        self.panel(term_id)?;
+        self.resize(term_id, cols, rows)
+    }
+
     /// Kills and reaps the process; unknown ids are ignored.
     pub fn close(&self, term_id: u32) {
         if let Some(term) = self.forget(term_id) {
@@ -456,7 +495,7 @@ impl TerminalHub {
     }
 }
 
-/// Types `text` into a background agent, as the reference `sendToSession` does. An open terminal
+/// Pastes `text` into a background agent, then presses Enter. An open terminal
 /// is reused and left open; otherwise a temporary one is attached and closed 2 s after the Enter.
 pub fn send_message(hub: &TerminalHub, agent: &Agent, text: &str) -> Result<(), String> {
     if agent.kind != Kind::Background {
@@ -467,12 +506,7 @@ pub fn send_message(hub: &TerminalHub, agent: &Agent, text: &str) -> Result<(), 
     }
     let text = normalise_message(text).ok_or("Invalid message")?;
     let short_id = agent.short_id.as_deref().ok_or("Agent has no id")?;
-    let payload = if text.contains('\n') {
-        format!("\x1b[200~{text}\x1b[201~")
-    } else {
-        // Typed as keys: a Tab would trigger the TUI's completion.
-        text.replace('\t', "  ")
-    };
+    let payload = paste_payload(&text);
 
     let guard = hub.lock_agent(short_id);
     if let Some(id) = hub.existing(short_id) {
@@ -492,6 +526,22 @@ pub fn send_message(hub: &TerminalHub, agent: &Agent, text: &str) -> Result<(), 
         drop(guard);
     });
     Ok(())
+}
+
+/// The message as one bracketed paste that Claude Code takes as plain text.
+///
+/// Never typed as keys: a Tab would trigger completion. A paste alone is not enough either
+/// (checked against Claude Code 2.1): a leading `!` still switches the input to shell mode
+/// and a leading `/` opens the slash-command menu, so the Enter would run "!rm …" in the
+/// agent's folder or "/clear" its context. A space in front makes both plain text. A last
+/// word starting with `@` opens the file menu, which would take the Enter: a space after it
+/// closes the menu. `normalise_message` refused control characters, so the text cannot end
+/// the paste early.
+fn paste_payload(text: &str) -> String {
+    let lead = if text.starts_with(['!', '/']) { " " } else { "" };
+    let mention_last = text.rsplit(char::is_whitespace).next().is_some_and(|w| w.starts_with('@'));
+    let trail = if mention_last { " " } else { "" };
+    format!("\x1b[200~{lead}{text}{trail}\x1b[201~")
 }
 
 /// The CLI's status can lag: a prompt that opened since would take the typed text as an answer.
@@ -580,7 +630,7 @@ pub async fn agents_term_write(
 ) -> Result<(), String> {
     super::actions::switched_on(&state)?;
     let hub = state.hub.clone();
-    blocking(move || hub.write(term_id, data.as_bytes())).await
+    blocking(move || hub.panel_write(term_id, data.as_bytes())).await
 }
 
 #[tauri::command]
@@ -592,7 +642,7 @@ pub async fn agents_term_resize(
 ) -> Result<(), String> {
     super::actions::switched_on(&state)?;
     let hub = state.hub.clone();
-    blocking(move || hub.resize(term_id, cols, rows)).await
+    blocking(move || hub.panel_resize(term_id, cols, rows)).await
 }
 
 #[tauri::command]
@@ -791,14 +841,21 @@ pub(super) mod tests {
         let resolve = || {
             calls.fetch_add(1, Ordering::SeqCst);
             let claude = found.get().then(|| std::path::PathBuf::from("/opt/x/claude"));
-            LoginEnv { claude, path: "/usr/bin".into() }
+            LoginEnv { claude, path: "/usr/bin".into(), vars: vec![] }
         };
-        assert_eq!(refresh_login_env(&cache, &resolve).claude, None);
-        assert_eq!(refresh_login_env(&cache, &resolve).claude, None);
-        assert_eq!(calls.load(Ordering::SeqCst), 2, "missing: looked up again");
+        let t0 = Instant::now();
+        let at = |s: u64| t0 + Duration::from_secs(s);
+        assert_eq!(refresh_login_env(&cache, &resolve, at(0)).claude, None);
+        // Missing: not looked up again for 30 s, however often the settings card opens.
+        assert_eq!(refresh_login_env(&cache, &resolve, at(1)).claude, None);
+        assert_eq!(refresh_login_env(&cache, &resolve, at(29)).claude, None);
+        assert_eq!(calls.load(Ordering::SeqCst), 1, "missing: cached for 30 s");
+        assert_eq!(refresh_login_env(&cache, &resolve, at(31)).claude, None);
+        assert_eq!(calls.load(Ordering::SeqCst), 2, "missing: looked up again after 30 s");
         found.set(true); // Claude Code installed meanwhile
-        assert!(refresh_login_env(&cache, &resolve).claude.is_some());
-        assert!(refresh_login_env(&cache, &resolve).claude.is_some());
+        assert_eq!(refresh_login_env(&cache, &resolve, at(40)).claude, None, "still within 30 s");
+        assert!(refresh_login_env(&cache, &resolve, at(62)).claude.is_some());
+        assert!(refresh_login_env(&cache, &resolve, at(500)).claude.is_some());
         assert_eq!(calls.load(Ordering::SeqCst), 3, "found: cached");
         assert!(cached_login_env(&cache).claude.is_some(), "shared with the cached lookup");
     }
@@ -863,6 +920,29 @@ pub(super) mod tests {
         assert!(open(&hub, "0a1b2c3d").is_err());
     }
 
+    /// The webview may only type into and resize the panels it opened: a temporary terminal
+    /// (one send, one answer, a watch) belongs to the code that checks the prompt before Enter.
+    #[test]
+    fn panel_write_to_temporary_terminal_refused() {
+        let (hub, spawner, _) = hub();
+        let temp = hub.open_temporary("0a1b2c3d", 80, 24).unwrap();
+        let watch = hub.watch("11111111", 80, 24).unwrap();
+        for id in [temp, watch] {
+            assert!(hub.panel_write(id, b"\r").is_err());
+            assert!(hub.panel_resize(id, 100, 30).is_err());
+        }
+        assert!(spawner.handles().iter().all(|h| h.writes().is_empty()), "nothing written");
+        assert!(spawner.handles().iter().all(|h| *h.size.lock().unwrap() == (80, 24)));
+        // The panel's own terminal still takes keys and sizes.
+        let panel = open(&hub, "0a1b2c3d").unwrap();
+        hub.panel_write(panel, b"x").unwrap();
+        hub.panel_resize(panel, 100, 30).unwrap();
+        let h = &spawner.handles()[2];
+        assert_eq!(h.writes(), vec!["x"]);
+        assert_eq!(*h.size.lock().unwrap(), (100, 30));
+        assert!(hub.panel_write(999, b"x").is_err(), "unknown id");
+    }
+
     #[test]
     fn exit_is_reported() {
         let (hub, spawner, _) = hub();
@@ -902,9 +982,33 @@ pub(super) mod tests {
     fn send_single_line() {
         let (hub, spawner, clock) = hub();
         send_message(&hub, &agent("bg", "idle"), "hi").unwrap();
-        assert_eq!(spawner.handles()[0].writes(), vec!["hi", "\r"]);
+        assert_eq!(spawner.handles()[0].writes(), vec!["\x1b[200~hi\x1b[201~", "\r"]);
         assert_eq!(*spawner.handles()[0].size.lock().unwrap(), (80, 24));
         assert!(clock.sleeps.lock().unwrap().contains(&300));
+    }
+
+    /// Typed as keys (or pasted as is), a leading `!` would switch Claude Code to shell mode
+    /// and `/` would run a slash command: every message goes in as one plain-text paste, then
+    /// the Enter on its own.
+    #[test]
+    fn send_bang_and_slash_as_bracketed_paste() {
+        for (text, pasted) in [
+            // A leading space keeps Claude Code out of shell mode and the slash-command menu.
+            ("!ls", "\x1b[200~ !ls\x1b[201~"),
+            ("/clear", "\x1b[200~ /clear\x1b[201~"),
+            ("/clear\nmore", "\x1b[200~ /clear\nmore\x1b[201~"),
+            // Already plain text: unchanged.
+            (" /clear", "\x1b[200~ /clear\x1b[201~"),
+            ("a !b /c", "\x1b[200~a !b /c\x1b[201~"),
+            ("a\tb", "\x1b[200~a\tb\x1b[201~"),
+            // A trailing @word would open the file menu and take the Enter.
+            ("see @notes", "\x1b[200~see @notes \x1b[201~"),
+            ("@a b", "\x1b[200~@a b\x1b[201~"),
+        ] {
+            let (hub, spawner, _) = hub();
+            send_message(&hub, &agent("bg", "idle"), text).unwrap();
+            assert_eq!(spawner.handles()[0].writes(), vec![pasted, "\r"], "{text:?}");
+        }
     }
 
     #[test]
@@ -959,7 +1063,7 @@ pub(super) mod tests {
         let id = open(&hub, "0a1b2c3d").unwrap();
         send_message(&hub, &agent("bg", "idle"), "hi").unwrap();
         assert_eq!(spawner.handles().len(), 1);
-        assert_eq!(spawner.handles()[0].writes(), vec!["hi", "\r"]);
+        assert_eq!(spawner.handles()[0].writes(), vec!["\x1b[200~hi\x1b[201~", "\r"]);
         std::thread::sleep(Duration::from_millis(50));
         assert_eq!(hub.existing("0a1b2c3d"), Some(id), "the panel stays open");
     }

@@ -3,6 +3,7 @@ import { useUndoStore } from "../../stores/undo-store";
 import * as q from "../queries/recurring";
 import type { RecurringInvoiceTemplate } from "../../types/recurring";
 import { getLabels } from "../../lib/notify";
+import { snapshotRows, pushRestore } from "../undoRestore";
 
 export function useRecurringTemplates() {
   return useQuery({
@@ -76,36 +77,15 @@ export function useUpdateRecurringTemplate() {
 
 export function useDeleteRecurringTemplate() {
   const qc = useQueryClient();
-  const push = useUndoStore((s) => s.push);
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["recurring_templates"] });
   return useMutation({
     meta: { errorLabel: "error_delete_recurring" },
+    // Undo puts the very same row back (same id and dates); redo deletes that id.
     mutationFn: async (id: number) => {
-      const prev = await q.getRecurringTemplate(id);
+      const snap = await snapshotRows([{ table: "recurring_invoice_templates", where: "id = $1", params: [id] }]);
       await q.deleteRecurringTemplate(id);
-      return prev;
+      pushRestore(getLabels().undo_delete_recurring, snap, { redo: () => q.deleteRecurringTemplate(id), invalidate });
     },
-    onSuccess: (prev) => {
-      qc.invalidateQueries({ queryKey: ["recurring_templates"] });
-      if (prev) {
-        const { id: _id, created_at, updated_at, ...data } = prev;
-        // Redo targets exactly the id the restore produced.
-        let restoredId: number | null = null;
-        push({
-          label: getLabels().undo_delete_recurring,
-          execute: async () => {
-            restoredId = await q.createRecurringTemplate(
-              data as Omit<RecurringInvoiceTemplate, "id" | "created_at" | "updated_at">
-            );
-            qc.invalidateQueries({ queryKey: ["recurring_templates"] });
-          },
-          redo: async () => {
-            if (restoredId !== null) {
-              await q.deleteRecurringTemplate(restoredId);
-              qc.invalidateQueries({ queryKey: ["recurring_templates"] });
-            }
-          },
-        });
-      }
-    },
+    onSuccess: invalidate,
   });
 }

@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { Paperclip, CalendarCheck } from "lucide-react";
+import React, { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
+import { CalendarCheck } from "lucide-react";
 import { ICONS, ICON_SIZE, Button, DatePicker, Input, Select, FormField, FormGrid, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, QueryState, NoResults, Spinner, Popover, IconButton, Tag, Callout, Tooltip } from "../components/ui";
 import * as v from "../lib/validate";
 import { deleteWithUndo } from "../lib/undo";
@@ -52,6 +52,9 @@ export function ExpensesPage() {
   const updateExpense = useUpdateExpense();
   const deleteExpense = useDeleteExpense();
   const [showForm, setShowForm] = useState(false);
+  // From the first await (the next reference) to the end of the insert: a
+  // second Enter in that window would create a second expense.
+  const [saving, setSaving] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState<Expense> | null>(null);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortState<SortKey>>({ key: "invoice_date", dir: "desc" });
@@ -226,37 +229,45 @@ export function ExpensesPage() {
           categories={categories ?? []}
           pastSuppliers={pastSuppliers ?? []}
           prefill={prefill}
+          submitting={saving}
           onSave={async (data) => {
-            const reference = await getNextExpenseReference(new Date().getFullYear());
+            setSaving(true);
+            try {
+              const reference = await getNextExpenseReference(new Date().getFullYear());
 
-            let receiptPath = data.receipt_path;
-            if (prefill?.receiptPath && !receiptPath) {
-              try {
-                const ext = prefill.receiptPath.split(".").pop() ?? "pdf";
-                const { receiptsDir } = await orgPaths();
-                if (!(await exists(receiptsDir))) {
-                  await mkdir(receiptsDir, { recursive: true });
+              let receiptPath = data.receipt_path;
+              if (prefill?.receiptPath && !receiptPath) {
+                try {
+                  const ext = prefill.receiptPath.split(".").pop() ?? "pdf";
+                  const { receiptsDir } = await orgPaths();
+                  if (!(await exists(receiptsDir))) {
+                    await mkdir(receiptsDir, { recursive: true });
+                  }
+                  const safeRef = sanitizeSegment(reference);
+                  const safeSup = sanitizeSegment(data.supplier || "");
+                  const destPath = `${receiptsDir}/${safeRef}_${safeSup}.${ext}`;
+                  await copyFile(prefill.receiptPath, destPath);
+                  receiptPath = destPath;
+                } catch (e) {
+                  logError("Receipt copy failed:", e);
                 }
-                const safeRef = sanitizeSegment(reference);
-                const safeSup = sanitizeSegment(data.supplier || "");
-                const destPath = `${receiptsDir}/${safeRef}_${safeSup}.${ext}`;
-                await copyFile(prefill.receiptPath, destPath);
-                receiptPath = destPath;
-              } catch (e) {
-                logError("Receipt copy failed:", e);
               }
-            }
 
-            createExpense.mutate(
-              { ...data, reference, receipt_path: receiptPath },
-              {
-                onSuccess: () => {
-                  notify.success(t.expense_created);
-                  setShowForm(false);
-                  setPrefill(null);
-                },
-              }
-            );
+              createExpense.mutate(
+                { ...data, reference, receipt_path: receiptPath },
+                {
+                  onSuccess: () => {
+                    notify.success(t.expense_created);
+                    setShowForm(false);
+                    setPrefill(null);
+                  },
+                  onSettled: () => setSaving(false),
+                }
+              );
+            } catch (e) {
+              setSaving(false);
+              throw e;
+            }
           }}
           onCancel={() => { setShowForm(false); setPrefill(null); }}
         />
@@ -324,13 +335,13 @@ export function ExpensesPage() {
                               </Button>
                             </Tooltip>
                             <span className="text-xs text-success-text flex items-center gap-1">
-                              <Paperclip size={ICON_SIZE.control} />
+                              <ICONS.attachment size={ICON_SIZE.control} />
                             </span>
                           </div>
                         ) : (
                           <Button
                             variant="link"
-                            icon={Paperclip}
+                            icon={ICONS.attachment}
                             onClick={() => attachReceipt(exp.id, exp.reference, exp.supplier)}
                           >
                             {t.attach}
@@ -450,12 +461,19 @@ export function NewExpenseForm({
   categories,
   pastSuppliers,
   prefill,
+  title,
+  submitting,
   onSave,
   onCancel,
+  amountHint,
 }: {
   categories: { code: string; name_fr: string }[];
   pastSuppliers: { supplier: string; category_code: string; amount: number }[];
   prefill: (ExtractedExpenseData & { receiptPath?: string }) | null;
+  /** The dialog title; "New expense" by default. */
+  title?: string;
+  /** The save is running (spinner, no second submit). */
+  submitting?: boolean;
   onSave: (data: {
     supplier: string;
     category_code: string;
@@ -465,8 +483,10 @@ export function NewExpenseForm({
     paid_date: string | null;
     receipt_path: string | null;
     notes: string;
-  }) => void;
+  }) => void | Promise<void>;
   onCancel: () => void;
+  /** A muted line under the amount (e.g. the currency conversion of a prefilled renewal). */
+  amountHint?: ReactNode;
 }) {
   const t = useT();
   const [form, setForm] = useState(() => {
@@ -597,7 +617,8 @@ export function NewExpenseForm({
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
     // DB failures surface via the mutation's onError toast (backstop).
-    onSave({
+    // Returned so FormModal ignores a second submit while it runs.
+    return onSave({
       ...form,
       due_date: prefill?.due_date ?? null,
       paid_date: null,
@@ -606,7 +627,16 @@ export function NewExpenseForm({
   };
 
   return (
-    <FormModal open onClose={onCancel} title={t.new_expense} submitLabel={t.save} onSubmit={submit}>
+    <FormModal
+      open
+      onClose={onCancel}
+      title={title ?? t.new_expense}
+      submitLabel={t.save}
+      onSubmit={submit}
+      submitting={submitting}
+      // Filled from a dropped receipt: a stray backdrop click would lose the scan.
+      dirty={prefill?.receiptPath ? true : undefined}
+    >
       {prefill?.receiptPath && <ReceiptNote path={prefill.receiptPath} />}
       <FormGrid cols={2}>
         <div className="relative">
@@ -707,6 +737,7 @@ export function NewExpenseForm({
           label={t.amount}
           required
           error={errors.amount}
+          hint={amountHint}
           badge={detectedBadge("amount", () => setForm((f) => ({ ...f, amount: 0 })))}
         >
           <Input

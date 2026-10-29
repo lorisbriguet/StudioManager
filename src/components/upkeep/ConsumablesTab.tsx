@@ -7,7 +7,7 @@ import { useT } from "../../i18n/useT";
 import { useConsumables, useDeleteConsumable, useMachines } from "../../db/hooks/useUpkeep";
 import { isLow } from "../../db/queries/consumables";
 import { openMachineAttachment } from "../../lib/upkeep/openAttachment";
-import { formatMoney } from "../../lib/upkeep/money";
+import { formatMoney } from "../../lib/money";
 import { notify } from "../../lib/notify";
 import { useConfirm } from "../../lib/confirm";
 import { todayLocalISO } from "../../utils/localDate";

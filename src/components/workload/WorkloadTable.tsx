@@ -1,7 +1,9 @@
 import { useState, useCallback, useMemo, useRef, useEffect, type RefObject } from "react";
 import { Sigma } from "lucide-react";
-import { Button, DragHandle, Select, Popover, Input, FormModal, FormField, MenuItem, ICONS, ICON_SIZE } from "../ui";
-import { MENU_DIVIDER } from "../ui/Dropdown";
+import {
+  Button, DragHandle, Select, Popover, Input, FormModal, FormField, MenuItem, ICONS, ICON_SIZE, MENU_DIVIDER,
+  IconButton, Table, MUTED_INTERACTIVE, TABLE_ROW_H, TABLE_TH, TABLE_X,
+} from "../ui";
 import { notify } from "../../lib/notify";
 import {
   DndContext,
@@ -37,9 +39,6 @@ import { COLUMN_ICONS } from "./columnIcons";
 import { evaluateFormula } from "../../lib/formulaEval";
 import { useT } from "../../i18n/useT";
 import { useTimerActions } from "../../hooks/useTimerActions";
-import { IconButton } from "../ui/IconButton";
-import { Table } from "../ui/Table";
-import { MUTED_INTERACTIVE, TABLE_ROW_H, TABLE_TH, TABLE_X } from "../ui/tokens";
 
 /** Header cells open the column menu on click. */
 const HEADER_BUTTON = `cursor-pointer ${MUTED_INTERACTIVE}`;

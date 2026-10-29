@@ -20,6 +20,8 @@ export const queryClient = new QueryClient({
   // `meta.errorLabel` ("Couldn't save the invoice", generic label otherwise),
   // raw error logged with a "Details" copy. Hooks and call sites don't toast
   // the failure again. A hook-level onError opts out (it reports itself).
+  // notify.error only drops an identical failure (same label and cause)
+  // while its toast is up, so two different failed saves both show.
   mutationCache: new MutationCache({
     onError: (error, _variables, _context, mutation) => {
       if (mutation.options.onError) return;

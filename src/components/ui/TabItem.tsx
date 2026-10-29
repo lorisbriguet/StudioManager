@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { createContext, useContext, type KeyboardEvent, type ReactNode } from "react";
 import { IconButton } from "./IconButton";
 import { MUTED_INTERACTIVE } from "./tokens";
 import { ICONS, ICON_SIZE, renderIcon, type IconProp } from "./icons";
@@ -8,6 +8,17 @@ import { ICONS, ICON_SIZE, renderIcon, type IconProp } from "./icons";
  * a close button on hover. Used by every tab row in the app so they all
  * look the same. A non-interactive container holds two sibling buttons
  * (activate, close): a button inside a button is invalid.
+ *
+ * As ARIA tabs, inside a TabList (below): give each tab `id` and `controls`
+ * (its panel's id), and the panel `role="tabpanel" id aria-labelledby={tab id}`.
+ * TabList then makes the row one Tab stop (the active tab) and moves with
+ * Left/Right/Home/End, activating as it goes.
+ *
+ *   const ids = tabIds(useId(), key);   // { tab, panel }
+ *   <TabList label={t.upkeep}>
+ *     <TabItem role="tab" id={ids.tab} controls={ids.panel} … />
+ *   </TabList>
+ *   <div role="tabpanel" id={ids.panel} aria-labelledby={ids.tab} tabIndex={0}>…</div>
  */
 type TabItemProps = {
   label: string;
@@ -18,6 +29,10 @@ type TabItemProps = {
   icon?: IconProp;
   /** "tab" inside a role="tablist"; the app's page tabs are links to pages. */
   role?: "tab";
+  /** The tab button's id, for its panel's aria-labelledby. */
+  id?: string;
+  /** The id of the tabpanel this tab shows (aria-controls). */
+  controls?: string;
 } & (
   /** Omit both for tabs that can't be closed. */
   | { onClose?: undefined; closeLabel?: undefined }
@@ -25,7 +40,43 @@ type TabItemProps = {
   | { onClose: () => void; closeLabel: string }
 );
 
-export function TabItem({ label, active, onActivate, onClose, closeLabel, pinned = false, icon, role }: TabItemProps) {
+/** The ids that wire a tab to its panel: `${base}-tab-${key}` and `${base}-panel-${key}`. */
+export function tabIds(base: string, key: string): { tab: string; panel: string } {
+  return { tab: `${base}-tab-${key}`, panel: `${base}-panel-${key}` };
+}
+
+/** Set by TabList: its tabs use a roving tabindex (only the active one is a Tab stop). */
+const RovingTabs = createContext(false);
+
+/** Left/Right/Home/End across the row's tabs: focus the next one and activate it. */
+function onTabListKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+  const tabs = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+  const current = tabs.findIndex((tab) => tab === e.target);
+  if (current < 0 || tabs.length === 0) return;
+  const last = tabs.length - 1;
+  const next =
+    e.key === "ArrowRight" ? (current === last ? 0 : current + 1)
+    : e.key === "ArrowLeft" ? (current === 0 ? last : current - 1)
+    : e.key === "Home" ? 0
+    : e.key === "End" ? last
+    : -1;
+  if (next < 0) return;
+  e.preventDefault();
+  tabs[next].focus();
+  tabs[next].click();
+}
+
+/** A row of `role="tab"` TabItems: the tablist role, its name, and the keyboard pattern. */
+export function TabList({ label, className = "", children }: { label: string; className?: string; children: ReactNode }) {
+  return (
+    <div role="tablist" aria-label={label} onKeyDown={onTabListKeyDown} className={className}>
+      <RovingTabs.Provider value={true}>{children}</RovingTabs.Provider>
+    </div>
+  );
+}
+
+export function TabItem({ label, active, onActivate, onClose, closeLabel, pinned = false, icon, role, id, controls }: TabItemProps) {
+  const roving = useContext(RovingTabs) && role === "tab";
   return (
     <div
       onAuxClick={(e) => {
@@ -44,6 +95,9 @@ export function TabItem({ label, active, onActivate, onClose, closeLabel, pinned
         type="button"
         onClick={onActivate}
         role={role}
+        id={id}
+        aria-controls={controls}
+        tabIndex={roving && !active ? -1 : undefined}
         aria-selected={role === "tab" ? active : undefined}
         aria-current={role === "tab" ? undefined : active ? "page" : undefined}
         className="flex items-center gap-1.5 cursor-pointer min-w-0 rounded focus-accent"
@@ -54,7 +108,7 @@ export function TabItem({ label, active, onActivate, onClose, closeLabel, pinned
       </button>
       {onClose && !pinned && (
         <IconButton
-          icon={X}
+          icon={ICONS.close}
           label={closeLabel}
           size="xs"
           tone="danger"

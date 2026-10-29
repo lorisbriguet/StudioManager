@@ -28,3 +28,6 @@ pulldown-cmark = { version = "0.13.5", default-features = false, features = ["ht
 rmcp = { version = "3.8.0", features = ["server", "transport-io", "macros"] }
 tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "io-std"] }
 schemars = "1"
+# flock(2) for the change log (std's File::lock needs Rust 1.89). Already in
+# the tree through tokio, mio and getrandom.
+libc = "0.2"

@@ -1,4 +1,3 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
 import { notify } from "../../lib/notify";
@@ -53,8 +52,8 @@ export function DocView({
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className={`${PANEL_TOP_BAR} gap-1 px-3 border-[var(--color-border)]`}>
-        <IconButton icon={ChevronLeft} label={t.wiki_back} onClick={nav.onBack} disabled={!nav.canBack} />
-        <IconButton icon={ChevronRight} label={t.wiki_forward} onClick={nav.onForward} disabled={!nav.canForward} />
+        <IconButton icon={ICONS.prev} label={t.wiki_back} onClick={nav.onBack} disabled={!nav.canBack} />
+        <IconButton icon={ICONS.next} label={t.wiki_forward} onClick={nav.onForward} disabled={!nav.canForward} />
         <div className="flex-1 min-w-0 text-center text-xs text-muted truncate">
           {doc.projectName} <span className="opacity-50">/</span> <span className="text-[var(--color-text)]">{doc.rel}</span>
         </div>

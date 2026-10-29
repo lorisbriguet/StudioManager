@@ -186,6 +186,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 | Notifications | tauri-plugin-notification |
 | Forms | React Hook Form + Zod |
 | Icons | Lucide React |
+| Agents | Claude Code CLI through a PTY (portable-pty), `studiomanager-mcp` sidecar (MCP, stdio), tauri-nspanel for the menu bar panel |
 
 ---
 

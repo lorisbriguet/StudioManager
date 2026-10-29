@@ -110,6 +110,10 @@ pub struct Run {
     /// replaces this one (only the last run is kept, but a manual run mustn't erase it).
     #[serde(default)]
     pub last_scheduled_for: Option<String>,
+    /// A command's last output line. Never written to `routine-runs.json` (output can hold
+    /// tokens or paths): it is kept in memory and shown as the message while the app runs.
+    #[serde(skip)]
+    pub output: Option<String>,
 }
 
 impl Run {
@@ -264,8 +268,22 @@ fn write_json<T: Serialize>(dir: &Path, file: &str, v: &T) -> Result<(), String>
     write_atomic(&dir.join(file), &format!("{json}\n"))
 }
 
-/// Validates everything, gives new sections and routines (id "") an id, and writes the file.
-pub fn save_routines(dir: &Path, mut all: Routines) -> Result<Routines, String> {
+/// Validates everything, gives new sections and routines (id "") an id, and writes the file
+/// (`routines_save` does the same with a confirmation in between).
+#[cfg(test)]
+pub fn save_routines(dir: &Path, all: Routines) -> Result<Routines, String> {
+    let all = prepare(all)?;
+    write_routines(dir, &all)?;
+    Ok(all)
+}
+
+/// Writes `routines.json` (already through `prepare`).
+pub fn write_routines(dir: &Path, all: &Routines) -> Result<(), String> {
+    write_json(dir, ROUTINES_FILE, all)
+}
+
+/// Validates everything and gives new sections and routines (id "") an id; writes nothing.
+pub fn prepare(mut all: Routines) -> Result<Routines, String> {
     let mut seen = HashSet::new();
     for s in &mut all.sections {
         assign_id(&mut s.id, &mut seen)?;
@@ -285,7 +303,6 @@ pub fn save_routines(dir: &Path, mut all: Routines) -> Result<Routines, String> 
         }
         validate(r).map_err(|e| format!("\"{}\": {e}", r.title))?;
     }
-    write_json(dir, ROUTINES_FILE, &all)?;
     Ok(all)
 }
 
@@ -297,11 +314,50 @@ pub fn find<'a>(all: &'a Routines, id: &str) -> Result<&'a Routine, String> {
         .ok_or_else(|| "Unknown routine".to_string())
 }
 
-pub fn read_runs(dir: &Path) -> Vec<Run> {
-    std::fs::read_to_string(dir.join(RUNS_FILE))
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default()
+/// The last runs; none when the file doesn't exist yet. An unreadable or corrupt file is an
+/// error, not "no runs": the once-per-day guard of scheduled routines depends on it.
+pub fn read_runs(dir: &Path) -> Result<Vec<Run>, String> {
+    let raw = match std::fs::read_to_string(dir.join(RUNS_FILE)) {
+        Ok(raw) => raw,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
+        Err(e) => return Err(format!("{RUNS_FILE} can't be read: {e}")),
+    };
+    serde_json::from_str(&raw).map_err(|e| format!("{RUNS_FILE} is damaged ({e}); fix or delete it"))
+}
+
+/// The last output line of each routine's last command run (`Run::output`), by app data folder
+/// and routine id, with the run's start: in memory only.
+type Outputs = std::collections::HashMap<(std::path::PathBuf, String), (i64, String)>;
+static OUTPUTS: Mutex<Option<Outputs>> = Mutex::new(None);
+
+fn remember_output(dir: &Path, run: &Run) {
+    let mut held = OUTPUTS.lock().unwrap_or_else(|e| e.into_inner());
+    let map = held.get_or_insert_with(Default::default);
+    let key = (dir.to_path_buf(), run.routine_id.clone());
+    match &run.output {
+        Some(line) => {
+            map.insert(key, (run.started_at, line.clone()));
+        }
+        // A newer run of the routine replaces the old line, a running one keeps nothing.
+        None => {
+            map.remove(&key);
+        }
+    }
+}
+
+/// The runs with their output line, while this process remembers it, as the shown message.
+pub fn with_output(dir: &Path, runs: Vec<Run>) -> Vec<Run> {
+    let held = OUTPUTS.lock().unwrap_or_else(|e| e.into_inner());
+    runs.into_iter()
+        .map(|mut r| {
+            let key = (dir.to_path_buf(), r.routine_id.clone());
+            if let Some((_, line)) = held.as_ref().and_then(|m| m.get(&key)).filter(|(at, _)| *at == r.started_at) {
+                r.output = Some(line.clone());
+                r.message = Some(line.clone());
+            }
+            r
+        })
+        .collect()
 }
 
 /// Serialises saving `routines.json` together with the pruning of the runs of deleted routines.
@@ -310,16 +366,17 @@ pub static SAVE_LOCK: Mutex<()> = Mutex::new(());
 /// Serialises every read-modify-write of `routine-runs.json`.
 static RUNS_LOCK: Mutex<()> = Mutex::new(());
 
-/// Applies `f` to the runs and writes them back.
+/// Applies `f` to the runs and writes them back. An unreadable file is left as it is.
 pub fn update_runs(dir: &Path, f: impl FnOnce(&mut Vec<Run>)) -> Result<(), String> {
     let _held = RUNS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let mut runs = read_runs(dir);
+    let mut runs = read_runs(dir)?;
     f(&mut runs);
     write_json(dir, RUNS_FILE, &runs)
 }
 
-/// Records `run` as the last run of its routine.
+/// Records `run` as the last run of its routine. Its output line stays in memory.
 pub fn record_run(dir: &Path, run: &Run) -> Result<(), String> {
+    remember_output(dir, run);
     update_runs(dir, |runs| {
         let mut run = run.clone();
         if run.scheduled_for.is_none() {
@@ -458,11 +515,12 @@ mod tests {
             agent_short_id: None,
             scheduled_for: None,
             last_scheduled_for: None,
+            output: None,
         };
         record_run(&dir, &run("a", 1)).unwrap();
         record_run(&dir, &run("b", 2)).unwrap();
         record_run(&dir, &run("a", 3)).unwrap();
-        let runs = read_runs(&dir);
+        let runs = read_runs(&dir).unwrap();
         assert_eq!(runs.len(), 2);
         assert_eq!(runs.iter().find(|r| r.routine_id == "a").unwrap().started_at, 3);
     }

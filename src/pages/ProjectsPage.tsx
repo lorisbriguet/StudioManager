@@ -295,14 +295,15 @@ export function ProjectsPage() {
         {showForm && (
           <NewProjectForm
             clients={clients ?? []}
-            onSave={(data) => {
-              createProject.mutate(data, {
-                onSuccess: () => {
-                  notify.success(t.toast_project_created);
-                  setShowForm(false);
-                },
-              });
-            }}
+            submitting={createProject.isPending}
+            onSave={(data) => createProject.mutateAsync(data).then(
+              () => {
+                notify.success(t.toast_project_created);
+                setShowForm(false);
+              },
+              // The mutation's onError toast reports it; the form stays open.
+              () => {}
+            )}
             onCancel={() => setShowForm(false)}
           />
         )}
@@ -448,10 +449,13 @@ export function ProjectsPage() {
 
 function NewProjectForm({
   clients,
+  submitting,
   onSave,
   onCancel,
 }: {
   clients: { id: string; name: string }[];
+  /** The save is running (spinner, no second submit). */
+  submitting?: boolean;
   onSave: (data: {
     client_id: string;
     name: string;
@@ -462,7 +466,7 @@ function NewProjectForm({
     notes: string;
     layout_config: string | null;
     folder_path: string | null;
-  }) => void;
+  }) => void | Promise<void>;
   onCancel: () => void;
 }) {
   const [form, setForm] = useState({
@@ -485,7 +489,8 @@ function NewProjectForm({
     };
     setErrors(next);
     if (next.name || next.client_id) return;
-    onSave({
+    // Returned so FormModal ignores a second submit while it runs.
+    return onSave({
       ...form,
       start_date: form.start_date || null,
       deadline: form.deadline || null,
@@ -495,7 +500,7 @@ function NewProjectForm({
   };
 
   return (
-    <FormModal open onClose={onCancel} title={t.new_project} submitLabel={t.save} onSubmit={submit}>
+    <FormModal open onClose={onCancel} title={t.new_project} submitLabel={t.save} onSubmit={submit} submitting={submitting}>
       <FormGrid cols={2}>
         <FormField label={t.project_name} required error={errors.name}>
           <Input

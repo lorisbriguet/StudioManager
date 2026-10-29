@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { startAgent, startFolders, type StartFolder } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
-import { Button, FormActions, FormField, FormGrid, FormLayout, Input, Select, Textarea } from "../ui";
+import { Button, Callout, FormActions, FormField, FormGrid, FormLayout, Input, Select, Textarea } from "../ui";
 import { ModelMenu } from "./ModelMenu";
+import { logError } from "../../lib/log";
 
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
@@ -35,7 +36,8 @@ export function StartAgentForm({ onStarted, onCancel }: StartAgentFormProps) {
   const [model, setModel] = useState("sonnet");
   const [name, setName] = useState("");
   const [nameEdited, setNameEdited] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  /** What failed; shown translated, the raw error goes to the log. */
+  const [error, setError] = useState<"folders" | "start" | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -46,7 +48,10 @@ export function StartAgentForm({ onStarted, onCancel }: StartAgentFormProps) {
         setFolders(list);
         setFolder((cur) => cur || list[0]?.path || "");
       })
-      .catch((e) => alive && setError(String(e)));
+      .catch((e) => {
+        void logError("Agents: couldn't list the start folders:", e);
+        if (alive) setError("folders");
+      });
     return () => {
       alive = false;
     };
@@ -66,7 +71,8 @@ export function StartAgentForm({ onStarted, onCancel }: StartAgentFormProps) {
     try {
       onStarted(await startAgent(folder, task, model, name));
     } catch (e) {
-      setError(String(e));
+      void logError("Agents: start failed:", e);
+      setError("start");
     } finally {
       setBusy(false);
     }
@@ -109,9 +115,7 @@ export function StartAgentForm({ onStarted, onCancel }: StartAgentFormProps) {
         </FormField>
       </FormGrid>
       {error && (
-        <p role="alert" className="text-sm text-[var(--color-danger-text)]">
-          {error}
-        </p>
+        <Callout tone="danger">{error === "folders" ? t.agents_folders_load_failed : t.agents_start_failed}</Callout>
       )}
       <FormActions>
         <Button variant="secondary" onClick={onCancel}>

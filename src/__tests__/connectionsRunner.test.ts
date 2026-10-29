@@ -231,6 +231,7 @@ describe("connection errors shown to the user", () => {
       expect(connectionErrorText("password_invalid", t)).toBe(t.upkeep_err_bambu_password);
       expect(connectionErrorText("tfa_unsupported", t)).toBe(t.upkeep_err_bambu_tfa);
       expect(connectionErrorText("history_too_long", t)).toBe(t.upkeep_err_bambu_history);
+      expect(connectionErrorText("reenter_password", t)).toBe(t.upkeep_err_syno_reenter);
     });
     it(`the status line of a failing connection is readable in ${lang}`, () => {
       const text = connectionStatusText(conn({ last_sync_at: null, last_error: `untrusted_cert:${FP}` }), t);

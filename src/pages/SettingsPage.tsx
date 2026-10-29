@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { notify } from "../lib/notify";
-import { HardDrive, RotateCcw, FlaskConical, Camera, LayoutList, Tags, Archive, Shield, Store, type LucideIcon } from "lucide-react";
+import { FlaskConical, LayoutList, Tags, Shield, Store, type LucideIcon } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { open } from "@tauri-apps/plugin-dialog";
 import { purgeAllCalendarEvents, syncAllExisting, listWritableCalendars } from "../lib/appleCalendar";
@@ -250,7 +250,8 @@ export function SettingsPage() {
     try {
       const backups = await listBackups(backupPath);
       setAvailableBackups(backups);
-      setSelectedBackup(backups[0] ?? "");
+      // A refresh keeps the pick while it still exists.
+      setSelectedBackup((cur) => (backups.includes(cur) ? cur : backups[0] ?? ""));
     } catch (e) {
       if (isScopeDenied(e)) notify.error(t.backup_path_not_allowed, e);
       setAvailableBackups([]);
@@ -317,7 +318,7 @@ export function SettingsPage() {
         { key: "suppliers", label: t.suppliers, icon: Store },
         { key: "lists", label: t.custom_lists, icon: LayoutList },
         { key: "time_entries", label: t.time_entries_management, icon: ICONS.time },
-        { key: "backup", label: t.backup, icon: Archive },
+        { key: "backup", label: t.backup, icon: ICONS.archive },
         ...(isDemoBuild()
           ? [
               { key: "sandbox" as const, label: t.test_mode, icon: Shield },
@@ -554,14 +555,15 @@ export function SettingsPage() {
                     onChange={(e) => { setCalendarName(e.target.value); setCalendarError(null); }}
                     aria-invalid={calendarError ? true : undefined}
                     aria-describedby={calendarError ? "calendar-error" : undefined}
-                    onFocus={() => {
-                      if (availableCalendars.length === 0 && !loadingCalendars) {
-                        setLoadingCalendars(true);
-                        listWritableCalendars()
-                          .then(setAvailableCalendars)
-                          .catch((e) => notify.error(t.toast_failed_calendars, e))
-                          .finally(() => setLoadingCalendars(false));
-                      }
+                    // On open, not focus: WebKit doesn't focus a clicked button.
+                    // Each open refreshes (a calendar may have been added).
+                    onOpen={() => {
+                      if (loadingCalendars) return;
+                      setLoadingCalendars(true);
+                      listWritableCalendars()
+                        .then(setAvailableCalendars)
+                        .catch((e) => notify.error(t.toast_failed_calendars, e))
+                        .finally(() => setLoadingCalendars(false));
                     }}
                     fullWidth={false}
                   >
@@ -734,7 +736,7 @@ export function SettingsPage() {
                 </div>
               </SettingRow>
               <div className="py-3 flex items-center gap-2">
-                <Button type="button" icon={HardDrive} onClick={runBackup} disabled={backing || !backupPath}>
+                <Button type="button" icon={ICONS.disk} onClick={runBackup} disabled={backing || !backupPath}>
                   {backing ? t.backing_up : t.backup_now}
                 </Button>
               </div>
@@ -747,23 +749,24 @@ export function SettingsPage() {
                     value={selectedBackup}
                     aria-label={t.select_backup}
                     onChange={(e) => setSelectedBackup(e.target.value)}
-                    onFocus={() => {
-                      if (availableBackups.length === 0 && !loadingBackups) loadBackupList();
+                    // On open, not focus (WebKit doesn't focus a clicked button);
+                    // each open refreshes, so a backup just made is listed.
+                    onOpen={() => {
+                      if (!loadingBackups) loadBackupList();
                     }}
                     disabled={!backupPath || restoring}
                     fullWidth={false}
                     className="max-w-[180px]"
                   >
-                    {availableBackups.length === 0 && !loadingBackups && (
+                    {availableBackups.length === 0 && (
                       <option value="">{backupPath ? t.select_backup : t.toast_set_backup_dir}</option>
                     )}
-                    {loadingBackups && <option value="">{t.select_backup}</option>}
                     {availableBackups.map((name) => (
                       <option key={name} value={name}>{name.replace("backup-", "")}</option>
                     ))}
                   </Select>
                   {loadingBackups && <Spinner size={12} />}
-                  <Button variant="danger" icon={RotateCcw} onClick={runRestore} disabled={restoring || !selectedBackup || !backupPath}>
+                  <Button variant="danger" icon={ICONS.restore} onClick={runRestore} disabled={restoring || !selectedBackup || !backupPath}>
                     {restoring ? t.restoring : t.restore}
                   </Button>
                 </div>
@@ -773,10 +776,10 @@ export function SettingsPage() {
               <SettingsCard title={t.snapshot} desc={t.snapshot_desc}>
               <SettingRow label={t.snapshot}>
                 <div className="flex items-center gap-2">
-                  <Button type="button" icon={Camera} onClick={handleCreateSnapshot} loading={snapshotting} disabled={testMode}>
+                  <Button type="button" icon={ICONS.camera} onClick={handleCreateSnapshot} loading={snapshotting} disabled={testMode}>
                     {t.create_snapshot}
                   </Button>
-                  <Button variant="danger" icon={RotateCcw} onClick={handleRestoreSnapshot} loading={restoringSnapshot} disabled={!hasSnapshotFile || testMode}>
+                  <Button variant="danger" icon={ICONS.restore} onClick={handleRestoreSnapshot} loading={restoringSnapshot} disabled={!hasSnapshotFile || testMode}>
                     {t.restore_snapshot}
                   </Button>
                   {!hasSnapshotFile && <span className="text-xs text-muted">{t.no_snapshot_available}</span>}

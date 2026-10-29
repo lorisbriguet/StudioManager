@@ -15,6 +15,7 @@ import { ICON_SIZE } from "./icons";
  *     iconClassName={`transition-transform ${open ? "rotate-90" : ""}`} />
  *   <IconButton to={`/invoices/${id}`} icon={ICONS.preview} label={t.preview} />   a router Link
  *   <IconButton href={url} target="_blank" icon={ICONS.openExternal} label={t.open} />  an <a>
+ *   <IconButton icon={ICONS.close} label={t.remove} size="xs" floating />           on a thumbnail's corner
  *
  * Two sizes, each a fixed square with a fixed icon, so padding is never set
  * by hand: sm = 26px box (the height of every control) around a 14px icon;
@@ -23,6 +24,8 @@ import { ICON_SIZE } from "./icons";
  * (pass `title` to show a different hint).
  * `reveal` hides the button until its row is hovered (the nearest `group`,
  * or a named one: reveal="task" → group/task) or it has keyboard focus.
+ * `floating` pins a round button on its `relative` parent's top-right
+ * corner, on a surface with a border (remove an attachment's thumbnail).
  */
 
 type Tone = "default" | "danger" | "accent";
@@ -45,6 +48,11 @@ interface IconButtonBase {
   color?: "danger" | "accent";
   /** Classes on the icon itself, e.g. a rotating expand chevron. */
   iconClassName?: string;
+  /**
+   * Round, on a bordered surface, pinned over the top-right corner of its
+   * `relative` parent (remove a thumbnail). No positioning classes to add.
+   */
+  floating?: boolean;
 }
 
 type ButtonProps = IconButtonBase &
@@ -58,10 +66,13 @@ type AnchorProps = IconButtonBase &
 
 type IconButtonProps = ButtonProps | RouterLinkProps | AnchorProps;
 
-const SIZE: Record<Size, { box: string; icon: number }> = {
-  sm: { box: "w-6.5 h-6.5 rounded-md", icon: ICON_SIZE.menu },
-  xs: { box: "w-5 h-5 rounded", icon: ICON_SIZE.control },
+const SIZE: Record<Size, { box: string; radius: string; icon: number }> = {
+  sm: { box: "w-6.5 h-6.5", radius: "rounded-md", icon: ICON_SIZE.menu },
+  xs: { box: "w-5 h-5", radius: "rounded", icon: ICON_SIZE.control },
 };
+
+/** `floating`: a round chip over the parent's top-right corner. */
+const FLOATING = "absolute -top-1.5 -right-1.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-input-border)]";
 
 // Spelled out so Tailwind generates each one.
 export const REVEAL_CLASSES: Record<"group" | Exclude<RevealGroup, true>, string> = {
@@ -99,6 +110,7 @@ export function IconButton(allProps: IconButtonProps) {
     pressed,
     color,
     iconClassName,
+    floating = false,
     className = "",
     title,
     ...props
@@ -106,7 +118,7 @@ export function IconButton(allProps: IconButtonProps) {
   const active = activeProp || pressed === true;
   const cls = `inline-flex items-center justify-center shrink-0 transition-colors focus-accent disabled:opacity-30 disabled:pointer-events-none ${
         SIZE[size].box
-      } ${
+      } ${floating ? FLOATING : SIZE[size].radius} ${
         active
           ? "text-[var(--color-text)] bg-[var(--color-hover-row)]"
           : color === "danger"

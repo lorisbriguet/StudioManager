@@ -3,6 +3,7 @@ import * as q from "../queries/workload";
 import type { WorkloadColumn } from "../../types/workload";
 import { useUndoStore } from "../../stores/undo-store";
 import { getLabels } from "../../lib/notify";
+import { snapshotRows, snapshotLinks, pushRestore, reinsertAt } from "../undoRestore";
 
 // ── Templates ──────────────────────────────────────────────
 
@@ -38,10 +39,56 @@ export function useUpdateWorkloadTemplate() {
 
 export function useDeleteWorkloadTemplate() {
   const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["workload-templates"] });
   return useMutation({
     meta: { errorLabel: "error_delete_template" },
-    mutationFn: (id: number) => q.deleteWorkloadTemplate(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["workload-templates"] }),
+    // Undo puts the very same row back: projects.workload_template_id (no
+    // foreign key, so the delete leaves it as is) points at a template again.
+    mutationFn: async (id: number) => {
+      const snap = await snapshotRows([{ table: "workload_templates", where: "id = $1", params: [id] }]);
+      // Legacy workload_rows.template_id is ON DELETE SET NULL.
+      const links = await snapshotLinks([{ table: "workload_rows", column: "template_id", id }]);
+      await q.deleteWorkloadTemplate(id);
+      const name = String(snap[0].rows[0]?.name ?? "");
+      pushRestore(`${getLabels().undo_delete_workload_template} "${name}"`, snap, {
+        redo: () => q.deleteWorkloadTemplate(id),
+        invalidate,
+        extra: links,
+      });
+    },
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * Remove a template's column. Undo and redo work on the columns as they are
+ * when they run, so a column added or edited since stays.
+ */
+export function useDeleteWorkloadTemplateColumn() {
+  const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["workload-templates"] });
+  const setColumns = async (templateId: number, change: (cols: WorkloadColumn[]) => WorkloadColumn[]) => {
+    const tpl = await q.getWorkloadTemplate(templateId);
+    if (!tpl) return;
+    await q.updateWorkloadTemplate(templateId, { columns: change(tpl.columns) });
+    invalidate();
+  };
+  return useMutation({
+    meta: { errorLabel: "error_save_template" },
+    mutationFn: async ({ templateId, key }: { templateId: number; key: string }) => {
+      const tpl = await q.getWorkloadTemplate(templateId);
+      const index = tpl?.columns.findIndex((c) => c.key === key) ?? -1;
+      if (!tpl || index === -1) return;
+      const col = tpl.columns[index];
+      const without = (cols: WorkloadColumn[]) => cols.filter((c) => c.key !== key);
+      await q.updateWorkloadTemplate(templateId, { columns: without(tpl.columns) });
+      useUndoStore.getState().push({
+        label: getLabels().undo_delete_column,
+        execute: () => setColumns(templateId, (cols) => reinsertAt(cols, col, index, (c) => c.key === key)),
+        redo: () => setColumns(templateId, without),
+      });
+    },
+    onSuccess: invalidate,
   });
 }
 

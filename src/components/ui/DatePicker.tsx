@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useContext, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { addMonths, format, getDay, isSameDay, isSameMonth, isToday, isValid, parse, startOfMonth, subMonths, addDays } from "date-fns";
 import { ICONS } from "./icons";
 import { useAppStore, type DateFormatOption } from "../../stores/app-store";
@@ -7,6 +7,8 @@ import { IconButton } from "./IconButton";
 import { Popover } from "./Popover";
 import { Input } from "./Input";
 import { Button } from "./Button";
+import { FieldError } from "./FormField";
+import { FormModalContext } from "./Form";
 
 /**
  * Calendar and DatePicker. See DESIGN-SYSTEM.md, "Dates".
@@ -261,6 +263,23 @@ export function DatePicker({
   const [invalid, setInvalid] = useState(false);
   const selected = value ? parseLocalDate(value) : undefined;
   const [month, setMonth] = useState(() => selected ?? new Date());
+  const errorId = useId();
+  const formModal = useContext(FormModalContext);
+
+  // In a FormModal, text that isn't a date blocks the submit (the field keeps
+  // its last good value, which would otherwise be saved behind a red field).
+  // Reads the field itself: the check runs before React has re-rendered.
+  useEffect(
+    () =>
+      formModal?.register(() => {
+        const el = inputRef.current;
+        if (!el || el.disabled || !el.value.trim()) return null;
+        if (parseTypedDate(el.value, useAppStore.getState().dateFormat)) return null;
+        setInvalid(true);
+        return el;
+      }),
+    [formModal]
+  );
 
   // Follow outside changes (a pick, a reset) unless the text already means that date.
   useEffect(() => {
@@ -305,12 +324,18 @@ export function DatePicker({
   };
 
   const pick = (d: Date) => {
+    formModal?.markDirty();
     onChange(toDateString(d));
     setText(format(d, fmt));
     setInvalid(false);
     setOpen(false);
     inputRef.current?.focus({ preventScroll: true });
   };
+
+  const callerInvalid = aria["aria-invalid"] === true || aria["aria-invalid"] === "true";
+  // Its own error line, unless the caller already shows one (FormField's
+  // `error`) or the field is a bare table cell, where a line would shift the row.
+  const ownError = invalid && !callerInvalid && variant === "default";
 
   return (
     <div ref={wrapRef} className={`relative ${fullWidth ? "w-full" : "inline-block"} ${className}`}>
@@ -342,7 +367,13 @@ export function DatePicker({
             setOpen(true);
             return;
           }
-          if (e.key === "Enter" && settle() === undefined) setInvalid(true);
+          if (e.key === "Enter" && settle() === undefined) {
+            // Not a date: flag it and stop here, so Enter doesn't submit the
+            // form (or reach an Enter-to-save handler) with the old value.
+            e.preventDefault();
+            setInvalid(true);
+            return;
+          }
           onKeyDown?.(e);
         }}
         onBlur={() => {
@@ -352,8 +383,8 @@ export function DatePicker({
           onBlur?.(settled === undefined ? value : settled);
         }}
         aria-label={aria["aria-label"]}
-        aria-invalid={invalid || aria["aria-invalid"] === true || aria["aria-invalid"] === "true" ? true : undefined}
-        aria-describedby={aria["aria-describedby"]}
+        aria-invalid={invalid || callerInvalid ? true : undefined}
+        aria-describedby={[aria["aria-describedby"], ownError ? errorId : undefined].filter(Boolean).join(" ") || undefined}
         aria-required={aria["aria-required"]}
         data-testid={aria["data-testid"]}
         inputClassName={`tabular-nums ${inputClassName}`}
@@ -369,6 +400,7 @@ export function DatePicker({
           />
         }
       />
+      {ownError && <FieldError id={errorId}>{t.invalid_date}</FieldError>}
       {open && (
         <Popover
           anchor={wrapRef}

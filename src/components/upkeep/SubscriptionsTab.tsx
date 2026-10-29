@@ -12,7 +12,7 @@ import {
   useSubscriptions,
 } from "../../db/hooks/useUpkeep";
 import { yearlyTotal, type PendingRenewal } from "../../db/queries/subscriptions";
-import { formatMoney } from "../../lib/upkeep/money";
+import { formatMoney } from "../../lib/money";
 import { formatDisplayDate } from "../../utils/formatDate";
 import type { Subscription } from "../../types/upkeep";
 
@@ -129,8 +129,10 @@ export function SubscriptionsTab() {
       )}
       {adding && (
         <PrefilledExpenseModal
+          title={t.upkeep_renewal_expense_title}
           supplier={subs.find((s) => s.id === adding.subscription_id)?.vendor ?? adding.name}
           amount={adding.amount}
+          currency={adding.currency}
           date={adding.renewed_on}
           onCancel={() => setAdding(null)}
           onSaved={async (expenseId) => {

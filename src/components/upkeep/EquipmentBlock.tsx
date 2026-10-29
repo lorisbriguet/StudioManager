@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { EmptyState, SectionLabel } from "../ui";
 import { useMachinesByProject, useProjectMaterialCost } from "../../db/hooks/useUpkeep";
 import { useT } from "../../i18n/useT";
-import { formatMoney } from "../../lib/upkeep/money";
+import { formatMoney } from "../../lib/money";
 import type { ProjectMaterialCostRow } from "../../db/queries/consumables";
 
 /** Material cost summed per currency, in order of first appearance; never mixes currencies. */

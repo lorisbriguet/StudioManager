@@ -3,6 +3,7 @@ mod agents;
 mod apple;
 mod connectors;
 mod dbfiles;
+mod doc_roots;
 mod menubar;
 mod migrate;
 mod project_docs;
@@ -109,8 +110,7 @@ fn execute_batch(
     conn.busy_timeout(std::time::Duration::from_millis(5000))
         .map_err(|e| format!("Failed to set busy_timeout: {e}"))?;
 
-    conn.execute_batch("BEGIN")
-        .map_err(|e| format!("BEGIN failed: {e}"))?;
+    begin_batch(&conn)?;
 
     let mut last_insert_id: i64 = 0;
 
@@ -151,6 +151,17 @@ fn execute_batch(
     }
 
     Ok(serde_json::json!({ "lastInsertId": last_insert_id }))
+}
+
+/// Open the batch's transaction holding the write lock from the start.
+/// A deferred `BEGIN` takes a read snapshot at the first read and upgrades
+/// it at the first write; if another connection (the plugin pool, the MCP
+/// server) commits in between, that upgrade fails at once with
+/// `SQLITE_BUSY_SNAPSHOT`, which `busy_timeout` cannot retry. `IMMEDIATE`
+/// waits (up to the busy timeout) for the lock instead.
+fn begin_batch(conn: &rusqlite::Connection) -> Result<(), String> {
+    conn.execute_batch("BEGIN IMMEDIATE")
+        .map_err(|e| format!("BEGIN failed: {e}"))
 }
 
 /// Convert Tauri SQL plugin style $1, $2 placeholders to rusqlite ?1, ?2.
@@ -534,10 +545,51 @@ fn startup_state(app_dir: &Path, init: Result<ActiveOrg, String>) -> (ActiveOrg,
     }
 }
 
+/// Extensions macOS runs, installs or loads when a bundle or file of that
+/// type is opened. `open_in_finder` refuses them outright: a project folder
+/// or a link can be set by an agent (MCP `link_folder`), and "Open folder"
+/// must never launch what it points at.
+const EXECUTABLE_EXTENSIONS: &[&str] = &[
+    "app", "appex", "action", "bundle", "command", "component", "framework", "kext",
+    "mpkg", "osax", "pkg", "plugin", "prefpane", "qlgenerator", "saver", "service",
+    "terminal", "tool", "workflow", "xpc",
+];
+
+/// Is this a bundle or an executable document, by its extension or, for a
+/// directory, by the `Contents/Info.plist` every application-like bundle has
+/// whatever its name?
+fn is_executable_target(path: &Path) -> bool {
+    let by_extension = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| EXECUTABLE_EXTENSIONS.iter().any(|x| x.eq_ignore_ascii_case(e)));
+    by_extension || (path.is_dir() && path.join("Contents").join("Info.plist").exists())
+}
+
+/// The `open` arguments for a canonical path: a folder opens in Finder
+/// (`-a Finder`, never its default handler), a file is revealed in its
+/// folder (`-R`, never opened). Bundles and executable files are refused.
+fn finder_open_args(canonical: &Path) -> Result<Vec<std::ffi::OsString>, String> {
+    if is_executable_target(canonical) {
+        return Err(format!(
+            "refusing to open an application, installer or script: {}",
+            canonical.display()
+        ));
+    }
+    let mut args: Vec<std::ffi::OsString> = if canonical.is_dir() {
+        vec!["-a".into(), "Finder".into()]
+    } else {
+        vec!["-R".into()]
+    };
+    args.push(canonical.as_os_str().to_owned());
+    Ok(args)
+}
+
 /// Open a directory in Finder, or reveal a file in its enclosing folder
 /// (macOS `open` command). The path is canonicalized first: it must exist
 /// and resolve to an absolute path, and a canonical path can never start
-/// with `-`, so it cannot be misparsed as an `open` flag.
+/// with `-`, so it cannot be misparsed as an `open` flag. See
+/// `finder_open_args` for what is refused.
 #[tauri::command]
 async fn open_in_finder(path: String) -> Result<(), String> {
     let canonical =
@@ -545,13 +597,8 @@ async fn open_in_finder(path: String) -> Result<(), String> {
     if !canonical.is_absolute() {
         return Err(format!("path is not absolute: {path}"));
     }
-    let mut cmd = std::process::Command::new("open");
-    if canonical.is_file() {
-        // Reveal files in their enclosing Finder window instead of
-        // launching the default application for the file type.
-        cmd.arg("-R");
-    }
-    let output = cmd.arg(&canonical).output().map_err(|e| e.to_string())?;
+    let args = finder_open_args(&canonical)?;
+    let output = std::process::Command::new("open").args(&args).output().map_err(|e| e.to_string())?;
     if output.status.success() {
         Ok(())
     } else {
@@ -564,9 +611,51 @@ async fn open_in_finder(path: String) -> Result<(), String> {
     }
 }
 
+/// May a webview of this app load `url`? Only the app's own pages: the
+/// `tauri://localhost` custom protocol (`http(s)://tauri.localhost` where
+/// the platform serves it that way), blobs those pages create (PDF
+/// previews in iframes), `about:blank`/`about:srcdoc`, and, in a debug
+/// build, the Vite dev server (`dev_url`). Everything else is refused: a
+/// link in an agent reply or a document must open in the browser, never
+/// replace the app with someone else's page.
+pub(crate) fn allow_navigation(url: &tauri::Url, dev_url: Option<&tauri::Url>) -> bool {
+    match url.scheme() {
+        "tauri" => url.host_str() == Some("localhost"),
+        "http" | "https" if url.host_str() == Some("tauri.localhost") => true,
+        "about" => matches!(url.path(), "blank" | "srcdoc"),
+        "blob" => tauri::Url::parse(url.path())
+            .is_ok_and(|inner| inner.scheme() != "blob" && allow_navigation(&inner, dev_url)),
+        _ => dev_url.is_some_and(|dev| {
+            url.scheme() == dev.scheme()
+                && url.host_str() == dev.host_str()
+                && url.port_or_known_default() == dev.port_or_known_default()
+        }),
+    }
+}
+
+/// Applies `allow_navigation` to every webview, the main window and the
+/// menu bar panel alike (a plugin's hook runs for all of them).
+fn navigation_guard<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    tauri::plugin::Builder::new("navigation-guard")
+        .on_navigation(|webview, url| {
+            let dev_url = if cfg!(debug_assertions) { webview.config().build.dev_url.as_ref() } else { None };
+            let allowed = allow_navigation(url, dev_url);
+            if !allowed {
+                log::warn!("blocked navigation of {} to {}", webview.label(), url.scheme());
+            }
+            allowed
+        })
+        .build()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // The menu bar panel is a non-activating NSPanel (see `menubar`).
+    #[cfg(target_os = "macos")]
+    let builder = builder.plugin(tauri_nspanel::init());
+    builder
+        .plugin(navigation_guard())
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -823,6 +912,119 @@ mod tests {
         assert!(check_expected_org(Some("abc123"), "abc123").is_ok());
         let err = check_expected_org(Some("old111"), "abc123").unwrap_err();
         assert!(err.contains("old111") && err.contains("abc123"));
+    }
+
+    fn url(s: &str) -> tauri::Url {
+        tauri::Url::parse(s).unwrap()
+    }
+
+    #[test]
+    fn navigation_stays_on_the_apps_own_pages() {
+        for ok in [
+            "tauri://localhost/",
+            "tauri://localhost/menubar",
+            "tauri://localhost/projects/12?tab=wiki#notes",
+            "https://tauri.localhost/",
+            "http://tauri.localhost/menubar",
+            "blob:tauri://localhost/6f1c1a54-2d6c-4f7e-9c1e-0b8c2e1d9a11",
+            "about:blank",
+            "about:srcdoc",
+        ] {
+            assert!(allow_navigation(&url(ok), None), "{ok} must be allowed");
+        }
+        for bad in [
+            "https://evil.example/login",
+            "http://localhost:1420/",
+            "tauri://evil.example/",
+            "https://tauri.localhost.evil.example/",
+            "file:///Users/me/Downloads/page.html",
+            "data:text/html,<h1>hi</h1>",
+            "blob:https://evil.example/6f1c1a54",
+            "blob:blob:tauri://localhost/x",
+            "javascript:alert(1)",
+            "mailto:me@example.com",
+            "vscode://file/etc/passwd",
+            "about:settings",
+        ] {
+            assert!(!allow_navigation(&url(bad), None), "{bad} must be refused");
+        }
+    }
+
+    #[test]
+    fn the_dev_server_is_allowed_only_when_given() {
+        let dev = url("http://localhost:1420");
+        assert!(allow_navigation(&url("http://localhost:1420/menubar"), Some(&dev)));
+        assert!(allow_navigation(&url("blob:http://localhost:1420/abc"), Some(&dev)));
+        assert!(!allow_navigation(&url("http://localhost:1421/"), Some(&dev)));
+        assert!(!allow_navigation(&url("https://localhost:1420/"), Some(&dev)));
+        assert!(!allow_navigation(&url("http://127.0.0.1:1420/"), Some(&dev)));
+        assert!(!allow_navigation(&url("https://evil.example/"), Some(&dev)));
+        // and the app's own origin still is
+        assert!(allow_navigation(&url("tauri://localhost/"), Some(&dev)));
+    }
+
+    #[test]
+    fn a_folder_opens_in_finder_and_a_file_is_revealed() {
+        let dir = tmp_dir("finder-plain");
+        let folder = dir.join("Client work");
+        std::fs::create_dir_all(&folder).unwrap();
+        let file = folder.join("invoice.pdf");
+        std::fs::write(&file, b"%PDF").unwrap();
+        let args = |p: &Path| -> Vec<String> {
+            finder_open_args(p).unwrap().into_iter().map(|a| a.into_string().unwrap()).collect()
+        };
+        assert_eq!(args(&folder), vec!["-a".to_string(), "Finder".into(), folder.display().to_string()]);
+        assert_eq!(args(&file), vec!["-R".to_string(), file.display().to_string()]);
+        // a dotted folder name that is not a bundle type is a plain folder
+        let dotted = dir.join("v2.3.0");
+        std::fs::create_dir_all(&dotted).unwrap();
+        assert_eq!(args(&dotted)[0], "-a");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn bundles_and_executable_files_are_refused() {
+        let dir = tmp_dir("finder-bundles");
+        for name in ["Invoice.app", "Setup.PKG", "Tool.bundle", "Run.workflow"] {
+            let bundle = dir.join(name);
+            std::fs::create_dir_all(&bundle).unwrap();
+            let err = finder_open_args(&bundle).unwrap_err();
+            assert!(err.contains("refusing"), "{name}: {err}");
+        }
+        for name in ["run.command", "shell.terminal", "Installer.pkg"] {
+            let file = dir.join(name);
+            std::fs::write(&file, b"#!/bin/sh").unwrap();
+            assert!(finder_open_args(&file).is_err(), "{name} must be refused");
+        }
+        // an application bundle renamed to look like a folder
+        let disguised = dir.join("Invoices 2026");
+        std::fs::create_dir_all(disguised.join("Contents")).unwrap();
+        std::fs::write(disguised.join("Contents").join("Info.plist"), b"<plist/>").unwrap();
+        assert!(finder_open_args(&disguised).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_batch_holds_the_write_lock_from_begin() {
+        let dir = tmp_dir("begin-immediate");
+        let db = dir.join("t.db");
+        let setup = rusqlite::Connection::open(&db).unwrap();
+        setup.execute_batch("PRAGMA journal_mode=WAL; CREATE TABLE t (x INTEGER);").unwrap();
+        let batch = rusqlite::Connection::open(&db).unwrap();
+        begin_batch(&batch).unwrap();
+        // Another writer cannot slip a commit in between the batch's reads
+        // and writes (with a deferred BEGIN this insert would succeed and the
+        // batch's first write would then fail with BUSY_SNAPSHOT).
+        let other = rusqlite::Connection::open(&db).unwrap();
+        other.busy_timeout(std::time::Duration::ZERO).unwrap();
+        let err = other.execute("INSERT INTO t VALUES (1)", []).unwrap_err();
+        assert_eq!(err.sqlite_error_code(), Some(rusqlite::ErrorCode::DatabaseBusy), "{err}");
+        batch.execute("INSERT INTO t VALUES (2)", []).unwrap();
+        batch.execute_batch("COMMIT").unwrap();
+        let n: i64 = other.query_row("SELECT COUNT(*) FROM t", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 1);
+        drop((setup, batch, other));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

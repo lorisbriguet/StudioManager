@@ -35,6 +35,7 @@ import { useTabStore } from "../stores/tab-store";
 import { useOrgStore } from "../stores/org-store";
 import { useTimerActions } from "../hooks/useTimerActions";
 import { useT } from "../i18n/useT";
+import { plural } from "../i18n/plural";
 import { ICONS, ICON_SIZE, Checkbox, Button, Dropdown, PageHeader, SearchBar, EmptyState, QueryError, NoResults, ListSkeleton, Select, FilterChip, AddRow, InlineRename, DragHandle } from "../components/ui";
 import { taskStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Task, Subtask, TaskStatus } from "../types/task";
@@ -337,7 +338,7 @@ export function TasksPage() {
               {g.clientName && (
                 <span className="text-xs text-muted">/ {g.clientName}</span>
               )}
-              <span className="text-xs text-muted ml-auto">{g.tasks.length} task{g.tasks.length !== 1 ? "s" : ""}</span>
+              <span className="text-xs text-muted ml-auto">{plural(g.tasks.length, t.task_count_one, t.task_count_other)}</span>
               </button>
             </div>
             {!collapsedProjects.has(g.projectId) && <div className="divide-y divide-[var(--color-border-divider)]">

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { AgentsPage } from "../pages/AgentsPage";
@@ -7,6 +7,9 @@ import { useAppStore } from "../stores/app-store";
 import { emit } from "../__mocks__/tauri-event";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 import type { Agent, Group } from "../lib/agents";
+import { logError } from "../lib/log";
+
+vi.mock("../lib/log", () => ({ logError: vi.fn(() => Promise.resolve()) }));
 
 const label = {
   orgId: "o1",
@@ -144,7 +147,7 @@ describe("StartAgentForm", () => {
     expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
   });
 
-  it("shows the command's error inline", async () => {
+  it("shows a translated error inline and logs the command's error", async () => {
     await setup();
     setInvokeHandler((cmd) => {
       if (cmd === "agents_start") throw "Folder is not trusted";
@@ -152,7 +155,10 @@ describe("StartAgentForm", () => {
     });
     fireEvent.change(screen.getByLabelText("Task"), { target: { value: "Do it" } });
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
-    expect(await screen.findByText("Folder is not trusted")).toBeInTheDocument();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Couldn't start the agent");
+    expect(alert).not.toHaveTextContent("Folder is not trusted");
+    expect(vi.mocked(logError)).toHaveBeenCalledWith(expect.any(String), "Folder is not trusted");
   });
 });
 

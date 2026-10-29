@@ -1,4 +1,5 @@
-import { Camera, HardDrive, Image, Laptop, Monitor, Printer, Wrench, type LucideIcon } from "lucide-react";
+import { Image, Laptop, Monitor, Printer, Wrench, type LucideIcon } from "lucide-react";
+import { ICONS } from "../../components/ui/icons";
 import type { UIKey } from "../../i18n/ui";
 import type { IntervalUnit } from "../../types/upkeep";
 
@@ -24,7 +25,7 @@ export interface MachineTemplate {
 /** Starting points only: every interval is editable before and after saving. */
 export const MACHINE_TEMPLATES: MachineTemplate[] = [
   {
-    key: "nas", nameKey: "tpl_nas", icon: HardDrive,
+    key: "nas", nameKey: "tpl_nas", icon: ICONS.disk,
     items: [
       { titleKey: "tpl_nas_restore", schedule: "interval", interval_n: 3, interval_unit: "month" },
       { titleKey: "tpl_nas_update", schedule: "interval", interval_n: 1, interval_unit: "month" },
@@ -56,7 +57,7 @@ export const MACHINE_TEMPLATES: MachineTemplate[] = [
     ],
   },
   {
-    key: "camera", nameKey: "tpl_camera", icon: Camera,
+    key: "camera", nameKey: "tpl_camera", icon: ICONS.camera,
     items: [
       { titleKey: "tpl_camera_sensor", schedule: "interval", interval_n: 6, interval_unit: "month" },
       { titleKey: "tpl_camera_firmware", schedule: "interval", interval_n: 3, interval_unit: "month" },

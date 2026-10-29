@@ -43,7 +43,7 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
-use super::{describe, Connector, DeviceInfo, DeviceList, DeviceReading, SyncResult};
+use super::{describe, read_limited, Connector, DeviceInfo, DeviceList, DeviceReading, SyncResult, MAX_RESPONSE_BYTES};
 
 /// An HTTP answer: status and JSON body (`Null` when the body isn't JSON).
 pub(crate) struct Reply {
@@ -350,7 +350,7 @@ impl Bambu {
         }
         let secret = self.secret();
         match secret.access_token {
-            Some(t) if secret.expires_at.is_none_or(|e| self.now < e - EXPIRY_MARGIN) => Ok(t),
+            Some(t) if secret.expires_at.map_or(true, |e| self.now < e - EXPIRY_MARGIN) => Ok(t),
             Some(_) => self.refresh(),
             None => Err(TOKEN_EXPIRED.into()),
         }
@@ -447,8 +447,10 @@ impl Https {
             .send()
             .map_err(|e| format!("cannot reach Bambu Lab's servers: {}", describe(e)))?;
         let status = resp.status().as_u16();
+        let bytes = read_limited(resp.content_length(), resp, MAX_RESPONSE_BYTES)
+            .map_err(|e| format!("Bambu Lab's servers sent an unreadable answer: {e}"))?;
         // A non-JSON body (an HTML error page) reads as Null; its status says enough.
-        let body = resp.text().ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(JsonValue::Null);
+        let body = serde_json::from_slice(&bytes).unwrap_or(JsonValue::Null);
         Ok(Reply { status, body })
     }
 }
@@ -690,7 +692,7 @@ mod tests {
             serde_json::json!({ "status": 2, "deviceId": P2S, "startTime": "2026-09-02T10:00:00Z",
                 "endTime": "2026-09-02T09:00:00Z" }),
         ] {
-            assert!(finished_tasks(&[task.clone()], since).is_err(), "{task}");
+            assert!(finished_tasks(std::slice::from_ref(&task), since).is_err(), "{task}");
         }
         // Through a sync: a task list that isn't one, or a non-JSON answer.
         for tasks in [serde_json::json!({ "hits": 3 }), serde_json::json!({ "total": 1 }), JsonValue::Null] {

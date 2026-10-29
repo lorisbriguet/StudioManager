@@ -221,7 +221,10 @@ export function Popover({
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.stopPropagation()}
-      className={`fixed z-[60] ${POPOVER_SURFACE} ${PADDING[padding]} animate-in fade-in duration-100 ${className}`}
+      // The fade-in starts only once placed: a running animation overrides the
+      // inline opacity, and WebKit paints its first frame where the panel was
+      // mounted (top left), so the panel flashed in the corner and slid in.
+      className={`fixed z-[60] ${POPOVER_SURFACE} ${PADDING[padding]} ${pos ? "animate-in fade-in duration-100" : ""} ${className}`}
       // Until placed: transparent, not visibility:hidden. A hidden element
       // cannot take focus, and focus moves in before the placement re-render.
       style={{

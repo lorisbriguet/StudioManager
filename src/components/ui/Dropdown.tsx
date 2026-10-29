@@ -1,5 +1,6 @@
 import {
   cloneElement,
+  useContext,
   useCallback,
   useEffect,
   useId,
@@ -13,6 +14,7 @@ import {
 import { Check, ChevronDown, Plus, Search } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { Input } from "./Input";
+import { FormModalContext } from "./Form";
 import { Kbd } from "./Kbd";
 import { Popover } from "./Popover";
 import { SECTION_LABEL } from "./SectionLabel";
@@ -331,8 +333,10 @@ interface DropdownSelectCommon {
   autoFocus?: boolean;
   /** Called when focus leaves the dropdown (trigger and panel). */
   onBlur?: () => void;
-  /** Called when the trigger gets focus (e.g. lazy-load the options). */
+  /** Called when the trigger gets focus. Not for lazy-loading: WebKit doesn't focus a clicked button; use `onOpen`. */
   onFocus?: () => void;
+  /** Called each time the menu opens (click, arrow keys, defaultOpen): lazy-load or refresh the options here. */
+  onOpen?: () => void;
   renderValue?: (selected: DropdownOption[]) => ReactNode;
   /** A name is required: aria-label, aria-labelledby, or an `id` a <label htmlFor> points at (FormField, SettingRow). */
   "aria-label"?: string;
@@ -376,9 +380,13 @@ export function DropdownSelect(props: DropdownSelectProps) {
     autoFocus,
     onBlur,
     onFocus,
+    onOpen,
     renderValue,
   } = props;
   const t = useT();
+  // A pick fires no input/change event: tell a surrounding FormModal the form
+  // changed, so its backdrop click no longer discards it.
+  const form = useContext(FormModalContext);
   const autoId = useId();
   const menuId = `${autoId}-menu`;
   const triggerId = id ?? `${autoId}-trigger`;
@@ -393,6 +401,11 @@ export function DropdownSelect(props: DropdownSelectProps) {
   const [query, setQuery] = useState("");
   const onBlurRef = useRef(onBlur);
   onBlurRef.current = onBlur;
+  const onOpenRef = useRef(onOpen);
+  onOpenRef.current = onOpen;
+  useEffect(() => {
+    if (open) onOpenRef.current?.();
+  }, [open]);
 
   const selectedValues = props.multiple ? props.value : [props.value];
   const selected = options.filter((o) => selectedValues.includes(o.value));
@@ -412,6 +425,7 @@ export function DropdownSelect(props: DropdownSelectProps) {
   }, []);
 
   const pick = (v: string) => {
+    if (props.multiple || v !== props.value) form?.markDirty();
     if (props.multiple) {
       const next = props.value.includes(v) ? props.value.filter((x) => x !== v) : [...props.value, v];
       props.onChange(next);
@@ -562,6 +576,7 @@ export function Dropdown({ trigger, items, align = "start", className = "", "ari
   const anchorRef = useRef<HTMLSpanElement>(null);
   const returnTo = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
+  const form = useContext(FormModalContext);
   const baseId = useId();
   const menuId = `${baseId}-menu`;
   const triggerId = trigger.props.id ?? `${baseId}-trigger`;
@@ -586,7 +601,8 @@ export function Dropdown({ trigger, items, align = "start", className = "", "ari
             shortcut: it.shortcut,
             danger: it.danger,
             disabled: it.disabled,
-            onPick: it.onSelect,
+            // A menu action inside a FormModal (add a field, insert a value) changes the form
+            onPick: form ? () => { form.markDirty(); it.onSelect(); } : it.onSelect,
           }
   );
 

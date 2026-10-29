@@ -11,6 +11,9 @@ use tauri_plugin_autostart::ManagerExt;
 
 use crate::agents::cli::{read_settings, SettingsGuard};
 
+#[cfg(target_os = "macos")]
+mod nspanel;
+
 /// Passed to the app when macOS starts it at login.
 pub const STARTUP_ARG: &str = "--menubar";
 
@@ -36,26 +39,11 @@ static ATTENTION: AtomicBool = AtomicBool::new(false);
 /// would open the panel again instead of closing it.
 static PANEL_BLURRED_AT: AtomicU64 = AtomicU64::new(0);
 const REOPEN_GUARD_MS: u64 = 300;
-/// When the panel was last shown (ms since epoch). Opening it while StudioManager is in the
-/// background brings the app forward, and macOS then hands the focus to the main window if it
-/// is open: a focus loss this soon after showing is that hand-over, not a click elsewhere.
-static PANEL_SHOWN_AT: AtomicU64 = AtomicU64::new(0);
-const ACTIVATION_GRACE_MS: u64 = 600;
 
-/// What the panel does when it loses focus: take it back during the app's activation,
-/// hide otherwise.
-#[derive(Debug, PartialEq)]
-pub enum BlurAction {
-    Refocus,
-    Hide,
-}
-
-pub fn blur_action(now: u64, shown_at: u64) -> BlurAction {
-    if now.saturating_sub(shown_at) < ACTIVATION_GRACE_MS {
-        BlurAction::Refocus
-    } else {
-        BlurAction::Hide
-    }
+/// Whether a click on the icon this soon after the panel hid on losing the focus is that same
+/// click (it closes the panel), not a new one to open it.
+pub fn reopen_suppressed(now: u64, blurred_at: u64) -> bool {
+    now.saturating_sub(blurred_at) < REOPEN_GUARD_MS
 }
 
 /// Whether the app stays alive with its window closed: Agents on and the menu bar on.
@@ -118,6 +106,8 @@ fn apply_tray(app: &AppHandle, enabled: bool) {
     if !enabled {
         let _ = app.remove_tray_by_id(TRAY_ID);
         if let Some(w) = app.get_webview_window(PANEL_LABEL) {
+            #[cfg(target_os = "macos")]
+            nspanel::release(app, PANEL_LABEL);
             let _ = w.destroy();
         }
         return;
@@ -173,6 +163,8 @@ fn ensure_panel(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
     if let Some(w) = app.get_webview_window(PANEL_LABEL) {
         return Ok(w);
     }
+    // On macOS the panel's level and Spaces behaviour (`nspanel.rs`) replace `always_on_top` and
+    // `visible_on_all_workspaces`.
     let w = WebviewWindowBuilder::new(app, PANEL_LABEL, WebviewUrl::App("/menubar".into()))
         .title("StudioManager")
         .inner_size(PANEL_WIDTH, PANEL_HEIGHT)
@@ -180,18 +172,22 @@ fn ensure_panel(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
         .decorations(false)
         .skip_taskbar(true)
         .always_on_top(true)
+        .visible_on_all_workspaces(true)
         .shadow(true)
         .visible(false)
         .build()?;
+    // Should it fail, the panel stays a plain window: it still works, but opening it activates
+    // the app and can bring the main window forward.
+    #[cfg(target_os = "macos")]
+    if let Err(e) = nspanel::convert(&w) {
+        eprintln!("[menubar] the panel is a plain window: {e}");
+        nspanel::release(app, PANEL_LABEL);
+    }
     let panel = w.clone();
     w.on_window_event(move |event| {
+        // A click anywhere else (another app, the desktop, the main window) closes it.
         if let tauri::WindowEvent::Focused(false) = event {
-            let now = now_ms();
-            if blur_action(now, PANEL_SHOWN_AT.load(Ordering::Relaxed)) == BlurAction::Refocus {
-                let _ = panel.set_focus();
-                return;
-            }
-            PANEL_BLURRED_AT.store(now, Ordering::Relaxed);
+            PANEL_BLURRED_AT.store(now_ms(), Ordering::Relaxed);
             let _ = panel.hide();
         }
     });
@@ -236,7 +232,7 @@ fn toggle_panel(app: &AppHandle, item: tauri::Rect) {
         let _ = panel.hide();
         return;
     }
-    if now_ms().saturating_sub(PANEL_BLURRED_AT.load(Ordering::Relaxed)) < REOPEN_GUARD_MS {
+    if reopen_suppressed(now_ms(), PANEL_BLURRED_AT.load(Ordering::Relaxed)) {
         return;
     }
     // The icon's rect comes in physical pixels; the screen under it gives the scale.
@@ -255,7 +251,11 @@ fn toggle_panel(app: &AppHandle, item: tauri::Rect) {
         let (x, y) = panel_origin(icon, screen, PANEL_WIDTH * scale, scale);
         let _ = panel.set_position(PhysicalPosition::new(x, y));
     }
-    PANEL_SHOWN_AT.store(now_ms(), Ordering::Relaxed);
+    // Takes the keyboard without activating the app: the main window stays where it is (#6).
+    #[cfg(target_os = "macos")]
+    if nspanel::show(app, PANEL_LABEL) {
+        return;
+    }
     let _ = panel.show();
     let _ = panel.set_focus();
 }
@@ -306,13 +306,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn focus_lost_while_the_app_activates_is_taken_back() {
-        // The main window takes the focus right after the panel opens: keep the panel.
-        assert_eq!(blur_action(10_100, 10_000), BlurAction::Refocus);
-        assert_eq!(blur_action(10_599, 10_000), BlurAction::Refocus);
-        // A click elsewhere later closes it.
-        assert_eq!(blur_action(10_600, 10_000), BlurAction::Hide);
-        assert_eq!(blur_action(50_000, 10_000), BlurAction::Hide);
+    fn the_click_that_closed_the_panel_does_not_reopen_it() {
+        // Hid at 10 000 when the click on the icon took its focus: that click arrives after.
+        assert!(reopen_suppressed(10_000, 10_000));
+        assert!(reopen_suppressed(10_299, 10_000));
+        // A later click opens it again.
+        assert!(!reopen_suppressed(10_300, 10_000));
+        // Never hidden that way: no guard. The clock went back: no overflow.
+        assert!(!reopen_suppressed(10_000, 0));
+        assert!(reopen_suppressed(9_000, 10_000));
     }
 
     #[test]

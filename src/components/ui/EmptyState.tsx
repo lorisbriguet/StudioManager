@@ -23,7 +23,7 @@ interface EmptyStateProps {
   icon?: IconProp;
   action?: ReactNode;
   size?: EmptyStateSize;
-  /** danger: an error state (icon in the danger colour). */
+  /** danger: an error state (icon in the danger colour), announced as role="alert". */
   tone?: "default" | "danger";
   className?: string;
 }
@@ -37,7 +37,10 @@ export function EmptyState({ message, hint, icon, action, size = "lg", tone = "d
   const s = SIZE[size];
   const iconNode = renderIcon(icon, s.icon);
   return (
-    <div className={`flex flex-col items-center justify-center text-center text-muted ${s.box} ${className}`}>
+    <div
+      role={tone === "danger" ? "alert" : undefined}
+      className={`flex flex-col items-center justify-center text-center text-muted ${s.box} ${className}`}
+    >
       {iconNode && (
         <div aria-hidden="true" className={`${s.iconGap} ${tone === "danger" ? "text-[var(--color-danger-text)]" : "opacity-40"}`}>{iconNode}</div>
       )}

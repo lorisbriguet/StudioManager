@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { Button, Dropdown, EmptyState, ICONS, IconButton, SectionLabel, type DropdownItem } from "../components/ui";
+import { Button, Callout, Dropdown, EmptyState, ICONS, IconButton, SectionLabel, type DropdownItem } from "../components/ui";
 import { useAgents } from "../components/agents/useAgents";
 import { useT } from "../i18n/useT";
 import { useAppStore } from "../stores/app-store";
 import { openMainWindow } from "../lib/agents";
+import { logError } from "../lib/log";
+import { routineRunTextClass } from "../lib/statusColors";
 import {
   ROUTINES_CHANGED,
   getRoutineRuns,
@@ -18,17 +20,23 @@ import {
   type Run,
 } from "../lib/routines";
 
-/** Loads the routines and their last runs, and again whenever Rust says they changed. */
+const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+/** Rust's error while the Agents switch is off (`agents/actions.rs`). */
+const AGENTS_OFF = "Agents are switched off";
+
+/** Loads the routines and their last runs, and again whenever Rust says they changed. A failed
+ *  load (e.g. "Agents are switched off", an unreadable runs file) keeps what is there and says why. */
 function useRoutines() {
   const [data, setData] = useState<{ routines: Routines; runs: Run[] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const load = useCallback(async () => {
-    try {
-      const [routines, runs] = await Promise.all([getRoutines(), getRoutineRuns()]);
-      setData({ routines, runs });
-    } catch {
-      // Agents switched off or a read failed: show what is there, or the empty state.
-      setData((d) => d ?? { routines: { sections: [], routines: [] }, runs: [] });
-    }
+    const [routines, runs] = await Promise.allSettled([getRoutines(), getRoutineRuns()]);
+    const failed = [routines, runs].find((r): r is PromiseRejectedResult => r.status === "rejected");
+    setError(failed ? errorText(failed.reason) : null);
+    setData((d) => ({
+      routines: routines.status === "fulfilled" ? routines.value : (d?.routines ?? { sections: [], routines: [] }),
+      runs: runs.status === "fulfilled" ? runs.value : (d?.runs ?? []),
+    }));
   }, []);
   useEffect(() => {
     let alive = true;
@@ -45,44 +53,38 @@ function useRoutines() {
       unlisten?.();
     };
   }, [load]);
-  return data;
+  return { data, error };
 }
 
 const timeOf = (epochMs: number, locale: string) =>
   new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(epochMs));
 
-/** Status colours as the Agents groups: running info, done success, failed danger. */
-const TONE = {
-  running: "text-[var(--color-info-text)]",
-  done: "text-[var(--color-success-text)]",
-  failed: "text-[var(--color-danger-text)]",
-} as const;
-
 function RoutineRow({ routine, run, sessionId }: { routine: Routine; run: Run | undefined; sessionId: string | null }) {
   const t = useT();
   const locale = useAppStore((s) => (s.language === "FR" ? "fr" : "en"));
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  /** Runs an action; a failure (e.g. "Agents are switched off") shows in the row. */
+  const [failed, setFailed] = useState(false);
+  /** Runs an action; a failure shows a translated line in the row, the raw error goes to the log. */
   const attempt = async (action: () => Promise<unknown>) => {
-    setError(null);
+    setFailed(false);
     try {
       await action();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setFailed(true);
+      void logError(`Routine ${routine.id}: action failed:`, e instanceof Error ? e.message : e);
     }
   };
 
   const running = run?.status === "running";
   let status = { text: routine.idleHint, tone: "text-muted" as string };
-  if (run?.status === "running") status = { text: t.routines_running, tone: TONE.running };
+  if (run?.status === "running") status = { text: t.routines_running, tone: routineRunTextClass("running") };
   else if (run?.status === "done") {
     const at = t.routines_done_at.replace("{time}", run.finishedAt ? timeOf(run.finishedAt, locale) : "");
-    status = { text: run.message ? `${at} · ${run.message}` : at, tone: TONE.done };
+    status = { text: run.message ? `${at} · ${run.message}` : at, tone: routineRunTextClass("done") };
   } else if (run?.status === "failed") {
     status = {
       text: run.message ? t.routines_failed.replace("{message}", run.message) : t.routines_failed_plain,
-      tone: TONE.failed,
+      tone: routineRunTextClass("failed"),
     };
   }
 
@@ -115,10 +117,10 @@ function RoutineRow({ routine, run, sessionId }: { routine: Routine; run: Run | 
       <div className="flex-1 min-w-0">
         <div className="text-sm truncate">{routine.title}</div>
         {status.text && <div className={`text-xs truncate ${status.tone}`}>{status.text}</div>}
-        {error && (
-          <div role="alert" className="text-xs text-danger-text">
-            {error}
-          </div>
+        {failed && (
+          <Callout tone="danger" className="mt-1">
+            {t.routines_action_failed}
+          </Callout>
         )}
       </div>
       <Button variant="secondary" onClick={main.onClick} disabled={main.disabled}>
@@ -135,15 +137,28 @@ function RoutineRow({ routine, run, sessionId }: { routine: Routine; run: Run | 
  */
 export function DayTab() {
   const t = useT();
-  const data = useRoutines();
+  const { data, error } = useRoutines();
   const { agents } = useAgents();
+  /** Why a section link didn't open (e.g. "Not found: …"), by section id. */
+  const [linkError, setLinkError] = useState<{ section: string; message: string } | null>(null);
 
   if (!data) return null;
   const { routines, runs } = data;
+  const shownError = error === AGENTS_OFF ? t.agents_off : error;
+  const loadError = shownError && (
+    <div role="alert" className="px-4 pt-3 text-xs text-danger-text">
+      {shownError}
+    </div>
+  );
+  const openLink = (section: string, index: number) => {
+    setLinkError(null);
+    openSectionLink(section, index).catch((e) => setLinkError({ section, message: errorText(e) }));
+  };
   if (routines.routines.length === 0) {
     return (
       <EmptyState
-        message={t.routines_day_empty}
+        tone={shownError ? "danger" : "default"}
+        message={shownError || t.routines_day_empty}
         action={
           <Button variant="secondary" onClick={() => void openMainWindow({ settings: "agents" })}>
             {t.routines_open_settings}
@@ -155,6 +170,7 @@ export function DayTab() {
 
   return (
     <div className="pb-2">
+      {loadError}
       {routines.sections.map((s) => {
         const rows = routines.routines.filter((r) => r.sectionId === s.id);
         if (rows.length === 0 && s.links.length === 0) return null;
@@ -164,12 +180,17 @@ export function DayTab() {
               <SectionLabel as="h2">{s.name}</SectionLabel>
               <div className="flex flex-wrap justify-end gap-x-3">
                 {s.links.map((l, i) => (
-                  <Button key={i} variant="link" onClick={() => void openSectionLink(s.id, i).catch(() => {})}>
+                  <Button key={i} variant="link" onClick={() => openLink(s.id, i)}>
                     {l.label}
                   </Button>
                 ))}
               </div>
             </div>
+            {linkError?.section === s.id && (
+              <div role="alert" className="px-4 mb-1 text-xs text-danger-text">
+                {linkError.message}
+              </div>
+            )}
             {rows.map((r) => {
               const run = runs.find((x) => x.routineId === r.id);
               const session = run?.agentShortId ? agents.find((a) => a.shortId === run.agentShortId) : undefined;

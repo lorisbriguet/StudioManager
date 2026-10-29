@@ -94,10 +94,11 @@ export async function setSubscriptionCalendarEvent(
 }
 
 /**
- * Record every renewal that has come due and move renews_on forward, in one
- * atomic batch. Each renewal is a pending "add to expenses?" question; nothing
- * is written to Expenses. Idempotent: INSERT OR IGNORE plus the advanced
- * renews_on means a second call finds nothing due. Returns the renewals recorded.
+ * Record the renewal that has come due (at most one, the latest: see
+ * `rollRenewals`) and move renews_on past today, in one atomic batch. Each
+ * renewal is a pending "add to expenses?" question; nothing is written to
+ * Expenses. Idempotent: INSERT OR IGNORE plus the advanced renews_on means a
+ * second call finds nothing due. Returns the renewals recorded.
  */
 export async function applyRenewals(
   sub: Subscription,

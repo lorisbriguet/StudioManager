@@ -6,13 +6,14 @@ import {
   useCreateWorkloadTemplate,
   useUpdateWorkloadTemplate,
   useDeleteWorkloadTemplate,
+  useDeleteWorkloadTemplateColumn,
 } from "../../db/hooks/useWorkload";
 import { WorkloadColumnEditor } from "./WorkloadColumnEditor";
 import { DEFAULT_WORKLOAD_COLUMNS } from "../../types/workload";
 import type { WorkloadColumn } from "../../types/workload";
 import { useT } from "../../i18n/useT";
 import { IconButton } from "../ui/IconButton";
-import { pushUndoable } from "../../lib/undo";
+import { deleteWithUndo } from "../../lib/undo";
 import type { WorkloadTemplate } from "../../types/workload";
 
 export function WorkloadTemplateManager() {
@@ -21,6 +22,7 @@ export function WorkloadTemplateManager() {
   const createTemplate = useCreateWorkloadTemplate();
   const updateTemplate = useUpdateWorkloadTemplate();
   const deleteTemplate = useDeleteWorkloadTemplate();
+  const deleteColumn = useDeleteWorkloadTemplateColumn();
 
   const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
   const [renamingId, setRenamingId] = useState<number | null>(null);
@@ -51,18 +53,11 @@ export function WorkloadTemplateManager() {
     );
   };
 
-  // No question: Undo re-creates the template with its columns.
+  // No question: Undo puts the same template back (same id, so the projects
+  // using it still do).
   const handleDelete = (tpl: WorkloadTemplate) => {
-    deleteTemplate.mutate(tpl.id, {
-      onSuccess: () => {
-        if (editingTemplateId === tpl.id) setEditingTemplateId(null);
-        pushUndoable(t.workload_template_deleted, {
-          label: `${t.undo_delete_workload_template} "${tpl.name}"`,
-          execute: async () => {
-            await createTemplate.mutateAsync({ name: tpl.name, columns: tpl.columns });
-          },
-        });
-      },
+    deleteWithUndo(deleteTemplate, tpl.id, t.workload_template_deleted, () => {
+      if (editingTemplateId === tpl.id) setEditingTemplateId(null);
     });
   };
 
@@ -88,25 +83,10 @@ export function WorkloadTemplateManager() {
     updateTemplate.mutate({ id: editingTemplate.id, columns: next });
   };
 
+  // Undo puts the column back into the columns as they are then.
   const handleDeleteColumn = () => {
-    if (!editingTemplate || !editingColumn) return;
-    const { id, columns: prev } = editingTemplate;
-    const next = prev.filter((_, i) => i !== editingColumn.index);
-    updateTemplate.mutate(
-      { id, columns: next },
-      {
-        onSuccess: () =>
-          pushUndoable(t.column_deleted, {
-            label: t.undo_delete_column,
-            execute: async () => {
-              await updateTemplate.mutateAsync({ id, columns: prev });
-            },
-            redo: async () => {
-              await updateTemplate.mutateAsync({ id, columns: next });
-            },
-          }),
-      }
-    );
+    if (!editingTemplate || !editingColumn?.column) return;
+    deleteWithUndo(deleteColumn, { templateId: editingTemplate.id, key: editingColumn.column.key }, t.column_deleted);
   };
 
   return (
@@ -175,7 +155,7 @@ export function WorkloadTemplateManager() {
                     className="flex items-center gap-2 py-1 text-xs group/col"
                   >
                     <span className="w-32 truncate font-medium">{col.name}</span>
-                    <span className="text-muted w-20">{col.type}</span>
+                    <span className="text-muted w-20">{t[`column_type_${col.type}`]}</span>
                     {(col.type === "select" || col.type === "multi_select") &&
                       col.options && (
                         <div className="flex gap-0.5 flex-1 overflow-hidden">

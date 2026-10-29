@@ -24,6 +24,8 @@ import { CONTROL_BOX, NUMERIC } from "./tokens";
  *   <Input variant="bare" aria-label={col.name} />            table cells: no frame until hover/focus
  *   <Input variant="inline" autoFocus />                      rename in place (prefer InlineRename)
  *   <Textarea value={notes} />                                3 rows, grows to 12, then scrolls
+ *   <Textarea variant="composer" rows={1} aria-label={…}      a chat box: framed, buttons inside
+ *     leading={attach} trailing={send} attachments={thumbs} />
  */
 
 export type FieldVariant = "default" | "bare" | "inline";
@@ -209,14 +211,30 @@ function supportsFieldSizing() {
   return typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("field-sizing", "content");
 }
 
+/** `composer`: a message box (Agents) with its buttons inside the frame. */
+export type TextareaVariant = Exclude<FieldVariant, "inline"> | "composer";
+
 interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   fullWidth?: boolean;
-  variant?: Exclude<FieldVariant, "inline">;
+  variant?: TextareaVariant;
+  /** composer: controls left of the text (attach), bottom-aligned with its first line. */
+  leading?: ReactNode;
+  /** composer: controls right of the text (send). */
+  trailing?: ReactNode;
+  /** composer: a wrapping row above the text (attached image thumbnails). */
+  attachments?: ReactNode;
+  /** composer: accent frame without focus (a file dragged over the window). */
+  highlight?: boolean;
+  /** composer: `className` goes on the frame, this on the textarea itself. */
+  textareaClassName?: string;
   /** The most rows it grows to before it scrolls. */
   maxRows?: number;
   /** Fill the parent's height (the dashboard note): no growing, no resize handle. */
   fill?: boolean;
 }
+
+/** The textarea inside a composer frame: no frame of its own, the frame shows focus. */
+const COMPOSER_FIELD = `${CONTROL_BOX} flex-1 min-w-0 bg-transparent border-transparent outline-none placeholder:text-muted disabled:opacity-50 disabled:cursor-not-allowed`;
 
 /**
  * `rows` (3) is the starting height. The field grows with its content up to
@@ -225,7 +243,23 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
  */
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
   (
-    { className = "", fullWidth = true, variant = "default", rows = 3, maxRows = 12, fill = false, style, onInput, readOnly, ...props },
+    {
+      className = "",
+      fullWidth = true,
+      variant = "default",
+      rows = 3,
+      maxRows = 12,
+      fill = false,
+      leading,
+      trailing,
+      attachments,
+      highlight = false,
+      textareaClassName = "",
+      style,
+      onInput,
+      readOnly,
+      ...props
+    },
     ref
   ) => {
     const inner = useRef<HTMLTextAreaElement>(null);
@@ -249,7 +283,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           maxHeight: `calc(${maxRows * LINE_EM}em + ${BOX_PX}px)`,
         };
 
-    return (
+    const grow = fill ? "h-full" : "[field-sizing:content] overflow-y-auto";
+    const field = (cls: string) => (
       <textarea
         ref={inner}
         rows={rows}
@@ -259,11 +294,29 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           fit();
           onInput?.(e);
         }}
-        className={`${fieldClass({ variant, fullWidth, readOnly: !!readOnly })} leading-relaxed resize-none ${
-          fill ? "h-full" : "[field-sizing:content] overflow-y-auto"
-        } ${className}`.trim()}
+        className={`${cls} leading-relaxed resize-none ${grow}`.trim()}
         {...props}
       />
+    );
+
+    if (variant !== "composer") {
+      return field(`${fieldClass({ variant, fullWidth, readOnly: !!readOnly })} ${className} ${textareaClassName}`);
+    }
+
+    return (
+      <div
+        className={`rounded-xl border bg-[var(--color-input-bg)] p-2 focus-within:border-accent ${
+          highlight ? "border-accent" : "border-[var(--color-input-border)]"
+        } ${fullWidth ? "w-full" : ""} ${className}`.trim()}
+      >
+        {attachments && <div className="flex flex-wrap gap-2 px-2 pb-2">{attachments}</div>}
+        <div className="flex items-end gap-1.5">
+          {/* mb-0.5 centres a 26px button on the first line of text. */}
+          {leading && <div className="shrink-0 flex items-center gap-1 mb-0.5">{leading}</div>}
+          {field(`${COMPOSER_FIELD} ${textareaClassName}`)}
+          {trailing && <div className="shrink-0 flex items-center gap-1 mb-0.5">{trailing}</div>}
+        </div>
+      </div>
     );
   }
 );

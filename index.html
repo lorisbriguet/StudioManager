@@ -7,7 +7,7 @@
   </head>
   <body>
     <script>
-      // Apply theme before React loads to prevent white flash
+      // Apply theme and language before React loads to prevent white flash
       (function() {
         try {
           var dark = localStorage.getItem('darkMode');
@@ -18,6 +18,8 @@
             document.body.style.background = '#111111';
             document.body.style.color = '#e5e5e5';
           }
+          // Same as applyDocumentLang in src/stores/app-store.ts; set early so the first paint is announced right.
+          if (localStorage.getItem('appLanguage') === 'FR') document.documentElement.lang = 'fr';
           if (localStorage.getItem('reduceMotion') === 'true') {
             document.documentElement.classList.add('reduce-motion');
           }

@@ -4,6 +4,7 @@ import { PrefilledExpenseModal } from "./PrefilledExpenseModal";
 import { useT } from "../../i18n/useT";
 import { useUpdateMachine } from "../../db/hooks/useUpkeep";
 import { useExpenses } from "../../db/hooks/useExpenses";
+import { formatMoney } from "../../lib/money";
 import { formatDisplayDate } from "../../utils/formatDate";
 import { todayLocalISO } from "../../utils/localDate";
 import type { Machine } from "../../types/upkeep";
@@ -21,7 +22,7 @@ export function MachineExpenseRow({ machine }: { machine: Machine }) {
   return (
     <div className="space-y-2">
       <div className="text-sm tabular-nums">
-        {machine.price != null ? `${machine.price.toFixed(2)} ${machine.currency ?? "CHF"}` : "—"}
+        {machine.price != null ? formatMoney(machine.price, machine.currency ?? "CHF") : "—"}
       </div>
       {machine.expense_id != null ? (
         <div className="flex items-center gap-2 text-xs">
@@ -49,7 +50,7 @@ export function MachineExpenseRow({ machine }: { machine: Machine }) {
               <option value="">{t.upkeep_pick_expense}</option>
               {expenses.map((e) => (
                 <option key={e.id} value={e.id}>
-                  {e.reference} · {e.supplier} · {e.amount.toFixed(2)}
+                  {e.reference} · {e.supplier} · {formatMoney(e.amount, "CHF")}
                 </option>
               ))}
             </Select>
@@ -67,6 +68,7 @@ export function MachineExpenseRow({ machine }: { machine: Machine }) {
         <PrefilledExpenseModal
           supplier={machine.supplier ?? undefined}
           amount={machine.price ?? undefined}
+          currency={machine.currency}
           date={machine.purchase_date ?? todayLocalISO()}
           onCancel={() => setCreating(false)}
           onSaved={(id) => {
