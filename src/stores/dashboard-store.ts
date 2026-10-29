@@ -51,7 +51,10 @@ export type WidgetType =
   | "project-time-distribution"
   | "invoice-aging"
   // Studio upkeep
-  | "upkeep";
+  | "upkeep"
+  // Wiki
+  | "wiki-recent"
+  | "wiki-overview";
 
 export interface DashboardWidget {
   id: string;
@@ -108,6 +111,8 @@ export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
   { type: "quick-create", labelKey: "quick_create", category: "utility", defaultW: 2, defaultH: 2, minW: 2, minH: 2 },
   { type: "pinned-notes", labelKey: "pinned_notes", category: "utility", defaultW: 3, defaultH: 3, minW: 3, minH: 3 },
   { type: "upkeep", labelKey: "upkeep_widget", category: "utility", defaultW: 3, defaultH: 4, minW: 3, minH: 3 },
+  { type: "wiki-recent", labelKey: "wiki_recent_widget", category: "utility", defaultW: 3, defaultH: 3, minW: 3, minH: 3 },
+  { type: "wiki-overview", labelKey: "wiki_articles", category: "utility", defaultW: 2, defaultH: 2, minW: 2, minH: 2 },
   // Financial — Invoice aging
   { type: "invoice-aging", labelKey: "invoice_aging", category: "financial", defaultW: 4, defaultH: 4, minW: 3, minH: 3 },
   // Phase 13 — Time tracking

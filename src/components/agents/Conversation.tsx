@@ -8,6 +8,8 @@ import { EmptyState, ICONS, ICON_SIZE } from "../ui";
 import { ExternalLink } from "./ExternalLink";
 
 const REFRESH_MS = 3000;
+/** Within this many px of the bottom counts as "at the bottom". */
+const STICK_PX = 80;
 
 interface ConversationProps {
   sessionId: string;
@@ -21,6 +23,8 @@ export function Conversation({ sessionId, working }: ConversationProps) {
   /** The session whose first load is in: from then on, new replies are announced. */
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const stickRef = useRef(true);
 
   useEffect(() => {
     setItems([]);
@@ -54,16 +58,33 @@ export function Conversation({ sessionId, working }: ConversationProps) {
     };
   }, [sessionId, working]);
 
+  // The panel's scroller is the parent. New replies pull the view down only while the reader
+  // is already at the bottom; once they scroll up they stay where they are.
   useEffect(() => {
-    endRef.current?.scrollIntoView?.({ block: "end" });
-  }, [items]);
+    const scroller = rootRef.current?.parentElement;
+    if (!scroller) return;
+    const onScroll = () => {
+      stickRef.current = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= STICK_PX;
+    };
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    return () => scroller.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Opening another agent starts at its latest message.
+  useEffect(() => {
+    stickRef.current = true;
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (stickRef.current) endRef.current?.scrollIntoView?.({ block: "end" });
+  }, [items, working]);
 
   // A live region: replies that arrive (or grow, while the agent works) are read out
   // without moving focus. It turns on after a session's first load, so opening an
   // agent doesn't read out its whole history.
   const live = loadedFor === sessionId;
   return (
-    <div role={live ? "log" : undefined} aria-live={live ? "polite" : undefined}>
+    <div ref={rootRef} role={live ? "log" : undefined} aria-live={live ? "polite" : undefined}>
       {items.length === 0 ? (
         <EmptyState icon={ICONS.agents} message={t.agents_no_conversation} />
       ) : (
@@ -83,9 +104,26 @@ export function Conversation({ sessionId, working }: ConversationProps) {
               </div>
             ) : null,
           )}
+          {working && <WorkingDots label={t.agents_working} />}
           <div ref={endRef} />
         </div>
       )}
+    </div>
+  );
+}
+
+/** Three pulsing dots at the end of the conversation while the agent works. */
+function WorkingDots({ label }: { label: string }) {
+  return (
+    <div role="status" aria-label={label} className="flex items-center gap-1 text-muted" data-testid="agent-working">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          aria-hidden
+          className="agent-working-dot size-1.5 rounded-full bg-current"
+          style={{ animationDelay: `${i * 160}ms` }}
+        />
+      ))}
     </div>
   );
 }

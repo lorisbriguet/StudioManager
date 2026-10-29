@@ -42,6 +42,7 @@ export function TerminalPanel({ shortId, onClose }: TerminalPanelProps) {
   const host = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [ended, setEnded] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     const el = host.current;
@@ -169,14 +170,24 @@ export function TerminalPanel({ shortId, onClose }: TerminalPanelProps) {
   }, [shortId]);
 
   return (
-    <Card tone="inset" padding="none" className="overflow-hidden flex flex-col h-72 shrink-0">
+    // Tall enough for Claude's sub-agents list (about 30 rows); the toggle gives it most of the window.
+    <Card
+      tone="inset"
+      padding="none"
+      className={`overflow-hidden flex flex-col shrink-0 ${expanded ? "h-[80vh]" : "h-[min(28rem,60vh)]"}`}
+    >
       <div className={`${PANEL_TOP_BAR} justify-between px-3 border-[var(--color-border)]`}>
         <span className="text-sm text-muted">
           {ended ? t.agents_terminal_closed : shortId}
         </span>
-        <Button variant="outline" onClick={onClose}>
-          {t.agents_terminal_close}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" aria-pressed={expanded} onClick={() => setExpanded((e) => !e)}>
+            {expanded ? t.agents_terminal_shrink : t.agents_terminal_expand}
+          </Button>
+          <Button variant="outline" onClick={onClose}>
+            {t.agents_terminal_close}
+          </Button>
+        </div>
       </div>
       {error && <p role="alert" className="p-3 text-sm text-[var(--color-danger-text)]">{error}</p>}
       <div ref={host} className={error ? "hidden" : "flex-1 min-h-0 p-2 overflow-hidden"} />

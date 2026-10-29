@@ -53,7 +53,7 @@ export function MenuBarApp() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-[var(--color-bg)] text-[var(--color-text)] overflow-hidden">
+    <div className="h-screen flex flex-col bg-[var(--color-bg)] text-[var(--color-text)] overflow-hidden rounded-xl border border-[var(--color-border)]">
       <TabList label="StudioManager" className={`${PANEL_TOP_BAR} px-1.5 border-[var(--color-border)]`}>
         {TABS.map((id) => {
           const ids = tabIds(idBase, id);

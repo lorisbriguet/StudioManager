@@ -11,7 +11,7 @@ import { useAppStore, type DateFormatOption } from "../stores/app-store";
  * Negative-offset strings ("...-01:00") are NOT handled: the DB never
  * produces them (the trailing "-01:00" would be mistaken for a naive datetime).
  */
-function parseDbDate(dateStr: string): Date {
+export function parseDbDate(dateStr: string): Date {
   const normalized = dateStr.includes("T") ? dateStr : dateStr.replace(" ", "T");
   const withTz = normalized.length === 10 ? normalized + "T00:00:00"
     : (normalized.endsWith("Z") || normalized.includes("+")) ? normalized

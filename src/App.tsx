@@ -179,6 +179,10 @@ function StartupChecks() {
  *  follow changes made in the main window. */
 function MenuBarShell() {
   useFollowAppSettings();
+  // The window is transparent: the page behind the panel's rounded frame must be too.
+  useEffect(() => {
+    document.documentElement.classList.add("menubar-window");
+  }, []);
   return (
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary FallbackComponent={ErrorFallback}>
