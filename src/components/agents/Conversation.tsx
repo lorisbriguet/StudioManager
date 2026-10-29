@@ -11,6 +11,22 @@ import { ExternalLink } from "./ExternalLink";
 const REFRESH_MS = 3000;
 /** Within this many px of the bottom counts as "at the bottom". */
 const STICK_PX = 80;
+/** An agent's own reply as the last message, older than this, means its turn is over. */
+const REPLY_SETTLED_MS = 8000;
+
+/**
+ * Whether the agent is working on something right now. The status alone is not enough: it
+ * stays "busy" while the agent only waits on a background task, long after its last reply.
+ * The turn is over once the newest thing in the conversation is the agent's own reply and
+ * it has been there a few seconds; a tool call, or a message sent to the agent, means more
+ * is coming.
+ */
+export function isWorkingNow(working: boolean, items: Item[], now = Date.now()): boolean {
+  if (!working) return false;
+  const last = items[items.length - 1];
+  if (!last || last.kind !== "assistant" || !last.at) return true;
+  return now - Date.parse(last.at) < REPLY_SETTLED_MS;
+}
 
 interface ConversationProps {
   sessionId: string;
@@ -83,9 +99,12 @@ export function Conversation({ sessionId, working }: ConversationProps) {
     if (loadedFor === sessionId) settle(sessionId, items);
   }, [items, loadedFor, sessionId]);
 
+  // Recomputed on every refresh (every 3 s while working), so the dots go once the reply settles.
+  const busyNow = isWorkingNow(working, items);
+
   useEffect(() => {
     if (stickRef.current) endRef.current?.scrollIntoView?.({ block: "end" });
-  }, [items, working, waiting.length]);
+  }, [items, busyNow, waiting.length]);
 
   // A live region: replies that arrive (or grow, while the agent works) are read out
   // without moving focus. It turns on after a session's first load, so opening an
@@ -120,7 +139,7 @@ export function Conversation({ sessionId, working }: ConversationProps) {
               <span className="text-xs text-muted">{t.agents_message_unread}</span>
             </div>
           ))}
-          {working && <WorkingDots label={t.agents_working} />}
+          {busyNow && <WorkingDots label={t.agents_working} />}
           <div ref={endRef} />
         </div>
       )}

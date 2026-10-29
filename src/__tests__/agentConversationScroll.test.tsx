@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
-import { Conversation } from "../components/agents/Conversation";
+import { Conversation, isWorkingNow } from "../components/agents/Conversation";
 import { setInvokeHandler } from "../__mocks__/tauri-api";
+import type { Item } from "../lib/agents";
 
 const scrollIntoView = vi.fn();
 
@@ -24,6 +25,29 @@ function renderIn(working: boolean) {
 
 let replies = 1;
 const messages = () => Array.from({ length: replies }, (_, i) => ({ kind: "assistant", text: `reply ${i}`, at: null }));
+
+describe("isWorkingNow", () => {
+  const now = Date.parse("2026-10-29T12:00:00.000Z");
+  const ago = (ms: number) => new Date(now - ms).toISOString();
+  const reply = (ms: number): Item => ({ kind: "assistant", text: "done", at: ago(ms) });
+  const tool = (ms: number): Item => ({ kind: "tool", name: "Bash", summary: "", at: ago(ms) });
+
+  it("is never on while the agent is not working", () => {
+    expect(isWorkingNow(false, [tool(0)], now)).toBe(false);
+  });
+
+  it("is off once the agent's own reply has sat for a few seconds, even if the status stays busy", () => {
+    expect(isWorkingNow(true, [reply(60_000)], now)).toBe(false);
+    expect(isWorkingNow(true, [tool(60_000), reply(9_000)], now)).toBe(false);
+  });
+
+  it("is on right after a reply (a tool call may follow), after a tool call and after your message", () => {
+    expect(isWorkingNow(true, [reply(2_000)], now)).toBe(true);
+    expect(isWorkingNow(true, [reply(60_000), tool(30_000)], now)).toBe(true);
+    expect(isWorkingNow(true, [reply(60_000), { kind: "user", text: "go on", at: ago(1000) }], now)).toBe(true);
+    expect(isWorkingNow(true, [], now)).toBe(true);
+  });
+});
 
 describe("Conversation scrolling and working indicator", () => {
   beforeEach(() => {
