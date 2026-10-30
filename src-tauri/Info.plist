@@ -6,5 +6,9 @@
 	     (see scripts/compile-icon.sh). CFBundleIconFile stays managed by Tauri. -->
 	<key>CFBundleIconName</key>
 	<string>StudioManager</string>
+	<!-- Without this key macOS 15+ never shows the Local Network prompt and blocks every
+	     connection to a device on the LAN ("No route to host"): the Synology connection. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>StudioManager reads your NAS and printers on the local network to track disk health and print hours.</string>
 </dict>
 </plist>
