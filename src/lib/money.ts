@@ -7,6 +7,11 @@
  * switch to fr-CH's "1 234.50 CHF".
  */
 export function formatMoney(amount: number, currency: string | null | undefined): string {
+  // Older ICU data writes de-CH grouping as a plain apostrophe, newer as "’": always the latter.
+  return format(amount, currency).replace(/'/g, "’");
+}
+
+function format(amount: number, currency: string | null | undefined): string {
   const code = currency?.trim().toUpperCase();
   if (code) {
     try {
