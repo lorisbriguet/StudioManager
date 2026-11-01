@@ -42,6 +42,11 @@ export function PaperlessForm({ onDone, onCancel, connection }: ConnectionFormPr
     if (port == null) return;
     const token = f.token.trim();
     if (!host || (!existing && !token)) { setError(t.upkeep_paperless_required); return; }
+    // The stored token belongs to the address it was saved for.
+    const moved = connection != null
+      && (host.toLowerCase() !== (connection.host ?? "").toLowerCase()
+        || port !== (connection.port ?? DEFAULT_PORT));
+    if (moved && !token) { setError(t.upkeep_paperless_reenter_token); return; }
     const data = {
       kind: "paperless" as const,
       label: f.label.trim() || t.upkeep_connection_kind_paperless,

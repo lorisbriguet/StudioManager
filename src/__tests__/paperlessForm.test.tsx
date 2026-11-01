@@ -74,6 +74,17 @@ describe("PaperlessForm", () => {
     expect(await screen.findByText(/Paperless refused the token/)).toBeInTheDocument();
   });
 
+  it("reconnect: a changed host with an empty token is refused without saving or testing", () => {
+    const conn = { id: 4, kind: "paperless", label: "Mine", host: "h.example", port: 443 } as never;
+    render(<PaperlessForm onDone={vi.fn()} onCancel={vi.fn()} connection={conn} />);
+    fireEvent.change(screen.getByLabelText(/^Paperless address/), { target: { value: "other.example" } });
+    fireEvent.click(screen.getByRole("button", { name: t.upkeep_paperless_connect }));
+    expect(screen.getByText(t.upkeep_paperless_reenter_token)).toBeInTheDocument();
+    expect(update).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+    expect(testConnection).not.toHaveBeenCalled();
+  });
+
   it("reconnect: prefilled, empty token keeps the stored one", async () => {
     testConnection.mockResolvedValue([]);
     const onDone = vi.fn();
