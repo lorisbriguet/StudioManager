@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { CalendarCheck } from "lucide-react";
-import { ICONS, ICON_SIZE, Button, DatePicker, Input, Select, FormField, FormGrid, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, QueryState, NoResults, Spinner, Popover, IconButton, Tag, Callout, Tooltip } from "../components/ui";
+import { ICONS, ICON_SIZE, Button, DatePicker, Input, Select, FormField, FormGrid, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, QueryState, NoResults, Spinner, Popover, IconButton, Tag, Callout, Tooltip, SegmentedControl, CountBadge } from "../components/ui";
 import * as v from "../lib/validate";
 import { deleteWithUndo } from "../lib/undo";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
@@ -9,9 +9,7 @@ import { notify } from "../lib/notify";
 import { format } from "date-fns";
 import { formatDisplayDate } from "../utils/formatDate";
 import { todayLocalISO } from "../utils/localDate";
-import { copyFile, mkdir, exists } from "@tauri-apps/plugin-fs";
-import { orgPaths } from "../lib/orgPaths";
-import { attachReceipt as attachReceiptFlow, sanitizeSegment } from "../lib/attachReceipt";
+import { attachReceipt as attachReceiptFlow, copyIntoReceipts } from "../lib/attachReceipt";
 import { ReceiptPreview } from "../components/ReceiptPreview";
 import {
   useExpenses,
@@ -37,6 +35,11 @@ import { useT } from "../i18n/useT";
 import { type ExtractedExpenseData } from "../lib/expenseParse";
 import { logError } from "../lib/log";
 import { useYearGrouping } from "../hooks/useYearGrouping";
+import { useQueryClient } from "@tanstack/react-query";
+import { PaperlessInbox, type MissingReceipt } from "../components/expenses/PaperlessInbox";
+import { usePaperlessInbox, paperlessInboxKey } from "../db/hooks/usePaperlessInbox";
+import { matchSupplier } from "../lib/paperless/inbox";
+import { recordInboxLink, type PaperlessSource } from "../lib/paperless/commands";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
@@ -59,7 +62,14 @@ export function ExpensesPage() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortState<SortKey>>({ key: "invoice_date", dir: "desc" });
   const [preview, setPreview] = useState<{ path: string; reference: string } | null>(null);
-  const [prefill, setPrefill] = useState<(ExtractedExpenseData & { receiptPath?: string }) | null>(null);
+  // `paperless`: the form was opened from the Paperless inbox; saving links that document.
+  const [prefill, setPrefill] = useState<(ExtractedExpenseData & { receiptPath?: string; paperless?: PaperlessSource }) | null>(null);
+  const inbox = usePaperlessInbox();
+  const inboxCount = inbox.items.filter((i) => i.state === "new").length;
+  const [view, setView] = useState<"all" | "inbox">("all");
+  const showInbox = view === "inbox" && !!inbox.connection;
+  const [missingReceipts, setMissingReceipts] = useState<MissingReceipt[]>([]);
+  const qc = useQueryClient();
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
   const [filterLogic, setFilterLogic] = useState<ConditionLogic>("and");
@@ -139,7 +149,7 @@ export function ExpensesPage() {
     items: visibleRows,
     onOpen: openExpenseMenu,
     onMenu: openRowMenu,
-    enabled: preview === null,
+    enabled: preview === null && !showInbox,
   });
 
   const bulk = useBulkSelect(filtered);
@@ -213,6 +223,44 @@ export function ExpensesPage() {
         <Button icon={ICONS.add} onClick={() => { setPrefill(null); setShowForm(true); }}>{t.new_expense}</Button>
       </PageHeader>
 
+      {inbox.connection && (
+        <SegmentedControl
+          aria-label={t.paperless_view}
+          value={view}
+          onChange={setView}
+          className="mb-4"
+          options={[
+            { value: "all", label: t.all },
+            {
+              value: "inbox",
+              label: (
+                <>
+                  {t.paperless_to_file}
+                  {inboxCount > 0 && <>{" "}<CountBadge value={inboxCount} tone="accent" /></>}
+                </>
+              ),
+            },
+          ]}
+        />
+      )}
+
+      {showInbox ? (
+        <PaperlessInbox
+          inbox={inbox}
+          missing={missingReceipts}
+          onMissingResolved={(docId) => setMissingReceipts((l) => l.filter((m) => m.docId !== docId))}
+          onCreate={(item, receiptPath) => {
+            setPrefill({
+              supplier: matchSupplier(item.supplier, (pastSuppliers ?? []).map((s) => s.supplier)) ?? undefined,
+              invoice_date: item.date,
+              receiptPath,
+              paperless: { connectionId: item.connectionId, docId: item.docId, title: item.title },
+            });
+            setShowForm(true);
+          }}
+        />
+      ) : (
+      <>
       <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); setFilterConditions([]); }} placeholder={t.search_expenses} className="w-64 mb-4" />
 
       <SavedFilterBar
@@ -223,6 +271,8 @@ export function ExpensesPage() {
         onActiveChange={setActiveFilterId}
         fields={expenseFields}
       />
+      </>
+      )}
 
       {showForm && (
         <NewExpenseForm
@@ -238,28 +288,31 @@ export function ExpensesPage() {
               let receiptPath = data.receipt_path;
               if (prefill?.receiptPath && !receiptPath) {
                 try {
-                  const ext = prefill.receiptPath.split(".").pop() ?? "pdf";
-                  const { receiptsDir } = await orgPaths();
-                  if (!(await exists(receiptsDir))) {
-                    await mkdir(receiptsDir, { recursive: true });
-                  }
-                  const safeRef = sanitizeSegment(reference);
-                  const safeSup = sanitizeSegment(data.supplier || "");
-                  const destPath = `${receiptsDir}/${safeRef}_${safeSup}.${ext}`;
-                  await copyFile(prefill.receiptPath, destPath);
-                  receiptPath = destPath;
+                  receiptPath = await copyIntoReceipts(prefill.receiptPath, reference, data.supplier || "");
                 } catch (e) {
                   logError("Receipt copy failed:", e);
                 }
               }
 
+              const source = prefill?.paperless;
               createExpense.mutate(
                 { ...data, reference, receipt_path: receiptPath },
                 {
-                  onSuccess: () => {
+                  onSuccess: (id) => {
                     notify.success(t.expense_created);
                     setShowForm(false);
                     setPrefill(null);
+                    if (source) {
+                      // Booked: now link the Paperless document and write back to it (failures stay soft).
+                      const category = categoryMap.get(data.category_code)?.name_fr;
+                      const tags = ["StudioManager", data.invoice_date.slice(0, 4), ...(category ? [category] : [])];
+                      void recordInboxLink(source, id, `${reference} ${data.supplier}`, tags, () => {
+                        if (!receiptPath) {
+                          setMissingReceipts((l) => [...l, { connectionId: source.connectionId, docId: source.docId, expenseId: id, title: source.title, reference, supplier: data.supplier }]);
+                        }
+                        void qc.invalidateQueries({ queryKey: paperlessInboxKey(source.connectionId) });
+                      });
+                    }
                   },
                   onSettled: () => setSaving(false),
                 }
@@ -273,6 +326,7 @@ export function ExpensesPage() {
         />
       )}
 
+      {!showInbox && (
       <QueryState query={expensesQuery} skeleton={<TableSkeleton columns={9} />} errorMessage={t.load_error_expenses}>
       {(all) => (
       <Table>
@@ -380,6 +434,7 @@ export function ExpensesPage() {
       </Table>
       )}
       </QueryState>
+      )}
 
       {preview && (
         <ReceiptPreview
