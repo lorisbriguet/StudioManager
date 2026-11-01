@@ -96,6 +96,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Supplier autocomplete with smart autofill (category + amount)
 - Inline editable paid date
 - Receipt preview inline
+- Paperless inbox: supplier invoices that reached your Paperless-ngx (by email, for example) and aren't expenses yet, each turned into an expense in one confirmation with its PDF as the receipt; dismiss what isn't an expense. Connect it in Upkeep › Connections ([design](docs/superpowers/specs/2026-11-01-paperless-inbox-design.md))
 
 ### Income Tracking
 - Non-invoice revenue tracking (side income, grants, refunds, interest)
@@ -119,7 +120,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Machines and equipment (NAS, 3D printer, monitor, camera...) with their upkeep items: every N days, weeks, months or years, or every N print hours
 - What is overdue or due soon on the Upkeep page, in the calendar and in notifications; mark done, snooze, log the service and its cost
 - Consumables with stock levels and reorder alerts, subscriptions with renewals you confirm into expenses, warranties, and lending equipment out
-- Optional read-only connections to a Synology NAS (disk health) and the Bambu Lab cloud (print hours); secrets stay in the macOS Keychain, nothing connects unless you add it
+- Optional connections to a Synology NAS (disk health), the Bambu Lab cloud (print hours) and Paperless-ngx (the invoice inbox); secrets stay in the macOS Keychain, nothing connects unless you add it
 - Share equipment between organisations: an organisation can use another one's machines, upkeep and consumables (Settings › Upkeep › Equipment); project links and calendar events stay with the owner
 - Agents can read the machines and what is due through [the MCP server](docs/superpowers/specs/2026-10-27-agent-access-mcp-design.md); no secrets, no readings history
 - Design and decisions: [the Studio upkeep spec](docs/superpowers/specs/2026-10-28-studio-upkeep-design.md)

@@ -11,7 +11,7 @@ A checklist for moving from the AgentBar menu bar app to StudioManager's [menu b
 4. **Set up your routines** in Settings > Agents > Routines (see [Routines](menu-bar.md#routines)).
    - **Personal:** two agent routines, start and end of day, each reading its prompt from your own prompt file. Schedule start of day on weekdays or daily at 08:00.
    - **Art Basel:** command routines that run your own script, which calls the control room and prints what to show. Keep the script, and any key it needs, in your own tooling, never in StudioManager. Give the program as an absolute path and the arguments one per line.
-   - Brief comments: message the start-of-day agent from the Agents page.
+   - Brief comments: from 3.2.0, Send on the brief page works again, through StudioManager (see [Morning brief comments](agents.md#morning-brief-comments)). Before that, message the start-of-day agent from the Agents page.
 5. **Retire AgentBar.**
    1. Quit AgentBar, then remove it from System Settings > General > Login Items.
    2. Stop and remove its 08:00 launchd job:

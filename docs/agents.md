@@ -1,6 +1,6 @@
 # Agents
 
-The Agents page shows every Claude Code agent running on your Mac in one place, so you can see which ones need you without opening each terminal. It is off until you turn it on. Nothing listens on a network port: the app talks to the `claude` command on your Mac and nothing else.
+The Agents page shows every Claude Code agent running on your Mac in one place, so you can see which ones need you without opening each terminal. It is off until you turn it on. The app talks to the `claude` command on your Mac; the only port it opens is the one for [morning brief comments](#morning-brief-comments), on this Mac only.
 
 Design and reasons: [the design spec](superpowers/specs/2026-10-28-agents-window-design.md). For letting AI apps read your StudioManager data, see [Agent access](agent-access.md), which is a separate feature. To see and answer agents from the Mac menu bar, see [Menu bar](menu-bar.md).
 
@@ -51,3 +51,14 @@ The terminal attaches to the agent only. You can use `!` commands inside Claude,
 ## Notifications
 
 You get a Mac notification when an agent has been waiting for you for a few seconds, so a prompt that resolves at once stays silent. Each agent notifies at most once every three minutes, however often it goes back to waiting. It only works while StudioManager is open.
+
+## Morning brief comments
+
+The personal morning brief (the page the Start of day routine opens) lets you select a passage, write a note and **Send** it to the morning agent, which answers in its chat. StudioManager receives those comments, as AgentBar did before it:
+
+- A small server on `127.0.0.1:47480`, reachable from this Mac only. It starts the first time the Agents switch is on and runs until StudioManager quits.
+- Every request needs the token in `brief-token` in the app data folder (readable by you only), which the brief's renderer writes into the page. Requests from another web page, or to another host name, are refused.
+- A comment is typed into the background agent named `personal-sod` started that day. If there is none, the comment is kept with the reason ("No morning agent running for …") and the page shows it as not sent.
+- Comments are kept per day in `brief-comments/<date>.json` in the app data folder.
+
+If the page says comments stay in the browser and its button reads **Keep**, StudioManager isn't answering: open it and check that Agents is on.

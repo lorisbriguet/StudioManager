@@ -85,6 +85,15 @@ All 12 checklist items pass after three fixes found by the pass:
 - [x] Test Mode and Presentation Mode are demo-build tools now: their Settings category is hidden in the real app (banners and exit paths stay for anyone mid-mode at update time); the Snapshot card moved under Backup
 - [x] Docs: guide, [README](README.md) and landing page no longer point testers at Presentation Mode
 
+## V3.2.0 — Done (Paperless inbox, fixes)
+
+- [x] Paperless invoice inbox: supplier invoices from Paperless-ngx become expenses in one confirmation ([spec](docs/superpowers/specs/2026-11-01-paperless-inbox-design.md), [plan](docs/superpowers/plans/2026-11-01-paperless-inbox.md))
+- [x] Local Network permission declared, so macOS 15+ lets the NAS connection through
+- [x] Morning brief comments reach the morning agent again: StudioManager runs the comments server AgentBar used to ([docs](docs/agents.md#morning-brief-comments))
+- [x] Agents chat: only what you typed shows as your message (no more skill instructions, task notices or command output); a message with images no longer stays greyed out next to its delivered copy; one-click copy on code blocks
+- [x] Agent names: a space becomes "-", other characters a name can't hold are refused as you type
+- [x] Tooltips no longer flash in the top left corner; amounts always use the Swiss apostrophe
+
 ## V3.1.0 — Done (shared equipment, agents polish)
 
 - [x] Shared equipment: an organisation can use another organisation's machines, upkeep and consumables (Settings › Upkeep › Equipment); project links and calendar events stay with the owner ([spec](docs/superpowers/specs/2026-10-28-studio-upkeep-design.md))
