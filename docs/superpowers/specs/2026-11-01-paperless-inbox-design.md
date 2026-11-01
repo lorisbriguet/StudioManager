@@ -1,6 +1,6 @@
 # Paperless invoice inbox — design
 
-Date: 2026-11-01. Status: draft for Loris's review.
+Date: 2026-11-01. Status: approved by Loris (2026-11-01). Implementation plan: [2026-11-01-paperless-inbox.md](../plans/2026-11-01-paperless-inbox.md).
 
 Related: [studio upkeep design](2026-10-28-studio-upkeep-design.md) (the connections system this extends), [agent access / MCP design](2026-10-27-agent-access-mcp-design.md) (why agents can't create expenses).
 
