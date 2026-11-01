@@ -7,7 +7,7 @@
 //!   DELETE /brief/<date>/comments/<id>
 //!
 //! Only once the Agents switch is on (then until StudioManager quits); loopback only. Every request needs the token from `<app dir>/brief-token`, which the page
-//! renderer (agent-bar/brief/personal_brief.py) writes into the page. Comments are kept per
+//! renderer (briefs/brief/personal_brief.py) writes into the page. Comments are kept per
 //! day in `<app dir>/brief-comments/<date>.json`.
 
 use super::model::{Agent, Kind};
