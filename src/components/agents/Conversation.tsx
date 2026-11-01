@@ -7,6 +7,7 @@ import { settle, unread, useSent } from "../../lib/outbox";
 import { useT } from "../../i18n/useT";
 import { EmptyState, ICONS, ICON_SIZE } from "../ui";
 import { ExternalLink } from "./ExternalLink";
+import { CodeBlock } from "./CodeBlock";
 
 const REFRESH_MS = 3000;
 /** Within this many px of the bottom counts as "at the bottom". */
@@ -164,7 +165,7 @@ export function Conversation({ sessionId, working }: ConversationProps) {
               </div>
             ) : g.item.kind === "assistant" ? (
               <div key={g.key} data-anchor-key={g.key} className="agent-markdown text-sm leading-relaxed break-words">
-                <Markdown remarkPlugins={[remarkGfm]} components={{ a: ExternalLink }}>{g.item.text}</Markdown>
+                <Markdown remarkPlugins={[remarkGfm]} components={{ a: ExternalLink, pre: CodeBlock }}>{g.item.text}</Markdown>
               </div>
             ) : null,
           )}
