@@ -1,0 +1,11 @@
+{
+  "count": 3,
+  "next": null,
+  "previous": null,
+  "all": [1, 2, 3],
+  "results": [
+    {"id": 1, "slug": "a-saisir", "name": "À saisir", "color": "#a6cee3", "text_color": "#000000", "match": "", "matching_algorithm": 0, "is_insensitive": true, "is_inbox_tag": false, "document_count": 3},
+    {"id": 2, "slug": "studiomanager", "name": "StudioManager", "color": "#1f78b4", "text_color": "#ffffff", "match": "", "matching_algorithm": 0, "is_insensitive": true, "is_inbox_tag": false, "document_count": 1},
+    {"id": 3, "slug": "fournisseur", "name": "Fournisseur", "color": "#b2df8a", "text_color": "#000000", "match": "", "matching_algorithm": 0, "is_insensitive": true, "is_inbox_tag": false, "document_count": 2}
+  ]
+}

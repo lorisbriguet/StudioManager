@@ -1,0 +1,10 @@
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "all": [5, 6],
+  "results": [
+    {"id": 5, "slug": "swisscom", "name": "Swisscom", "match": "", "matching_algorithm": 6, "is_insensitive": true, "document_count": 2, "last_correspondence": "2026-10-28T00:00:00Z"},
+    {"id": 6, "slug": "papeterie-du-lac", "name": "Papeterie du Lac", "match": "", "matching_algorithm": 6, "is_insensitive": true, "document_count": 1, "last_correspondence": "2026-10-15T00:00:00Z"}
+  ]
+}
