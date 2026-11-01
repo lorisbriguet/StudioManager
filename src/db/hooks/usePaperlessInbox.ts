@@ -40,6 +40,7 @@ export function usePaperlessInbox(): PaperlessInbox {
           title: d.title,
           supplier: d.correspondent,
           date: d.created,
+          amount: d.amount ?? null,
           state: links.get(d.id)?.state === "dismissed" ? ("dismissed" as const) : ("new" as const),
         }));
     },

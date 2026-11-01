@@ -15,9 +15,9 @@ import { usePaperlessInbox } from "../db/hooks/usePaperlessInbox";
 
 const conn = { id: 3, kind: "paperless", host: "nas.local", port: 8000, label: "P" };
 const docs = [
-  { id: 1, title: "A", correspondent: "Sunrise", created: "2026-10-01", original_file_name: null },
-  { id: 2, title: "B", correspondent: null, created: "2026-09-01", original_file_name: null },
-  { id: 3, title: "C", correspondent: "Swisscom", created: "2026-08-01", original_file_name: null },
+  { id: 1, title: "A", correspondent: "Sunrise", created: "2026-10-01", original_file_name: null, amount: null },
+  { id: 2, title: "B", correspondent: null, created: "2026-09-01", original_file_name: null, amount: null },
+  { id: 3, title: "C", correspondent: "Swisscom", created: "2026-08-01", original_file_name: null, amount: 123.45 },
 ];
 
 function wrapper() {
@@ -52,7 +52,8 @@ describe("usePaperlessInbox", () => {
     const { result } = renderHook(() => usePaperlessInbox(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.items).toHaveLength(2));
     expect(result.current.items.map((i) => [i.docId, i.state])).toEqual([[2, "dismissed"], [3, "new"]]);
-    expect(result.current.items[1]).toMatchObject({ connectionId: 3, supplier: "Swisscom", date: "2026-08-01" });
+    expect(result.current.items[1]).toMatchObject({ connectionId: 3, supplier: "Swisscom", date: "2026-08-01", amount: 123.45 });
+    expect(result.current.items[0].amount).toBeNull();
     expect(result.current.connection).toEqual({ id: 3, host: "nas.local", port: 8000 });
     expect(invoke).toHaveBeenCalledWith("paperless_inbox", expect.objectContaining({
       id: 3, config: expect.objectContaining({ host: "nas.local", port: 8000 }),

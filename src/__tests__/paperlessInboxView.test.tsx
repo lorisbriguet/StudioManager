@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-quer
 import { useAppStore } from "../stores/app-store";
 import { getDb } from "../db";
 import { setSelectHandler, executedStatements, clearExecutedStatements } from "../__mocks__/tauri-sql";
-import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
+import { setInvokeHandler, invokedCommands, clearInvokedCommands, copiedFiles, removedPaths, clearFsWrites } from "../__mocks__/tauri-api";
 import { uiLabels } from "../i18n/ui";
 import type { InboxItem } from "../lib/paperless/inbox";
 
@@ -60,12 +60,13 @@ vi.mock("../db/queries/connections", () => ({
 
 import { ExpensesPage } from "../pages/ExpensesPage";
 
-const item = (docId: number, supplier: string | null, state: InboxItem["state"] = "new"): InboxItem => ({
+const item = (docId: number, supplier: string | null, state: InboxItem["state"] = "new", amount: number | null = null): InboxItem => ({
   connectionId: 3,
   docId,
   title: `Doc ${docId}`,
   supplier,
   date: "2026-10-01",
+  amount,
   state,
 });
 
@@ -121,10 +122,14 @@ afterEach(() => {
 
 const insert = () => executedStatements.find((s) => s.sql.includes("INSERT INTO expenses"));
 
+const amountInput = (dialog: HTMLElement) => within(dialog).getByLabelText(new RegExp(`^${t.amount}`));
+
 async function createAndSave() {
   await openInbox(1);
   fireEvent.click(await screen.findByRole("button", { name: t.paperless_create_expense }));
   const dialog = await screen.findByRole("dialog", { name: t.new_expense });
+  // No Montant in Paperless: the amount starts empty and the user types it.
+  fireEvent.change(amountInput(dialog), { target: { value: "80" } });
   fireEvent.click(within(dialog).getByRole("button", { name: t.save }));
   await waitFor(() => expect(linkPaperlessDoc).toHaveBeenCalled());
 }
@@ -155,10 +160,66 @@ describe("Paperless inbox on the Expenses page", () => {
     const dialog = await screen.findByRole("dialog", { name: t.new_expense });
     expect(within(dialog).getByLabelText(new RegExp(`^${t.supplier}`))).toHaveValue("Sunrise");
     expect(invokedCommands.find((c) => c.cmd === "paperless_download")?.args).toMatchObject({ id: 3, docId: 11 });
+    fireEvent.change(amountInput(dialog), { target: { value: "80" } });
     fireEvent.click(within(dialog).getByRole("button", { name: t.save }));
     await waitFor(() => expect(insert()).toBeDefined());
     expect(insert()!.params).toContain("2026-10-01");
     expect(insert()!.params).toContain("Sunrise");
+  });
+
+  it("without a Paperless amount the form's amount is empty, not the supplier's last amount", async () => {
+    // Sunrise has past expenses (49.90 in the select handler).
+    renderPage();
+    await openInbox(1);
+    fireEvent.click(screen.getByRole("button", { name: t.paperless_create_expense }));
+    const dialog = await screen.findByRole("dialog", { name: t.new_expense });
+    expect(within(dialog).getByLabelText(new RegExp(`^${t.supplier}`))).toHaveValue("Sunrise");
+    expect(amountInput(dialog)).toHaveValue(null);
+    // Saving without an amount is refused: nothing is booked.
+    fireEvent.click(within(dialog).getByRole("button", { name: t.save }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(insert()).toBeUndefined();
+  });
+
+  it("the Paperless Montant prefills the amount", async () => {
+    fake.items = [item(11, "Sunrise", "new", 123.45)];
+    renderPage();
+    await openInbox(1);
+    fireEvent.click(screen.getByRole("button", { name: t.paperless_create_expense }));
+    const dialog = await screen.findByRole("dialog", { name: t.new_expense });
+    expect(amountInput(dialog)).toHaveValue(123.45);
+    fireEvent.click(within(dialog).getByRole("button", { name: t.save }));
+    await waitFor(() => expect(insert()).toBeDefined());
+    expect(insert()!.params).toContain(123.45);
+  });
+
+  it("a dropped-receipt prefill still guesses the supplier's last amount", async () => {
+    // Regression guard: only inbox prefills skip the history amount.
+    const { NewExpenseForm } = await import("../pages/ExpensesPage");
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+      <NewExpenseForm
+        categories={[{ code: "TE", name_fr: "Télécommunications" }]}
+        pastSuppliers={[{ supplier: "Sunrise", category_code: "TE", amount: 49.9 }]}
+        prefill={{ supplier: "Sunrise", receiptPath: "/Users/me/Downloads/x.pdf" }}
+        onSave={() => {}}
+        onCancel={() => {}}
+      />
+      </QueryClientProvider>
+    );
+    const dialog = await screen.findByRole("dialog", { name: t.new_expense });
+    expect(amountInput(dialog)).toHaveValue(49.9);
+  });
+
+  it("the receipt is copied from the downloaded path, which is then deleted", async () => {
+    clearFsWrites();
+    download = () => "/Users/me/Library/Application Support/ch.studio/paperless-cache/11.pdf";
+    renderPage();
+    await createAndSave();
+    const copy = copiedFiles.find((c) => c.from.endsWith("paperless-cache/11.pdf"));
+    expect(copy).toBeDefined();
+    expect(copy!.to).toMatch(/receipts\/.*_Sunrise\.pdf$/);
+    await waitFor(() => expect(removedPaths).toContain("/Users/me/Library/Application Support/ch.studio/paperless-cache/11.pdf"));
   });
 
   it("saving links the doc and writes back title and tags", async () => {

@@ -27,6 +27,11 @@ const REFUSED: &str = "Paperless refused the token (401). Reconnect it in Settin
 const INBOX_PATH: &str = "/api/documents/?tags__name__iexact=%C3%80%20saisir&ordering=-created&page_size=100";
 const TAGS_PATH: &str = "/api/tags/?page_size=1000";
 const CORRESPONDENTS_PATH: &str = "/api/correspondents/?page_size=1000";
+const CUSTOM_FIELDS_PATH: &str = "/api/custom_fields/?page_size=100";
+/// The custom field that carries an invoice's amount (spec §3).
+const AMOUNT_FIELD: &str = "Montant";
+/// Downloaded originals older than this are removed at the next download.
+const CACHE_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(24 * 3600);
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct InboxDoc {
@@ -36,6 +41,9 @@ pub struct InboxDoc {
     /// YYYY-MM-DD
     pub created: String,
     pub original_file_name: Option<String>,
+    /// The `Montant` custom field, only when it reads as an amount in CHF (or
+    /// without currency). `None` leaves the expense form's amount empty.
+    pub amount: Option<f64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -130,9 +138,31 @@ fn ids(v: &JsonValue, key: &str) -> Vec<i64> {
     v.get(key).and_then(JsonValue::as_array).map(|a| a.iter().filter_map(JsonValue::as_i64).collect()).unwrap_or_default()
 }
 
-/// The inbox out of the three Paperless answers: documents tagged `À saisir`
-/// that don't carry `StudioManager`.
-pub(crate) fn parse_inbox(docs: &JsonValue, tags: &JsonValue, correspondents: &JsonValue) -> Vec<InboxDoc> {
+/// An amount out of a custom field value: a number (float field) or a
+/// monetary string such as `"CHF123.45"` or `"123.45"`. Any currency other
+/// than CHF, or anything unreadable, gives `None`.
+pub(crate) fn parse_amount(value: &JsonValue) -> Option<f64> {
+    let n = match value {
+        JsonValue::Number(n) => n.as_f64()?,
+        JsonValue::String(s) => {
+            let s = s.trim();
+            let digits = s.trim_start_matches(|c: char| c.is_ascii_alphabetic());
+            let currency = &s[..s.len() - digits.len()];
+            if !(currency.is_empty() || currency.eq_ignore_ascii_case("CHF")) {
+                return None;
+            }
+            digits.trim().parse::<f64>().ok()?
+        }
+        _ => return None,
+    };
+    Some(n).filter(|n| n.is_finite())
+}
+
+/// The inbox out of the Paperless answers: documents tagged `À saisir` that
+/// don't carry `StudioManager`. `custom_fields` (the custom field list, or
+/// `Null`) gives the id of the `Montant` field.
+pub(crate) fn parse_inbox(docs: &JsonValue, tags: &JsonValue, correspondents: &JsonValue, custom_fields: &JsonValue) -> Vec<InboxDoc> {
+    let amount_field = id_names(custom_fields).into_iter().find(|(_, n)| name_eq(n, AMOUNT_FIELD)).map(|(i, _)| i);
     let tag_names = id_names(tags);
     let linked: Vec<i64> = tag_names.iter().filter(|(_, n)| name_eq(n, LINKED_TAG)).map(|(i, _)| *i).collect();
     let people = id_names(correspondents);
@@ -154,6 +184,13 @@ pub(crate) fn parse_inbox(docs: &JsonValue, tags: &JsonValue, correspondents: &J
                 correspondent,
                 created: d.get("created").and_then(JsonValue::as_str).unwrap_or_default().chars().take(10).collect(),
                 original_file_name: d.get("original_file_name").and_then(JsonValue::as_str).map(String::from),
+                amount: amount_field.and_then(|f| {
+                    d.get("custom_fields")?
+                        .as_array()?
+                        .iter()
+                        .find(|cf| cf.get("field").and_then(JsonValue::as_i64) == Some(f))
+                        .and_then(|cf| parse_amount(cf.get("value")?))
+                }),
             })
         })
         .collect()
@@ -216,7 +253,10 @@ impl Paperless {
         let docs = self.json(Method::Get, INBOX_PATH, None)?;
         let tags = self.json(Method::Get, TAGS_PATH, None)?;
         let people = self.json(Method::Get, CORRESPONDENTS_PATH, None)?;
-        Ok(parse_inbox(&docs, &tags, &people))
+        // Amounts are a convenience: without the field list the inbox still
+        // works, every amount is simply left empty.
+        let fields = self.json(Method::Get, CUSTOM_FIELDS_PATH, None).unwrap_or(JsonValue::Null);
+        Ok(parse_inbox(&docs, &tags, &people, &fields))
     }
 
     /// The original file and its extension.
@@ -279,7 +319,10 @@ impl Connector for Paperless {
         Ok(vec![DeviceInfo { device_id: "paperless".into(), name: Some(self.host.clone()), model: None }])
     }
 
+    /// Same request as `test`, so a revoked token or an unreachable server
+    /// marks the connection failing in the upkeep runner. Nothing to record.
     fn sync(&self) -> Result<SyncResult, String> {
+        self.json(Method::Get, "/api/documents/?page_size=1", None)?;
         Ok(SyncResult { devices: vec![] })
     }
 }
@@ -349,6 +392,46 @@ fn with_paperless<T>(
     f(&p).map_err(|e| super::redact(&e, secret.as_deref()))
 }
 
+/// Where downloaded originals go: `<app data>/paperless-cache`, inside the
+/// plugin-fs scope `$APPDATA/**` so the webview can copy them into receipts/.
+fn download_dir(app_data: &std::path::Path) -> std::path::PathBuf {
+    app_data.join("paperless-cache")
+}
+
+/// Remove downloaded originals last modified more than a day before `now`
+/// (left behind when the expense form was cancelled). Best effort.
+fn prune_cache(dir: &std::path::Path, now: std::time::SystemTime) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let old = entry
+            .metadata()
+            .ok()
+            .filter(|m| m.is_file())
+            .and_then(|m| m.modified().ok())
+            .and_then(|m| now.duration_since(m).ok())
+            .is_some_and(|age| age > CACHE_MAX_AGE);
+        if old {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
+/// Write a downloaded original as `<dir>/<doc_id>.<ext>`, after pruning the
+/// old ones; returns its path.
+fn save_download(
+    dir: &std::path::Path,
+    doc_id: i64,
+    ext: &str,
+    bytes: &[u8],
+    now: std::time::SystemTime,
+) -> Result<std::path::PathBuf, String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("cannot create the download folder: {e}"))?;
+    prune_cache(dir, now);
+    let path = dir.join(format!("{doc_id}.{ext}"));
+    std::fs::write(&path, bytes).map_err(|e| format!("cannot save the file: {e}"))?;
+    Ok(path)
+}
+
 #[tauri::command]
 pub(crate) async fn paperless_inbox(app: tauri::AppHandle, org: String, id: i64, config: JsonValue) -> Result<Vec<InboxDoc>, String> {
     super::guard(&app, &org)?;
@@ -364,12 +447,13 @@ pub(crate) async fn paperless_download(
     doc_id: i64,
 ) -> Result<String, String> {
     super::guard(&app, &org)?;
-    let dir = app.path().app_cache_dir().map_err(|e| format!("Failed to get app cache dir: {e}"))?.join("paperless");
+    // Under app data, not the cache dir: the webview then copies the file into
+    // receipts/ with plugin-fs, whose scope (capabilities/default.json) allows
+    // `$APPDATA/**` but not `$APPCACHE`.
+    let dir = download_dir(&app.path().app_data_dir().map_err(|e| format!("Failed to get app data dir: {e}"))?);
     super::blocking(move || {
         let (bytes, ext) = with_paperless(&super::keychain::Keychain, &org, id, &config, |p| p.download(doc_id))?;
-        std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create the cache folder: {e}"))?;
-        let path = dir.join(format!("{doc_id}.{ext}"));
-        std::fs::write(&path, bytes).map_err(|e| format!("cannot save the file: {e}"))?;
+        let path = save_download(&dir, doc_id, &ext, &bytes, std::time::SystemTime::now())?;
         Ok(path.to_string_lossy().into_owned())
     })
     .await
@@ -410,6 +494,7 @@ mod tests {
     const DOCS: &str = include_str!("fixtures/paperless_documents.json");
     const TAGS: &str = include_str!("fixtures/paperless_tags.json");
     const PEOPLE: &str = include_str!("fixtures/paperless_correspondents.json");
+    const FIELDS: &str = include_str!("fixtures/paperless_custom_fields.json");
 
     type Handler = Box<dyn Fn(&Request) -> Result<Response, String> + Send + Sync>;
 
@@ -451,6 +536,8 @@ mod tests {
             ok(TAGS)
         } else if p.starts_with("/api/correspondents/") {
             ok(PEOPLE)
+        } else if p.starts_with("/api/custom_fields/") {
+            ok(FIELDS)
         } else {
             status(404)
         }
@@ -459,7 +546,7 @@ mod tests {
     #[test]
     fn parse_inbox_skips_studiomanager_tagged() {
         let v = |s: &str| serde_json::from_str::<JsonValue>(s).unwrap();
-        let inbox = parse_inbox(&v(DOCS), &v(TAGS), &v(PEOPLE));
+        let inbox = parse_inbox(&v(DOCS), &v(TAGS), &v(PEOPLE), &v(FIELDS));
         assert_eq!(inbox.len(), 2);
         assert_eq!(
             inbox[0],
@@ -469,11 +556,87 @@ mod tests {
                 correspondent: Some("Swisscom".into()),
                 created: "2026-10-28".into(),
                 original_file_name: Some("scan_20261028.pdf".into()),
+                amount: Some(123.45),
             }
         );
         assert_eq!(inbox[1].id, 101);
         assert_eq!(inbox[1].correspondent, None);
         assert_eq!(inbox[1].original_file_name, None);
+    }
+
+    #[test]
+    fn montant_in_chf_is_the_amount_other_currencies_are_none() {
+        let v = |s: &str| serde_json::from_str::<JsonValue>(s).unwrap();
+        let inbox = parse_inbox(&v(DOCS), &v(TAGS), &v(PEOPLE), &v(FIELDS));
+        // 103: "CHF123.45" in the field named "montant" (any case); the other field is ignored.
+        assert_eq!(inbox[0].amount, Some(123.45));
+        // 101: "EUR50.00" is not booked as CHF.
+        assert_eq!(inbox[1].amount, None);
+        // Without the field list, no amounts.
+        assert!(parse_inbox(&v(DOCS), &v(TAGS), &v(PEOPLE), &JsonValue::Null).iter().all(|d| d.amount.is_none()));
+    }
+
+    #[test]
+    fn parse_amount_reads_monetary_and_float_values() {
+        assert_eq!(parse_amount(&json!("CHF123.45")), Some(123.45));
+        assert_eq!(parse_amount(&json!("chf 9.90")), Some(9.9));
+        assert_eq!(parse_amount(&json!("123.45")), Some(123.45));
+        assert_eq!(parse_amount(&json!(42.5)), Some(42.5));
+        assert_eq!(parse_amount(&json!("EUR50.00")), None);
+        assert_eq!(parse_amount(&json!("USD1")), None);
+        assert_eq!(parse_amount(&json!("")), None);
+        assert_eq!(parse_amount(&json!("CHF")), None);
+        assert_eq!(parse_amount(&JsonValue::Null), None);
+    }
+
+    #[test]
+    fn inbox_reads_custom_fields_once() {
+        let (p, seen) = fake(routes);
+        let inbox = p.inbox().unwrap();
+        assert_eq!(inbox[0].amount, Some(123.45));
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen.iter().filter(|r| r.path == CUSTOM_FIELDS_PATH).count(), 1);
+    }
+
+    #[test]
+    fn inbox_without_custom_fields_endpoint_still_lists_documents() {
+        let (p, _) = fake(|req| if req.path.starts_with("/api/custom_fields/") { status(404) } else { routes(req) });
+        let inbox = p.inbox().unwrap();
+        assert_eq!(inbox.len(), 2);
+        assert!(inbox.iter().all(|d| d.amount.is_none()));
+    }
+
+    #[test]
+    fn sync_checks_the_token() {
+        let (p, seen) = fake(|_| status(401));
+        assert_eq!(p.sync().unwrap_err(), REFUSED);
+        assert_eq!(seen.lock().unwrap()[0].path, "/api/documents/?page_size=1");
+        let (p, _) = fake(|_| status(500));
+        assert_eq!(p.sync().unwrap_err(), "Paperless error 500");
+    }
+
+    #[test]
+    fn downloads_go_under_app_data_and_old_ones_are_pruned() {
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let app_data = std::env::temp_dir().join(format!("sm-paperless-{nanos}"));
+        let dir = download_dir(&app_data);
+        assert_eq!(dir, app_data.join("paperless-cache"));
+
+        let now = std::time::SystemTime::now();
+        let first = save_download(&dir, 7, "pdf", b"%PDF-7", now).unwrap();
+        assert_eq!(first, dir.join("7.pdf"));
+        assert_eq!(std::fs::read(&first).unwrap(), b"%PDF-7");
+
+        // Within a day: the earlier file stays.
+        let second = save_download(&dir, 8, "png", b"png", now + std::time::Duration::from_secs(3600)).unwrap();
+        assert!(first.exists() && second.exists());
+
+        // Two days later: both earlier downloads are removed, the new one is written.
+        let later = now + std::time::Duration::from_secs(2 * 24 * 3600);
+        let third = save_download(&dir, 9, "pdf", b"%PDF-9", later).unwrap();
+        assert!(!first.exists() && !second.exists());
+        assert!(third.exists());
+        let _ = std::fs::remove_dir_all(&app_data);
     }
 
     #[test]
@@ -542,6 +705,7 @@ mod tests {
         assert_eq!(d, vec![DeviceInfo { device_id: "paperless".into(), name: Some("paperless.local".into()), model: None }]);
         assert_eq!(seen.lock().unwrap()[0].path, "/api/documents/?page_size=1");
         assert!(p.sync().unwrap().devices.is_empty());
+        assert_eq!(seen.lock().unwrap()[1].path, "/api/documents/?page_size=1");
     }
 
     #[test]

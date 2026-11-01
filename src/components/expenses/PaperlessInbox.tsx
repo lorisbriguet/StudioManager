@@ -6,8 +6,7 @@ import { useT } from "../../i18n/useT";
 import { notify } from "../../lib/notify";
 import { logError } from "../../lib/log";
 import { formatDisplayDate } from "../../utils/formatDate";
-import { copyIntoReceipts } from "../../lib/attachReceipt";
-import { paperlessDocUrl, paperlessDownload, paperlessThumbnail } from "../../lib/paperless/commands";
+import { paperlessDocUrl, paperlessDownload, paperlessThumbnail, receiptFromDownload } from "../../lib/paperless/commands";
 import type { InboxItem } from "../../lib/paperless/inbox";
 import { paperlessInboxKey, type PaperlessInbox as Inbox } from "../../db/hooks/usePaperlessInbox";
 import { dismissPaperlessDoc, undismissPaperlessDoc } from "../../db/queries/paperlessLinks";
@@ -77,7 +76,7 @@ export function PaperlessInbox({
     setBusy(m.docId);
     try {
       const src = await paperlessDownload(m.connectionId, m.docId);
-      const dest = await copyIntoReceipts(src, m.reference, m.supplier);
+      const dest = await receiptFromDownload(src, m.reference, m.supplier);
       await updateExpense.mutateAsync({ id: m.expenseId, data: { receipt_path: dest } });
       notify.success(t.receipt_attached);
       onMissingResolved(m.docId);

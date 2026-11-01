@@ -1,4 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
+import { remove } from "@tauri-apps/plugin-fs";
+import { copyIntoReceipts } from "../attachReceipt";
 import { getConnections } from "../../db/queries/connections";
 import { connectionConfig } from "../upkeep/connections";
 import { useOrgStore } from "../../stores/org-store";
@@ -14,9 +16,27 @@ async function call<T>(cmd: string, connectionId: number, args: Record<string, u
   return invoke<T>(cmd, { org, id: c.id, config: connectionConfig(c), ...args });
 }
 
-/** Download the original file into the app cache; resolves to its absolute path. */
+/**
+ * Download the original file into `<app data>/paperless-cache/` (inside the
+ * fs scope, so it can be copied into receipts/); resolves to its absolute path.
+ */
 export const paperlessDownload = (connectionId: number, docId: number) =>
   call<string>("paperless_download", connectionId, { docId });
+
+/**
+ * Copy a downloaded original into receipts/ (see `copyIntoReceipts`), then
+ * delete the downloaded copy. A failed delete is only logged: the Rust side
+ * prunes downloads older than a day anyway.
+ */
+export async function receiptFromDownload(downloadPath: string, reference: string, supplier: string): Promise<string> {
+  const dest = await copyIntoReceipts(downloadPath, reference, supplier);
+  try {
+    await remove(downloadPath);
+  } catch (e) {
+    logError("Paperless download cleanup failed:", e);
+  }
+  return dest;
+}
 
 /** The document's thumbnail as a data URL. */
 export const paperlessThumbnail = (connectionId: number, docId: number) =>

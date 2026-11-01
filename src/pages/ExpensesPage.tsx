@@ -39,7 +39,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { PaperlessInbox, type MissingReceipt } from "../components/expenses/PaperlessInbox";
 import { usePaperlessInbox, paperlessInboxKey } from "../db/hooks/usePaperlessInbox";
 import { matchSupplier } from "../lib/paperless/inbox";
-import { recordInboxLink, type PaperlessSource } from "../lib/paperless/commands";
+import { receiptFromDownload, recordInboxLink, type PaperlessSource } from "../lib/paperless/commands";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
@@ -63,7 +63,7 @@ export function ExpensesPage() {
   const [sort, setSort] = useState<SortState<SortKey>>({ key: "invoice_date", dir: "desc" });
   const [preview, setPreview] = useState<{ path: string; reference: string } | null>(null);
   // `paperless`: the form was opened from the Paperless inbox; saving links that document.
-  const [prefill, setPrefill] = useState<(ExtractedExpenseData & { receiptPath?: string; paperless?: PaperlessSource }) | null>(null);
+  const [prefill, setPrefill] = useState<(ExpensePrefill & { paperless?: PaperlessSource }) | null>(null);
   const inbox = usePaperlessInbox();
   const inboxCount = inbox.items.filter((i) => i.state === "new").length;
   const [view, setView] = useState<"all" | "inbox">("all");
@@ -253,6 +253,9 @@ export function ExpensesPage() {
             setPrefill({
               supplier: matchSupplier(item.supplier, (pastSuppliers ?? []).map((s) => s.supplier)) ?? undefined,
               invoice_date: item.date,
+              // Paperless `Montant` (CHF) or empty: never the supplier's last amount (spec §3).
+              amount: item.amount ?? undefined,
+              noAmountGuess: true,
               receiptPath,
               paperless: { connectionId: item.connectionId, docId: item.docId, title: item.title },
             });
@@ -288,7 +291,11 @@ export function ExpensesPage() {
               let receiptPath = data.receipt_path;
               if (prefill?.receiptPath && !receiptPath) {
                 try {
-                  receiptPath = await copyIntoReceipts(prefill.receiptPath, reference, data.supplier || "");
+                  // A Paperless download is a temporary copy: delete it once in receipts/.
+                  // A dropped receipt is the user's own file and stays.
+                  receiptPath = await (prefill.paperless ? receiptFromDownload : copyIntoReceipts)(
+                    prefill.receiptPath, reference, data.supplier || ""
+                  );
                 } catch (e) {
                   logError("Receipt copy failed:", e);
                 }
@@ -499,6 +506,17 @@ const expenseSchema: v.FormSchema<ExpenseFormField> = {
   invoice_date: [v.required, v.dateValid],
 };
 
+/** What opens the expense form prefilled (dropped receipt, Paperless inbox, renewal). */
+export type ExpensePrefill = ExtractedExpenseData & {
+  receiptPath?: string;
+  /**
+   * Without `amount`, leave the amount empty instead of guessing the
+   * supplier's last amount (Paperless inbox: accounting data is only what the
+   * document or the user says).
+   */
+  noAmountGuess?: boolean;
+};
+
 /** Fields the receipt parser can prefill — tracked for "from receipt" badges. */
 type DetectableExpenseField = "supplier" | "invoice_date" | "amount";
 
@@ -524,7 +542,7 @@ export function NewExpenseForm({
 }: {
   categories: { code: string; name_fr: string }[];
   pastSuppliers: { supplier: string; category_code: string; amount: number }[];
-  prefill: (ExtractedExpenseData & { receiptPath?: string }) | null;
+  prefill: ExpensePrefill | null;
   /** The dialog title; "New expense" by default. */
   title?: string;
   /** The save is running (spinner, no second submit). */
@@ -553,7 +571,7 @@ export function NewExpenseForm({
       );
       if (match) {
         categoryCode = match.category_code;
-        amount = match.amount;
+        if (!prefill.noAmountGuess) amount = match.amount;
       }
     }
 
@@ -598,7 +616,7 @@ export function NewExpenseForm({
       );
       if (match) {
         categoryCode = match.category_code;
-        amount = match.amount;
+        if (!prefill.noAmountGuess) amount = match.amount;
       }
     }
     setForm({

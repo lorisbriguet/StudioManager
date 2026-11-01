@@ -6,6 +6,8 @@ export type InboxItem = {
   supplier: string | null;
   /** YYYY-MM-DD */
   date: string;
+  /** The Paperless `Montant` custom field in CHF; null leaves the form's amount empty. */
+  amount: number | null;
   state: "new" | "dismissed";
 };
 
@@ -16,6 +18,7 @@ export interface InboxDoc {
   correspondent: string | null;
   created: string;
   original_file_name: string | null;
+  amount: number | null;
 }
 
 /** Transport failures start with this (Rust contract): the inbox goes offline instead of erroring. */
