@@ -1,4 +1,4 @@
-export type ConnectionKind = "synology" | "bambu_cloud";
+export type ConnectionKind = "synology" | "bambu_cloud" | "paperless";
 export type MachineStatus = "working" | "attention" | "broken" | "lent" | "retired";
 export type IntervalUnit = "day" | "week" | "month" | "year";
 export type RenewalDecision = "pending" | "added" | "skipped";

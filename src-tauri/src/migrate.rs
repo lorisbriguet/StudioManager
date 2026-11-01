@@ -19,13 +19,14 @@ pub const MIGRATIONS: &[SqlMigration] = &[
     SqlMigration { version: 6, sql: include_str!("../migrations/006_activities.sql") },
     SqlMigration { version: 7, sql: include_str!("../migrations/007_upkeep.sql") },
     SqlMigration { version: 8, sql: include_str!("../migrations/008_machine_linked_at.sql") },
+    SqlMigration { version: 9, sql: include_str!("../migrations/009_paperless.sql") },
 ];
 
 // Only referenced from this module's own tests (as the expected "fully
 // migrated" version); nothing in the production path needs it, since
 // `migrate_db` derives what to apply from `MIGRATIONS` itself.
 #[allow(dead_code)]
-pub const LATEST_VERSION: i64 = 8;
+pub const LATEST_VERSION: i64 = 9;
 
 fn table_exists(conn: &rusqlite::Connection, name: &str) -> Result<bool, String> {
     conn.query_row(
@@ -149,7 +150,42 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM pragma_table_info('machines') WHERE name='linked_at'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(has, 1);
-        assert_eq!(LATEST_VERSION, 8);
+        assert!(LATEST_VERSION >= 8);
+    }
+
+    #[test]
+    fn migrates_to_009_adds_paperless() {
+        let path = temp_db("m009");
+        migrate_db(&path).unwrap();
+        assert!(table_exists(&path, "paperless_links"));
+        let conn = Connection::open(&path).unwrap();
+        conn.execute("INSERT INTO connections (kind, label) VALUES ('paperless', 'P')", []).unwrap();
+        assert!(conn.execute("INSERT INTO connections (kind, label) VALUES ('nope', 'X')", []).is_err());
+    }
+
+    #[test]
+    fn migration_009_keeps_machine_connection_links() {
+        let db = temp_db("m009keep");
+        let conn = Connection::open(&db).unwrap();
+        conn.execute_batch("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);").unwrap();
+        for m in MIGRATIONS.iter().filter(|m| m.version <= 8) {
+            conn.execute_batch(m.sql).unwrap();
+            conn.execute("INSERT INTO schema_migrations (version, applied_at) VALUES (?1, datetime('now'))", [m.version]).unwrap();
+        }
+        conn.execute("INSERT INTO connections (kind, label) VALUES ('synology', 'NAS')", []).unwrap();
+        let cid: i64 = conn.last_insert_rowid();
+        conn.execute("INSERT INTO machines (name, connection_id) VALUES ('M', ?1)", [cid]).unwrap();
+        drop(conn);
+        assert_eq!(migrate_db(&db).unwrap(), 1);
+        let conn = Connection::open(&db).unwrap();
+        let (mcid, kind, label): (i64, String, String) = conn
+            .query_row(
+                "SELECT m.connection_id, c.kind, c.label FROM machines m JOIN connections c ON c.id = m.connection_id",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!((mcid, kind.as_str(), label.as_str()), (cid, "synology", "NAS"));
     }
 
     #[test]
@@ -161,7 +197,7 @@ mod tests {
         conn.execute_batch(
             "DROP TABLE schema_migrations;
              CREATE TABLE _sqlx_migrations (version BIGINT PRIMARY KEY, description TEXT NOT NULL, installed_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, success BOOLEAN NOT NULL, checksum BLOB NOT NULL, execution_time BIGINT NOT NULL);
-             INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) VALUES (1,'a',1,x'00',0),(2,'b',1,x'00',0),(3,'c',1,x'00',0),(4,'d',1,x'00',0),(5,'e',1,x'00',0),(6,'f',1,x'00',0),(7,'g',1,x'00',0),(8,'h',1,x'00',0);",
+             INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) VALUES (1,'a',1,x'00',0),(2,'b',1,x'00',0),(3,'c',1,x'00',0),(4,'d',1,x'00',0),(5,'e',1,x'00',0),(6,'f',1,x'00',0),(7,'g',1,x'00',0),(8,'h',1,x'00',0),(9,'i',1,x'00',0);",
         )
         .unwrap();
         drop(conn);
