@@ -95,6 +95,35 @@ fn truncate(s: &str) -> String {
     s.chars().take(SUMMARY_MAX).collect()
 }
 
+/// The text between `<tag>` and `</tag>`, trimmed.
+fn tag_body<'a>(text: &'a str, tag: &str) -> Option<&'a str> {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    let start = text.find(&open)? + open.len();
+    let end = start + text[start..].find(&close)?;
+    Some(text[start..end].trim())
+}
+
+/// What the person typed, from a user text block; None for what Claude Code wrote there itself
+/// (background task notices, command output, an interruption note). A slash command reads
+/// as typed ("/model opus"), a shell command as "! git status".
+fn typed_text(text: &str) -> Option<String> {
+    const NOT_TYPED: [&str; 6] =
+        ["<task-notification>", "<local-command-", "<bash-stdout>", "<bash-stderr>", "<system-reminder>", "[Request interrupted"];
+    if NOT_TYPED.iter().any(|p| text.starts_with(p)) {
+        return None;
+    }
+    if text.starts_with("<command-name>") || text.starts_with("<command-message>") {
+        let name = tag_body(text, "command-name")?;
+        let args = tag_body(text, "command-args").unwrap_or("");
+        return Some(if args.is_empty() { name.to_string() } else { format!("{name} {args}") });
+    }
+    if let Some(cmd) = tag_body(text, "bash-input").filter(|_| text.starts_with("<bash-input>")) {
+        return Some(format!("! {cmd}"));
+    }
+    Some(text.to_string())
+}
+
 /// The items one transcript line contributes (none for tool results, system lines, junk).
 fn line_items(line: &str) -> Vec<Item> {
     let Ok(v) = serde_json::from_str::<Value>(line) else { return vec![] };
@@ -117,6 +146,13 @@ fn line_items(line: &str) -> Vec<Item> {
     if kind != "user" && kind != "assistant" {
         return vec![];
     }
+    // Claude Code also stores as user lines what the person never typed: a skill's
+    // instructions, an image's source note, a message from another session (all `isMeta`),
+    // and the summary written after a compaction.
+    let flag = |k: &str| v.get(k).and_then(Value::as_bool) == Some(true);
+    if kind == "user" && (flag("isMeta") || flag("isCompactSummary") || flag("isVisibleInTranscriptOnly")) {
+        return vec![];
+    }
     let blocks: Vec<Value> = match v.pointer("/message/content") {
         Some(Value::String(s)) => vec![serde_json::json!({"type": "text", "text": s})],
         Some(Value::Array(a)) => a.clone(),
@@ -130,12 +166,13 @@ fn line_items(line: &str) -> Vec<Item> {
                 if text.is_empty() {
                     continue;
                 }
-                let text = text.to_string();
-                out.push(if kind == "user" {
-                    Item::User { text, at: at.clone() }
+                if kind == "user" {
+                    if let Some(text) = typed_text(text) {
+                        out.push(Item::User { text, at: at.clone() });
+                    }
                 } else {
-                    Item::Assistant { text, at: at.clone() }
-                });
+                    out.push(Item::Assistant { text: text.to_string(), at: at.clone() });
+                }
             }
             Some("tool_use") if kind == "assistant" => {
                 let name = b.get("name").and_then(Value::as_str).unwrap_or("").to_string();
@@ -300,6 +337,34 @@ mod tests {
             summarise(jsonl, 300),
             vec![Item::User { text: "fix settings too".into(), at: Some("2026-01-01T10:00:05.000Z".into()) }]
         );
+    }
+
+    #[test]
+    fn only_what_the_person_typed_counts_as_their_message() {
+        let jsonl = concat!(
+            // a skill's instructions, an image's source note, another session's message: isMeta
+            r#"{"type":"user","isMeta":true,"message":{"content":[{"type":"text","text":"Base directory for this skill: /x\n\n# Skill"}]}}"#, "\n",
+            r#"{"type":"user","isMeta":true,"message":{"content":[{"type":"text","text":"[Image: source: /tmp/a.png]"}]}}"#, "\n",
+            // the summary written after a compaction
+            r#"{"type":"user","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"content":"This session is being continued from a previous conversation."}}"#, "\n",
+            // notices and command output Claude Code stores as user lines
+            r#"{"type":"user","message":{"content":"<task-notification>\n<task-id>b1</task-id>\n</task-notification>"}}"#, "\n",
+            r#"{"type":"user","message":{"content":"<local-command-stdout>Reconnected.</local-command-stdout>"}}"#, "\n",
+            r#"{"type":"user","message":{"content":"<bash-stdout>ok</bash-stdout><bash-stderr></bash-stderr>"}}"#, "\n",
+            r#"{"type":"user","message":{"content":[{"type":"text","text":"[Request interrupted by user]"}]}}"#, "\n",
+            // typed by the person, shown as typed
+            r#"{"type":"user","message":{"content":"<command-name>/model</command-name>\n            <command-message>model</command-message>\n            <command-args>opus</command-args>"}}"#, "\n",
+            r#"{"type":"user","message":{"content":"<bash-input> git status</bash-input>"}}"#, "\n",
+            r#"{"type":"user","message":{"content":[{"type":"text","text":"[Image #1]look at this"},{"type":"image","source":{}}]}}"#, "\n",
+        );
+        let texts: Vec<String> = summarise(jsonl, 300)
+            .into_iter()
+            .map(|i| match i {
+                Item::User { text, .. } => text,
+                other => panic!("unexpected {other:?}"),
+            })
+            .collect();
+        assert_eq!(texts, vec!["/model opus", "! git status", "[Image #1]look at this"]);
     }
 
     #[test]
