@@ -22,7 +22,16 @@ const bySession = new Map<string, Sent[]>();
 const listeners = new Set<() => void>();
 
 const emit = () => listeners.forEach((l) => l());
-const norm = (s: string) => s.trim().replace(/\s+/g, " ");
+/**
+ * Compared without images: an attached image is sent as its path on a line of its own
+ * (agent-uploads), and Claude Code writes it into the transcript as "[Image #n]" instead.
+ */
+const norm = (s: string) =>
+  s
+    .replace(/^.*\/agent-uploads\/[^/\n]+$/gm, "")
+    .replace(/\[Image #\d+\]/g, "")
+    .trim()
+    .replace(/\s+/g, " ");
 
 export function addSent(sessionId: string, text: string, now = Date.now()) {
   bySession.set(sessionId, [...(bySession.get(sessionId) ?? EMPTY), { text, sentAt: now }]);
