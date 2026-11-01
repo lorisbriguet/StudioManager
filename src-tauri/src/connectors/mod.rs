@@ -6,6 +6,7 @@
 
 pub mod bambu;
 pub mod keychain;
+pub mod paperless;
 pub mod synology;
 pub mod tls;
 
@@ -84,6 +85,7 @@ fn build_connector(
     match kind {
         "synology" => synology::build(config, secret),
         "bambu_cloud" => bambu::build(config, secret),
+        "paperless" => paperless::build(config, secret),
         _ => Err(format!("unsupported connection kind: {kind}")),
     }
 }
@@ -495,6 +497,12 @@ mod tests {
     fn synology_kind_is_registered() {
         let config = serde_json::json!({ "host": "nas.local", "port": 5001, "account": "studio" });
         assert!(build_connector("synology", &config, Some(r#"{"password":"x"}"#.into())).is_ok());
+    }
+
+    #[test]
+    fn paperless_kind_is_registered() {
+        let config = serde_json::json!({ "host": "paperless.local", "port": 8000 });
+        assert!(build_connector("paperless", &config, Some("t0k".into())).is_ok());
     }
 
     #[test]

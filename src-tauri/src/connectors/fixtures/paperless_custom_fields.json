@@ -1,0 +1,10 @@
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "all": [1, 2],
+  "results": [
+    {"id": 1, "name": "Référence fournisseur", "data_type": "string", "extra_data": {"select_options": [], "default_currency": null}, "document_count": 1},
+    {"id": 2, "name": "montant", "data_type": "monetary", "extra_data": {"select_options": [], "default_currency": "CHF"}, "document_count": 2}
+  ]
+}

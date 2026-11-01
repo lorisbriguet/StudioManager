@@ -49,7 +49,7 @@ function ConnectionRow({ c }: { c: Connection }) {
     setTesting(true);
     try {
       const devices = await testConnection(c);
-      notify.success(t.upkeep_connection_test_ok.replace("{count}", String(devices.length)));
+      notify.success(c.kind === "paperless" ? t.upkeep_connection_test_ok_paperless : t.upkeep_connection_test_ok.replace("{count}", String(devices.length)));
     } catch (e) {
       // The connector's own words (translated, or already redacted by Rust).
       notify.error(connectionErrorText(e, t), e);

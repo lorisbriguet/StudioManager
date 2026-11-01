@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { uiLabels } from "../i18n/ui";
 import type { Connection, Machine } from "../types/upkeep";
 
@@ -87,5 +87,25 @@ describe("linking a machine to a device", () => {
     render(<ReadingsSection machine={machine} items={[]} />);
     await findDevices("NAS");
     expect(screen.queryByLabelText(t.upkeep_reading_baseline)).toBeNull();
+  });
+
+  it("a Paperless connection is not a reading source", () => {
+    // Only Paperless: as if there were no connection at all.
+    connections = [conn({ id: 4, kind: "paperless", label: "Paperless", region: null, account: null })];
+    render(<ReadingsSection machine={machine} items={[]} />);
+    expect(screen.getByText(t.upkeep_no_connection)).toBeInTheDocument();
+    expect(screen.queryByLabelText(t.upkeep_link_connection)).toBeNull();
+  });
+
+  it("Paperless is left out of the connections offered for linking", () => {
+    connections = [
+      conn({ id: 3, kind: "synology", label: "NAS", region: null }),
+      conn({ id: 4, kind: "paperless", label: "Paperless", region: null, account: null }),
+    ];
+    render(<ReadingsSection machine={machine} items={[]} />);
+    fireEvent.click(screen.getByLabelText(t.upkeep_link_connection));
+    const listbox = screen.getByRole("listbox");
+    expect(within(listbox).getByRole("option", { name: "NAS" })).toBeInTheDocument();
+    expect(within(listbox).queryByRole("option", { name: "Paperless" })).toBeNull();
   });
 });

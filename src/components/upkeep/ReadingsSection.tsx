@@ -15,6 +15,12 @@ import { connectionVariant, diskHealthVariant } from "../../lib/statusColors";
 import type { DeviceInfo } from "../../db/queries/connections";
 import type { Machine, MachineDisk, UpkeepItem } from "../../types/upkeep";
 
+/** Connections a machine can read from: Paperless holds documents, not devices. */
+function useReadingSources() {
+  const { data: connections = [] } = useConnections();
+  return connections.filter((c) => c.kind !== "paperless");
+}
+
 /** Drive age bar runs full at this many years. */
 const DRIVE_LIFE_YEARS = 5;
 const HOURS_PER_YEAR = 24 * 365;
@@ -107,7 +113,7 @@ function ManualReading({ machine }: { machine: Machine }) {
 
 function LinkForm({ machine, needsBaseline }: { machine: Machine; needsBaseline: boolean }) {
   const t = useT();
-  const { data: connections = [] } = useConnections();
+  const connections = useReadingSources();
   const link = useLinkMachine();
   const [connId, setConnId] = useState<number | null>(null);
   const [devices, setDevices] = useState<DeviceInfo[] | null>(null);
@@ -198,7 +204,7 @@ function LinkForm({ machine, needsBaseline }: { machine: Machine; needsBaseline:
  */
 export function ReadingsSection({ machine, items }: { machine: Machine; items: UpkeepItem[] }) {
   const t = useT();
-  const { data: connections = [] } = useConnections();
+  const connections = useReadingSources();
   const usage = items.find((i) => i.schedule === "usage" && !i.archived);
   const metric = usage?.usage_metric ?? "print_hours";
   const label = metricLabel(metric, t);
