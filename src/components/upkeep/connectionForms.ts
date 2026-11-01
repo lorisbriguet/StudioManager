@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import type { Connection, ConnectionKind } from "../../types/upkeep";
 import { BambuForm } from "./BambuForm";
+import { PaperlessForm } from "./PaperlessForm";
 import { SynologyForm } from "./SynologyForm";
 
 /**
@@ -23,6 +24,7 @@ export interface ConnectionFormProps {
 export const CONNECTION_FORMS: Partial<Record<ConnectionKind, ComponentType<ConnectionFormProps>>> = {
   synology: SynologyForm,
   bambu_cloud: BambuForm,
+  paperless: PaperlessForm,
 };
 
-export const CONNECTION_KINDS: ConnectionKind[] = ["synology", "bambu_cloud"];
+export const CONNECTION_KINDS: ConnectionKind[] = ["synology", "bambu_cloud", "paperless"];
