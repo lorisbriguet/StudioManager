@@ -9,8 +9,10 @@ const unlisten = vi.fn();
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(async (_n: string, f: () => void) => { cb = f; return unlisten; }),
 }));
+const syncAll = vi.fn(async () => 0);
+vi.mock("../lib/upkeep/calendar", () => ({ syncAllUpkeepEvents: () => syncAll() }));
 
-beforeEach(() => { vi.useFakeTimers(); cb = null; unlisten.mockClear(); });
+beforeEach(() => { vi.useFakeTimers(); cb = null; unlisten.mockClear(); syncAll.mockClear(); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe("useDbChangedListener", () => {
@@ -24,8 +26,10 @@ describe("useDbChangedListener", () => {
     cb!(); cb!(); cb!();
     await vi.advanceTimersByTimeAsync(399);
     expect(spy).not.toHaveBeenCalled();
+    expect(syncAll).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(2);
     expect(spy).toHaveBeenCalledTimes(1);
+    expect(syncAll).toHaveBeenCalledTimes(1);
     unmount();
     await vi.advanceTimersByTimeAsync(0);
     expect(unlisten).toHaveBeenCalled();

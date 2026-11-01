@@ -29,6 +29,7 @@ pub mod server;
 pub mod samples;
 pub mod statusline;
 pub mod text;
+pub mod upkeep;
 pub mod write;
 
 #[cfg(test)]

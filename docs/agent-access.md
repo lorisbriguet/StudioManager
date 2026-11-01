@@ -41,7 +41,9 @@ Tasks: `list_tasks`, `create_task`, `update_task`, `create_subtask`, `update_sub
 
 Clients: `list_clients`, `get_client`, `create_client`.
 
-Studio: `list_machines` (machines and equipment with their next upkeep; no readings or connection details).
+Upkeep, reading: `list_machines` (machines and equipment with their next upkeep), `get_machine` (one machine with its upkeep items, service log and consumables), `list_consumables`, `list_subscriptions`. No serial numbers, readings or connection details; prices and costs only when money reading is allowed.
+
+Upkeep, writing: `add_service_log` (a dated repair, upgrade or part on a machine, such as new RAM in a NAS), `create_machine`, `update_machine`, `add_upkeep_item` (a repeating task such as "clean the filter every 6 months"), `mark_upkeep_done`, `create_consumable`, `update_consumable` (set the stock or add a restock), `create_subscription`, `update_subscription` (plan, vendor, link, cost, notes, or cancel; a subscription's name, renewal date and period change in the app). Each of these tells the agent to ask you first and say what it will save. An organisation that uses another organisation's machines and consumables (Settings > Studio upkeep) reads and writes them in that organisation, which agent access must allow too; subscriptions always stay with the organisation itself.
 
 Wiki and tools: `list_wiki`, `get_wiki_article`, `put_wiki_article`, `add_decision`, `link_tool`.
 
@@ -51,7 +53,7 @@ A project's own Markdown files (README, design system, release notes, docs) show
 
 Money (hidden unless allowed in Settings): `list_invoices`, `get_invoice`, `list_quotes`, `list_expenses`, `pnl_summary`.
 
-That is 27 tools, 5 of them money tools. Names given to the tools (projects, clients, articles) match regardless of accents and case; if several match, the server returns the candidates instead of picking one. Agents are asked to check with you before creating projects or clients.
+That is 39 tools, 5 of them money tools. Names given to the tools (projects, clients, articles) match regardless of accents and case; if several match, the server returns the candidates instead of picking one. Agents are asked to check with you before creating projects or clients and before every upkeep write.
 
 ## Safety rules
 
@@ -61,8 +63,8 @@ That is 27 tools, 5 of them money tools. Names given to the tools (projects, cli
 - **Project folders.** `link_folder` and `update_project` accept only an existing folder inside Documents, Desktop, Downloads or `~/Library/CloudStorage` (not one of those places itself), and never an app or other bundle (`.app`, `.bundle`, `.framework`…).
 - **Size.** A title, name, note, link or article over 1 MB is refused.
 - **Test and presentation mode.** While either mode is active, writes are refused. Reads still work on the real data.
-- **Apple Calendar.** If calendar sync is on, changes an agent makes to a task's or subtask's due date or status are not pushed to Apple Calendar. The event catches up the next time you edit that task in the app.
-- **Fields agents never write:** calendar links, workload fields, layout configuration and tracked time.
+- **Apple Calendar.** If calendar sync is on, changes an agent makes to a task's or subtask's due date or status are not pushed to Apple Calendar. The event catches up the next time you edit that task in the app. Upkeep items and subscriptions an agent adds, or upkeep it marks done, get their calendar event from the app as soon as it sees the change (the app must be open).
+- **Fields agents never write:** calendar links, workload fields, layout configuration, tracked time, and a machine's serial number, device connection and readings. Agents never create expenses: a cost on a service log entry stays on that entry.
 
 ## Known limit
 
