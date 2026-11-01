@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { AgentsPage } from "../pages/AgentsPage";
-import { StartAgentForm, slugifyName } from "../components/agents/StartAgentForm";
+import { StartAgentForm, slugifyName, typedName } from "../components/agents/StartAgentForm";
 import { ConfirmHost } from "../components/ui/ConfirmDialog";
 import { isInside } from "../lib/agents";
 import { useAppStore } from "../stores/app-store";
@@ -119,6 +119,20 @@ describe("StartAgentForm", () => {
     expect(slugifyName("Fix the login bug")).toBe("fix-the-login-bug");
     expect(slugifyName("--a  b!!c")).toBe("a-bc");
     expect(slugifyName("x".repeat(100))).toHaveLength(64);
+  });
+
+  it("a typed name turns spaces into - and drops characters a name cannot hold", () => {
+    expect(typedName("Fix the Login")).toBe("Fix-the-Login");
+    expect(typedName("café/bug #2")).toBe("cafbug-2");
+    expect(typedName(" -x")).toBe("x");
+    expect(typedName("a".repeat(70))).toHaveLength(64);
+  });
+
+  it("the name field never holds a space or a character a name cannot hold", async () => {
+    await setup();
+    const field = screen.getByLabelText("Name") as HTMLInputElement;
+    fireEvent.change(field, { target: { value: "morning brief: v2" } });
+    expect(field.value).toBe("morning-brief-v2");
   });
 
   it("starts an agent with folder, task, model and the followed name", async () => {
