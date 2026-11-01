@@ -413,6 +413,9 @@ pub async fn agents_set_enabled(
         if !enabled {
             // Each panel still gets `agents:term-exit` from its reader thread.
             hub.close_all();
+        } else {
+            // The morning brief's comments server; once started it runs until the app quits.
+            super::brief::start(&app);
         }
         Ok(info(&app_dir, &login))
     })

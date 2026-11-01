@@ -63,8 +63,10 @@ pub fn init(handle: &tauri::AppHandle) {
     handle.manage(AgentsState::new(app_dir));
     poller::start(handle);
     routines::schedule::start(handle);
-    // The morning brief's comments (see brief.rs).
-    brief::start(handle);
+    // The morning brief's comments (see brief.rs); started by the Agents switch otherwise.
+    if cli::read_settings(&handle.state::<AgentsState>().app_dir).enabled {
+        brief::start(handle);
+    }
     // Old attached images; best effort, off the startup path.
     let dir = handle.state::<AgentsState>().app_dir.clone();
     std::thread::spawn(move || uploads::clean_old(&dir, std::time::SystemTime::now()));

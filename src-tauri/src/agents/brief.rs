@@ -6,7 +6,7 @@
 //!   POST   /brief/<date>/comments        {quote, note, section}  -> stored, then sent to the agent
 //!   DELETE /brief/<date>/comments/<id>
 //!
-//! Loopback only. Every request needs the token from `<app dir>/brief-token`, which the page
+//! Only once the Agents switch is on (then until StudioManager quits); loopback only. Every request needs the token from `<app dir>/brief-token`, which the page
 //! renderer (agent-bar/brief/personal_brief.py) writes into the page. Comments are kept per
 //! day in `<app dir>/brief-comments/<date>.json`.
 
@@ -30,6 +30,8 @@ const NOTE_MAX: usize = 2000;
 const SECTION_MAX: usize = 80;
 
 static STORE_LOCK: Mutex<()> = Mutex::new(());
+/// The server starts once, when the Agents switch is first on, and runs until the app quits.
+static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// The token, created on first use (48 hex characters, readable by this user only).
 pub fn token(app_dir: &Path) -> std::io::Result<String> {
@@ -325,8 +327,12 @@ fn serve(b: &dyn Backend, mut s: TcpStream) {
     let _ = s.write_all(&encode(&route(b, &req)));
 }
 
-/// Starts the server on its own thread; logs and gives up if the port is taken.
+/// Starts the server on its own thread, once; logs and gives up if the port is taken.
+/// Called at launch when Agents is on, and when the Agents switch is turned on.
 pub fn start(app: &tauri::AppHandle) {
+    if STARTED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
     let dir = crate::app_data_dir(app).unwrap_or_default();
     let token = match token(&dir) {
         Ok(t) => t,

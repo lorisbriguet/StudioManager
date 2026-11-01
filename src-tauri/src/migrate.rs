@@ -150,7 +150,7 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM pragma_table_info('machines') WHERE name='linked_at'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(has, 1);
-        assert!(LATEST_VERSION >= 8);
+        const { assert!(LATEST_VERSION >= 8) };
     }
 
     #[test]
