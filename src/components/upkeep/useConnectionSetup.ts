@@ -100,7 +100,8 @@ export function useConnectionSetup(connection: Connection | undefined, onDone: (
         const devices = await testConnection(conn, opts);
         ran = true;
         doneRef.current = true;
-        notify.success(t.upkeep_connection_test_ok.replace("{count}", String(devices.length)));
+        // Paperless has no devices: the test only proves the token.
+        notify.success(conn.kind === "paperless" ? t.upkeep_connection_test_ok_paperless : t.upkeep_connection_test_ok.replace("{count}", String(devices.length)));
         onDone();
       } catch (e) {
         ran = !isRefusedByApp(e);

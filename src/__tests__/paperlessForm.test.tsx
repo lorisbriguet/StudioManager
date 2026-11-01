@@ -21,9 +21,14 @@ vi.mock("../lib/upkeep/connections", () => ({
   saveConnectionSecret: (id: number, s: string) => saveConnectionSecret(id, s),
 }));
 vi.mock("../hooks/useUnsavedChangesWarning", () => ({ useUnsavedChangesWarning: () => {} }));
+vi.mock("../lib/notify", async (orig) => ({
+  ...(await orig<typeof import("../lib/notify")>()),
+  ...(await import("../__mocks__/notify")).notifyMockModule(),
+}));
 
 import { PaperlessForm } from "../components/upkeep/PaperlessForm";
 import { CONNECTION_FORMS, CONNECTION_KINDS } from "../components/upkeep/connectionForms";
+import { notify } from "../lib/notify";
 
 const t = uiLabels.EN;
 
@@ -51,6 +56,7 @@ describe("PaperlessForm", () => {
     fireEvent.change(token, { target: { value: "s3cret-token" } });
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_paperless_connect }));
     await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(notify.success).toHaveBeenCalledWith(t.upkeep_connection_test_ok_paperless);
     const { data, secret } = create.mock.calls[0][0];
     expect(data).toMatchObject({ kind: "paperless", host: "dsm-lorisb.tail47efa3.ts.net", port: 8443 });
     expect(JSON.stringify(data)).not.toContain("s3cret-token");

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { uiLabels } from "../i18n/ui";
 
 const syncNow = vi.fn();
@@ -13,9 +13,19 @@ vi.mock("../db/hooks/useConnections", () => ({
   useUpdateConnection: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock("../hooks/useUnsavedChangesWarning", () => ({ useUnsavedChangesWarning: () => {} }));
+const testConnection = vi.fn();
+vi.mock("../lib/upkeep/connections", async (orig) => ({
+  ...(await orig<typeof import("../lib/upkeep/connections")>()),
+  testConnection: (c: unknown) => testConnection(c),
+}));
+vi.mock("../lib/notify", async (orig) => ({
+  ...(await orig<typeof import("../lib/notify")>()),
+  ...(await import("../__mocks__/notify")).notifyMockModule(),
+}));
 
 import { ConnectionsCard } from "../components/upkeep/ConnectionsCard";
 import { pickOption } from "./fixtures/dropdown";
+import { notify } from "../lib/notify";
 
 const t = uiLabels.EN;
 
@@ -58,5 +68,21 @@ describe("ConnectionsCard", () => {
     expect(screen.queryByText(/otp_required/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_connection_reconnect }));
     expect(screen.getByDisplayValue("nas.local")).toBeInTheDocument();
+  });
+
+  it("Test says the token works for Paperless", async () => {
+    testConnection.mockResolvedValue([{ device_id: "paperless", name: "nas.local", model: null }]);
+    connections = [{ id: 6, kind: "paperless", label: "Paperless", host: "nas.local", port: 8443, last_sync_at: null, last_error: null, failing_since: null }];
+    render(<ConnectionsCard />);
+    fireEvent.click(screen.getByRole("button", { name: t.upkeep_connection_test }));
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith(t.upkeep_connection_test_ok_paperless));
+  });
+
+  it("Test counts devices for a device connection", async () => {
+    testConnection.mockResolvedValue([{ device_id: "a" }, { device_id: "b" }]);
+    connections = [{ id: 5, kind: "synology", label: "Office NAS", host: "nas.local", port: 5001, last_sync_at: null, last_error: null, failing_since: null }];
+    render(<ConnectionsCard />);
+    fireEvent.click(screen.getByRole("button", { name: t.upkeep_connection_test }));
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith(t.upkeep_connection_test_ok.replace("{count}", "2")));
   });
 });
