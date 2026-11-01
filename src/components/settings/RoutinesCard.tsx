@@ -3,7 +3,7 @@ import { SettingRow, SettingsCard } from "../ui/Settings";
 import { Button, FIELD_LABEL, FormActions, FormField, FormLayout, ICONS, IconButton, Input, Radio, SectionLabel, Select, Textarea } from "../ui";
 import { useConfirm } from "../../lib/confirm";
 import { ModelMenu } from "../agents/ModelMenu";
-import { slugifyName } from "../agents/StartAgentForm";
+import { slugifyName, typedName } from "../agents/StartAgentForm";
 import { useT } from "../../i18n/useT";
 import { startFolders, type StartFolder } from "../../lib/agents";
 import { getRoutines, saveRoutines, type Routine, type Routines, type Section } from "../../lib/routines";
@@ -262,7 +262,7 @@ function RoutineForm({
                 value={agentName}
                 maxLength={64}
                 placeholder={slugifyName(title)}
-                onChange={(e) => setAgentName(e.target.value)}
+                onChange={(e) => setAgentName(typedName(e.target.value))}
               />
             </FormField>
           </div>

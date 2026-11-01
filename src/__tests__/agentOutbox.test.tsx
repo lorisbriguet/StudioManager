@@ -32,6 +32,16 @@ describe("unread (sent messages the transcript does not show yet)", () => {
     expect(unread(sent, [user("ok", iso(T0 + 2000)), user("ok", iso(T0 + 2500))], T0 + 3000)).toHaveLength(0);
   });
 
+  it("matches a message with images: Claude Code turns each attached path into [Image #n]", () => {
+    const up = "/Users/me/Library/Application Support/ch.studiomanager.app/agent-uploads";
+    const sent = [
+      { text: `keep on getting spammed by these\n\n${up}/1-0.png`, sentAt: T0 },
+      { text: `${up}/2-0.png\n\n${up}/2-1.jpg`, sentAt: T0 + 100 },
+    ];
+    const items = [user("[Image #1]keep on getting spammed by these", iso(T0 + 2000)), user("[Image #2] [Image #3]", iso(T0 + 2100))];
+    expect(unread(sent, items, T0 + 3000)).toHaveLength(0);
+  });
+
   it("gives up on a message after half an hour", () => {
     expect(unread([{ text: "x", sentAt: T0 }], [], T0 + 31 * 60_000)).toHaveLength(0);
   });

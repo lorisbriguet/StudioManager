@@ -20,6 +20,18 @@ export function slugifyName(text: string): string {
     .slice(0, 64);
 }
 
+/**
+ * A name as it is typed: a space becomes "-", a character a name cannot hold is dropped, so what
+ * is in the field is always a valid name (or on the way to one). Case is kept.
+ */
+export function typedName(text: string): string {
+  return text
+    .replace(/\s/g, "-")
+    .replace(/[^A-Za-z0-9._-]/g, "")
+    .replace(/^[^A-Za-z0-9]+/, "")
+    .slice(0, 64);
+}
+
 function folderOptionText(f: StartFolder, untrusted: string): string {
   const l = f.label;
   const text = l ? `${l.orgName} › ${l.clientName} › ${l.projectName} — ${f.path}` : f.path;
@@ -162,7 +174,7 @@ export function StartAgentForm({ onStarted, onCancel }: StartAgentFormProps) {
             maxLength={64}
             onChange={(e) => {
               setNameEdited(true);
-              setName(e.target.value);
+              setName(typedName(e.target.value));
             }}
           />
         </FormField>

@@ -84,4 +84,24 @@ describe("Tooltip", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
     vi.useRealTimers();
   });
+
+  it("is placed on the element before paint, never rendered at the top left corner", () => {
+    render(
+      <Tooltip content="Open full page">
+        <button type="button">open</button>
+      </Tooltip>
+    );
+    const btn = screen.getByRole("button", { name: "open" });
+    btn.getBoundingClientRect = () => ({ top: 200, bottom: 220, left: 300, right: 340, width: 40, height: 20, x: 300, y: 200, toJSON: () => ({}) });
+    // keyboard focus shows it at once
+    const matches = btn.matches.bind(btn);
+    btn.matches = (s: string) => (s === ":focus-visible" ? true : matches(s));
+    fireEvent.focus(btn);
+    const tip = screen.getByRole("tooltip");
+    // React never writes a 0,0 position: the bubble starts parked off screen, then is placed.
+    expect(tip.style.top).not.toBe("0px");
+    expect(tip.style.left).not.toBe("0px");
+    expect(tip.className).toContain("transition-none");
+    expect(tip.className).toContain("animate-popover");
+  });
 });

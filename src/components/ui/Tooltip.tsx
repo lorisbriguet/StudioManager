@@ -31,7 +31,6 @@ export function useTooltip(content: ReactNode, { side = "top" as "top" | "bottom
   const bubble = useRef<HTMLDivElement>(null);
   const timer = useRef<number | undefined>(undefined);
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   const show = useCallback((el: HTMLElement, now = false) => {
     anchor.current = el;
@@ -42,7 +41,6 @@ export function useTooltip(content: ReactNode, { side = "top" as "top" | "bottom
   const hide = useCallback(() => {
     window.clearTimeout(timer.current);
     setOpen(false);
-    setPos(null);
   }, []);
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
@@ -55,7 +53,12 @@ export function useTooltip(content: ReactNode, { side = "top" as "top" | "bottom
     const above = r.top - b.offsetHeight - m;
     const below = r.bottom + m;
     const top = side === "top" ? (above >= m ? above : below) : below + b.offsetHeight > window.innerHeight - m ? above : below;
-    setPos({ top, left });
+    // Placed straight on the element, not through state: a state update means a second render,
+    // and WebKit can paint the first one (where the bubble was mounted) before it. Same as Popover.
+    b.style.top = `${top}px`;
+    b.style.left = `${left}px`;
+    b.style.opacity = "";
+    b.classList.add("animate-popover");
   }, [open, side, content]);
 
   useEffect(() => {
@@ -89,8 +92,10 @@ export function useTooltip(content: ReactNode, { side = "top" as "top" | "bottom
             ref={bubble}
             id={id}
             role="tooltip"
-            className="fixed z-[70] max-w-60 px-2 py-1 rounded-md text-xs leading-snug text-[var(--color-bg)] bg-[var(--color-text)] shadow-menu pointer-events-none animate-in fade-in duration-100"
-            style={{ top: pos?.top ?? 0, left: pos?.left ?? 0, opacity: pos ? undefined : 0 }}
+            // `transition-none`: the position is set directly and must never glide.
+            className="fixed z-[70] max-w-60 px-2 py-1 rounded-md text-xs leading-snug text-[var(--color-bg)] bg-[var(--color-text)] shadow-menu pointer-events-none transition-none"
+            // Until placed (before the first paint): far off screen and transparent, never at 0,0.
+            style={{ top: -9999, left: -9999, opacity: 0 }}
           >
             {content}
           </div>,
