@@ -392,6 +392,10 @@ Follow-ups to [the Studio upkeep spec](docs/superpowers/specs/2026-10-28-studio-
 - [ ] UniFi (network gear): firmware age and device health
 - [ ] Agent write access for upkeep (mark done, log a service) once the read tools have proven themselves
 
+## Dashboard pages (set aside 2026-11-02)
+
+- [ ] Several dashboard pages as tabs under the title, each its own widget grid, stored per organisation (also fixes the dashboard layout being shared between organisations through global localStorage keys). Mocked up and chosen during the [Network page](docs/superpowers/specs/2026-11-02-network-page-design.md) brainstorm, then replaced by that page.
+
 ## Low Priority
 
 - [ ] Resizable side peek snap positions
