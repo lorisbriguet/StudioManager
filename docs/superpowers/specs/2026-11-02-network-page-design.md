@@ -1,6 +1,6 @@
 # Network page — design
 
-Date: 2026-11-02 · Status: draft, waiting for Loris's approval
+Date: 2026-11-02 · Status: approved by Loris (2026-11-02). Implementation plan: [2026-11-02-network-page.md](../plans/2026-11-02-network-page.md)
 
 Built on [DESIGN-SYSTEM.md](../../../DESIGN-SYSTEM.md). Extends the machines and connections of the
 [studio upkeep design](2026-10-28-studio-upkeep-design.md). Organisations and the "equipment from" setting:
