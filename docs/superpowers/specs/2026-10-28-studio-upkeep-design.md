@@ -6,6 +6,7 @@ Plan: [2026-10-28-studio-upkeep.md](../plans/2026-10-28-studio-upkeep.md)
 
 Mockups (4 screens, dark theme): https://claude.ai/artifact/3WGEaXkpVcZNfkFDy41avo. Built on
 [DESIGN-SYSTEM.md](../../../DESIGN-SYSTEM.md). Idea backlog: [IDEAS.md](../../../IDEAS.md).
+Follow-up: [dashboard pages and studio widgets](2026-11-02-dashboard-pages-design.md) (machine links, NAS and backup widgets).
 
 Decisions marked *[call]* were made by the designer from the conversation and the code; Loris can overturn any.
 Everything else was said by Loris.
