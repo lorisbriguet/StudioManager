@@ -39,7 +39,7 @@
 - Modify: `src/stores/org-store.ts` (`applyPrefsToAppStore`)
 - Modify: `src/stores/app-store.ts` (state + setter, next to `showTasksPage`)
 - Modify: `src/pages/SettingsPage.tsx` (Behaviour card, after the Income row)
-- Modify: `src/components/layout/Sidebar.tsx` (item after `agents`, filter)
+- Modify: `src/components/layout/Sidebar.tsx` (item after `agents`; the switch filter goes in **both** `navItems.filter` lists, the main one and the collapsed/compact one further down)
 - Modify: `src/components/ui/icons.ts` (`network: Network` from lucide)
 - Modify: `src/App.tsx` (route `network`)
 - Create: `src/pages/NetworkPage.tsx`
@@ -84,7 +84,7 @@ git commit -m "feat(network): opt-in Network page in the sidebar"
 - Modify: `src/db/queries/connections.ts` (`currentReading`, `firstReadingSince`, `getMachineReadings`, `getMachineDisks` → `getEquipmentDb()`; new `getEquipmentConnections`, `getLatestMetrics`)
 - Modify: `src/db/hooks/useConnections.ts` (new hooks)
 - Modify: `src/lib/upkeep/connections.ts` (`syncPass`)
-- Test: `src/__tests__/equipmentReadings.test.ts` (new), `src/__tests__/` existing connection-sync test file (add a case)
+- Test: `src/__tests__/equipmentReadings.test.ts` (new), `src/__tests__/connectionsRunner.test.ts` (add a case)
 
 **Interfaces:**
 - Produces:
@@ -96,7 +96,7 @@ git commit -m "feat(network): opt-in Network page in the sidebar"
 
 `equipmentReadings.test.ts`, mocking `../db` with `getEquipmentDb` returning a fake whose `select` records its SQL and `getDb` throwing: `getMachineDisks reads the equipment database`, `getLatestMetrics returns one row per metric for the prefix` (fake rows `volume_used_bytes:volume_1` at two times → only the newest is returned; SQL uses `LIKE` with the prefix escaped for `%` and `_`), `getEquipmentConnections reads the equipment database`.
 
-In the sync tests: `a borrowing organisation runs no connection sync` — with `equipmentOrgId()` mocked to `"stud"`, `runConnectionSyncs(qc, { force: true })` never calls `invoke("connection_sync", …)` nor `recordSync`.
+In `connectionsRunner.test.ts`: `a borrowing organisation runs no connection sync` — with `equipmentOrgId()` mocked to `"stud"`, `runConnectionSyncs(qc, { force: true })` never calls `invoke("connection_sync", …)` nor `recordSync`.
 
 - [ ] **Step 2: Run them to see them fail**
 
@@ -109,7 +109,7 @@ Switch the four read queries to `getEquipmentDb()` (writes stay as they are: whe
 
 - [ ] **Step 4: Run the tests**
 
-Run: `npx vitest run src/__tests__/equipmentReadings.test.ts src/__tests__/equipmentOrg.test.ts` plus the sync test file
+Run: `npx vitest run src/__tests__/equipmentReadings.test.ts src/__tests__/equipmentOrg.test.ts` `src/__tests__/connectionsRunner.test.ts`
 Expected: PASS, and `npm test` stays green.
 
 - [ ] **Step 5: Commit**
@@ -179,8 +179,8 @@ git commit -m "feat(network): reachability checks for links and remote machines"
   - `linkUrl(raw: string): string` — trims, and adds `https://` when there is no scheme (same rule as `openMachineAttachment`).
   - `isRemoteLink(raw: string): boolean` — true for the schemes in `REMOTE_SCHEMES = ["vnc", "jump"]` (keep in sync with Rust in Task 5).
   - `pinFor(url: string, connections: Connection[]): string | null` — `cert_fingerprint` of a connection whose `host` equals the URL host (case-insensitive) and whose `port` equals the URL port (443 for https and 80 for http when absent).
-  - `NetworkCard { machine: Machine; services: MachineFile[]; remote: MachineFile[]; nas: Connection | null }` and `buildNetworkCards(machines: Machine[], links: MachineFile[], connections: Connection[]): NetworkCard[]` — keeps machines (not `retired`) that have a link or a `synology` connection (`machine.connection_id`), in the order of `machines`; `services` = links that are not remote, `remote` = remote links.
-  - `formatAgo(from: string | number, now: number, t: T): string` in `src/lib/network/format.ts` — "just now" under a minute, then "{n} min ago", "{n} h ago", "{n} d ago" (EN/FR keys; the app has no such helper yet). Used for "Checked … ago" and "Updated … ago".
+  - `NetworkCard { machine: Machine; services: MachineFile[]; remote: MachineFile[]; nas: Connection | null }` and `buildNetworkCards(machines: Machine[], links: MachineFile[], connections: Connection[]): NetworkCard[]` — keeps machines (`status !== "retired"`) that have a link or a `synology` connection (`machine.connection_id`), in the order of `machines`; `services` = links whose `linkUrl` is http(s) (spec §2: "its http(s) links"; other schemes such as `smb://` are neither checked nor listed), `remote` = remote links.
+  - `formatAgo(from: string | number, now: number, t: ReturnType<typeof useT>): string` in `src/lib/network/format.ts` — "just now" under a minute, then "{n} min ago", "{n} h ago", "{n} d ago" (EN/FR keys; the app has no such helper yet). Used for "Checked … ago" and "Updated … ago".
   - `useNetworkChecks(targets: CheckTarget[]): { results: Map<string, CheckResult>; checkedAt: number | null; checking: boolean; refresh: () => void }` — checks on mount, on `refresh()`, and every 300 000 ms while mounted; skipped in test/presentation mode; never calls `notify`. Target keys: `link:{file.id}` for services (Http, `pin` from `pinFor`), `machine:{machine.id}` for the online check (Task 5).
 
 - [ ] **Step 1: Write the failing tests**
@@ -285,7 +285,7 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement**
 
-Rust as above (session gains the two API paths from `SYNO.API.Info`, like `system` and `storage`). `NasHealth`: one line per volume ("Volume 1 · 4.8 of 7 TB", sizes through `formatBytesShort`) with `ProgressBar`, the disk summary with `diskHealthVariant`, "Updated {time} ago" on the card title row. Volume names: `volume_1` → "Volume 1".
+Rust as above. The session gains the two API paths from `SYNO.API.Info` (add both names to the `query` list in `login`), but **optional**: unlike `system` and `storage`, a NAS that does not offer them must still log in and sync (look them up without `?`; missing → no snapshot metrics). Add both entries to `fixtures/synology_api_info.json`. `NasHealth`: one line per volume ("Volume 1 · 4.8 of 7 TB", sizes through `formatBytesShort`) with `ProgressBar`, the disk summary with `diskHealthVariant`, "Updated {time} ago" on the card title row. Volume names: `volume_1` → "Volume 1".
 
 - [ ] **Step 4: Run the tests**
 
@@ -318,7 +318,7 @@ git commit -m "feat(network): NAS volume usage, snapshot dates and health on the
 
 - [ ] **Step 1: Write the failing tests**
 
-Rust: `parse_time_machine_reads_the_last_destination` (inline plist with two destinations, `LastDestinationID` pointing at the second, `SnapshotDates` with two dates → the newer one, `RESULT` 0); `parse_time_machine_without_snapshot_dates_has_no_last_backup` (shape of a first backup in progress: `RESULT` 26, no `SnapshotDates`); `parse_time_machine_auto_backup_off_is_disabled`.
+Rust: `migrates_to_010_adds_is_backup` in `migrate.rs` (like `migrates_to_009_adds_paperless`; `LATEST_VERSION` becomes 10); `parse_time_machine_reads_the_last_destination` (inline plist with two destinations, `LastDestinationID` pointing at the second, `SnapshotDates` with two dates → the newer one, `RESULT` 0); `parse_time_machine_without_snapshot_dates_has_no_last_backup` (shape of a first backup in progress: `RESULT` 26, no `SnapshotDates`); `parse_time_machine_auto_backup_off_is_disabled`.
 
 TS `networkBackups.test.ts`: `timeMachineState` cases for 1 day (success), 3 days (warning), 8 days (danger), `last_result` 21 not running (danger), running with no backup yet (warning, `running`), disabled (hidden); `BackupsCard hides sources that are not set up`; `BackupsCard lists upkeep items marked as backups with their last done date`; `UpkeepItemForm saves the backup checkbox`.
 
