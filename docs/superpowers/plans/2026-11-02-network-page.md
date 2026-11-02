@@ -8,7 +8,7 @@
 
 **Tech Stack:** Tauri 2 (Rust, reqwest blocking + rustls, rusqlite), React + TypeScript, TanStack Query, zustand, vitest + Testing Library.
 
-**Spec:** [2026-11-02-network-page-design.md](../specs/2026-11-02-network-page-design.md)
+**Spec:** [2026-11-02-network-page-design.md](../specs/2026-11-02-network-page-design.md) · **Handover:** [2026-11-02-network-page-handover.md](2026-11-02-network-page-handover.md)
 
 ## Global Constraints
 
@@ -350,7 +350,7 @@ git commit -m "feat(network): Backups card with Time Machine, NAS snapshots and 
 Not code. Before the branch is merged, with Loris at the Mac, on the dev build:
 
 - [ ] Settings › Behaviour › Network page on, in both organisations; Network appears under Agents.
-- [ ] On the NAS machine, the links DSM, Paperless, Pi-hole, Uptime Kuma, Forgejo, FreshRSS, Homepage show dots; on the Mac mini, `vnc://100.83.155.50` and the Jump Desktop link open their app.
+- [ ] On the NAS machine, the links DSM, Paperless, Pi-hole, Uptime Kuma, Forgejo, FreshRSS, Homepage show dots; on the Mac mini, its Screen Sharing (`vnc://`) and Jump Desktop links open their app.
 - [ ] Upkeep › connections › Sync now on the DS925+, then the NAS card shows the real volume and snapshot dates. If the shapes differ from the fixtures, save the real answers (secrets removed) as the fixtures and fix the parsers.
 - [ ] In Personal Projects, the same cards, with "Updated … ago" from the studio organisation's last sync.
 - [ ] Time Machine row matches `tmutil status`.
