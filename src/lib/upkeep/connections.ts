@@ -156,7 +156,8 @@ export async function recomputeUsageForecast(
     }
   }
   if (next === item.next_due_on) return false;
-  const batch = new TransactionBatch(expectedOrg);
+  // The item lives where its machine does: the lender's database when borrowed.
+  const batch = new TransactionBatch(expectedOrg, equipmentOrgId());
   batch.add(
     "UPDATE upkeep_items SET next_due_on = $1, updated_at = datetime('now') WHERE id = $2",
     [next, item.id]

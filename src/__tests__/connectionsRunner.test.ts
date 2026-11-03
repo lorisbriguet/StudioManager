@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
 import type { QueryClient } from "@tanstack/react-query";
 
 vi.mock("../lib/log", () => ({ logError: vi.fn(), logWarn: vi.fn(), logInfo: vi.fn(), logDebug: vi.fn() }));
@@ -463,5 +463,54 @@ describe("usage forecasts outside a sync", () => {
     const due = batchStmts().find((s) => s.sql.includes("UPDATE upkeep_items SET next_due_on"));
     expect(due?.params).toEqual(["2026-12-17", 9]);
     expect(syncItemCalendar).toHaveBeenCalledWith(9, {});
+  });
+});
+
+describe("a borrowing organisation writes readings and forecasts to the lender", () => {
+  const prefs = (equipmentFrom?: string) => ({
+    showIncome: true, showTasksPage: true, showTimeOverview: true, calendarSync: false,
+    calendarName: "", backupPath: "", exportLanguage: "FR" as const, equipmentFrom,
+  });
+  beforeEach(() => {
+    useOrgStore.setState({
+      activeId: "6kun0b",
+      organisations: [
+        { id: "stud", name: "stud", createdAt: "", prefs: prefs() },
+        { id: "6kun0b", name: "pers", createdAt: "", prefs: prefs("stud") },
+      ],
+    });
+  });
+  afterEach(() => {
+    useOrgStore.setState({ organisations: [] });
+  });
+  const targets = () => batches().map((b) => b.args.targetOrg);
+
+  it("a typed reading and the forecast after it target the lender's database", async () => {
+    routeSelects({ machines: [machine({ connection_id: null, device_id: null, reading_baseline: null })] });
+    await recordManualReading(machine({ connection_id: null, device_id: null, reading_baseline: null }), 150, TODAY);
+    expect(batchStmts().some((s) => s.sql.includes("INSERT INTO machine_readings"))).toBe(true);
+    expect(batchStmts().some((s) => s.sql.includes("UPDATE upkeep_items SET next_due_on"))).toBe(true);
+    expect(targets().length).toBeGreaterThan(1);
+    expect(targets().every((t) => t === "stud")).toBe(true);
+    // still bound to the open organisation, so a switch mid-way refuses the write
+    expect(batches().every((b) => b.args.expectedOrg === "6kun0b" || b.args.expectedOrg === undefined)).toBe(true);
+  });
+
+  it("marking done and saving an item re-forecast in the lender's database", async () => {
+    routeSelects();
+    await markDoneWithForecast(9, TODAY, null, undefined, TODAY);
+    await syncItemWithForecast(9, {}, TODAY);
+    expect(batchStmts().some((s) => s.sql.includes("UPDATE upkeep_items SET next_due_on"))).toBe(true);
+    expect(targets().every((t) => t === "stud")).toBe(true);
+  });
+
+  it("an organisation with its own equipment still writes to itself", async () => {
+    useOrgStore.setState({
+      organisations: [{ id: "6kun0b", name: "pers", createdAt: "", prefs: prefs() }],
+    });
+    routeSelects();
+    await syncItemWithForecast(9, {}, TODAY);
+    expect(batches().length).toBeGreaterThan(0);
+    expect(targets().every((t) => t === undefined)).toBe(true);
   });
 });

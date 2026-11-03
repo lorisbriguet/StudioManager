@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { getDb, getEquipmentDb, validateFields, TransactionBatch } from "../index";
+import { getDb, getEquipmentDb, equipmentOrgId, validateFields, TransactionBatch } from "../index";
 import { useOrgStore } from "../../stores/org-store";
 import { todayLocalISO } from "../../utils/localDate";
 import type {
@@ -155,7 +155,8 @@ export async function storeReadings(
   readAtISO: string,
   expectedOrg?: string
 ): Promise<void> {
-  const batch = new TransactionBatch(expectedOrg);
+  // Readings belong to the machines, which a borrowing organisation reads from the lender.
+  const batch = new TransactionBatch(expectedOrg, equipmentOrgId());
   for (const [metric, value] of r.metrics) {
     if (!Number.isFinite(value)) continue;
     batch.add(
