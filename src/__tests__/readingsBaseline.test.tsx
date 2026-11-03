@@ -9,6 +9,7 @@ let connections: Connection[] = [];
 const idle = { mutate: vi.fn(), isPending: false };
 vi.mock("../db/hooks/useConnections", () => ({
   useConnections: () => ({ data: connections }),
+  useEquipmentConnections: () => ({ data: connections }),
   useCurrentReading: () => ({ data: null }),
   useMachineDisks: () => ({ data: [] }),
   useLinkMachine: () => ({ mutate: linkMutate, isPending: false }),

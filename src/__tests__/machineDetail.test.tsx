@@ -19,6 +19,7 @@ let disks: unknown[] = [];
 let reading: number | null = null;
 vi.mock("../db/hooks/useConnections", () => ({
   useConnections: () => ({ data: connections }),
+  useEquipmentConnections: () => ({ data: connections }),
   useMachineDisks: () => ({ data: disks }),
   useCurrentReading: () => ({ data: reading }),
   useLinkMachine: mut,
