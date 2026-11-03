@@ -19,10 +19,21 @@ export function useCurrentReading(machineId: number, metric = "print_hours") {
   });
 }
 
+export function useEquipmentConnections() {
+  return useQuery({ queryKey: ["equipment-connections"], queryFn: q.getEquipmentConnections });
+}
+
+export function useLatestMetrics(machineId: number, prefix: string) {
+  return useQuery({
+    queryKey: ["machine-readings", machineId, "latest", prefix],
+    queryFn: () => q.getLatestMetrics(machineId, prefix),
+  });
+}
+
 function useInvalidateAll() {
   const qc = useQueryClient();
   return () => {
-    for (const key of ["connections", "machines", "upkeep-items", "machine-readings", "machine-disks"]) {
+    for (const key of ["connections", "machines", "upkeep-items", "machine-readings", "machine-disks", "equipment-connections"]) {
       qc.invalidateQueries({ queryKey: [key] });
     }
   };

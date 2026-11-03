@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { getDb, validateFields, TransactionBatch } from "../index";
+import { getDb, getEquipmentDb, validateFields, TransactionBatch } from "../index";
 import { useOrgStore } from "../../stores/org-store";
 import { todayLocalISO } from "../../utils/localDate";
 import type {
@@ -189,7 +189,7 @@ export async function storeReadings(
 
 /** Latest stored value of a metric plus the machine's `reading_baseline`; null without readings. */
 export async function currentReading(machineId: number, metric: string): Promise<number | null> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   const rows = await db.select<{ value: number }[]>(
     `SELECT value FROM machine_readings WHERE machine_id = $1 AND metric = $2
      ORDER BY read_at DESC, id DESC LIMIT 1`,
@@ -212,7 +212,7 @@ export async function firstReadingSince(
   metric: string,
   sinceISO: string
 ): Promise<number | null> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   const rows = await db.select<{ value: number }[]>(
     `SELECT value FROM machine_readings WHERE machine_id = $1 AND metric = $2 AND read_at >= $3
      ORDER BY read_at ASC, id ASC LIMIT 1`,
@@ -232,7 +232,7 @@ export async function getMachineReadings(
   metric: string,
   sinceISO: string
 ): Promise<Pick<MachineReading, "value" | "read_at">[]> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   return db.select<Pick<MachineReading, "value" | "read_at">[]>(
     `SELECT value, read_at FROM machine_readings
      WHERE machine_id = $1 AND metric = $2 AND read_at >= $3 ORDER BY read_at ASC, id ASC`,
@@ -241,9 +241,32 @@ export async function getMachineReadings(
 }
 
 export async function getMachineDisks(machineId: number): Promise<MachineDisk[]> {
-  const db = await getDb();
+  const db = await getEquipmentDb();
   return db.select<MachineDisk[]>(
     "SELECT * FROM machine_disks WHERE machine_id = $1 ORDER BY slot ASC",
     [machineId]
   );
+}
+
+/** All connections of the equipment database (the lender's, when borrowing). */
+export async function getEquipmentConnections(): Promise<Connection[]> {
+  const db = await getEquipmentDb();
+  return db.select<Connection[]>("SELECT * FROM connections ORDER BY label ASC");
+}
+
+/** Newest row per metric whose name starts with `prefix`. */
+export async function getLatestMetrics(
+  machineId: number,
+  prefix: string
+): Promise<{ metric: string; value: number; read_at: string }[]> {
+  const db = await getEquipmentDb();
+  const escaped = prefix.replace(/[\\%_]/g, (c) => "\\" + c);
+  const rows = await db.select<{ metric: string; value: number; read_at: string }[]>(
+    `SELECT metric, value, read_at FROM machine_readings
+     WHERE machine_id = $1 AND metric LIKE $2 ESCAPE '\\'
+     ORDER BY read_at DESC, id DESC`,
+    [machineId, escaped + "%"]
+  );
+  const seen = new Set<string>();
+  return rows.filter((r) => (seen.has(r.metric) ? false : (seen.add(r.metric), true)));
 }

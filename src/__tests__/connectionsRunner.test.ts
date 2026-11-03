@@ -242,6 +242,28 @@ describe("connection errors shown to the user", () => {
 });
 
 describe("runConnectionSyncs", () => {
+  it("a borrowing organisation runs no connection sync", async () => {
+    routeSelects();
+    const orgPrefs = (equipmentFrom?: string) => ({
+      showIncome: true, showTasksPage: true, showTimeOverview: true, calendarSync: false,
+      calendarName: "", backupPath: "", exportLanguage: "FR" as const, equipmentFrom,
+    });
+    useOrgStore.setState({
+      activeId: "6kun0b",
+      organisations: [
+        { id: "stud", name: "stud", createdAt: "", prefs: orgPrefs() },
+        { id: "6kun0b", name: "pers", createdAt: "", prefs: orgPrefs("stud") },
+      ],
+    });
+    try {
+      await runConnectionSyncs(qcStub(), { force: true, todayISO: TODAY });
+      expect(invokedCommands.filter((c) => c.cmd === "connection_sync")).toHaveLength(0);
+      expect(batchStmts().some((s) => /UPDATE connections/.test(s.sql))).toBe(false);
+    } finally {
+      useOrgStore.setState({ organisations: [] });
+    }
+  });
+
   it("stores readings for the linked machine, records success and re-forecasts usage items", async () => {
     routeSelects();
     setInvokeHandler((cmd) => (cmd === "connection_sync" ? syncResult : null));
