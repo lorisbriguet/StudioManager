@@ -50,7 +50,9 @@ describe("task creation undo/redo", () => {
   it("undo deletes the created task and its calendar event; redo recreates it with the same fields", async () => {
     useAppStore.setState({ calendarSync: true });
     setSelectHandler((sql) =>
-      sql.includes("FROM tasks WHERE id") ? [{ id: 1, ...newTask, calendar_event_id: "evt-1" }] : []
+      sql.includes("FROM tasks WHERE id")
+        ? [{ id: 1, ...newTask, calendar_event_id: "evt-1" }]
+        : []
     );
     const { result } = renderHook(() => useCreateTask(), { wrapper });
     result.current.mutate(newTask);
@@ -66,9 +68,11 @@ describe("task creation undo/redo", () => {
 
     clearExecutedStatements();
     await action.redo!();
-    const ins = executedStatements.find((s) => s.sql.includes("INSERT INTO tasks"))!;
-    expect(ins.params[1]).toBe("New");
-    expect(ins.params[5]).toBe("2030-01-01");
+    const ins = executedStatements.find((s) => s.sql.includes("INSERT OR REPLACE INTO tasks"))!;
+    expect(ins.sql).toMatch(/\(id,/);
+    expect(ins.params[0]).toBe(1);
+    expect(ins.params).toContain("New");
+    expect(ins.params).toContain(null); // calendar_event_id cleared: the event was deleted
   });
 
   it("undo does not touch the calendar when sync is off", async () => {
@@ -102,7 +106,8 @@ describe("subtask creation undo/redo", () => {
 
     clearExecutedStatements();
     await action.redo!();
-    const ins = executedStatements.find((s) => s.sql.includes("INSERT INTO subtasks"))!;
-    expect(ins.params[1]).toBe("Sub");
+    const ins = executedStatements.find((s) => s.sql.includes("INSERT OR REPLACE INTO subtasks"))!;
+    expect(ins.params).toContain("Sub");
+    expect(ins.params[0]).toBe(1);
   });
 });

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useOrgStore } from "./org-store";
 
 export interface UndoAction {
   label: string;
@@ -6,6 +7,33 @@ export interface UndoAction {
   /** If provided, allows redo after undo */
   redo?: () => Promise<void> | void;
   redirectTo?: string;
+  /** Organisation active when the action was pushed (stamped by the store). */
+  orgId?: string;
+}
+
+/**
+ * Stamp an action with the active organisation and make it inert in any other
+ * one: ids in one organisation's database mean other rows in another's.
+ */
+function stamp(action: UndoAction): UndoAction {
+  if (action.orgId !== undefined) return action;
+  const orgId = useOrgStore.getState().activeId;
+  action.orgId = orgId;
+  const run = (f: () => Promise<void> | void) => () =>
+    useOrgStore.getState().activeId === orgId ? f() : undefined;
+  action.execute = run(action.execute);
+  if (action.redo) action.redo = run(action.redo);
+  return action;
+}
+
+/** True when the action belongs to another organisation than the active one. */
+export function isForeignAction(action: UndoAction): boolean {
+  return action.orgId !== undefined && action.orgId !== useOrgStore.getState().activeId;
+}
+
+/** Empty both stacks (used when the organisation changes). */
+export function clearUndoHistory(): void {
+  useUndoStore.setState({ stack: [], redoStack: [] });
 }
 
 interface UndoState {
@@ -38,18 +66,18 @@ export const useUndoStore = create<UndoState>((set) => ({
   redoStack: [],
   push: (action) =>
     set((s) => ({
-      stack: [action, ...s.stack].slice(0, MAX_STACK),
+      stack: [stamp(action), ...s.stack].slice(0, MAX_STACK),
       redoStack: [], // new action clears redo history
     })),
   pushRedo: (action) =>
     set((s) => ({
-      redoStack: [action, ...s.redoStack].slice(0, MAX_STACK),
+      redoStack: [stamp(action), ...s.redoStack].slice(0, MAX_STACK),
     })),
   insertUndo: (action, index) =>
     set((s) => {
       const i = Math.max(0, Math.min(index, s.stack.length));
       return {
-        stack: [...s.stack.slice(0, i), action, ...s.stack.slice(i)].slice(0, MAX_STACK),
+        stack: [...s.stack.slice(0, i), stamp(action), ...s.stack.slice(i)].slice(0, MAX_STACK),
       };
     }),
   remove: (action) =>
