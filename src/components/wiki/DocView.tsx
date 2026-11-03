@@ -5,7 +5,8 @@ import { useT } from "../../i18n/useT";
 import { parseWikiArticleId, parseWikiFileKey } from "../../lib/wikiLinks";
 import { useProjectDoc, type ProjectDoc } from "../../db/hooks/useProjectDocs";
 import type { WikiRef } from "../../lib/wikiTabs";
-import { EmptyState, PANEL_TOP_BAR, IconButton, HEADING_1, ICONS } from "../ui";
+import { EmptyState, FORM_WIDTH, IconButton, HEADING_1, ICONS } from "../ui";
+import { WIKI_HEADER_ROW } from "./wikiLayout";
 import { Skeleton } from "../ui/Skeleton";
 
 /** True when the rendered Markdown opens with its own level-1 title (`# …`). */
@@ -25,7 +26,7 @@ export function DocView({
 }: {
   doc: ProjectDoc;
   nav: { canBack: boolean; canForward: boolean; onBack: () => void; onForward: () => void };
-  onOpenRef: (ref: WikiRef, newTab: boolean) => void;
+  onOpenRef: (ref: WikiRef) => void;
 }) {
   const t = useT();
   const { data: content, isLoading, isError } = useProjectDoc(doc);
@@ -37,11 +38,10 @@ export function DocView({
     if (!anchor) return;
     e.preventDefault();
     const href = anchor.getAttribute("href") ?? "";
-    const newTab = e.metaKey || e.ctrlKey;
     const fileKey = parseWikiFileKey(href);
-    if (fileKey) return onOpenRef(fileKey, newTab);
+    if (fileKey) return onOpenRef(fileKey);
     const id = parseWikiArticleId(href);
-    if (id !== null) return onOpenRef(id, newTab);
+    if (id !== null) return onOpenRef(id);
     if (/^https?:\/\//i.test(href)) {
       openUrl(href).catch((err) => {
         notify.error(t.failed_to_open_url, err);
@@ -51,10 +51,11 @@ export function DocView({
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className={`${PANEL_TOP_BAR} gap-1 px-3 border-[var(--color-border)]`}>
+      {/* One header row over the header line, like the article's. */}
+      <div className={WIKI_HEADER_ROW}>
         <IconButton icon={ICONS.prev} label={t.wiki_back} onClick={nav.onBack} disabled={!nav.canBack} />
         <IconButton icon={ICONS.next} label={t.wiki_forward} onClick={nav.onForward} disabled={!nav.canForward} />
-        <div className="flex-1 min-w-0 text-center text-xs text-muted truncate">
+        <div className="flex-1 min-w-0 truncate">
           {doc.projectName} <span className="opacity-50">/</span> <span className="text-[var(--color-text)]">{doc.rel}</span>
         </div>
         <IconButton
@@ -68,8 +69,8 @@ export function DocView({
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto px-8 py-8">
-        <div className="max-w-[720px] mx-auto">
+      <div className="flex-1 overflow-y-auto py-6">
+        <div className={FORM_WIDTH}>
           <p className="text-xs text-muted mb-6">{t.wiki_file_read_only}</p>
           {isLoading ? (
             <div className="space-y-3">
@@ -81,8 +82,8 @@ export function DocView({
             <EmptyState message={t.wiki_file_unreadable} />
           ) : (
             <>
-              {/* The page's h1, like an article title, unless the file opens with its own `# …`. */}
-              {!startsWithH1(content.html) && <h1 className={`${HEADING_1} mb-3`}>{fileName}</h1>}
+              {/* The file's title, like an article title, unless the file opens with its own `# …`. */}
+              {!startsWithH1(content.html) && <h2 className={`${HEADING_1} mb-3`}>{fileName}</h2>}
               <div className="tiptap-editor is-reading" onClick={handleClick}>
                 <div className="ProseMirror wiki-doc" dangerouslySetInnerHTML={{ __html: content.html }} />
               </div>

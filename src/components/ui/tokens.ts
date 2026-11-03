@@ -65,8 +65,8 @@ export const CARD_STACK = "space-y-4";
 
 /**
  * Headings. Two title levels and the 10px SectionLabel; no 12/16/18px titles.
- * Level 1: the page title, one per page, always an h1 (PageHeader, SidebarTitle,
- * the wiki article title). Level 2: cards, widgets, modals, peek panels and
+ * Level 1: the page title, one per page, always an h1 (PageHeader, SidebarTitle;
+ * the wiki article title, an h2 under the "Wiki" h1, also uses this size). Level 2: cards, widgets, modals, peek panels and
  * project blocks (PanelTitle, Card.Header).
  */
 export const HEADING_1 = "text-xl font-semibold tracking-tight";

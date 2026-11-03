@@ -23,8 +23,8 @@ import { deleteWithUndo } from "../lib/undo";
 import { useT } from "../i18n/useT";
 import { notify } from "../lib/notify";
 import { scrollBehavior } from "../lib/motion";
-import { ICONS, ICON_SIZE, Badge, Button, BottomBar, EmptyState, PANEL_TOP_BAR, Popover, IconButton, SectionLabel, Input, HEADING_1 } from "../components/ui";
-import { TabItem, TabList, tabIds } from "../components/ui/TabItem";
+import { ICONS, ICON_SIZE, Badge, Button, Dropdown, EmptyState, FORM_WIDTH, PageHeader, Popover, IconButton, SectionLabel, Input, HEADING_1 } from "../components/ui";
+import { WIKI_HEADER_ROW } from "../components/wiki/wikiLayout";
 import { TagInput } from "../components/shared/TagInput";
 import { MENU_ITEM } from "../components/ui/Dropdown";
 import { Select } from "../components/ui/Select";
@@ -50,7 +50,7 @@ import { WikiGraph } from "../components/wiki/WikiGraph";
 import type { GraphBox } from "../components/wiki/GraphView";
 import { WikiSidePanel, DocSidePanel } from "../components/wiki/WikiSidePanel";
 import { projectColors } from "../components/wiki/wikiColors";
-import { closeTab, EMPTY_TABS, openInTabs, pruneTabs, tabArticleId, tabRef, type TabsState, type WikiRef } from "../lib/wikiTabs";
+import { closeView, EMPTY_TABS, leaveGraph, openInView, pruneTabs, singleView, tabArticleId, tabRef, type TabsState, type WikiRef } from "../lib/wikiTabs";
 import { useProjectDocs, type ProjectDoc } from "../db/hooks/useProjectDocs";
 import { DocView } from "../components/wiki/DocView";
 
@@ -412,12 +412,15 @@ export function ArticleEditor({
   nav,
   onContentChange,
   onSaveStateChange,
+  status,
 }: {
   articleId: number;
-  /** Called after the article is deleted (closes its tab). */
+  /** Muted text in the header row, before the buttons (word count, save state). */
+  status?: React.ReactNode;
+  /** Called after the article is deleted (closes it). */
   onBack?: () => void;
-  /** Follows an internal wiki link; `newTab` on Cmd-click while reading. */
-  onOpenArticle?: (ref: WikiRef, newTab?: boolean) => void;
+  /** Follows an internal wiki link. */
+  onOpenArticle?: (ref: WikiRef) => void;
   /** Project files the link picker offers besides articles. */
   linkFiles?: ProjectDoc[];
   /** Reading shows the article read-only and links open on a plain click. */
@@ -713,8 +716,8 @@ export function ArticleEditor({
   }, [linkPopup, editor]);
 
   // While editing, a plain click places the cursor so the link text stays
-  // editable, and Cmd/Ctrl-click follows the link. While reading, a plain
-  // click follows it and Cmd/Ctrl-click opens it in a new tab.
+  // editable, and Cmd/Ctrl-click follows the link. While reading, any click
+  // follows it.
   const handleEditorClick = useCallback(
     (e: React.MouseEvent) => {
       const anchor = (e.target as HTMLElement).closest("a");
@@ -726,12 +729,12 @@ export function ArticleEditor({
       const href = anchor.getAttribute("href") ?? "";
       const fileKey = parseWikiFileKey(href);
       if (fileKey) {
-        onOpenArticle?.(fileKey, reading && modifier);
+        onOpenArticle?.(fileKey);
         return;
       }
       const targetId = parseWikiArticleId(href);
       if (targetId !== null) {
-        if (targetId !== articleId) onOpenArticle?.(targetId, reading && modifier);
+        if (targetId !== articleId) onOpenArticle?.(targetId);
         return;
       }
       if (/^https?:\/\//i.test(href)) {
@@ -748,15 +751,15 @@ export function ArticleEditor({
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Top bar: history, breadcrumb, mode, delete */}
-      <div className={`${PANEL_TOP_BAR} gap-1 px-3 border-[var(--color-border)]`}>
+      {/* One header row: history, breadcrumb, word count and save state, mode, more */}
+      <div className={WIKI_HEADER_ROW}>
         {nav && (
           <>
             <IconButton icon={ICONS.prev} label={t.wiki_back} onClick={nav.onBack} disabled={!nav.canBack} />
             <IconButton icon={ICONS.next} label={t.wiki_forward} onClick={nav.onForward} disabled={!nav.canForward} />
           </>
         )}
-        <div className="flex-1 min-w-0 text-center text-xs text-muted truncate">
+        <div className="flex-1 min-w-0 ml-1 truncate">
           {[nav?.folderName, article.project_name].filter(Boolean).map((part, i) => (
             <span key={i}>
               {part} <span className="opacity-50">/</span>{" "}
@@ -764,21 +767,28 @@ export function ArticleEditor({
           ))}
           <span className="text-[var(--color-text)]">{article.title}</span>
         </div>
-        {onModeChange && (
-          <IconButton
-            icon={reading ? ICONS.edit : ICONS.preview}
-            label={reading ? t.wiki_switch_to_editing : t.wiki_switch_to_reading}
-            pressed={!reading}
-            onClick={() => onModeChange(reading ? "editing" : "reading")}
+        {status != null && <span className="shrink-0 mr-2">{status}</span>}
+        <div className="flex items-center gap-2 shrink-0">
+          {onModeChange && (
+            <Button
+              variant="outline"
+              icon={reading ? ICONS.edit : ICONS.preview}
+              onClick={() => onModeChange(reading ? "editing" : "reading")}
+            >
+              {reading ? t.edit : t.wiki_read}
+            </Button>
+          )}
+          {/* Delete sits behind the more menu, apart from the mode toggle, so a missed click can't delete. */}
+          <Dropdown
+            align="end"
+            trigger={<IconButton icon={ICONS.more} label={t.more_actions} />}
+            items={[{ label: t.delete, icon: ICONS.delete, danger: true, onSelect: handleDeleteArticle }]}
           />
-        )}
-        {/* Kept apart from the mode toggle, so a missed click can't delete. */}
-        <div aria-hidden="true" className="h-4 w-px mx-1.5 bg-[var(--color-border)]" />
-        <IconButton icon={ICONS.delete} label={t.delete} tone="danger" onClick={handleDeleteArticle} />
+        </div>
       </div>
 
       <div
-        className="flex-1 overflow-y-auto px-8 py-8"
+        className="flex-1 overflow-y-auto py-6"
         onScroll={() => {
           // The menus sit at the caret: they'd float off the text it scrolls.
           if (slashMenu) {
@@ -788,9 +798,9 @@ export function ArticleEditor({
           if (linkPopup) closeLinkPopup();
         }}
       >
-        <div className="max-w-[720px] mx-auto">
-          {/* Title: the page h1, editable in place */}
-          <h1 className={`${HEADING_1} mb-3`}>
+        <div className={FORM_WIDTH}>
+          {/* Title: level-1 size under the page's "Wiki" h1, editable in place */}
+          <h2 className={`${HEADING_1} mb-3`}>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -801,7 +811,7 @@ export function ArticleEditor({
               aria-label={t.wiki_article_title}
               className={`w-full ${HEADING_1} block bg-transparent border-none outline-none text-[var(--color-text)] placeholder:text-muted`}
             />
-          </h1>
+          </h2>
 
           {/* Metadata row */}
           <div className="flex items-center gap-3 mb-6 flex-wrap">
@@ -910,7 +920,6 @@ const SIDE_PANEL_INLINE_MIN = 1000;
 
 export function WikiPage() {
   const t = useT();
-  const tabsBase = useId();
   const tabsKey = useOrgStore((s) => s.orgKey("wikiTabs"));
 
   const { data: allArticles = [], isSuccess: articlesLoaded } = useWikiArticles();
@@ -922,7 +931,8 @@ export function WikiPage() {
   const deleteArticle = useDeleteWikiArticle();
   const updateArticle = useUpdateWikiArticle();
 
-  const [tabsState, setTabsState] = useState<TabsState>(() => readStored(tabsKey, EMPTY_TABS));
+  // One article view (with its back/forward history) and the graph: no tab strip.
+  const [tabsState, setTabsState] = useState<TabsState>(() => singleView(readStored(tabsKey, EMPTY_TABS)));
   const [mode, setModeState] = useState<WikiMode>(() => readStored<WikiMode>("wikiMode", "reading"));
   const [explorerOpen, setExplorerOpen] = useState(() => readStored("wikiExplorerOpen", true));
   const [sideOpen, setSideOpen] = useState(() => readStored("wikiSidePanelOpen", true));
@@ -996,21 +1006,21 @@ export function WikiPage() {
   }, []);
 
   const openArticle = useCallback(
-    (id: number, newTab = false) => {
+    (id: number) => {
       if (!byId.has(id)) {
         notify.error(t.wiki_article_not_found);
         return;
       }
-      setTabsState((s) => openInTabs(s, id, newTab));
+      setTabsState((s) => openInView(s, id));
     },
     [byId, t.wiki_article_not_found]
   );
 
   /** Opens an article (by id) or a project file (by key). */
   const openRef = useCallback(
-    (ref: WikiRef, newTab = false) => {
-      if (typeof ref === "number") openArticle(ref, newTab);
-      else setTabsState((s) => openInTabs(s, ref, newTab));
+    (ref: WikiRef) => {
+      if (typeof ref === "number") openArticle(ref);
+      else setTabsState((s) => openInView(s, ref));
     },
     [openArticle]
   );
@@ -1022,6 +1032,8 @@ export function WikiPage() {
         : { tabs: [...s.tabs, { key: "graph", kind: "graph" }], active: "graph" }
     );
   }, []);
+  const graphActive = activeTab?.kind === "graph";
+  const toggleGraph = () => (graphActive ? setTabsState(leaveGraph) : openGraph());
 
   const moveHistory = useCallback((step: number) => {
     setTabsState((s) => ({
@@ -1034,25 +1046,14 @@ export function WikiPage() {
     }));
   }, []);
 
-  // Keyboard: Cmd+[ / Cmd+] go back and forward in the tab's history,
-  // Cmd+Shift+[ / Cmd+Shift+] switch wiki tabs. (Cmd+W and Ctrl+Tab stay
-  // with the app's own tabs.)
+  // Keyboard: Cmd+[ / Cmd+] go back and forward in the article's history.
+  // (Cmd+W and Ctrl+Tab stay with the app's own tabs.)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
       if (e.code !== "BracketLeft" && e.code !== "BracketRight") return;
       e.preventDefault();
-      const step = e.code === "BracketLeft" ? -1 : 1;
-      if (!e.shiftKey) {
-        moveHistory(step);
-        return;
-      }
-      setTabsState((s) => {
-        if (s.tabs.length < 2) return s;
-        const idx = s.tabs.findIndex((tab) => tab.key === s.active);
-        const next = s.tabs[(idx + step + s.tabs.length) % s.tabs.length];
-        return { ...s, active: next.key };
-      });
+      moveHistory(e.code === "BracketLeft" ? -1 : 1);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -1084,7 +1085,7 @@ export function WikiPage() {
         {
           onSuccess: (newId: number) => {
             setMode("editing");
-            setTabsState((s) => openInTabs(s, newId, true));
+            setTabsState((s) => openInView(s, newId));
           },
         }
       );
@@ -1152,7 +1153,6 @@ export function WikiPage() {
         index={index}
         colors={colors}
         onOpen={openArticle}
-        onOpenGraph={openGraph}
         onLinkIt={handleLinkIt}
         onOutline={scrollToHeading}
         docs={docs}
@@ -1167,14 +1167,13 @@ export function WikiPage() {
         colors={colors}
         onOpen={openArticle}
         onOpenFile={openRef}
-        onOpenGraph={openGraph}
         onOutline={scrollToHeading}
       />
     ) : null;
 
   const editorSkeleton = (
-    <div className="flex-1 px-8 py-8">
-      <div className="max-w-[720px] mx-auto space-y-3">
+    <div className="flex-1 py-6">
+      <div className={`${FORM_WIDTH} space-y-3`}>
         <Skeleton width="50%" height={20} rounded="md" />
         <Skeleton width="90%" height={14} rounded="md" />
         <Skeleton width="80%" height={14} rounded="md" />
@@ -1182,156 +1181,115 @@ export function WikiPage() {
     </div>
   );
 
+  const closeActive = () => setTabsState((s) => (s.active ? closeView(s, s.active) : s));
+  const historyNav =
+    activeTab?.kind === "article"
+      ? {
+          canBack: activeTab.pos > 0,
+          canForward: activeTab.pos < activeTab.history.length - 1,
+          onBack: () => moveHistory(-1),
+          onForward: () => moveHistory(1),
+        }
+      : null;
+
+  // A flat page like Invoices: the PageHeader on the canvas, then three columns
+  // (explorer, article, links) split by hairlines, no cards, no tab strip.
   return (
-    <div ref={rootRef} className="relative flex flex-1 min-h-0 -m-8 page-transition">
-      {explorerOpen && (
-        <WikiExplorer
-          articles={allArticles}
-          docs={docs}
-          activeRef={activeRef}
-          colors={colors}
-          creating={createArticle.isPending}
-          onOpen={openRef}
-          onNewArticle={handleNewArticle}
-          onOpenGraph={openGraph}
-          onDeleteArticle={handleDeleteArticle}
-          pageHeading={!(activeTab?.kind === "article" && (activeDoc || activeArticle))}
+    <div className="flex flex-col flex-1 min-h-0 page-transition">
+      <PageHeader title={t.wiki}>
+        <IconButton icon={PanelLeft} label={t.wiki_explorer} aria-pressed={explorerOpen} onClick={toggleExplorer} />
+        {/* Always there (greyed when nothing open has a side panel), so the header doesn't shift. */}
+        <IconButton
+          icon={PanelRight}
+          label={t.wiki_side_panel}
+          aria-pressed={hasSidePanel && sideVisible}
+          disabled={!hasSidePanel}
+          onClick={toggleSide}
         />
-      )}
+        <Button variant="secondary" icon={ICONS.graph} aria-pressed={graphActive} onClick={toggleGraph}>
+          {t.wiki_graph}
+        </Button>
+        <Button icon={ICONS.add} onClick={() => handleNewArticle(null)} disabled={createArticle.isPending}>
+          {t.new_article}
+        </Button>
+      </PageHeader>
 
-      <div className="flex-1 min-w-0 flex flex-col">
-        {/* Tab bar: same tabs and icon buttons as the app's own tab bar */}
-        <div className={`${PANEL_TOP_BAR} border-[var(--color-border)] bg-[var(--color-bg)]`}>
-          <IconButton
-            icon={PanelLeft}
-            label={t.wiki_explorer}
-            aria-pressed={explorerOpen}
-            onClick={toggleExplorer}
-            className="ml-1.5"
-          />
-          <TabList label={t.wiki_open_tabs} className="flex items-center flex-1 min-w-0 overflow-x-auto scrollbar-hide">
-            {tabsState.tabs.map((tab) => {
-              const ref = tabRef(tab);
-              const pending = typeof ref === "number" && !articlesLoaded;
-              const label =
-                tab.kind === "graph"
-                  ? t.wiki_graph
-                  : typeof ref === "string"
-                    ? (docsByKey.get(ref)?.rel ?? ref.split(":").slice(2).join(":")).split("/").pop()!
-                    : byId.get(ref ?? -1)?.title ?? "";
-              const ids = tabIds(tabsBase, tab.key);
-              return (
-                <TabItem
-                  key={tab.key}
-                  role="tab"
-                  id={ids.tab}
-                  controls={ids.panel}
-                  label={label}
-                  icon={
-                    tab.kind === "graph"
-                      ? ICONS.graph
-                      : typeof ref === "string"
-                        ? ICONS.file
-                        : pending
-                          ? <Skeleton inline width={72} height={10} />
-                          : ICONS.wikiArticle
-                  }
-                  active={tab.key === tabsState.active}
-                  onActivate={() => setTabsState((s) => ({ ...s, active: tab.key }))}
-                  onClose={() => setTabsState((s) => closeTab(s, tab.key))}
-                  closeLabel={t.wiki_close_tab}
-                />
-              );
-            })}
-          </TabList>
-          {/* Always there (greyed when nothing open has a side panel), so the
-              tab strip doesn't shift when you switch tabs. */}
-          <IconButton
-            icon={PanelRight}
-            label={t.wiki_side_panel}
-            aria-pressed={hasSidePanel && sideVisible}
-            disabled={!hasSidePanel}
-            onClick={toggleSide}
-            className="mr-1.5"
-          />
-        </div>
-
-        {/* The active tab's panel (just a wrapper when nothing is open). */}
-        <div
-          className="flex-1 min-h-0 min-w-0 flex flex-col"
-          {...(activeTab
-            ? { role: "tabpanel", id: tabIds(tabsBase, activeTab.key).panel, "aria-labelledby": tabIds(tabsBase, activeTab.key).tab }
-            : {})}
-        >
-        {activeTab?.kind === "graph" ? (
-          <WikiGraph
+      <div ref={rootRef} className="relative flex flex-1 min-h-0 gap-8">
+        {explorerOpen && (
+          <WikiExplorer
             articles={allArticles}
-            folders={folders}
-            index={index}
-            colors={colors}
             docs={docs}
-            activeRef={lastRef}
+            activeRef={activeRef}
+            colors={colors}
+            creating={createArticle.isPending}
             onOpen={openRef}
-            savedView={graphViewRef.current}
-            onViewChange={(v) => {
-              graphViewRef.current = v;
-            }}
+            onNewArticle={handleNewArticle}
+            onDeleteArticle={handleDeleteArticle}
           />
-        ) : activeTab?.kind === "article" && activeFileKey ? (
-          activeDoc ? (
-            <>
-              <DocView
-                key={activeDoc.key}
-                doc={activeDoc}
-                onOpenRef={openRef}
-                nav={{
-                  canBack: activeTab.pos > 0,
-                  canForward: activeTab.pos < activeTab.history.length - 1,
-                  onBack: () => moveHistory(-1),
-                  onForward: () => moveHistory(1),
-                }}
-              />
-              <BottomBar className="justify-end">
-                <span>
-                  {t.wiki_linked_from} {index.fileBacklinks.get(activeDoc.key)?.length ?? 0}
-                </span>
-                <span>{t.wiki_reading}</span>
-              </BottomBar>
-            </>
-          ) : docsLoading ? (
-            editorSkeleton
-          ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <EmptyState
-                message={t.wiki_file_unreadable}
-                icon={ICONS.file}
-                action={
-                  <Button variant="secondary" icon={ICONS.close} onClick={() => setTabsState((s) => closeTab(s, activeTab.key))}>
-                    {t.wiki_close_tab}
-                  </Button>
-                }
-              />
-            </div>
-          )
-        ) : activeTab?.kind === "article" && activeId != null && activeArticle ? (
-          <>
-            {/* Keyed so moving between articles remounts the editor: the unmount
-                flush then saves typing still inside the 2s autosave window. */}
+        )}
+
+        <section
+          aria-label={graphActive ? t.wiki_graph : activeArticle?.title ?? activeDoc?.rel ?? t.wiki}
+          className={`flex-1 min-w-0 min-h-0 flex flex-col ${explorerOpen ? "border-l border-[var(--color-border-divider)] pl-8" : ""}`}
+        >
+          {graphActive ? (
+            <WikiGraph
+              articles={allArticles}
+              folders={folders}
+              index={index}
+              colors={colors}
+              docs={docs}
+              activeRef={lastRef}
+              onOpen={openRef}
+              savedView={graphViewRef.current}
+              onViewChange={(v) => {
+                graphViewRef.current = v;
+              }}
+            />
+          ) : historyNav && activeFileKey ? (
+            activeDoc ? (
+              <DocView key={activeDoc.key} doc={activeDoc} onOpenRef={openRef} nav={historyNav} />
+            ) : docsLoading ? (
+              editorSkeleton
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <EmptyState
+                  message={t.wiki_file_unreadable}
+                  icon={ICONS.file}
+                  action={
+                    <Button variant="secondary" icon={ICONS.close} onClick={closeActive}>
+                      {t.close}
+                    </Button>
+                  }
+                />
+              </div>
+            )
+          ) : historyNav && activeId != null && activeArticle ? (
+            // Keyed so moving between articles remounts the editor: the unmount
+            // flush then saves typing still inside the 2s autosave window.
             <ArticleEditor
               key={activeId}
               articleId={activeId}
-              onBack={() => setTabsState((s) => closeTab(s, activeTab.key))}
+              onBack={closeActive}
               onOpenArticle={openRef}
               linkFiles={docs}
               mode={mode}
               onModeChange={setMode}
               onContentChange={handleContentChange}
               onSaveStateChange={setSaveState}
+              status={
+                <>
+                  {t.wiki_words.replace("{n}", String(wordCount(activeHtml)))}
+                  {saveState !== "idle" && (
+                    <span aria-live="polite">
+                      {" · "}
+                      {saveState === "saving" ? t.wiki_saving : t.wiki_saved}
+                    </span>
+                  )}
+                </>
+              }
               nav={{
-                canBack: activeTab.pos > 0,
-                canForward: activeTab.pos < activeTab.history.length - 1,
-                onBack: () => moveHistory(-1),
-                onForward: () => moveHistory(1),
+                ...historyNav,
                 // Articles without a project show the group they sit in (e.g. User Guide).
                 folderName:
                   activeArticle.project_id == null && activeArticle.folder_id != null
@@ -1339,60 +1297,46 @@ export function WikiPage() {
                     : undefined,
               }}
             />
-            <BottomBar className="justify-end">
-              <span>
-                {t.wiki_backlinks} {index.backlinks.get(activeId)?.length ?? 0}
-              </span>
-              <span>
-                {t.wiki_outgoing} {index.outgoing.get(activeId)?.size ?? 0}
-              </span>
-              <span>{t.wiki_words.replace("{n}", String(wordCount(activeHtml)))}</span>
-              {saveState !== "idle" && (
-                <span aria-live="polite">{saveState === "saving" ? t.wiki_saving : t.wiki_saved}</span>
+          ) : !articlesLoaded ? (
+            activeTab ? editorSkeleton : <div className="flex-1" />
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              {allArticles.length === 0 ? (
+                <EmptyState
+                  message={t.no_articles_yet}
+                  hint={t.first_run_wiki}
+                  icon={ICONS.wikiArticle}
+                  action={
+                    <Button icon={ICONS.add} onClick={() => handleNewArticle(null)} disabled={createArticle.isPending}>
+                      {t.new_article}
+                    </Button>
+                  }
+                />
+              ) : (
+                <EmptyState
+                  message={t.wiki_nothing_open}
+                  icon={ICONS.wikiArticle}
+                  action={
+                    <Button variant="secondary" icon={ICONS.graph} onClick={openGraph}>
+                      {t.wiki_open_graph}
+                    </Button>
+                  }
+                />
               )}
-              <span>{mode === "reading" ? t.wiki_reading : t.wiki_editing}</span>
-            </BottomBar>
-          </>
-        ) : !articlesLoaded ? (
-          activeTab ? editorSkeleton : <div className="flex-1" />
-        ) : (
-          <div className="flex-1 flex items-center justify-center">
-            {!articlesLoaded ? null : allArticles.length === 0 ? (
-              <EmptyState
-                message={t.no_articles_yet}
-                hint={t.first_run_wiki}
-                icon={ICONS.wikiArticle}
-                action={
-                  <Button icon={ICONS.add} onClick={() => handleNewArticle(null)} disabled={createArticle.isPending}>
-                    {t.new_article}
-                  </Button>
-                }
-              />
-            ) : (
-              <EmptyState
-                message={t.wiki_nothing_open}
-                icon={ICONS.wikiArticle}
-                action={
-                  <Button variant="secondary" icon={ICONS.graph} onClick={openGraph}>
-                    {t.wiki_open_graph}
-                  </Button>
-                }
-              />
-            )}
-          </div>
-        )}
-        </div>
-      </div>
+            </div>
+          )}
+        </section>
 
-      {sideVisible && sidePanel && (
-        narrow ? (
-          <div className="absolute inset-y-0 right-0 z-20 flex bg-[var(--color-bg)] shadow-menu">
-            {sidePanel}
-          </div>
-        ) : (
-          sidePanel
-        )
-      )}
+        {sideVisible && sidePanel && !graphActive && (
+          narrow ? (
+            <div className="absolute inset-y-0 right-0 z-20 flex bg-[var(--color-bg)] shadow-menu pr-4">
+              {sidePanel}
+            </div>
+          ) : (
+            sidePanel
+          )
+        )}
+      </div>
     </div>
   );
 }

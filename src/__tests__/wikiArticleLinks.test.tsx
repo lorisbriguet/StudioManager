@@ -95,20 +95,41 @@ describe("wiki article links", () => {
     expect(await screen.findByDisplayValue("Article One")).toBeInTheDocument();
   });
 
-  it("opens a link in a new tab on Cmd-click while reading", async () => {
+  it("follows a link in place on Cmd-click while reading: one article view, no tab strip", async () => {
     renderAt("/wiki?article=1");
     await screen.findByDisplayValue("Article One");
     fireEvent.click(await screen.findByText("Article Two", { selector: "a" }), { metaKey: true });
     expect(await screen.findByDisplayValue("Article Two")).toBeInTheDocument();
-    const bar = screen.getByRole("tablist", { name: /^open articles$/i });
-    expect(within(bar).getAllByRole("tab")).toHaveLength(2);
+    expect(screen.queryByRole("tablist")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^back$/i }));
+    expect(await screen.findByDisplayValue("Article One")).toBeInTheDocument();
+  });
+
+  it("the header's Graph button opens the graph and brings the article back", async () => {
+    renderAt("/wiki?article=1");
+    await screen.findByDisplayValue("Article One");
+    const graph = screen.getByRole("button", { name: /^graph view$/i });
+    fireEvent.click(graph);
+    expect(graph).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByDisplayValue("Article One")).toBeNull();
+    fireEvent.click(graph);
+    expect(await screen.findByDisplayValue("Article One")).toBeInTheDocument();
+  });
+
+  it("shows the word count in the header row and keeps Delete in the more menu", async () => {
+    renderAt("/wiki?article=1");
+    await screen.findByDisplayValue("Article One");
+    expect(screen.getByText("3 words")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^delete$/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^more actions$/i }));
+    expect(screen.getByRole("menuitem", { name: /^delete$/i })).toBeInTheDocument();
   });
 
   it("shows backlinks for the open article", async () => {
     renderAt("/wiki?article=2");
     await screen.findByDisplayValue("Article Two");
     const panel = screen.getByRole("region", { name: /^backlinks$/i });
-    expect(panel).toHaveTextContent("Backlinks · 1");
+    expect(within(panel).getByRole("heading", { name: /^Backlinks\s*1$/ })).toBeInTheDocument();
     expect(panel).toHaveTextContent("Article One");
   });
 });

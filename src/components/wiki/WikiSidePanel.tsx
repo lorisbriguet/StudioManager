@@ -1,24 +1,14 @@
-import { useId, useMemo, useState } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useT } from "../../i18n/useT";
 import type { WikiArticleWithTags } from "../../types/wiki";
-import {
-  buildWikiGraph,
-  extractOutline,
-  findUnlinkedMentions,
-  neighbourhood,
-  type LinkIndex,
-  type OutlineItem,
-  type Snippet,
-} from "../../lib/wikiGraph";
-import { GraphView } from "./GraphView";
+import { extractOutline, findUnlinkedMentions, type LinkIndex, type OutlineItem, type Snippet } from "../../lib/wikiGraph";
 import { colorFor } from "./wikiColors";
-import { Button, PANEL_TOP_BAR, TabItem, IconButton, SectionLabel, Tooltip, EmptyState, Card, ICONS, ICON_SIZE } from "../ui";
-import { TabList, tabIds } from "../ui/TabItem";
+import { Button, SectionLabel, Tooltip, ICONS, ICON_SIZE } from "../ui";
 import { useProjectDoc, type ProjectDoc } from "../../db/hooks/useProjectDocs";
 
 function SnippetText({ s }: { s: Snippet }) {
   return (
-    <span className="block mt-1 text-xs leading-relaxed text-muted">
+    <span className="block text-xs leading-relaxed">
       {s.before}
       <mark className="bg-accent-light text-accent-text rounded px-0.5">{s.mark}</mark>
       {s.after}
@@ -26,136 +16,109 @@ function SnippetText({ s }: { s: Snippet }) {
   );
 }
 
-/** The graph around one item (`id`), for the side panel. */
-function localGraph(graph: ReturnType<typeof buildWikiGraph>, id: number) {
-  const keep = neighbourhood(id, graph.edges);
-  return {
-    nodes: graph.items.filter((i) => keep.has(i.id)),
-    edges: graph.edges.filter(([a, b]) => keep.has(a) && keep.has(b)),
-    refOf: new Map(graph.items.map((i) => [i.id, i.ref])),
-  };
-}
-
-/** One-line rows (outgoing links, outline). */
+/**
+ * The side column is flat like a Table: each section is a group row (SectionLabel
+ * and its plain count, over the header line), then 36px rows with hairlines.
+ */
 const ROW =
-  "w-full flex items-center gap-1.5 h-7 px-2 rounded-md text-sm text-left text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors";
+  "focus-accent w-full h-9 flex items-center gap-1.5 px-2 border-b border-[var(--color-border-divider)] text-sm text-left text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] transition-colors";
+/** A section's message when it has nothing (no backlinks yet). */
+const EMPTY_ROW = "h-9 flex items-center px-2 border-b border-[var(--color-border-divider)] text-xs text-muted";
 
-type PanelTab = "links" | "outline";
-
-/** The side panel's tabs; `idBase` (from useId) wires each tab to the panel below it. */
-function PanelTabs({ tab, onTab, idBase }: { tab: PanelTab; onTab: (tab: PanelTab) => void; idBase: string }) {
-  const t = useT();
-  const links = tabIds(idBase, "links");
-  const outline = tabIds(idBase, "outline");
+function Section({ label, count, children }: { label: string; count?: number; children: ReactNode }) {
   return (
-    <TabList label={t.wiki_side_panel} className={`${PANEL_TOP_BAR} px-1.5 border-[var(--color-border)]`}>
-      <TabItem role="tab" id={links.tab} controls={links.panel} label={t.wiki_links} active={tab === "links"} onActivate={() => onTab("links")} />
-      <TabItem role="tab" id={outline.tab} controls={outline.panel} label={t.wiki_outline} active={tab === "outline"} onActivate={() => onTab("outline")} />
-    </TabList>
-  );
-}
-
-/** role/id/aria-labelledby for the panel of the active tab. */
-function panelProps(idBase: string, tab: PanelTab) {
-  const ids = tabIds(idBase, tab);
-  return { role: "tabpanel", id: ids.panel, "aria-labelledby": ids.tab } as const;
-}
-
-function OutlineList({ outline, onOutline }: { outline: OutlineItem[]; onOutline: (headingIndex: number) => void }) {
-  const t = useT();
-  return (
-    <>
-      <SectionLabel className="mb-2">{t.wiki_outline}</SectionLabel>
-      {outline.length === 0 ? (
-        <EmptyState size="sm" message={t.wiki_no_headings} />
-      ) : (
-        outline.map((h) => (
-          <button
-            key={h.index}
-            type="button"
-            onClick={() => onOutline(h.index)}
-            className={`${ROW} block truncate`}
-            style={{ paddingLeft: 8 + (h.level - 1) * 12 }}
-          >
-            {h.text}
-          </button>
-        ))
-      )}
-    </>
-  );
-}
-
-function LocalGraph({
-  graph,
-  focusId,
-  colors,
-  title,
-  onOpenGraph,
-  onOpen,
-  onOpenFile,
-}: {
-  graph: ReturnType<typeof localGraph>;
-  focusId: number;
-  colors: Map<number, string>;
-  title: string;
-  onOpenGraph: () => void;
-  onOpen: (id: number, newTab: boolean) => void;
-  onOpenFile?: (key: string, newTab: boolean) => void;
-}) {
-  const t = useT();
-  return (
-    <section aria-label={t.wiki_local_graph}>
-      <SectionLabel as="span" className="mb-2" action={<IconButton icon={ICONS.maximize} label={t.wiki_open_graph} onClick={onOpenGraph} />}>
-        {t.wiki_local_graph}
-      </SectionLabel>
-      <div className="h-44 rounded-xl border border-[var(--color-border-divider)] bg-[var(--color-bg)]">
-        <GraphView
-          compact
-          nodes={graph.nodes}
-          edges={graph.edges}
-          colors={colors}
-          focusId={focusId}
-          onOpen={(id, newTab) => {
-            const ref = graph.refOf.get(id);
-            if (typeof ref === "number") onOpen(ref, newTab);
-            else if (ref) onOpenFile?.(ref, newTab);
-          }}
-          label={`${t.wiki_local_graph}: ${title}`}
-        />
+    <section aria-label={label}>
+      <div className="h-8 flex items-center px-2 border-b border-[var(--color-border)]">
+        <SectionLabel as="h2" count={count}>
+          {label}
+        </SectionLabel>
       </div>
+      {children}
     </section>
   );
 }
 
-/** An article that links here, with up to two snippets: an inset card. */
-function SourceCard({
+/** A row that opens an article; its snippets show in a tooltip. */
+function SourceRow({
   src,
   snippets,
   colors,
   projectName,
   onClick,
+  action,
 }: {
   src: WikiArticleWithTags;
   snippets: Snippet[];
   colors: Map<number, string>;
   /** Shown on the right when the source is in another project. */
   projectName?: string | null;
-  onClick: (e: React.MouseEvent) => void;
+  onClick: () => void;
+  /** A button on the right of the row (Link it). */
+  action?: ReactNode;
 }) {
+  const row = (
+    <button type="button" onClick={onClick} className={`${ROW} ${action ? "pr-16" : ""}`}>
+      <span aria-hidden="true" className="dot-sm shrink-0" style={{ background: colorFor(colors, src.project_id) }} />
+      <span className="flex-1 truncate">{src.title}</span>
+      {projectName && <span className="text-xs text-muted truncate max-w-24">{projectName}</span>}
+    </button>
+  );
+  const shown = snippets.slice(0, 2);
+  return (
+    <div className="relative">
+      {shown.length > 0 ? (
+        <Tooltip
+          content={
+            <span className="block space-y-1 max-w-64">
+              {shown.map((s, i) => (
+                <SnippetText key={i} s={s} />
+              ))}
+            </span>
+          }
+        >
+          {row}
+        </Tooltip>
+      ) : (
+        row
+      )}
+      {action && <span className="absolute right-2 top-1/2 -translate-y-1/2">{action}</span>}
+    </div>
+  );
+}
+
+function OutlineRows({ outline, onOutline }: { outline: OutlineItem[]; onOutline: (headingIndex: number) => void }) {
   const t = useT();
   return (
-    <Tooltip content={t.wiki_new_tab_hint}>
-      <Card as="button" tone="inset" padding="sm" interactive onClick={onClick} className="w-full text-left">
-        <span className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-text)]">
-          <span aria-hidden="true" className="dot-sm shrink-0" style={{ background: colorFor(colors, src.project_id) }} />
-          <span className="truncate">{src.title}</span>
-          {projectName && <span className="ml-auto text-xs font-normal text-muted truncate">{projectName}</span>}
-        </span>
-        {snippets.slice(0, 2).map((s, i) => (
-          <SnippetText key={i} s={s} />
-        ))}
-      </Card>
-    </Tooltip>
+    <Section label={t.wiki_outline}>
+      {outline.length === 0 ? (
+        <p className={EMPTY_ROW}>{t.wiki_no_headings}</p>
+      ) : (
+        outline.map((h) => (
+          <button
+            key={h.index}
+            type="button"
+            onClick={() => onOutline(h.index)}
+            className={ROW}
+            style={{ paddingLeft: 8 + (h.level - 1) * 12 }}
+          >
+            <span className="truncate">{h.text}</span>
+          </button>
+        ))
+      )}
+    </Section>
+  );
+}
+
+/** The side column's frame: beside the article, split from it by the column line. */
+function Column({ children }: { children: ReactNode }) {
+  const t = useT();
+  return (
+    <aside
+      aria-label={t.wiki_side_panel}
+      className="w-58 shrink-0 flex flex-col min-h-0 overflow-y-auto space-y-3 border-l border-[var(--color-border-divider)] pl-8"
+    >
+      {children}
+    </aside>
   );
 }
 
@@ -166,7 +129,6 @@ export function WikiSidePanel({
   index,
   colors,
   onOpen,
-  onOpenGraph,
   onLinkIt,
   onOutline,
   docs = [],
@@ -178,156 +140,104 @@ export function WikiSidePanel({
   content?: string;
   index: LinkIndex;
   colors: Map<number, string>;
-  onOpen: (id: number, newTab: boolean) => void;
-  onOpenGraph: () => void;
+  onOpen: (id: number) => void;
   onLinkIt: (sourceId: number) => void;
   onOutline: (headingIndex: number) => void;
   /** Project files, to name the ones this article links to. */
   docs?: ProjectDoc[];
-  onOpenFile?: (key: string, newTab: boolean) => void;
+  onOpenFile?: (key: string) => void;
 }) {
   const t = useT();
-  const [tab, setTab] = useState<PanelTab>("links");
-  const idBase = useId();
   const docsByKey = useMemo(() => new Map(docs.map((d) => [d.key, d])), [docs]);
   const outgoingFiles = [...(index.fileOutgoing.get(article.id) ?? new Map<string, number>()).keys()];
   const byId = useMemo(() => new Map(articles.map((a) => [a.id, a])), [articles]);
 
   const backlinks = index.backlinks.get(article.id) ?? [];
   const outgoing = [...(index.outgoing.get(article.id) ?? new Map<number, number>())];
-  const unlinked = useMemo(
-    () => (tab === "links" ? findUnlinkedMentions(articles, article, index) : []),
-    [tab, articles, article, index]
-  );
+  const unlinked = useMemo(() => findUnlinkedMentions(articles, article, index), [articles, article, index]);
   const html = content ?? article.content;
   const outline = useMemo(() => extractOutline(html), [html]);
 
-  const local = useMemo(() => localGraph(buildWikiGraph(articles, docs, index), article.id), [articles, docs, index, article.id]);
-
-  const open = (id: number) => (e: React.MouseEvent) => onOpen(id, e.metaKey || e.ctrlKey);
-
   return (
-    <aside
-      aria-label={t.wiki_side_panel}
-      className="w-72 shrink-0 flex flex-col min-h-0 border-l border-[var(--color-border-divider)]"
-    >
-      <PanelTabs tab={tab} onTab={setTab} idBase={idBase} />
+    <Column>
+      <Section label={t.wiki_backlinks} count={backlinks.length}>
+        {backlinks.length === 0 ? (
+          <p className={EMPTY_ROW}>{t.wiki_no_backlinks}</p>
+        ) : (
+          backlinks.map((b) => {
+            const src = byId.get(b.sourceId);
+            if (!src) return null;
+            return (
+              <SourceRow
+                key={b.sourceId}
+                src={src}
+                snippets={b.snippets}
+                colors={colors}
+                projectName={src.project_id !== article.project_id ? src.project_name : null}
+                onClick={() => onOpen(b.sourceId)}
+              />
+            );
+          })
+        )}
+      </Section>
 
-      {tab === "outline" ? (
-        <div {...panelProps(idBase, tab)} className="flex-1 overflow-y-auto p-3">
-          <OutlineList outline={outline} onOutline={onOutline} />
-        </div>
-      ) : (
-        <div {...panelProps(idBase, tab)} className="flex-1 overflow-y-auto p-3 space-y-5">
-          <LocalGraph
-            graph={local}
-            focusId={article.id}
-            colors={colors}
-            title={article.title}
-            onOpenGraph={onOpenGraph}
-            onOpen={onOpen}
-            onOpenFile={onOpenFile}
-          />
+      <Section label={t.wiki_outgoing} count={outgoing.length + outgoingFiles.length}>
+        {outgoing.length + outgoingFiles.length === 0 ? (
+          <p className={EMPTY_ROW}>{t.wiki_no_outgoing}</p>
+        ) : (
+          <>
+            {outgoing.map(([id, count]) => {
+              const dst = byId.get(id);
+              if (!dst) return null;
+              return (
+                <button key={id} type="button" onClick={() => onOpen(id)} className={ROW}>
+                  <span className="flex-1 truncate">{dst.title}</span>
+                  {dst.project_id !== article.project_id && dst.project_name && (
+                    <span className="text-xs text-muted truncate max-w-24">{dst.project_name}</span>
+                  )}
+                  {count > 1 && <span className="text-xs text-muted tabular-nums">{count}</span>}
+                </button>
+              );
+            })}
+            {outgoingFiles.map((key) => (
+              <button key={key} type="button" onClick={() => onOpenFile?.(key)} className={ROW}>
+                <ICONS.file size={ICON_SIZE.menu} className="shrink-0 text-muted" />
+                <span className="flex-1 truncate">{docsByKey.get(key)?.rel ?? key.split(":").slice(2).join(":")}</span>
+              </button>
+            ))}
+          </>
+        )}
+      </Section>
 
-          <section aria-label={t.wiki_backlinks}>
-            <SectionLabel className="mb-2">
-              {t.wiki_backlinks} · {backlinks.length}
-            </SectionLabel>
-            {backlinks.length === 0 ? (
-              <EmptyState size="sm" message={t.wiki_no_backlinks} />
-            ) : (
-              <div className="space-y-1.5">
-                {backlinks.map((b) => {
-                  const src = byId.get(b.sourceId);
-                  if (!src) return null;
-                  return (
-                    <SourceCard
-                      key={b.sourceId}
-                      src={src}
-                      snippets={b.snippets}
-                      colors={colors}
-                      projectName={src.project_id !== article.project_id ? src.project_name : null}
-                      onClick={open(b.sourceId)}
-                    />
-                  );
-                })}
-              </div>
-            )}
-          </section>
+      <OutlineRows outline={outline} onOutline={onOutline} />
 
-          <section aria-label={t.wiki_outgoing}>
-            <SectionLabel className="mb-2">
-              {t.wiki_outgoing} · {outgoing.length + outgoingFiles.length}
-            </SectionLabel>
-            {outgoing.length + outgoingFiles.length === 0 ? (
-              <EmptyState size="sm" message={t.wiki_no_outgoing} />
-            ) : (
-              <>
-                {outgoing.map(([id, count]) => {
-                  const dst = byId.get(id);
-                  if (!dst) return null;
-                  return (
-                    <button key={id} type="button" onClick={open(id)} className={ROW}>
-                      <ICONS.goToLinked size={ICON_SIZE.menu} className="shrink-0 text-muted" />
-                      <span className="flex-1 truncate">{dst.title}</span>
-                      {dst.project_id !== article.project_id && dst.project_name && (
-                        <span className="text-xs text-muted truncate max-w-24">{dst.project_name}</span>
-                      )}
-                      {count > 1 && <span className="text-xs text-muted">{count}</span>}
-                    </button>
-                  );
-                })}
-                {outgoingFiles.map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={(e) => onOpenFile?.(key, e.metaKey || e.ctrlKey)}
-                    className={ROW}
-                  >
-                    <ICONS.file size={ICON_SIZE.menu} className="shrink-0 text-muted" />
-                    <span className="flex-1 truncate">{docsByKey.get(key)?.rel ?? key.split(":").slice(2).join(":")}</span>
-                  </button>
-                ))}
-              </>
-            )}
-          </section>
-
-          {unlinked.length > 0 && (
-            <section aria-label={t.wiki_unlinked}>
-              <SectionLabel className="mb-2">
-                {t.wiki_unlinked} · {unlinked.length}
-              </SectionLabel>
-              <div className="space-y-1.5">
-                {unlinked.map((u) => {
-                  const src = byId.get(u.sourceId);
-                  if (!src) return null;
-                  return (
-                    <Card key={u.sourceId} tone="dashed" padding="sm">
-                      <button
-                        type="button"
-                        onClick={open(u.sourceId)}
-                        className="flex items-center gap-1.5 max-w-full text-sm font-medium text-left text-[var(--color-text)] hover:underline"
-                      >
-                        <span aria-hidden="true" className="dot-sm shrink-0" style={{ background: colorFor(colors, src.project_id) }} />
-                        <span className="truncate">{src.title}</span>
-                      </button>
-                      <SnippetText s={u.snippet} />
-                      <Button variant="link" onClick={() => onLinkIt(u.sourceId)} className="mt-1.5">
-                        {t.wiki_link_it}
-                      </Button>
-                    </Card>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-        </div>
+      {unlinked.length > 0 && (
+        <Section label={t.wiki_unlinked} count={unlinked.length}>
+          {unlinked.map((u) => {
+            const src = byId.get(u.sourceId);
+            if (!src) return null;
+            return (
+              <SourceRow
+                key={u.sourceId}
+                src={src}
+                snippets={[u.snippet]}
+                colors={colors}
+                onClick={() => onOpen(u.sourceId)}
+                action={
+                  <Button variant="link" onClick={() => onLinkIt(u.sourceId)}>
+                    {t.wiki_link_it}
+                  </Button>
+                }
+              />
+            );
+          })}
+        </Section>
       )}
-    </aside>
+    </Column>
   );
 }
 
-/** Side panel of a project file: which articles link to it, and its outline. */
+/** Side column of a project file: which articles link to it, the files it links to, its outline. */
 export function DocSidePanel({
   doc,
   docs,
@@ -336,7 +246,6 @@ export function DocSidePanel({
   colors,
   onOpen,
   onOpenFile,
-  onOpenGraph,
   onOutline,
 }: {
   doc: ProjectDoc;
@@ -344,89 +253,41 @@ export function DocSidePanel({
   articles: WikiArticleWithTags[];
   index: LinkIndex;
   colors: Map<number, string>;
-  onOpen: (id: number, newTab: boolean) => void;
-  onOpenFile: (key: string, newTab: boolean) => void;
-  onOpenGraph: () => void;
+  onOpen: (id: number) => void;
+  onOpenFile: (key: string) => void;
   onOutline: (headingIndex: number) => void;
 }) {
   const t = useT();
-  const [tab, setTab] = useState<PanelTab>("links");
-  const idBase = useId();
   const { data: content } = useProjectDoc(doc);
   const byId = useMemo(() => new Map(articles.map((a) => [a.id, a])), [articles]);
   const linkedFrom = index.fileBacklinks.get(doc.key) ?? [];
   const outline = useMemo(() => extractOutline(content?.html ?? ""), [content?.html]);
-  const local = useMemo(() => {
-    const graph = buildWikiGraph(articles, docs, index);
-    const id = graph.items.find((i) => i.ref === doc.key)?.id;
-    return id === undefined ? null : { ...localGraph(graph, id), id };
-  }, [articles, docs, index, doc.key]);
   const linkedFiles = docs.filter((d) => doc.links.includes(d.rel) && d.projectId === doc.projectId);
 
   return (
-    <aside aria-label={t.wiki_side_panel} className="w-72 shrink-0 flex flex-col min-h-0 border-l border-[var(--color-border-divider)]">
-      <PanelTabs tab={tab} onTab={setTab} idBase={idBase} />
-      <div {...panelProps(idBase, tab)} className="flex-1 overflow-y-auto p-3">
-        {tab === "outline" ? (
-          <OutlineList outline={outline} onOutline={onOutline} />
+    <Column>
+      <Section label={t.wiki_linked_from} count={linkedFrom.length}>
+        {linkedFrom.length === 0 ? (
+          <p className={EMPTY_ROW}>{t.wiki_no_file_links}</p>
         ) : (
-          <div className="space-y-5">
-            {local && (
-              <LocalGraph
-                graph={local}
-                focusId={local.id}
-                colors={colors}
-                title={doc.rel}
-                onOpenGraph={onOpenGraph}
-                onOpen={onOpen}
-                onOpenFile={onOpenFile}
-              />
-            )}
-            <section aria-label={t.wiki_linked_from}>
-              <SectionLabel className="mb-2">
-                {t.wiki_linked_from} · {linkedFrom.length}
-              </SectionLabel>
-              {linkedFrom.length === 0 ? (
-                <EmptyState size="sm" message={t.wiki_no_file_links} />
-              ) : (
-                <div className="space-y-1.5">
-                  {linkedFrom.map((b) => {
-                    const src = byId.get(b.sourceId);
-                    if (!src) return null;
-                    return (
-                      <SourceCard
-                        key={b.sourceId}
-                        src={src}
-                        snippets={b.snippets}
-                        colors={colors}
-                        onClick={(e) => onOpen(b.sourceId, e.metaKey || e.ctrlKey)}
-                      />
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-            {linkedFiles.length > 0 && (
-              <section aria-label={t.wiki_outgoing}>
-                <SectionLabel className="mb-2">
-                  {t.wiki_outgoing} · {linkedFiles.length}
-                </SectionLabel>
-                {linkedFiles.map((d) => (
-                  <button
-                    key={d.key}
-                    type="button"
-                    onClick={(e) => onOpenFile(d.key, e.metaKey || e.ctrlKey)}
-                    className={ROW}
-                  >
-                    <ICONS.file size={ICON_SIZE.menu} className="shrink-0 text-muted" />
-                    <span className="flex-1 truncate">{d.rel}</span>
-                  </button>
-                ))}
-              </section>
-            )}
-          </div>
+          linkedFrom.map((b) => {
+            const src = byId.get(b.sourceId);
+            if (!src) return null;
+            return <SourceRow key={b.sourceId} src={src} snippets={b.snippets} colors={colors} onClick={() => onOpen(b.sourceId)} />;
+          })
         )}
-      </div>
-    </aside>
+      </Section>
+      {linkedFiles.length > 0 && (
+        <Section label={t.wiki_outgoing} count={linkedFiles.length}>
+          {linkedFiles.map((d) => (
+            <button key={d.key} type="button" onClick={() => onOpenFile(d.key)} className={ROW}>
+              <ICONS.file size={ICON_SIZE.menu} className="shrink-0 text-muted" />
+              <span className="flex-1 truncate">{d.rel}</span>
+            </button>
+          ))}
+        </Section>
+      )}
+      <OutlineRows outline={outline} onOutline={onOutline} />
+    </Column>
   );
 }
