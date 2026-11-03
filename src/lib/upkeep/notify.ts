@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { getDb, equipmentOrgId, TransactionBatch } from "../../db";
+import { getDb, getEquipmentDb, equipmentOrgId, TransactionBatch } from "../../db";
 import { getActiveUpkeepItems } from "../../db/queries/upkeepItems";
 import { getMachines } from "../../db/queries/machines";
 import { getConsumables, isLow } from "../../db/queries/consumables";
@@ -172,10 +172,10 @@ export function planNotifications(input: PlanInput): PlannedNotice[] {
   return out;
 }
 
-/** The UPDATE that records a notice as sent. */
 /** Notices whose marker row lives with the equipment (the lender's database when borrowed). */
 const EQUIPMENT_CAUSES = new Set<PlannedNotice["cause"]>(["overdue", "low_stock", "disk", "warranty"]);
 
+/** The UPDATE that records a notice as sent. */
 export function markerStatement(n: PlannedNotice): { sql: string; params: unknown[] } {
   switch (n.cause) {
     case "overdue":
@@ -244,13 +244,13 @@ export async function runUpkeepCheck(qc: QueryClient, todayISO: string): Promise
   if (!sameOrg()) return null;
   const pendingRenewals = await getPendingRenewals();
   if (!sameOrg()) return null;
-  const db = await getDb();
-  const disks = await db.select<MachineDisk[]>(
+  // Disks belong to the machines: the lender's database when borrowed.
+  const disks = await (await getEquipmentDb()).select<MachineDisk[]>(
     `SELECT d.* FROM machine_disks d JOIN machines m ON m.id = d.machine_id
      WHERE m.status != 'retired'`
   );
   if (!sameOrg()) return null;
-  const connections = await db.select<Connection[]>(
+  const connections = await (await getDb()).select<Connection[]>(
     "SELECT * FROM connections WHERE failing_since IS NOT NULL AND failing_notified = 0"
   );
   if (!sameOrg()) return null;
