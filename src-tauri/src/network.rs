@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::net::{TcpStream, ToSocketAddrs};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const MAX_TARGETS: usize = 32;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
@@ -78,10 +78,37 @@ pub fn socket_address(url: &str) -> Option<String> {
     Some(format!("{authority}:{port}"))
 }
 
+/// Runs `work` on its own thread and gives up after `limit`: DNS resolution
+/// has no timeout of its own. A late worker is left to finish and is ignored.
+fn within<T: Send + 'static>(limit: Duration, work: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(work());
+    });
+    rx.recv_timeout(limit).ok()
+}
+
+/// Resolve and connect; stops trying further addresses once `deadline` passes.
+fn tcp_connects(addr: &str, deadline: Instant) -> bool {
+    let Ok(addrs) = addr.to_socket_addrs() else { return false };
+    for a in addrs {
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return false;
+        }
+        if TcpStream::connect_timeout(&a, CONNECT_TIMEOUT.min(left)).is_ok() {
+            return true;
+        }
+    }
+    false
+}
+
 fn check_tcp(target: &CheckTarget) -> CheckResult {
     let up = socket_address(&target.url)
-        .and_then(|addr| addr.to_socket_addrs().ok())
-        .map(|mut addrs| addrs.any(|a| TcpStream::connect_timeout(&a, CONNECT_TIMEOUT).is_ok()))
+        .and_then(|addr| {
+            let deadline = Instant::now() + TOTAL_TIMEOUT;
+            within(TOTAL_TIMEOUT, move || tcp_connects(&addr, deadline))
+        })
         .unwrap_or(false);
     CheckResult {
         key: target.key.clone(),
@@ -140,6 +167,7 @@ fn check_all(targets: Vec<CheckTarget>) -> Vec<CheckResult> {
     handles
         .into_iter()
         .map(|(key, h)| {
+            // A panicked check maps to Error.
             h.join().unwrap_or(CheckResult { key, state: CheckState::Error, reason: None })
         })
         .collect()
@@ -163,7 +191,6 @@ mod tests {
     use super::*;
     use std::io::{Read, Write};
     use std::net::TcpListener;
-    use std::time::Instant;
 
     fn target(key: &str, kind: CheckKind, url: String) -> CheckTarget {
         CheckTarget { key: key.into(), kind, url, pin: None }
@@ -252,5 +279,24 @@ mod tests {
         assert_eq!(results[0].state, CheckState::Unreachable);
         assert_eq!(results[1].key, "fast");
         assert_eq!(results[1].state, CheckState::Up);
+    }
+
+    #[test]
+    fn stalled_work_gives_up_at_the_limit() {
+        let start = Instant::now();
+        let r = within(Duration::from_millis(200), || {
+            std::thread::sleep(Duration::from_secs(3));
+            true
+        });
+        assert_eq!(r, None);
+        assert!(start.elapsed() < Duration::from_secs(1));
+    }
+
+    #[test]
+    fn expired_deadline_stops_before_connecting() {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = l.local_addr().unwrap().to_string();
+        assert!(!tcp_connects(&addr, Instant::now()));
+        assert!(tcp_connects(&addr, Instant::now() + Duration::from_secs(2)));
     }
 }
