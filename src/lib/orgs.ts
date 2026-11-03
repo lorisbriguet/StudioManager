@@ -6,6 +6,8 @@ export interface OrgPrefs {
   showIncome: boolean;
   showTasksPage: boolean;
   showTimeOverview: boolean;
+  /** Opt-in Network page. Absent in older registries; read as off. */
+  showNetworkPage?: boolean;
   calendarSync: boolean;
   calendarName: string;
   /** Absent in registries written before upkeep; read as 'day_9am'. */

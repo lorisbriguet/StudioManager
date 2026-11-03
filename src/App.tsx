@@ -27,6 +27,7 @@ import { FinancesPage } from "./pages/FinancesPage";
 import { InvoicePreviewPage } from "./pages/InvoicePreviewPage";
 import { QuotePreviewPage } from "./pages/QuotePreviewPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
+import { NetworkPage } from "./pages/NetworkPage";
 import { UpkeepPage } from "./pages/UpkeepPage";
 import { MachinePage } from "./pages/MachinePage";
 const AgentsPage = lazy(() =>
@@ -231,6 +232,7 @@ function MainApp() {
                 <Route path="wiki" element={<Suspense fallback={<PageSpinner />}><WikiPage /></Suspense>} />
                 <Route path="agents" element={<Suspense fallback={<PageSpinner />}><AgentsPage /></Suspense>} />
                 <Route path="resources" element={<ResourcesPage />} />
+                <Route path="network" element={<NetworkPage />} />
                 <Route path="upkeep" element={<UpkeepPage />} />
                 <Route path="upkeep/machines/:id" element={<MachinePage />} />
                 <Route path="notifications"element={<NotificationsPage />} />

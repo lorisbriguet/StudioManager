@@ -85,3 +85,7 @@ Please include:
 - A screenshot if it is visual. Blur or crop anything you would not want a stranger to read.
 
 Questions of the form "why does it work this way" are just as useful as bugs. Thank you.
+
+## Network page
+
+An optional page under Agents that gathers the links, status and backups of your machines. It is off by default: turn it on in Settings → Behaviour → Network page. The design is in [the Network page spec](superpowers/specs/2026-11-02-network-page-design.md).

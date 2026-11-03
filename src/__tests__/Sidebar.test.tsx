@@ -68,6 +68,20 @@ describe("Sidebar", () => {
     useAppStore.setState({ agentsEnabled: false });
   });
 
+  it("hides Network when the switch is off", () => {
+    useAppStore.setState({ showNetworkPage: false });
+    renderSidebar();
+    expect(screen.queryByText("Network")).toBeNull();
+  });
+
+  it("shows Network right after Agents when on", () => {
+    useAppStore.setState({ agentsEnabled: true, showNetworkPage: true });
+    renderSidebar();
+    const hrefs = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
+    expect(hrefs.indexOf("/network")).toBe(hrefs.indexOf("/agents") + 1);
+    useAppStore.setState({ agentsEnabled: false, showNetworkPage: false });
+  });
+
   it("shows notification badge with unread count", () => {
     renderSidebar();
     // The badge shows "3" (from our mock)
