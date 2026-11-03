@@ -1,6 +1,9 @@
 import type { Connection, Machine, MachineFile } from "../../types/upkeep";
 
-/** Link schemes shown as remote buttons. Keep in sync with the Rust allow-list. */
+/**
+ * Link schemes shown as remote buttons. Keep in sync with the Rust allow-list.
+ * `jump` (Jump Desktop) is confirmed during the on-site check.
+ */
 export const REMOTE_SCHEMES = ["vnc", "jump"] as const;
 
 export interface NetworkCard {
@@ -60,4 +63,9 @@ export function buildNetworkCards(machines: Machine[], links: MachineFile[], con
     if (services.length || remote.length || nas) cards.push({ machine, services, remote, nas });
   }
   return cards;
+}
+
+/** The machine's first Screen Sharing link: its address is what the online check connects to. */
+export function vncLink(card: NetworkCard): MachineFile | undefined {
+  return card.remote.find((f) => schemeOf(f.path_or_url) === "vnc");
 }

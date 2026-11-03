@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, waitFor, renderHook, act } from "@testing-library/react";
+import { render, screen, cleanup, waitFor, renderHook, act, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { useAppStore } from "../stores/app-store";
 import type { Machine, MachineFile } from "../types/upkeep";
@@ -11,6 +11,7 @@ let links: MachineFile[] = [];
 let due: DueRow[] = [];
 const networkCheck = vi.fn(async (_t: { key: string }[]): Promise<CheckResult[]> => []);
 const notifySpy = vi.fn();
+const openRemoteLink = vi.fn(async (_id: number) => {});
 
 const q = <T,>(data: T) => ({ data, isPending: false, isError: false, isFetching: false, refetch: vi.fn() });
 vi.mock("../db/hooks/useUpkeep", () => ({
@@ -21,7 +22,10 @@ vi.mock("../db/hooks/useUpkeep", () => ({
   useSnoozeUpkeep: () => ({ mutate: vi.fn() }),
 }));
 vi.mock("../db/hooks/useConnections", () => ({ useEquipmentConnections: () => q([]) }));
-vi.mock("../lib/network/commands", () => ({ networkCheck: (t: { key: string }[]) => networkCheck(t) }));
+vi.mock("../lib/network/commands", () => ({
+  networkCheck: (t: { key: string }[]) => networkCheck(t),
+  openRemoteLink: (id: number) => openRemoteLink(id),
+}));
 vi.mock("../lib/upkeep/openAttachment", () => ({ openMachineAttachment: vi.fn() }));
 vi.mock("../lib/notify", async (orig) => ({
   ...(await orig<typeof import("../lib/notify")>()),
@@ -47,6 +51,8 @@ beforeEach(() => {
   networkCheck.mockReset();
   networkCheck.mockImplementation(async () => []);
   notifySpy.mockReset();
+  openRemoteLink.mockReset();
+  openRemoteLink.mockImplementation(async () => {});
 });
 afterEach(cleanup);
 
@@ -97,6 +103,44 @@ describe("NetworkPage", () => {
     renderPage();
     expect(screen.getByText("Swap the drive")).toBeTruthy();
     expect(screen.queryByText("Dust the fan")).toBeNull();
+  });
+});
+
+describe("Remote block", () => {
+  beforeEach(() => {
+    links = [
+      l(10, 1, "Screen Sharing", "vnc://mini.local"),
+      l(11, 1, "Jump Desktop", "jump://mini.local"),
+      l(12, 2, "Screen Sharing", "jump://other.local"),
+    ];
+  });
+
+  it("shows Online and one button per remote link", async () => {
+    networkCheck.mockImplementation(async () => [{ key: "machine:1", state: "up", reason: null }]);
+    renderPage();
+    expect(await screen.findByText("Online")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /Screen Sharing|Jump Desktop/ })).toHaveLength(3);
+    const keys = networkCheck.mock.calls[0][0].map((x) => x.key);
+    expect(keys).toEqual(["machine:1"]);
+  });
+
+  it("shows Unreachable when the machine does not answer, and no state without a vnc link", async () => {
+    networkCheck.mockImplementation(async () => [{ key: "machine:1", state: "unreachable", reason: null }]);
+    renderPage();
+    expect(await screen.findAllByText("Unreachable")).toHaveLength(1);
+  });
+
+  it("clicking a remote button calls openRemoteLink with the file id", async () => {
+    renderPage();
+    fireEvent.click(screen.getAllByRole("button", { name: "Jump Desktop" })[0]);
+    await waitFor(() => expect(openRemoteLink).toHaveBeenCalledWith(11));
+  });
+
+  it("reports a failed open", async () => {
+    openRemoteLink.mockRejectedValueOnce(new Error("boom"));
+    renderPage();
+    fireEvent.click(screen.getAllByRole("button", { name: "Jump Desktop" })[0]);
+    await waitFor(() => expect(notifySpy).toHaveBeenCalled());
   });
 });
 

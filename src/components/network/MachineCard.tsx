@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Card, HEADING_2, SectionLabel } from "../ui";
 import { useT } from "../../i18n/useT";
+import { RemoteBlock } from "./RemoteBlock";
 import { ServiceRow } from "./ServiceRow";
 import type { NetworkCard } from "../../lib/network/model";
 import type { CheckResult } from "../../lib/network/commands";
@@ -16,7 +17,9 @@ export function MachineCard({ card, results }: { card: NetworkCard; results: Map
           <Link to={`/upkeep/machines/${machine.id}`} className="hover:text-accent-text">{machine.name}</Link>
         </h2>
         <span className="text-xs text-muted truncate">{machine.kind}</span>
+        <RemoteBlock.State card={card} result={results.get(`machine:${machine.id}`)} />
       </div>
+      <RemoteBlock card={card} />
       {services.length > 0 && (
         <section>
           <SectionLabel as="h3" className="mb-1">{t.net_services}</SectionLabel>

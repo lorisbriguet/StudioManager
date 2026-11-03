@@ -9,7 +9,7 @@ import { useMachineLinks, useMachines, useUpkeepOverview } from "../db/hooks/use
 import { useAppStore } from "../stores/app-store";
 import { useNetworkChecks } from "../hooks/useNetworkChecks";
 import { formatAgo } from "../lib/network/format";
-import { buildNetworkCards, linkUrl, pinFor } from "../lib/network/model";
+import { buildNetworkCards, linkUrl, pinFor, vncLink } from "../lib/network/model";
 import type { CheckTarget } from "../lib/network/commands";
 
 const GRID = `grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] ${CARD_GAP} items-start`;
@@ -32,14 +32,18 @@ export function NetworkPage() {
   );
   const targets = useMemo<CheckTarget[]>(
     () =>
-      (cards ?? []).flatMap((c) =>
-        c.services.map((f) => ({
-          key: `link:${f.id}`,
-          kind: "http" as const,
-          url: linkUrl(f.path_or_url),
-          pin: pinFor(f.path_or_url, connections.data ?? []),
-        }))
-      ),
+      (cards ?? []).flatMap((c) => {
+        const vnc = vncLink(c);
+        return [
+          ...c.services.map((f) => ({
+            key: `link:${f.id}`,
+            kind: "http" as const,
+            url: linkUrl(f.path_or_url),
+            pin: pinFor(f.path_or_url, connections.data ?? []),
+          })),
+          ...(vnc ? [{ key: `machine:${c.machine.id}`, kind: "tcp" as const, url: linkUrl(vnc.path_or_url) }] : []),
+        ];
+      }),
     [cards, connections.data]
   );
   const { results, checkedAt, checking, refresh } = useNetworkChecks(targets);

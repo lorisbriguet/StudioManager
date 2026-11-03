@@ -186,6 +186,63 @@ pub async fn network_check(app: tauri::AppHandle, targets: Vec<CheckTarget>) -> 
         .map_err(|e| format!("network check failed: {e}"))
 }
 
+/// Schemes a remote-access button may open. `vnc` is Screen Sharing. The Jump
+/// Desktop scheme (`jump`) is confirmed during the on-site check; Jump Desktop
+/// is not installed on the development Mac. Keep in sync with the TS list.
+pub(crate) const REMOTE_SCHEMES: &[&str] = &["vnc", "jump"];
+
+/// Parses a stored link and accepts it only when its scheme is a remote one.
+/// Whitespace and control characters are refused outright.
+fn remote_url_allowed(url: &str) -> Result<reqwest::Url, String> {
+    let url = url.trim();
+    if url.is_empty() || url.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err("not a remote link".into());
+    }
+    let parsed = reqwest::Url::parse(url).map_err(|_| "not a remote link".to_string())?;
+    if !url.contains("://") || !REMOTE_SCHEMES.contains(&parsed.scheme()) {
+        return Err("not a remote link".into());
+    }
+    Ok(parsed)
+}
+
+/// The remote URL stored in `machine_files` row `file_id`: it must be a link, not an attachment.
+fn remote_link_url(conn: &rusqlite::Connection, file_id: i64) -> Result<reqwest::Url, String> {
+    let row: Option<(String, String)> = conn
+        .query_row("SELECT kind, path_or_url FROM machine_files WHERE id = ?1", [file_id], |r| {
+            Ok((r.get(0)?, r.get(1)?))
+        })
+        .map(Some)
+        .or_else(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => Ok(None),
+            e => Err(e),
+        })
+        .map_err(|e| format!("Failed to read the link: {e}"))?;
+    match row {
+        Some((kind, url)) if kind == "link" => remote_url_allowed(&url),
+        _ => Err("not a remote link".into()),
+    }
+}
+
+/// Opens a machine's remote link (Screen Sharing, Jump Desktop). The URL is read from the
+/// database by id, never taken from the page, and passed to `open` as one argument (no shell).
+#[tauri::command]
+pub async fn open_remote_link(app: tauri::AppHandle, target_org: Option<String>, file_id: i64) -> Result<(), String> {
+    let org = crate::active_org(&app)?;
+    let db_path = crate::batch_db_path(&app, &org, target_org.as_deref())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = rusqlite::Connection::open_with_flags(&db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .map_err(|e| format!("Failed to open DB: {e}"))?;
+        let url = remote_link_url(&conn, file_id)?;
+        let status = std::process::Command::new("/usr/bin/open")
+            .arg(url.as_str())
+            .status()
+            .map_err(|e| format!("Failed to open the link: {e}"))?;
+        if status.success() { Ok(()) } else { Err("Failed to open the link".into()) }
+    })
+    .await
+    .map_err(|e| format!("open failed: {e}"))?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -298,5 +355,60 @@ mod tests {
         let addr = l.local_addr().unwrap().to_string();
         assert!(!tcp_connects(&addr, Instant::now()));
         assert!(tcp_connects(&addr, Instant::now() + Duration::from_secs(2)));
+    }
+
+    #[test]
+    fn remote_url_allowed_accepts_vnc_and_jump() {
+        assert_eq!(remote_url_allowed("vnc://mini.local").unwrap().scheme(), "vnc");
+        assert_eq!(remote_url_allowed("vnc://user@mini.local:5901").unwrap().scheme(), "vnc");
+        assert_eq!(remote_url_allowed("  jump://mini.local ").unwrap().scheme(), "jump");
+    }
+
+    #[test]
+    fn remote_url_allowed_refuses_https_file_and_shell_like_input() {
+        for bad in [
+            "https://x",
+            "file:///etc/passwd",
+            "vnc",
+            "vnc:mini.local",
+            "javascript:alert(1)",
+            "vnc://mini.local; rm -rf ~",
+            "vnc://mini.local\n-a Calculator",
+            "",
+        ] {
+            assert!(remote_url_allowed(bad).is_err(), "{bad:?} should be refused");
+        }
+    }
+
+    fn files_db() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE machine_files (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, path_or_url TEXT NOT NULL);
+             INSERT INTO machine_files VALUES (1, 'link', 'vnc://mini.local');
+             INSERT INTO machine_files VALUES (2, 'file', '/Users/x/manual.pdf');
+             INSERT INTO machine_files VALUES (3, 'link', 'https://example.test');",
+        )
+        .unwrap();
+        conn
+    }
+
+    #[test]
+    fn open_remote_link_reads_a_remote_link() {
+        assert_eq!(remote_link_url(&files_db(), 1).unwrap().as_str(), "vnc://mini.local");
+    }
+
+    #[test]
+    fn open_remote_link_refuses_a_file_attachment() {
+        assert!(remote_link_url(&files_db(), 2).is_err());
+    }
+
+    #[test]
+    fn open_remote_link_refuses_a_web_link() {
+        assert!(remote_link_url(&files_db(), 3).is_err());
+    }
+
+    #[test]
+    fn open_remote_link_refuses_a_missing_row() {
+        assert!(remote_link_url(&files_db(), 99).is_err());
     }
 }
