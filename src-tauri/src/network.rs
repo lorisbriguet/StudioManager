@@ -288,11 +288,17 @@ fn remote_link_url(conn: &rusqlite::Connection, file_id: i64) -> Result<reqwest:
     }
 }
 
+/// No request leaves the Mac in test or presentation mode: opening a remote session is one.
+fn ensure_live(in_mode: bool) -> Result<(), String> {
+    if in_mode { Err("remote links are disabled in test and presentation mode".into()) } else { Ok(()) }
+}
+
 /// Opens a machine's remote link (Screen Sharing, Jump Desktop). The URL is read from the
 /// database by id, never taken from the page, and passed to `open` as one argument (no shell).
 #[tauri::command]
 pub async fn open_remote_link(app: tauri::AppHandle, target_org: Option<String>, file_id: i64) -> Result<(), String> {
     let org = crate::active_org(&app)?;
+    ensure_live(org.in_mode())?;
     let db_path = crate::batch_db_path(&app, &org, target_org.as_deref())?;
     tauri::async_runtime::spawn_blocking(move || {
         let conn = rusqlite::Connection::open_with_flags(&db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
@@ -455,6 +461,12 @@ mod tests {
         )
         .unwrap();
         conn
+    }
+
+    #[test]
+    fn open_remote_link_is_refused_in_test_and_presentation_mode() {
+        assert!(ensure_live(true).is_err());
+        assert!(ensure_live(false).is_ok());
     }
 
     #[test]

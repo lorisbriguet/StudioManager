@@ -1,4 +1,4 @@
-import { ListSkeleton, ProgressBar, SectionLabel } from "../ui";
+import { ListSkeleton, ProgressBar, QueryError, SectionLabel } from "../ui";
 import { useT } from "../../i18n/useT";
 import { useLatestMetrics, useMachineDisks } from "../../db/hooks/useConnections";
 import { diskHealthVariant } from "../../lib/statusColors";
@@ -14,6 +14,16 @@ export function NasHealth({ machineId }: { machineId: number }) {
   const metrics = useLatestMetrics(machineId, "volume_");
   const disks = useMachineDisks(machineId);
   if (metrics.isPending || disks.isPending) return <ListSkeleton size="sm" rows={2} className="mb-3" />;
+  if (metrics.isError || disks.isError) {
+    return (
+      <QueryError
+        className="mb-3"
+        message={t.load_error_network}
+        onRetry={() => { if (metrics.isError) void metrics.refetch(); if (disks.isError) void disks.refetch(); }}
+        retrying={metrics.isFetching || disks.isFetching}
+      />
+    );
+  }
   const volumes = volumesFrom(metrics.data ?? []);
   const list = disks.data ?? [];
   if (volumes.length === 0 && list.length === 0) return null;

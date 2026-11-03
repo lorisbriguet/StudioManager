@@ -9,6 +9,7 @@ import type { CheckResult } from "../lib/network/commands";
 let machines: Machine[] = [];
 let links: MachineFile[] = [];
 let due: DueRow[] = [];
+let tm: { enabled: boolean; lastBackupAt: string | null; lastResult: number | null; running: boolean } | null = null;
 const networkCheck = vi.fn(async (_t: { key: string }[]): Promise<CheckResult[]> => []);
 const notifySpy = vi.fn();
 const openRemoteLink = vi.fn(async (_id: number) => {});
@@ -23,7 +24,7 @@ vi.mock("../db/hooks/useUpkeep", () => ({
   useSnoozeUpkeep: () => ({ mutate: vi.fn() }),
 }));
 vi.mock("../db/hooks/useConnections", () => ({ useEquipmentConnections: () => q([]), useLatestMetricsFor: () => [] }));
-vi.mock("../hooks/useTimeMachine", () => ({ useTimeMachine: () => q(null) }));
+vi.mock("../hooks/useTimeMachine", () => ({ useTimeMachine: () => q(tm) }));
 vi.mock("../lib/network/commands", () => ({
   networkCheck: (t: { key: string }[]) => networkCheck(t),
   openRemoteLink: (id: number) => openRemoteLink(id),
@@ -50,6 +51,7 @@ beforeEach(() => {
   machines = [m(1, "Server A"), m(2, "Server B")];
   links = [l(1, 1, "Files", "https://files.example.test"), l(2, 1, "Wiki", "https://wiki.example.test"), l(3, 2, "Feeds", "https://feeds.example.test")];
   due = [];
+  tm = null;
   networkCheck.mockReset();
   networkCheck.mockImplementation(async () => []);
   notifySpy.mockReset();
@@ -82,6 +84,14 @@ describe("NetworkPage", () => {
     renderPage();
     expect(screen.getByText(/Nothing to show yet/)).toBeTruthy();
     expect(screen.queryByText("Upkeep due")).toBeNull();
+  });
+
+  it("shows the Backups card, not the empty state, when only Time Machine is on", () => {
+    links = [];
+    tm = { enabled: true, lastBackupAt: new Date().toISOString(), lastResult: 0, running: false };
+    renderPage();
+    expect(screen.queryByText(/Nothing to show yet/)).toBeNull();
+    expect(screen.getByText("Time Machine")).toBeTruthy();
   });
 
   it("renders without dots in presentation mode", async () => {

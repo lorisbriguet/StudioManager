@@ -19,11 +19,12 @@ export function MachineCard({ card, results, now = Date.now() }: { card: Network
           <Link to={`/upkeep/machines/${machine.id}`} className="hover:text-accent-text">{machine.name}</Link>
         </h2>
         <span className="text-xs text-muted truncate">{machine.kind}</span>
-        {card.nas?.last_sync_at && (
+        {card.nas?.last_ok_at && (
           <span className="text-xs text-muted shrink-0">
-            {t.net_nas_updated.replace("{time}", formatAgo(card.nas.last_sync_at, now, t))}
+            {t.net_nas_updated.replace("{time}", formatAgo(card.nas.last_ok_at, now, t))}
           </span>
         )}
+        {card.nas?.failing_since && <span className="text-xs text-warning-text shrink-0">{t.net_nas_sync_failing}</span>}
         <RemoteBlock.State card={card} result={results.get(`machine:${machine.id}`)} />
       </div>
       <RemoteBlock card={card} />

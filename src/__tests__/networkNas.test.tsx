@@ -25,7 +25,7 @@ const card = (): NetworkCard => ({
   machine: { id: 1, name: "Server A", kind: "server" } as Machine,
   services: [],
   remote: [],
-  nas: { id: 9, last_sync_at: "2026-11-02T09:00:00Z" } as Connection,
+  nas: { id: 9, last_sync_at: "2026-11-02T09:00:00Z", last_ok_at: "2026-11-02T09:00:00Z", failing_since: null } as Connection,
 });
 const renderCard = () =>
   render(<MemoryRouter><MachineCard card={card()} results={new Map()} now={NOW} /></MemoryRouter>);
@@ -73,6 +73,20 @@ describe("NasHealth in MachineCard", () => {
     expect(screen.getByText("Volume 1 · 4.8 of 7 TB")).toBeInTheDocument();
     expect(screen.getByText("Updated 3 h ago")).toBeInTheDocument();
     expect(screen.getByRole("progressbar").firstElementChild!.className).not.toMatch(/warning|danger/);
+  });
+
+  it("dates the update from the last successful sync and flags a failing one", () => {
+    const failing = { ...card(), nas: { ...card().nas!, last_sync_at: "2026-11-02T11:55:00Z", last_ok_at: "2026-10-30T09:00:00Z", failing_since: "2026-10-30T10:00:00Z" } as Connection };
+    render(<MemoryRouter><MachineCard card={failing} results={new Map()} now={NOW} /></MemoryRouter>);
+    expect(screen.getByText("Updated 3 d ago")).toBeInTheDocument();
+    expect(screen.getByText("Sync failing")).toBeInTheDocument();
+  });
+
+  it("shows no update time when no sync ever succeeded", () => {
+    const never = { ...card(), nas: { ...card().nas!, last_ok_at: null, failing_since: "2026-11-02T10:00:00Z" } as Connection };
+    render(<MemoryRouter><MachineCard card={never} results={new Map()} now={NOW} /></MemoryRouter>);
+    expect(screen.queryByText(/Updated/)).toBeNull();
+    expect(screen.getByText("Sync failing")).toBeInTheDocument();
   });
 
   it("warns above 75%", () => {

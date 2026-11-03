@@ -9,8 +9,8 @@ Date: 2026-11-02. Written by the session that brainstormed the feature with Lori
 - **Mockup Loris chose (option A, grouped by machine):** `docs/superpowers/mockups/2026-11-02-network-page.html`
   (open it in a browser; the click-to-select script of the brainstorm tool is not included, ignore its errors). Its
   numbers were illustrative.
-- **Branch / worktree:** `worktree-dashboard-pages-spec`, at
-  `/Users/loris.briguet/Documents/GitHub/StudioManager/.claude/worktrees/dashboard-pages-spec`, pushed to `origin`.
+- **Branch / worktree:** `worktree-dashboard-pages-spec`, in the worktree
+  `.claude/worktrees/dashboard-pages-spec`, pushed to `origin`.
   `main` was clean at 3.2.0 (`96d0ed6`) when the branch started.
 - **Execution method chosen by Loris:** subagent-driven (`superpowers:subagent-driven-development`): a fresh
   implementer per task, a fresh reviewer before the next task, a whole-branch review at the end.

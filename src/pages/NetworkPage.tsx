@@ -8,7 +8,9 @@ import { UpkeepDueCard } from "../components/network/UpkeepDueCard";
 import { useEquipmentConnections } from "../db/hooks/useConnections";
 import { useMachineLinks, useMachines, useUpkeepOverview } from "../db/hooks/useUpkeep";
 import { useAppStore } from "../stores/app-store";
+import { useTimeMachine } from "../hooks/useTimeMachine";
 import { useNetworkChecks } from "../hooks/useNetworkChecks";
+import { timeMachineState } from "../lib/network/backups";
 import { formatAgo } from "../lib/network/format";
 import { buildNetworkCards, linkUrl, pinFor, vncLink } from "../lib/network/model";
 import type { CheckTarget } from "../lib/network/commands";
@@ -22,6 +24,7 @@ export function NetworkPage() {
   const links = useMachineLinks();
   const connections = useEquipmentConnections();
   const { due } = useUpkeepOverview();
+  const tm = useTimeMachine();
   const noChecks = useAppStore((s) => s.testMode || s.presentationMode);
 
   const cards = useMemo(
@@ -65,6 +68,9 @@ export function NetworkPage() {
     refetch: () => queries.forEach((x) => void x.refetch()),
   };
 
+  // Empty only when there is nothing to list and Time Machine is off: backups of this Mac still deserve the page.
+  const hasBackups = tm.isPending || timeMachineState(tm.data ?? null, new Date(now)).show;
+
   const ids = new Set((cards ?? []).map((c) => c.machine.id));
   const dueRows = due.filter((r) => ids.has(r.machine.id));
 
@@ -90,6 +96,7 @@ export function NetworkPage() {
             <Card><ListSkeleton size="sm" rows={3} /></Card>
           </div>
         }
+        isEmpty={(list) => list.length === 0 && !hasBackups}
         empty={
           <EmptyState
             icon={ICONS.network}

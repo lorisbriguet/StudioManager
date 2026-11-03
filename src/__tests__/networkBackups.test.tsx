@@ -9,8 +9,11 @@ import type { TimeMachineStatus } from "../lib/network/commands";
 let tm: TimeMachineStatus | null = null;
 let metrics: { metric: string; value: number }[] = [];
 let items: UpkeepItem[] = [];
+let pending = false;
+let failed = false;
+const refetch = vi.fn();
 const createItem = vi.fn();
-const q = <T,>(data: T) => ({ data, isPending: false, isError: false });
+const q = <T,>(data: T) => ({ data: pending || failed ? undefined : data, isPending: pending, isError: failed, isFetching: false, refetch });
 vi.mock("../hooks/useTimeMachine", () => ({ useTimeMachine: () => q(tm) }));
 vi.mock("../db/hooks/useConnections", () => ({
   useLatestMetricsFor: (ids: number[]) => ids.map(() => q(metrics)),
@@ -22,7 +25,7 @@ vi.mock("../db/hooks/useUpkeep", () => ({
 }));
 vi.mock("../hooks/useUnsavedChangesWarning", () => ({ useUnsavedChangesWarning: () => {} }));
 
-import { timeMachineState } from "../lib/network/backups";
+import { timeMachineState, ageTone } from "../lib/network/backups";
 import { BackupsCard } from "../components/network/BackupsCard";
 import { UpkeepItemForm } from "../components/upkeep/UpkeepItemForm";
 
@@ -65,6 +68,14 @@ describe("timeMachineState", () => {
   });
 });
 
+describe("ageTone", () => {
+  it("is success up to 2 days, warning up to 7, danger beyond", () => {
+    expect(ageTone(ago(1), NOW)).toBe("success");
+    expect(ageTone(ago(3), NOW)).toBe("warning");
+    expect(ageTone(ago(8), NOW)).toBe("danger");
+  });
+});
+
 const nasCard = (): NetworkCard => ({
   machine: { id: 1, name: "Server A", kind: "nas" } as Machine,
   services: [],
@@ -81,6 +92,9 @@ const renderCard = (cards: NetworkCard[] = [nasCard()]) => render(<BackupsCard c
 beforeEach(() => {
   useAppStore.setState({ language: "EN", dateFormat: "dd/MM/yyyy", upkeepSoonDays: 7 });
   tm = null;
+  pending = false;
+  failed = false;
+  refetch.mockReset();
   metrics = [];
   items = [];
   createItem.mockReset();
@@ -123,6 +137,30 @@ describe("BackupsCard", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("colours the NAS snapshot by age like Time Machine", () => {
+    const at = (d: number) => Date.parse(ago(d)) / 1000;
+    for (const [days, cls] of [[1, "bg-success"], [3, "bg-warning"], [8, "bg-danger"]] as const) {
+      metrics = [{ metric: "snapshot_latest_at:docs", value: at(days) }];
+      const { container, unmount } = renderCard();
+      expect(container.querySelector(`li .${cls}`)).not.toBeNull();
+      unmount();
+    }
+  });
+
+  it("shows a skeleton, not the empty text, while loading", () => {
+    pending = true;
+    renderCard();
+    expect(screen.queryByText(t.net_backups_none)).toBeNull();
+  });
+
+  it("shows a danger callout with Retry when a read fails", () => {
+    failed = true;
+    renderCard();
+    expect(screen.queryByText(t.net_backups_none)).toBeNull();
+    fireEvent.click(screen.getByText(t.retry));
+    expect(refetch).toHaveBeenCalled();
   });
 
   it("says Running while a backup runs", () => {

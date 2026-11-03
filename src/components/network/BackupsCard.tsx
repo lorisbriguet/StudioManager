@@ -1,10 +1,10 @@
-import { Card, EmptyState, ICONS, Tooltip } from "../ui";
+import { Card, EmptyState, ICONS, ListSkeleton, QueryError, Tooltip } from "../ui";
 import { useT } from "../../i18n/useT";
 import { useActiveUpkeepItems } from "../../db/hooks/useUpkeep";
 import { useLatestMetricsFor } from "../../db/hooks/useConnections";
 import { useTimeMachine } from "../../hooks/useTimeMachine";
 import { useAppStore } from "../../stores/app-store";
-import { timeMachineState, type BackupTone } from "../../lib/network/backups";
+import { ageTone, timeMachineState, type BackupTone } from "../../lib/network/backups";
 import { latestSnapshot } from "../../lib/network/nas";
 import { dueState } from "../../lib/upkeep/schedule";
 import { formatDisplayDate } from "../../utils/formatDate";
@@ -61,7 +61,7 @@ export function BackupsCard({ cards, now = Date.now() }: { cards: NetworkCard[];
     rows.push(
       <Row
         key={`nas-${c.machine.id}`}
-        tone="success"
+        tone={ageTone(snap.at * 1000, new Date(now))}
         name={nasCards.length > 1 ? `${t.net_nas_snapshots} · ${c.machine.name}` : t.net_nas_snapshots}
         detail={t.net_backup_last.replace("{date}", unixDate(snap.at))}
         hint={snap.byShare.map((x) => (
@@ -87,10 +87,25 @@ export function BackupsCard({ cards, now = Date.now() }: { cards: NetworkCard[];
     );
   }
 
+  const sources = [tm, items, ...readings];
+  const pending = sources.some((x) => x.isPending);
+  const failed = sources.find((x) => x.isError);
   return (
     <Card as="section">
       <Card.Header title={t.net_backups} />
-      {rows.length > 0 ? <ul>{rows}</ul> : <EmptyState size="sm" icon={ICONS.archive} message={t.net_backups_none} />}
+      {pending ? (
+        <ListSkeleton size="sm" rows={2} />
+      ) : failed ? (
+        <QueryError
+          message={t.load_error_network}
+          onRetry={() => sources.filter((x) => x.isError).forEach((x) => void x.refetch())}
+          retrying={sources.some((x) => x.isFetching)}
+        />
+      ) : rows.length > 0 ? (
+        <ul>{rows}</ul>
+      ) : (
+        <EmptyState size="sm" icon={ICONS.archive} message={t.net_backups_none} />
+      )}
     </Card>
   );
 }
