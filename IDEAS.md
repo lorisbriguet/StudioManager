@@ -85,6 +85,13 @@ All 12 checklist items pass after three fixes found by the pass:
 - [x] Test Mode and Presentation Mode are demo-build tools now: their Settings category is hidden in the real app (banners and exit paths stay for anyone mid-mode at update time); the Snapshot card moved under Backup
 - [x] Docs: guide, [README](README.md) and landing page no longer point testers at Presentation Mode
 
+## V3.3.1 — Done (agent Upkeep tools back)
+
+- [x] Agent Upkeep tools shipped (they were on an unmerged branch, so 3.3.0 lacked them): service log, machines, upkeep items, consumables, subscriptions, each asking first ([Agent access](docs/agent-access.md))
+- [x] New `add_machine_link` tool, links in `get_machine`: agents can fill the Network page
+- [x] Release gate in [RELEASING.md](RELEASING.md): open PRs and unmerged branches checked, agent tools checked after install; the MCP protocol test lists every Upkeep tool
+- [ ] Left out on purpose: PR #21 (brief renderer path docs, draft) and the old `paperless-inbox-spec` branch (shipped in 3.2.0)
+
 ## V3.3.0 — Done (Network page, flat pages, fixes)
 
 - [x] Network page: machine cards with service links and status, remote machines, NAS health, backups (Time Machine, NAS snapshots, upkeep items marked as backups) ([spec](docs/superpowers/specs/2026-11-02-network-page-design.md), [plan](docs/superpowers/plans/2026-11-02-network-page.md))

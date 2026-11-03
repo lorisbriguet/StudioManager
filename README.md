@@ -122,7 +122,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Consumables with stock levels and reorder alerts, subscriptions with renewals you confirm into expenses, warranties, and lending equipment out
 - Optional connections to a Synology NAS (disk health), the Bambu Lab cloud (print hours) and Paperless-ngx (the invoice inbox); secrets stay in the macOS Keychain, nothing connects unless you add it
 - Share equipment between organisations: an organisation can use another one's machines, upkeep and consumables (Settings › Upkeep › Equipment); project links and calendar events stay with the owner
-- Agents can read the machines and what is due through [the MCP server](docs/superpowers/specs/2026-10-27-agent-access-mcp-design.md); no secrets, no readings history
+- Agents can read the machines and what is due through [the MCP server](docs/superpowers/specs/2026-10-27-agent-access-mcp-design.md), and, after asking you, log a service, add or edit machines, upkeep items, consumables and subscriptions, and add links to a machine for the Network page ([Agent access](docs/agent-access.md)); no secrets, no readings history
 - Design and decisions: [the Studio upkeep spec](docs/superpowers/specs/2026-10-28-studio-upkeep-design.md)
 
 ### Network
