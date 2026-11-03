@@ -121,6 +121,12 @@ export async function getMachineFiles(machineId: number): Promise<MachineFile[]>
   );
 }
 
+/** Every link of every machine, for the Network page. */
+export async function getMachineLinks(): Promise<MachineFile[]> {
+  const db = await getEquipmentDb();
+  return db.select<MachineFile[]>("SELECT * FROM machine_files WHERE kind = 'link' ORDER BY id ASC");
+}
+
 /**
  * Attach a manual, invoice or link. A `file` is copied into the active
  * organisation's data folder (`machines/<id>/`), like receipts, and the copy's
