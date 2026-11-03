@@ -140,15 +140,23 @@ export function useCreateTask() {
     mutationFn: async (data: Omit<Task, "id" | "created_at" | "updated_at" | "calendar_event_id" | "planned_minutes" | "tracked_minutes" | "workload_cells" | "workload_sort_order">) => {
       const id = await q.createTask(data);
       syncTaskCalendar(id);
+      // Redo creates a new row, so undo/redo follow whichever id is current.
+      let currentId = id;
       useUndoStore.getState().push({
         label: `${getLabels().undo_create_task} "${data.title}"`,
         execute: async () => {
-          await q.deleteTask(id);
+          const cur = await q.getTaskById(currentId);
+          const calId = useAppStore.getState().calendarSync ? cur?.calendar_event_id : null;
+          await q.deleteTask(currentId);
+          if (calId) deleteCalendarEvent(calId).catch(notifyCalendarSyncFailure);
           qc.invalidateQueries({ queryKey: ["tasks"] });
+          qc.invalidateQueries({ queryKey: ["workload-rows"] });
         },
         redo: async () => {
-          await q.createTask(data);
+          currentId = await q.createTask(data);
+          syncTaskCalendar(currentId);
           qc.invalidateQueries({ queryKey: ["tasks"] });
+          qc.invalidateQueries({ queryKey: ["workload-rows"] });
         },
       });
       return id;
@@ -277,14 +285,19 @@ export function useCreateSubtask() {
     mutationFn: async (data: Omit<Subtask, "id" | "created_at" | "updated_at" | "calendar_event_id">) => {
       const id = await q.createSubtask(data);
       syncSubtaskCalendar(id);
+      let currentId = id;
       useUndoStore.getState().push({
         label: `${getLabels().undo_create_subtask} "${data.title}"`,
         execute: async () => {
-          await q.deleteSubtask(id);
+          const cur = await q.getSubtaskById(currentId);
+          const calId = useAppStore.getState().calendarSync ? cur?.calendar_event_id : null;
+          await q.deleteSubtask(currentId);
+          if (calId) deleteCalendarEvent(calId).catch(notifyCalendarSyncFailure);
           qc.invalidateQueries({ queryKey: ["subtasks"] });
         },
         redo: async () => {
-          await q.createSubtask(data);
+          currentId = await q.createSubtask(data);
+          syncSubtaskCalendar(currentId);
           qc.invalidateQueries({ queryKey: ["subtasks"] });
         },
       });
