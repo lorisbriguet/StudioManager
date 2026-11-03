@@ -1,0 +1,11 @@
+{
+  "data": {
+    "snapshots": [
+      { "time": "GMT+01-2026.10.31-02.00.01", "desc": "", "lock": false },
+      { "time": "GMT+01-2026.11.02-02.00.03", "desc": "", "lock": false },
+      { "time": "GMT+01-2026.11.01-02.00.02", "desc": "", "lock": false }
+    ],
+    "total": 3
+  },
+  "success": true
+}

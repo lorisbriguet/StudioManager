@@ -128,6 +128,61 @@ pub(crate) fn parse_disks(data: &JsonValue) -> Vec<DiskReading> {
         .collect()
 }
 
+/// Volume sizes of a `load_info` answer (`data`): `volume_total_bytes:{id}` and
+/// `volume_used_bytes:{id}` for each volume that reports `size.total` and
+/// `size.used` (byte counts, sent as strings).
+pub(crate) fn parse_volumes(data: &JsonValue) -> Vec<(String, f64)> {
+    let Some(volumes) = data.get("volumes").and_then(JsonValue::as_array) else { return vec![] };
+    let mut out = vec![];
+    for v in volumes {
+        let (Some(id), Some(size)) = (text(v, "id"), v.get("size")) else { continue };
+        let (Some(total), Some(used)) = (number(size, "total"), number(size, "used")) else { continue };
+        out.push((format!("volume_total_bytes:{id}"), total));
+        out.push((format!("volume_used_bytes:{id}"), used));
+    }
+    out
+}
+
+/// Days since 1970-01-01 of a civil date (proleptic Gregorian).
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+/// A DSM snapshot name such as `GMT+01-2026.11.02-02.00.03` → Unix seconds
+/// (UTC). The `GMT` part is the offset of the local time that follows
+/// (`GMT+05:30` and `GMT-05` work too). `None` for anything else.
+fn parse_snapshot_time(s: &str) -> Option<f64> {
+    let rest = s.trim().strip_prefix("GMT")?;
+    let sign = match rest.chars().next()? {
+        '+' => 1,
+        '-' => -1,
+        _ => return None,
+    };
+    let rest = &rest[1..];
+    let (offset, rest) = rest.split_once('-')?;
+    let (oh, om) = match offset.split_once(':') {
+        Some((h, m)) => (h, m),
+        None => (offset, "0"),
+    };
+    let offset_secs = sign * (oh.parse::<i64>().ok()? * 3600 + om.parse::<i64>().ok()? * 60);
+    let (date, time) = rest.split_once('-')?;
+    let d: Vec<i64> = date.split('.').map(|p| p.parse().ok()).collect::<Option<_>>()?;
+    let t: Vec<i64> = time.split('.').map(|p| p.parse().ok()).collect::<Option<_>>()?;
+    if d.len() != 3 || t.len() != 3 || !(1..=12).contains(&d[1]) || !(1..=31).contains(&d[2]) {
+        return None;
+    }
+    if !(0..24).contains(&t[0]) || !(0..60).contains(&t[1]) || !(0..61).contains(&t[2]) {
+        return None;
+    }
+    let local = days_from_civil(d[0], d[1], d[2]) * 86_400 + t[0] * 3600 + t[1] * 60 + t[2];
+    Some((local - offset_secs) as f64)
+}
+
 /// `https://<host>:<port>/webapi/`, IPv6 literals in brackets.
 pub(crate) fn base_url(host: &str, port: u16) -> String {
     let host = host.trim();
@@ -198,6 +253,11 @@ const API_INFO: &str = "SYNO.API.Info";
 const API_AUTH: &str = "SYNO.API.Auth";
 const API_SYSTEM: &str = "SYNO.Core.System";
 const API_STORAGE: &str = "SYNO.Storage.CGI.Storage";
+/// Optional: shared folders and their snapshots (a NAS without them still syncs).
+const API_SHARE: &str = "SYNO.Core.Share";
+const API_SNAPSHOT: &str = "SYNO.Core.Share.Snapshot";
+/// Snapshot listing costs one request per shared folder: look at this many.
+const MAX_SNAPSHOT_SHARES: usize = 50;
 /// Name of the session, and of this computer in the account's trusted devices.
 const CLIENT_NAME: &str = "StudioManager";
 
@@ -300,6 +360,9 @@ struct Session {
     auth: Api,
     system: Api,
     storage: Api,
+    /// Optional APIs: `None` when the NAS doesn't offer them.
+    share: Option<Api>,
+    snapshot: Option<Api>,
     sid: String,
 }
 
@@ -333,11 +396,13 @@ impl Synology {
 
     fn login(&self) -> Result<Session, String> {
         let info_api = Api { name: API_INFO, path: "query.cgi".into(), version: 1 };
-        let query = [API_AUTH, API_SYSTEM, API_STORAGE].join(",");
+        let query = [API_AUTH, API_SYSTEM, API_STORAGE, API_SHARE, API_SNAPSHOT].join(",");
         let info = self.call(&info_api, "query", vec![("query", query)]).map_err(|e| e.message(API_INFO))?;
         let auth = api(&info, API_AUTH, 7)?;
         let system = api(&info, API_SYSTEM, 1)?;
         let storage = api(&info, API_STORAGE, 1)?;
+        let share = api(&info, API_SHARE, 1).ok();
+        let snapshot = api(&info, API_SNAPSHOT, 1).ok();
 
         let mut form = vec![
             ("account", self.account.clone()),
@@ -376,7 +441,7 @@ impl Synology {
             });
         }
         let sid = text(&data, "sid").ok_or("DSM signed in without a session id")?;
-        Ok(Session { auth, system, storage, sid })
+        Ok(Session { auth, system, storage, share, snapshot, sid })
     }
 
     fn keep(&self, secret: Secret) {
@@ -409,11 +474,43 @@ impl Synology {
         })
     }
 
-    fn disks(&self, s: &Session) -> Result<Vec<DiskReading>, String> {
+    /// `load_info`: the disks and the volume sizes.
+    fn storage(&self, s: &Session) -> Result<(Vec<DiskReading>, Vec<(String, f64)>), String> {
         let data = self
             .call(&s.storage, "load_info", vec![("action", "load_info".to_string()), ("_sid", s.sid.clone())])
             .map_err(|e| e.message(API_STORAGE))?;
-        Ok(parse_disks(&data))
+        Ok((parse_disks(&data), parse_volumes(&data)))
+    }
+
+    /// `snapshot_latest_at:{share}` (Unix seconds) per shared folder that has
+    /// a snapshot. Best effort: any failure leaves the metrics out (a share
+    /// that fails is skipped), it never fails the sync.
+    fn snapshots(&self, s: &Session) -> Vec<(String, f64)> {
+        let (Some(share_api), Some(snap_api)) = (&s.share, &s.snapshot) else { return vec![] };
+        let Ok(data) = self.call(share_api, "list", vec![("_sid", s.sid.clone())]) else { return vec![] };
+        let names: Vec<String> = data
+            .get("shares")
+            .and_then(JsonValue::as_array)
+            .map(|a| a.iter().filter_map(|v| text(v, "name")).take(MAX_SNAPSHOT_SHARES).collect())
+            .unwrap_or_default();
+        let mut out = vec![];
+        for name in names {
+            let Ok(data) = self.call(snap_api, "list", vec![("name", name.clone()), ("_sid", s.sid.clone())]) else {
+                continue;
+            };
+            let newest = data
+                .get("snapshots")
+                .and_then(JsonValue::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|v| text(v, "time").or_else(|| text(v, "name")))
+                .filter_map(|t| parse_snapshot_time(&t))
+                .fold(None::<f64>, |m, t| Some(m.map_or(t, |m| m.max(t))));
+            if let Some(at) = newest {
+                out.push((format!("snapshot_latest_at:{name}"), at));
+            }
+        }
+        out
     }
 }
 
@@ -428,9 +525,10 @@ impl Connector for Synology {
     fn sync(&self) -> Result<SyncResult, String> {
         self.with_session(|s| {
             let sys = self.system(s)?;
-            let disks = self.disks(s)?;
+            let (disks, mut metrics) = self.storage(s)?;
+            metrics.extend(self.snapshots(s));
             Ok(SyncResult {
-                devices: vec![DeviceReading { device_id: sys.serial, model: sys.model, metrics: vec![], disks, print_tasks: None }],
+                devices: vec![DeviceReading { device_id: sys.serial, model: sys.model, metrics, disks, print_tasks: None }],
             })
         })
     }
@@ -541,6 +639,8 @@ mod tests {
     const LOGIN_DEVICE_TOKEN: &str = include_str!("fixtures/synology_login_device_token.json");
     const SYSTEM: &str = include_str!("fixtures/synology_system_info.json");
     const STORAGE: &str = include_str!("fixtures/synology_storage_load_info.json");
+    const SHARES: &str = include_str!("fixtures/synology_share_list.json");
+    const SNAPSHOTS: &str = include_str!("fixtures/synology_snapshot_list.json");
 
     fn json(s: &str) -> JsonValue {
         serde_json::from_str(s).unwrap()
@@ -552,6 +652,8 @@ mod tests {
     struct Fake {
         login: &'static str,
         storage: JsonValue,
+        snapshots: JsonValue,
+        info: JsonValue,
         calls: Calls,
     }
 
@@ -561,11 +663,13 @@ mod tests {
             self.calls.lock().unwrap().push((path.to_string(), form.clone()));
             let get = |k: &str| form.iter().find(|(f, _)| f == k).map(|(_, v)| v.as_str()).unwrap_or("");
             Ok(match (get("api"), get("method")) {
-                ("SYNO.API.Info", "query") => json(API_INFO),
+                ("SYNO.API.Info", "query") => self.info.clone(),
                 ("SYNO.API.Auth", "login") => json(self.login),
                 ("SYNO.API.Auth", "logout") => serde_json::json!({ "success": true }),
                 ("SYNO.Core.System", "info") => json(SYSTEM),
                 ("SYNO.Storage.CGI.Storage", "load_info") => self.storage.clone(),
+                ("SYNO.Core.Share", "list") => json(SHARES),
+                ("SYNO.Core.Share.Snapshot", "list") => self.snapshots.clone(),
                 other => panic!("unexpected call {other:?}"),
             })
         }
@@ -573,7 +677,7 @@ mod tests {
 
     fn nas(login: &'static str, secret: Secret) -> (Synology, Calls) {
         let calls: Calls = Arc::default();
-        let fake = Fake { login, storage: json(STORAGE), calls: calls.clone() };
+        let fake = Fake { login, storage: json(STORAGE), snapshots: json(SNAPSHOTS), info: json(API_INFO), calls: calls.clone() };
         (Synology::new("studio".into(), secret, Box::new(fake)), calls)
     }
 
@@ -602,6 +706,77 @@ mod tests {
         assert_eq!(d1.power_on_hours, None);
         // DSM reports 0 °C for a drive it can't read.
         assert_eq!(disks[3].temperature, None);
+    }
+
+    #[test]
+    fn parse_volumes_reads_used_and_total() {
+        let v = parse_volumes(&json(STORAGE)["data"]);
+        assert_eq!(
+            v,
+            vec![
+                ("volume_total_bytes:volume_1".to_string(), 7_000_000_000_000.0),
+                ("volume_used_bytes:volume_1".to_string(), 4_800_000_000_000.0),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_volumes_skips_volumes_without_size() {
+        let data = serde_json::json!({ "volumes": [
+            { "id": "volume_1" },
+            { "id": "volume_2", "size": { "total": "100" } },
+            { "id": "volume_3", "size": { "total": "100", "used": "40" } },
+        ] });
+        let v = parse_volumes(&data);
+        assert_eq!(v.len(), 2);
+        assert_eq!(v[0].0, "volume_total_bytes:volume_3");
+        assert!(parse_volumes(&serde_json::json!({})).is_empty());
+    }
+
+    #[test]
+    fn parse_snapshot_time_reads_dsm_names() {
+        // 2026-11-02 02:00:03 at GMT+01 is 01:00:03 UTC.
+        assert_eq!(parse_snapshot_time("GMT+01-2026.11.02-02.00.03"), Some(1_793_581_203.0));
+        assert_eq!(parse_snapshot_time("GMT+00-1970.01.01-00.00.00"), Some(0.0));
+        assert_eq!(parse_snapshot_time("GMT-05-2026.11.02-02.00.03"), Some(1_793_581_203.0 + 6.0 * 3600.0));
+        assert_eq!(parse_snapshot_time("GMT+05:30-2026.11.02-06.30.03"), Some(1_793_581_203.0));
+        for bad in ["", "2026.11.02-02.00.03", "GMT+01-2026.13.02-02.00.03", "GMT+01-2026.11.02", "GMT*01-2026.11.02-02.00.03"] {
+            assert_eq!(parse_snapshot_time(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn sync_stores_the_newest_snapshot_of_each_share() {
+        let (c, _) = nas(LOGIN, pw());
+        let m = &c.sync().unwrap().devices[0].metrics;
+        let get = |k: &str| m.iter().find(|(n, _)| n == k).map(|(_, v)| *v);
+        assert_eq!(get("snapshot_latest_at:photos"), Some(1_793_581_203.0));
+        assert_eq!(get("snapshot_latest_at:projects"), Some(1_793_581_203.0));
+        assert_eq!(get("volume_used_bytes:volume_1"), Some(4_800_000_000_000.0));
+    }
+
+    #[test]
+    fn sync_without_snapshot_api_still_succeeds() {
+        // The snapshot API answers an error.
+        let fake = Fake {
+            login: LOGIN,
+            storage: json(STORAGE),
+            snapshots: serde_json::json!({ "error": { "code": 105 }, "success": false }),
+            info: json(API_INFO),
+            calls: Arc::default(),
+        };
+        let c = Synology::new("studio".into(), pw(), Box::new(fake));
+        let m = &c.sync().unwrap().devices[0].metrics;
+        assert!(m.iter().any(|(n, _)| n.starts_with("volume_used_bytes:")));
+        assert!(!m.iter().any(|(n, _)| n.starts_with("snapshot_latest_at:")));
+        // A NAS that doesn't list the APIs at all still logs in and syncs.
+        let mut info = json(API_INFO);
+        info["data"].as_object_mut().unwrap().retain(|k, _| !k.starts_with("SYNO.Core.Share"));
+        let fake = Fake { login: LOGIN, storage: json(STORAGE), snapshots: json(SNAPSHOTS), info, calls: Arc::default() };
+        let c = Synology::new("studio".into(), pw(), Box::new(fake));
+        let m = &c.sync().unwrap().devices[0].metrics;
+        assert!(!m.iter().any(|(n, _)| n.starts_with("snapshot_latest_at:")));
+        assert!(m.iter().any(|(n, _)| n.starts_with("volume_total_bytes:")));
     }
 
     #[test]
@@ -676,7 +851,7 @@ mod tests {
         let d = &r.devices[0];
         assert_eq!(d.device_id, "SCRUBBEDNAS01");
         assert_eq!(d.model.as_deref(), Some("DS920+"));
-        assert!(d.metrics.is_empty());
+        assert!(!d.metrics.is_empty());
         assert_eq!(d.disks.len(), 4);
     }
 
@@ -749,6 +924,8 @@ mod tests {
         let fake = Fake {
             login: LOGIN,
             storage: serde_json::json!({ "error": { "code": 105 }, "success": false }),
+            snapshots: json(SNAPSHOTS),
+            info: json(API_INFO),
             calls,
         };
         let c = Synology::new("studio".into(), pw(), Box::new(fake));

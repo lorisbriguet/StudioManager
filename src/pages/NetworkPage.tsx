@@ -102,7 +102,7 @@ export function NetworkPage() {
           <div className={GRID}>
             <div className={CARD_STACK}>
               {list.map((card) => (
-                <MachineCard key={card.machine.id} card={card} results={results} />
+                <MachineCard key={card.machine.id} card={card} results={results} now={now} />
               ))}
             </div>
             <div className={CARD_STACK}>

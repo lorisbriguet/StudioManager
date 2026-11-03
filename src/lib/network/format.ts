@@ -22,3 +22,17 @@ export function checkReason(result: CheckResult | undefined, t: T): string | nul
   const code = /^http_(\d{3})$/.exec(result.reason ?? "")?.[1];
   return code ? t.net_error_code.replace("{code}", code) : t.net_error;
 }
+
+const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB", "PB"];
+
+/** Decimal units, one decimal at most, trailing ".0" dropped: "4.8 TB", "7 TB", "512 GB". */
+export function formatBytesShort(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "0 B";
+  let i = Math.min(BYTE_UNITS.length - 1, Math.floor(Math.log10(n) / 3));
+  let v = Math.round((n / 1000 ** i) * 10) / 10;
+  if (v >= 1000 && i < BYTE_UNITS.length - 1) {
+    i += 1;
+    v = Math.round((n / 1000 ** i) * 10) / 10;
+  }
+  return `${v} ${BYTE_UNITS[i]}`;
+}
