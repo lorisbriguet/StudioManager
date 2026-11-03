@@ -73,3 +73,41 @@ describe("AddRow", () => {
     expect(onKeyDown).toHaveBeenCalled();
   });
 });
+
+describe("AddRow draft", () => {
+  const field = () => screen.getByRole("textbox", { name: "New task" }) as HTMLInputElement;
+
+  it("keeps the typed text when the row unmounts and comes back, per key", () => {
+    const first = render(<AddRow placeholder="New task" draftKey="o:task:1" onAdd={vi.fn()} />);
+    fireEvent.change(field(), { target: { value: "Half a thought" } });
+    first.unmount();
+    render(<AddRow placeholder="New task" draftKey="o:task:1" onAdd={vi.fn()} />);
+    expect(field().value).toBe("Half a thought");
+    cleanup();
+    render(<AddRow placeholder="New task" draftKey="o:task:2" onAdd={vi.fn()} />);
+    expect(field().value).toBe("");
+  });
+
+  it("does not create on blur, and Esc clears the draft", () => {
+    const onAdd = vi.fn();
+    const first = render(<AddRow placeholder="New task" draftKey="o:task:3" onAdd={onAdd} />);
+    fireEvent.change(field(), { target: { value: "Keep me" } });
+    fireEvent.blur(field());
+    first.unmount();
+    expect(onAdd).not.toHaveBeenCalled();
+    render(<AddRow placeholder="New task" draftKey="o:task:3" onAdd={onAdd} />);
+    expect(field().value).toBe("Keep me");
+    fireEvent.keyDown(field(), { key: "Escape" });
+    expect(field().value).toBe("");
+  });
+
+  it("clears the draft once the item is created", async () => {
+    const first = render(<AddRow placeholder="New task" draftKey="o:task:4" onAdd={() => Promise.resolve()} />);
+    fireEvent.change(field(), { target: { value: "Ship it" } });
+    await act(async () => { fireEvent.keyDown(field(), { key: "Enter" }); });
+    expect(field().value).toBe("");
+    first.unmount();
+    render(<AddRow placeholder="New task" draftKey="o:task:4" onAdd={vi.fn()} />);
+    expect(field().value).toBe("");
+  });
+});

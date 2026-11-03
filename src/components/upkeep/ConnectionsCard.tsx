@@ -3,7 +3,8 @@ import { Badge, Button, EmptyState, FormField, FormGrid, ICONS, IconButton, Moda
 import { notify } from "../../lib/notify";
 import { useConfirm } from "../../lib/confirm";
 import { useT } from "../../i18n/useT";
-import { useConnections, useDeleteConnection, useSyncNow } from "../../db/hooks/useConnections";
+import { useBorrowedEquipment } from "../../db/hooks/useBorrowedEquipment";
+import { useEquipmentConnections, useDeleteConnection, useSyncNow } from "../../db/hooks/useConnections";
 import { connectionErrorText, connectionStatusText, testConnection } from "../../lib/upkeep/connections";
 import { connectionVariant } from "../../lib/statusColors";
 import { CONNECTION_FORMS, CONNECTION_KINDS } from "./connectionForms";
@@ -36,7 +37,7 @@ function AddConnectionDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function ConnectionRow({ c }: { c: Connection }) {
+function ConnectionRow({ c, borrowing }: { c: Connection; borrowing: boolean }) {
   const t = useT();
   const syncNow = useSyncNow();
   const remove = useDeleteConnection();
@@ -74,20 +75,25 @@ function ConnectionRow({ c }: { c: Connection }) {
             {c.failing_since ? t.upkeep_connection_failing : t.upkeep_connection_ok}
           </Badge>
         )}
-        <Button variant="secondary" loading={testing} onClick={() => void test()}>
-          {t.upkeep_connection_test}
-        </Button>
-        <Button variant="secondary" loading={syncNow.isPending} onClick={() => syncNow.mutate(c.id)}>
-          {t.upkeep_sync_now}
-        </Button>
-        {Form && (
-          <Button variant="secondary" onClick={() => setReconnecting(true)}>
-            {t.upkeep_connection_reconnect}
-          </Button>
+        {/* Borrowed machines: the lender's connections and last sync, read-only here. */}
+        {!borrowing && (
+          <>
+            <Button variant="secondary" loading={testing} onClick={() => void test()}>
+              {t.upkeep_connection_test}
+            </Button>
+            <Button variant="secondary" loading={syncNow.isPending} onClick={() => syncNow.mutate(c.id)}>
+              {t.upkeep_sync_now}
+            </Button>
+            {Form && (
+              <Button variant="secondary" onClick={() => setReconnecting(true)}>
+                {t.upkeep_connection_reconnect}
+              </Button>
+            )}
+            <IconButton icon={ICONS.delete} label={t.remove} tone="danger" onClick={() => void onRemove()} />
+          </>
         )}
-        <IconButton icon={ICONS.delete} label={t.remove} tone="danger" onClick={() => void onRemove()} />
       </div>
-      {Form && reconnecting && (
+      {Form && !borrowing && reconnecting && (
         <Modal open onClose={() => setReconnecting(false)} title={t.upkeep_connection_reconnect}>
           <Form
             connection={c}
@@ -104,20 +110,24 @@ function ConnectionRow({ c }: { c: Connection }) {
 /** Settings › Upkeep › Connections: list, add, test, sync now, remove. */
 export function ConnectionsCard() {
   const t = useT();
-  const { data: connections = [] } = useConnections();
+  // The database that holds the machines: the lender's when borrowing.
+  const { data: connections = [] } = useEquipmentConnections();
+  const borrowing = useBorrowedEquipment();
   const [adding, setAdding] = useState(false);
   return (
     <SettingsCard title={t.upkeep_connections} desc={t.upkeep_connections_desc}>
       {connections.length === 0 ? (
         <EmptyState size="sm" message={t.upkeep_connections_empty} />
       ) : (
-        connections.map((c) => <ConnectionRow key={c.id} c={c} />)
+        connections.map((c) => <ConnectionRow key={c.id} c={c} borrowing={borrowing} />)
       )}
-      <div className="py-3">
-        <Button variant="secondary" icon={ICONS.add} onClick={() => setAdding(true)}>
-          {t.upkeep_connection_add}
-        </Button>
-      </div>
+      {!borrowing && (
+        <div className="py-3">
+          <Button variant="secondary" icon={ICONS.add} onClick={() => setAdding(true)}>
+            {t.upkeep_connection_add}
+          </Button>
+        </div>
+      )}
       {adding && <AddConnectionDialog onClose={() => setAdding(false)} />}
     </SettingsCard>
   );

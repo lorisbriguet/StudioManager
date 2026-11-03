@@ -1,4 +1,4 @@
-import { useUndoStore, type UndoAction } from "../stores/undo-store";
+import { useUndoStore, isForeignAction, type UndoAction } from "../stores/undo-store";
 import { notify, TOAST_DURATION } from "./notify";
 
 /** How long an Undo toast stays up. */
@@ -32,6 +32,10 @@ export function undoableAction(message: string, action: UndoAction | undefined):
     const store = useUndoStore.getState();
     const idx = store.stack.indexOf(action);
     if (idx === -1) return; // already undone
+    if (isForeignAction(action)) {
+      store.remove(action); // another organisation's entry: drop it silently
+      return;
+    }
     // Remove before executing so a concurrent Cmd+Z can't double-run it
     store.remove(action);
     try {

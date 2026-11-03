@@ -1,7 +1,6 @@
 import {
   createCalendarEvent,
   deleteCalendarEvent,
-  updateCalendarEvent,
 } from "../appleCalendar";
 import { useAppStore } from "../../stores/app-store";
 import { useOrgStore } from "../../stores/org-store";
@@ -42,6 +41,12 @@ export function alertMinutes(alert: UpkeepAlert, settingsDefault: ConcreteAlert)
 export interface SyncOptions {
   /** Recreate an existing event even when its date has not moved (title or alert changed). */
   force?: boolean;
+  /**
+   * Moving an event creates the new one first. With this callback the old
+   * uid is handed over instead of deleted, so the caller deletes it only once
+   * the new ids are stored (and keeps it if they are not).
+   */
+  onReplaced?: (oldUid: string) => void;
 }
 
 type ItemEventIds = Pick<UpkeepItem, "calendar_event_id" | "calendar_event_date">;
@@ -70,6 +75,20 @@ export async function removeUpkeepEvent(uid: string | null): Promise<boolean> {
     notifyFailure(e);
     return false;
   }
+}
+
+/** Move = create the new event first; the old one goes only after that succeeded. */
+async function moveEvent(
+  oldUid: string | null,
+  event: { title: string; date: string; alertMinutes: number | null },
+  opts: SyncOptions
+): Promise<string> {
+  const uid = await createCalendarEvent(event);
+  if (oldUid) {
+    if (opts.onReplaced) opts.onReplaced(oldUid);
+    else await removeUpkeepEvent(oldUid);
+  }
+  return uid;
 }
 
 /** "Item · Machine": the title of an upkeep event, in Apple Calendar and in the app. */
@@ -119,9 +138,7 @@ export async function syncItemEvent(
     alertMinutes: resolveAlert(item.alert),
   };
   try {
-    const uid = item.calendar_event_id
-      ? await updateCalendarEvent(item.calendar_event_id, event)
-      : await createCalendarEvent(event);
+    const uid = await moveEvent(item.calendar_event_id, event, opts);
     return { calendar_event_id: uid, calendar_event_date: due };
   } catch (e) {
     notifyFailure(e);
@@ -154,9 +171,7 @@ export async function syncSubscriptionEvent(
     alertMinutes: resolveAlert(sub.alert),
   };
   try {
-    const uid = sub.calendar_event_id
-      ? await updateCalendarEvent(sub.calendar_event_id, event)
-      : await createCalendarEvent(event);
+    const uid = await moveEvent(sub.calendar_event_id, event, opts);
     return { calendar_event_id: uid };
   } catch (e) {
     notifyFailure(e);
@@ -249,7 +264,8 @@ function syncItemById(id: number, opts: SyncOptions): Promise<boolean | undefine
     if (!item || !same()) return false;
     const machine = await getMachine(item.machine_id);
     if (!machine || !same()) return false;
-    const ids = await syncItemEvent(item, machine, opts);
+    let replaced: string | null = null;
+    const ids = await syncItemEvent(item, machine, { ...opts, onReplaced: (u) => { replaced = u; } });
     latestUid.set(key, ids.calendar_event_id);
     if (
       ids.calendar_event_id === item.calendar_event_id &&
@@ -263,6 +279,9 @@ function syncItemById(id: number, opts: SyncOptions): Promise<boolean | undefine
       async () => (await getUpkeepItem(id)) !== null,
       () => setItemCalendarEvent(id, ids.calendar_event_id, ids.calendar_event_date, org)
     );
+    // The old event goes only once the new one is stored; otherwise the row
+    // still points at it and it stays.
+    if (stored && replaced) await removeUpkeepEvent(replaced);
     return stored && isNew;
   });
 }
@@ -274,7 +293,8 @@ function syncSubscriptionById(id: number, opts: SyncOptions): Promise<boolean | 
     if (!same()) return false;
     const sub = await getSubscription(id);
     if (!sub || !same()) return false;
-    const ids = await syncSubscriptionEvent(sub, opts);
+    let replaced: string | null = null;
+    const ids = await syncSubscriptionEvent(sub, { ...opts, onReplaced: (u) => { replaced = u; } });
     latestUid.set(key, ids.calendar_event_id);
     if (ids.calendar_event_id === sub.calendar_event_id) return false;
     const isNew = ids.calendar_event_id !== null;
@@ -283,6 +303,7 @@ function syncSubscriptionById(id: number, opts: SyncOptions): Promise<boolean | 
       async () => (await getSubscription(id)) !== null,
       () => setSubscriptionCalendarEvent(id, ids.calendar_event_id, org)
     );
+    if (stored && replaced) await removeUpkeepEvent(replaced);
     return stored && isNew;
   });
 }

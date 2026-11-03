@@ -80,3 +80,41 @@ export function pruneTabs(state: TabsState, exists: Set<number>): TabsState {
   const active = tabs.some((t) => t.key === state.active) ? state.active : tabs[0]?.key ?? null;
   return { tabs, active };
 }
+
+// ─── One view at a time ─────────────────────────────────────────────
+// The page shows one article (or file) and the graph, with no tab strip: the
+// state keeps at most one article tab, with its back/forward history, and the
+// graph tab. The helpers below keep it that way.
+
+/** The article tab: the active one, else the first. */
+function articleTab(state: TabsState): WikiTab | undefined {
+  const active = state.tabs.find((t) => t.key === state.active);
+  return active?.kind === "article" ? active : state.tabs.find((t) => t.kind === "article");
+}
+
+/** Drops every article tab but one (state saved while the wiki had tabs). */
+export function singleView(state: TabsState): TabsState {
+  const article = articleTab(state);
+  const tabs = state.tabs.filter((t) => t.kind === "graph" || t === article);
+  if (tabs.length === state.tabs.length) return state;
+  const active = tabs.some((t) => t.key === state.active) ? state.active : article?.key ?? null;
+  return { tabs, active };
+}
+
+/** Opens `ref` in the article view, adding it to its history (also from the graph). */
+export function openInView(state: TabsState, ref: WikiRef): TabsState {
+  const article = articleTab(state);
+  if (!article) return openInTabs(state, ref, true);
+  return openInTabs({ ...state, active: article.key }, ref, false);
+}
+
+/** Leaves the graph for the article view (or nothing, when none is open). */
+export function leaveGraph(state: TabsState): TabsState {
+  return { ...state, active: articleTab(state)?.key ?? null };
+}
+
+/** Closes the article view; never lands on the graph by itself. */
+export function closeView(state: TabsState, key: string): TabsState {
+  const next = closeTab(state, key);
+  return state.active === key && next.active === "graph" ? { ...next, active: null } : next;
+}

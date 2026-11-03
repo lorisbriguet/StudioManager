@@ -23,7 +23,7 @@ function item(over: Partial<UpkeepItem> = {}): UpkeepItem {
     id: 7, machine_id: 3, title: "Clean nozzle", notes: null, schedule: "interval",
     interval_n: 3, interval_unit: "month", anchor_day: 20, usage_metric: null, usage_every: null,
     last_done_on: null, last_done_reading: null, next_due_on: "2026-10-20", snooze_until: null,
-    in_calendar: 1, alert: "default", calendar_event_id: null, calendar_event_date: null,
+    in_calendar: 1, is_backup: 0, alert: "default", calendar_event_id: null, calendar_event_date: null,
     overdue_notified_for: null, archived: 0, created_at: "", updated_at: "",
     ...over,
   };

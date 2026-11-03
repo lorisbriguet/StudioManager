@@ -116,11 +116,16 @@ describe("AgentDetail", () => {
     await waitFor(() => expect(switched).toBe("abcd1234"));
   });
 
-  it("dismiss only appears in needs you", () => {
-    const { rerender } = render(<AgentDetail agent={agent()} onOpenTerminal={() => {}} />);
-    expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
-    rerender(<AgentDetail agent={agent({ group: "needs-you", status: "waiting" })} onOpenTerminal={() => {}} />);
-    expect(screen.getByRole("button", { name: "Dismiss" })).toBeInTheDocument();
+  it("dismiss and delete sit in the more menu; dismiss only in needs you", () => {
+    const { unmount } = render(<AgentDetail agent={agent()} onOpenTerminal={() => {}} />);
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Dismiss" })).toBeNull();
+    unmount();
+    render(<AgentDetail agent={agent({ group: "needs-you", status: "waiting" })} onOpenTerminal={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    expect(screen.getByRole("menuitem", { name: "Dismiss" })).toBeInTheDocument();
   });
 
   it("open terminal reports the short id", () => {

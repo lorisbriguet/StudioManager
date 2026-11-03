@@ -15,6 +15,7 @@ const ITEM_COLUMNS = [
   "usage_every",
   "last_done_on",
   "in_calendar",
+  "is_backup",
   "alert",
   "archived",
 ] as const;
@@ -50,6 +51,7 @@ function prepareNewItem(data: MachineTemplateItemInput): {
       usage_every: data.usage_every ?? null,
       last_done_on: data.last_done_on ?? null,
       in_calendar: data.in_calendar ?? 1,
+      is_backup: data.is_backup ?? 0,
       alert: data.alert ?? "default",
       archived: data.archived ?? 0,
     },

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as q from "../queries/connections";
 import { updateMachine } from "../queries/machines";
 import { recordManualReading, runConnectionSyncs, saveConnectionSecret } from "../../lib/upkeep/connections";
@@ -19,10 +19,31 @@ export function useCurrentReading(machineId: number, metric = "print_hours") {
   });
 }
 
+export function useEquipmentConnections() {
+  return useQuery({ queryKey: ["equipment-connections"], queryFn: q.getEquipmentConnections });
+}
+
+export function useLatestMetrics(machineId: number, prefix: string) {
+  return useQuery({
+    queryKey: ["machine-readings", machineId, "latest", prefix],
+    queryFn: () => q.getLatestMetrics(machineId, prefix),
+  });
+}
+
+/** useLatestMetrics for several machines at once (same cache keys). */
+export function useLatestMetricsFor(machineIds: number[], prefix: string) {
+  return useQueries({
+    queries: machineIds.map((machineId) => ({
+      queryKey: ["machine-readings", machineId, "latest", prefix],
+      queryFn: () => q.getLatestMetrics(machineId, prefix),
+    })),
+  });
+}
+
 function useInvalidateAll() {
   const qc = useQueryClient();
   return () => {
-    for (const key of ["connections", "machines", "upkeep-items", "machine-readings", "machine-disks"]) {
+    for (const key of ["connections", "machines", "upkeep-items", "machine-readings", "machine-disks", "equipment-connections"]) {
       qc.invalidateQueries({ queryKey: [key] });
     }
   };

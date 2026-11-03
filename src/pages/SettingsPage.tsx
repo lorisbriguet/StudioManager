@@ -51,6 +51,8 @@ export function SettingsPage() {
   const setProjectOpenMode = useAppStore((s) => s.setProjectOpenMode);
   const showTasksPage = useAppStore((s) => s.showTasksPage);
   const setShowTasksPage = useAppStore((s) => s.setShowTasksPage);
+  const showNetworkPage = useAppStore((s) => s.showNetworkPage);
+  const setShowNetworkPage = useAppStore((s) => s.setShowNetworkPage);
   const showIncome = useAppStore((s) => s.showIncome);
   const setShowIncome = useAppStore((s) => s.setShowIncome);
   const showTimeOverview = useAppStore((s) => s.showTimeOverview);
@@ -525,6 +527,9 @@ export function SettingsPage() {
               </SettingRow>
               <SettingRow label={t.show_income} desc={t.show_income_desc}>
                 <Toggle checked={showIncome} onChange={setShowIncome} ariaLabel={t.show_income} />
+              </SettingRow>
+              <SettingRow label={t.show_network_page} desc={t.show_network_page_desc}>
+                <Toggle checked={showNetworkPage} onChange={setShowNetworkPage} ariaLabel={t.show_network_page} />
               </SettingRow>
               <SettingRow label={t.show_time_overview} desc={t.show_time_overview_desc}>
                 <Toggle checked={showTimeOverview} onChange={setShowTimeOverview} ariaLabel={t.show_time_overview} />

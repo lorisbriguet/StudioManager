@@ -48,6 +48,7 @@ export function applyPrefsToAppStore(prefs: OrgPrefs): void {
     showIncome: prefs.showIncome,
     showTasksPage: prefs.showTasksPage,
     showTimeOverview: prefs.showTimeOverview,
+    showNetworkPage: prefs.showNetworkPage ?? false,
     calendarSync: prefs.calendarSync,
     calendarName: prefs.calendarName,
     upkeepAlertDefault: prefs.upkeepAlertDefault ?? "day_9am",

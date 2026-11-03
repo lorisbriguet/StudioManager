@@ -115,7 +115,13 @@
       { "disks": ["sata1", "sata2", "sata3", "sata4"], "id": "reuse_1", "raidType": "single", "status": "degraded" }
     ],
     "volumes": [
-      { "id": "volume_1", "pool_path": "reuse_1", "status": "degraded", "fs_type": "btrfs" }
+      {
+        "id": "volume_1",
+        "pool_path": "reuse_1",
+        "status": "degraded",
+        "fs_type": "btrfs",
+        "size": { "free_inode": "1000000", "total": "7000000000000", "total_device": "1", "used": "4800000000000" }
+      }
     ]
   },
   "success": true

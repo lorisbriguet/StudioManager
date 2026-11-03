@@ -16,6 +16,9 @@ pub struct OrgPrefs {
     pub show_income: bool,
     pub show_tasks_page: bool,
     pub show_time_overview: bool,
+    /// Opt-in Network page; absent in older registries, read as off.
+    #[serde(default)]
+    pub show_network_page: bool,
     pub calendar_sync: bool,
     pub calendar_name: String,
     /// Absent in registries written before upkeep.
@@ -57,6 +60,7 @@ impl Default for OrgPrefs {
             show_income: true,
             show_tasks_page: true,
             show_time_overview: true,
+            show_network_page: false,
             calendar_sync: false,
             calendar_name: "StudioManager".to_string(),
             upkeep_alert_default: default_upkeep_alert(),
@@ -87,6 +91,12 @@ pub struct Registry {
     pub version: u32,
     pub active_id: String,
     pub organisations: Vec<Organisation>,
+}
+
+/// An organisation id as `new_id` makes them: lowercase letters and digits
+/// only, never empty, so it can never build a path outside `orgs/`.
+pub fn is_plain_id(id: &str) -> bool {
+    !id.is_empty() && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
 }
 
 pub fn org_dir(app_dir: &Path, id: &str) -> PathBuf {
@@ -339,6 +349,21 @@ mod tests {
         }).unwrap();
         assert!(json.contains(r#""equipmentFrom":"9qr85u""#));
         assert!(!serde_json::to_string(&OrgPrefs::default()).unwrap().contains("equipmentFrom"));
+    }
+
+    #[test]
+    fn prefs_without_show_network_page_read_as_off() {
+        let json = r#"{"showIncome":true,"showTasksPage":true,"showTimeOverview":true,"calendarSync":false,"calendarName":"Cal","backupPath":"","exportLanguage":"FR"}"#;
+        let prefs: OrgPrefs = serde_json::from_str(json).unwrap();
+        assert!(!prefs.show_network_page);
+    }
+
+    #[test]
+    fn show_network_page_round_trips() {
+        let json = serde_json::to_string(&OrgPrefs { show_network_page: true, ..OrgPrefs::default() }).unwrap();
+        assert!(json.contains(r#""showNetworkPage":true"#));
+        let back: OrgPrefs = serde_json::from_str(&json).unwrap();
+        assert!(back.show_network_page);
     }
 
     #[test]

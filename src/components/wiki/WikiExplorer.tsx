@@ -1,15 +1,23 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { ChevronDown, ChevronRight, ChevronsDownUp } from "lucide-react";
+import { ChevronRight, ChevronsDownUp } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useOrgStore } from "../../stores/org-store";
 import { useWikiFolders } from "../../db/hooks/useWiki";
-import { BottomBar, Dropdown, SearchBar, IconButton, SectionLabel, Tooltip, ICONS, ICON_SIZE, type DropdownItem } from "../ui";
+import { Dropdown, SearchBar, IconButton, SECTION_LABEL, Tooltip, ICONS, ICON_SIZE, type DropdownItem } from "../ui";
 import type { WikiArticleWithTags } from "../../types/wiki";
 import type { ProjectDoc } from "../../db/hooks/useProjectDocs";
 import type { WikiRef } from "../../lib/wikiTabs";
 import { colorFor } from "./wikiColors";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
-import { navItemClass } from "../ui/NavItem";
+
+/** A 36px tree row with the row hairline, like a Table row. */
+const ROW =
+  "focus-accent w-full h-9 flex items-center gap-2 px-2 border-b border-[var(--color-border-divider)] text-sm text-left transition-colors";
+/** Selected as Table.Row (accent tint), hover-row otherwise. */
+const rowTone = (active: boolean) =>
+  active ? "bg-accent-tint text-[var(--color-text)] font-medium" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]";
+/** A row with a "more" button: room for it while it shows. */
+const MORE_ROOM = "group-hover:pr-8 group-focus-within:pr-8";
 
 interface Group {
   key: string;
@@ -71,15 +79,8 @@ export function WikiExplorer({
   creating = false,
   onOpen,
   onNewArticle,
-  onOpenGraph,
   onDeleteArticle,
-  pageHeading = false,
 }: {
-  /**
-   * Nothing open that has its own h1 (graph, empty state): the "Wiki" label is
-   * the page h1. With an article or file open, its title is the h1 and this is an h2.
-   */
-  pageHeading?: boolean;
   articles: WikiArticleWithTags[];
   docs?: ProjectDoc[];
   /** The open article's id or file's key. */
@@ -87,17 +88,16 @@ export function WikiExplorer({
   colors: Map<number, string>;
   /** A new article is being created: its buttons wait. */
   creating?: boolean;
-  onOpen: (ref: WikiRef, newTab: boolean) => void;
-  /** Creates an article, in `projectId` when given. */
+  onOpen: (ref: WikiRef) => void;
+  /** Creates an article in `projectId` (the "+" on a project's group row). */
   onNewArticle: (projectId: number | null) => void;
-  onOpenGraph: () => void;
   onDeleteArticle: (id: number) => void;
 }) {
   const t = useT();
   const { data: folders = [] } = useWikiFolders();
   const storageKey = useOrgStore((s) => s.orgKey("wikiTreeOpen"));
   const [search, setSearch] = useState("");
-  const [menu, setMenu] = useState<{ ref: WikiRef; x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ id: number; x: number; y: number } | null>(null);
 
   const folderNames = useMemo(() => new Map(folders.map((f) => [f.id, f.name])), [folders]);
   const groups = useMemo(
@@ -145,10 +145,9 @@ export function WikiExplorer({
     (d: ProjectDoc) => !query || d.rel.toLowerCase().includes(query) || d.title.toLowerCase().includes(query),
     [query]
   );
-  const rowClass = (active: boolean) => navItemClass({ active });
-  const openMenu = (ref: WikiRef) => (e: React.MouseEvent) => {
+  const openMenu = (id: number) => (e: React.MouseEvent) => {
     e.preventDefault();
-    setMenu({ ref, x: e.clientX, y: e.clientY });
+    setMenu({ id, x: e.clientX, y: e.clientY });
   };
 
   // Arrow keys move through the visible rows; Right opens a group, Left
@@ -179,63 +178,40 @@ export function WikiExplorer({
     .map((g) => ({ g, list: g.articles.filter(matches), files: g.docs.filter(docMatches) }))
     .filter(({ list, files }) => !query || list.length > 0 || files.length > 0);
 
-  const menuItems = (ref: WikiRef): ContextMenuItem[] => [
-    { label: t.wiki_open_new_tab, icon: ICONS.newTab, onClick: () => onOpen(ref, true) },
-    ...(typeof ref === "number"
-      ? [
-          { label: "", onClick: () => {}, divider: true },
-          { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => onDeleteArticle(ref) },
-        ]
-      : []),
+  const menuItems = (id: number): ContextMenuItem[] => [
+    { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => onDeleteArticle(id) },
   ];
-  // The same items behind a "more" button on each row: WebKit sends no
+  // The same items behind a "more" button on each article row: WebKit sends no
   // contextmenu event from the keyboard, so right-click alone isn't reachable.
-  const moreMenu = (ref: WikiRef, title: string) => (
+  const moreMenu = (id: number, title: string) => (
     <Dropdown
       align="end"
       className="absolute right-1 top-1/2 -translate-y-1/2"
-      items={menuItems(ref).map((it): DropdownItem =>
-        it.divider ? { divider: true } : { label: it.label, icon: it.icon, danger: it.danger, disabled: it.disabled, onSelect: it.onClick }
-      )}
+      items={menuItems(id).map((it): DropdownItem => ({ label: it.label, icon: it.icon, danger: it.danger, disabled: it.disabled, onSelect: it.onClick }))}
       trigger={
         <IconButton size="xs" icon={ICONS.more} label={`${t.more_actions}: ${title}`} reveal className="group-focus-within:opacity-100" />
       }
     />
   );
-  /** A tree row with a "more" button: room for it while it shows. */
-  const MORE_ROOM = "group-hover:pr-8 group-focus-within:pr-8";
 
+  // Flat rows like a Table: a group row per project (as Table.Group: chevron, dot,
+  // SectionLabel, muted count) over the header line, then 36px rows with hairlines.
   return (
-    <aside
-      aria-label={t.wiki_explorer}
-      className="w-60 shrink-0 flex flex-col min-h-0 border-r border-[var(--color-border-divider)]"
-    >
-      <div className="px-3 pt-5 pb-2 space-y-3">
-        <SectionLabel as={pageHeading ? "h1" : "h2"} className="px-2">{t.wiki}</SectionLabel>
-        <SearchBar value={search} onChange={setSearch} placeholder={t.search_articles} className="w-full" />
-        <div className="flex items-center gap-1 px-1">
-          <IconButton icon={ICONS.add} label={t.new_article} onClick={() => onNewArticle(null)} disabled={creating} />
-          <IconButton icon={ChevronsDownUp} label={t.wiki_collapse_all} onClick={() => setOpen(new Set())} />
-          <IconButton icon={ICONS.graph} label={t.wiki_open_graph} onClick={onOpenGraph} className="ml-auto" />
-        </div>
+    <aside aria-label={t.wiki_explorer} className="w-58 shrink-0 flex flex-col min-h-0">
+      <div className="flex items-center gap-1 mb-4">
+        <SearchBar value={search} onChange={setSearch} placeholder={t.search_articles} className="flex-1 min-w-0" />
+        <IconButton icon={ChevronsDownUp} label={t.wiki_collapse_all} onClick={() => setOpen(new Set())} />
       </div>
 
-      <nav
-        role="tree"
-        aria-label={t.wiki_explorer}
-        onKeyDown={onTreeKeyDown}
-        className="flex-1 overflow-y-auto px-1.5 pb-3 space-y-px"
-      >
-        {query && visibleGroups.length === 0 && (
-          <p className="px-3 py-2 text-xs text-muted">{t.wiki_explorer_no_results}</p>
-        )}
+      <nav role="tree" aria-label={t.wiki_explorer} onKeyDown={onTreeKeyDown} className="flex-1 overflow-y-auto space-y-3">
+        {query && visibleGroups.length === 0 && <p className="px-2 py-2 text-xs text-muted">{t.wiki_explorer_no_results}</p>}
         {visibleGroups.map(({ g, list, files }) => {
           const isOpen = !!query || open.has(g.key);
           const filesKey = `${g.key}:files`;
           const filesOpen = !!query || open.has(filesKey);
           return (
             <div key={g.key} data-tree-branch>
-              <div className="group flex items-center rounded-md hover:bg-[var(--color-hover-row)]">
+              <div className="group h-8 flex items-center border-b border-[var(--color-border)] hover:bg-[var(--color-hover-row)]">
                 <button
                   type="button"
                   data-tree-item
@@ -243,51 +219,44 @@ export function WikiExplorer({
                   aria-level={1}
                   onClick={() => toggle(g.key)}
                   aria-expanded={isOpen}
-                  className="flex-1 min-w-0 flex items-center gap-2 py-1.5 pl-3 pr-1 text-sm font-medium text-left text-[var(--color-text)]"
+                  className="focus-accent flex-1 min-w-0 h-full flex items-center gap-2 px-2 rounded text-left cursor-pointer"
                 >
-                  {isOpen ? (
-                    <ChevronDown size={ICON_SIZE.menu} className="shrink-0 text-muted" />
-                  ) : (
-                    <ChevronRight size={ICON_SIZE.menu} className="shrink-0 text-muted" />
-                  )}
+                  <ChevronRight size={ICON_SIZE.control} className={`shrink-0 text-muted transition-transform ${isOpen ? "rotate-90" : ""}`} />
                   <span aria-hidden="true" className="dot shrink-0" style={{ background: colorFor(colors, g.projectId) }} />
-                  <span className="flex-1 truncate">{g.name}</span>
-                  <span className="text-xs font-normal text-muted">{list.length + files.length}</span>
+                  <span className={`truncate ${SECTION_LABEL}`}>{g.name}</span>
+                  <span className="text-xs text-muted tabular-nums">{list.length + files.length}</span>
                 </button>
                 {g.projectId != null && (
-                  <IconButton size="xs"
+                  <IconButton
+                    size="xs"
                     icon={ICONS.add}
                     label={`${t.new_article}: ${g.name}`}
                     reveal
                     onClick={() => onNewArticle(g.projectId)}
                     disabled={creating}
-                    className="mr-2"
+                    className="mr-1"
                   />
                 )}
               </div>
               {isOpen && (
-                <div role="group" className="ml-4.5 pl-1 border-l border-[var(--color-border-divider)] space-y-px">
+                <div role="group">
                   {list.map((a) => {
                     const active = a.id === activeRef;
                     return (
                       <div key={a.id} className="group relative">
-                      <button
-                        data-tree-item
-                        role="treeitem"
-                        aria-level={2}
-                        onClick={(e) => onOpen(a.id, e.metaKey || e.ctrlKey)}
-                        onAuxClick={(e) => {
-                          if (e.button === 1) onOpen(a.id, true);
-                        }}
-                        onContextMenu={openMenu(a.id)}
-                        aria-current={active ? "page" : undefined}
-                        type="button"
-                        className={`${rowClass(active)} ${MORE_ROOM}`}
-                      >
-                        <ICONS.wikiArticle size={ICON_SIZE.menu} className="shrink-0" />
-                        <span className="flex-1 truncate">{a.title}</span>
-                      </button>
-                      {moreMenu(a.id, a.title)}
+                        <button
+                          data-tree-item
+                          role="treeitem"
+                          aria-level={2}
+                          onClick={() => onOpen(a.id)}
+                          onContextMenu={openMenu(a.id)}
+                          aria-current={active ? "page" : undefined}
+                          type="button"
+                          className={`${ROW} ${rowTone(active)} ${MORE_ROOM}`}
+                        >
+                          <span className="flex-1 truncate">{a.title}</span>
+                        </button>
+                        {moreMenu(a.id, a.title)}
                       </div>
                     );
                   })}
@@ -300,36 +269,29 @@ export function WikiExplorer({
                         aria-level={2}
                         onClick={() => toggle(filesKey)}
                         aria-expanded={filesOpen}
-                        className="w-full flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-md text-sm text-left text-muted hover:bg-[var(--color-hover-row)]"
+                        className={`${ROW} ${rowTone(false)} text-muted`}
                       >
-                        {filesOpen ? <ChevronDown size={ICON_SIZE.menu} className="shrink-0" /> : <ChevronRight size={ICON_SIZE.menu} className="shrink-0" />}
+                        <ChevronRight size={ICON_SIZE.control} className={`shrink-0 transition-transform ${filesOpen ? "rotate-90" : ""}`} />
                         <span className="flex-1">{t.wiki_files}</span>
-                        <span className="text-xs">{files.length}</span>
+                        <span className="text-xs tabular-nums">{files.length}</span>
                       </button>
                       {filesOpen && (
-                        <div role="group" className="ml-4.5 pl-1 border-l border-[var(--color-border-divider)] space-y-px">
+                        <div role="group">
                           {files.map((d) => (
-                            <div key={d.key} className="group relative">
-                            <Tooltip content={d.title !== d.rel ? `${d.rel} — ${d.title}` : d.rel}>
-                            <button
-                              type="button"
-                              data-tree-item
-                              role="treeitem"
-                              aria-level={3}
-                              onClick={(e) => onOpen(d.key, e.metaKey || e.ctrlKey)}
-                              onAuxClick={(e) => {
-                                if (e.button === 1) onOpen(d.key, true);
-                              }}
-                              onContextMenu={openMenu(d.key)}
-                              aria-current={d.key === activeRef ? "page" : undefined}
-                              className={`${rowClass(d.key === activeRef)} ${MORE_ROOM}`}
-                            >
-                              <ICONS.file size={ICON_SIZE.menu} className="shrink-0" />
-                              <span className="flex-1 truncate">{d.rel}</span>
-                            </button>
+                            <Tooltip key={d.key} content={d.title !== d.rel ? `${d.rel} — ${d.title}` : d.rel}>
+                              <button
+                                type="button"
+                                data-tree-item
+                                role="treeitem"
+                                aria-level={3}
+                                onClick={() => onOpen(d.key)}
+                                aria-current={d.key === activeRef ? "page" : undefined}
+                                className={`${ROW} ${rowTone(d.key === activeRef)} pl-6`}
+                              >
+                                <ICONS.file size={ICON_SIZE.menu} className="shrink-0 text-muted" />
+                                <span className="flex-1 truncate">{d.rel}</span>
+                              </button>
                             </Tooltip>
-                            {moreMenu(d.key, d.rel)}
-                            </div>
                           ))}
                         </div>
                       )}
@@ -342,13 +304,7 @@ export function WikiExplorer({
         })}
       </nav>
 
-      <BottomBar>
-        <span>
-          {t.wiki_footer_counts.replace("{articles}", String(articles.length)).replace("{files}", String(docs.length))}
-        </span>
-      </BottomBar>
-
-      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.ref)} onClose={() => setMenu(null)} />}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.id)} onClose={() => setMenu(null)} />}
     </aside>
   );
 }
