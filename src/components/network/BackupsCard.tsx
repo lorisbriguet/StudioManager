@@ -18,7 +18,7 @@ const DOT: Record<BackupTone | "none", string> = {
   none: "bg-checkbox-border",
 };
 
-function Row({ tone, name, detail, hint }: { tone: BackupTone | "none"; name: string; detail: string; hint?: string }) {
+function Row({ tone, name, detail, hint }: { tone: BackupTone | "none"; name: string; detail: string; hint?: React.ReactNode }) {
   const text = <span className="text-xs text-muted shrink-0 tabular-nums">{detail}</span>;
   return (
     <li className="flex items-center gap-2 h-7 text-sm">
@@ -64,7 +64,9 @@ export function BackupsCard({ cards, now = Date.now() }: { cards: NetworkCard[];
         tone="success"
         name={nasCards.length > 1 ? `${t.net_nas_snapshots} · ${c.machine.name}` : t.net_nas_snapshots}
         detail={t.net_backup_last.replace("{date}", unixDate(snap.at))}
-        hint={snap.byShare.map((x) => `${x.share}: ${unixDate(x.at)}`).join("\n")}
+        hint={snap.byShare.map((x) => (
+          <div key={x.share} data-testid="snapshot-share">{`${x.share}: ${unixDate(x.at)}`}</div>
+        ))}
       />
     );
   });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 import { useAppStore } from "../stores/app-store";
 import { uiLabels } from "../i18n/ui";
 import type { Connection, Machine, UpkeepItem } from "../types/upkeep";
@@ -106,6 +106,23 @@ describe("BackupsCard", () => {
     expect(screen.getByText(t.net_time_machine)).toBeTruthy();
     expect(screen.getByText("Last 01/11/2026")).toBeTruthy();
     expect(screen.getByText(t.net_nas_snapshots)).toBeTruthy();
+  });
+
+  it("lists one tooltip entry per share", () => {
+    vi.useFakeTimers();
+    try {
+      metrics = [
+        { metric: "snapshot_latest_at:docs", value: Date.parse("2026-10-31T03:00:00Z") / 1000 },
+        { metric: "snapshot_latest_at:photos", value: Date.parse("2026-10-30T03:00:00Z") / 1000 },
+      ];
+      renderCard();
+      fireEvent.mouseEnter(screen.getByText("Last 31/10/2026"));
+      act(() => { vi.advanceTimersByTime(500); });
+      const entries = screen.getAllByTestId("snapshot-share").map((e) => e.textContent);
+      expect(entries).toEqual(["docs: 31/10/2026", "photos: 30/10/2026"]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("says Running while a backup runs", () => {
