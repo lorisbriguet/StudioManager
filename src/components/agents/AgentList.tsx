@@ -108,14 +108,11 @@ export function AgentList({ byGroup, selectedId, onSelect, compact, renderExtra 
                           {model && <span className="shrink-0 text-xs font-normal text-muted">{model}</span>}
                           {a.quiet && <Badge variant="neutral">{t.agents_quiet}</Badge>}
                         </div>
-                        {/* One second line: what the agent waits for, in its status colour, else its project. */}
-                        {a.waitingFor ? (
-                          <div className={`text-xs truncate ${agentGroupTextClass(g)}`}>{a.waitingFor}</div>
-                        ) : (
-                          !(compact && (g === "idle" || g === "done")) && (
-                            <div className="text-xs text-muted truncate">{agentLabel(a)}</div>
-                          )
+                        {/* The project, then what the agent waits for in its status colour. */}
+                        {!(compact && (g === "idle" || g === "done")) && (
+                          <div className="text-xs text-muted truncate">{agentLabel(a)}</div>
                         )}
+                        {a.waitingFor && <div className={`text-xs truncate ${agentGroupTextClass(g)}`}>{a.waitingFor}</div>}
                       </button>
                       {renderExtra?.(a)}
                     </li>

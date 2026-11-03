@@ -67,10 +67,9 @@ describe("AgentsPage", () => {
     // Group rows: label then a plain count (no coloured Badge).
     const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
     expect(headings).toEqual(["Needs you1", "Working1", "Idle1", "Done1"]);
-    // One second line per row: the status line for needs-you, the project otherwise
-    // (only the working row shows the shared project label).
+    // Every row keeps its project line; a needs-you row adds its status line under it.
     expect(screen.getByText("Run npm test?")).toBeInTheDocument();
-    expect(screen.getByText("Org › Client › Project")).toBeInTheDocument();
+    expect(screen.getAllByText("Org › Client › Project")).toHaveLength(2);
     expect(screen.getAllByText("proj").length).toBeGreaterThan(0);
     expect(screen.getByText("quiet")).toBeInTheDocument();
   });
