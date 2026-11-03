@@ -31,6 +31,7 @@ import { useT } from "../../i18n/useT";
 import { PriorityBadge } from "./PriorityBadge";
 import { SortableSubtaskRow } from "./SortableSubtaskRow";
 import { AddRow, Checkbox, ICONS, IconButton, FilterChip, InlineRename, EmptyState } from "../ui";
+import { useDraftKeys } from "../../stores/draft-store";
 
 export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
   projectId: number;
@@ -40,6 +41,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
   compact?: boolean;
 }) {
   const t = useT();
+  const draftKey = useDraftKeys();
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
@@ -96,7 +98,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
         </div>
       </div>
 
-      <AddRow className="mb-3" placeholder={t.new_task} onAdd={addTask} />
+      <AddRow className="mb-3" placeholder={t.new_task} draftKey={draftKey("task", projectId)} onAdd={addTask} />
 
       <div className="space-y-0.5">
         {tasks.filter((tk) => taskFilter === "all" ? true : taskFilter === "done" ? tk.status === "done" : tk.status !== "done").map((tk) => {
@@ -249,6 +251,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                   <AddRow
                     className="mt-1"
                     placeholder={t.new_subtask}
+                    draftKey={draftKey("subtask", tk.id)}
                     onAdd={(title) =>
                       createSubtask.mutateAsync({ task_id: tk.id, title, status: "todo", due_date: null, end_date: null, start_time: null, end_time: null, reminder: null, sort_order: subtasks.length })
                     }
