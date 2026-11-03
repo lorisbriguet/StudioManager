@@ -57,11 +57,12 @@ export function ConsumablesTab() {
         <Callout tone="warning">{t.upkeep_low_banner.replace("{count}", String(lowCount))}</Callout>
       )}
       <div className="text-xs text-muted">{t.upkeep_sorted_by_stock}</div>
+      <div>
       <PanelTitle
         title={t.upkeep_consumables}
         count={consumables.length}
         action={<Button icon={ICONS.add} onClick={() => setEditing("new")}>{t.upkeep_add_consumable}</Button>}
-        className="-mb-2"
+        className="mb-2"
       />
       <Table>
         <Table.Head>
@@ -117,6 +118,7 @@ export function ConsumablesTab() {
           )}
         </Table.Body>
       </Table>
+      </div>
 
       {editing && (
         <ConsumableForm consumable={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} />

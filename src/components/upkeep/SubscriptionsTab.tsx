@@ -71,11 +71,12 @@ export function SubscriptionsTab() {
         ))}
       </div>
 
+      <div>
       <PanelTitle
         title={t.upkeep_subscriptions}
         count={subs.length}
         action={<Button icon={ICONS.add} onClick={() => setEditing("new")}>{t.upkeep_add_subscription}</Button>}
-        className="-mb-2"
+        className="mb-2"
       />
 
       <Table>
@@ -127,6 +128,7 @@ export function SubscriptionsTab() {
           )}
         </Table.Body>
       </Table>
+      </div>
 
       {editing && (
         <SubscriptionForm subscription={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} />

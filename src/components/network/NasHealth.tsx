@@ -33,21 +33,21 @@ export function NasHealth({ machineId }: { machineId: number }) {
   return (
     <section className="mb-3">
       <SectionLabel as="h3" className="mb-1">{t.net_nas}</SectionLabel>
-      <ul className="flex flex-col gap-2">
+      <ul>
         {volumes.map((v) => {
           const n = volumeNumber(v.id);
           const name = n === null ? v.id : t.net_nas_volume.replace("{n}", String(n));
           const pct = (v.used / v.total) * 100;
           return (
-            <li key={v.id}>
-              <div className="text-sm mb-1">{`${name} · ${usedOfTotal(v.used, v.total, t.net_nas_used_of)}`}</div>
-              <ProgressBar value={pct} tone={tone(pct)} aria-label={name} />
+            <li key={v.id} className="flex items-center gap-3 h-10 border-b border-[var(--color-border-divider)]">
+              <span className="text-sm shrink-0">{`${name} · ${usedOfTotal(v.used, v.total, t.net_nas_used_of)}`}</span>
+              <ProgressBar className="flex-1 min-w-0" value={pct} tone={tone(pct)} aria-label={name} />
             </li>
           );
         })}
       </ul>
       {list.length > 0 && (
-        <p className="text-sm mt-2 flex flex-wrap gap-x-3">
+        <p className="text-sm flex flex-wrap items-center gap-x-3 min-h-10 border-b border-[var(--color-border-divider)]">
           {bad.length === 0 ? (
             <span className="text-muted">{list.length === 1 ? t.net_nas_drives_ok_one : t.net_nas_drives_ok.replace("{n}", String(list.length))}</span>
           ) : (
