@@ -27,6 +27,7 @@ import { FinancesPage } from "./pages/FinancesPage";
 import { InvoicePreviewPage } from "./pages/InvoicePreviewPage";
 import { QuotePreviewPage } from "./pages/QuotePreviewPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
+import { NetworkPage } from "./pages/NetworkPage";
 import { UpkeepPage } from "./pages/UpkeepPage";
 import { MachinePage } from "./pages/MachinePage";
 const AgentsPage = lazy(() =>
@@ -52,7 +53,7 @@ import { useAutoBackup } from "./hooks/useAutoBackup";
 import { useGuideUpdateCheck } from "./hooks/useGuideUpdateCheck";
 import { useErrorNotifications } from "./hooks/useErrorNotifications";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { useUndoStore } from "./stores/undo-store";
+import { useUndoStore, isForeignAction } from "./stores/undo-store";
 import { useConfirmStore } from "./stores/confirm-store";
 import { useAppStore } from "./stores/app-store";
 import { useOrgStore } from "./stores/org-store";
@@ -114,6 +115,10 @@ function StartupChecks() {
         // Redo: Cmd+Shift+Z
         const action = store.redoStack[0];
         if (!action) return;
+        if (isForeignAction(action)) {
+          store.remove(action); // another organisation's entry: drop it silently
+          return;
+        }
         e.preventDefault();
         // Remove before executing so a concurrent trigger can't double-run it;
         // put back on failure so it isn't lost and can be retried.
@@ -132,6 +137,10 @@ function StartupChecks() {
         // Undo: Cmd+Z
         const action = store.stack[0];
         if (!action) return;
+        if (isForeignAction(action)) {
+          store.remove(action);
+          return;
+        }
         e.preventDefault();
         // Remove before executing so a concurrent trigger (toast Undo button)
         // can't double-run it; put back on failure so it can be retried.
@@ -231,6 +240,7 @@ function MainApp() {
                 <Route path="wiki" element={<Suspense fallback={<PageSpinner />}><WikiPage /></Suspense>} />
                 <Route path="agents" element={<Suspense fallback={<PageSpinner />}><AgentsPage /></Suspense>} />
                 <Route path="resources" element={<ResourcesPage />} />
+                <Route path="network" element={<NetworkPage />} />
                 <Route path="upkeep" element={<UpkeepPage />} />
                 <Route path="upkeep/machines/:id" element={<MachinePage />} />
                 <Route path="notifications"element={<NotificationsPage />} />

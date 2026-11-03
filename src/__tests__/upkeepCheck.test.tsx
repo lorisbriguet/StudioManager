@@ -29,7 +29,7 @@ vi.mock("../lib/upkeep/calendar", () => ({ syncSubscriptionCalendar: vi.fn() }))
 vi.mock("../lib/upkeep/connections", () => ({
   runConnectionSyncs: vi.fn(async () => {}),
 }));
-vi.mock("../db/index", async (orig) => ({ ...(await orig<typeof import("../db/index")>()), getDb: vi.fn() }));
+vi.mock("../db/index", async (orig) => ({ ...(await orig<typeof import("../db/index")>()), getDb: vi.fn(), getEquipmentDb: vi.fn(), equipmentOrgId: vi.fn(() => null) }));
 
 import { runUpkeepCheck } from "../lib/upkeep/notify";
 import { useUpkeepCheck } from "../hooks/useUpkeepCheck";
@@ -41,7 +41,7 @@ import { getMachines } from "../db/queries/machines";
 import { getConsumables } from "../db/queries/consumables";
 import { getSubscriptions, getPendingRenewals, applyRenewals } from "../db/queries/subscriptions";
 import { syncSubscriptionCalendar } from "../lib/upkeep/calendar";
-import { getDb, TransactionBatch } from "../db/index";
+import { getDb, getEquipmentDb, equipmentOrgId, TransactionBatch } from "../db/index";
 import { invokedCommands, clearInvokedCommands, setInvokeHandler } from "../__mocks__/tauri-api";
 import { useAppStore } from "../stores/app-store";
 import { useOrgStore } from "../stores/org-store";
@@ -75,9 +75,12 @@ beforeEach(() => {
   vi.mocked(getPendingRenewals).mockResolvedValue([]);
   vi.mocked(applyRenewals).mockResolvedValue(0);
   vi.mocked(createNotification).mockResolvedValue(1);
-  vi.mocked(getDb).mockResolvedValue({
+  vi.mocked(equipmentOrgId).mockReturnValue(null);
+  const db = {
     select: vi.fn(async (sql: string) => (sql.includes("machine_disks") ? diskRows : connRows)),
-  } as never);
+  };
+  vi.mocked(getDb).mockResolvedValue(db as never);
+  vi.mocked(getEquipmentDb).mockResolvedValue(db as never);
 });
 
 const batchCalls = () => invokedCommands.filter((c) => c.cmd === "execute_batch");
@@ -102,6 +105,33 @@ describe("runUpkeepCheck", () => {
     ]);
     const keys = vi.mocked(qc.invalidateQueries).mock.calls.map((c) => (c[0] as { queryKey: string[] }).queryKey[0]);
     expect(keys).toEqual(expect.arrayContaining(["notifications", "upkeep-items", "subscriptions"]));
+  });
+
+  it("a borrowing organisation keeps the notice local and writes the marker to the lender", async () => {
+    vi.mocked(equipmentOrgId).mockReturnValue("lender");
+    expect(await runUpkeepCheck(qcStub(), TODAY)).toBe(1);
+    expect(batchCalls()).toHaveLength(2);
+    expect(batchCalls()[0].args.targetOrg).toBeUndefined();
+    expect(stmtsOf(0).map((s) => s.sql)).toEqual([expect.stringContaining("INSERT INTO notifications")]);
+    expect(batchCalls()[1].args.targetOrg).toBe("lender");
+    expect(batchCalls()[1].args.expectedOrg).toBe("org-a");
+    expect(stmtsOf(1)).toEqual([
+      expect.objectContaining({ sql: expect.stringContaining("overdue_notified_for"), params: ["2026-10-20", 7] }),
+    ]);
+  });
+
+  it("a borrowed disk is read from the lender's database and its marker goes there", async () => {
+    vi.mocked(equipmentOrgId).mockReturnValue("lender");
+    const own = { select: vi.fn(async () => []) };
+    const lent = { select: vi.fn(async () => [{ id: 4, machine_id: 3, slot: "Drive 1", health: "failing", notified_health: null }]) };
+    vi.mocked(getDb).mockResolvedValue(own as never);
+    vi.mocked(getEquipmentDb).mockResolvedValue(lent as never);
+    vi.mocked(getActiveUpkeepItems).mockResolvedValue([]);
+    expect(await runUpkeepCheck(qcStub(), TODAY)).toBe(1);
+    expect(lent.select).toHaveBeenCalledWith(expect.stringContaining("machine_disks"));
+    expect(own.select).not.toHaveBeenCalledWith(expect.stringContaining("machine_disks"));
+    expect(batchCalls()[1].args.targetOrg).toBe("lender");
+    expect(stmtsOf(1)[0]).toMatchObject({ sql: expect.stringContaining("machine_disks"), params: ["failing", 4] });
   });
 
   it("second run with the marker set writes nothing", async () => {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Callout, EmptyState, ICONS, IconButton, Modal, ProgressBar, Table } from "../ui";
+import { Button, Callout, EmptyState, ICONS, IconButton, Modal, PanelTitle, ProgressBar, Table } from "../ui";
 import { ConsumableAmountModal } from "./ConsumableAmountModal";
 import { ConsumableForm } from "./ConsumableForm";
 import { PrefilledExpenseModal } from "./PrefilledExpenseModal";
@@ -56,10 +56,14 @@ export function ConsumablesTab() {
       {lowCount > 0 && (
         <Callout tone="warning">{t.upkeep_low_banner.replace("{count}", String(lowCount))}</Callout>
       )}
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted">{t.upkeep_sorted_by_stock}</span>
-        <Button icon={ICONS.add} onClick={() => setEditing("new")}>{t.upkeep_add_consumable}</Button>
-      </div>
+      <div className="text-xs text-muted">{t.upkeep_sorted_by_stock}</div>
+      <div>
+      <PanelTitle
+        title={t.upkeep_consumables}
+        count={consumables.length}
+        action={<Button icon={ICONS.add} onClick={() => setEditing("new")}>{t.upkeep_add_consumable}</Button>}
+        className="mb-2"
+      />
       <Table>
         <Table.Head>
           <Table.Th>{t.upkeep_col_item}</Table.Th>
@@ -114,6 +118,7 @@ export function ConsumablesTab() {
           )}
         </Table.Body>
       </Table>
+      </div>
 
       {editing && (
         <ConsumableForm consumable={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} />

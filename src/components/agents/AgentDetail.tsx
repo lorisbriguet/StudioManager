@@ -4,10 +4,10 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { dismissAgent, deleteAgent, saveImage, sendMessage, stopAgent, switchModel, type Agent } from "../../lib/agents";
 import { addSent } from "../../lib/outbox";
 import { useT } from "../../i18n/useT";
-import { Badge, Button, Callout, HEADING_2, ICONS, IconButton, PANEL_TOP_BAR, Textarea } from "../ui";
+import { Button, Callout, Dropdown, HEADING_2, ICONS, IconButton, Textarea } from "../ui";
 import { useConfirm } from "../../lib/confirm";
 import { agentLabel, GROUP_LABEL_KEYS } from "./AgentList";
-import { agentGroupDotClass, agentGroupVariant } from "../../lib/statusColors";
+import { agentGroupDotClass } from "../../lib/statusColors";
 import { logError } from "../../lib/log";
 import { Conversation } from "./Conversation";
 import { PromptAnswer } from "./PromptAnswer";
@@ -203,24 +203,20 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className={`${PANEL_TOP_BAR} gap-2 px-5 border-[var(--color-border)]`}>
+      {/* One header row over the header line, 32px like the list's group rows beside it,
+          so the two lines meet level. Dismiss and Delete sit behind the "more" menu. */}
+      <div className="h-8 shrink-0 flex items-center gap-2 border-b border-[var(--color-border)]">
         <h2 className={`${HEADING_2} truncate`}>{agent.name}</h2>
-        <Badge variant={agentGroupVariant(agent.group)} className="shrink-0 gap-1.5">
-          <span className={`dot ${agentGroupDotClass(agent.group)}`} aria-hidden />
-          {t[GROUP_LABEL_KEYS[agent.group]]}
-        </Badge>
-        <div className="ml-auto flex items-center gap-2">
-          <Button variant="secondary" disabled={!shortId} onClick={() => void stop()}>
+        <span className="min-w-0 inline-flex items-center gap-1.5 text-xs text-muted">
+          <span className={`dot shrink-0 ${agentGroupDotClass(agent.group)}`} aria-hidden />
+          <span className="truncate">
+            {t[GROUP_LABEL_KEYS[agent.group]]} · {agentLabel(agent)}
+          </span>
+        </span>
+        <div className="ml-auto flex items-center gap-2 shrink-0">
+          <Button variant="outline" disabled={!shortId} onClick={() => void stop()}>
             {t.agents_stop}
           </Button>
-          <Button variant="danger" disabled={!shortId} onClick={() => void remove()}>
-            {t.agents_delete}
-          </Button>
-          {agent.group === "needs-you" && (
-            <Button variant="outline" onClick={() => void run(() => dismissAgent(agent.sessionId))}>
-              {t.agents_dismiss}
-            </Button>
-          )}
           {shortId && (
             <Button variant="outline" onClick={() => onOpenTerminal(shortId)}>
               {t.agents_open_terminal}
@@ -239,12 +235,21 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
               }
             />
           )}
+          <Dropdown
+            align="end"
+            trigger={<IconButton icon={ICONS.more} label={t.more_actions} />}
+            items={[
+              ...(agent.group === "needs-you"
+                ? [{ label: t.agents_dismiss, onSelect: () => void run(() => dismissAgent(agent.sessionId)) }]
+                : []),
+              { label: t.agents_delete, icon: ICONS.delete, danger: true, disabled: !shortId, onSelect: () => void remove() },
+            ]}
+          />
         </div>
       </div>
-      <div className="px-5 pt-3 text-xs text-muted">{agentLabel(agent)}</div>
 
       {error && (
-        <div className="px-5 pt-3">
+        <div className="pt-3">
           <Callout tone="danger">
             {error === "image_type"
               ? t.agents_image_type
@@ -258,7 +263,7 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
       )}
 
       {agent.group === "needs-you" && background && shortId && (
-        <div className="px-5 pt-3">
+        <div className="pt-3">
           <PromptAnswer shortId={shortId} onOpenTerminal={onOpenTerminal} />
         </div>
       )}
@@ -267,7 +272,7 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
         <Conversation sessionId={agent.sessionId} working={agent.group === "working"} />
       </div>
 
-      <div className="max-w-3xl w-full mx-auto space-y-1.5 px-5 pb-5">
+      <div className="max-w-3xl w-full mx-auto space-y-1.5 px-5">
         <input
           ref={fileInput}
           type="file"

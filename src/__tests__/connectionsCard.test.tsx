@@ -7,6 +7,7 @@ const remove = vi.fn();
 let connections: unknown[] = [];
 vi.mock("../db/hooks/useConnections", () => ({
   useConnections: () => ({ data: connections }),
+  useEquipmentConnections: () => ({ data: connections }),
   useSyncNow: () => ({ mutate: syncNow, isPending: false }),
   useDeleteConnection: () => ({ mutate: remove, isPending: false }),
   useCreateConnection: () => ({ mutateAsync: vi.fn(), isPending: false }),

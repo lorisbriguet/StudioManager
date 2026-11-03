@@ -8,7 +8,7 @@ import type { ProjectDoc } from "../db/hooks/useProjectDocs";
 
 // Heading levels follow the page: a project's blocks are h2 under the
 // project page's h1, and h3 under the h2 title of a peek panel. A wiki file
-// view always has an h1.
+// view always has a title: an h2 under the page's "Wiki" h1.
 
 vi.mock("../db/hooks/useProjects", () => ({
   useUpdateProject: () => ({ mutate: vi.fn() }),
@@ -56,17 +56,16 @@ describe("DocView title", () => {
   };
   const nav = { canBack: false, canForward: false, onBack: () => {}, onForward: () => {} };
 
-  it("adds an h1 from the file name when the Markdown has no title of its own", () => {
+  it("adds an h2 title from the file name when the Markdown has no title of its own", () => {
     docContent = { title: "usage", html: "<p>Hello</p>" };
     render(<DocView doc={doc} nav={nav} onOpenRef={() => {}} />);
-    expect(screen.getByRole("heading", { level: 1, name: "usage.md" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "usage.md" })).toBeInTheDocument();
   });
 
-  it("keeps the file's own h1 and adds none", () => {
+  it("keeps the file's own title and adds none", () => {
     docContent = { title: "Usage", html: "<h1>Usage guide</h1><p>Hello</p>" };
     render(<DocView doc={doc} nav={nav} onOpenRef={() => {}} />);
-    const h1s = screen.getAllByRole("heading", { level: 1 });
-    expect(h1s).toHaveLength(1);
-    expect(h1s[0]).toHaveTextContent("Usage guide");
+    expect(screen.queryByRole("heading", { level: 2, name: "usage.md" })).toBeNull();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Usage guide");
   });
 });

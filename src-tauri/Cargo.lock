@@ -4785,13 +4785,14 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
 name = "studiomanager"
-version = "3.2.0"
+version = "3.3.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
  "keyring",
  "libc",
  "log",
+ "plist",
  "portable-pty",
  "pulldown-cmark",
  "rcgen",

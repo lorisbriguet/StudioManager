@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Badge, Button, FIELD_LABEL, FormField, Input, ProgressBar, Select, Table } from "../ui";
 import { notify } from "../../lib/notify";
 import { useT } from "../../i18n/useT";
+import { useBorrowedEquipment } from "../../db/hooks/useBorrowedEquipment";
 import {
-  useConnections,
+  useEquipmentConnections,
   useCurrentReading,
   useLinkMachine,
   useMachineDisks,
@@ -15,9 +16,12 @@ import { connectionVariant, diskHealthVariant } from "../../lib/statusColors";
 import type { DeviceInfo } from "../../db/queries/connections";
 import type { Machine, MachineDisk, UpkeepItem } from "../../types/upkeep";
 
-/** Connections a machine can read from: Paperless holds documents, not devices. */
+/**
+ * Connections a machine can read from: Paperless holds documents, not devices.
+ * Read from the database that holds the machines, so a borrower sees the lender's.
+ */
 function useReadingSources() {
-  const { data: connections = [] } = useConnections();
+  const { data: connections = [] } = useEquipmentConnections();
   return connections.filter((c) => c.kind !== "paperless");
 }
 
@@ -211,6 +215,7 @@ export function ReadingsSection({ machine, items }: { machine: Machine; items: U
   const { data: reading = null } = useCurrentReading(machine.id, metric);
   const syncNow = useSyncNow();
   const link = useLinkMachine();
+  const borrowing = useBorrowedEquipment();
   const conn = connections.find((c) => c.id === machine.connection_id) ?? null;
 
   return (
@@ -228,13 +233,18 @@ export function ReadingsSection({ machine, items }: { machine: Machine; items: U
               {conn.failing_since ? t.upkeep_connection_failing : t.upkeep_connection_ok}
             </Badge>
           )}
-          <Button variant="secondary" loading={syncNow.isPending} onClick={() => syncNow.mutate(conn.id)}>
-            {t.upkeep_sync_now}
-          </Button>
-          <Button variant="outline"
-            onClick={() => link.mutate({ id: machine.id, connection_id: null, device_id: null, reading_baseline: machine.reading_baseline, linked_at: null })}>
-            {t.upkeep_unlink}
-          </Button>
+          {/* A borrower does not sync: the lender's last sync is what is shown. */}
+          {!borrowing && (
+            <>
+              <Button variant="secondary" loading={syncNow.isPending} onClick={() => syncNow.mutate(conn.id)}>
+                {t.upkeep_sync_now}
+              </Button>
+              <Button variant="outline"
+                onClick={() => link.mutate({ id: machine.id, connection_id: null, device_id: null, reading_baseline: machine.reading_baseline, linked_at: null })}>
+                {t.upkeep_unlink}
+              </Button>
+            </>
+          )}
         </div>
       ) : (
         !usage && connections.length === 0 && <p className="text-sm text-muted">{t.upkeep_no_connection}</p>
@@ -252,7 +262,7 @@ export function ReadingsSection({ machine, items }: { machine: Machine; items: U
       <Disks machineId={machine.id} />
 
       {!conn && usage && <ManualReading machine={machine} />}
-      {!conn && <LinkForm machine={machine} needsBaseline={!!usage || machine.template_key === "printer_3d"} />}
+      {!conn && !borrowing && <LinkForm machine={machine} needsBaseline={!!usage || machine.template_key === "printer_3d"} />}
     </div>
   );
 }

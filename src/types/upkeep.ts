@@ -78,6 +78,8 @@ export interface UpkeepItem {
   next_due_on: string | null;
   snooze_until: string | null;
   in_calendar: number;
+  /** 1 when the item is a backup the Network page lists (a manual copy). */
+  is_backup: number;
   alert: UpkeepAlert;
   calendar_event_id: string | null;
   calendar_event_date: string | null;

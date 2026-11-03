@@ -17,6 +17,7 @@ vi.mock("../db/hooks/useConnections", () => {
   const m = () => ({ mutate: () => {}, mutateAsync: async () => 0, isPending: false });
   return {
     useConnections: () => ({ data: [] }),
+    useEquipmentConnections: () => ({ data: [] }),
     useMachineDisks: () => ({ data: [] }),
     useCurrentReading: () => ({ data: null }),
     useLinkMachine: m, useRecordManualReading: m, useSyncNow: m,

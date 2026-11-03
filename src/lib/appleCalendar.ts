@@ -50,10 +50,11 @@ export async function createCalendarEvent(event: CalendarEvent): Promise<string>
   });
 }
 
-/** Update an existing calendar event by uid — deletes old and creates new */
+/** Update an existing calendar event by uid: creates the new one first, then deletes the old (a failed create keeps it) */
 export async function updateCalendarEvent(uid: string, event: CalendarEvent): Promise<string> {
+  const newUid = await createCalendarEvent(event);
   try { await deleteCalendarEvent(uid); } catch (e) { logWarn("Calendar sync: delete old event:", e); }
-  return await createCalendarEvent(event);
+  return newUid;
 }
 
 /** Delete a calendar event by uid */

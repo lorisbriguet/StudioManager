@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { DatePicker, FormField, FormGrid, FormGridItem, FormModal, Input, Select, Toggle } from "../ui";
+import { DatePicker, FormField, FormGrid, FormGridItem, FormModal, Input, Select } from "../ui";
+import { InCalendarSelect } from "./InCalendarSelect";
 import { useT } from "../../i18n/useT";
 import { useCreateSubscription, useUpdateSubscription } from "../../db/hooks/useUpkeep";
 import { useUnsavedChangesWarning } from "../../hooks/useUnsavedChangesWarning";
@@ -112,7 +113,9 @@ export function SubscriptionForm({ onClose, subscription: s }: Props) {
           <Input value={f.url} placeholder="https://" onChange={(e) => set("url", e.target.value)} />
         </FormField>
         <FormGridItem>
-          <Toggle checked={f.inCalendar} onChange={(v) => set("inCalendar", v)} label={t.upkeep_in_calendar} />
+          <FormField label={t.upkeep_in_calendar}>
+            <InCalendarSelect inCalendar={f.inCalendar} onChange={(v) => set("inCalendar", v)} />
+          </FormField>
         </FormGridItem>
       </FormGrid>
     </FormModal>

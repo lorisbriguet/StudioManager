@@ -53,7 +53,7 @@ describe("AgentsPage", () => {
     const list = [
       agent("done"),
       agent("idle", { quiet: "stale" }),
-      agent("working", { model: "sonnet" }),
+      agent("working", { model: "sonnet", project: label }),
       agent("needs-you", { project: label, waitingFor: "Run npm test?" }),
     ];
     setInvokeHandler((cmd) => (cmd === "agents_list" ? list : []));
@@ -63,10 +63,13 @@ describe("AgentsPage", () => {
       </MemoryRouter>,
     );
     await screen.findByText("agent-needs-you");
+    expect(screen.getByRole("heading", { level: 1, name: "Agents" })).toBeInTheDocument();
+    // Group rows: label then a plain count (no coloured Badge).
     const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
-    expect(headings).toEqual(["Needs you", "Working", "Idle", "Done"]);
-    expect(screen.getByText("Org › Client › Project")).toBeInTheDocument();
+    expect(headings).toEqual(["Needs you1", "Working1", "Idle1", "Done1"]);
+    // Every row keeps its project line; a needs-you row adds its status line under it.
     expect(screen.getByText("Run npm test?")).toBeInTheDocument();
+    expect(screen.getAllByText("Org › Client › Project")).toHaveLength(2);
     expect(screen.getAllByText("proj").length).toBeGreaterThan(0);
     expect(screen.getByText("quiet")).toBeInTheDocument();
   });
@@ -92,6 +95,9 @@ describe("AgentsPage", () => {
       </MemoryRouter>,
     );
     expect(screen.getByText(/switched off/i)).toBeInTheDocument();
+    // The same shell as when it is on: the page title and the (disabled) New agent button.
+    expect(screen.getByRole("heading", { level: 1, name: "Agents" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New agent" })).toBeDisabled();
   });
 });
 

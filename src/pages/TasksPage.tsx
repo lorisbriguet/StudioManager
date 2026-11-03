@@ -33,6 +33,7 @@ import { useBulkDelete } from "../hooks/useBulkDelete";
 import { useListNavigation } from "../hooks/useListNavigation";
 import { useTabStore } from "../stores/tab-store";
 import { useOrgStore } from "../stores/org-store";
+import { useDraftKeys } from "../stores/draft-store";
 import { useTimerActions } from "../hooks/useTimerActions";
 import { useT } from "../i18n/useT";
 import { plural } from "../i18n/plural";
@@ -45,6 +46,7 @@ import { PILL } from "../components/ui/tokens";
 
 export function TasksPage() {
   const t = useT();
+  const draftKey = useDraftKeys();
   const openTab = useTabStore((s) => s.openTab);
   // V1.11 C1: tasks of cancelled/completed projects are hidden, so their
   // project groups disappear entirely (groups are derived from the tasks).
@@ -527,6 +529,7 @@ export function TasksPage() {
                         <AddRow
                           className="mt-1"
                           placeholder={t.new_subtask}
+                          draftKey={draftKey("subtask", tk.id)}
                           onAdd={(title) =>
                             createSubtask.mutateAsync({
                               task_id: tk.id,
@@ -551,6 +554,7 @@ export function TasksPage() {
               <AddRow
                 className="px-4 py-2 border-t border-[var(--color-border-divider)]"
                 placeholder={t.new_task}
+                draftKey={draftKey("task", g.projectId)}
                 onAdd={(title) => {
                   // A second Enter while the first create is in flight adds nothing.
                   if (createTask.isPending) return false;

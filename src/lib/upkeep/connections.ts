@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { QueryClient } from "@tanstack/react-query";
-import { TransactionBatch } from "../../db";
+import { TransactionBatch, equipmentOrgId } from "../../db";
 import {
   currentReading,
   firstReadingSince,
@@ -156,7 +156,8 @@ export async function recomputeUsageForecast(
     }
   }
   if (next === item.next_due_on) return false;
-  const batch = new TransactionBatch(expectedOrg);
+  // The item lives where its machine does: the lender's database when borrowed.
+  const batch = new TransactionBatch(expectedOrg, equipmentOrgId());
   batch.add(
     "UPDATE upkeep_items SET next_due_on = $1, updated_at = datetime('now') WHERE id = $2",
     [next, item.id]
@@ -328,6 +329,8 @@ export async function runConnectionSyncs(qc: QueryClient, opts: SyncOptions = {}
 async function syncPass(qc: QueryClient, opts: SyncOptions): Promise<void> {
   const { org, same } = orgGuard();
   if (!same()) return;
+  // A borrowing organisation reads the lender's connections; only the lender syncs them.
+  if (equipmentOrgId() !== null) return;
   const todayISO = opts.todayISO ?? todayLocalISO();
   const now = Date.now();
   const due = (await getConnections()).filter((c) => {
@@ -389,7 +392,7 @@ async function syncPass(qc: QueryClient, opts: SyncOptions): Promise<void> {
   }
 
   if (wrote && same()) {
-    for (const key of ["connections", "machines", "upkeep-items", "machine-readings", "machine-disks"]) {
+    for (const key of ["connections", "machines", "upkeep-items", "machine-readings", "machine-disks", "equipment-connections"]) {
       qc.invalidateQueries({ queryKey: [key] });
     }
   }

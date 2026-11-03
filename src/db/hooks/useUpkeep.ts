@@ -133,6 +133,10 @@ export function useMachineFiles(machineId: number) {
   });
 }
 
+export function useMachineLinks() {
+  return useQuery({ queryKey: ["machine-links"], queryFn: m.getMachineLinks });
+}
+
 export function useServiceLog(machineId: number) {
   return useQuery({
     queryKey: ["service-log", machineId],
@@ -260,6 +264,7 @@ export function useAddMachineFile() {
       m.addMachineFile(machineId, file),
     onSuccess: (_, { machineId }) => {
       qc.invalidateQueries({ queryKey: ["machines", machineId, "files"] });
+      qc.invalidateQueries({ queryKey: ["machine-links"] });
     },
   });
 }
@@ -270,6 +275,7 @@ export function useRemoveMachineFile() {
     mutationFn: ({ fileId }: { fileId: number; machineId: number }) => m.removeMachineFile(fileId),
     onSuccess: (_, { machineId }) => {
       qc.invalidateQueries({ queryKey: ["machines", machineId, "files"] });
+      qc.invalidateQueries({ queryKey: ["machine-links"] });
     },
   });
 }

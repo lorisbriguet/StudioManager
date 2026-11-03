@@ -44,7 +44,7 @@ function item(over: Partial<UpkeepItem> = {}): UpkeepItem {
     id: 7, machine_id: 3, title: "Clean nozzle", notes: null, schedule: "interval",
     interval_n: 3, interval_unit: "month", anchor_day: 28, usage_metric: null, usage_every: null,
     last_done_on: null, last_done_reading: null, next_due_on: "2026-11-10", snooze_until: null,
-    in_calendar: 1, alert: "default", calendar_event_id: null, calendar_event_date: null,
+    in_calendar: 1, is_backup: 0, alert: "default", calendar_event_id: null, calendar_event_date: null,
     overdue_notified_for: null, archived: 0, created_at: "", updated_at: "",
     ...over,
   };
@@ -559,6 +559,45 @@ describe("organisation switch during a calendar sync", () => {
       (c.args.statements as { sql: string }[]).some((s) => s.sql.includes("calendar_event_id")));
     expect(batch?.args.expectedOrg).toBe("org-a");
     expect(deletedUids()).toEqual(["NEW-UID"]);
+  });
+
+  it("moving an event while the organisation switches keeps the old event", async () => {
+    const moving = item({ id: 115, next_due_on: "2026-12-10", calendar_event_id: "E1", calendar_event_date: "2026-11-10" });
+    setSelectHandler((sql) => {
+      if (sql.includes("FROM upkeep_items")) return [moving];
+      if (sql.includes("FROM machines")) return [machine()];
+      return [];
+    });
+    const release = holdCreate("E2");
+    const sync = syncItemCalendar(115);
+    await new Promise((r) => setTimeout(r, 0));
+    useOrgStore.setState({ activeId: "org-b" });
+    release();
+    await sync;
+    expect(deletedUids()).toEqual(["E2"]);
+    expect(eventWrites()).toHaveLength(0);
+  });
+
+  it("a refused write after a move keeps the old event too", async () => {
+    setSelectHandler((sql) => {
+      if (sql.includes("FROM upkeep_items"))
+        return [item({ id: 116, next_due_on: "2026-12-10", calendar_event_id: "E1", calendar_event_date: "2026-11-10" })];
+      if (sql.includes("FROM machines")) return [machine()];
+      return [];
+    });
+    setBatchFailure((stmts) =>
+      stmts.some((s) => s.sql.includes("calendar_event_id")) ? new Error("organisation changed") : null);
+    await syncItemCalendar(116);
+    expect(deletedUids()).toEqual(["NEW-UID"]);
+  });
+
+  it("a failed create while moving never deletes the old event", async () => {
+    setInvokeHandler((cmd) => { if (cmd === "calendar_create_event") throw new Error("boom"); return null; });
+    await syncItemEvent(
+      item({ next_due_on: "2026-12-10", calendar_event_id: "E1", calendar_event_date: "2026-11-10" }),
+      machine()
+    );
+    expect(deletedUids()).toEqual([]);
   });
 
   it("does not start while a switch is in progress", async () => {

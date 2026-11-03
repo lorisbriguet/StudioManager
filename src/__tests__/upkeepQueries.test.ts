@@ -26,7 +26,7 @@ function item(over: Partial<UpkeepItem>): UpkeepItem {
     last_done_reading: null,
     next_due_on: "2026-10-28",
     snooze_until: "2026-10-30",
-    in_calendar: 1,
+    in_calendar: 1, is_backup: 0,
     alert: "default",
     calendar_event_id: null,
     calendar_event_date: null,

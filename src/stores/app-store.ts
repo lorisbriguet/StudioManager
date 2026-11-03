@@ -159,6 +159,7 @@ export interface AppState {
   lastAutoBackup: number; // timestamp
   projectOpenMode: ProjectOpenMode;
   showTasksPage: boolean;
+  showNetworkPage: boolean;
   /** Mirror of agents.json's switch, loaded at startup. */
   agentsEnabled: boolean;
   setAgentsEnabled: (enabled: boolean) => void;
@@ -207,6 +208,7 @@ export interface AppState {
   setLastAutoBackup: (ts: number) => void;
   setProjectOpenMode: (mode: ProjectOpenMode) => void;
   setShowTasksPage: (show: boolean) => void;
+  setShowNetworkPage: (show: boolean) => void;
   setShowIncome: (show: boolean) => void;
   setShowTimeOverview: (show: boolean) => void;
   setContext: (ctx: Partial<AppState["currentContext"]>) => void;
@@ -318,6 +320,7 @@ export const useAppStore = create<AppState>((set) => ({
   agentsEnabled: false,
   setAgentsEnabled: (enabled) => set({ agentsEnabled: enabled }),
   showTasksPage: localStorage.getItem("showTasksPage") !== "false",
+  showNetworkPage: false,
   showIncome: localStorage.getItem("showIncome") === "true",
   showTimeOverview: localStorage.getItem("showTimeOverview") === "true",
   language: storedLanguage(),
@@ -425,6 +428,7 @@ export const useAppStore = create<AppState>((set) => ({
     localStorage.setItem("projectOpenMode", mode);
     set({ projectOpenMode: mode });
   },
+  setShowNetworkPage: (show) => { set({ showNetworkPage: show }); void useOrgStore.getState().savePrefs({ showNetworkPage: show }); },
   setShowTasksPage: (show) => { set({ showTasksPage: show }); void useOrgStore.getState().savePrefs({ showTasksPage: show }); },
   setShowIncome: (show) => { set({ showIncome: show }); void useOrgStore.getState().savePrefs({ showIncome: show }); },
   setShowTimeOverview: (show) => { set({ showTimeOverview: show }); void useOrgStore.getState().savePrefs({ showTimeOverview: show }); },

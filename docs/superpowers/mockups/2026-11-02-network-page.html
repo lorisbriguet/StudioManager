@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Network page</title>
+<style>
+:root{--bg:#111;--surface:#161616;--surface2:#1c1c1c;--border:#2a2a2a;--text:#e5e5e5;--sec:#d4d4d4;--muted:#b0b0b0;--faint:#6f6f6f;--accent:#3b82f6;--accent-light:#172554;--accent-text:#9db8f0;--success:#22c55e;--warning:#f59e0b;--danger:#ef4444}
+*{box-sizing:border-box}
+body{margin:0;background:#0b0b0b;color:var(--text);font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:28px}
+h1.q{font-size:20px;margin:0 0 4px}.sub{color:var(--muted);margin:0 0 24px;font-size:13px}
+.option{border:2px solid transparent;border-radius:16px;padding:14px;margin-bottom:28px;cursor:pointer;background:#0e0e0e}
+.option.selected{border-color:var(--accent)}
+.opthead{display:flex;gap:10px;align-items:baseline;margin:0 4px 12px}.letter{background:var(--accent);color:#fff;border-radius:999px;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-weight:600;font-size:13px}
+.opthead b{font-size:15px}.opthead span{color:var(--muted);font-size:13px}
+.app{display:flex;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--bg)}
+.side{width:170px;border-right:1px solid var(--border);padding:16px 10px;flex:none}
+.logo{font-weight:800;font-size:12px;line-height:1;margin:0 8px 18px}
+.nav{display:flex;flex-direction:column;gap:2px}.nav div{padding:6px 10px;border-radius:6px;color:var(--sec);font-size:13px}.nav .on{background:var(--accent-light);color:var(--accent-text)}.nav hr{border:0;border-top:1px solid var(--border);margin:6px 4px}
+.main{flex:1;padding:22px 24px;min-width:0}
+.ph{display:flex;align-items:center;gap:10px;margin-bottom:20px}.ph h2{font-size:20px;font-weight:600;margin:0}.sp{flex:1}
+.ctl{background:var(--surface2);border-radius:6px;padding:5px 10px;font-size:12px;color:var(--sec)}.fine{font-size:12px;color:var(--muted)}
+.cols{display:grid;grid-template-columns:2fr 1fr;gap:16px;align-items:start}.stack{display:flex;flex-direction:column;gap:16px}
+.card{background:var(--surface);border-radius:12px;padding:16px;min-width:0}
+.ct{font-size:13px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px}.ct .r{margin-left:auto;font-weight:400}
+.lbl{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:12px 0 4px}
+.bar{height:4px;background:var(--surface2);border-radius:99px;overflow:hidden;margin:6px 0}.bar i{display:block;height:100%;background:var(--success)}
+.row{display:flex;align-items:center;gap:8px;font-size:13px;padding:6px 0;color:var(--sec)}.row .r{margin-left:auto;color:var(--muted);font-size:12px}
+.row+.row{border-top:1px solid #1e1e1e}
+.dot{width:6px;height:6px;border-radius:50%;flex:none}.g{background:var(--success)}.y{background:var(--warning)}.rd{background:var(--danger)}.m{background:var(--faint)}
+.btn{display:inline-block;background:var(--surface2);border-radius:6px;padding:5px 10px;font-size:12px;color:var(--sec);margin:4px 6px 0 0}
+.ext{color:var(--faint);font-size:12px}
+.links{display:grid;grid-template-columns:1fr 1fr;column-gap:24px}
+.links .row{border-top:1px solid #1e1e1e}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.tile{background:var(--surface2);border-radius:8px;padding:10px 12px;font-size:13px;display:flex;align-items:center;gap:8px}.tile small{display:block;color:var(--muted);font-size:11px}
+.sec{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:22px 0 8px}
+.note{color:var(--faint);font-size:12px;margin:10px 4px 0}
+</style></head><body>
+<h1 class="q">Which Network page layout feels right?</h1>
+<p class="sub">Real machines and services; numbers are illustrative. Both live under Agents in the sidebar, switched on in Settings.</p>
+
+<div class="option" data-choice="by-machine" onclick="toggleSelect(this)">
+ <div class="opthead"><span class="letter">A</span><b>Grouped by machine</b><span>One card per machine: its health, its services, its remote buttons. Backups and upkeep on the side.</span></div>
+ <div class="app">
+  <div class="side"><div class="logo">STUDIO→|<br>MANAGER</div><div class="nav"><div>Dashboard</div><div>Clients</div><div>Projects</div><div>Calendar</div><hr><div>Wiki</div><div>Agents</div><div class="on">Network</div><div>Resources</div><div>Upkeep</div><hr><div>Invoices</div><div>Expenses</div></div></div>
+  <div class="main">
+   <div class="ph"><h2>Network</h2><div class="sp"></div><span class="fine">Checked 1 min ago</span><div class="ctl">↻</div></div>
+   <div class="cols">
+    <div class="stack">
+     <div class="card"><div class="ct">Synology DS925+ <span class="r fine">NAS · updated 3 h ago</span></div>
+      <div class="fine">Volume 1 · 4.8 of 7 TB</div><div class="bar"><i style="width:69%"></i></div>
+      <div class="row"><span class="dot g"></span>2 drives healthy<span class="r">SSD cache healthy</span></div>
+      <div class="lbl">Services</div>
+      <div class="links">
+       <div class="row"><span class="dot g"></span>DSM<span class="r ext">↗</span></div><div class="row"><span class="dot g"></span>Paperless<span class="r ext">↗</span></div>
+       <div class="row"><span class="dot g"></span>Pi-hole<span class="r ext">↗</span></div><div class="row"><span class="dot g"></span>Uptime Kuma<span class="r ext">↗</span></div>
+       <div class="row"><span class="dot g"></span>Forgejo<span class="r ext">↗</span></div><div class="row"><span class="dot y"></span>FreshRSS<span class="r">Error 502 ↗</span></div>
+       <div class="row"><span class="dot g"></span>Homepage<span class="r ext">↗</span></div>
+      </div></div>
+     <div class="card"><div class="ct">Mac mini <span class="r fine"><span class="dot g" style="display:inline-block;margin-right:6px"></span>Online</span></div>
+      <span class="btn">Screen Sharing</span><span class="btn">Jump Desktop</span></div>
+    </div>
+    <div class="stack">
+     <div class="card"><div class="ct">Backups</div>
+      <div class="row"><span class="dot y"></span>Time Machine<span class="r">running · last 5 Oct</span></div>
+      <div class="row"><span class="dot g"></span>NAS snapshots<span class="r">today 02:00</span></div>
+      <div class="row"><span class="dot g"></span>HDD copy<span class="r">2 Nov</span></div></div>
+     <div class="card"><div class="ct">Upkeep due</div>
+      <div class="row"><span class="dot y"></span>NAS · Check DSM updates<span class="r">28 Nov</span></div>
+      <div class="row"><span class="dot y"></span>Mac mini · macOS updates<span class="r">28 Nov</span></div></div>
+    </div>
+   </div>
+  </div>
+ </div>
+</div>
+
+<div class="option" data-choice="by-kind" onclick="toggleSelect(this)">
+ <div class="opthead"><span class="letter">B</span><b>Services first</b><span>All links as tiles at the top (the thing you click most), then machines, then backups and upkeep.</span></div>
+ <div class="app">
+  <div class="side"><div class="logo">STUDIO→|<br>MANAGER</div><div class="nav"><div>Dashboard</div><div>Clients</div><div>Projects</div><div>Calendar</div><hr><div>Wiki</div><div>Agents</div><div class="on">Network</div><div>Resources</div><div>Upkeep</div><hr><div>Invoices</div><div>Expenses</div></div></div>
+  <div class="main">
+   <div class="ph"><h2>Network</h2><div class="sp"></div><span class="fine">Checked 1 min ago</span><div class="ctl">↻</div></div>
+   <div class="tiles">
+    <div class="tile"><span class="dot g"></span><div>DSM<small>NAS</small></div></div><div class="tile"><span class="dot g"></span><div>Paperless<small>NAS</small></div></div>
+    <div class="tile"><span class="dot g"></span><div>Pi-hole<small>NAS</small></div></div><div class="tile"><span class="dot g"></span><div>Uptime Kuma<small>NAS</small></div></div>
+    <div class="tile"><span class="dot g"></span><div>Forgejo<small>NAS</small></div></div><div class="tile"><span class="dot y"></span><div>FreshRSS<small>Error 502</small></div></div>
+    <div class="tile"><span class="dot g"></span><div>Homepage<small>NAS</small></div></div><div class="tile"><span class="dot g"></span><div>Screen Sharing<small>Mac mini</small></div></div>
+   </div>
+   <div class="sec">Machines</div>
+   <div class="cols" style="grid-template-columns:1fr 1fr 1fr">
+    <div class="card"><div class="ct">Synology DS925+</div><div class="fine">Volume 1 · 4.8 of 7 TB</div><div class="bar"><i style="width:69%"></i></div><div class="row"><span class="dot g"></span>2 drives healthy<span class="r">3 h ago</span></div></div>
+    <div class="card"><div class="ct">Mac mini <span class="r fine">Online</span></div><span class="btn">Screen Sharing</span><span class="btn">Jump Desktop</span></div>
+    <div class="card"><div class="ct">Backups</div><div class="row"><span class="dot y"></span>Time Machine<span class="r">5 Oct</span></div><div class="row"><span class="dot g"></span>Snapshots<span class="r">02:00</span></div><div class="row"><span class="dot g"></span>HDD copy<span class="r">2 Nov</span></div></div>
+   </div>
+   <div class="sec">Upkeep due</div>
+   <div class="card"><div class="row"><span class="dot y"></span>NAS · Check DSM updates<span class="r">28 Nov</span></div><div class="row"><span class="dot y"></span>Mac mini · macOS updates<span class="r">28 Nov</span></div></div>
+  </div>
+ </div>
+</div>
+<p class="note">Click one to select it, then answer in the terminal.</p>
+</body></html>

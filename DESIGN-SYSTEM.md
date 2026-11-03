@@ -157,7 +157,7 @@ The two default themes mirror `src/index.css` value for value, except their acce
 
 | Element | Classes |
 |---------|---------|
-| Level 1: page title, one per page, always an `h1` | `HEADING_1` = `text-xl font-semibold tracking-tight` (`PageHeader`, `SidebarTitle`, wiki article title) |
+| Level 1: page title, one per page, always an `h1` | `HEADING_1` = `text-xl font-semibold tracking-tight` (`PageHeader`, `SidebarTitle`; the one size exception is the wiki article title, an `h2` at this size, see [PageHeader](#pageheader)) |
 | Level 2: card, widget, modal, peek panel, project block | `HEADING_2` = `text-sm font-semibold` (`PanelTitle`, `Card.Header`, `Modal` title) |
 | Label (year groups, categories, stat captions) | `<SectionLabel>` (`text-[10px] font-medium uppercase tracking-widest text-muted`) |
 | Stat value | `STAT_VALUE` = `text-xl font-semibold tabular-nums` (`StatTile`) |
@@ -197,7 +197,8 @@ Every page's title row is `ui/PageHeader`: the page's one `h1`.
 - `as="h2"`: a page inside another page. `ProjectDetailContent` uses it in peek panels and is the `h1` on the project page.
 - **Peek panels** (Projects, Calendar) open with `ui/PeekHeader`: close on the left, open the full page on the right, then the project's `PageHeader as="h2"`.
 - **Sidebar pages** (Settings, Profile) put the title at the top of their sidebar with `ui/SidebarTitle` (level 1 `h1`).
-- **Wiki:** an open article's title is the page `h1` (an editable field inside an `h1`, level 1). The explorer's "Wiki" label is the `h1` only when nothing with its own title is open. Prose headings are content and sit below the article title: `h1` 15px, `h2` 14px, `h3` 13px, all semibold (`src/index.css`, `.tiptap-editor .ProseMirror`, also used by DocView).
+- **Flat list-and-detail pages** (Agents, Wiki) keep the normal `PageHeader` on the `p-8` canvas (never `-m-8`), with the page's primary action on the right, the same whether the feature is on or off. Below it the columns sit side by side `gap-8`, the right one opening with `border-l border-divider pl-8`; no cards. Lists are flat rows like a `Table`: a group row per group (32px, chevron, status dot, `SectionLabel` label, plain `text-xs text-muted` count, the header line `border-[var(--color-border)]` under it, like `Table.Group`), then rows with `border-divider` hairlines, `hover-row` on hover and `bg-accent-tint` when selected (as `Table.Row`), never a status-tinted background or a coloured count `Badge`. The detail opens with one 32px header row over the header line (the `HEADING_2` name, a muted status line, its buttons, and an `ICONS.more` `Dropdown` for the rarer and destructive actions), level with the list's first group row. The Wiki has three such columns (explorer with its `SearchBar` on top, the article, the links column) with no tab strip and no bottom bar: the article's header row holds back/forward, the breadcrumb, the word count and save state, the Edit/Read button and the "more" menu (Delete); the `PageHeader` holds the column toggles, "Graph view" (secondary, pressed while the graph shows) and "New article"; the links column is group rows (Backlinks, Outgoing links, Outline, Unlinked mentions) over plain 36px rows. Under 1000px the links column floats over the article (`shadow-menu`).
+- **Wiki:** the page `h1` is its `PageHeader` "Wiki". An open article's title is an editable field inside an `h2` at level-1 size (`HEADING_1`), the document's own title under the page title; a project file shows its file name the same way unless the Markdown opens with its own `# …`. Prose headings are content and sit below the article title: `h1` 15px, `h2` 14px, `h3` 13px, all semibold (`src/index.css`, `.tiptap-editor .ProseMirror`, also used by DocView).
 
 ### Section labels
 
@@ -213,7 +214,7 @@ Every small uppercase label uses `src/components/ui/SectionLabel.tsx`. There is 
 - **Action:** `action` puts a button on the right of the same row.
 - **Spacing:** it sets no margin, so the caller adds it.
 - **Class string:** for a `<th>` or a third-party heading, use the `SECTION_LABEL` class string. `MENU_GROUP_LABEL` and `SectionHeader` (`ui/Settings`) are built on it.
-- **Not a title:** a page's own title is `PageHeader` (or `SidebarTitle`), never a section label. The one exception is the wiki explorer's "Wiki" label, which becomes the page `h1` only when nothing with its own title is open (see [PageHeader](#pageheader)).
+- **Not a title:** a page's own title is `PageHeader` (or `SidebarTitle`), never a section label.
 
 ---
 
@@ -376,6 +377,7 @@ One icon per concept, so the same thing always looks the same. Use the `ICONS` k
 | Sort | `sortAsc` · `sortDesc` · `sortNone` | `ArrowUp` · `ArrowDown` · `ArrowUpDown` | |
 | Collapse / expand sidebar | `collapseSidebar` · `expandSidebar` | `PanelLeftClose` · `PanelLeftOpen` | |
 | Agents | `agents` | `Bot` | Agents page, Settings → Agents |
+| Network | `network` | `Network` | Network page (opt-in, Settings → Behaviour) |
 | Studio upkeep | `upkeep` | `Wrench` | Upkeep page, Settings → Upkeep |
 | Graph | `graph` | `Waypoints` | The wiki graph, a link map |
 | Disk, storage | `disk` | `HardDrive` | The NAS machine type, a disk or volume |
@@ -450,9 +452,9 @@ import { Card } from "../components/ui";
 - **`padding`:** `md` 16px (default), `sm` 12px (nested and compact cards), `none` (rows that touch the edges bring their own padding: SettingsCard, NamedTable, the dashboard widget frame). There is no 20px card.
 - **`tone`:**
   - `surface` (default): the surface fill, no border.
-  - `inset`: surface plus a 1px `border-divider` border. A card inside a card is **always** bordered (ClientDetail contacts and addresses, NamedTable in a project block, wiki backlink cards, the link pickers of project blocks).
-  - `dashed`: transparent with a dashed `input-border` border, for add and draft boxes (contact and address drafts, "Add block", an unlinked wiki mention).
-- **`interactive`:** hover tint (`hover-row`), pointer and the accent focus ring. On a div with `onClick` it adds `role="button"`, `tabIndex=0`, and Enter / Space click it (the key stops there, so a page-level list shortcut doesn't act twice). Use `as="button"` when the whole card is one action (wiki backlinks).
+  - `inset`: surface plus a 1px `border-divider` border. A card inside a card is **always** bordered (ClientDetail contacts and addresses, NamedTable in a project block, the link pickers of project blocks).
+  - `dashed`: transparent with a dashed `input-border` border, for add and draft boxes (contact and address drafts, "Add block").
+- **`interactive`:** hover tint (`hover-row`), pointer and the accent focus ring. On a div with `onClick` it adds `role="button"`, `tabIndex=0`, and Enter / Space click it (the key stops there, so a page-level list shortcut doesn't act twice). Use `as="button"` when the whole card is one action.
 - **`interactive="link"`:** for a clickable card that holds its own controls (the projects grid with its bulk checkbox, notifications with their icon buttons): a `role="button"` can't contain other buttons. The card gets the hover tint and pointer only; its title is a real `<button>` (or `<Link>`) with `className={CARD_LINK}`, whose `::after` stretches over the card, so a click anywhere opens it and Enter / Space work natively on the title. The ring shows on the whole card. Inner controls take `CARD_CONTROL` (`relative z-10`) to sit above the overlay.
 - **`selected`:** the accent outline on a `hover-row` fill (the open or bulk-selected project, the expanded workload template).
 - **`as`:** `div` (default), `section` / `article` for a landmark, `li`, `button`. Other props (`onContextMenu`, `style`, `ref`, `aria-*`, `data-*`) pass through.
@@ -1091,7 +1093,7 @@ const choice = await confirm({ …, extra: { label: t.export_as_draft, value: "d
 
 ## Navigation
 
-Rows in a navigation list use `src/components/ui/NavItem.tsx`: the app sidebar, settings and profile categories, the wiki explorer and custom lists.
+Rows in a navigation list use `src/components/ui/NavItem.tsx`: the app sidebar, settings and profile categories and custom lists. (The wiki explorer is a flat tree of table-style rows, see [PageHeader](#pageheader).)
 
 ```tsx
 <NavItem active={cat === key} icon={ICONS.appearance} onClick={() => setCat(key)}>{t.appearance}</NavItem>
@@ -1103,7 +1105,7 @@ Rows in a navigation list use `src/components/ui/NavItem.tsx`: the app sidebar, 
 
 | Size | Classes | Use |
 |------|---------|-----|
-| `sm` (default) | `gap-2 px-3 py-1.5 text-xs` | Settings, wiki explorer, custom lists |
+| `sm` (default) | `gap-2 px-3 py-1.5 text-xs` | Settings, custom lists |
 | `md` | `gap-2.5 px-3.5 py-1.5 text-sm` | App sidebar, profile |
 
 - **Active row:** `bg-accent-light text-accent-text font-medium` and `aria-current="page"`.
@@ -1264,7 +1266,7 @@ Item icons are components, drawn at 14px. A popover that holds more than command
 - **Lazy options:** `onOpen` on `Select` / `DropdownSelect` runs each time the list opens (click, arrow keys, `defaultOpen`): load or refresh the options there. Not `onFocus`: WebKit doesn't focus a clicked button.
 - `Select` sends no DOM `change` event. Inside a `FormModal`, a pick (in `Select`, `DropdownSelect`, or a `Dropdown` menu action) marks the form dirty by itself; any other form that tracks dirty state with `<div onChange>` must call `markDirty()` in each Select's `onChange`.
 - Tests: open with `pickOption(trigger, "Label")` from `src/__tests__/fixtures/dropdown.ts`.
-- A popup that opens at the text caret and keeps the focus in the editor (the wiki's slash menu and link picker) is a `Popover` with the `MENU_*` row look, `role="listbox"` with `role="option"` rows; `Popover` flips above the caret or slides left instead of leaving the window, and closes when the editor scrolls. A right-click menu is always `ContextMenu`, never hand-built, and never the only way in: WebKit sends no `contextmenu` event from the keyboard, so the same items also sit behind a "more" `IconButton` (`ICONS.more`, `reveal`, also shown while the row has focus: `group-focus-within:opacity-100`) opening a `Dropdown` (the wiki explorer's article and file rows).
+- A popup that opens at the text caret and keeps the focus in the editor (the wiki's slash menu and link picker) is a `Popover` with the `MENU_*` row look, `role="listbox"` with `role="option"` rows; `Popover` flips above the caret or slides left instead of leaving the window, and closes when the editor scrolls. A right-click menu is always `ContextMenu`, never hand-built, and never the only way in: WebKit sends no `contextmenu` event from the keyboard, so the same items also sit behind a "more" `IconButton` (`ICONS.more`, `reveal`, also shown while the row has focus: `group-focus-within:opacity-100`) opening a `Dropdown` (the wiki explorer's article rows).
 
 ---
 

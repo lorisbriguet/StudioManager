@@ -50,7 +50,6 @@ describe("wiki explorer row menu", () => {
         colors={projectColors([])}
         onOpen={onOpen}
         onNewArticle={() => {}}
-        onOpenGraph={() => {}}
         onDeleteArticle={onDelete}
       />
     );

@@ -125,7 +125,6 @@ describe("explorer", () => {
         colors={projectColors([1])}
         onOpen={() => {}}
         onNewArticle={() => {}}
-        onOpenGraph={() => {}}
         onDeleteArticle={() => {}}
       />
     );
@@ -136,9 +135,10 @@ describe("explorer", () => {
     expect(screen.getByText(/nothing matches this search/i)).toBeInTheDocument();
   });
 
-  it("counts articles and files in its footer", () => {
+  it("has no footer bar: each project's group row carries its count", () => {
     renderExplorer();
-    expect(screen.getByText("2 articles · 0 files")).toBeInTheDocument();
+    expect(screen.queryByRole("contentinfo")).toBeNull();
+    expect(screen.getByRole("treeitem", { name: /alpha\s*1/i })).toBeInTheDocument();
   });
 
   it("moves through the tree with the arrow keys", () => {
@@ -159,7 +159,7 @@ describe("empty wiki", () => {
     // Not before they have loaded: no first-run message flashing by.
     expect(screen.queryByText(/keep notes, processes/i)).toBeNull();
     expect(await screen.findByText(/keep notes, processes/i)).toBeInTheDocument();
-    // The explorer's icon button, and the empty state's own.
+    // The page header's button, and the empty state's own.
     expect(screen.getAllByRole("button", { name: /^new article$/i })).toHaveLength(2);
   });
 });

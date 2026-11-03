@@ -82,7 +82,7 @@ describe("project files in the wiki", () => {
     expect(await screen.findByRole("heading", { name: "StudioManager Design System" })).toBeInTheDocument();
     expect(screen.getByText(/read-only here/i)).toBeInTheDocument();
     const linkedFrom = screen.getByRole("region", { name: /linked from/i });
-    expect(linkedFrom).toHaveTextContent("Linked from · 1");
+    expect(within(linkedFrom).getByRole("heading", { name: /^Linked from\s*1$/ })).toBeInTheDocument();
     expect(linkedFrom).toHaveTextContent("Structure");
   });
 });

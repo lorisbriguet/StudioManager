@@ -27,6 +27,7 @@ const navItems: SidebarItem[] = [
   { divider: true },
   { to: "/wiki", icon: ICONS.wikiArticle, labelKey: "wiki" },
   { to: "/agents", icon: ICONS.agents, labelKey: "agents" },
+  { to: "/network", icon: ICONS.network, labelKey: "network" },
   { to: "/resources", icon: ICONS.resource, labelKey: "resources" },
   { to: "/upkeep", icon: ICONS.upkeep, labelKey: "upkeep" },
   { divider: true },
@@ -47,6 +48,7 @@ export function Sidebar() {
   const showTasksPage = useAppStore((s) => s.showTasksPage);
   const showIncome = useAppStore((s) => s.showIncome);
   const agentsEnabled = useAppStore((s) => s.agentsEnabled);
+  const showNetworkPage = useAppStore((s) => s.showNetworkPage);
   const { data: unreadCount = 0 } = useUnreadNotificationCount();
   const { overdueCount } = useUpkeepOverview();
   const openTab = useTabStore((s) => s.openTab);
@@ -61,9 +63,10 @@ export function Sidebar() {
       if (item.labelKey === "tasks" && !showTasksPage) return false;
       if (item.labelKey === "income" && !showIncome) return false;
       if (item.labelKey === "agents" && !agentsEnabled) return false;
+      if (item.labelKey === "network" && !showNetworkPage) return false;
       return true;
     });
-  }, [showTasksPage, showIncome, agentsEnabled]);
+  }, [showTasksPage, showIncome, agentsEnabled, showNetworkPage]);
 
   // Track keyboard focus index (-1 = no keyboard focus)
   const [focusIdx, setFocusIdx] = useState(-1);
@@ -172,9 +175,10 @@ export function Sidebar() {
       if (item.labelKey === "tasks" && !showTasksPage) return false;
       if (item.labelKey === "income" && !showIncome) return false;
       if (item.labelKey === "agents" && !agentsEnabled) return false;
+      if (item.labelKey === "network" && !showNetworkPage) return false;
       return true;
     });
-  }, [showTasksPage, showIncome, agentsEnabled]);
+  }, [showTasksPage, showIncome, agentsEnabled, showNetworkPage]);
 
   // Map from allVisible index to visibleLinks index (for focus matching)
   const linkIndexMap = useMemo(() => {

@@ -52,4 +52,13 @@ describe("machine attachments", () => {
     expect(openShell).toHaveBeenLastCalledWith("http://a.b");
     expect(invoke).not.toHaveBeenCalled();
   });
+
+  it("treats host:port as a host, and leaves vnc, mailto, tel and https alone", async () => {
+    await openMachineAttachment({ kind: "link", path_or_url: " nas.local:5001 " });
+    expect(openShell).toHaveBeenLastCalledWith("https://nas.local:5001");
+    for (const u of ["vnc://10.0.0.5", "mailto:a@b.ch", "tel:+41000", "https://x.ch/a"]) {
+      await openMachineAttachment({ kind: "link", path_or_url: u });
+      expect(openShell).toHaveBeenLastCalledWith(u);
+    }
+  });
 });

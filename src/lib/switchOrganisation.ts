@@ -5,6 +5,7 @@ import { exitPresentationMode, exitTestMode } from "./modes";
 import { closeDb, getDb } from "../db";
 import { switchOrganisationCmd, type Registry } from "./orgs";
 import { queryClient } from "./queryClient";
+import { clearUndoHistory } from "../stores/undo-store";
 
 export interface SwitchDeps {
   confirmIfDirty: () => Promise<boolean>;
@@ -29,7 +30,10 @@ export function defaultSwitchDeps(navigate: (p: string) => void, stopTimer: () =
     openDb: getDb,
     switchCmd: switchOrganisationCmd,
     applyRegistry: (r) => useOrgStore.getState().applyRegistry(r),
-    clearQueries: () => queryClient.clear(),
+    clearQueries: () => {
+      queryClient.clear();
+      clearUndoHistory();
+    },
     navigate,
   };
 }

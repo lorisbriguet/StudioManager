@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Badge, Button, Callout, EmptyState, ICONS, IconButton, Table } from "../ui";
+import { Badge, Button, Callout, EmptyState, ICONS, IconButton, PanelTitle, Table } from "../ui";
 import { useConfirm } from "../../lib/confirm";
 import { PrefilledExpenseModal } from "./PrefilledExpenseModal";
 import { SubscriptionForm } from "./SubscriptionForm";
@@ -65,14 +65,19 @@ export function SubscriptionsTab() {
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-sm text-muted tabular-nums">
-          {totals.map(([cur, amount]) => (
-            <div key={cur}>{t.upkeep_yearly_total.replace("{amount}", formatMoney(amount, cur))}</div>
-          ))}
-        </div>
-        <Button icon={ICONS.add} onClick={() => setEditing("new")}>{t.upkeep_add_subscription}</Button>
+      <div className="text-sm text-muted tabular-nums">
+        {totals.map(([cur, amount]) => (
+          <div key={cur}>{t.upkeep_yearly_total.replace("{amount}", formatMoney(amount, cur))}</div>
+        ))}
       </div>
+
+      <div>
+      <PanelTitle
+        title={t.upkeep_subscriptions}
+        count={subs.length}
+        action={<Button icon={ICONS.add} onClick={() => setEditing("new")}>{t.upkeep_add_subscription}</Button>}
+        className="mb-2"
+      />
 
       <Table>
         <Table.Head>
@@ -123,6 +128,7 @@ export function SubscriptionsTab() {
           )}
         </Table.Body>
       </Table>
+      </div>
 
       {editing && (
         <SubscriptionForm subscription={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} />

@@ -3,13 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { readFile } from "@tauri-apps/plugin-fs";
 import {
   Badge, Button, Card, DatePicker, EmptyState, FIELD_LABEL, FormField, FormGrid, FormModal, ICONS, IconButton,
-  Input, PageHeader, PanelTitle, Select, Table, Tag, Toggle,
+  Input, PageHeader, PanelTitle, Select, Table, Tag,
 } from "../ui";
 import { MachineForm } from "./MachineForm";
 import { MachineExpenseRow } from "./MachineExpenseRow";
 import { FilesSection, ServiceLogSection } from "./MachineLogSections";
 import { UpkeepItemForm } from "./UpkeepItemForm";
 import { ReadingsSection } from "./ReadingsSection";
+import { InCalendarSelect } from "./InCalendarSelect";
 import { repeatsLabel } from "./DueList";
 import { useT } from "../../i18n/useT";
 import {
@@ -270,11 +271,9 @@ export function MachineDetail({ machineId, compact = false, onDeleted, onBack }:
                       )}
                     </Table.Td>
                     <Table.Td className="whitespace-nowrap">
-                      <Toggle
-                        size="sm"
-                        checked={it.in_calendar === 1}
-                        label={<span className="text-xs text-muted">{t.upkeep_in_calendar}</span>}
-                        ariaLabel={t.upkeep_in_calendar}
+                      <InCalendarSelect
+                        fullWidth={false}
+                        inCalendar={it.in_calendar === 1}
                         onChange={(on) => updateItem.mutate({ id: it.id, data: { in_calendar: on ? 1 : 0 } })}
                       />
                     </Table.Td>
