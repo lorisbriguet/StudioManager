@@ -93,6 +93,12 @@ pub struct Registry {
     pub organisations: Vec<Organisation>,
 }
 
+/// An organisation id as `new_id` makes them: lowercase letters and digits
+/// only, never empty, so it can never build a path outside `orgs/`.
+pub fn is_plain_id(id: &str) -> bool {
+    !id.is_empty() && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+}
+
 pub fn org_dir(app_dir: &Path, id: &str) -> PathBuf {
     app_dir.join(ORGS_DIR).join(id)
 }

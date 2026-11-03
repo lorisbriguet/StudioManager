@@ -89,13 +89,20 @@ fn check_expected_org(expected: Option<&str>, active_id: &str) -> Result<(), Str
 /// production database when an organisation borrows another's equipment.
 /// Test and presentation copies never reach into another organisation.
 fn batch_db_path(app: &tauri::AppHandle, org: &ActiveOrg, target: Option<&str>) -> Result<PathBuf, String> {
+    resolve_batch_db(&app_data_dir(app)?, org, target)
+}
+
+fn resolve_batch_db(app_dir: &Path, org: &ActiveOrg, target: Option<&str>) -> Result<PathBuf, String> {
     let Some(target) = target.filter(|t| *t != org.id) else {
         return Ok(org.db_path());
     };
+    if !orgs::is_plain_id(target) {
+        return Err("invalid organisation id".into());
+    }
     if org.in_mode() {
         return Err("another organisation's data is not available in test or presentation mode".into());
     }
-    let dir = orgs::org_dir(&app_data_dir(app)?, target);
+    let dir = orgs::org_dir(app_dir, target);
     if !dir.join(DB_FILE).exists() {
         return Err(format!("unknown organisation: {target}"));
     }
@@ -839,6 +846,29 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn active(id: &str, db_name: &str) -> ActiveOrg {
+        ActiveOrg { id: id.into(), dir: PathBuf::from("/nowhere"), db_name: db_name.into() }
+    }
+
+    #[test]
+    fn a_batch_target_must_be_a_plain_organisation_id() {
+        let app = std::env::temp_dir().join(format!("sm-batch-{}", std::process::id()));
+        let own = active("abc123", DB_FILE);
+        for bad in ["", "..", "../x", "a/b", "a\\b", "ABC", "a b", "ab.c", "/etc"] {
+            let err = resolve_batch_db(&app, &own, Some(bad)).unwrap_err();
+            assert!(err.contains("invalid organisation id"), "{bad:?}: {err}");
+        }
+        // a real organisation directory is found
+        let dir = orgs::org_dir(&app, "xyz789");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(DB_FILE), b"").unwrap();
+        assert_eq!(resolve_batch_db(&app, &own, Some("xyz789")).unwrap(), dir.join(DB_FILE));
+        assert!(resolve_batch_db(&app, &own, Some("nope00")).unwrap_err().contains("unknown organisation"));
+        // the open organisation itself needs no target
+        assert_eq!(resolve_batch_db(&app, &own, Some("abc123")).unwrap(), own.db_path());
+        std::fs::remove_dir_all(&app).ok();
+    }
 
     #[test]
     fn converts_dollar_placeholders_to_question_marks() {
