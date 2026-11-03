@@ -122,14 +122,14 @@ pub struct SubtaskChanges {
 
 // ── Shared mechanics ─────────────────────────────────────────
 
-fn db<T>(r: rusqlite::Result<T>) -> R<T> {
+pub(crate) fn db<T>(r: rusqlite::Result<T>) -> R<T> {
     read::db(r)
 }
 
 /// Run `work` in one `BEGIN IMMEDIATE` transaction, commit, then log its
 /// summary. A `None` summary means nothing changed and nothing is logged.
 /// Any error drops the transaction, which rolls it back.
-fn write<T>(
+pub(crate) fn write<T>(
     dir: &Path,
     org: &Org,
     tool: &str,
@@ -147,7 +147,7 @@ fn write<T>(
 
 /// `UPDATE <table> SET <given columns>, updated_at = now WHERE id = ?`.
 /// Column names are always literals from this file.
-fn update_row(conn: &Connection, table: &str, id: i64, sets: Vec<(&'static str, Value)>) -> R<()> {
+pub(crate) fn update_row(conn: &Connection, table: &str, id: i64, sets: Vec<(&'static str, Value)>) -> R<()> {
     let mut parts: Vec<String> = sets
         .iter()
         .enumerate()
@@ -173,7 +173,7 @@ fn next_sort_order(conn: &Connection, table: &str, parent: &str, id: i64) -> R<i
     ))
 }
 
-fn columns(sets: &[(&'static str, Value)]) -> String {
+pub(crate) fn columns(sets: &[(&'static str, Value)]) -> String {
     sets.iter().map(|(c, _)| *c).collect::<Vec<_>>().join(", ")
 }
 
@@ -227,7 +227,7 @@ fn parse_priority(s: &str) -> R<&'static str> {
     }
 }
 
-fn parse_date(s: &str) -> R<String> {
+pub(crate) fn parse_date(s: &str) -> R<String> {
     let s = s.trim();
     if s.len() == 10 && NaiveDate::parse_from_str(s, "%Y-%m-%d").is_ok() {
         Ok(s.to_string())
@@ -237,7 +237,7 @@ fn parse_date(s: &str) -> R<String> {
 }
 
 /// Creation: absent or empty means no date.
-fn optional_date(s: Option<&str>) -> R<Option<String>> {
+pub(crate) fn optional_date(s: Option<&str>) -> R<Option<String>> {
     match s.map(str::trim) {
         None | Some("") => Ok(None),
         Some(d) => parse_date(d).map(Some),
@@ -245,7 +245,7 @@ fn optional_date(s: Option<&str>) -> R<Option<String>> {
 }
 
 /// Update: an empty string clears the date.
-fn date_value(s: &str) -> R<Value> {
+pub(crate) fn date_value(s: &str) -> R<Value> {
     if s.trim().is_empty() {
         Ok(Value::Null)
     } else {
@@ -253,7 +253,7 @@ fn date_value(s: &str) -> R<Value> {
     }
 }
 
-fn capped<'a>(s: &'a str, what: &str) -> R<&'a str> {
+pub(crate) fn capped<'a>(s: &'a str, what: &str) -> R<&'a str> {
     if s.len() > MAX_TEXT {
         Err(format!("{what} too long (over 1 MB)."))
     } else {
@@ -261,7 +261,7 @@ fn capped<'a>(s: &'a str, what: &str) -> R<&'a str> {
     }
 }
 
-fn required(s: &str, what: &str) -> R<String> {
+pub(crate) fn required(s: &str, what: &str) -> R<String> {
     let t = capped(s, what)?.trim();
     if t.is_empty() {
         Err(format!("{what} can't be empty."))

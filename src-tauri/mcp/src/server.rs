@@ -9,7 +9,8 @@
 use crate::guard::{self, AccessConfig, Org};
 use crate::orgs::Registry;
 use crate::write::{ProjectChanges, SubtaskChanges, TaskChanges};
-use crate::{money, read, write};
+use crate::upkeep::{ConsumableFields, MachineFields, SubscriptionChanges};
+use crate::{money, read, upkeep, write};
 use chrono::{Datelike, Local};
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
@@ -25,10 +26,10 @@ type R<T> = Result<T, String>;
 
 pub const INSTRUCTIONS: &str = "\
 StudioManager is the user's studio management app: organisations, clients, projects, tasks, \
-project wikis and, when allowed, invoices, quotes and expenses.
+project wikis, upkeep (machines, consumables, subscriptions) and, when allowed, invoices, quotes and expenses.
 Name the organisation in what you tell the user (every result carries it).
 Nothing can be deleted through these tools.
-Ask the user before creating a client or a project.
+Ask the user before creating a client or a project, and before every upkeep write (say exactly what you will save).
 When a name matches more than one record, the candidates come back: use the id.
 Dates are YYYY-MM-DD.
 Wiki articles link to each other: write [[Title]] or [[Project/Title]] for every related article (see put_wiki_article).";
@@ -39,6 +40,21 @@ pub const MONEY_TOOLS: [&str; 5] = [
     "list_quotes",
     "list_expenses",
     "pnl_summary",
+];
+
+/// Upkeep tools that write: each one's description tells the agent to ask
+/// the user first.
+pub const UPKEEP_WRITES: [&str; 10] = [
+    "add_service_log",
+    "add_machine_link",
+    "create_machine",
+    "update_machine",
+    "add_upkeep_item",
+    "mark_upkeep_done",
+    "create_consumable",
+    "update_consumable",
+    "create_subscription",
+    "update_subscription",
 ];
 
 #[derive(Clone)]
@@ -313,6 +329,214 @@ pub struct YearMonthInput {
     pub month: Option<u32>,
 }
 
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MachineInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    /// Machine name or id.
+    pub machine: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CreateMachineInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    pub name: String,
+    /// Free text, e.g. NAS, 3D printer, Laptop. Default: generic.
+    pub kind: Option<String>,
+    pub maker: Option<String>,
+    pub model: Option<String>,
+    pub location: Option<String>,
+    /// working (default), attention, broken, lent or retired.
+    pub status: Option<String>,
+    /// YYYY-MM-DD.
+    pub purchase_date: Option<String>,
+    pub supplier: Option<String>,
+    pub price: Option<f64>,
+    /// e.g. CHF, EUR.
+    pub currency: Option<String>,
+    /// YYYY-MM-DD.
+    pub warranty_until: Option<String>,
+    pub lifespan_years: Option<f64>,
+    pub notes: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateMachineInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    /// Machine name or id.
+    pub machine: String,
+    pub name: Option<String>,
+    pub kind: Option<String>,
+    /// Empty clears it.
+    pub maker: Option<String>,
+    /// Empty clears it.
+    pub model: Option<String>,
+    /// Empty clears it.
+    pub location: Option<String>,
+    /// working, attention, broken, lent or retired.
+    pub status: Option<String>,
+    /// Empty clears it.
+    pub lent_to: Option<String>,
+    /// YYYY-MM-DD; empty clears it.
+    pub lent_until: Option<String>,
+    /// YYYY-MM-DD; empty clears it.
+    pub purchase_date: Option<String>,
+    /// Empty clears it.
+    pub supplier: Option<String>,
+    pub price: Option<f64>,
+    pub currency: Option<String>,
+    /// YYYY-MM-DD; empty clears it.
+    pub warranty_until: Option<String>,
+    pub lifespan_years: Option<f64>,
+    /// Replaces the notes; read them with get_machine first to keep them.
+    pub notes: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MachineLinkInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    /// Machine name or id.
+    pub machine: String,
+    /// What the link opens, e.g. "Paperless" or "Screen Sharing".
+    pub label: String,
+    /// The address: a web page (https://…) or a remote-access link (vnc://…).
+    pub url: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct ServiceLogInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    /// Machine name or id.
+    pub machine: String,
+    /// What was done, e.g. "Installed 2 x 16 GB RAM".
+    pub description: String,
+    /// YYYY-MM-DD. Default: today.
+    pub done_on: Option<String>,
+    pub cost: Option<f64>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UpkeepItemInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    /// Machine name or id.
+    pub machine: String,
+    /// e.g. "Clean the dust filter".
+    pub title: String,
+    /// Repeat every N units. Default: 1.
+    pub every: Option<i64>,
+    /// day, week, month or year.
+    pub unit: String,
+    /// YYYY-MM-DD the schedule counts from when it was never done. Default: today.
+    pub start_on: Option<String>,
+    /// YYYY-MM-DD it was last done, if known.
+    pub last_done_on: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UpkeepDoneInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    /// From get_machine.
+    pub item_id: i64,
+    /// YYYY-MM-DD. Default: today.
+    pub done_on: Option<String>,
+    /// Service log text. Default: the item's title.
+    pub note: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CreateConsumableInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    pub name: String,
+    /// Machine name or id it is used by.
+    pub machine: Option<String>,
+    /// Default: pcs.
+    pub unit: Option<String>,
+    pub stock: Option<f64>,
+    /// Low-stock notice below this.
+    pub reorder_level: Option<f64>,
+    pub supplier: Option<String>,
+    pub product_url: Option<String>,
+    pub unit_price: Option<f64>,
+    pub currency: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateConsumableInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    pub consumable_id: i64,
+    pub name: Option<String>,
+    /// Machine name or id; empty detaches it.
+    pub machine: Option<String>,
+    pub unit: Option<String>,
+    /// New stock count.
+    pub stock: Option<f64>,
+    /// Stock to add (a restock). Not with stock.
+    pub add_stock: Option<f64>,
+    pub reorder_level: Option<f64>,
+    /// Empty clears it.
+    pub supplier: Option<String>,
+    /// Empty clears it.
+    pub product_url: Option<String>,
+    pub unit_price: Option<f64>,
+    pub currency: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CreateSubscriptionInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    pub name: String,
+    /// Next renewal, YYYY-MM-DD.
+    pub renews_on: String,
+    /// month or year.
+    pub period: String,
+    /// Per period. Default: 0.
+    pub cost: Option<f64>,
+    pub currency: Option<String>,
+    pub plan: Option<String>,
+    pub vendor: Option<String>,
+    pub url: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateSubscriptionInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    pub subscription_id: i64,
+    /// Empty clears it.
+    pub plan: Option<String>,
+    /// Empty clears it.
+    pub vendor: Option<String>,
+    /// Empty clears it.
+    pub url: Option<String>,
+    pub cost: Option<f64>,
+    pub currency: Option<String>,
+    /// active or cancelled.
+    pub status: Option<String>,
+    /// Empty clears it.
+    pub notes: Option<String>,
+}
+
 // ── Plumbing ─────────────────────────────────────────────────
 
 fn ok(v: Value) -> CallToolResult {
@@ -370,6 +594,26 @@ fn write_in<T: Serialize>(
 ) -> R<Value> {
     let org = guard::resolve_org(dir, org)?;
     to_json(f(dir, &org)?)
+}
+
+fn allow_money(dir: &Path) -> bool {
+    AccessConfig::load(dir).allow_money
+}
+
+/// Read machines, upkeep or consumables where the organisation's equipment
+/// lives (it may borrow another organisation's); the result names that one.
+fn equipment_in<T: Serialize>(
+    dir: &Path,
+    org: Option<&str>,
+    f: impl FnOnce(&Connection, &Org, bool) -> R<T>,
+) -> R<Value> {
+    let org = guard::resolve_org(dir, org)?;
+    let (eq, conn) = upkeep::open_equipment_read(dir, &org)?;
+    Ok(with_org(&eq, to_json(f(&conn, &eq, allow_money(dir))?)?))
+}
+
+fn today_iso() -> String {
+    today().format("%Y-%m-%d").to_string()
 }
 
 fn today() -> chrono::NaiveDate {
@@ -710,8 +954,265 @@ impl Server {
         description = "List the studio's machines and equipment with status, location and next upkeep (title and due date). No readings, no connection details."
     )]
     async fn list_machines(&self, Parameters(p): Parameters<OrgOnly>) -> CallToolResult {
-        self.run(move |d| read_in(d, p.org.as_deref(), read::list_machines))
+        self.run(move |d| equipment_in(d, p.org.as_deref(), |c, _, _| read::list_machines(c)))
             .await
+    }
+
+    #[tool(
+        description = "Get a machine with its upkeep items, service log and consumables. No serial, readings or connection; costs only when money reading is allowed."
+    )]
+    async fn get_machine(&self, Parameters(p): Parameters<MachineInput>) -> CallToolResult {
+        self.run(move |d| {
+            equipment_in(d, p.org.as_deref(), |c, o, money| {
+                upkeep::get_machine(c, o, &p.machine, money)
+            })
+        })
+        .await
+    }
+
+    #[tool(description = "List consumables with stock and reorder level, lowest stock first.")]
+    async fn list_consumables(&self, Parameters(p): Parameters<OrgOnly>) -> CallToolResult {
+        self.run(move |d| {
+            equipment_in(d, p.org.as_deref(), |c, _, money| {
+                upkeep::list_consumables(c, money)
+            })
+        })
+        .await
+    }
+
+    #[tool(description = "List subscriptions with their renewal date and period, active ones first.")]
+    async fn list_subscriptions(&self, Parameters(p): Parameters<OrgOnly>) -> CallToolResult {
+        self.run(move |d| {
+            let money = allow_money(d);
+            read_in(d, p.org.as_deref(), |c| upkeep::list_subscriptions(c, money))
+        })
+        .await
+    }
+
+    #[tool(
+        description = "Ask the user before calling. Add a dated entry to a machine's service log: a repair, an upgrade (e.g. RAM), a part replaced. For a scheduled upkeep item use mark_upkeep_done."
+    )]
+    async fn add_service_log(&self, Parameters(p): Parameters<ServiceLogInput>) -> CallToolResult {
+        self.run(move |d| {
+            let done_on = p.done_on.clone().unwrap_or_else(today_iso);
+            let money = allow_money(d);
+            write_in(d, p.org.as_deref(), |d, o| {
+                upkeep::add_service_log(d, o, &p.machine, &p.description, &done_on, p.cost, money)
+            })
+        })
+        .await
+    }
+
+    #[tool(
+        description = "Ask the user before calling. Add a link to a machine: a web page of a service it runs (e.g. Paperless on the NAS) or a remote-access link (vnc://…). StudioManager's Network page lists these with their status."
+    )]
+    async fn add_machine_link(&self, Parameters(p): Parameters<MachineLinkInput>) -> CallToolResult {
+        self.run(move |d| {
+            write_in(d, p.org.as_deref(), |d, o| upkeep::add_machine_link(d, o, &p.machine, &p.label, &p.url))
+        })
+        .await
+    }
+
+    #[tool(description = "Ask the user before calling. Add a machine or piece of equipment to Upkeep.")]
+    async fn create_machine(&self, Parameters(p): Parameters<CreateMachineInput>) -> CallToolResult {
+        self.run(move |d| {
+            let fields = MachineFields {
+                name: Some(p.name),
+                kind: p.kind,
+                maker: p.maker,
+                model: p.model,
+                location: p.location,
+                status: p.status,
+                lent_to: None,
+                lent_until: None,
+                purchase_date: p.purchase_date,
+                supplier: p.supplier,
+                price: p.price,
+                currency: p.currency,
+                warranty_until: p.warranty_until,
+                lifespan_years: p.lifespan_years,
+                notes: p.notes,
+            };
+            let money = allow_money(d);
+            write_in(d, p.org.as_deref(), |d, o| {
+                upkeep::create_machine(d, o, &fields, money)
+            })
+        })
+        .await
+    }
+
+    #[tool(
+        description = "Ask the user before calling. Change a machine's details, status or notes. Notes are replaced: read them with get_machine first."
+    )]
+    async fn update_machine(&self, Parameters(p): Parameters<UpdateMachineInput>) -> CallToolResult {
+        self.run(move |d| {
+            let fields = MachineFields {
+                name: p.name,
+                kind: p.kind,
+                maker: p.maker,
+                model: p.model,
+                location: p.location,
+                status: p.status,
+                lent_to: p.lent_to,
+                lent_until: p.lent_until,
+                purchase_date: p.purchase_date,
+                supplier: p.supplier,
+                price: p.price,
+                currency: p.currency,
+                warranty_until: p.warranty_until,
+                lifespan_years: p.lifespan_years,
+                notes: p.notes,
+            };
+            let money = allow_money(d);
+            write_in(d, p.org.as_deref(), |d, o| {
+                upkeep::update_machine(d, o, &p.machine, &fields, money)
+            })
+        })
+        .await
+    }
+
+    #[tool(
+        description = "Ask the user before calling. Add a repeating upkeep item to a machine (e.g. clean the filter every 6 months). StudioManager adds it to the calendar when it next opens."
+    )]
+    async fn add_upkeep_item(&self, Parameters(p): Parameters<UpkeepItemInput>) -> CallToolResult {
+        self.run(move |d| {
+            write_in(d, p.org.as_deref(), |d, o| {
+                upkeep::add_upkeep_item(
+                    d,
+                    o,
+                    &p.machine,
+                    &p.title,
+                    p.every,
+                    &p.unit,
+                    p.start_on.as_deref(),
+                    p.last_done_on.as_deref(),
+                    p.notes.as_deref(),
+                    today(),
+                )
+            })
+        })
+        .await
+    }
+
+    #[tool(
+        description = "Ask the user before calling. Mark an upkeep item done: logs the service and moves its next due date."
+    )]
+    async fn mark_upkeep_done(&self, Parameters(p): Parameters<UpkeepDoneInput>) -> CallToolResult {
+        self.run(move |d| {
+            let done_on = p.done_on.clone().unwrap_or_else(today_iso);
+            write_in(d, p.org.as_deref(), |d, o| {
+                upkeep::mark_upkeep_done(d, o, p.item_id, &done_on, p.note.as_deref())
+            })
+        })
+        .await
+    }
+
+    #[tool(description = "Ask the user before calling. Add a consumable (ink, filament, filters...).")]
+    async fn create_consumable(
+        &self,
+        Parameters(p): Parameters<CreateConsumableInput>,
+    ) -> CallToolResult {
+        self.run(move |d| {
+            let fields = ConsumableFields {
+                name: Some(p.name),
+                machine: p.machine,
+                unit: p.unit,
+                stock: p.stock,
+                add_stock: None,
+                reorder_level: p.reorder_level,
+                supplier: p.supplier,
+                product_url: p.product_url,
+                unit_price: p.unit_price,
+                currency: p.currency,
+            };
+            let money = allow_money(d);
+            write_in(d, p.org.as_deref(), |d, o| {
+                upkeep::create_consumable(d, o, &fields, money)
+            })
+        })
+        .await
+    }
+
+    #[tool(
+        description = "Ask the user before calling. Change a consumable: set its stock or add a restock, or edit its details."
+    )]
+    async fn update_consumable(
+        &self,
+        Parameters(p): Parameters<UpdateConsumableInput>,
+    ) -> CallToolResult {
+        self.run(move |d| {
+            let fields = ConsumableFields {
+                name: p.name,
+                machine: p.machine,
+                unit: p.unit,
+                stock: p.stock,
+                add_stock: p.add_stock,
+                reorder_level: p.reorder_level,
+                supplier: p.supplier,
+                product_url: p.product_url,
+                unit_price: p.unit_price,
+                currency: p.currency,
+            };
+            let money = allow_money(d);
+            write_in(d, p.org.as_deref(), |d, o| {
+                upkeep::update_consumable(d, o, p.consumable_id, &fields, money)
+            })
+        })
+        .await
+    }
+
+    #[tool(
+        description = "Ask the user before calling. Add a subscription (software, hosting, licence) with its next renewal date. StudioManager adds it to the calendar when it next opens."
+    )]
+    async fn create_subscription(
+        &self,
+        Parameters(p): Parameters<CreateSubscriptionInput>,
+    ) -> CallToolResult {
+        self.run(move |d| {
+            let money = allow_money(d);
+            write_in(d, p.org.as_deref(), |d, o| {
+                upkeep::create_subscription(
+                    d,
+                    o,
+                    &p.name,
+                    &p.renews_on,
+                    &p.period,
+                    p.cost,
+                    p.currency.as_deref(),
+                    p.plan.as_deref(),
+                    p.vendor.as_deref(),
+                    p.url.as_deref(),
+                    p.notes.as_deref(),
+                    money,
+                )
+            })
+        })
+        .await
+    }
+
+    #[tool(
+        description = "Ask the user before calling. Change a subscription's plan, vendor, URL, cost, notes, or cancel it. Its name, renewal date and period change in the app."
+    )]
+    async fn update_subscription(
+        &self,
+        Parameters(p): Parameters<UpdateSubscriptionInput>,
+    ) -> CallToolResult {
+        self.run(move |d| {
+            let changes = SubscriptionChanges {
+                plan: p.plan,
+                vendor: p.vendor,
+                url: p.url,
+                cost: p.cost,
+                currency: p.currency,
+                status: p.status,
+                notes: p.notes,
+            };
+            let money = allow_money(d);
+            write_in(d, p.org.as_deref(), |d, o| {
+                upkeep::update_subscription(d, o, p.subscription_id, &changes, money)
+            })
+        })
+        .await
     }
 
     #[tool(description = "Get a client with contacts and projects.")]
@@ -888,14 +1389,24 @@ mod tests {
         let dir = crate::test_support::ready_dir("org-a", "Studio A");
         assert_eq!(
             Server::new(Ok(dir.clone())).tool_router.list_all().len(),
-            22
+            35
         );
         crate::test_support::write_access(&dir, r#"{"enabled": true, "allowMoney": true}"#);
-        assert_eq!(Server::new(Ok(dir)).tool_router.list_all().len(), 27);
+        assert_eq!(Server::new(Ok(dir)).tool_router.list_all().len(), 40);
         assert_eq!(
             Server::new(Err("x".into())).tool_router.list_all().len(),
-            22
+            35
         );
+    }
+
+    #[test]
+    fn upkeep_writes_ask_first() {
+        let tools = Server::new(Err("x".into())).tool_router.list_all();
+        for name in UPKEEP_WRITES {
+            let tool = tools.iter().find(|t| t.name == name).expect(name);
+            let desc = tool.description.as_deref().unwrap_or("");
+            assert!(desc.starts_with("Ask the user before calling."), "{name}: {desc}");
+        }
     }
 
     #[test]

@@ -161,7 +161,7 @@ fn project_from_row(r: &Row) -> rusqlite::Result<ProjectRef> {
     })
 }
 
-fn is_digits(s: &str) -> bool {
+pub(crate) fn is_digits(s: &str) -> bool {
     !s.is_empty() && s.chars().all(|c| c.is_ascii_digit())
 }
 
