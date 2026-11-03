@@ -258,6 +258,8 @@ const API_SHARE: &str = "SYNO.Core.Share";
 const API_SNAPSHOT: &str = "SYNO.Core.Share.Snapshot";
 /// Snapshot listing costs one request per shared folder: look at this many.
 const MAX_SNAPSHOT_SHARES: usize = 50;
+/// Overall time the snapshot reads may take; the shares not reached are left out.
+const SNAPSHOT_DEADLINE: std::time::Duration = std::time::Duration::from_secs(20);
 /// Name of the session, and of this computer in the account's trusted devices.
 const CLIENT_NAME: &str = "StudioManager";
 
@@ -494,9 +496,16 @@ impl Synology {
             .map(|a| a.iter().filter_map(|v| text(v, "name")).take(MAX_SNAPSHOT_SHARES).collect())
             .unwrap_or_default();
         let mut out = vec![];
+        let deadline = std::time::Instant::now() + SNAPSHOT_DEADLINE;
         for name in names {
-            let Ok(data) = self.call(snap_api, "list", vec![("name", name.clone()), ("_sid", s.sid.clone())]) else {
-                continue;
+            if std::time::Instant::now() >= deadline {
+                break;
+            }
+            let data = match self.call(snap_api, "list", vec![("name", name.clone()), ("_sid", s.sid.clone())]) {
+                Ok(d) => d,
+                // The NAS stopped answering: don't wait on every other share.
+                Err(CallError::Transport(_)) => break,
+                Err(CallError::Dsm(_)) => continue,
             };
             let newest = data
                 .get("snapshots")
@@ -653,6 +662,7 @@ mod tests {
         login: &'static str,
         storage: JsonValue,
         snapshots: JsonValue,
+        snapshots_down: bool,
         info: JsonValue,
         calls: Calls,
     }
@@ -662,6 +672,9 @@ mod tests {
             let form: Vec<(String, String)> = form.iter().map(|(k, v)| (k.to_string(), v.clone())).collect();
             self.calls.lock().unwrap().push((path.to_string(), form.clone()));
             let get = |k: &str| form.iter().find(|(f, _)| f == k).map(|(_, v)| v.as_str()).unwrap_or("");
+            if get("api") == "SYNO.Core.Share.Snapshot" && self.snapshots_down {
+                return Err("cannot reach the NAS".into());
+            }
             Ok(match (get("api"), get("method")) {
                 ("SYNO.API.Info", "query") => self.info.clone(),
                 ("SYNO.API.Auth", "login") => json(self.login),
@@ -677,7 +690,7 @@ mod tests {
 
     fn nas(login: &'static str, secret: Secret) -> (Synology, Calls) {
         let calls: Calls = Arc::default();
-        let fake = Fake { login, storage: json(STORAGE), snapshots: json(SNAPSHOTS), info: json(API_INFO), calls: calls.clone() };
+        let fake = Fake { login, storage: json(STORAGE), snapshots: json(SNAPSHOTS), snapshots_down: false, info: json(API_INFO), calls: calls.clone() };
         (Synology::new("studio".into(), secret, Box::new(fake)), calls)
     }
 
@@ -762,6 +775,7 @@ mod tests {
             login: LOGIN,
             storage: json(STORAGE),
             snapshots: serde_json::json!({ "error": { "code": 105 }, "success": false }),
+            snapshots_down: false,
             info: json(API_INFO),
             calls: Arc::default(),
         };
@@ -772,11 +786,30 @@ mod tests {
         // A NAS that doesn't list the APIs at all still logs in and syncs.
         let mut info = json(API_INFO);
         info["data"].as_object_mut().unwrap().retain(|k, _| !k.starts_with("SYNO.Core.Share"));
-        let fake = Fake { login: LOGIN, storage: json(STORAGE), snapshots: json(SNAPSHOTS), info, calls: Arc::default() };
+        let fake = Fake { login: LOGIN, storage: json(STORAGE), snapshots: json(SNAPSHOTS), snapshots_down: false, info, calls: Arc::default() };
         let c = Synology::new("studio".into(), pw(), Box::new(fake));
         let m = &c.sync().unwrap().devices[0].metrics;
         assert!(!m.iter().any(|(n, _)| n.starts_with("snapshot_latest_at:")));
         assert!(m.iter().any(|(n, _)| n.starts_with("volume_total_bytes:")));
+    }
+
+    #[test]
+    fn a_silent_nas_stops_the_snapshot_reads_after_the_first_failure() {
+        let calls: Calls = Arc::default();
+        let fake = Fake {
+            login: LOGIN,
+            storage: json(STORAGE),
+            snapshots: json(SNAPSHOTS),
+            snapshots_down: true,
+            info: json(API_INFO),
+            calls: calls.clone(),
+        };
+        let c = Synology::new("studio".into(), pw(), Box::new(fake));
+        let m = &c.sync().unwrap().devices[0].metrics;
+        assert!(m.iter().any(|(n, _)| n.starts_with("volume_used_bytes:")));
+        assert!(!m.iter().any(|(n, _)| n.starts_with("snapshot_latest_at:")));
+        let n = calls.lock().unwrap().iter().filter(|(_, f)| param(f, "api") == Some("SYNO.Core.Share.Snapshot")).count();
+        assert_eq!(n, 1, "two shares, one attempt");
     }
 
     #[test]
@@ -925,6 +958,7 @@ mod tests {
             login: LOGIN,
             storage: serde_json::json!({ "error": { "code": 105 }, "success": false }),
             snapshots: json(SNAPSHOTS),
+            snapshots_down: false,
             info: json(API_INFO),
             calls,
         };

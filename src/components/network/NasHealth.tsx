@@ -39,7 +39,7 @@ export function NasHealth({ machineId }: { machineId: number }) {
       {list.length > 0 && (
         <p className="text-sm mt-2 flex flex-wrap gap-x-3">
           {bad.length === 0 ? (
-            <span className="text-muted">{t.net_nas_drives_ok.replace("{n}", String(list.length))}</span>
+            <span className="text-muted">{list.length === 1 ? t.net_nas_drives_ok_one : t.net_nas_drives_ok.replace("{n}", String(list.length))}</span>
           ) : (
             bad.map((d) => (
               <span key={d.slot} className={diskHealthVariant(d.health) === "danger" ? "text-danger-text" : "text-warning-text"}>
