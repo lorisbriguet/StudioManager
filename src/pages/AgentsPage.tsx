@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
-import { Button, EmptyState, ICONS, PageHeader, PANEL_TOP_BAR, SidebarTitle } from "../components/ui";
+import { Button, EmptyState, ICONS, PageHeader } from "../components/ui";
 import { useAgents } from "../components/agents/useAgents";
 import { AgentList } from "../components/agents/AgentList";
 import { AgentDetail } from "../components/agents/AgentDetail";
@@ -39,71 +39,67 @@ export function AgentsPage() {
     setParams({}, { replace: true });
   }, [wantsNew, setParams]);
 
-  if (!enabled) {
-    return (
-      <div>
-        <PageHeader title={t.agents} />
-        <EmptyState icon={ICONS.agents} message={t.agents_off} />
-      </div>
-    );
-  }
-
   const select = (id: string) => {
     setStarting(false);
     setTerminalFor(null);
     setParams({ agent: id });
   };
 
-  // Full-height columns like Settings: the page runs edge to edge (-m-8), and both
-  // columns start with a PANEL_TOP_BAR so the line between them never steps.
+  // A flat page like Invoices: the PageHeader on the canvas (the same whether the feature
+  // is on or off), then the list and the selected agent side by side, split by a hairline.
   return (
-    <div className="flex flex-1 min-h-0 -m-8">
-      <aside className="w-72 shrink-0 flex flex-col min-h-0 border-r border-[var(--color-border-divider)]">
-        <div className={`${PANEL_TOP_BAR} pl-5 pr-3 justify-between border-[var(--color-border)]`}>
-          <SidebarTitle className="truncate">{t.agents}</SidebarTitle>
-          <Button variant="outline" icon={ICONS.add} onClick={() => setStarting(true)}>
-            {t.agents_new}
-          </Button>
-        </div>
-        {agents.length === 0 ? (
-          <EmptyState icon={ICONS.agents} message={t.agents_empty} />
-        ) : (
-          <AgentList byGroup={byGroup} selectedId={selectedId} onSelect={select} />
-        )}
-      </aside>
-      <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-        {starting ? (
-          <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6">
-            <div className="max-w-xl">
-              <StartAgentForm
-                onStarted={(shortId) => {
-                  setStarting(false);
-                  setPendingShortId(shortId);
-                }}
-                onCancel={() => setStarting(false)}
-              />
-            </div>
-          </div>
-        ) : selected ? (
-          <>
-            <div className="flex-1 min-h-0">
-              <AgentDetail
-                agent={selected}
-                onOpenTerminal={setTerminalFor}
-                onDeleted={() => setParams({})}
-                onSwitched={setPendingShortId}
-              />
-            </div>
-            {terminalFor && selected.shortId === terminalFor && (
-              <div className="shrink-0 px-5 pb-5">
-                <TerminalPanel key={terminalFor} shortId={terminalFor} onClose={() => setTerminalFor(null)} />
-              </div>
+    <div className="flex flex-col flex-1 min-h-0">
+      <PageHeader title={t.agents}>
+        <Button icon={ICONS.add} disabled={!enabled} onClick={() => setStarting(true)}>
+          {t.agents_new}
+        </Button>
+      </PageHeader>
+      {!enabled ? (
+        <EmptyState icon={ICONS.agents} message={t.agents_off} />
+      ) : (
+        <div className="flex flex-1 min-h-0 gap-8">
+          <section aria-label={t.agents} className="w-70 shrink-0 flex flex-col min-h-0">
+            {agents.length === 0 ? (
+              <EmptyState icon={ICONS.agents} message={t.agents_empty} />
+            ) : (
+              <AgentList byGroup={byGroup} selectedId={selectedId} onSelect={select} />
             )}
-          </>
-        ) : (
-          <EmptyState icon={ICONS.agents} message={t.agents_select_hint} />
-        )}
-      </div>
+          </section>
+          <div className="flex-1 min-w-0 min-h-0 flex flex-col border-l border-[var(--color-border-divider)] pl-8">
+            {starting ? (
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <div className="max-w-xl">
+                  <StartAgentForm
+                    onStarted={(shortId) => {
+                      setStarting(false);
+                      setPendingShortId(shortId);
+                    }}
+                    onCancel={() => setStarting(false)}
+                  />
+                </div>
+              </div>
+            ) : selected ? (
+              <>
+                <div className="flex-1 min-h-0">
+                  <AgentDetail
+                    agent={selected}
+                    onOpenTerminal={setTerminalFor}
+                    onDeleted={() => setParams({})}
+                    onSwitched={setPendingShortId}
+                  />
+                </div>
+                {terminalFor && selected.shortId === terminalFor && (
+                  <div className="shrink-0 pt-4">
+                    <TerminalPanel key={terminalFor} shortId={terminalFor} onClose={() => setTerminalFor(null)} />
+                  </div>
+                )}
+              </>
+            ) : (
+              <EmptyState icon={ICONS.agents} message={t.agents_select_hint} />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

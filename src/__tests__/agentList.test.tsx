@@ -42,7 +42,8 @@ describe("AgentList", () => {
     expect(screen.queryByText("old-one")).toBeNull();
     const toggle = screen.getByRole("button", { name: /Done/ });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByRole("heading", { name: "Done" }).parentElement).toHaveTextContent("2");
+    // The group row reads like Table.Group: label, then its plain count.
+    expect(screen.getByRole("heading", { name: /^Done/ })).toHaveTextContent("Done2");
     fireEvent.click(toggle);
     expect(screen.getByText("old-one")).toBeInTheDocument();
     expect(screen.getByText("older-one")).toBeInTheDocument();
