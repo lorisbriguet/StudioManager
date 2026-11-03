@@ -10,7 +10,7 @@ import { IconButton } from "../components/ui/IconButton";
 import { Textarea } from "../components/ui/Input";
 import { agentGroupDotClass, agentGroupTextClass, routineRunTextClass } from "../lib/statusColors";
 import { logError } from "../lib/log";
-import { setInvokeHandler, clearInvokedCommands } from "../__mocks__/tauri-api";
+import { setInvokeHandler, clearInvokedCommands, invokedCommands } from "../__mocks__/tauri-api";
 import type { Agent, Group, Prompt } from "../lib/agents";
 
 vi.mock("../lib/log", () => ({ logError: vi.fn(() => Promise.resolve()) }));
@@ -170,6 +170,25 @@ describe("AgentDetail composer", () => {
     expect(screen.getByRole("textbox", { name: "Message to the agent" })).toHaveAccessibleDescription(
       "Messages can only be sent to background agents. Use the terminal.",
     );
+  });
+
+  it("Enter sends, Shift+Enter and IME composition do not, and blank text is not sent", async () => {
+    setInvokeHandler((cmd) => (cmd === "agents_conversation" ? [] : null));
+    render(<AgentDetail agent={agent()} onOpenTerminal={() => {}} />);
+    const box = screen.getByRole("textbox", { name: "Message to the agent" });
+    const sends = () => invokedCommands.filter((c) => c.cmd === "agents_send").length;
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(sends()).toBe(0);
+    fireEvent.change(box, { target: { value: "   " } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(sends()).toBe(0);
+    fireEvent.change(box, { target: { value: "hello" } });
+    fireEvent.keyDown(box, { key: "Enter", shiftKey: true });
+    expect(sends()).toBe(0);
+    fireEvent.keyDown(box, { key: "Enter", isComposing: true });
+    expect(sends()).toBe(0);
+    fireEvent.keyDown(box, { key: "Enter" });
+    await waitFor(() => expect(sends()).toBe(1));
   });
 
   it("a failed send shows a translated danger Callout and logs the raw error", async () => {
