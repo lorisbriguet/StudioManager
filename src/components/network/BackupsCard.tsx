@@ -1,4 +1,5 @@
 import { Card, EmptyState, ICONS, ListSkeleton, QueryError, Tooltip } from "../ui";
+import { WidgetShell, WidgetTitle } from "../dashboard/WidgetShell";
 import { useT } from "../../i18n/useT";
 import { useActiveUpkeepItems } from "../../db/hooks/useUpkeep";
 import { useLatestMetricsFor } from "../../db/hooks/useConnections";
@@ -21,7 +22,7 @@ const DOT: Record<BackupTone | "none", string> = {
 function Row({ tone, name, detail, hint }: { tone: BackupTone | "none"; name: string; detail: string; hint?: React.ReactNode }) {
   const text = <span className="text-xs text-muted shrink-0 tabular-nums">{detail}</span>;
   return (
-    <li className="flex items-center gap-2 h-7 text-sm">
+    <li className="flex items-center gap-2 h-10 text-sm border-b border-[var(--color-border-divider)]">
       <span className={`dot-sm ${DOT[tone]}`} aria-hidden />
       <span className="truncate flex-1 min-w-0">{name}</span>
       {hint ? <Tooltip content={hint}>{text}</Tooltip> : text}
@@ -91,21 +92,23 @@ export function BackupsCard({ cards, now = Date.now() }: { cards: NetworkCard[];
   const pending = sources.some((x) => x.isPending);
   const failed = sources.find((x) => x.isError);
   return (
-    <Card as="section">
-      <Card.Header title={t.net_backups} />
-      {pending ? (
-        <ListSkeleton size="sm" rows={2} />
-      ) : failed ? (
-        <QueryError
-          message={t.load_error_network}
-          onRetry={() => sources.filter((x) => x.isError).forEach((x) => void x.refetch())}
-          retrying={sources.some((x) => x.isFetching)}
-        />
-      ) : rows.length > 0 ? (
-        <ul>{rows}</ul>
-      ) : (
-        <EmptyState size="sm" icon={ICONS.archive} message={t.net_backups_none} />
-      )}
+    <Card as="section" padding="none">
+      <WidgetShell>
+        <WidgetTitle>{t.net_backups}</WidgetTitle>
+        {pending ? (
+          <ListSkeleton size="sm" rows={2} />
+        ) : failed ? (
+          <QueryError
+            message={t.load_error_network}
+            onRetry={() => sources.filter((x) => x.isError).forEach((x) => void x.refetch())}
+            retrying={sources.some((x) => x.isFetching)}
+          />
+        ) : rows.length > 0 ? (
+          <ul>{rows}</ul>
+        ) : (
+          <EmptyState size="sm" icon={ICONS.archive} message={t.net_backups_none} />
+        )}
+      </WidgetShell>
     </Card>
   );
 }

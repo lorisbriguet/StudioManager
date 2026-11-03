@@ -19,8 +19,8 @@ export function ServiceRow({ file, result }: { file: MachineFile; result?: Check
   const reason = checkReason(result, t);
   const open = () => void openMachineAttachment({ kind: "link", path_or_url: linkUrl(file.path_or_url) });
   return (
-    <div className="group flex items-center gap-1 rounded-md hover:bg-[var(--color-hover-row)] -mx-2 px-2">
-      <button type="button" onClick={open} className="flex flex-1 min-w-0 items-center gap-2 h-7 text-left text-sm focus-accent rounded-md">
+    <div className="group flex items-center gap-1 border-b border-[var(--color-border-divider)] rounded-md hover:bg-[var(--color-hover-row)] -mx-2 px-2">
+      <button type="button" onClick={open} className="flex flex-1 min-w-0 items-center gap-2 h-10 text-left text-sm focus-accent rounded-md">
         <span className={`dot-sm ${dotClass(result)}`} aria-hidden />
         {result?.state === "up" && <span className="sr-only">{t.net_service_up}</span>}
         <span className="truncate">{file.label}</span>
