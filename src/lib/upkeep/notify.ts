@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { getDb, TransactionBatch } from "../../db";
+import { getDb, equipmentOrgId, TransactionBatch } from "../../db";
 import { getActiveUpkeepItems } from "../../db/queries/upkeepItems";
 import { getMachines } from "../../db/queries/machines";
 import { getConsumables, isLow } from "../../db/queries/consumables";
@@ -173,6 +173,9 @@ export function planNotifications(input: PlanInput): PlannedNotice[] {
 }
 
 /** The UPDATE that records a notice as sent. */
+/** Notices whose marker row lives with the equipment (the lender's database when borrowed). */
+const EQUIPMENT_CAUSES = new Set<PlannedNotice["cause"]>(["overdue", "low_stock", "disk", "warranty"]);
+
 export function markerStatement(n: PlannedNotice): { sql: string; params: unknown[] } {
   switch (n.cause) {
     case "overdue":
@@ -260,19 +263,32 @@ export async function runUpkeepCheck(qc: QueryClient, todayISO: string): Promise
   const written: PlannedNotice[] = [];
   for (const n of notices) {
     if (!sameOrg()) break;
+    // Borrowed equipment: the item, machine, disk and consumable rows are the
+    // lender's, so their markers go to its database, in a batch of their own.
+    const lender = EQUIPMENT_CAUSES.has(n.cause) ? equipmentOrgId() : null;
     const batch = new TransactionBatch(org);
     batch.add(
       "INSERT INTO notifications (type, title, message, read, link) VALUES ($1, $2, $3, 0, $4)",
       [n.cause === "disk" || n.cause === "connection" ? "error" : "warning", n.title, n.message, n.link]
     );
     const s = markerStatement(n);
-    batch.add(s.sql, s.params);
+    if (!lender) batch.add(s.sql, s.params);
     try {
       await batch.commit();
       written.push(n);
     } catch (e) {
       // Neither the notice nor its marker was written: the next run plans it again.
       logWarn(`Upkeep check: ${n.cause} notice ${n.refId} not written:`, e);
+      continue;
+    }
+    if (lender) {
+      try {
+        const marker = new TransactionBatch(org, lender);
+        marker.add(s.sql, s.params);
+        await marker.commit();
+      } catch (e) {
+        logWarn(`Upkeep check: ${n.cause} marker ${n.refId} not written:`, e);
+      }
     }
   }
 

@@ -29,7 +29,7 @@ vi.mock("../lib/upkeep/calendar", () => ({ syncSubscriptionCalendar: vi.fn() }))
 vi.mock("../lib/upkeep/connections", () => ({
   runConnectionSyncs: vi.fn(async () => {}),
 }));
-vi.mock("../db/index", async (orig) => ({ ...(await orig<typeof import("../db/index")>()), getDb: vi.fn() }));
+vi.mock("../db/index", async (orig) => ({ ...(await orig<typeof import("../db/index")>()), getDb: vi.fn(), equipmentOrgId: vi.fn(() => null) }));
 
 import { runUpkeepCheck } from "../lib/upkeep/notify";
 import { useUpkeepCheck } from "../hooks/useUpkeepCheck";
@@ -41,7 +41,7 @@ import { getMachines } from "../db/queries/machines";
 import { getConsumables } from "../db/queries/consumables";
 import { getSubscriptions, getPendingRenewals, applyRenewals } from "../db/queries/subscriptions";
 import { syncSubscriptionCalendar } from "../lib/upkeep/calendar";
-import { getDb, TransactionBatch } from "../db/index";
+import { getDb, equipmentOrgId, TransactionBatch } from "../db/index";
 import { invokedCommands, clearInvokedCommands, setInvokeHandler } from "../__mocks__/tauri-api";
 import { useAppStore } from "../stores/app-store";
 import { useOrgStore } from "../stores/org-store";
@@ -102,6 +102,20 @@ describe("runUpkeepCheck", () => {
     ]);
     const keys = vi.mocked(qc.invalidateQueries).mock.calls.map((c) => (c[0] as { queryKey: string[] }).queryKey[0]);
     expect(keys).toEqual(expect.arrayContaining(["notifications", "upkeep-items", "subscriptions"]));
+  });
+
+  it("a borrowing organisation keeps the notice local and writes the marker to the lender", async () => {
+    vi.mocked(equipmentOrgId).mockReturnValue("lender");
+    expect(await runUpkeepCheck(qcStub(), TODAY)).toBe(1);
+    expect(batchCalls()).toHaveLength(2);
+    expect(batchCalls()[0].args.targetOrg).toBeUndefined();
+    expect(stmtsOf(0).map((s) => s.sql)).toEqual([expect.stringContaining("INSERT INTO notifications")]);
+    expect(batchCalls()[1].args.targetOrg).toBe("lender");
+    expect(batchCalls()[1].args.expectedOrg).toBe("org-a");
+    expect(stmtsOf(1)).toEqual([
+      expect.objectContaining({ sql: expect.stringContaining("overdue_notified_for"), params: ["2026-10-20", 7] }),
+    ]);
+    vi.mocked(equipmentOrgId).mockReturnValue(null);
   });
 
   it("second run with the marker set writes nothing", async () => {
