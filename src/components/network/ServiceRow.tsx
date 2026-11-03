@@ -26,7 +26,7 @@ export function ServiceRow({ file, result }: { file: MachineFile; result?: Check
         <span className="truncate">{file.label}</span>
         {reason && <span className="text-xs text-muted shrink-0">{reason}</span>}
       </button>
-      <IconButton icon={ICONS.openExternal} label={t.open_link} size="xs" reveal onClick={open} />
+      <IconButton icon={ICONS.openExternal} label={t.net_open_service.replace("{label}", file.label)} size="xs" reveal onClick={open} />
     </div>
   );
 }

@@ -16,14 +16,20 @@ export function useNetworkChecks(targets: CheckTarget[]) {
   const [checkedAt, setCheckedAt] = useState<number | null>(null);
   const [checking, setChecking] = useState(false);
   const running = useRef(false);
+  const pending = useRef(false);
   const alive = useRef(true);
   const latest = useRef(targets);
   latest.current = targets;
   const signature = JSON.stringify(targets);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<void> => {
     const list = latest.current;
-    if (skip || running.current || list.length === 0) return;
+    if (skip || list.length === 0) return;
+    if (running.current) {
+      // Targets may have changed mid-run: go again once, with the latest, when this one ends.
+      pending.current = true;
+      return;
+    }
     running.current = true;
     setChecking(true);
     try {
@@ -44,6 +50,10 @@ export function useNetworkChecks(targets: CheckTarget[]) {
     } finally {
       running.current = false;
       if (alive.current) setChecking(false);
+      if (pending.current && alive.current) {
+        pending.current = false;
+        void refresh();
+      }
     }
   }, [skip]);
 

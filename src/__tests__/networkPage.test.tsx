@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, waitFor, renderHook, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { useAppStore } from "../stores/app-store";
 import type { Machine, MachineFile } from "../types/upkeep";
@@ -29,6 +29,7 @@ vi.mock("../lib/notify", async (orig) => ({
 }));
 
 import { NetworkPage } from "../pages/NetworkPage";
+import { useNetworkChecks } from "../hooks/useNetworkChecks";
 
 const m = (id: number, name: string) => ({ id, name, kind: "server", status: "working", connection_id: null }) as Machine;
 const l = (id: number, machine_id: number, label: string, url: string) =>
@@ -96,5 +97,20 @@ describe("NetworkPage", () => {
     renderPage();
     expect(screen.getByText("Swap the drive")).toBeTruthy();
     expect(screen.queryByText("Dust the fan")).toBeNull();
+  });
+});
+
+describe("useNetworkChecks", () => {
+  it("re-runs with the new targets when they change during an in-flight check", async () => {
+    let release: () => void = () => {};
+    networkCheck.mockImplementationOnce(() => new Promise((res) => { release = () => res([]); }));
+    const t = (key: string) => ({ key, kind: "http" as const, url: "https://example.test" });
+    const { rerender } = renderHook(({ targets }) => useNetworkChecks(targets), { initialProps: { targets: [t("link:1")] } });
+    await waitFor(() => expect(networkCheck).toHaveBeenCalledTimes(1));
+    rerender({ targets: [t("link:1"), t("link:2")] });
+    expect(networkCheck).toHaveBeenCalledTimes(1);
+    await act(async () => release());
+    await waitFor(() => expect(networkCheck).toHaveBeenCalledTimes(2));
+    expect(networkCheck.mock.calls[1][0].map((x) => x.key)).toEqual(["link:1", "link:2"]);
   });
 });

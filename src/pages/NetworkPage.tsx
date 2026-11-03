@@ -6,6 +6,7 @@ import { MachineCard } from "../components/network/MachineCard";
 import { UpkeepDueCard } from "../components/network/UpkeepDueCard";
 import { useEquipmentConnections } from "../db/hooks/useConnections";
 import { useMachineLinks, useMachines, useUpkeepOverview } from "../db/hooks/useUpkeep";
+import { useAppStore } from "../stores/app-store";
 import { useNetworkChecks } from "../hooks/useNetworkChecks";
 import { formatAgo } from "../lib/network/format";
 import { buildNetworkCards, linkUrl, pinFor } from "../lib/network/model";
@@ -20,6 +21,7 @@ export function NetworkPage() {
   const links = useMachineLinks();
   const connections = useEquipmentConnections();
   const { due } = useUpkeepOverview();
+  const noChecks = useAppStore((s) => s.testMode || s.presentationMode);
 
   const cards = useMemo(
     () =>
@@ -70,7 +72,7 @@ export function NetworkPage() {
             {checkedAt !== null && (
               <span className="text-xs text-muted">{t.net_checked_ago.replace("{time}", formatAgo(checkedAt, now, t))}</span>
             )}
-            <IconButton icon={ICONS.updates} label={t.net_check_now} onClick={refresh} disabled={checking} />
+            <IconButton icon={ICONS.updates} label={t.net_check_now} onClick={refresh} disabled={checking || noChecks} />
           </>
         }
       />
