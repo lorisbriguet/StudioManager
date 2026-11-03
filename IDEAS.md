@@ -85,6 +85,15 @@ All 12 checklist items pass after three fixes found by the pass:
 - [x] Test Mode and Presentation Mode are demo-build tools now: their Settings category is hidden in the real app (banners and exit paths stay for anyone mid-mode at update time); the Snapshot card moved under Backup
 - [x] Docs: guide, [README](README.md) and landing page no longer point testers at Presentation Mode
 
+## V3.3.0 — Done (Network page, flat pages, fixes)
+
+- [x] Network page: machine cards with service links and status, remote machines, NAS health, backups (Time Machine, NAS snapshots, upkeep items marked as backups) ([spec](docs/superpowers/specs/2026-11-02-network-page-design.md), [plan](docs/superpowers/plans/2026-11-02-network-page.md))
+- [x] Agents and Wiki pages: flat layout with a page header, like Invoices; Upkeep tabs aligned; Network in dashboard-style cards
+- [x] Borrowed equipment: readings, disks, typed-in readings and upkeep notices all use the owner's database; borrowers run no syncs
+- [x] Undo: redo of status changes, undo of creation removes its calendar event, undo history is per organisation
+- [x] Calendar: moving an upkeep event no longer loses it on an organisation switch; "In calendar" is a dropdown
+- [x] Unsent task and subtask titles survive leaving the page; `host:port` links open as https
+
 ## V3.2.0 — Done (Paperless inbox, fixes)
 
 - [x] Paperless invoice inbox: supplier invoices from Paperless-ngx become expenses in one confirmation ([spec](docs/superpowers/specs/2026-11-01-paperless-inbox-design.md), [plan](docs/superpowers/plans/2026-11-01-paperless-inbox.md))

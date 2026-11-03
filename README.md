@@ -110,7 +110,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Click to open URLs externally
 
 ### Wiki
-- Vault-style layout: articles grouped by project, tabs with back/forward, reading and editing modes
+- Vault-style layout: articles grouped by project, back/forward, reading and editing modes
 - Links between articles: `/link` or type `[[`, Cmd-click to follow; backlinks with their sentence, outgoing links and unlinked mentions in the side panel
 - Graph view of every article and how they link, one cluster per project; drag dots, pan and zoom
 - A project's own Markdown files (README, design system, docs) show read-only straight from its folder, with their links in the graph
@@ -124,6 +124,14 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Share equipment between organisations: an organisation can use another one's machines, upkeep and consumables (Settings › Upkeep › Equipment); project links and calendar events stay with the owner
 - Agents can read the machines and what is due through [the MCP server](docs/superpowers/specs/2026-10-27-agent-access-mcp-design.md); no secrets, no readings history
 - Design and decisions: [the Studio upkeep spec](docs/superpowers/specs/2026-10-28-studio-upkeep-design.md)
+
+### Network
+- An optional page (Settings › Behaviour) with one card per machine: its service links with a status dot (up, unreachable, error), checked from the Mac every 5 minutes while the page is open, never "down", nothing notifies
+- Remote machines: online state and buttons for Screen Sharing (`vnc://`) and other remote-desktop links, opened safely by id
+- NAS health: volume usage and drive health from the Synology connection, snapshot dates
+- Backups: this Mac's Time Machine, the NAS's newest snapshot, and upkeep items marked "Counts as a backup"
+- Works in an organisation that uses another's equipment, showing the owner's last readings
+- Design and decisions: [the Network page spec](docs/superpowers/specs/2026-11-02-network-page-design.md)
 
 ### Finance & P&L
 - Real-time profit & loss overview — only sent/paid/overdue invoices count as revenue (drafts excluded)
