@@ -5,6 +5,7 @@ mod connectors;
 mod dbfiles;
 mod doc_roots;
 mod menubar;
+mod network;
 mod migrate;
 mod project_docs;
 pub mod orgs;
@@ -730,6 +731,7 @@ pub fn run() {
             agent_access::recent_agent_changes,
             connectors::connection_save_secret,
             connectors::connection_delete_secret,
+            network::network_check,
             connectors::connection_test,
             connectors::connection_sync,
             connectors::paperless::paperless_inbox,
