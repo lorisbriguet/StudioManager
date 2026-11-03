@@ -205,7 +205,10 @@ const TIME_MACHINE_PREFS: &str = "/Library/Preferences/com.apple.TimeMachine.pli
 /// `running` is left false; the command fills it from `tmutil`.
 pub fn parse_time_machine(prefs: &plist::Value) -> TimeMachineStatus {
     let root = prefs.as_dictionary();
-    let enabled = root.and_then(|d| d.get("AutoBackup")).and_then(|v| v.as_boolean()).unwrap_or(false);
+    let enabled = root
+        .and_then(|d| d.get("AutoBackup"))
+        .and_then(|v| v.as_boolean().or_else(|| v.as_signed_integer().map(|n| n != 0)))
+        .unwrap_or(false);
     let last_id = root.and_then(|d| d.get("LastDestinationID")).and_then(|v| v.as_string());
     let dest = root
         .and_then(|d| d.get("Destinations"))
@@ -221,6 +224,23 @@ pub fn parse_time_machine(prefs: &plist::Value) -> TimeMachineStatus {
         .and_then(|dates| dates.iter().filter_map(|v| v.as_date()).map(|d| d.to_xml_format()).max());
     let last_result = dest.and_then(|d| d.get("RESULT")).and_then(|v| v.as_signed_integer());
     TimeMachineStatus { enabled, last_backup_at, last_result, running: false }
+}
+
+/// The preferences through `defaults`: macOS lets `cfprefsd` read the domain
+/// without Full Disk Access, while opening the file directly is refused.
+/// Falls back to the file (readable when the app has Full Disk Access).
+fn read_time_machine_prefs() -> Result<plist::Value, String> {
+    let out = std::process::Command::new("/usr/bin/defaults")
+        .args(["export", "/Library/Preferences/com.apple.TimeMachine", "-"])
+        .output();
+    if let Ok(o) = out {
+        if o.status.success() {
+            if let Ok(v) = plist::Value::from_reader_xml(o.stdout.as_slice()) {
+                return Ok(v);
+            }
+        }
+    }
+    plist::Value::from_file(TIME_MACHINE_PREFS).map_err(|e| format!("Time Machine preferences: {e}"))
 }
 
 fn time_machine_running() -> bool {
@@ -242,7 +262,7 @@ pub async fn time_machine_status(app: tauri::AppHandle) -> Result<Option<TimeMac
         if !std::path::Path::new(TIME_MACHINE_PREFS).exists() {
             return Ok(None);
         }
-        let prefs = plist::Value::from_file(TIME_MACHINE_PREFS).map_err(|e| format!("Time Machine preferences: {e}"))?;
+        let prefs = read_time_machine_prefs()?;
         let mut status = parse_time_machine(&prefs);
         status.running = status.enabled && time_machine_running();
         Ok(Some(status))
@@ -526,6 +546,13 @@ mod tests {
         assert!(s.enabled);
         assert_eq!(s.last_backup_at, None);
         assert_eq!(s.last_result, Some(26));
+    }
+
+    #[test]
+    fn parse_time_machine_reads_auto_backup_as_integer() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>AutoBackup</key><integer>1</integer></dict></plist>"#;
+        let v = plist::Value::from_reader_xml(xml.as_bytes()).unwrap();
+        assert!(parse_time_machine(&v).enabled);
     }
 
     #[test]
