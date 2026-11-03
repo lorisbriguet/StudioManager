@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { Machine, UpkeepItem } from "../types/upkeep";
 import { uiLabels } from "../i18n/ui";
@@ -54,6 +54,7 @@ vi.mock("../db/hooks/useExpenses", () => ({
 
 import { MachineDetail } from "../components/upkeep/MachineDetail";
 import { pickOption } from "./fixtures/dropdown";
+import { useAppStore } from "../stores/app-store";
 
 const t = uiLabels.EN;
 
@@ -99,10 +100,30 @@ describe("MachineDetail", () => {
     expect(screen.getByText(t.overdue)).toBeInTheDocument();
   });
 
-  it("toggling In calendar updates the item with in_calendar 0", () => {
+  it("In calendar is a dropdown listing the organisation's calendar by name", () => {
+    useAppStore.setState({ calendarName: "Studio" });
     renderDetail();
-    fireEvent.click(screen.getByRole("switch", { name: t.upkeep_in_calendar }));
+    const trigger = screen.getByLabelText(t.upkeep_in_calendar);
+    expect(trigger).toHaveTextContent("Studio");
+    fireEvent.click(trigger);
+    const names = within(screen.getByRole("listbox")).getAllByRole("option").map((o) => o.textContent);
+    expect(names).toEqual([t.upkeep_not_in_calendar, "Studio"]);
+  });
+
+  it("picking Not in calendar updates the item with in_calendar 0", () => {
+    useAppStore.setState({ calendarName: "Studio" });
+    renderDetail();
+    pickOption(screen.getByLabelText(t.upkeep_in_calendar), t.upkeep_not_in_calendar);
     expect(updateItem).toHaveBeenCalledWith({ id: 4, data: { in_calendar: 0 } });
+  });
+
+  it("with no calendar set up it offers only Not in calendar and a hint", () => {
+    useAppStore.setState({ calendarName: "" });
+    renderDetail();
+    fireEvent.click(screen.getByLabelText(t.upkeep_in_calendar));
+    const options = within(screen.getByRole("listbox")).getAllByRole("option");
+    expect(options.map((o) => o.textContent)).toEqual([t.upkeep_not_in_calendar, t.upkeep_calendar_setup_hint]);
+    expect(options[1]).toHaveAttribute("aria-disabled", "true");
   });
 
   it("setting status Retired shows the reminders-stop note", () => {
