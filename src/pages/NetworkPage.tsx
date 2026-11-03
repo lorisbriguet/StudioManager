@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useT } from "../i18n/useT";
 import { Button, CARD_GAP, CARD_STACK, Card, EmptyState, ICONS, IconButton, ListSkeleton, PageHeader, QueryState } from "../components/ui";
 import { MachineCard } from "../components/network/MachineCard";
+import { BackupsCard } from "../components/network/BackupsCard";
 import { UpkeepDueCard } from "../components/network/UpkeepDueCard";
 import { useEquipmentConnections } from "../db/hooks/useConnections";
 import { useMachineLinks, useMachines, useUpkeepOverview } from "../db/hooks/useUpkeep";
@@ -106,6 +107,7 @@ export function NetworkPage() {
               ))}
             </div>
             <div className={CARD_STACK}>
+              <BackupsCard cards={list} now={now} />
               <UpkeepDueCard rows={dueRows} />
             </div>
           </div>

@@ -18,10 +18,12 @@ vi.mock("../db/hooks/useUpkeep", () => ({
   useMachines: () => q(machines),
   useMachineLinks: () => q(links),
   useUpkeepOverview: () => ({ due, lowStock: [], endingSoon: [], replacements: [], overdueCount: 0 }),
+  useActiveUpkeepItems: () => q([]),
   useMarkUpkeepDone: () => ({ mutate: vi.fn() }),
   useSnoozeUpkeep: () => ({ mutate: vi.fn() }),
 }));
-vi.mock("../db/hooks/useConnections", () => ({ useEquipmentConnections: () => q([]) }));
+vi.mock("../db/hooks/useConnections", () => ({ useEquipmentConnections: () => q([]), useLatestMetricsFor: () => [] }));
+vi.mock("../hooks/useTimeMachine", () => ({ useTimeMachine: () => q(null) }));
 vi.mock("../lib/network/commands", () => ({
   networkCheck: (t: { key: string }[]) => networkCheck(t),
   openRemoteLink: (id: number) => openRemoteLink(id),

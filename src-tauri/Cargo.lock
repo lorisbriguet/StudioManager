@@ -4792,6 +4792,7 @@ dependencies = [
  "keyring",
  "libc",
  "log",
+ "plist",
  "portable-pty",
  "pulldown-cmark",
  "rcgen",

@@ -49,7 +49,7 @@ const machine = (over: Partial<Machine> = {}): Machine => ({
 const usageItem = (over: Partial<UpkeepItem> = {}): UpkeepItem => ({
   id: 9, machine_id: 3, title: "Lube rods", notes: null, schedule: "usage", interval_n: null,
   interval_unit: null, anchor_day: null, usage_metric: "print_hours", usage_every: 200,
-  last_done_on: null, last_done_reading: 100, next_due_on: null, snooze_until: null, in_calendar: 1,
+  last_done_on: null, last_done_reading: 100, next_due_on: null, snooze_until: null, in_calendar: 1, is_backup: 0,
   alert: "default", calendar_event_id: null, calendar_event_date: null, overdue_notified_for: null,
   archived: 0, created_at: "", updated_at: "",
   ...over,

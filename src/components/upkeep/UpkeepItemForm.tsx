@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { DatePicker, FormField, FormGrid, FormModal, Input, Select } from "../ui";
+import { Checkbox, DatePicker, FormField, FormGrid, FormModal, Input, Select } from "../ui";
 import { useT } from "../../i18n/useT";
 import { useCreateUpkeepItem, useUpdateUpkeepItem } from "../../db/hooks/useUpkeep";
 import { useUnsavedChangesWarning } from "../../hooks/useUnsavedChangesWarning";
@@ -31,6 +31,7 @@ export function UpkeepItemForm({ open, onClose, machineId, item, allowUsage }: P
   const [every, setEvery] = useState(String(item?.usage_every ?? 100));
   const [startOn, setStartOn] = useState(todayLocalISO());
   const [notes, setNotes] = useState(item?.notes ?? "");
+  const [isBackup, setIsBackup] = useState(item?.is_backup === 1);
   const [error, setError] = useState<string | null>(null);
 
   const dirty =
@@ -39,7 +40,8 @@ export function UpkeepItemForm({ open, onClose, machineId, item, allowUsage }: P
     n !== String(item?.interval_n ?? 1) ||
     unit !== (item?.interval_unit ?? "month") ||
     every !== String(item?.usage_every ?? 100) ||
-    notes !== (item?.notes ?? "");
+    notes !== (item?.notes ?? "") ||
+    isBackup !== (item?.is_backup === 1);
   useUnsavedChangesWarning(dirty);
 
   const close = async () => {
@@ -49,7 +51,7 @@ export function UpkeepItemForm({ open, onClose, machineId, item, allowUsage }: P
 
   const save = () => {
     if (!title.trim()) { setError(t.upkeep_title_required); return; }
-    const base = { title: title.trim(), notes: notes.trim() || null, schedule };
+    const base = { title: title.trim(), notes: notes.trim() || null, schedule, is_backup: isBackup ? 1 : 0 };
     const sched =
       schedule === "interval"
         ? {
@@ -119,6 +121,9 @@ export function UpkeepItemForm({ open, onClose, machineId, item, allowUsage }: P
         <FormField label={t.upkeep_notes} span="full">
           <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
         </FormField>
+        <div className="col-span-full">
+          <Checkbox label={t.upkeep_is_backup} checked={isBackup} onChange={(e) => setIsBackup(e.target.checked)} />
+        </div>
       </FormGrid>
     </FormModal>
   );

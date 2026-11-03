@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as q from "../queries/connections";
 import { updateMachine } from "../queries/machines";
 import { recordManualReading, runConnectionSyncs, saveConnectionSecret } from "../../lib/upkeep/connections";
@@ -27,6 +27,16 @@ export function useLatestMetrics(machineId: number, prefix: string) {
   return useQuery({
     queryKey: ["machine-readings", machineId, "latest", prefix],
     queryFn: () => q.getLatestMetrics(machineId, prefix),
+  });
+}
+
+/** useLatestMetrics for several machines at once (same cache keys). */
+export function useLatestMetricsFor(machineIds: number[], prefix: string) {
+  return useQueries({
+    queries: machineIds.map((machineId) => ({
+      queryKey: ["machine-readings", machineId, "latest", prefix],
+      queryFn: () => q.getLatestMetrics(machineId, prefix),
+    })),
   });
 }
 

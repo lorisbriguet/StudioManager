@@ -186,6 +186,71 @@ pub async fn network_check(app: tauri::AppHandle, targets: Vec<CheckTarget>) -> 
         .map_err(|e| format!("network check failed: {e}"))
 }
 
+/// This Mac's Time Machine, as the Backups card shows it.
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TimeMachineStatus {
+    pub enabled: bool,
+    /// Newest snapshot of the last-used destination, ISO 8601 (UTC).
+    pub last_backup_at: Option<String>,
+    /// The destination's last result code (0 is success).
+    pub last_result: Option<i64>,
+    pub running: bool,
+}
+
+const TIME_MACHINE_PREFS: &str = "/Library/Preferences/com.apple.TimeMachine.plist";
+
+/// Reads the preferences plist: `AutoBackup`, then the destination named by
+/// `LastDestinationID` for its newest `SnapshotDates` entry and its `RESULT`.
+/// `running` is left false; the command fills it from `tmutil`.
+pub fn parse_time_machine(prefs: &plist::Value) -> TimeMachineStatus {
+    let root = prefs.as_dictionary();
+    let enabled = root.and_then(|d| d.get("AutoBackup")).and_then(|v| v.as_boolean()).unwrap_or(false);
+    let last_id = root.and_then(|d| d.get("LastDestinationID")).and_then(|v| v.as_string());
+    let dest = root
+        .and_then(|d| d.get("Destinations"))
+        .and_then(|v| v.as_array())
+        .and_then(|list| {
+            list.iter().filter_map(|v| v.as_dictionary()).find(|d| {
+                last_id.is_some() && d.get("DestinationID").and_then(|v| v.as_string()) == last_id
+            })
+        });
+    let last_backup_at = dest
+        .and_then(|d| d.get("SnapshotDates"))
+        .and_then(|v| v.as_array())
+        .and_then(|dates| dates.iter().filter_map(|v| v.as_date()).map(|d| d.to_xml_format()).max());
+    let last_result = dest.and_then(|d| d.get("RESULT")).and_then(|v| v.as_signed_integer());
+    TimeMachineStatus { enabled, last_backup_at, last_result, running: false }
+}
+
+fn time_machine_running() -> bool {
+    std::process::Command::new("/usr/bin/tmutil")
+        .arg("status")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("Running = 1"))
+        .unwrap_or(false)
+}
+
+/// This Mac's Time Machine, or None when it was never set up (no preferences
+/// file) or in test and presentation mode, where the Mac's real state stays out.
+#[tauri::command]
+pub async fn time_machine_status(app: tauri::AppHandle) -> Result<Option<TimeMachineStatus>, String> {
+    if crate::active_org(&app)?.in_mode() {
+        return Ok(None);
+    }
+    tauri::async_runtime::spawn_blocking(|| {
+        if !std::path::Path::new(TIME_MACHINE_PREFS).exists() {
+            return Ok(None);
+        }
+        let prefs = plist::Value::from_file(TIME_MACHINE_PREFS).map_err(|e| format!("Time Machine preferences: {e}"))?;
+        let mut status = parse_time_machine(&prefs);
+        status.running = status.enabled && time_machine_running();
+        Ok(Some(status))
+    })
+    .await
+    .map_err(|e| format!("Time Machine check failed: {e}"))?
+}
+
 /// Schemes a remote-access button may open. `vnc` is Screen Sharing. The Jump
 /// Desktop scheme (`jump`) is confirmed during the on-site check; Jump Desktop
 /// is not installed on the development Mac. Keep in sync with the TS list.
@@ -410,5 +475,52 @@ mod tests {
     #[test]
     fn open_remote_link_refuses_a_missing_row() {
         assert!(remote_link_url(&files_db(), 99).is_err());
+    }
+
+    fn plist_of(body: &str) -> plist::Value {
+        let xml = format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict>{body}</dict></plist>"
+        );
+        plist::Value::from_reader_xml(xml.as_bytes()).unwrap()
+    }
+
+    #[test]
+    fn parse_time_machine_reads_the_last_destination() {
+        let p = plist_of(
+            "<key>AutoBackup</key><true/><key>LastDestinationID</key><string>B</string>
+             <key>Destinations</key><array>
+               <dict><key>DestinationID</key><string>A</string><key>RESULT</key><integer>21</integer>
+                 <key>SnapshotDates</key><array><date>2026-01-01T10:00:00Z</date></array></dict>
+               <dict><key>DestinationID</key><string>B</string><key>RESULT</key><integer>0</integer>
+                 <key>SnapshotDates</key><array><date>2026-10-30T08:00:00Z</date><date>2026-11-01T09:30:00Z</date></array></dict>
+             </array>",
+        );
+        let s = parse_time_machine(&p);
+        assert!(s.enabled);
+        assert_eq!(s.last_backup_at.as_deref(), Some("2026-11-01T09:30:00Z"));
+        assert_eq!(s.last_result, Some(0));
+        assert!(!s.running);
+    }
+
+    #[test]
+    fn parse_time_machine_without_snapshot_dates_has_no_last_backup() {
+        let p = plist_of(
+            "<key>AutoBackup</key><true/><key>LastDestinationID</key><string>A</string>
+             <key>Destinations</key><array>
+               <dict><key>DestinationID</key><string>A</string><key>RESULT</key><integer>26</integer></dict>
+             </array>",
+        );
+        let s = parse_time_machine(&p);
+        assert!(s.enabled);
+        assert_eq!(s.last_backup_at, None);
+        assert_eq!(s.last_result, Some(26));
+    }
+
+    #[test]
+    fn parse_time_machine_auto_backup_off_is_disabled() {
+        let s = parse_time_machine(&plist_of("<key>AutoBackup</key><false/>"));
+        assert!(!s.enabled);
+        assert_eq!(s.last_backup_at, None);
+        assert_eq!(s.last_result, None);
     }
 }

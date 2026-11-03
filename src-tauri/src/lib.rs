@@ -733,6 +733,7 @@ pub fn run() {
             connectors::connection_delete_secret,
             network::network_check,
             network::open_remote_link,
+            network::time_machine_status,
             connectors::connection_test,
             connectors::connection_sync,
             connectors::paperless::paperless_inbox,
