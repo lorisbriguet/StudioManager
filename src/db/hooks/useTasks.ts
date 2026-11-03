@@ -172,26 +172,35 @@ export function useUpdateTask() {
       data: Partial<Omit<Task, "id" | "created_at" | "updated_at">>;
     }) => {
       const prev = await q.getTaskById(id);
+      // Marking done also moves the due date to today: apply that before
+      // capturing the previous values so undo restores it too.
+      if (data.status === "done") {
+        const today = todayLocalISO();
+        if (prev?.due_date && prev.due_date !== today) {
+          data = { ...data, due_date: today };
+        }
+      }
       if (prev) {
         const prevData: Record<string, unknown> = {};
         for (const key of Object.keys(data)) {
           prevData[key] = (prev as unknown as Record<string, unknown>)[key];
         }
+        const nextData = data;
         useUndoStore.getState().push({
           label: `${getLabels().undo_update_task} "${prev.title}"`,
           execute: async () => {
             await q.updateTask(id, prevData as Partial<Omit<Task, "id" | "created_at" | "updated_at">>);
             syncTaskCalendar(id);
             qc.invalidateQueries({ queryKey: ["tasks"] });
+            qc.invalidateQueries({ queryKey: ["workload-rows"] });
+          },
+          redo: async () => {
+            await q.updateTask(id, nextData);
+            syncTaskCalendar(id);
+            qc.invalidateQueries({ queryKey: ["tasks"] });
+            qc.invalidateQueries({ queryKey: ["workload-rows"] });
           },
         });
-      }
-      // When marking as done, update due_date to today if it differs
-      if (data.status === "done") {
-        const today = todayLocalISO();
-        if (prev?.due_date && prev.due_date !== today) {
-          data = { ...data, due_date: today };
-        }
       }
       await q.updateTask(id, data);
       syncTaskCalendar(id);
@@ -297,25 +306,33 @@ export function useUpdateSubtask() {
       data: Partial<Omit<Subtask, "id" | "created_at" | "updated_at">>;
     }) => {
       const prev = await q.getSubtaskById(id);
+      // Marking done also moves the due date to today: apply that before
+      // capturing the previous values so undo restores it too.
+      if (data.status === "done") {
+        const today = todayLocalISO();
+        if (prev?.due_date && prev.due_date !== today) {
+          data = { ...data, due_date: today };
+        }
+      }
       if (prev) {
         const prevData: Record<string, unknown> = {};
         for (const key of Object.keys(data)) {
           prevData[key] = (prev as unknown as Record<string, unknown>)[key];
         }
+        const nextData = data;
         useUndoStore.getState().push({
           label: `${getLabels().undo_update_subtask} "${prev.title}"`,
           execute: async () => {
             await q.updateSubtask(id, prevData as Partial<Omit<Subtask, "id" | "created_at" | "updated_at">>);
             syncSubtaskCalendar(id);
             qc.invalidateQueries({ queryKey: ["subtasks"] });
-          },
+                },
+          redo: async () => {
+            await q.updateSubtask(id, nextData);
+            syncSubtaskCalendar(id);
+            qc.invalidateQueries({ queryKey: ["subtasks"] });
+                },
         });
-      }
-      if (data.status === "done") {
-        const today = todayLocalISO();
-        if (prev?.due_date && prev.due_date !== today) {
-          data = { ...data, due_date: today };
-        }
       }
       await q.updateSubtask(id, data);
       syncSubtaskCalendar(id);
