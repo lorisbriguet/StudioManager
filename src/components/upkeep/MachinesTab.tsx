@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Badge, Button, EmptyState, ICONS, PeekHeader, Table } from "../ui";
+import { Badge, Button, EmptyState, ICONS, PanelTitle, PeekHeader, Table } from "../ui";
 import { MachineDetail } from "./MachineDetail";
 import { MachineForm } from "./MachineForm";
 import { useT } from "../../i18n/useT";
@@ -35,7 +35,7 @@ export function MachinesTab() {
   return (
     <div className="flex">
       <div className="flex-1 min-w-0">
-        <div className="flex justify-end mb-3">{addButton}</div>
+        <PanelTitle title={t.upkeep_tab_machines} count={machines.length} action={addButton} className="mb-2" />
         <Table>
           <Table.Head>
             <Table.Th>{t.name}</Table.Th>
