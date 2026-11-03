@@ -135,6 +135,15 @@ pub struct MachineDetail {
     pub upkeep_items: Vec<UpkeepItemRef>,
     pub service_log: Vec<ServiceEntry>,
     pub consumables: Vec<ConsumableRef>,
+    /// The machine's links (web pages, remote access): what the Network page shows.
+    pub links: Vec<MachineLink>,
+}
+
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct MachineLink {
+    pub id: i64,
+    pub label: String,
+    pub url: String,
 }
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
@@ -515,9 +524,17 @@ fn machine_detail(conn: &Connection, org: &Org, id: i64, money: bool) -> R<Machi
                 upkeep_items: Vec::new(),
                 service_log: Vec::new(),
                 consumables: Vec::new(),
+                links: Vec::new(),
             })
         },
     ))?;
+    let mut stmt = db(conn.prepare(
+        "SELECT id, label, path_or_url FROM machine_files \
+         WHERE machine_id = ?1 AND kind = 'link' ORDER BY id ASC",
+    ))?;
+    m.links = db(stmt
+        .query_map([id], |r| Ok(MachineLink { id: r.get(0)?, label: r.get(1)?, url: r.get(2)? }))
+        .and_then(|rows| rows.collect()))?;
     let mut stmt = db(conn.prepare(&format!(
         "{ITEM_SELECT} WHERE machine_id = ?1 \
          ORDER BY archived ASC, next_due_on IS NULL, next_due_on ASC, title ASC"
@@ -719,6 +736,35 @@ pub fn add_service_log(
             "Logged service on machine \"{}\" (id {id}) on {done_on}: {description}",
             d.name
         );
+        Ok((d, Some(summary)))
+    })
+}
+
+/// Add a link (a web page or a remote-access address such as `vnc://…`) to a
+/// machine, as the app's machine page does. The Network page lists these.
+pub fn add_machine_link(dir: &Path, org: &Org, machine: &str, label: &str, url: &str) -> R<MachineDetail> {
+    let label = required(label, "Label")?;
+    let url = required(url, "Address")?;
+    if url.chars().any(|c| c.is_whitespace() || c.is_control()) || url.len() > 2048 {
+        return Err("The address can't contain spaces and must be shorter than 2048 characters.".to_string());
+    }
+    let org = equipment_org(dir, org)?;
+    write(dir, &org, "add_machine_link", |tx| {
+        let id = resolve_machine(tx, machine)?;
+        let exists: i64 = db(tx.query_row(
+            "SELECT count(*) FROM machine_files WHERE machine_id = ?1 AND kind = 'link' AND path_or_url = ?2",
+            params![id, url],
+            |r| r.get(0),
+        ))?;
+        if exists > 0 {
+            return Err(format!("This machine already has a link to {url}."));
+        }
+        db(tx.execute(
+            "INSERT INTO machine_files (machine_id, label, kind, path_or_url) VALUES (?1, ?2, 'link', ?3)",
+            params![id, label, url],
+        ))?;
+        let d = machine_detail(tx, &org, id, false)?;
+        let summary = format!("Added link \"{label}\" ({url}) to machine \"{}\" (id {id})", d.name);
         Ok((d, Some(summary)))
     })
 }
@@ -1186,6 +1232,34 @@ mod tests {
         assert!(add_service_log(&dir, &org, "NAS", "x", "1/11/2026", None, false).is_err());
         assert!(add_service_log(&dir, &org, "NAS", "x", "2026-11-01", Some(-1.0), false).is_err());
         assert!(add_service_log(&dir, &org, "Nope", "x", "2026-11-01", None, false).is_err());
+    }
+
+    #[test]
+    fn links_on_a_machine_feed_the_network_page() {
+        let (dir, org, conn) = fixture();
+        conn.execute(
+            "INSERT INTO machine_files (machine_id, label, kind, path_or_url) VALUES (1, 'Manual', 'file', '/x/manual.pdf')",
+            [],
+        )
+        .unwrap();
+        let m = add_machine_link(&dir, &org, "nas", "Paperless", "https://nas.example:8443").unwrap();
+        assert_eq!(m.name, "NAS");
+        assert_eq!(m.links.len(), 1, "files are not links: {:?}", m.links);
+        assert_eq!(m.links[0].label, "Paperless");
+        assert_eq!(m.links[0].url, "https://nas.example:8443");
+        let m = add_machine_link(&dir, &org, "1", "Screen Sharing", "vnc://100.64.0.7").unwrap();
+        assert_eq!(m.links.iter().map(|l| l.label.as_str()).collect::<Vec<_>>(), ["Paperless", "Screen Sharing"]);
+        assert_eq!(one::<i64>(&conn, "SELECT count(*) FROM machine_files WHERE kind = 'link'"), 2);
+        let log = std::fs::read_to_string(dir.join(crate::log::LOG_FILE)).unwrap();
+        assert!(log.contains("add_machine_link") && log.contains("Paperless"), "{log}");
+        assert_eq!(get_machine(&conn, &org, "NAS", false).unwrap().links.len(), 2);
+
+        assert!(add_machine_link(&dir, &org, "NAS", "Again", "https://nas.example:8443").is_err(), "same address twice");
+        assert!(add_machine_link(&dir, &org, "NAS", " ", "https://x.example").is_err(), "empty label");
+        assert!(add_machine_link(&dir, &org, "NAS", "X", " ").is_err(), "empty address");
+        assert!(add_machine_link(&dir, &org, "NAS", "X", "https://a b.example").is_err(), "spaces in address");
+        assert!(add_machine_link(&dir, &org, "Nope", "X", "https://x.example").is_err(), "unknown machine");
+        assert_eq!(one::<i64>(&conn, "SELECT count(*) FROM machine_files WHERE kind = 'link'"), 2);
     }
 
     #[test]

@@ -26,6 +26,8 @@ Run `bash scripts/build-mcp.sh` once on a fresh clone before any `cargo` command
 - Working tree contains only the changes meant for this release; no debug code, `console.log` leftovers, or commented-out hacks.
 - No secrets/PII in the diff (keys, IBANs, personal paths). `scripts/migrate-data.mjs` was deleted in the 2026-08 audit for exactly this reason — anything similar must read personal values from env, never hardcode them. Note the repo is PUBLIC.
 - If the release changes the data layout, run `scripts/rehearse-org-upgrade.sh` against the real folder first and recommend Backup Now in the release notes.
+- **Open pull requests and branches:** run `gh pr list --state open` and `git branch -r --no-merged origin/main`. Every PR or branch meant for this release is merged first; any other is left out on purpose and named in the release notes. 3.3.0 shipped without the agent Upkeep tools because their PR (#22) was never merged, while the installed app had been built from that branch.
+- **Agent tools:** the MCP protocol test (`src-tauri/mcp/tests/protocol.rs`) lists every tool group that must ship (money, Upkeep). A release that removes a tool on purpose updates that list in the same PR and says so in the changelog. After installing the release, reconnect the agent tools in Claude Code (`/mcp` › studiomanager › Reconnect) and check that `get_machine` answers. See [Agent access](docs/agent-access.md).
 
 ## 2. Design-system compliance audit (required)
 

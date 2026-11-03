@@ -44,8 +44,9 @@ pub const MONEY_TOOLS: [&str; 5] = [
 
 /// Upkeep tools that write: each one's description tells the agent to ask
 /// the user first.
-pub const UPKEEP_WRITES: [&str; 9] = [
+pub const UPKEEP_WRITES: [&str; 10] = [
     "add_service_log",
+    "add_machine_link",
     "create_machine",
     "update_machine",
     "add_upkeep_item",
@@ -398,6 +399,18 @@ pub struct UpdateMachineInput {
 
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+pub struct MachineLinkInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    /// Machine name or id.
+    pub machine: String,
+    /// What the link opens, e.g. "Paperless" or "Screen Sharing".
+    pub label: String,
+    /// The address: a web page (https://…) or a remote-access link (vnc://…).
+    pub url: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
 pub struct ServiceLogInput {
     /// Organisation id or name. Default: the active organisation.
     pub org: Option<String>,
@@ -990,6 +1003,16 @@ impl Server {
         .await
     }
 
+    #[tool(
+        description = "Ask the user before calling. Add a link to a machine: a web page of a service it runs (e.g. Paperless on the NAS) or a remote-access link (vnc://…). StudioManager's Network page lists these with their status."
+    )]
+    async fn add_machine_link(&self, Parameters(p): Parameters<MachineLinkInput>) -> CallToolResult {
+        self.run(move |d| {
+            write_in(d, p.org.as_deref(), |d, o| upkeep::add_machine_link(d, o, &p.machine, &p.label, &p.url))
+        })
+        .await
+    }
+
     #[tool(description = "Ask the user before calling. Add a machine or piece of equipment to Upkeep.")]
     async fn create_machine(&self, Parameters(p): Parameters<CreateMachineInput>) -> CallToolResult {
         self.run(move |d| {
@@ -1366,13 +1389,13 @@ mod tests {
         let dir = crate::test_support::ready_dir("org-a", "Studio A");
         assert_eq!(
             Server::new(Ok(dir.clone())).tool_router.list_all().len(),
-            34
+            35
         );
         crate::test_support::write_access(&dir, r#"{"enabled": true, "allowMoney": true}"#);
-        assert_eq!(Server::new(Ok(dir)).tool_router.list_all().len(), 39);
+        assert_eq!(Server::new(Ok(dir)).tool_router.list_all().len(), 40);
         assert_eq!(
             Server::new(Err("x".into())).tool_router.list_all().len(),
-            34
+            35
         );
     }
 

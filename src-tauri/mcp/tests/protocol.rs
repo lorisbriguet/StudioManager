@@ -136,6 +136,25 @@ fn seeded(allow_money: bool) -> std::path::PathBuf {
     dir
 }
 
+/// The Upkeep tools. 3.3.0 shipped without them (their branch was never
+/// merged): this list makes a release that drops one fail its tests.
+const UPKEEP_TOOLS: [&str; 14] = [
+    "list_machines",
+    "get_machine",
+    "list_consumables",
+    "list_subscriptions",
+    "add_service_log",
+    "add_machine_link",
+    "create_machine",
+    "update_machine",
+    "add_upkeep_item",
+    "mark_upkeep_done",
+    "create_consumable",
+    "update_consumable",
+    "create_subscription",
+    "update_subscription",
+];
+
 const MONEY_TOOLS: [&str; 5] = [
     "list_invoices",
     "get_invoice",
@@ -157,8 +176,8 @@ fn stdio_round_trip() {
     assert!(instructions.lines().count() <= 8);
 
     let names = server.tool_names();
-    assert_eq!(names.len(), 39, "{names:?}");
-    for t in MONEY_TOOLS {
+    assert_eq!(names.len(), 40, "{names:?}");
+    for t in MONEY_TOOLS.iter().chain(UPKEEP_TOOLS.iter()) {
         assert!(names.iter().any(|n| n == t), "missing {t}");
     }
 
@@ -207,9 +226,12 @@ fn money_tools_hidden_when_off_at_startup() {
     let mut server = Server::start(&dir);
     server.initialize();
     let names = server.tool_names();
-    assert_eq!(names.len(), 34, "{names:?}");
+    assert_eq!(names.len(), 35, "{names:?}");
     for t in MONEY_TOOLS {
         assert!(!names.iter().any(|n| n == t), "{t} listed");
+    }
+    for t in UPKEEP_TOOLS {
+        assert!(names.iter().any(|n| n == t), "missing {t}");
     }
 }
 
