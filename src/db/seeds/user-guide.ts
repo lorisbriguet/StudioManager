@@ -526,7 +526,7 @@ const articles: ArticleSeed[] = [
   // ── 11. Settings & Customization ─────────────────────────────────
   {
     title: "Settings & Customization",
-    related: ["Organisations", "Calendar", "Keyboard Shortcuts", "Getting Started"],
+    related: ["Organisations", "Agent access", "Calendar", "Keyboard Shortcuts", "Getting Started"],
     tags: ["guide", "settings"],
     content: `<h2>Settings Overview</h2>
 <p>Access settings from the <strong>gear icon</strong> at the bottom of the sidebar. Settings are organized into sections.</p>
@@ -577,8 +577,71 @@ const articles: ArticleSeed[] = [
   <li><strong>Snapshot</strong> — Take a quick safety copy of the current organisation's database before a risky change, and restore it in one click.</li>
 </ul>
 
+<h2>Agents</h2>
+<p>Turn on the Agents page, and let AI apps such as Claude read and edit your data. See the <a href="guide:Agent%20access">Agent access</a> article.</p>
+
 <h2>Updates</h2>
 <p>Check for app updates. When a new version is available, download and install it directly from within the app. The app restarts automatically after installation.</p>`,
+  },
+
+  // ── Agent access ─────────────────────────────────────────────────
+  {
+    title: "Agent access",
+    related: ["Organisations", "Settings & Customization", "Projects & Tasks", "Resources & Wiki"],
+    tags: ["guide", "agents", "settings"],
+    content: `<h2>What agent access is</h2>
+<p>Agent access lets AI apps such as Claude Code or Claude Desktop read and edit your StudioManager data: projects, tasks, clients, the wiki and Studio upkeep. It works through a small program that ships inside the app, <code>studiomanager-mcp</code>. The AI app starts it on your Mac and talks to it directly (a local MCP server, over standard input and output). The program opens no network connection: it reads and writes the same files the app uses. What an agent reads is then part of its conversation with the AI app, like anything else you show it.</p>
+<p>Agent access is <strong>off</strong> until you turn it on. It is a different feature from the Agents page, which shows the Claude Code agents running on your Mac.</p>
+
+<h2>Turning it on</h2>
+<ol>
+  <li>Go to <strong>Settings &gt; Agents</strong> and find the <strong>Agent access</strong> card.</li>
+  <li>Switch on <strong>Allow AI agents to use StudioManager</strong>.</li>
+  <li>Under <strong>Organisations agents can use</strong>, untick any organisation agents should stay out of. Agents can neither read nor write an unticked organisation.</li>
+  <li>Leave <strong>Let agents read invoices, quotes and expenses</strong> off unless you want them (see Money below).</li>
+</ol>
+<p>Open StudioManager once with each organisation after installing or updating the app. Until then, agents are told to do exactly that and the organisation stays untouched.</p>
+
+<h2>Connecting Claude Code</h2>
+<p>The Agent access card shows the command for your copy of the app. Press <strong>Copy command</strong> and run it in a terminal. It looks like this:</p>
+<p><code>claude mcp add studiomanager -- '/Applications/StudioManager.app/Contents/MacOS/studiomanager-mcp'</code></p>
+<p>Start a new Claude Code session afterwards: the StudioManager tools appear in it. Ask, for example, "what's due this week?" or "add a task to the website project".</p>
+<ul>
+  <li><strong>Claude Desktop</strong> — Press <strong>Add…</strong>. The app shows the change to Claude Desktop's settings, keeps a backup of the file next to it, and writes it only after you confirm. Restart Claude Desktop afterwards.</li>
+  <li><strong>Other apps</strong> — Press <strong>Copy config</strong> and add it to the app's MCP settings.</li>
+</ul>
+
+<h2>What agents can do</h2>
+<ul>
+  <li><strong>Projects and tasks</strong> — List, read, create and update projects, tasks and subtasks, see what is due, and link a project to its folder on your Mac.</li>
+  <li><strong>Clients</strong> — List, read and create clients.</li>
+  <li><strong>Wiki</strong> — Read and write project articles, record decisions and link tools to a project. Agents link related articles to each other.</li>
+  <li><strong>Studio upkeep</strong> — Read machines, consumables and subscriptions; add service log entries, upkeep items and links; mark upkeep done; update stock and subscriptions.</li>
+</ul>
+<p>Agents are asked to check with you before they create a client or a project, and before every upkeep change, saying what they will save.</p>
+
+<h2>Agents never delete</h2>
+<ul>
+  <li>No tool removes anything. A task or subtask can only be set to to-do or done.</li>
+  <li><strong>Backup first</strong> — Before an agent's first change to an organisation in a session, a full copy of that organisation's database is saved in the <code>backups/agent</code> folder of the app's data folder. The 20 most recent per organisation are kept.</li>
+  <li><strong>Recent agent changes</strong> — Every change an agent makes is listed on the Agent access card, with the time and the organisation. Open pages refresh by themselves within a couple of seconds.</li>
+  <li>In test mode and presentation mode, agents can read but not change anything.</li>
+  <li>Agents never touch tracked time, workload fields, calendar links or layouts, and never create expenses.</li>
+</ul>
+
+<h2>Money</h2>
+<p>Invoices, quotes, expenses and the P&amp;L summary sit behind their own switch, <strong>Let agents read invoices, quotes and expenses</strong>, which is off by default. Even when it is on, agents can only read them: they can't create or change a financial document. After switching it on, quit and reopen the AI app (or reconnect the StudioManager server) so the money tools appear.</p>
+
+<h2>A consent switch, not a lock</h2>
+<p>These switches tell StudioManager's server what you agree to. They don't hide your files: an AI app allowed to run commands or edit files on your Mac (such as Claude Code) could open the data folder without going through the server at all. What keeps an agent out of your files is the AI app's own permission settings: which commands it may run and which folders it may touch.</p>
+
+<h2>Good to know</h2>
+<ul>
+  <li>The agent sees an organisation's data only through the tools above. That's 40 tools, 5 of them for money.</li>
+  <li>If an agent edits a project or wiki article while you are editing the same one in the app, your next save overwrites the agent's change.</li>
+  <li>A task due date or status changed by an agent reaches Apple Calendar the next time you edit that task in the app.</li>
+  <li>The Demo build registers as <code>studiomanager-demo</code>, so both can be connected side by side.</li>
+</ul>`,
   },
 
   // ── 12. Keyboard Shortcuts ───────────────────────────────────────
@@ -753,8 +816,9 @@ const articles: ArticleSeed[] = [
 
 /** Bump when a release changes the guide, so every organisation is offered the
  *  new content once. Paired with `guideUpdateNotified:<organisation id>` in
- *  localStorage by `useGuideUpdateCheck`. v3: articles link to each other. */
-export const USER_GUIDE_VERSION = 3;
+ *  localStorage by `useGuideUpdateCheck`. v3: articles link to each other.
+ *  v4: Agent access. */
+export const USER_GUIDE_VERSION = 4;
 
 /** Titles this version ships, in order. The guide of an organisation created by
  *  an earlier release is missing the ones added since. */
