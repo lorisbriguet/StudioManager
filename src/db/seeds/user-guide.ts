@@ -597,7 +597,7 @@ const articles: ArticleSeed[] = [
 <ol>
   <li>Go to <strong>Settings &gt; Agents</strong> and find the <strong>Agent access</strong> card.</li>
   <li>Switch on <strong>Allow AI agents to use StudioManager</strong>.</li>
-  <li>Under <strong>Organisations agents can use</strong>, untick any organisation agents should stay out of. Agents can neither read nor write an unticked organisation.</li>
+  <li>Under <strong>Organisations agents can use</strong>, untick any organisation agents should stay out of. Agents can neither read nor write an unticked organisation. A new organisation starts unticked: come back here and tick it when agents should use it.</li>
   <li>Leave <strong>Let agents read invoices, quotes and expenses</strong> off unless you want them (see Money below).</li>
 </ol>
 <p>Open StudioManager once with each organisation after installing or updating the app. Until then, agents are told to do exactly that and the organisation stays untouched.</p>

@@ -406,6 +406,8 @@ fn create_organisation(app: tauri::AppHandle, name: String, seed_from_current: b
             let copied = seed::copy_settings_tables(&current.prod_db_path(), &dir.join(DB_FILE))?;
             log::info!("seeded new organisation {id} from current: {copied:?}");
         }
+        // Before the registry lists it, so agents never see it allowed.
+        agent_access::withhold_new_org(&app_dir, &id)?;
         Ok(())
     })();
     if let Err(e) = result {
