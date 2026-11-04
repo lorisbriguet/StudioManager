@@ -773,6 +773,8 @@ pub fn run() {
             agents::prompt::agents_prompt,
             agents::prompt::agents_answer,
             agents::poller::agents_list,
+            agents::login::agents_login_status,
+            agents::login::agents_login_check,
             agents::uploads::agents_save_image,
             agents::routines::routines_get,
             agents::routines::routines_save,

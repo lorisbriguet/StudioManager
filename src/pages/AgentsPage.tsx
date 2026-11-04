@@ -8,6 +8,7 @@ import { AgentList } from "../components/agents/AgentList";
 import { AgentDetail } from "../components/agents/AgentDetail";
 import { TerminalPanel } from "../components/agents/TerminalPanel";
 import { StartAgentForm } from "../components/agents/StartAgentForm";
+import { LoginNotice } from "../components/agents/LoginNotice";
 
 export function AgentsPage() {
   const t = useT();
@@ -54,6 +55,7 @@ export function AgentsPage() {
           {t.agents_new}
         </Button>
       </PageHeader>
+      {enabled && <LoginNotice quiet className="mb-4" />}
       {!enabled ? (
         <EmptyState icon={ICONS.agents} message={t.agents_off} />
       ) : (

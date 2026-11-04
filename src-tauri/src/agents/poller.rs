@@ -226,6 +226,7 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
     let mut models = ModelCache::new();
     let mut alerts_at: Option<Instant> = None;
     let mut gate = NotifyGate::default();
+    let mut login_at: Option<Instant> = None;
     loop {
         std::thread::sleep(POLL_INTERVAL);
         let Some(state) = app.try_state::<super::AgentsState>() else {
@@ -236,6 +237,7 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
             // Off: forget everything so turning it on starts a new baseline.
             if poll.baseline_done || !poll.last_good.is_empty() {
                 poll = PollState::default();
+                login_at = None;
                 gate = NotifyGate::default();
                 if let Ok(mut c) = state.last.lock() {
                     c.clear();
@@ -261,6 +263,20 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
         let Some(cli) = state.real_cli() else {
             continue;
         };
+        // The Claude sign-in's end date: when Agents start, then hourly (one CLI run, <= 10 s).
+        if login_at.map_or(true, |t| t.elapsed() >= super::login::CHECK_INTERVAL) {
+            login_at = Some(Instant::now());
+            let status = super::login::refresh(&app, &cli);
+            // Notifications belong to the menu bar, like the limit alerts.
+            if let (true, Some(s)) = (settings.menu_bar, &status) {
+                if let Some(a) = super::login::take_alert(&state.app_dir, s, now_ms()) {
+                    log::info!("[agents] sign-in alert: {}", a.key);
+                    if let Err(e) = app.notification().builder().title(&a.title).body(&a.body).show() {
+                        log::warn!("[agents] notification failed: {e}");
+                    }
+                }
+            }
+        }
         if reload.swap(false, Ordering::Relaxed)
             || index_at.map_or(true, |t| t.elapsed() >= INDEX_RELOAD)
         {
