@@ -128,6 +128,9 @@ pub(crate) fn parse_disks(data: &JsonValue) -> Vec<DiskReading> {
         .collect()
 }
 
+/// The disks and the named volume metrics read by `load_info`.
+type Storage = (Vec<DiskReading>, Vec<(String, f64)>);
+
 /// Volume sizes of a `load_info` answer (`data`): `volume_total_bytes:{id}` and
 /// `volume_used_bytes:{id}` for each volume that reports `size.total` and
 /// `size.used` (byte counts, sent as strings).
@@ -477,7 +480,7 @@ impl Synology {
     }
 
     /// `load_info`: the disks and the volume sizes.
-    fn storage(&self, s: &Session) -> Result<(Vec<DiskReading>, Vec<(String, f64)>), String> {
+    fn storage(&self, s: &Session) -> Result<Storage, String> {
         let data = self
             .call(&s.storage, "load_info", vec![("action", "load_info".to_string()), ("_sid", s.sid.clone())])
             .map_err(|e| e.message(API_STORAGE))?;
