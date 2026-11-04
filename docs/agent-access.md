@@ -8,7 +8,7 @@ It is off until you turn it on. To watch and answer Claude Code agents running o
 
 1. Open StudioManager, then Settings > Agents (Agent access card).
 2. Switch on "Allow AI agents to use StudioManager".
-3. Pick the organisations agents may use. The server refuses to read or write an organisation you leave unticked.
+3. Pick the organisations agents may use. The server refuses to read or write an organisation you leave unticked. An organisation created from now on starts unticked: tick it here when agents should use it.
 4. Optionally allow agents to read invoices, quotes and expenses (the "money" tools below). This is a separate switch and is off by default. The money tools appear in the AI app only after it restarts the StudioManager server (quit and reopen the AI app, or reconnect the server) after you switch this on.
 
 Open StudioManager at least once with each organisation after installing or updating. The server refuses to touch a database the app has not prepared and says "Open StudioManager once with this organisation, then try again."

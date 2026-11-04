@@ -92,6 +92,15 @@ pub fn write_access(dir: &Path, settings: &AccessSettings) -> Result<(), String>
     write_atomic(&dir.join(ACCESS_FILE), &format!("{json}\n"))
 }
 
+/// A new organisation starts unticked: agents may use it only once the owner
+/// ticks it in Settings. The server allows an organisation missing from
+/// `orgs`, so the new id is written as `false`. Every other setting is kept.
+pub fn withhold_new_org(dir: &Path, id: &str) -> Result<(), String> {
+    let mut settings = read_access(dir);
+    settings.orgs.insert(id.to_string(), false);
+    write_access(dir, &settings)
+}
+
 /// The newest `limit` log entries, newest first; unreadable lines skipped.
 pub fn read_recent(dir: &Path, limit: usize) -> Vec<LogEntry> {
     let raw = std::fs::read_to_string(dir.join(LOG_FILE)).unwrap_or_default();
@@ -735,6 +744,27 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&config).unwrap(), "{ not json");
         let entries: Vec<_> = std::fs::read_dir(&dir).unwrap().collect();
         assert_eq!(entries.len(), 1, "no backup or temp file left behind");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn new_org_starts_unticked_and_keeps_the_rest() {
+        let dir = tmp_dir("withhold");
+        // No settings file yet: the new organisation is still recorded.
+        withhold_new_org(&dir, "new001").unwrap();
+        assert_eq!(read_access(&dir).orgs.get("new001"), Some(&false));
+
+        let settings = AccessSettings {
+            enabled: true,
+            allow_money: true,
+            orgs: HashMap::from([("old001".to_string(), true)]),
+        };
+        write_access(&dir, &settings).unwrap();
+        withhold_new_org(&dir, "new002").unwrap();
+        let after = read_access(&dir);
+        assert!(after.enabled && after.allow_money);
+        assert_eq!(after.orgs.get("old001"), Some(&true));
+        assert_eq!(after.orgs.get("new002"), Some(&false));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
