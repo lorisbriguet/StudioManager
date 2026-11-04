@@ -52,6 +52,19 @@ The terminal attaches to the agent only. You can use `!` commands inside Claude,
 
 You get a Mac notification when an agent has been waiting for you for a few seconds, so a prompt that resolves at once stays silent. Each agent notifies at most once every three minutes, however often it goes back to waiting. It only works while StudioManager is open.
 
+## Claude sign-in
+
+A claude.ai sign-in ends on a set date, and once it has ended agents stop working. The page tells you before that happens. It reads the date from `claude auth status`, which reports `loginExpiresAt` from Claude Code 2.1.318.
+
+- **More than 10 days left:** a muted line under the page title, "Claude sign-in until 8 Nov".
+- **10 days or fewer:** a warning on the page and in the [menu bar](menu-bar.md) Agents tab: "Claude sign-in ends in 4 days (8 Nov). Run claude auth login in a terminal."
+- **Ended, or signed out:** the same place, in red.
+- **Check again** (on the warning) reads the status right away, so it clears as soon as you have signed in again.
+
+The app checks when Agents start and then every hour. Days left are counted from the last check, so the warning stays right between checks. While the menu bar is on, you also get a Mac notification at 10, 3 and 1 day left, and when the sign-in has ended (or Claude is signed out). Each comes once per sign-in. A new sign-in starts over. Which ones were sent is kept in `login-alerts.json` in the app data folder.
+
+A sign-in with no end date shows nothing: an API key, or a token from `claude setup-token` in `CLAUDE_CODE_OAUTH_TOKEN`. The studio Mac mini signs in that second way (its SSH sessions read the token from `~/.config/claude-oauth.env`), and for it `claude auth status` gives `loginExpiresAt: null`, so the app cannot show its end. These tokens last about a year. The renewal is tracked as an Upkeep item in StudioManager instead.
+
 ## Morning brief comments
 
 The personal morning brief (the page the Start of day routine opens) lets you select a passage, write a note and **Send** it to the morning agent, which answers in its chat. StudioManager receives those comments, as AgentBar did before it:

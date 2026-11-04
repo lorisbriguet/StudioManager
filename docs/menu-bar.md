@@ -27,7 +27,7 @@ It has three tabs.
 
 ### Agents
 
-The same list as the Agents page: Needs you, Working, Idle and Done. You can answer a prompt right here, with the same safety rules as the page (see [Answer buttons](agents.md#answer-buttons)). Clicking an agent opens it in the main window.
+The same list as the Agents page: Needs you, Working, Idle and Done. You can answer a prompt right here, with the same safety rules as the page (see [Answer buttons](agents.md#answer-buttons)). Clicking an agent opens it in the main window. From 10 days before the Claude sign-in ends, a warning sits above the list (see [Claude sign-in](agents.md#claude-sign-in)).
 
 ### Usage
 
@@ -63,6 +63,8 @@ Limits appear after Claude Code's next reply.
 - when you are on pace to run out more than an hour before the window resets.
 
 Each alert fires once per window. Turned off, limits are still recorded, so nothing piles up when you turn it back on. Needs-you notifications keep working with the window closed.
+
+The menu bar also sends the [Claude sign-in](agents.md#claude-sign-in) reminders: at 10, 3 and 1 day before it ends, and when it has ended. They are always on while the menu bar is.
 
 ## Routines
 

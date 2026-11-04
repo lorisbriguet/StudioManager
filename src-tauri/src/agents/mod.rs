@@ -1,6 +1,7 @@
 pub mod actions;
 pub mod brief;
 pub mod cli;
+pub mod login;
 pub mod model;
 pub mod poller;
 pub mod projects;
@@ -27,6 +28,8 @@ pub struct AgentsState {
     pub last: Mutex<Vec<model::Agent>>,
     /// The transcript scan behind the Usage tab, and its last result (60 s cache).
     pub activity: Arc<Mutex<usage::activity::ActivityCache>>,
+    /// The last `claude auth status` (see login.rs); None before the first check.
+    pub login: Mutex<Option<login::LoginStatus>>,
 }
 
 impl AgentsState {
@@ -36,7 +39,7 @@ impl AgentsState {
             Arc::new(pty::RealSpawner::new(login_env.clone())),
             Arc::new(pty::SystemClock),
         );
-        Self { app_dir, login_env, hub, last: Mutex::new(Vec::new()), activity: Default::default() }
+        Self { app_dir, login_env, hub, last: Mutex::new(Vec::new()), activity: Default::default(), login: Mutex::new(None) }
     }
 
     /// The cached login-shell environment, for use on a blocking thread: resolving it runs a

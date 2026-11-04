@@ -233,6 +233,27 @@ export function isInside(path: string, folder: string): boolean {
 /** The full agent list; carried by the `agents:changed` event. */
 export const AGENTS_CHANGED = "agents:changed";
 
+/** `claude auth status`, as the poller last read it (hourly). */
+export interface LoginStatus {
+  loggedIn: boolean;
+  authMethod: string | null;
+  /** Epoch ms; null when the CLI gives no date (an env token, an API key). */
+  expiresAt: number | null;
+  checkedAt: number;
+}
+
+/** Sent after every sign-in check, with the status (null before any check succeeded). */
+export const AGENTS_LOGIN = "agents:login";
+
+export function getLoginStatus(): Promise<LoginStatus | null> {
+  return invoke<LoginStatus | null>("agents_login_status");
+}
+
+/** Runs `claude auth status` now (after a fresh `claude auth login`). */
+export function checkLogin(): Promise<LoginStatus | null> {
+  return invoke<LoginStatus | null>("agents_login_check");
+}
+
 /** Rejects with "Agents are switched off" while the switch is off. */
 export function listAgents(): Promise<Agent[]> {
   return invoke<Agent[]>("agents_list");
