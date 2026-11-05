@@ -2,6 +2,8 @@
 
 Step-by-step guidelines for publishing a new release on GitHub. Follow in order; every gate must pass before moving on. (Claude Code users: the `GitPublisher` skill automates this process — these are the same rules in human-readable form.)
 
+**Building on GitHub instead of this Mac:** after the version bump, the changelog and the tag (steps 3, 5, 7 up to `git push origin main --tags`), run Actions › **Release build** › Run workflow with the version (`gh workflow run release.yml -f version=X.Y.Z`) and approve it when it asks (the `release` environment). It runs the gates of steps 1 and 2, builds and signs (step 4), writes `latest.json` (step 6) and creates a **draft** release with the three assets. Download the `.dmg` from the draft, smoke-test it, then publish the draft and do step 8. One-time setup: the updater key as the `TAURI_SIGNING_PRIVATE_KEY` secret of the `release` environment (`gh secret set TAURI_SIGNING_PRIVATE_KEY --env release < ~/.tauri/StudioManager.key`). The workflow is [.github/workflows/release.yml](.github/workflows/release.yml).
+
 ---
 
 ## 0. Prerequisites (one-time setup)
