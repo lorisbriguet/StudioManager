@@ -43,9 +43,12 @@ import type { Task, Subtask, TaskStatus } from "../types/task";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 import { PILL } from "../components/ui/tokens";
+import { useStartAgentOn } from "../hooks/useStartAgentOn";
+import { agentMenuItems } from "../lib/agentStart";
 
 export function TasksPage() {
   const t = useT();
+  const { enabled: agentsOn, start: startAgentOn } = useStartAgentOn();
   const draftKey = useDraftKeys();
   const openTab = useTabStore((s) => s.openTab);
   // V1.11 C1: tasks of cancelled/completed projects are hidden, so their
@@ -610,6 +613,7 @@ export function TasksPage() {
           items={[
             { label: ctxMenu.item.status === "done" ? t.todo : t.done, onClick: () => updateTask.mutate({ id: ctxMenu.item.id, data: { status: ctxMenu.item.status === "done" ? "todo" : "done" } }) },
             { label: t.open_in_new_tab, icon: ICONS.newTab, onClick: () => openTab(`/projects/${ctxMenu.item.project_id}`, projectName(ctxMenu.item.project_id)) },
+            ...agentMenuItems(agentsOn, startAgentOn, { kind: "task", id: ctxMenu.item.id }),
             { label: "", divider: true, onClick: () => {} },
             { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => deleteWithUndo(deleteTask, ctxMenu.item.id, t.toast_task_deleted) },
           ]}
@@ -622,6 +626,7 @@ export function TasksPage() {
           onClose={() => setSubCtxMenu(null)}
           items={[
             { label: subCtxMenu.item.status === "done" ? t.todo : t.done, onClick: () => updateSubtask.mutate({ id: subCtxMenu.item.id, data: { status: subCtxMenu.item.status === "done" ? "todo" : "done" } }) },
+            ...agentMenuItems(agentsOn, startAgentOn, { kind: "subtask", id: subCtxMenu.item.id }),
             { label: "", divider: true, onClick: () => {} },
             { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => deleteWithUndo(deleteSubtask, subCtxMenu.item.id, t.toast_subtask_deleted) },
           ]}
@@ -634,6 +639,7 @@ export function TasksPage() {
           onClose={() => setHeaderCtxMenu(null)}
           items={[
             { label: t.open_in_new_tab, icon: ICONS.newTab, onClick: () => openTab(`/projects/${headerCtxMenu.item.projectId}`, headerCtxMenu.item.projectName) },
+            ...agentMenuItems(agentsOn, startAgentOn, { kind: "project", id: headerCtxMenu.item.projectId }),
           ]}
         />
       )}

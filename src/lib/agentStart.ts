@@ -8,6 +8,8 @@ import { getSubtaskById, getTaskById } from "../db/queries/tasks";
 import { confirm } from "./confirm";
 import { getLabels } from "./notify";
 import { isInside, type StartFolder } from "./agents";
+import { ICONS } from "../components/ui/icons";
+import type { ContextMenuItem } from "../components/ui/ContextMenu";
 
 export type AgentKind = "task" | "subtask" | "project";
 
@@ -120,4 +122,14 @@ export async function loadAgentItem(target: AgentTarget, orgId: string): Promise
     project: { id: p.id, name: p.name, folder: p.folder_path || null },
     orgId,
   };
+}
+
+/** The "Start work with agent" menu entry, or none while agents are off. Spread into a menu's items. */
+export function agentMenuItems(
+  enabled: boolean,
+  start: (target: AgentTarget) => unknown,
+  target: AgentTarget,
+): ContextMenuItem[] {
+  if (!enabled) return [];
+  return [{ label: getLabels().agents_start_work, icon: ICONS.agents, onClick: () => void start(target) }];
 }
