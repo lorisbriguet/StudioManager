@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { open as openDirectory } from "@tauri-apps/plugin-dialog";
 import { isInside, startAgent, startFolders, trustFolder, type StartFolder } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
-import { useConfirm } from "../../lib/confirm";
+import { confirmTrust } from "../../lib/agentStart";
 import { Button, Callout, FormActions, FormField, FormGrid, FormLayout, ICONS, Input, Select, Textarea } from "../ui";
 import { ModelMenu } from "./ModelMenu";
 import { logError } from "../../lib/log";
@@ -45,7 +45,6 @@ interface StartAgentFormProps {
 
 export function StartAgentForm({ onStarted, onCancel }: StartAgentFormProps) {
   const t = useT();
-  const confirm = useConfirm();
   const [folders, setFolders] = useState<StartFolder[]>([]);
   const [folder, setFolder] = useState("");
   const [task, setTask] = useState("");
@@ -98,13 +97,7 @@ export function StartAgentForm({ onStarted, onCancel }: StartAgentFormProps) {
     let target = folder;
     const picked = folders.find((f) => f.path === folder);
     if (picked && !picked.trusted) {
-      const yes = await confirm({
-        title: t.agents_trust_title.replace("{folder}", folder),
-        message: picked.home ? t.agents_trust_home_message : t.agents_trust_message,
-        confirmLabel: t.agents_trust_confirm,
-        tone: picked.home ? "danger" : "default",
-      });
-      if (!yes) return;
+      if (!(await confirmTrust(folder, picked.home))) return;
       setBusy(true);
       try {
         target = await trustFolder(folder);
