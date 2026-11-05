@@ -25,6 +25,7 @@ vi.mock("../db/hooks/useUpkeep", () => ({
 }));
 vi.mock("../db/hooks/useConnections", () => ({ useEquipmentConnections: () => q([]), useLatestMetricsFor: () => [] }));
 vi.mock("../hooks/useTimeMachine", () => ({ useTimeMachine: () => q(tm) }));
+vi.mock("../hooks/useTailscale", () => ({ useTailscale: () => q(null) }));
 vi.mock("../lib/network/commands", () => ({
   networkCheck: (t: { key: string }[]) => networkCheck(t),
   openRemoteLink: (id: number) => openRemoteLink(id),
