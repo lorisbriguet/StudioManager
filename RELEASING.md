@@ -121,7 +121,23 @@ gh release create vX.Y.Z \
 - `git status` clean; tag, `package.json`, `tauri.conf.json`, `Cargo.toml`, [README](README.md) badge all agree.
 - `curl -sL https://github.com/lorisbriguet/StudioManager/releases/latest/download/latest.json` returns the new version with a non-empty signature.
 - On an installed previous version: Settings → check for updates → the update downloads AND installs (this is the real signature test).
+- Menu bar, by hand on the installed build (no test covers macOS windows, Spaces or focus): see [Menu bar checks](#menu-bar-checks) below.
 - Note follow-ups/risks in [IDEAS.md](IDEAS.md).
+
+### Menu bar checks
+
+Run these with Agents and **Show in menu bar** on (see [the menu bar guide](docs/menu-bar.md)). Each line is one thing that broke before or that only a real Mac shows.
+
+1. **Login:** log out and in. StudioManager starts with its window hidden, and the icon is in the menu bar.
+2. **Close vs quit:** close the main window: the icon stays and the Dock icon stays. Click the Dock icon: the window comes back. Cmd+Q: the icon goes away.
+3. **Focus:** in Finder, click the icon. The panel opens, Finder's menus stay in the menu bar, and the main window does not come forward. Type in the panel: the keys go to the panel.
+4. **Closing the panel:** click the desktop, another app, then the main window. Each closes the panel, and the app you clicked keeps the focus.
+5. **Spaces:** switch to another Space and click the icon. The panel opens on that Space, with no jump back to the first one.
+6. **Full screen:** put another app in full screen and click the icon. The panel shows over it.
+7. **Needs you:** start an agent that asks a question. The icon turns amber and the Agents tab lists it under Needs you. Answer from the panel: the icon goes back to normal.
+8. **Usage:** after a Claude Code reply, the Usage tab shows the plan limits with a reset time.
+9. **Day:** run a command routine by hand. It asks first, then shows Running and then Done with its last output line. Run a long one (for example a script that sleeps a minute) and Cmd+Q while it runs: the script stops too (`ps` no longer lists it), and after a restart the Day tab shows it as Interrupted.
+10. **Theme and language:** switch dark/light and FR/EN in Settings. The open panel follows without a restart.
 
 ## Demo build (never published)
 
