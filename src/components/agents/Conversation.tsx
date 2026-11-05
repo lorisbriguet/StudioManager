@@ -5,7 +5,7 @@ import { ChevronRight } from "lucide-react";
 import { conversation, type Item } from "../../lib/agents";
 import { settle, unread, useSent } from "../../lib/outbox";
 import { useT } from "../../i18n/useT";
-import { EmptyState, ICONS, ICON_SIZE } from "../ui";
+import { EmptyState, IconButton, ICONS, ICON_SIZE } from "../ui";
 import { ExternalLink } from "./ExternalLink";
 import { CodeBlock } from "./CodeBlock";
 
@@ -43,6 +43,8 @@ export function Conversation({ sessionId, working }: ConversationProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
+  /** Shown state of `stickRef`: off while the reader is scrolled up (the jump button shows). */
+  const [atBottom, setAtBottom] = useState(true);
 
   useEffect(() => {
     setItems([]);
@@ -83,11 +85,35 @@ export function Conversation({ sessionId, working }: ConversationProps) {
     if (!scroller) return;
     const onScroll = () => {
       stickRef.current = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= STICK_PX;
+      setAtBottom(stickRef.current);
       captureAnchor();
     };
     scroller.addEventListener("scroll", onScroll, { passive: true });
     return () => scroller.removeEventListener("scroll", onScroll);
   }, []);
+
+  // Pinned to the bottom until the reader scrolls up: also when the size changes after a
+  // load (the panel still sliding in, the window shown after it rendered, code blocks laid
+  // out late). A single jump on load was lost in those cases and the chat opened at the top.
+  useEffect(() => {
+    const root = rootRef.current;
+    const scroller = root?.parentElement;
+    if (!root || !scroller || typeof ResizeObserver === "undefined") return;
+    const pin = () => {
+      if (stickRef.current) scroller.scrollTop = scroller.scrollHeight;
+    };
+    const observer = new ResizeObserver(pin);
+    observer.observe(root);
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, []);
+
+  const jumpToLatest = () => {
+    const scroller = rootRef.current?.parentElement;
+    stickRef.current = true;
+    setAtBottom(true);
+    scroller?.scrollTo?.({ top: scroller.scrollHeight, behavior: "smooth" });
+  };
 
   // The transcript is the last 300 items: a new message pushes the oldest off the top and
   // everything below moves up. WebKit has no scroll anchoring, so a reader scrolled up would
@@ -128,6 +154,7 @@ export function Conversation({ sessionId, working }: ConversationProps) {
   // Opening another agent starts at its latest message.
   useEffect(() => {
     stickRef.current = true;
+    setAtBottom(true);
   }, [sessionId]);
 
   // Messages sent from here that the transcript does not show yet.
@@ -179,6 +206,17 @@ export function Conversation({ sessionId, working }: ConversationProps) {
           ))}
           {busyNow && <WorkingDots label={t.agents_working} />}
           <div ref={endRef} />
+          {!atBottom && (
+            // Sticks to the bottom of the scroller while the reader is scrolled up.
+            <div className="sticky bottom-3 flex justify-end pointer-events-none">
+              <IconButton
+                icon={ICONS.scrollToLatest}
+                label={t.agents_scroll_latest}
+                onClick={jumpToLatest}
+                className="pointer-events-auto rounded-full bg-[var(--color-surface)] border border-[var(--color-input-border)] shadow-menu"
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

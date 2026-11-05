@@ -21,11 +21,14 @@ The app asks your login shell (zsh, or bash if that is your shell) where `claude
 
 Agents are grouped as **Needs you**, **Working**, **Idle** and **Done**. Each one is labelled Organisation > Client > Project when its folder is linked to a project, across all organisations. Otherwise it shows the folder name.
 
+Right-click an agent to **flag** it. A flagged agent that is idle or done moves to a **Flagged** group at the top, so it is easy to find again; one that works or needs you stays in its group with a flag. Flags are kept on this Mac and show in the menu bar panel too. Right-click again to remove the flag.
+
 An agent in Needs you that has waited for more than 2 hours with no change, or that you dismiss, moves to Idle. A dismissal covers only the current wait: the next time that agent needs you, it shows in Needs you again.
 
 For each agent you can read the conversation. Agents started in the background (from this page or with `claude --bg`) also let you send a message, switch model, stop or delete them. Agents started in a terminal are listed and readable only. In Needs you you can also dismiss an agent.
 
 - **Send a message:** not while a prompt is open, and not for agents started in a terminal. The message always reaches the agent as text: it is pasted in one piece, then Enter is pressed. A message that starts with `!` or `/` gets a space in front, so it never runs a shell command or a slash command such as `/clear`: use the terminal for those. If a prompt opens while the message is being pasted, Enter is not pressed and the message stays in the agent's input. A message you sent shows greyed out ("Sent, not read yet") until the agent's conversation holds it, then turns into a normal message. The app only remembers it while it is open; one the agent never shows is dropped after 30 minutes.
+- **Reading:** the conversation opens at the latest message and follows new replies while you are at the bottom. Scroll up and it stays where you are; a round arrow button at the bottom brings you back to the latest message.
 - **Switch model:** stops the agent and continues the same conversation as a new agent on the model you pick.
 
 Starting an agent (or the new agent of a model switch) can take a while: the app waits up to a minute for `claude`. If that is not enough, it looks for the agent in the list by its name and folder, so an agent that did start is not reported as failed and is not started twice. Other `claude` commands (list, stop, delete) are given 10 seconds.

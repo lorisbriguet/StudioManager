@@ -9,6 +9,7 @@ import { useTabStore } from "../../stores/tab-store";
 import { confirmIfDirty } from "../../lib/dirty-guard";
 import { useUnreadNotificationCount } from "../../db/hooks/useNotifications";
 import { useUpkeepOverview } from "../../db/hooks/useUpkeep";
+import { usePaperlessInbox } from "../../db/hooks/usePaperlessInbox";
 import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
 import type { UIKey } from "../../i18n/ui";
@@ -51,6 +52,8 @@ export function Sidebar() {
   const showNetworkPage = useAppStore((s) => s.showNetworkPage);
   const { data: unreadCount = 0 } = useUnreadNotificationCount();
   const { overdueCount } = useUpkeepOverview();
+  // Paperless documents waiting to be checked on the Expenses page (not linked or dismissed).
+  const toCheckCount = usePaperlessInbox().items.filter((i) => i.state === "new").length;
   const openTab = useTabStore((s) => s.openTab);
   const t = useT();
   const navigate = useNavigate();
@@ -215,10 +218,11 @@ export function Sidebar() {
           const label = t[item.labelKey];
           const isNotifications = item.labelKey === "notifications";
           const isUpkeep = item.labelKey === "upkeep";
-          const badgeCount = isNotifications ? unreadCount : isUpkeep ? overdueCount : 0;
+          const isExpenses = item.labelKey === "expenses";
+          const badgeCount = isNotifications ? unreadCount : isUpkeep ? overdueCount : isExpenses ? toCheckCount : 0;
           const isFocused = focusIdx === currentLinkIdx;
           // Collapsed, the link is only an icon: it takes its name from aria-label and shows it in a Tooltip.
-          const collapsedName = isNotifications && unreadCount > 0 ? `${label} (${unreadCount})` : label;
+          const collapsedName = badgeCount > 0 ? `${label} (${badgeCount})` : label;
           const link = (
             <NavLink
               key={item.to}

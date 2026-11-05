@@ -85,6 +85,13 @@ All 12 checklist items pass after three fixes found by the pass:
 - [x] Test Mode and Presentation Mode are demo-build tools now: their Settings category is hidden in the real app (banners and exit paths stay for anyone mid-mode at update time); the Snapshot card moved under Backup
 - [x] Docs: guide, [README](README.md) and landing page no longer point testers at Presentation Mode
 
+## Next release — in progress
+
+- [x] Menu bar: Cmd+Q stops a running command routine; the panel may call only its 14 commands; menu bar checks in [RELEASING.md](RELEASING.md#menu-bar-checks)
+- [x] Agents: flag a conversation (right-click), Flagged group on top; jump-to-latest button; the conversation no longer opens at the first message ([docs](docs/agents.md#the-page))
+- [x] Sidebar: Expenses shows how many Paperless documents wait to be checked
+- [ ] Right-click a task, subtask or project to start an agent on it (next)
+
 ## V3.3.1 — Done (agent Upkeep tools back)
 
 - [x] Agent Upkeep tools shipped (they were on an unmerged branch, so 3.3.0 lacked them): service log, machines, upkeep items, consumables, subscriptions, each asking first ([Agent access](docs/agent-access.md))
