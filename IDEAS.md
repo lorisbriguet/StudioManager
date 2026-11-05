@@ -130,7 +130,7 @@ Design: [specs/2026-10-28-agents-window-design.md](docs/superpowers/specs/2026-1
 - [x] Menu bar: the agent bar inside StudioManager, with plan limits, alerts and a Day tab of routines ([docs](docs/menu-bar.md); design: [specs/2026-10-28-menu-bar-design.md](docs/superpowers/specs/2026-10-28-menu-bar-design.md))
 - [x] Full check of 2026-10-29: all 43 interface findings and the P1/P2 security and backend findings fixed ([report](docs/audits/2026-10-29-full-check.md)); quieter "needs you" notifications, one row per resumed session; menus no longer flash in the corner
 - [x] Follow-up: Cmd+Q stops a command routine still running, and what it started (E.7 of the full check); menu bar checks by hand in [RELEASING.md](RELEASING.md#menu-bar-checks)
-- [ ] Follow-up: Per-window command ACL (AppManifest) so the menu bar panel can only call its own commands
+- [x] Follow-up: Per-window command ACL (AppManifest): the menu bar panel can call only its 14 commands ([docs](docs/menu-bar.md#what-the-panel-can-do))
 - [ ] Follow-up: verify the MCP sidecar the app registers (G.9 of the full check)
 
 ## V2.3.0 — Done (wiki vault)

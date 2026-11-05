@@ -862,6 +862,88 @@ mod tests {
         ActiveOrg { id: id.into(), dir: PathBuf::from("/nowhere"), db_name: db_name.into() }
     }
 
+    /// The quoted names between `start` and the `]` that follows it.
+    fn quoted_after(src: &str, start: &str) -> Vec<String> {
+        let rest = &src[src.find(start).unwrap_or_else(|| panic!("{start} not found")) + start.len()..];
+        let block = &rest[..rest.find(']').unwrap()];
+        block.split('"').skip(1).step_by(2).map(String::from).collect()
+    }
+
+    /// The commands each window may call stay in step with the handler: one declared in
+    /// `generate_handler!` but not in build.rs would be refused everywhere, and the menu bar
+    /// panel never gets the powerful ones.
+    #[test]
+    fn window_command_lists_match_the_handler() {
+        let lib = include_str!("lib.rs");
+        let block = &lib[lib.find("generate_handler![").unwrap() + 18..];
+        let block = &block[..block.find("])").unwrap()];
+        let mut handler: Vec<String> = block
+            .split(',')
+            .map(|s| s.trim().rsplit("::").next().unwrap().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        handler.sort();
+
+        let mut declared = quoted_after(include_str!("../build.rs"), "const COMMANDS: &[&str] = &[");
+        declared.sort();
+        assert_eq!(declared, handler, "build.rs COMMANDS must list every command in generate_handler!");
+
+        let sets = include_str!("../permissions/windows.toml");
+        let allow = |c: &str| format!("allow-{}", c.replace('_', "-"));
+        let mut main = quoted_after(sets, "identifier = \"main-window\"");
+        main.retain(|p| p.starts_with("allow-"));
+        main.sort();
+        let mut every: Vec<String> = handler.iter().map(|c| allow(c)).collect();
+        every.sort();
+        assert_eq!(main, every, "the main window allows every command");
+
+        let mut panel = quoted_after(sets, "identifier = \"menubar-window\"");
+        panel.retain(|p| p.starts_with("allow-"));
+        assert_eq!(panel.len(), 14, "{panel:?}");
+        for p in &panel {
+            assert!(every.contains(p), "{p} is not a command");
+        }
+        for never in ["execute_batch", "routines_save", "agents_term_write", "agents_send", "agents_start", "set_agent_access", "connection_save_secret"] {
+            assert!(!panel.contains(&allow(never)), "the panel must not call {never}");
+        }
+    }
+
+    /// Tauri's own check, with the real capabilities: the panel is refused a command outside
+    /// its set before any handler runs, the main window is not. No handlers are registered,
+    /// so a command that passes the check answers "not found" instead.
+    #[test]
+    fn the_panel_window_is_refused_other_commands() {
+        use tauri::test::{get_ipc_response, mock_builder, INVOKE_KEY};
+        let app = mock_builder().build(tauri::generate_context!(test = true)).unwrap();
+        let window = |label: &str| {
+            app.get_webview_window(label).unwrap_or_else(|| {
+                tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::App("index.html".into()))
+                    .build()
+                    .unwrap()
+            })
+        };
+        let call = |label: &str, cmd: &str| {
+            let req = tauri::webview::InvokeRequest {
+                cmd: cmd.into(),
+                callback: tauri::ipc::CallbackFn(0),
+                error: tauri::ipc::CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: tauri::ipc::InvokeBody::default(),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            };
+            get_ipc_response(&window(label), req).unwrap_err().to_string()
+        };
+        let refused = |e: &str| e.contains("not allowed");
+        for cmd in ["execute_batch", "routines_save", "agents_term_write", "set_agent_access"] {
+            assert!(refused(&call("menubar", cmd)), "panel {cmd}: {}", call("menubar", cmd));
+            assert!(!refused(&call("main", cmd)), "main {cmd}: {}", call("main", cmd));
+        }
+        for cmd in ["agents_list", "routines_run", "menubar_open_main"] {
+            assert!(!refused(&call("menubar", cmd)), "panel {cmd}: {}", call("menubar", cmd));
+        }
+    }
+
     #[test]
     fn a_batch_target_must_be_a_plain_organisation_id() {
         let app = std::env::temp_dir().join(format!("sm-batch-{}", std::process::id()));
