@@ -837,6 +837,13 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
+            // Cmd+Q: stop the command routines still running, so none outlives the app.
+            if let tauri::RunEvent::Exit = event {
+                let stopped = agents::routines::run::stop_all();
+                if stopped > 0 {
+                    log::info!("[routines] stopped {stopped} running command(s) on quit");
+                }
+            }
             // Dock click while the window is hidden: bring it back.
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = event {

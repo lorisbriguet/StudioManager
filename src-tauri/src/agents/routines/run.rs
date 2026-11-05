@@ -96,18 +96,22 @@ pub fn run_command(
     if let Some(err) = child.stderr.take() {
         read_into(err, tail.clone(), done_tx);
     }
+    let group = child.id() as libc::pid_t;
+    track_group(group);
     let started = Instant::now();
     let mut timed_out = false;
     let code = loop {
-        match child.try_wait() {
+        match try_wait_tracked(&mut child, group) {
             Ok(Some(status)) => break status.code(),
             Ok(None) if started.elapsed() >= timeout => {
                 timed_out = true;
+                untrack_group(group);
                 kill_group(&mut child);
                 break None;
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(20)),
             Err(_) => {
+                untrack_group(group);
                 kill_group(&mut child);
                 break None;
             }
@@ -134,6 +138,59 @@ fn kill_group(child: &mut std::process::Child) {
     unsafe { libc::kill(-(child.id() as libc::pid_t), libc::SIGKILL) };
     let _ = child.kill();
     let _ = child.wait();
+}
+
+/// Process groups of the commands running now, so quitting the app can stop them.
+static GROUPS: Mutex<Option<HashSet<libc::pid_t>>> = Mutex::new(None);
+
+fn track_group(group: libc::pid_t) {
+    GROUPS.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(HashSet::new).insert(group);
+}
+
+fn untrack_group(group: libc::pid_t) {
+    if let Some(set) = GROUPS.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+        set.remove(&group);
+    }
+}
+
+/// `try_wait` under the groups lock: once the child is reaped its pid can be reused, so it
+/// leaves the set before `stop_all` could signal a stranger's group.
+fn try_wait_tracked(
+    child: &mut std::process::Child,
+    group: libc::pid_t,
+) -> std::io::Result<Option<std::process::ExitStatus>> {
+    let mut held = GROUPS.lock().unwrap_or_else(|e| e.into_inner());
+    let res = child.try_wait();
+    if !matches!(res, Ok(None)) {
+        if let Some(set) = held.as_mut() {
+            set.remove(&group);
+        }
+    }
+    res
+}
+
+/// Whether a command with this process group is running now.
+#[cfg(test)]
+fn is_tracked(group: libc::pid_t) -> bool {
+    GROUPS.lock().unwrap_or_else(|e| e.into_inner()).as_ref().is_some_and(|s| s.contains(&group))
+}
+
+/// Kills every running command and what it started. Called when the app quits: a command
+/// must not outlive StudioManager with nobody to record how it ended (the Day tab then shows
+/// it as interrupted). Returns how many were stopped.
+pub fn stop_all() -> usize {
+    stop_where(|_| true)
+}
+
+fn stop_where(pick: impl Fn(libc::pid_t) -> bool) -> usize {
+    let held = GROUPS.lock().unwrap_or_else(|e| e.into_inner());
+    let groups: Vec<libc::pid_t> = held.iter().flatten().copied().filter(|g| pick(*g)).collect();
+    for g in &groups {
+        // SAFETY: kill(2) on a process group of a child that is not reaped yet (the lock is
+        // held, and a reaped child leaves the set under it).
+        unsafe { libc::kill(-g, libc::SIGKILL) };
+    }
+    groups.len()
 }
 
 /// Reads a pipe on a thread into the shared tail, keeping its last `TAIL_BYTES`.
@@ -508,6 +565,39 @@ mod tests {
         drop(held);
         assert!(!is_running(&id));
         assert!(claim(&id).is_ok());
+    }
+
+    #[test]
+    fn quitting_stops_running_commands() {
+        // The script prints its pid (= its process group) to a file, starts a grandchild and
+        // waits; stopping must end both, long before the sleep would.
+        let dir = std::env::temp_dir().join(format!("sm-quit-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let pid_file = dir.join("pid");
+        let script = format!("echo $$ > '{}'; sleep 30 & wait", pid_file.display());
+        let started = std::time::Instant::now();
+        let runner = std::thread::spawn(move || sh(&script, TIMEOUT));
+
+        let group = loop {
+            if let Some(g) = std::fs::read_to_string(&pid_file).ok().and_then(|s| s.trim().parse().ok()) {
+                if is_tracked(g) {
+                    break g;
+                }
+            }
+            assert!(started.elapsed() < Duration::from_secs(5), "command never started");
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        // Only this test's command: other tests run commands at the same time.
+        assert_eq!(stop_where(|g| g == group), 1);
+        let o = runner.join().unwrap();
+        assert!(started.elapsed() < Duration::from_secs(5), "{:?}", started.elapsed());
+        assert_eq!(o.code, None);
+        assert!(!o.timed_out);
+        assert_eq!(command_result(&o).message.as_deref(), Some("Stopped by a signal"));
+        assert!(!is_tracked(group));
+        // SAFETY: signal 0 only checks whether the group still exists.
+        assert_ne!(unsafe { libc::kill(-group, 0) }, 0, "the grandchild outlived the stop");
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
