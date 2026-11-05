@@ -159,7 +159,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - **19 Accent Colors** — customize the app appearance
 - **Smooth Animations** — page transitions, card fade-ins, counter animations (with reduce-motion support)
 - **Agent access** — let AI agents (Claude Desktop, Claude Code, other MCP apps) read and update your projects, tasks, clients and wiki: off by default, per organisation, never deletes, backs up before the first change; invoices and expenses only on request, read-only ([docs](docs/agent-access.md))
-- **Agents** — an optional page that lists your Claude Code agents by needs you / working / idle / done, labelled by project, with answer buttons, a terminal attached to the agent and a Mac notification when one waits: off by default, needs the `claude` CLI ([docs](docs/agents.md))
+- **Agents** — an optional page that lists your Claude Code agents by needs you / working / idle / done, labelled by project, with answer buttons, a terminal attached to the agent and a Mac notification when one waits; right-click a task, subtask, project or calendar event to start an agent on it in one click ([how](docs/agents.md#start-from-a-task)): off by default, needs the `claude` CLI ([docs](docs/agents.md))
 - **Menu bar** — an optional panel in the Mac menu bar with your agents, Claude plan limits with alerts, and daily routines you run by hand or on a schedule; keeps running when the window is closed ([docs](docs/menu-bar.md))
 - **Organisations** — run several fully separate businesses in one install (own database, documents, bank details, preferences and backups per organisation); switch with Cmd+Shift+O
 - **Batch Operations** — multi-select with bulk actions on all list pages
