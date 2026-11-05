@@ -1,6 +1,7 @@
 # Start an agent from a task — design
 
-Date: 2026-11-05 · Status: draft, for Loris's review. StudioManager subtask 297 (task 44, New Features).
+Date: 2026-11-05 · Status: approved by Loris (2026-11-05). StudioManager subtask 297 (task 44, New Features).
+Implementation plan: [2026-11-05-agent-from-task.md](../plans/2026-11-05-agent-from-task.md)
 
 Built on [DESIGN-SYSTEM.md](../../../DESIGN-SYSTEM.md). Extends the Agents page of the
 [agents window design](2026-10-28-agents-window-design.md) (user guide: [Agents](../../agents.md)). The agent reads
