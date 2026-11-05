@@ -32,6 +32,9 @@ import { PriorityBadge } from "./PriorityBadge";
 import { SortableSubtaskRow } from "./SortableSubtaskRow";
 import { AddRow, Checkbox, ICONS, IconButton, FilterChip, InlineRename, EmptyState } from "../ui";
 import { useDraftKeys } from "../../stores/draft-store";
+import { ContextMenu, type ContextMenuState } from "../ui/ContextMenu";
+import { useStartAgentOn } from "../../hooks/useStartAgentOn";
+import { agentMenuItems, type AgentTarget } from "../../lib/agentStart";
 
 export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
   projectId: number;
@@ -61,6 +64,17 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
   const [editingTask, setEditingTask] = useState<number | null>(null);
   const [editingSubtask, setEditingSubtask] = useState<number | null>(null);
   const [hoveredSubtask, setHoveredSubtask] = useState<number | null>(null);
+  const { enabled: agentsOn, start: startAgentOn } = useStartAgentOn();
+  // Rows have no menu of their own; the agent item is the only entry, so no handler while agents are off.
+  const [agentMenu, setAgentMenu] = useState<ContextMenuState<AgentTarget> | null>(null);
+  const openAgentMenu = (target: AgentTarget) =>
+    agentsOn
+      ? (e: React.MouseEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setAgentMenu({ x: e.clientX, y: e.clientY, item: target });
+        }
+      : undefined;
 
   const totalCount = tasks.length;
 
@@ -109,7 +123,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
 
           return (
             <div key={tk.id}>
-              <div className="flex items-center gap-2 py-1.5 group/task">
+              <div className="flex items-center gap-2 py-1.5 group/task" onContextMenu={openAgentMenu({ kind: "task", id: tk.id })}>
                 <IconButton
                   onClick={() => {
                     const next = new Set(expandedTasks);
@@ -203,7 +217,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                   }}>
                   <SortableContext items={filteredSubtasks.map((s) => s.id)} strategy={verticalListSortingStrategy}>
                   {filteredSubtasks.map((s) => (
-                    <SortableSubtaskRow key={s.id} id={s.id} hovered={hoveredSubtask === s.id} onHoverChange={setHoveredSubtask}>
+                    <SortableSubtaskRow key={s.id} id={s.id} hovered={hoveredSubtask === s.id} onHoverChange={setHoveredSubtask} onContextMenu={openAgentMenu({ kind: "subtask", id: s.id })}>
                       <Checkbox
                         checked={s.status === "done"}
                         aria-label={`${t.mark_done}: ${s.title}`}
@@ -267,6 +281,14 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
           <EmptyState size="sm" message={taskFilter === "todo" ? t.project_tasks_all_done : t.project_tasks_none_done} />
         )}
       </div>
+      {agentMenu && (
+        <ContextMenu
+          x={agentMenu.x}
+          y={agentMenu.y}
+          onClose={() => setAgentMenu(null)}
+          items={agentMenuItems(agentsOn, startAgentOn, agentMenu.item)}
+        />
+      )}
     </div>
   );
 }

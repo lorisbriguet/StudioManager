@@ -29,6 +29,10 @@ import type { WorkloadColumn } from "../types/workload";
 import { DEFAULT_WORKLOAD_COLUMNS } from "../types/workload";
 import { SegmentedControl } from "../components/ui/SegmentedControl";
 import { MENU_ITEM } from "../components/ui/Dropdown";
+import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu";
+import { useStartAgentOn } from "../hooks/useStartAgentOn";
+import { agentMenuItems, calendarAgentTarget, type AgentTarget } from "../lib/agentStart";
+import type { EventMountArg } from "@fullcalendar/core";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 function toDateStr(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
@@ -111,6 +115,7 @@ function getTaskEventColor(
 
 export function CalendarPage() {
   const t = useT();
+  const { enabled: agentsOn, start: startAgentOn } = useStartAgentOn();
   const { data: tasks } = useTasksWithDueDate();
   const { data: subtasks } = useQuery({ queryKey: ["subtasks", "with-due-date"], queryFn: getSubtasksWithDueDate });
   const { data: projects } = useProjects();
@@ -362,6 +367,31 @@ export function CalendarPage() {
     }
   }, [navigate, projectOpenMode]);
 
+  // Right-click on a task, subtask or deadline event: "Open" and "Start work with agent".
+  // Events mount once, so the listener reads whether agents are on from a ref.
+  const [eventMenu, setEventMenu] = useState<
+    ContextMenuState<{ target: AgentTarget; props: Record<string, unknown> }> | null
+  >(null);
+  const agentsOnRef = useRef(agentsOn);
+  agentsOnRef.current = agentsOn;
+  const menuListeners = useRef(new WeakMap<HTMLElement, (e: MouseEvent) => void>());
+  const handleEventDidMount = useCallback((arg: EventMountArg) => {
+    const props = arg.event.extendedProps;
+    const target = calendarAgentTarget(props);
+    if (!target) return;
+    const onMenu = (e: MouseEvent) => {
+      if (!agentsOnRef.current) return;
+      e.preventDefault();
+      setEventMenu({ x: e.clientX, y: e.clientY, item: { target, props } });
+    };
+    menuListeners.current.set(arg.el, onMenu);
+    arg.el.addEventListener("contextmenu", onMenu);
+  }, []);
+  const handleEventWillUnmount = useCallback((arg: EventMountArg) => {
+    const onMenu = menuListeners.current.get(arg.el);
+    if (onMenu) arg.el.removeEventListener("contextmenu", onMenu);
+  }, []);
+
   const handleClosePeek = useCallback(() => {
     setClosingPeek(true);
   }, []);
@@ -543,6 +573,8 @@ export function CalendarPage() {
             eventDrop={handleEventDrop}
             eventResize={handleEventResize}
             eventClick={handleEventClick}
+            eventDidMount={handleEventDidMount}
+            eventWillUnmount={handleEventWillUnmount}
             eventContent={renderEventContent}
             dateClick={handleDateClick}
             firstDay={1}
@@ -564,6 +596,17 @@ export function CalendarPage() {
             projects={activeProjects}
             onSubmit={handleQuickCreate}
             onClose={() => setQuickCreate(null)}
+          />
+        )}
+        {eventMenu && (
+          <ContextMenu
+            x={eventMenu.x}
+            y={eventMenu.y}
+            onClose={() => setEventMenu(null)}
+            items={[
+              { label: t.view_details, icon: ICONS.preview, onClick: () => handleEventClick({ event: { extendedProps: eventMenu.item.props } }) },
+              ...agentMenuItems(agentsOn, startAgentOn, eventMenu.item.target),
+            ]}
           />
         )}
       </div>

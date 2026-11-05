@@ -10,6 +10,8 @@ import type { Subtask } from "../types/task";
 import { useAppStore } from "../stores/app-store";
 import { useTabStore } from "../stores/tab-store";
 import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu";
+import { useStartAgentOn } from "../hooks/useStartAgentOn";
+import { agentMenuItems } from "../lib/agentStart";
 import { BulkActionBar } from "../components/ui/BulkActionBar";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
@@ -67,6 +69,7 @@ export function ProjectsPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
   const t = useT();
+  const { enabled: agentsOn, start: startAgentOn } = useStartAgentOn();
 
   const handleDividerPointerDown = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
@@ -397,6 +400,7 @@ export function ProjectsPage() {
           items={[
             { label: t.view_details, icon: ICONS.preview, onClick: () => navigate(`/projects/${ctxMenu.item.id}`) },
             { label: t.open_in_new_tab, icon: ICONS.newTab, onClick: () => openTab(`/projects/${ctxMenu.item.id}`, ctxMenu.item.name) },
+            ...agentMenuItems(agentsOn, startAgentOn, { kind: "project", id: ctxMenu.item.id }),
             { label: "", divider: true, onClick: () => {} },
             { label: t.delete, icon: ICONS.delete, danger: true, onClick: async () => {
               const project = ctxMenu.item;

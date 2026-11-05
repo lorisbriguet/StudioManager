@@ -41,6 +41,18 @@ The folder list shows the folders you already trusted in Claude first (linked pr
 
 Trust follows Claude Code's own rule: a trusted folder covers every folder inside it. Starting an agent in a folder that is not trusted yet asks first ("Trust … for Claude Code?"). On **Trust and start**, StudioManager sets `hasTrustDialogAccepted` for that folder in `~/.claude.json`, the same thing answering Yes to Claude's own question does: it takes Claude's lock (`~/.claude.json.lock`), changes only that flag and keeps the file private. The home folder gets a stronger warning, since trusting it trusts everything in it. Nothing is trusted without that yes.
 
+## Start from a task
+
+Right-click a task, a subtask or a project and choose **Start work with agent**. The item is in the menus of the Tasks page (task and subtask rows, project headers), the Projects page, a project's Tasks section, and the Calendar's task, subtask and deadline events. It is hidden while agents are off.
+
+One click starts an agent on Opus in the project's linked folder and opens it on this page. There is no form: the agent is told which item to work on (its ids and titles), reads it and its context with the StudioManager tools ([Agent access](agent-access.md)), then tells you what it found and asks what to do before changing anything. Answer it in the conversation.
+
+- **No linked folder:** a folder picker opens; the folder you choose becomes the project's linked folder. Cancelling starts nothing.
+- **Folder not trusted yet:** the same trust question as **New agent**.
+- **Again on the same item:** each click starts a new agent, named after the item (`task-44-new-features`).
+
+Design: [the design spec](superpowers/specs/2026-11-05-agent-from-task-design.md).
+
 ## Answer buttons
 
 When an agent asks a question or wants to run a command, the page shows what is being asked and a button for each option. A click answers only if the same prompt is still on screen and the option you chose is highlighted. If not, it tells you to use the terminal. Options that need typed text go to the terminal too.

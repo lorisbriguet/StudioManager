@@ -7,8 +7,11 @@ export function SortableSubtaskRow({
   hovered,
   onHoverChange,
   children,
+  onContextMenu,
 }: {
   id: number;
+  /** Right-click on the row (the "Start work with agent" menu). */
+  onContextMenu?: React.MouseEventHandler<HTMLDivElement>;
   /** Handle visibility is explicit state, not CSS :hover — WebKit can leave
    *  :hover stale when dnd re-renders move rows under a stationary cursor,
    *  making the handle stick after the pointer left (#335). */
@@ -31,6 +34,7 @@ export function SortableSubtaskRow({
       className="flex items-center gap-2 py-1 group/sub"
       onMouseEnter={() => onHoverChange(id)}
       onMouseLeave={() => onHoverChange(null)}
+      onContextMenu={onContextMenu}
     >
       {/* Not reveal="sub": that is CSS :hover, the stale-hover bug above. Keyboard focus still shows it. */}
       <DragHandle {...attributes} {...listeners} className={hovered ? "opacity-100" : "opacity-0 focus-visible:opacity-100"} />
