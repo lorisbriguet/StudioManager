@@ -133,3 +133,13 @@ export function agentMenuItems(
   if (!enabled) return [];
   return [{ label: getLabels().agents_start_work, icon: ICONS.agents, onClick: () => void start(target) }];
 }
+
+/** What a calendar event's agent item works on: task, subtask, or a deadline's project. Null for the rest. */
+export function calendarAgentTarget(props: Record<string, unknown>): AgentTarget | null {
+  const id = props.itemId;
+  if (typeof id !== "number") return null;
+  if (props.type === "task") return { kind: "task", id };
+  if (props.type === "subtask") return { kind: "subtask", id };
+  if (props.type === "deadline") return { kind: "project", id };
+  return null;
+}
