@@ -45,6 +45,12 @@ Scheduled routines catch up: if the Mac was asleep or the app was closed at the 
 
 The last run of each routine is kept in `routine-runs.json` in the app data folder; that is how a routine knows it already ran today. If the file can't be read (damaged or edited by hand), scheduled routines are paused rather than run twice: you get one notification, the Day tab shows the error, and nothing overwrites the file. Fix or delete it to resume; a missing file just means nothing ran yet.
 
+## What the panel can do
+
+The panel is a separate window, and it may call only the 14 app commands it needs: list agents and answer their prompts, check the Claude sign-in, read plan usage, read, run and open the day's routines, and open the main window. Everything else, such as changing your data, saving routines, typing into an agent's terminal or changing settings, is refused for the panel by Tauri itself. The main window keeps every command. So even if something hostile ever ran inside the panel, it couldn't reach your database.
+
+The lists are in `src-tauri/permissions/windows.toml`; developers adding a command follow the note in the [README](../README.md).
+
 ## Plan limits
 
 Claude Code reports your plan limits through its status line. StudioManager provides its own status line command, which reads them, keeps them in the app data folder and prints nothing.
