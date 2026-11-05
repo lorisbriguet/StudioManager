@@ -37,15 +37,29 @@ export function useStartAgentOn(): { enabled: boolean; start: (target: AgentTarg
       inFlight.add(key);
       const t = getLabels();
       try {
-        const item = await loadAgentItem(target, useOrgStore.getState().activeId);
-        if (!item) return;
-
-        let folder = item.project.folder;
-        if (!folder) {
-          const dir = await openDirectory({ directory: true, title: t.agents_choose_folder });
-          if (typeof dir !== "string") return;
-          await updateProject.mutateAsync({ id: item.project.id, data: { folder_path: dir } });
-          folder = dir;
+        let item: Awaited<ReturnType<typeof loadAgentItem>>;
+        let folder: string | null;
+        try {
+          item = await loadAgentItem(target, useOrgStore.getState().activeId);
+          if (!item) return;
+          folder = item.project.folder;
+          if (!folder) {
+            const dir = await openDirectory({ directory: true, title: t.agents_choose_folder });
+            if (typeof dir !== "string") return;
+            folder = dir;
+          }
+        } catch (e) {
+          void logError("Agents: couldn't read the item to start on:", e);
+          notify.error(t.agents_start_failed, e);
+          return;
+        }
+        if (!item.project.folder) {
+          try {
+            await updateProject.mutateAsync({ id: item.project.id, data: { folder_path: folder } });
+          } catch {
+            // The query client's backstop already shows "Couldn't save the project".
+            return;
+          }
         }
 
         let folders: StartFolder[];

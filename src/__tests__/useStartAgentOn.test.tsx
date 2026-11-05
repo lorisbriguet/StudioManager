@@ -154,6 +154,24 @@ describe("useStartAgentOn", () => {
     expect(where).toBe("/tasks");
   });
 
+  it("shows the start error when the item can't be read, and never rejects", async () => {
+    const { loadAgentItem } = await import("../lib/agentStart");
+    vi.mocked(loadAgentItem).mockRejectedValueOnce(new Error("database is locked"));
+    const { result } = renderHook(() => useStartAgentOn(), { wrapper });
+    await act(() => expect(result.current.start({ kind: "task", id: 44 })).resolves.toBeUndefined());
+    expect(notify.error).toHaveBeenCalledWith("Couldn't start the agent", expect.anything());
+    expect(starts()).toHaveLength(0);
+  });
+
+  it("stops without rejecting when saving the picked folder fails", async () => {
+    item.current = task(null);
+    picked.dir = "/work/new";
+    mutateAsync.mockRejectedValueOnce(new Error("save failed"));
+    const { result } = renderHook(() => useStartAgentOn(), { wrapper });
+    await act(() => expect(result.current.start({ kind: "task", id: 44 })).resolves.toBeUndefined());
+    expect(starts()).toHaveLength(0);
+  });
+
   it("starts once when clicked twice while starting", async () => {
     const { result } = renderHook(() => useStartAgentOn(), { wrapper });
     await act(() =>
