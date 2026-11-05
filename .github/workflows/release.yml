@@ -1,7 +1,9 @@
 name: Release build
 
 # Builds, signs and drafts a release for a tag that already exists (RELEASING.md
-# steps 1, 2, 4 and 6). Started by hand only: Actions › Release build › Run workflow.
+# steps 1, 2, 4 and 6). Started by hand only, on the tag:
+#   gh workflow run release.yml --ref vX.Y.Z -f version=X.Y.Z
+# (or Actions › Release build › Run workflow, "Use workflow from" the tag).
 # Never runs on pushes or pull requests, so code from a fork can't reach the
 # signing key. The key lives in the "release" environment, which waits for
 # Loris's approval before the job starts.
@@ -33,13 +35,14 @@ jobs:
       VERSION: ${{ inputs.version }}
       CARGO_TARGET_DIR: ${{ github.workspace }}/../cargo-target
     steps:
-      - name: Check the version input
+      # Start it on the tag (gh workflow run release.yml --ref vX.Y.Z -f version=X.Y.Z):
+      # the release environment only accepts v* tags.
+      - name: Check the version input and the ref
         run: |
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "not a version: $VERSION"; exit 1; }
+          [ "$GITHUB_REF" = "refs/tags/v$VERSION" ] || { echo "start it on the tag v$VERSION (got $GITHUB_REF)"; exit 1; }
 
       - uses: actions/checkout@v4
-        with:
-          ref: refs/tags/v${{ inputs.version }}
 
       - uses: actions/setup-node@v4
         with:
