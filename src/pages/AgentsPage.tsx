@@ -40,6 +40,16 @@ export function AgentsPage() {
     setParams({}, { replace: true });
   }, [wantsNew, setParams]);
 
+  // `?started=<shortId>` ("Start work with agent" on a task): select it once listed.
+  const startedParam = params.get("started");
+  useEffect(() => {
+    if (!startedParam) return;
+    setStarting(false);
+    setTerminalFor(null);
+    setPendingShortId(startedParam);
+    setParams({}, { replace: true });
+  }, [startedParam, setParams]);
+
   const select = (id: string) => {
     setStarting(false);
     setTerminalFor(null);
