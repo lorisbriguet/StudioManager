@@ -32,6 +32,8 @@ export interface TimeMachineStatus {
   /** The destination's last result code; 0 is success. */
   lastResult: number | null;
   running: boolean;
+  /** This Mac's name: Time Machine names its bundle on a NAS after it. */
+  computerName: string | null;
 }
 
 /** Null when Time Machine was never set up on this Mac, and in test and presentation modes. */

@@ -3,7 +3,9 @@
 //!
 //! Calls: `query.cgi` SYNO.API.Info (paths and versions), SYNO.API.Auth
 //! `login` / `logout`, SYNO.Core.System `info` (model, serial, DSM version) and
-//! SYNO.Storage.CGI.Storage `load_info` (disks). Every request is a POST with a
+//! SYNO.Storage.CGI.Storage `load_info` (disks), and when offered SYNO.Core.Share
+//! with SYNO.Core.Share.Snapshot (newest snapshot per shared folder) and
+//! SYNO.FileStation.List (the Time Machine backups kept on the NAS). Every request is a POST with a
 //! form body, so the password, one-time code, session id and device token
 //! never appear in a URL.
 //!
@@ -259,6 +261,10 @@ const API_STORAGE: &str = "SYNO.Storage.CGI.Storage";
 /// Optional: shared folders and their snapshots (a NAS without them still syncs).
 const API_SHARE: &str = "SYNO.Core.Share";
 const API_SNAPSHOT: &str = "SYNO.Core.Share.Snapshot";
+/// Optional: File Station, to find the Time Machine bundles in the shared folders.
+const API_FILE_LIST: &str = "SYNO.FileStation.List";
+/// Rewritten by Time Machine when a backup completes: its date is the last backup.
+const TM_HISTORY: &str = "com.apple.TimeMachine.SnapshotHistory.plist";
 /// Snapshot listing costs one request per shared folder: look at this many.
 const MAX_SNAPSHOT_SHARES: usize = 50;
 /// Overall time the snapshot reads may take; the shares not reached are left out.
@@ -368,6 +374,7 @@ struct Session {
     /// Optional APIs: `None` when the NAS doesn't offer them.
     share: Option<Api>,
     snapshot: Option<Api>,
+    file_list: Option<Api>,
     sid: String,
 }
 
@@ -401,13 +408,14 @@ impl Synology {
 
     fn login(&self) -> Result<Session, String> {
         let info_api = Api { name: API_INFO, path: "query.cgi".into(), version: 1 };
-        let query = [API_AUTH, API_SYSTEM, API_STORAGE, API_SHARE, API_SNAPSHOT].join(",");
+        let query = [API_AUTH, API_SYSTEM, API_STORAGE, API_SHARE, API_SNAPSHOT, API_FILE_LIST].join(",");
         let info = self.call(&info_api, "query", vec![("query", query)]).map_err(|e| e.message(API_INFO))?;
         let auth = api(&info, API_AUTH, 7)?;
         let system = api(&info, API_SYSTEM, 1)?;
         let storage = api(&info, API_STORAGE, 1)?;
         let share = api(&info, API_SHARE, 1).ok();
         let snapshot = api(&info, API_SNAPSHOT, 1).ok();
+        let file_list = api(&info, API_FILE_LIST, 2).ok();
 
         let mut form = vec![
             ("account", self.account.clone()),
@@ -446,7 +454,7 @@ impl Synology {
             });
         }
         let sid = text(&data, "sid").ok_or("DSM signed in without a session id")?;
-        Ok(Session { auth, system, storage, share, snapshot, sid })
+        Ok(Session { auth, system, storage, share, snapshot, file_list, sid })
     }
 
     fn keep(&self, secret: Secret) {
@@ -490,14 +498,20 @@ impl Synology {
     /// `snapshot_latest_at:{share}` (Unix seconds) per shared folder that has
     /// a snapshot. Best effort: any failure leaves the metrics out (a share
     /// that fails is skipped), it never fails the sync.
-    fn snapshots(&self, s: &Session) -> Vec<(String, f64)> {
-        let (Some(share_api), Some(snap_api)) = (&s.share, &s.snapshot) else { return vec![] };
+    /// The shared folders' names (at most `MAX_SNAPSHOT_SHARES`); empty when
+    /// SYNO.Core.Share isn't offered or fails.
+    fn share_names(&self, s: &Session) -> Vec<String> {
+        let Some(share_api) = &s.share else { return vec![] };
         let Ok(data) = self.call(share_api, "list", vec![("_sid", s.sid.clone())]) else { return vec![] };
-        let names: Vec<String> = data
-            .get("shares")
+        data.get("shares")
             .and_then(JsonValue::as_array)
             .map(|a| a.iter().filter_map(|v| text(v, "name")).take(MAX_SNAPSHOT_SHARES).collect())
-            .unwrap_or_default();
+            .unwrap_or_default()
+    }
+
+    fn snapshots(&self, s: &Session, names: &[String]) -> Vec<(String, f64)> {
+        let Some(snap_api) = &s.snapshot else { return vec![] };
+        let names = names.to_vec();
         let mut out = vec![];
         let deadline = std::time::Instant::now() + SNAPSHOT_DEADLINE;
         for name in names {
@@ -524,6 +538,66 @@ impl Synology {
         }
         out
     }
+
+    /// File Station `list` of a folder's entries, with modification times.
+    fn list_folder(&self, api: &Api, s: &Session, path: &str) -> Result<Vec<JsonValue>, CallError> {
+        let data = self.call(
+            api,
+            "list",
+            vec![("folder_path", path.to_string()), ("additional", r#"["time"]"#.to_string()), ("_sid", s.sid.clone())],
+        )?;
+        Ok(data.get("files").and_then(JsonValue::as_array).cloned().unwrap_or_default())
+    }
+
+    /// `time_machine_latest_at:{computer}` (Unix seconds) per Time Machine
+    /// backup kept on the NAS: a `*.sparsebundle` or `*.backupbundle` at the
+    /// top of a shared folder, dated by its snapshot history file. The account
+    /// needs read access to the Time Machine folders; folders it can't open are
+    /// skipped. Best effort, like the snapshots.
+    fn time_machine(&self, s: &Session, names: &[String]) -> Vec<(String, f64)> {
+        let Some(fs) = &s.file_list else { return vec![] };
+        let mut out = vec![];
+        let deadline = std::time::Instant::now() + SNAPSHOT_DEADLINE;
+        'shares: for share in names {
+            if std::time::Instant::now() >= deadline {
+                break;
+            }
+            let entries = match self.list_folder(fs, s, &format!("/{share}")) {
+                Ok(e) => e,
+                Err(CallError::Transport(_)) => break,
+                Err(CallError::Dsm(_)) => continue,
+            };
+            for e in entries {
+                let Some(name) = text(&e, "name") else { continue };
+                let Some(computer) = backup_bundle(&name) else { continue };
+                if e.get("isdir").and_then(JsonValue::as_bool) != Some(true) {
+                    continue;
+                }
+                let files = match self.list_folder(fs, s, &format!("/{share}/{name}")) {
+                    Ok(f) => f,
+                    Err(CallError::Transport(_)) => break 'shares,
+                    Err(CallError::Dsm(_)) => continue,
+                };
+                let at = files
+                    .iter()
+                    .find(|f| text(f, "name").as_deref() == Some(TM_HISTORY))
+                    .and_then(|f| f.pointer("/additional/time/mtime"))
+                    .and_then(JsonValue::as_f64);
+                if let Some(at) = at {
+                    out.push((format!("time_machine_latest_at:{computer}"), at));
+                }
+            }
+        }
+        out
+    }
+}
+
+/// `Studio Mac.sparsebundle` → `Studio Mac`: the computer a Time Machine bundle belongs to.
+fn backup_bundle(name: &str) -> Option<&str> {
+    [".sparsebundle", ".backupbundle"]
+        .iter()
+        .find_map(|ext| name.strip_suffix(ext))
+        .filter(|stem| !stem.is_empty())
 }
 
 impl Connector for Synology {
@@ -538,7 +612,9 @@ impl Connector for Synology {
         self.with_session(|s| {
             let sys = self.system(s)?;
             let (disks, mut metrics) = self.storage(s)?;
-            metrics.extend(self.snapshots(s));
+            let shares = self.share_names(s);
+            metrics.extend(self.snapshots(s, &shares));
+            metrics.extend(self.time_machine(s, &shares));
             Ok(SyncResult {
                 devices: vec![DeviceReading { device_id: sys.serial, model: sys.model, metrics, disks, print_tasks: None }],
             })
@@ -686,6 +762,7 @@ mod tests {
                 ("SYNO.Storage.CGI.Storage", "load_info") => self.storage.clone(),
                 ("SYNO.Core.Share", "list") => json(SHARES),
                 ("SYNO.Core.Share.Snapshot", "list") => self.snapshots.clone(),
+                ("SYNO.FileStation.List", "list") => file_station(get("folder_path")),
                 other => panic!("unexpected call {other:?}"),
             })
         }
@@ -1098,5 +1175,67 @@ mod tests {
         assert_eq!(base_url("nas.local", 5001), "https://nas.local:5001/webapi/");
         assert_eq!(base_url("fe80::1", 5001), "https://[fe80::1]:5001/webapi/");
         assert_eq!(base_url("[fe80::1]", 5001), "https://[fe80::1]:5001/webapi/");
+    }
+
+    /// A NAS whose "projects" folder is closed to the account and whose
+    /// "photos" folder holds two Time Machine bundles and a stray folder.
+    fn file_station(path: &str) -> JsonValue {
+        let entry = |name: &str, dir: bool, mtime: i64| serde_json::json!({
+            "name": name, "isdir": dir, "path": format!("{path}/{name}"),
+            "additional": { "time": { "mtime": mtime } }
+        });
+        let files = match path {
+            "/projects" => return serde_json::json!({ "error": { "code": 407 }, "success": false }),
+            "/photos" => vec![
+                entry("Studio Mac.sparsebundle", true, 1_793_000_000),
+                entry("Old Mac.backupbundle", true, 1_700_000_000),
+                entry("Not a backup", true, 1_793_000_000),
+                entry("fake.sparsebundle", false, 1_793_000_000),
+            ],
+            "/photos/Studio Mac.sparsebundle" => vec![
+                entry("bands", true, 1_793_895_000),
+                entry("com.apple.TimeMachine.SnapshotHistory.plist", false, 1_793_895_512),
+                entry("com.apple.TimeMachine.Results.plist", false, 1_793_895_514),
+            ],
+            "/photos/Old Mac.backupbundle" => vec![entry("com.apple.TimeMachine.SnapshotHistory.plist", false, 1_700_000_100)],
+            other => panic!("unexpected folder {other}"),
+        };
+        serde_json::json!({ "data": { "files": files, "offset": 0, "total": files.len() }, "success": true })
+    }
+
+    #[test]
+    fn backup_bundle_names_the_computer() {
+        assert_eq!(backup_bundle("Loris’s Mac mini.sparsebundle"), Some("Loris’s Mac mini"));
+        assert_eq!(backup_bundle("Old.backupbundle"), Some("Old"));
+        assert_eq!(backup_bundle(".sparsebundle"), None);
+        assert_eq!(backup_bundle("photos"), None);
+    }
+
+    #[test]
+    fn sync_dates_each_time_machine_bundle_by_its_history_file() {
+        let mut info = json(API_INFO);
+        info["data"]["SYNO.FileStation.List"] =
+            serde_json::json!({ "maxVersion": 2, "minVersion": 1, "path": "entry.cgi", "requestFormat": "JSON" });
+        let fake = Fake { login: LOGIN, storage: json(STORAGE), snapshots: json(SNAPSHOTS), snapshots_down: false, info, calls: Arc::default() };
+        let c = Synology::new("studio".into(), pw(), Box::new(fake));
+        let m = c.sync().unwrap().devices.remove(0).metrics;
+        let tm: Vec<_> = m.iter().filter(|(n, _)| n.starts_with("time_machine_latest_at:")).cloned().collect();
+        assert_eq!(
+            tm,
+            vec![
+                ("time_machine_latest_at:Studio Mac".to_string(), 1_793_895_512.0),
+                ("time_machine_latest_at:Old Mac".to_string(), 1_700_000_100.0),
+            ]
+        );
+        // The snapshots are still read.
+        assert!(m.iter().any(|(n, _)| n == "snapshot_latest_at:photos"));
+    }
+
+    #[test]
+    fn sync_without_file_station_reads_no_time_machine() {
+        let (c, calls) = nas(LOGIN, pw());
+        let m = c.sync().unwrap().devices.remove(0).metrics;
+        assert!(!m.iter().any(|(n, _)| n.starts_with("time_machine_latest_at:")));
+        assert!(!calls.lock().unwrap().iter().any(|(_, f)| param(f, "api") == Some("SYNO.FileStation.List")));
     }
 }

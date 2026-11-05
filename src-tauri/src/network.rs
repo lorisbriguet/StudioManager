@@ -196,13 +196,15 @@ pub struct TimeMachineStatus {
     /// The destination's last result code (0 is success).
     pub last_result: Option<i64>,
     pub running: bool,
+    /// This Mac's name (Sharing settings): Time Machine names its bundle on a NAS after it.
+    pub computer_name: Option<String>,
 }
 
 const TIME_MACHINE_PREFS: &str = "/Library/Preferences/com.apple.TimeMachine.plist";
 
 /// Reads the preferences plist: `AutoBackup`, then the destination named by
 /// `LastDestinationID` for its newest `SnapshotDates` entry and its `RESULT`.
-/// `running` is left false; the command fills it from `tmutil`.
+/// `running` and `computer_name` are left empty; the command fills them.
 pub fn parse_time_machine(prefs: &plist::Value) -> TimeMachineStatus {
     let root = prefs.as_dictionary();
     let enabled = root
@@ -223,7 +225,7 @@ pub fn parse_time_machine(prefs: &plist::Value) -> TimeMachineStatus {
         .and_then(|v| v.as_array())
         .and_then(|dates| dates.iter().filter_map(|v| v.as_date()).map(|d| d.to_xml_format()).max());
     let last_result = dest.and_then(|d| d.get("RESULT")).and_then(|v| v.as_signed_integer());
-    TimeMachineStatus { enabled, last_backup_at, last_result, running: false }
+    TimeMachineStatus { enabled, last_backup_at, last_result, running: false, computer_name: None }
 }
 
 /// The preferences through `defaults`: macOS lets `cfprefsd` read the domain
@@ -241,6 +243,12 @@ fn read_time_machine_prefs() -> Result<plist::Value, String> {
         }
     }
     plist::Value::from_file(TIME_MACHINE_PREFS).map_err(|e| format!("Time Machine preferences: {e}"))
+}
+
+fn computer_name() -> Option<String> {
+    let out = std::process::Command::new("/usr/sbin/scutil").args(["--get", "ComputerName"]).output().ok()?;
+    let name = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (out.status.success() && !name.is_empty()).then_some(name)
 }
 
 fn time_machine_running() -> bool {
@@ -265,6 +273,7 @@ pub async fn time_machine_status(app: tauri::AppHandle) -> Result<Option<TimeMac
         let prefs = read_time_machine_prefs()?;
         let mut status = parse_time_machine(&prefs);
         status.running = status.enabled && time_machine_running();
+        status.computer_name = computer_name();
         Ok(Some(status))
     })
     .await

@@ -5,8 +5,8 @@ import { useActiveUpkeepItems } from "../../db/hooks/useUpkeep";
 import { useLatestMetricsFor } from "../../db/hooks/useConnections";
 import { useTimeMachine } from "../../hooks/useTimeMachine";
 import { useAppStore } from "../../stores/app-store";
-import { ageTone, timeMachineState, type BackupTone } from "../../lib/network/backups";
-import { latestSnapshot } from "../../lib/network/nas";
+import { ageTone, timeMachineRows, type BackupTone } from "../../lib/network/backups";
+import { latestSnapshot, timeMachineBackups } from "../../lib/network/nas";
 import { dueState } from "../../lib/upkeep/schedule";
 import { formatDisplayDate } from "../../utils/formatDate";
 import { todayLocalISO } from "../../utils/localDate";
@@ -33,8 +33,9 @@ function Row({ tone, name, detail, hint }: { tone: BackupTone | "none"; name: st
 const unixDate = (seconds: number) => formatDisplayDate(new Date(seconds * 1000).toISOString());
 
 /**
- * Backup sources: this Mac's Time Machine, each NAS's newest snapshot and the upkeep items marked as
- * backups. A source that was never set up is not listed; with none, the card says so.
+ * Backup sources: Time Machine (this Mac's, and every Mac whose backup a NAS keeps), each NAS's newest
+ * snapshot and the upkeep items marked as backups. A source that was never set up is not listed; with
+ * none, the card says so.
  */
 export function BackupsCard({ cards, now = Date.now() }: { cards: NetworkCard[]; now?: number }) {
   const t = useT();
@@ -43,17 +44,23 @@ export function BackupsCard({ cards, now = Date.now() }: { cards: NetworkCard[];
   const items = useActiveUpkeepItems();
   const nasCards = cards.filter((c) => c.nas);
   const readings = useLatestMetricsFor(nasCards.map((c) => c.machine.id), "snapshot_latest_at:");
+  const tmReadings = useLatestMetricsFor(nasCards.map((c) => c.machine.id), "time_machine_latest_at:");
 
   const rows: React.ReactNode[] = [];
 
-  const state = timeMachineState(tm.data ?? null, new Date(now));
-  if (state.show) {
-    const s = tm.data!;
+  const tmRows = timeMachineRows(
+    tm.data ?? null,
+    tmReadings.flatMap((r) => timeMachineBackups(r.data ?? [])),
+    new Date(now)
+  );
+  for (const r of tmRows) {
     const detail =
-      state.label === "running" ? t.net_backup_running
-      : state.label === "never" ? t.net_backup_none_yet
-      : t.net_backup_last.replace("{date}", formatDisplayDate(s.lastBackupAt!));
-    rows.push(<Row key="tm" tone={state.tone} name={t.net_time_machine} detail={detail} />);
+      r.label === "running" ? t.net_backup_running
+      : r.label === "never" ? t.net_backup_none_yet
+      : t.net_backup_last.replace("{date}", formatDisplayDate(r.lastBackupAt!));
+    const who = r.name ?? (tmRows.length > 1 ? t.net_this_mac : null);
+    const name = who ? `${t.net_time_machine} · ${who}` : t.net_time_machine;
+    rows.push(<Row key={r.key} tone={r.tone} name={name} detail={detail} hint={r.isThisMac ? undefined : t.net_tm_from_nas} />);
   }
 
   nasCards.forEach((c, i) => {
@@ -88,7 +95,7 @@ export function BackupsCard({ cards, now = Date.now() }: { cards: NetworkCard[];
     );
   }
 
-  const sources = [tm, items, ...readings];
+  const sources = [tm, items, ...readings, ...tmReadings];
   const pending = sources.some((x) => x.isPending);
   const failed = sources.find((x) => x.isError);
   return (
