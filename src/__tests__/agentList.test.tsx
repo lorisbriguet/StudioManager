@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { AgentList } from "../components/agents/AgentList";
 import { groupAgents } from "../components/agents/useAgents";
 import type { Agent, Group } from "../lib/agents";
@@ -73,5 +73,47 @@ describe("AgentList", () => {
     render(<AgentList byGroup={byGroup()} selectedId="sess-old-one" onSelect={() => {}} />);
     expect(screen.getByText("old-one")).toBeInTheDocument();
     expect(screen.queryByText("older-one")).toBeNull();
+  });
+});
+
+describe("AgentList flags", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  const flag = (name: string, label = "Flag") => {
+    fireEvent.contextMenu(screen.getByText(name));
+    fireEvent.click(screen.getByRole("menuitem", { name: label }));
+  };
+
+  it("a flagged Done agent moves to Flagged on top, and back when unflagged", () => {
+    render(<AgentList byGroup={byGroup()} selectedId={null} onSelect={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: /Done/ }));
+    flag("old-one");
+    const flagged = screen.getByRole("heading", { name: /^Flagged/ });
+    expect(flagged).toHaveTextContent("Flagged1");
+    expect(screen.getByRole("heading", { name: /^Done/ })).toHaveTextContent("Done1");
+    expect(screen.getAllByRole("img", { name: "Flagged" })).toHaveLength(1);
+    expect(JSON.parse(localStorage.getItem("agents.flagged") ?? "[]")).toEqual(["sess-old-one"]);
+    flag("old-one", "Remove flag");
+    expect(screen.queryByRole("heading", { name: /^Flagged/ })).toBeNull();
+    expect(screen.getByRole("heading", { name: /^Done/ })).toHaveTextContent("Done2");
+  });
+
+  it("a flagged working agent stays in Working, with its flag", () => {
+    render(<AgentList byGroup={byGroup()} selectedId={null} onSelect={() => {}} />);
+    flag("busy-one");
+    expect(screen.queryByRole("heading", { name: /^Flagged/ })).toBeNull();
+    expect(screen.getByRole("heading", { name: /^Working/ })).toHaveTextContent("Working1");
+    expect(screen.getByRole("img", { name: "Flagged" })).toBeInTheDocument();
+  });
+
+  it("follows a flag set in another window", () => {
+    render(<AgentList byGroup={byGroup()} selectedId={null} onSelect={() => {}} />);
+    act(() => {
+      localStorage.setItem("agents.flagged", JSON.stringify(["sess-older-one"]));
+      window.dispatchEvent(new StorageEvent("storage", { key: "agents.flagged" }));
+    });
+    expect(screen.getByRole("heading", { name: /^Flagged/ })).toHaveTextContent("Flagged1");
   });
 });

@@ -15,6 +15,11 @@ vi.mock("../db/hooks/useUpkeep", () => ({
   useUpkeepOverview: () => ({ overdueCount }),
 }));
 
+let inboxStates: ("new" | "dismissed")[] = [];
+vi.mock("../db/hooks/usePaperlessInbox", () => ({
+  usePaperlessInbox: () => ({ items: inboxStates.map((state, docId) => ({ docId, state })) }),
+}));
+
 function renderSidebar() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -99,6 +104,17 @@ describe("Sidebar", () => {
     overdueCount = 0;
     renderSidebar();
     expect(screen.getByRole("link", { name: /Upkeep/ })).not.toHaveTextContent(/\d/);
+  });
+
+  it("counts the Paperless documents waiting to be checked on the Expenses link", () => {
+    inboxStates = ["new", "dismissed", "new"];
+    const { unmount } = renderSidebar();
+    expect(screen.getByRole("link", { name: /Expenses/ })).toHaveTextContent("2");
+    unmount();
+    inboxStates = ["dismissed"];
+    renderSidebar();
+    expect(screen.getByRole("link", { name: /Expenses/ })).not.toHaveTextContent(/\d/);
+    inboxStates = [];
   });
 
   it("shows the compact brand mark instead of the wordmark when collapsed", () => {

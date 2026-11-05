@@ -143,6 +143,47 @@ describe("Conversation scrolling and working indicator", () => {
     expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
+  it("offers a jump to the latest message once the reader scrolls up", async () => {
+    const { scrollTo } = renderIn(true);
+    await tick();
+    expect(screen.queryByRole("button", { name: "Jump to the latest message" })).toBeNull();
+    scrollTo(100);
+    const jump = screen.getByRole("button", { name: "Jump to the latest message" });
+    const scroller = screen.getByTestId("scroller");
+    const smooth = vi.fn();
+    scroller.scrollTo = smooth as unknown as typeof scroller.scrollTo;
+    fireEvent.click(jump);
+    expect(smooth).toHaveBeenCalledWith({ top: 1000, behavior: "smooth" });
+    expect(screen.queryByRole("button", { name: "Jump to the latest message" })).toBeNull();
+  });
+
+  it("stays pinned to the bottom when the size changes after loading, until the reader scrolls up", async () => {
+    const observers: (() => void)[] = [];
+    const Real = globalThis.ResizeObserver;
+    globalThis.ResizeObserver = class {
+      constructor(cb: () => void) { observers.push(cb); }
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+    } as unknown as typeof ResizeObserver;
+    try {
+      renderIn(true);
+      await tick();
+      const scroller = screen.getByTestId("scroller");
+      let top = 0;
+      Object.defineProperty(scroller, "scrollTop", { configurable: true, get: () => top, set: (v: number) => { top = v; } });
+      // The panel finished sliding in: the size changed after the first jump.
+      act(() => observers.forEach((cb) => cb()));
+      expect(top).toBe(1000);
+      top = 100;
+      fireEvent.scroll(scroller);
+      act(() => observers.forEach((cb) => cb()));
+      expect(top).toBe(100);
+    } finally {
+      globalThis.ResizeObserver = Real;
+    }
+  });
+
   it("shows the working indicator only while the agent works", async () => {
     const { rerender } = renderIn(true);
     await tick();
