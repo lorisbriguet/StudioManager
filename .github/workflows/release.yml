@@ -1,0 +1,144 @@
+name: Release build
+
+# Builds, signs and drafts a release for a tag that already exists (RELEASING.md
+# steps 1, 2, 4 and 6). Started by hand only, on the tag:
+#   gh workflow run release.yml --ref vX.Y.Z -f version=X.Y.Z
+# (or Actions › Release build › Run workflow, "Use workflow from" the tag).
+# Never runs on pushes or pull requests, so code from a fork can't reach the
+# signing key. The key lives in the "release" environment, which waits for
+# Loris's approval before the job starts.
+#
+# Stays by hand (RELEASING.md): version bump, changelog, tag (before); smoke test
+# of the .dmg, menu bar checks, publishing the draft, /mcp reconnect (after).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without the v, e.g. 3.4.1 (the tag v<version> must exist)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build and draft v${{ inputs.version }}
+    runs-on: macos-latest
+    environment: release
+    env:
+      VERSION: ${{ inputs.version }}
+      CARGO_TARGET_DIR: ${{ github.workspace }}/../cargo-target
+    steps:
+      # Start it on the tag (gh workflow run release.yml --ref vX.Y.Z -f version=X.Y.Z):
+      # the release environment only accepts v* tags.
+      - name: Check the version input and the ref
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "not a version: $VERSION"; exit 1; }
+          [ "$GITHUB_REF" = "refs/tags/v$VERSION" ] || { echo "start it on the tag v$VERSION (got $GITHUB_REF)"; exit 1; }
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      # npm 10.9 (bundled with Node 22) crashes on Vitest 4's peer set (RELEASING.md, prerequisites).
+      - run: npm install -g npm@11
+      - run: npm ci
+
+      - name: Versions match the tag
+        run: |
+          pkg=$(node -p "require('./package.json').version")
+          conf=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          cargo=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)
+          echo "package.json $pkg, tauri.conf.json $conf, Cargo.toml $cargo, tag $VERSION"
+          [ "$pkg" = "$VERSION" ] && [ "$conf" = "$VERSION" ] && [ "$cargo" = "$VERSION" ]
+
+      # RELEASING.md step 1 (EN/FR parity is part of vitest: src/__tests__/i18nParity.test.ts)
+      - run: npx tsc --noEmit
+      - run: npx vitest run
+      - run: npm run lint
+      - run: bash scripts/build-mcp.sh
+      - name: MCP server tests and clippy
+        working-directory: src-tauri/mcp
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/../cargo-target-mcp
+        run: |
+          cargo test
+          cargo clippy --all-targets -- -D warnings
+
+      # RELEASING.md step 2: every count must be 0
+      - name: Design-system grep gates
+        run: |
+          a=$(grep -rnE 'bg-gray-|text-gray-|border-gray-|divide-gray-' src --include='*.tsx' | wc -l)
+          b=$(grep -rn 'dark:' src --include='*.tsx' | grep -v '// ' | grep -vE 'dark: boolean|darkMode' | wc -l)
+          c=$(grep -rnE '>[✕←→✓▸↑↓]<' src --include='*.tsx' | wc -l)
+          echo "gray classes $a, dark: variants $b, text glyph icons $c"
+          [ "$a" -eq 0 ] && [ "$b" -eq 0 ] && [ "$c" -eq 0 ]
+
+      # RELEASING.md step 4: without the key the build succeeds but ships a broken update signature
+      - name: Build (signed)
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: |
+          [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] || { echo "TAURI_SIGNING_PRIVATE_KEY is not set in the release environment"; exit 1; }
+          npm run tauri build
+
+      - name: Check the bundle
+        run: |
+          b="$CARGO_TARGET_DIR/release/bundle"
+          ls -l "$b/dmg" "$b/macos"
+          test -s "$b/macos/StudioManager.app.tar.gz.sig"
+          dir=$("$b/macos/StudioManager.app/Contents/MacOS/studiomanager-mcp" --print-data-dir)
+          echo "MCP data dir: $dir"
+          case "$dir" in *ch.studiomanager.app) ;; *) exit 1;; esac
+
+      # RELEASING.md step 6
+      - name: Write latest.json
+        run: |
+          b="$CARGO_TARGET_DIR/release/bundle"
+          node -e '
+            const fs = require("fs");
+            const v = process.env.VERSION;
+            const sig = fs.readFileSync(process.argv[1], "utf8").trim();
+            const url = `https://github.com/lorisbriguet/StudioManager/releases/download/v${v}/StudioManager.app.tar.gz`;
+            const p = { signature: sig, url };
+            const out = { version: v, notes: `StudioManager v${v}`, pub_date: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
+                          platforms: { "darwin-aarch64": p, "darwin-x86_64": p } };
+            fs.writeFileSync("latest.json", JSON.stringify(out, null, 2) + "\n");
+          ' "$b/macos/StudioManager.app.tar.gz.sig"
+          cat latest.json
+
+      # RELEASING.md step 7, as a draft: Loris publishes it after the smoke test
+      - name: Draft release with the three assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          b="$CARGO_TARGET_DIR/release/bundle"
+          dmg="$b/dmg/StudioManager_${VERSION}_aarch64.dmg"
+          assets=("$dmg" "$b/macos/StudioManager.app.tar.gz" latest.json)
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" "${assets[@]}" --clobber
+          else
+            gh release create "v$VERSION" --draft --verify-tag --title "StudioManager v$VERSION" \
+              --notes "Built by the Release build workflow. Replace with the changelog before publishing." "${assets[@]}"
+          fi
+          echo "Draft ready: smoke-test the .dmg, then publish (RELEASING.md steps 4 and 8)."
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StudioManager-${{ inputs.version }}
+          path: |
+            ${{ env.CARGO_TARGET_DIR }}/release/bundle/dmg/*.dmg
+            latest.json
+          retention-days: 7
