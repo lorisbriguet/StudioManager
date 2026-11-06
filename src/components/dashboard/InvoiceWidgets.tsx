@@ -8,6 +8,7 @@ import { useClients } from "../../db/hooks/useClients";
 import { todayLocalISO } from "../../utils/localDate";
 import { getInvoiceAging } from "../../db/queries/invoices";
 import { useChartTheme } from "../../hooks/useChartTheme";
+import { useNow } from "../../hooks/useNow";
 import { useT } from "../../i18n/useT";
 import { WidgetShell, WidgetTitle } from "./WidgetShell";
 import { EmptyState } from "../ui/EmptyState";
@@ -81,16 +82,17 @@ export function UnpaidInvoices() {
   const clientsMap = useMemo(() => new Map(clients?.map((c) => [c.id, c.name]) ?? []), [clients]);
   const clientName = (clientId: string) => clientsMap.get(clientId) ?? "";
 
+  const now = useNow();
   const unpaid = useMemo(() => {
     if (!invoices) return [];
     return invoices
       .filter((inv) => inv.status === "sent" || inv.status === "overdue")
       .map((inv) => {
-        const daysOut = Math.floor((Date.now() - new Date(inv.invoice_date).getTime()) / 86400000);
+        const daysOut = Math.floor((now - new Date(inv.invoice_date).getTime()) / 86400000);
         return { ...inv, daysOut };
       })
       .sort((a, b) => b.daysOut - a.daysOut);
-  }, [invoices]);
+  }, [invoices, now]);
 
   return (
     <WidgetShell>
@@ -122,6 +124,7 @@ export function UpcomingReminders() {
   const { data: clients } = useClients();
   const t = useT();
   const today = todayLocalISO();
+  const now = useNow();
 
   const clientsMap = useMemo(() => new Map(clients?.map((c) => [c.id, c.name]) ?? []), [clients]);
   const clientName = (clientId: string) => clientsMap.get(clientId) ?? "";
@@ -131,12 +134,12 @@ export function UpcomingReminders() {
     return invoices
       .filter((inv) => inv.status === "sent" && inv.due_date && inv.due_date >= today)
       .map((inv) => {
-        const daysLeft = Math.floor((new Date(inv.due_date!).getTime() - Date.now()) / 86400000);
+        const daysLeft = Math.floor((new Date(inv.due_date!).getTime() - now) / 86400000);
         return { ...inv, daysLeft };
       })
       .sort((a, b) => a.daysLeft - b.daysLeft)
       .slice(0, 8);
-  }, [invoices, today]);
+  }, [invoices, today, now]);
 
   return (
     <WidgetShell>

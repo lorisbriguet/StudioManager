@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, lazy, Suspense } from "react";
 import { IconButton } from "../components/ui/IconButton";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { Landmark, type LucideIcon } from "lucide-react";
 import { ICONS, ICON_SIZE } from "../components/ui/icons";
 import { isUntranslatedActivity } from "../lib/activityNudge";
@@ -63,10 +63,11 @@ export function ProfilePage() {
     register,
     handleSubmit,
     reset,
-    watch,
+    control,
     setValue,
     formState: { errors: rhfErrors },
   } = useForm<FormData>();
+  const vatExempt = useWatch({ control, name: "vat_exempt" });
   const t = useT();
 
   const { data: activityList } = useActivities();
@@ -322,7 +323,7 @@ export function ProfilePage() {
 
                 <div>
                   <Toggle
-                    checked={!!watch("vat_exempt")}
+                    checked={!!vatExempt}
                     onChange={(v) => setValue("vat_exempt", v ? 1 : 0)}
                     label={t.vat_exempt}
                   />

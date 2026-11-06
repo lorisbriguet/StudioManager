@@ -10,7 +10,7 @@ import type { CheckResult } from "../../lib/network/commands";
 import { formatAgo } from "../../lib/network/format";
 
 /** One machine: its name (a link to its Upkeep page), kind, and its services. NAS health and remote buttons. */
-export function MachineCard({ card, results, now = Date.now() }: { card: NetworkCard; results: Map<string, CheckResult>; now?: number }) {
+export function MachineCard({ card, results, now }: { card: NetworkCard; results: Map<string, CheckResult>; now: number }) {
   const t = useT();
   const { machine, services } = card;
   return (

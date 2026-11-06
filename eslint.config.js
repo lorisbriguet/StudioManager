@@ -75,16 +75,18 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       'studio/no-inline-query-key': 'error',
       // react-hooks v7 "recommended" bundles the React Compiler diagnostics.
-      // This codebase is not compiled with React Compiler. The rules below
-      // still flag long-standing (working) patterns; turn each back on once
-      // its violations are fixed. Counts as of 2026-11-06:
+      // This codebase is not compiled with React Compiler. Render stays pure:
+      // "now" in render comes from useNow (src/hooks/useNow.ts), a handler's
+      // time or id from src/lib/clock.ts. The two rules still off flag
+      // long-standing (working) patterns; turn each on once its violations
+      // are fixed. Counts as of 2026-11-06:
       'react-hooks/set-state-in-effect': 'off', // 53
-      'react-hooks/refs': 'off', // 46
-      'react-hooks/purity': 'off', // 11
-      'react-hooks/preserve-manual-memoization': 'off', // 3
-      'react-hooks/immutability': 'off', // 2
-      'react-hooks/globals': 'off', // 2
-      'react-hooks/incompatible-library': 'off', // 1
+      'react-hooks/refs': 'off', // 47
+      'react-hooks/purity': 'error',
+      'react-hooks/preserve-manual-memoization': 'error',
+      'react-hooks/immutability': 'error',
+      'react-hooks/globals': 'error',
+      'react-hooks/incompatible-library': 'error',
       // Toasts go through notify (src/lib/notify.ts): one API, the app's
       // durations and wording, errors never show raw text. See "Toasts" in
       // DESIGN-SYSTEM.md.
