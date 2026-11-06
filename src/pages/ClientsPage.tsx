@@ -264,7 +264,10 @@ export function ClientsPage() {
         count={bulk.count}
         onClear={bulk.clearSelection}
         actions={[
-          { label: t.archive_client, icon: ICONS.archive, onClick: () => void clientRemoval.archiveMany([...bulk.selected] as string[], bulk.clearSelection) },
+          { label: t.archive_client, icon: ICONS.archive, onClick: () => void clientRemoval.archiveMany(
+            ([...bulk.selected] as string[]).filter((id) => !clients?.find((c) => c.id === id)?.archived_at),
+            bulk.clearSelection
+          ) },
           { label: t.delete, icon: ICONS.delete, onClick: bulkDelete, danger: true },
         ]}
       />

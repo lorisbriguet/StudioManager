@@ -115,8 +115,10 @@ export function useSetClientArchived() {
         const l = getLabels();
         useUndoStore.getState().push({
           label: `${archived ? l.undo_archive_client : l.undo_restore_client} "${prev.name}"`,
+          // Undo puts back the exact previous state (an already archived
+          // client keeps its original date)
           execute: async () => {
-            await q.setClientArchived(id, !archived);
+            await q.updateClient(id, { archived_at: prev.archived_at ?? null });
             qc.invalidateQueries({ queryKey: ["clients"] });
           },
           redo: async () => {

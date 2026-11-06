@@ -47,8 +47,13 @@ export function ClientDetailPage() {
   // window close, and programmatic navigations via the dirty-guard registry)
   useUnsavedChangesWarning(dirty);
 
+  // A refetch while editing (Archive, Restore) only brings archived_at in,
+  // so unsaved edits survive
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
   useEffect(() => {
-    if (client) setForm(client);
+    if (!client) return;
+    setForm((prev) => (dirtyRef.current ? { ...prev, archived_at: client.archived_at } : client));
   }, [client]);
 
   // Update tab label with client name

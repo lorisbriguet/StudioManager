@@ -1,6 +1,7 @@
 import { useT } from "../i18n/useT";
 import { useConfirm, confirmDelete } from "../lib/confirm";
 import { batchUndo, deleteWithUndo, undoableAction } from "../lib/undo";
+import { notify } from "../lib/notify";
 import { countIssuedInvoices } from "../db/queries/clients";
 import { useDeleteClient, useSetClientArchived } from "../db/hooks/useClients";
 import type { Client } from "../types/client";
@@ -25,8 +26,13 @@ export function useClientRemoval() {
   const restore = (client: Pick<Client, "id">) =>
     deleteWithUndo(setArchived, { id: client.id, archived: false }, t.toast_client_restored);
 
-  const remove = async (client: Pick<Client, "id" | "name">, onDeleted?: () => void) => {
+  const remove = async (client: Pick<Client, "id" | "name" | "archived_at">, onDeleted?: () => void) => {
     if ((await countIssuedInvoices(client.id)) > 0) {
+      if (client.archived_at) {
+        // Already archived: nothing more to offer
+        notify.info(t.client_keep_invoices_archived);
+        return;
+      }
       const ok = await confirm({
         title: t.client_keep_invoices_title.replace("{name}", client.name),
         message: t.client_keep_invoices_message,
