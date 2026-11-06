@@ -3,12 +3,19 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { keysForTools, touchesCalendar } from "../lib/agentChangeKeys";
 
+/** Every `.rs` file under `dir`, subfolders included. */
+function rustFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? rustFiles(join(dir, e.name)) : e.name.endsWith(".rs") ? [join(dir, e.name)] : [],
+  );
+}
+
 /** Every tool name the MCP server logs a write under (`write(dir, org, "<tool>", ...)`). */
 function serverWriteTools(): string[] {
   const dir = join(__dirname, "../../src-tauri/mcp/src");
   const tools = new Set<string>();
-  for (const f of readdirSync(dir).filter((n) => n.endsWith(".rs"))) {
-    for (const m of readFileSync(join(dir, f), "utf8").matchAll(/\bwrite\(\s*\w+,\s*&?org,\s*"([a-z_]+)"/g)) {
+  for (const f of rustFiles(dir)) {
+    for (const m of readFileSync(f, "utf8").matchAll(/\bwrite\(\s*\w+,\s*&?org,\s*"([a-z_]+)"/g)) {
       tools.add(m[1]);
     }
   }
