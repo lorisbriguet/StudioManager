@@ -47,6 +47,7 @@ import { NotificationsPage } from "./pages/NotificationsPage";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConfirmHost } from "./components/ui/ConfirmDialog";
 import { QuickTimerModal } from "./components/QuickTimerModal";
+import { NewTaskModal } from "./components/NewTaskModal";
 import { OrgGate } from "./components/OrgGate";
 import { MenuBarApp } from "./menubar/MenuBarApp";
 import { useFollowAppSettings } from "./menubar/useFollowAppSettings";
@@ -260,6 +261,7 @@ function MainApp() {
             </Routes>
             <CommandPalette />
             <QuickTimerModal />
+            <NewTaskModal />
           </ErrorBoundary>
         </BrowserRouter>
       </OrgGate>

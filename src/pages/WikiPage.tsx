@@ -53,6 +53,7 @@ import { projectColors } from "../components/wiki/wikiColors";
 import { closeView, EMPTY_TABS, leaveGraph, openInView, pruneTabs, singleView, tabArticleId, tabRef, type TabsState, type WikiRef } from "../lib/wikiTabs";
 import { useProjectDocs, type ProjectDoc } from "../db/hooks/useProjectDocs";
 import { DocView } from "../components/wiki/DocView";
+import { useNewItem } from "../hooks/useNewItem";
 
 // ─── Slash Command Menu ───────────────────────────────────────────
 interface SlashMenuItem {
@@ -1092,6 +1093,8 @@ export function WikiPage() {
     },
     [createArticle, t.untitled, setMode]
   );
+  // Cmd+N and the palette's New article create one (lib/newEntity.ts).
+  useNewItem("/wiki", () => { if (!createArticle.isPending) handleNewArticle(null); });
 
   const handleDeleteArticle = useCallback(
     (id: number) => deleteWithUndo(deleteArticle, id, t.article_deleted),
