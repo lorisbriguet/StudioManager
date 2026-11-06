@@ -4,6 +4,7 @@ import { useAppStore } from "../stores/app-store";
 import { getTaskById } from "../db/queries/tasks";
 import { getProject } from "../db/queries/projects";
 import { createTimeEntry } from "../db/queries/timeEntries";
+import { invalidateTimeTracking } from "../db/queryKeys";
 import { notify } from "../lib/notify";
 import { todayLocalISO } from "../utils/localDate";
 import { useT } from "../i18n/useT";
@@ -67,14 +68,7 @@ export function useTimerActions() {
     // Entry is safely in the DB — now the timer state can go.
     clearTimer();
 
-    // Invalidate workload, task, and time-entries queries
-    qc.invalidateQueries({ queryKey: ["workload-rows", timer.projectId] });
-    qc.invalidateQueries({ queryKey: ["tasks"] });
-    qc.invalidateQueries({ queryKey: ["time-entries"] });
-    qc.invalidateQueries({ queryKey: ["time-this-week"] });
-    qc.invalidateQueries({ queryKey: ["weekly-trend"] });
-    qc.invalidateQueries({ queryKey: ["top-time-consumers"] });
-    qc.invalidateQueries({ queryKey: ["project-time-distribution"] });
+    invalidateTimeTracking(qc);
 
     // No toast: the timer bar disappearing is the feedback (routine work).
     return true;

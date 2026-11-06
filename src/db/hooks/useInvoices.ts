@@ -5,10 +5,11 @@ import type { Invoice, InvoiceLineItem } from "../../types/invoice";
 import { generateAndStoreInvoicePdf } from "../../lib/invoicePdfStore";
 import { getLabels, notify } from "../../lib/notify";
 import { documentHooks } from "./documentHooks";
+import { qk } from "../queryKeys";
 
 const hooks = documentHooks<Invoice, InvoiceLineItem>({
-  key: "invoices",
-  lineItemsKey: (id) => ["invoice-line-items", id],
+  keys: qk.invoices,
+  kind: "invoice",
   dateField: "invoice_date",
   lineItemForeignKey: "invoice_id",
   labels: {
@@ -45,7 +46,7 @@ const hooks = documentHooks<Invoice, InvoiceLineItem>({
       generateAndStoreInvoicePdf(id).then(() => true),
       { success: null, error: t.failed_to_generate_pdf }
     );
-    if (generated) qc.invalidateQueries({ queryKey: ["invoices"] });
+    if (generated) qc.invalidateQueries({ queryKey: qk.invoices.all });
   },
 });
 
@@ -59,7 +60,7 @@ export const useDeleteInvoice = hooks.useDelete;
 
 export function useInvoicesByClient(clientId: string) {
   return useQuery({
-    queryKey: ["invoices", "client", clientId],
+    queryKey: qk.invoices.byClient(clientId),
     queryFn: () => q.getInvoicesByClient(clientId),
     enabled: !!clientId,
   });

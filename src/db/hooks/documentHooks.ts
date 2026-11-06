@@ -4,6 +4,7 @@ import { getLabels } from "../../lib/notify";
 import type { UIKey } from "../../i18n/ui";
 import { AppError } from "../../lib/errors";
 import type { LineItemFields } from "../../types/document";
+import { invalidateMoney } from "../queryKeys";
 
 /** The fields every invoice or quote row has that these hooks rely on. */
 interface DocumentRow {
@@ -19,9 +20,15 @@ type DocFields<Doc> = Partial<NewDoc<Doc>>;
 type LabelKey = UIKey;
 
 export interface DocumentHooksConfig<Doc extends DocumentRow, Item extends LineItemFields> {
-  /** Query key prefix: "invoices" or "quotes". */
-  key: string;
-  lineItemsKey: (id: number) => QueryKey;
+  /** Its keys from src/db/queryKeys.ts: qk.invoices or qk.quotes. */
+  keys: {
+    all: QueryKey;
+    detail: (id: number) => QueryKey;
+    byProject: (projectId: number) => QueryKey;
+    lineItems: (id: number) => QueryKey;
+  };
+  /** Kind name used in error messages: "invoice" or "quote". */
+  kind: string;
   /** Column whose year numbers the reference when the document is sent. */
   dateField: keyof Doc & string;
   /** Foreign key column on line items, stripped before restoring them. */
@@ -53,7 +60,7 @@ export interface DocumentHooksConfig<Doc extends DocumentRow, Item extends LineI
 export function documentHooks<Doc extends DocumentRow, Item extends LineItemFields>(
   config: DocumentHooksConfig<Doc, Item>
 ) {
-  const { key, lineItemsKey, dateField, lineItemForeignKey, labels, queries: q } = config;
+  const { keys, kind, dateField, lineItemForeignKey, labels, queries: q } = config;
 
   const stripLineItem = (item: Item): LineItemFields => {
     const { id: _id, [lineItemForeignKey]: _fk, ...rest } = item as unknown as Record<string, unknown>;
@@ -90,29 +97,29 @@ export function documentHooks<Doc extends DocumentRow, Item extends LineItemFiel
   };
 
   const invalidate = (qc: QueryClient, ...extra: QueryKey[]) => {
-    qc.invalidateQueries({ queryKey: [key] });
+    qc.invalidateQueries({ queryKey: keys.all });
     for (const k of extra) qc.invalidateQueries({ queryKey: k });
-    qc.invalidateQueries({ queryKey: ["finance"] });
+    invalidateMoney(qc);
   };
 
   function useList() {
-    return useQuery({ queryKey: [key], queryFn: q.list });
+    return useQuery({ queryKey: keys.all, queryFn: q.list });
   }
 
   function useOne(id: number) {
-    return useQuery({ queryKey: [key, id], queryFn: () => q.get(id), enabled: !!id });
+    return useQuery({ queryKey: keys.detail(id), queryFn: () => q.get(id), enabled: !!id });
   }
 
   function useByProject(projectId: number) {
     return useQuery({
-      queryKey: [key, "project", projectId],
+      queryKey: keys.byProject(projectId),
       queryFn: () => q.listByProject(projectId),
       enabled: !!projectId,
     });
   }
 
   function useLineItems(id: number) {
-    return useQuery({ queryKey: lineItemsKey(id), queryFn: () => q.lineItems(id), enabled: !!id });
+    return useQuery({ queryKey: keys.lineItems(id), queryFn: () => q.lineItems(id), enabled: !!id });
   }
 
   function useCreate() {
@@ -128,7 +135,7 @@ export function documentHooks<Doc extends DocumentRow, Item extends LineItemFiel
             // its number would be freed for the next document.
             const current = await q.get(id);
             if (current && !current.reference.startsWith("DRAFT")) {
-              throw new AppError("error_undo_numbered_document", `Won't delete numbered ${key} ${current.reference}`);
+              throw new AppError("error_undo_numbered_document", `Won't delete numbered ${kind} ${current.reference}`);
             }
             await q.delete(id);
             invalidate(qc);
@@ -200,16 +207,16 @@ export function documentHooks<Doc extends DocumentRow, Item extends LineItemFiel
             label: `${getLabels()[labels.undoUpdate]} "${prev.reference}"`,
             execute: async () => {
               await restore(id, prevData, prevItems);
-              invalidate(qc, lineItemsKey(id));
+              invalidate(qc, keys.lineItems(id));
             },
             redo: async () => {
               await restore(id, data as Record<string, unknown>, lineItems);
-              invalidate(qc, lineItemsKey(id));
+              invalidate(qc, keys.lineItems(id));
             },
           });
         }
       },
-      onSuccess: (_data, { id }) => invalidate(qc, lineItemsKey(id)),
+      onSuccess: (_data, { id }) => invalidate(qc, keys.lineItems(id)),
     });
   }
 

@@ -1,13 +1,12 @@
 import * as q from "../queries/quotes";
 import type { Quote, QuoteLineItem } from "../../types/quote";
 import { documentHooks } from "./documentHooks";
+import { qk } from "../queryKeys";
 
-/** Quote line items are cached under the quote, so refreshing ["quotes"] covers them. */
-export const quoteLineItemsKey = (id: number) => ["quotes", id, "lineItems"];
 
 const hooks = documentHooks<Quote, QuoteLineItem>({
-  key: "quotes",
-  lineItemsKey: quoteLineItemsKey,
+  keys: qk.quotes,
+  kind: "quote",
   dateField: "quote_date",
   lineItemForeignKey: "quote_id",
   labels: {
