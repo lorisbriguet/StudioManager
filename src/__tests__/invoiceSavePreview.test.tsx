@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { MemoryRouter, Routes, Route, useNavigate } from "react-router-dom";
+
+/** Stands in for the preview page: its back arrow goes one step back in history. */
+function PreviewProbe() {
+  const navigate = useNavigate();
+  return <button data-testid="preview-probe" onClick={() => navigate(-1)}>Back</button>;
+}
 import { InvoiceFormPage } from "../pages/InvoiceFormPage";
 import { useAppStore } from "../stores/app-store";
 import { getDb } from "../db";
@@ -60,7 +66,7 @@ const lineItem = {
   sort_order: 0,
 };
 
-function renderForm() {
+function renderForm(history: string[] = ["/invoices/7/edit"]) {
   setSelectHandler((sql) => {
     const flat = sql.replace(/\s+/g, " ");
     if (flat.includes("FROM invoice_line_items")) return [lineItem];
@@ -73,10 +79,10 @@ function renderForm() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={["/invoices/7/edit"]}>
+      <MemoryRouter initialEntries={history} initialIndex={history.length - 1}>
         <Routes>
           <Route path="/invoices/:id/edit" element={<InvoiceFormPage />} />
-          <Route path="/invoices/:id/preview" element={<div data-testid="preview-probe" />} />
+          <Route path="/invoices/:id/preview" element={<PreviewProbe />} />
           <Route path="/invoices" element={<div data-testid="list-probe" />} />
         </Routes>
       </MemoryRouter>
@@ -108,6 +114,14 @@ describe("Invoice form Save & Preview", () => {
     });
     const update = executedStatements.find((s) => s.sql.replace(/\s+/g, " ").includes("UPDATE invoices"));
     expect(update).toBeDefined();
+  });
+
+  it("the preview's back arrow returns to the list, not to the form", async () => {
+    renderForm(["/invoices", "/invoices/7/edit"]);
+    await screen.findByDisplayValue("Poster design");
+    fireEvent.click(await screen.findByRole("button", { name: /save & preview/i }));
+    fireEvent.click(await screen.findByTestId("preview-probe"));
+    await waitFor(() => expect(screen.getByTestId("list-probe")).toBeInTheDocument());
   });
 
   it("plain save still returns to the list", async () => {

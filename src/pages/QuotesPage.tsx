@@ -14,7 +14,8 @@ import { buildQuotePdf } from "../lib/documentPdf";
 import { getQuoteLineItems } from "../db/queries/quotes";
 import { useClients } from "../db/hooks/useClients";
 import { useQuotes, useUpdateQuote, useDeleteQuote } from "../db/hooks/useQuotes";
-import { SortHeader, sortRows, type SortState } from "../components/ui/SortHeader";
+import { SortHeader, type SortState } from "../components/ui/SortHeader";
+import { sortDocuments } from "../lib/documentSort";
 import { useListNavigation } from "../hooks/useListNavigation";
 import { formatDisplayDate } from "../utils/formatDate";
 import { useT } from "../i18n/useT";
@@ -171,7 +172,7 @@ export function QuotesPage() {
         )
       : enriched;
     rows = applyFilterConditions(rows, filterConditions, filterLogic);
-    return sortRows(rows, sort.key, sort.dir);
+    return sortDocuments(rows, sort.key, sort.dir);
   }, [enriched, search, sort, filterConditions, filterLogic]);
 
   // Keyboard row navigation (flat list — every filtered row is visible).

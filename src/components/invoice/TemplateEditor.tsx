@@ -11,87 +11,8 @@ import {
 } from "../../db/hooks/useInvoiceTemplates";
 import type { InvoiceTemplate } from "../../types/invoice-template";
 import { SegmentedControl } from "../ui/SegmentedControl";
-
-// ---------------------------------------------------------------------------
-// Sample data for live preview
-// ---------------------------------------------------------------------------
-
-const sampleInvoice = {
-  id: 0,
-  reference: "INV-2026-001",
-  invoice_date: "2026-01-15",
-  due_date: "2026-02-14",
-  status: "sent" as const,
-  total: 3500,
-  subtotal: 3500,
-  currency: "CHF",
-  notes: "Thank you for your business.",
-  activity: "Graphic Design",
-  assignment: "Brand Identity",
-  po_number: "PO-12345",
-  project_id: null,
-  client_id: 0,
-  contact_id: null,
-  billing_address_id: null,
-  language: "EN" as const,
-  discount_rate: 0,
-  discount_amount: 0,
-  exchange_rate: null,
-  chf_equivalent: null,
-  chf_manual_override: null,
-  pdf_path: null,
-  payment_terms_days: 30,
-  reminder_count: 0,
-  last_reminder_date: null,
-  template_id: null,
-  created_at: "",
-  updated_at: "",
-};
-
-const sampleLineItems = [
-  { id: 1, invoice_id: 0, designation: "Logo Design", quantity: 1, rate: 1500, unit: "flat rate", amount: 1500, sort_order: 0 },
-  { id: 2, invoice_id: 0, designation: "Brand Guidelines", quantity: 8, rate: 150, unit: "hours", amount: 1200, sort_order: 1 },
-  { id: 3, invoice_id: 0, designation: "Business Card Design", quantity: 1, rate: 800, unit: "flat rate", amount: 800, sort_order: 2 },
-];
-
-const sampleClient = {
-  id: 0,
-  name: "Acme Corp",
-  address: "123 Business St",
-  postal_code: "8001",
-  city: "Zurich",
-  country: "Switzerland",
-  email: "hello@acme.ch",
-  language: "en" as const,
-  phone: "",
-  discount_rate: 0,
-  notes: "",
-  created_at: "",
-  updated_at: "",
-};
-
-const sampleProfile = {
-  id: 1,
-  owner_name: "Loris Briguet",
-  address: "Rue de la Paix 1",
-  postal_code: "1000",
-  city: "Lausanne",
-  country: "Switzerland",
-  email: "loris@example.ch",
-  phone: "+41 79 000 00 00",
-  ide_number: "CHE-123.456.789",
-  affiliate_number: "",
-  bank_name: "UBS Switzerland AG",
-  bank_address: "Bahnhofstrasse 45, 8001 Zurich",
-  iban: "CH56 0483 5012 3456 7800 9",
-  qr_iban: "CH56 0483 5012 3456 7800 9",
-  clearing: "8300",
-  bic_swift: "UBSWCHZH80A",
-  default_activity: '["Graphic Design"]',
-  default_payment_terms_days: 30,
-  vat_exempt: 1,
-  footer_text: "",
-};
+import { useBusinessProfile } from "../../db/hooks/useBusinessProfile";
+import { sampleClient, sampleInvoice, sampleLineItems, templatePreviewProfile } from "./templateSample";
 
 // ---------------------------------------------------------------------------
 // Column order helpers
@@ -165,6 +86,8 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
   const createTemplate = useCreateInvoiceTemplate();
   const updateTemplate = useUpdateInvoiceTemplate();
   const setDefault = useSetDefaultTemplate();
+  const { data: profile } = useBusinessProfile();
+  const previewProfile = templatePreviewProfile(profile);
 
   const initial = template
     ? {
@@ -425,8 +348,8 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
             <InvoicePDF
               invoice={sampleInvoice as never}
               lineItems={sampleLineItems}
-              client={sampleClient as never}
-              profile={sampleProfile as never}
+              client={sampleClient}
+              profile={previewProfile}
               projectName={showProjectName ? "Brand Identity Project" : undefined}
               reminderCount={0}
               template={currentTemplateState as never}

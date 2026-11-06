@@ -355,6 +355,12 @@ export function InvoiceFormPage() {
 
   const availableTasks = projectTasks ?? [];
 
+  /** The preview takes the form's place in history, so its back arrow skips the form. */
+  const goAfterSave = (dest: "list" | "preview", invoiceId: number) => {
+    if (dest === "preview") navigate(`/invoices/${invoiceId}/preview`, { replace: true });
+    else navigate("/invoices");
+  };
+
   const save = async (dest: "list" | "preview" = "list") => {
     // Phase 2 E2 — field-level validation replaces the old toast branches
     // (toasts remain the backstop for DB failures via onError below).
@@ -426,7 +432,7 @@ export function InvoiceFormPage() {
             onSuccess: () => {
               setFormDirty(false);
               notify.success(t.invoice_updated);
-              navigate(dest === "preview" ? `/invoices/${invoiceId}/preview` : "/invoices");
+              goAfterSave(dest, invoiceId);
             },
           }
         );
@@ -480,7 +486,7 @@ export function InvoiceFormPage() {
               }
               setFormDirty(false);
               notify.success(fromQuoteId ? t.quote_converted : t.invoice_created);
-              navigate(dest === "preview" ? `/invoices/${invoiceId}/preview` : "/invoices");
+              goAfterSave(dest, invoiceId);
             },
           }
         );

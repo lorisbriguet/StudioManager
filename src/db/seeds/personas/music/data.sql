@@ -471,6 +471,13 @@ INSERT INTO machine_disks (machine_id, slot, model, serial, size_bytes, power_on
 -- ═══════════════════════════════════════════════════
 -- REFERENCE RENUMBERING (per calendar year, from each row's own date)
 -- ═══════════════════════════════════════════════════
+-- Park every reference on a placeholder first: SQLite checks UNIQUE row by
+-- row, so renumbering in place fails when a new number is still held by a
+-- row not renumbered yet (rows inserted out of date order).
+UPDATE invoices SET reference = '#' || id WHERE reference NOT LIKE 'DRAFT-%';
+UPDATE quotes SET reference = '#' || id;
+UPDATE expenses SET reference = '#' || id;
+UPDATE income SET reference = '#' || id;
 UPDATE invoices SET reference = '' || strftime('%Y', invoice_date) || '-' || printf('%03d', (
   SELECT COUNT(*) FROM invoices i2
   WHERE strftime('%Y', i2.invoice_date) = strftime('%Y', invoices.invoice_date)
