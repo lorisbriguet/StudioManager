@@ -289,6 +289,14 @@ struct Navigate {
     path: String,
 }
 
+/// From the panel: hide it (Escape). Not a blur, so the next click on the icon opens it again.
+#[tauri::command]
+pub fn menubar_hide(app: AppHandle) {
+    if let Some(p) = app.get_webview_window(PANEL_LABEL) {
+        let _ = p.hide();
+    }
+}
+
 /// From the panel: hide it, bring the main window forward and, when given, open the agent
 /// (`agent`, a session id), the start form (`newAgent`) or the Agents settings (`settings: "agents"`,
 /// the only target accepted) there.

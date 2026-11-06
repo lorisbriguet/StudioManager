@@ -74,6 +74,11 @@ export function openMainWindow(
   });
 }
 
+/** From the menu bar panel: hide it (Escape). */
+export function hideMenuBarPanel(): Promise<void> {
+  return invoke<void>("menubar_hide");
+}
+
 /** Sent to the main window by `menubar_open_main`. */
 export const MENUBAR_NAVIGATE = "menubar:navigate";
 

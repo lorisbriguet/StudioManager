@@ -111,4 +111,5 @@ permissions = [
   "allow-routines-open-folder",
   "allow-routines-open-link",
   "allow-menubar-open-main",
+  "allow-menubar-hide",
 ]
