@@ -29,7 +29,10 @@ export function TabBar() {
     setCanGoForward(idx < newMax);
   }, []);
 
+  // history.state and sessionStorage live outside React, so they are read after
+  // each navigation rather than during render.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs from browser history, an external store
     updateNavState();
   }, [location, updateNavState]);
 
