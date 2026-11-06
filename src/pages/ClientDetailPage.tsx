@@ -24,7 +24,7 @@ import { ClientTimeline } from "../components/ClientTimeline";
 import { ContextMenu } from "../components/ui/ContextMenu";
 import { undoableFromStore, undoTop } from "../lib/undo";
 import { useClientRemoval } from "../hooks/useClientRemoval";
-import type { Client, ClientContact, ClientAddress } from "../types/client";
+import { sameAddress, type Client, type ClientContact, type ClientAddress } from "../types/client";
 
 export function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -736,8 +736,9 @@ function AddressesSection({
       />
 
       <div className="space-y-2">
-        {/* Main address — read-only card from client fields */}
-        {(client.address_line1 || client.postal_city) && (
+        {/* Main address — read-only card from client fields, only while no
+            address row already shows the same address */}
+        {(client.address_line1 || client.postal_city) && !addresses.some((a) => sameAddress(a, client)) && (
           <Card tone="inset" padding="sm" className="opacity-80">
             <SectionLabel as="span">{t.main_address}</SectionLabel>
             <div className="mt-1 text-sm">

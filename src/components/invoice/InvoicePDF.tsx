@@ -49,7 +49,7 @@ export function InvoicePDF({
   const showPoNumber = template ? !!template.show_po_number : true;
   const showQrBill = template ? !!template.show_qr_bill : true;
 
-  const qrBillData = shouldRenderQrBill(invoice, profile, showQrBill) ? buildQRBillData(invoice, client, profile) : null;
+  const qrBillData = shouldRenderQrBill(invoice, profile, showQrBill) ? buildQRBillData(invoice, client, profile, billingAddress) : null;
   const qrBillLang = invoice.language === "EN" ? "EN" as const : "FR" as const;
 
   const cur = invoice.currency || "CHF";

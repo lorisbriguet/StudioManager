@@ -80,6 +80,33 @@ describe("buildQRBillData", () => {
     expect(data.debtor!.city).toBe("Lausanne");
   });
 
+  it("takes the debtor from the invoice's billing address when one is chosen", () => {
+    const office = {
+      id: 7, client_id: "CLI001", label: "Office", billing_name: "Test Client SA",
+      address_line1: "Bahnhofstrasse 9", address_line2: "", postal_city: "8001 Zürich",
+    };
+    const data = buildQRBillData(baseInvoice, baseClient, baseProfile, office);
+    expect(data.debtor).toEqual({
+      name: "Test Client SA", address: "Bahnhofstrasse 9", zip: "8001", city: "Zürich", country: "CH",
+    });
+  });
+
+  it("names the debtor like the invoice does: billing name before client name", () => {
+    const data = buildQRBillData(baseInvoice, { ...baseClient, billing_name: "Test Client Sàrl" }, baseProfile);
+    expect(data.debtor!.name).toBe("Test Client Sàrl");
+  });
+
+  it("reads an old client's city from address_line2", () => {
+    const old = { ...baseClient, address_line2: "1950 Sion", postal_city: "" };
+    const data = buildQRBillData(baseInvoice, old, baseProfile);
+    expect(data.debtor).toMatchObject({ zip: "1950", city: "Sion" });
+  });
+
+  it("leaves the debtor out when there is no address", () => {
+    const none = { ...baseClient, address_line1: "", address_line2: "", postal_city: "" };
+    expect(buildQRBillData(baseInvoice, none, baseProfile).debtor).toBeUndefined();
+  });
+
   it("sets amount and currency", () => {
     const data = buildQRBillData(baseInvoice, baseClient, baseProfile);
     expect(data.amount).toBe(1500);
