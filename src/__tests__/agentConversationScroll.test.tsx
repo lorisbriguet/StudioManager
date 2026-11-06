@@ -16,6 +16,8 @@ function renderIn(working: boolean) {
   const scroller = screen.getByTestId("scroller");
   Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 1000 });
   Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 400 });
+  // Where the jump to the latest message on load leaves it.
+  Object.defineProperty(scroller, "scrollTop", { configurable: true, value: 600 });
   const scrollTo = (top: number) => {
     Object.defineProperty(scroller, "scrollTop", { configurable: true, value: top });
     fireEvent.scroll(scroller);
@@ -87,6 +89,7 @@ describe("Conversation keeps the reader's place when the window slides", () => {
     Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 1000 });
     Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 400 });
     Object.defineProperty(scroller, "scrollTop", { configurable: true, get: () => scrollTop, set: (v: number) => { scrollTop = v; } });
+    scrollTop = 600; // where the jump to the latest message on load leaves it
 
     await act(async () => { await vi.advanceTimersByTimeAsync(3100); });
     scrollTop = 250; // reading in the middle: 350 px above the bottom
@@ -194,5 +197,118 @@ describe("Conversation scrolling and working indicator", () => {
       </div>,
     );
     expect(screen.queryByTestId("agent-working")).not.toBeInTheDocument();
+  });
+});
+
+describe("Conversation opens at the latest message (subtask 322)", () => {
+  const observers: (() => void)[] = [];
+  const Real = globalThis.ResizeObserver;
+  let height = 1000;
+  let top = 0;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    Element.prototype.scrollIntoView = vi.fn();
+    observers.length = 0;
+    height = 1000;
+    top = 0;
+    replies = 3;
+    setInvokeHandler((cmd) => (cmd === "agents_conversation" ? messages() : null));
+    globalThis.ResizeObserver = class {
+      constructor(cb: () => void) { observers.push(cb); }
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+    } as unknown as typeof ResizeObserver;
+  });
+  afterEach(() => {
+    globalThis.ResizeObserver = Real;
+    vi.useRealTimers();
+  });
+
+  /** A 400 px scroller whose scrollTop is clamped like a browser's. */
+  function mount(sessionId = "s1") {
+    const view = render(
+      <div data-testid="scroller">
+        <Conversation sessionId={sessionId} working={false} />
+      </div>,
+    );
+    const scroller = screen.getByTestId("scroller");
+    Object.defineProperty(scroller, "scrollHeight", { configurable: true, get: () => height });
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 400 });
+    Object.defineProperty(scroller, "scrollTop", {
+      configurable: true,
+      get: () => top,
+      set: (v: number) => {
+        top = Math.max(0, Math.min(v, height - scroller.clientHeight));
+      },
+    });
+    const resized = () => act(() => observers.forEach((cb) => cb()));
+    return { ...view, scroller, resized };
+  }
+
+  const settle = () => act(async () => { await vi.advanceTimersByTimeAsync(10); });
+
+  it("stays at the bottom when the content grows before the scroll event of its own jump", async () => {
+    const { scroller, resized } = mount();
+    await settle();
+    resized();
+    expect(top).toBe(600);
+    // Code blocks and images lay out late: the content grows by 500 px, then the scroll
+    // event of the jump above arrives, measured against the new height.
+    height = 1500;
+    fireEvent.scroll(scroller);
+    resized();
+    expect(top).toBe(1100);
+    expect(screen.queryByRole("button", { name: "Jump to the latest message" })).toBeNull();
+  });
+
+  it("stays at the bottom when the question card above makes the scroller shorter", async () => {
+    const { scroller, resized } = mount();
+    await settle();
+    resized();
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 250 });
+    fireEvent.scroll(scroller);
+    resized();
+    expect(top).toBe(750);
+  });
+
+  it("still lets the reader scroll up, and follows again once they are back at the bottom", async () => {
+    const { scroller, resized } = mount();
+    await settle();
+    resized();
+    top = 200;
+    fireEvent.scroll(scroller);
+    height = 1500;
+    resized();
+    expect(top).toBe(200);
+    top = 1100;
+    fireEvent.scroll(scroller);
+    height = 1800;
+    resized();
+    expect(top).toBe(1400);
+  });
+
+  it("opens another session at its latest message after the reader scrolled up in this one", async () => {
+    const { scroller, resized, rerender } = mount();
+    await settle();
+    resized();
+    top = 100;
+    fireEvent.scroll(scroller);
+    rerender(
+      <div data-testid="scroller">
+        <Conversation sessionId="s2" working={false} />
+      </div>,
+    );
+    // The list empties first: the browser clamps the position to 0 and reports a scroll.
+    height = 400;
+    top = 0;
+    fireEvent.scroll(scroller);
+    await settle();
+    // The new transcript renders and grows before the next scroll event.
+    height = 1200;
+    fireEvent.scroll(scroller);
+    resized();
+    expect(top).toBe(800);
   });
 });
