@@ -17,3 +17,14 @@ export function useChanged(...deps: unknown[]): boolean {
   setPrev(deps);
   return true;
 }
+
+/**
+ * Like `useChanged`, but also true on the first render: for an effect that ran on mount
+ * and again whenever `deps` changed.
+ */
+export function useChangedOrMount(...deps: unknown[]): boolean {
+  const [prev, setPrev] = useState<unknown[] | null>(null);
+  if (prev && prev.length === deps.length && prev.every((d, i) => Object.is(d, deps[i]))) return false;
+  setPrev(deps);
+  return true;
+}
