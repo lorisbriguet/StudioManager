@@ -347,11 +347,20 @@ describe("contrast", () => {
     }
   });
 
-  it("the checkbox border is 3:1 against bg and surface in every theme", () => {
+  it("the checkbox border is 3:1 against bg, surface and its input-bg fill in every theme", () => {
+    for (const theme of THEMES) {
+      const env = themeEnv(theme);
+      for (const bg of [...surfaces, "--color-input-bg"]) {
+        expect(ratio(env, "--color-checkbox-border", bg), `${theme.id} ${bg}`).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+
+  it("the Toggle's off track is 3:1 against bg and surface in every theme", () => {
     for (const theme of THEMES) {
       const env = themeEnv(theme);
       for (const bg of surfaces) {
-        expect(ratio(env, "--color-checkbox-border", bg), `${theme.id} ${bg}`).toBeGreaterThanOrEqual(3);
+        expect(ratio(env, "--color-toggle-track", bg), `${theme.id} ${bg}`).toBeGreaterThanOrEqual(3);
       }
     }
   });
