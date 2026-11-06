@@ -8,7 +8,7 @@ def dlg(w, title, body, foot, note=""):
 field = lambda l, v: f'<div><span class="fl">{l}</span><div class="f">{v}</div></div>'
 
 today = "".join([
-    var("Create client · FormModal lg", "512px · 9 fields", f'<div class="g2">{field("Name","Fondation Artvis")}{field("Email","hello@artvis.ch")}</div><div class="acts" style="margin-top:12px"><span class="b">Cancel</span><span class="b p">Save</span></div>'),
+    var("Create client · FormModal lg", "512px · 9 fields", f'<div class="g2">{field("Name","Fondation Artvis")}{field("Email","hello@artvis.example")}</div><div class="acts" style="margin-top:12px"><span class="b">Cancel</span><span class="b p">Save</span></div>'),
     var("Create resource · FormModal md", "448px · 4 fields", f'<div class="g2">{field("Name","Figma")}{field("Type","Tool ▾")}</div><div class="acts" style="margin-top:12px"><span class="b">Cancel</span><span class="b p">Save</span></div>'),
     var("New organisation · Modal sm", "384px · Enter by hand", f'{field("Name","Studio")}<div class="acts" style="margin-top:12px"><span class="b">Cancel</span><span class="b p">Create</span></div>'),
     var("Draft export · Modal sm, no title", "Cancel is outline", '<p style="margin:0 0 12px;font-size:12px">This invoice is a draft. Mark it as sent before exporting?</p><div class="acts"><span class="b o">Cancel</span><span class="b">Export as draft</span><span class="b p">Mark sent &amp; export</span></div>'),
@@ -18,7 +18,7 @@ today = "".join([
 
 proposal = '<div class="panel"><div class="stage">' + "".join([
     dlg(400, "Delete invoice?", '<p style="margin:0">INV-2026-014 and its PDF will be deleted. This can\'t be undone.</p>', '<span class="b">Cancel</span><span class="b d">Delete</span>', "sm · 400px — confirm, prompt, 1–3 fields"),
-    dlg(560, "New client", f'<div class="g2">{field("Name *","Fondation Artvis")}{field("Email","hello@artvis.ch")}{field("Phone","+41 61 000 00 00")}{field("Language","Français ▾")}</div>', '<span class="b">Cancel</span><span class="b p">Create client</span>', "md · 560px — forms, wizard, palette, editors"),
+    dlg(560, "New client", f'<div class="g2">{field("Name *","Fondation Artvis")}{field("Email","hello@artvis.example")}{field("Phone","+41 61 000 00 00")}{field("Language","Français ▾")}</div>', '<span class="b">Cancel</span><span class="b p">Create client</span>', "md · 560px — forms, wizard, palette, editors"),
 ]) + '<div style="width:100%"><div class="xs muted" style="margin-bottom:6px">full · 80% × 85% — viewers (receipts, PDFs). The body scrolls in every size; header and footer stay.</div></div></div></div>'
 
 p = page(

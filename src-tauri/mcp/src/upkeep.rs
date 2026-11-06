@@ -1247,7 +1247,7 @@ mod tests {
         assert_eq!(m.links.len(), 1, "files are not links: {:?}", m.links);
         assert_eq!(m.links[0].label, "Paperless");
         assert_eq!(m.links[0].url, "https://nas.example:8443");
-        let m = add_machine_link(&dir, &org, "1", "Screen Sharing", "vnc://100.64.0.7").unwrap();
+        let m = add_machine_link(&dir, &org, "1", "Screen Sharing", "vnc://192.0.2.7").unwrap();
         assert_eq!(m.links.iter().map(|l| l.label.as_str()).collect::<Vec<_>>(), ["Paperless", "Screen Sharing"]);
         assert_eq!(one::<i64>(&conn, "SELECT count(*) FROM machine_files WHERE kind = 'link'"), 2);
         let log = std::fs::read_to_string(dir.join(crate::log::LOG_FILE)).unwrap();

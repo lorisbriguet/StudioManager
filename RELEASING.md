@@ -12,7 +12,7 @@ Step-by-step guidelines for publishing a new release on GitHub. Follow in order;
 - Tauri updater signing key at `~/.tauri/StudioManager.key`, protected by a password kept in the login Keychain (service `StudioManager-updater-key`). **Never commit it.** Its public key is pinned in `src-tauri/tauri.conf.json`: installed apps only accept updates signed with this key. Keep a backup of the key file and its password outside this Mac (password manager). For a new key, a lost one or a leaked one, see [Updater key: rotation, loss, leak](#updater-key-rotation-loss-leak). (The original key has no password and no Keychain entry: until the first rotation, use `TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""` in step 4.)
 - Node **20.19+ or 22.12+** (Vite 7 requirement) and stable Rust.
 - Use **npm 11** for installs and lockfile changes (`npx -y npm@11 install`): npm 10.9 crashes with `Cannot read properties of null (reading 'edgesOut')` on Vitest 4's peer set.
-- On this machine: the repo lives on Synology Drive, which corrupts `node_modules` and `src-tauri/target`. Build with a **local** cargo target dir (see step 4) and run `npm ci` if node_modules acts up. Ideally exclude both folders from sync.
+- Keep the repo out of synced folders (Synology Drive, iCloud): sync corrupts `node_modules` and `src-tauri/target`. Cargo builds into `src-tauri/target` unless `CARGO_TARGET_DIR` says otherwise (step 4 sets one). Run `npm ci` if node_modules acts up.
 
 ## 1. Pre-release validation (all must pass)
 
@@ -158,7 +158,7 @@ Run these with Agents and **Show in menu bar** on (see [the menu bar guide](docs
 | Sign step: "incorrect updater private key password" | The `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secret (or the Keychain entry) doesn't match the key |
 | "Check installed apps accept the signature" fails | The `release` environment holds a different key than the latest published release's pubkey |
 | Updater never sees the release | Tag/URL mismatch (`latest.json` url vs actual tag), or release marked draft/pre-release |
-| Build flakiness on this machine | Synology-synced `target`/`node_modules` — use local `CARGO_TARGET_DIR`, re-run `npm ci` |
+| Build flakiness | `target`/`node_modules` inside a synced folder — move the repo out of sync or set a local `CARGO_TARGET_DIR`, re-run `npm ci` |
 
 ## Updater key: rotation, loss, leak
 

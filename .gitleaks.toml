@@ -1,0 +1,38 @@
+# gitleaks config: the default secret rules plus private network addresses,
+# which this public repo must never contain. Use the RFC 5737 documentation
+# ranges (192.0.2.x, 198.51.100.x, 203.0.113.x) in tests and UI hints, and
+# .example domains in demo data.
+#
+# Run locally with `gitleaks git` (history) or `gitleaks dir .` (working tree).
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "private-ipv4-10"
+description = "Private IPv4 address (10.0.0.0/8)"
+regex = '''\b10\.\d{1,3}\.\d{1,3}\.\d{1,3}\b'''
+keywords = ["10."]
+
+[[rules]]
+id = "private-ipv4-172"
+description = "Private IPv4 address (172.16.0.0/12)"
+regex = '''\b172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}\b'''
+keywords = ["172."]
+
+[[rules]]
+id = "private-ipv4-192-168"
+description = "Private IPv4 address (192.168.0.0/16)"
+regex = '''\b192\.168\.\d{1,3}\.\d{1,3}\b'''
+keywords = ["192.168."]
+
+[[rules]]
+id = "cgnat-ipv4-tailnet"
+description = "Shared/CGNAT IPv4 address (100.64.0.0/10, used by Tailscale)"
+regex = '''\b100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}\b'''
+keywords = ["100."]
+
+# The range descriptions above match the rules themselves.
+[[allowlists]]
+description = "This config file"
+paths = ['''^\.gitleaks\.toml$''']

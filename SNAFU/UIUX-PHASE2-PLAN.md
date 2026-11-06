@@ -15,7 +15,7 @@
 4. DataTable: NOT in this phase (recorded in memory + SNAFU backlog).
 
 **Environment constraints (IMPORTANT for executors):**
-- Project root: `/Users/loris.briguet/Library/CloudStorage/SynologyDrive-02_SD/03_Projects/2026/StudioManager`
+- Project root: the repository root (paths below are relative to it).
 - Slow Synology cloud drive. Do NOT run git commands. No commits — the user commits manually.
 - Run targeted tests only (`npx vitest run src/__tests__/<file>`); the full suite + `npx tsc --noEmit` + `npm run lint` run once in the final task. Baseline: 173/173 tests, tsc clean, lint has exactly 19 known findings in 9 files (Task F1 clears them).
 - Always Read files before editing. Line refs below are from the audit and may have drifted.
