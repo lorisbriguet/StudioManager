@@ -15,7 +15,7 @@
 4. QR-bill is CHF-only: non-CHF invoices must render NO QR code section at all.
 
 **Environment constraints (IMPORTANT for executors):**
-- Project root: `/Users/loris.briguet/Library/CloudStorage/SynologyDrive-02_SD/03_Projects/2026/StudioManager`
+- Project root: the repository root (paths below are relative to it).
 - The project lives on a Synology cloud drive: file access can be slow; `git` commands can hang for minutes. **Do NOT run git commands.** No per-step commits — the user will commit manually at the end.
 - Run targeted tests only (`npx vitest run src/__tests__/<file>.test.ts`), never the full suite mid-task. Full suite + `npx tsc --noEmit` run once in the final task.
 - Do not run `npm run tauri dev` or any build; the human runs the app at the end.
