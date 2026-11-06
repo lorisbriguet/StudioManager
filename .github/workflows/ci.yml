@@ -42,8 +42,8 @@ jobs:
     # Tauri build takes over ten minutes, too long for every push. Releases
     # are built either on Loris's Mac or by the Release build workflow
     # (release.yml, started by hand on a tag), both per RELEASING.md. The MCP
-    # crate is checked there; Rust dependencies by the weekly `cargo audit`
-    # job in dependency-audit.yml.
+    # crate has its own job below; Rust dependencies are checked by the weekly
+    # `cargo audit` job in dependency-audit.yml.
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -81,6 +81,32 @@ jobs:
         working-directory: src-tauri
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
+        run: |
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked
+
+  mcp:
+    name: MCP crate clippy, test
+    # The MCP server (src-tauri/mcp) is its own crate with its own Cargo.lock:
+    # the app job above only builds its binary, never runs its tests or clippy.
+    # No Node or frontend needed.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Same version as rust-toolchain.toml.
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable, 2026-11
+        with:
+          toolchain: 1.93.1
+          components: clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: src-tauri/mcp
+      # From src-tauri/mcp, so cargo also reads src-tauri/.cargo/config.toml
+      # (the SQLite flag). --locked: build from Cargo.lock as committed.
+      - name: cargo clippy and test
+        working-directory: src-tauri/mcp
         run: |
           cargo clippy --locked --all-targets -- -D warnings
           cargo test --locked

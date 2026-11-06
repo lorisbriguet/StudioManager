@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { ICONS, Button, DatePicker, Input, PageHeader, Select, FormField, FieldError, FormLayout, FormGrid, FormActions, Textarea } from "../components/ui";
 import * as v from "../lib/validate";
 import { notify } from "../lib/notify";
@@ -8,6 +8,7 @@ import { useQuote, useCreateQuote, useUpdateQuote } from "../db/hooks/useQuotes"
 import { useInvoiceTemplates, useDefaultTemplate } from "../db/hooks/useInvoiceTemplates";
 import { useClients, useClientAddresses } from "../db/hooks/useClients";
 import { useProjects } from "../db/hooks/useProjects";
+import { getProject } from "../db/queries/projects";
 import { getQuoteLineItems } from "../db/queries/quotes";
 import { useT } from "../i18n/useT";
 import { useActivities } from "../db/hooks/useActivities";
@@ -35,6 +36,9 @@ export function QuoteFormPage() {
   const isEdit = !!id;
   const quoteId = Number(id);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // "New quote" from a project page: prefill client, project, language and discount
+  const fromProjectId = (!isEdit && Number(searchParams.get("project"))) || null;
 
   const t = useT();
   const { data: existingQuote } = useQuote(isEdit ? quoteId : 0);
@@ -167,12 +171,33 @@ export function QuoteFormPage() {
     }
   }, [existingQuote]);
 
+  // Pre-fill from a project (once clients are loaded, for language and discount)
+  const projectPrefilledRef = useRef(false);
+  useEffect(() => {
+    if (!fromProjectId || !clients || projectPrefilledRef.current) return;
+    projectPrefilledRef.current = true;
+    formLoadedRef.current = false;
+    getProject(fromProjectId).then((project) => {
+      if (!project) return;
+      const client = clients.find((c) => c.id === project.client_id);
+      setClientId(project.client_id);
+      setProjectId(project.id);
+      setLanguage(client?.language ?? "FR");
+      setDiscountRate(client?.has_discount ? client.discount_rate : 0);
+    }).catch((e) => {
+      notify.error(t.load_error_project, e);
+    }).finally(() => {
+      setTimeout(() => { formLoadedRef.current = true; }, 0);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-fill once per source project; t.* is only read in the error path
+  }, [fromProjectId, clients]);
+
   // Arm dirty tracking for new quotes (no existing data to load)
   useEffect(() => {
-    if (!isEdit) {
+    if (!isEdit && !fromProjectId) {
       setTimeout(() => { formLoadedRef.current = true; }, 0);
     }
-  }, [isEdit]);
+  }, [isEdit, fromProjectId]);
 
   const activityName = (a: Activity) => (language === "FR" ? a.name_fr : a.name_en);
   // Newly computed money values are rounded at every boundary — these are

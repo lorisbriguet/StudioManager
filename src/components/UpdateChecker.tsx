@@ -61,7 +61,7 @@ export function UpdateChecker() {
     await relaunch();
   };
 
-  // Check on mount (never in the demo build: its updater endpoint is a dead manifest by design)
+  // Check on mount (never in the demo build: it has no updater endpoint)
   useEffect(() => {
     if (!isDemoBuild()) checkForUpdate();
   }, []);

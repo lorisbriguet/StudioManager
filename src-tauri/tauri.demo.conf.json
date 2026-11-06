@@ -17,9 +17,7 @@
   },
   "plugins": {
     "updater": {
-      "endpoints": [
-        "https://github.com/lorisbriguet/StudioManager/releases/latest/download/demo-latest.json"
-      ]
+      "endpoints": []
     }
   },
   "bundle": {
