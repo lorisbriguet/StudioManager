@@ -6,6 +6,7 @@ import { queryClient } from "../lib/queryClient";
 import { logError } from "../lib/log";
 import { getLabels, notify } from "../lib/notify";
 import { sendNativeNotification } from "../lib/nativeNotification";
+import { modeActive } from "../lib/activeMode";
 
 /** Distinguish fs-scope denials (stored backup dir no longer accessible)
  *  from ordinary backup failures for a clearer user message. */
@@ -21,7 +22,9 @@ export function useAutoBackup() {
 
   useEffect(() => {
     const check = () => {
-      if (isBackupRunning()) return;
+      // A backup of test or presentation data would rotate the real backups
+      // away (same folder, same name prefix).
+      if (isBackupRunning() || modeActive()) return;
       const {
         autoBackupInterval,
         backupPath,

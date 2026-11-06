@@ -103,6 +103,35 @@ export function useUpdateClient() {
   });
 }
 
+/** Archive or restore a client, with undo. */
+export function useSetClientArchived() {
+  const qc = useQueryClient();
+  return useMutation({
+    meta: { errorLabel: "error_save_client" },
+    mutationFn: async ({ id, archived }: { id: string; archived: boolean }) => {
+      const prev = await q.getClient(id);
+      await q.setClientArchived(id, archived);
+      if (prev) {
+        const l = getLabels();
+        useUndoStore.getState().push({
+          label: `${archived ? l.undo_archive_client : l.undo_restore_client} "${prev.name}"`,
+          // Undo puts back the exact previous state (an already archived
+          // client keeps its original date)
+          execute: async () => {
+            await q.updateClient(id, { archived_at: prev.archived_at ?? null });
+            qc.invalidateQueries({ queryKey: ["clients"] });
+          },
+          redo: async () => {
+            await q.setClientArchived(id, archived);
+            qc.invalidateQueries({ queryKey: ["clients"] });
+          },
+        });
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["clients"] }),
+  });
+}
+
 export function useDeleteClient() {
   const qc = useQueryClient();
   const invalidateGraph = () => {
@@ -111,6 +140,7 @@ export function useDeleteClient() {
     }
   };
   return useMutation({
+    // A refused delete (issued invoices) is an AppError: the toast says why.
     meta: { errorLabel: "error_delete_client" },
     mutationFn: async (id: string) => {
       // Snapshot the FULL graph before the cascade destroys it, so undo
@@ -311,6 +341,12 @@ export function useDeleteClientAddress() {
       await q.deleteClientAddress(vars.id);
       if (prev) {
         const { id: _id, ...data } = prev;
+        // Deleting the client's own address also clears it on the client row.
+        const clearedOwn = await q.clearOwnAddressAfterDelete(vars.clientId, prev);
+        const refresh = () => {
+          qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] });
+          if (clearedOwn) qc.invalidateQueries({ queryKey: ["clients"] });
+        };
         // Redo targets exactly the id the restore produced — a field-match
         // lookup could hit a duplicate address with the same label.
         let restoredId: number | null = null;
@@ -318,19 +354,25 @@ export function useDeleteClientAddress() {
           label: `${getLabels().undo_delete_address} "${prev.label}"`,
           execute: async () => {
             restoredId = await q.createClientAddress(data as Omit<ClientAddress, "id">);
-            qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] });
+            if (clearedOwn) await q.setOwnAddress(vars.clientId, clearedOwn);
+            refresh();
           },
           redo: async () => {
             if (restoredId !== null) {
               await q.deleteClientAddress(restoredId);
-              qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] });
+              if (clearedOwn) {
+                await q.setOwnAddress(vars.clientId, { address_line1: "", address_line2: "", postal_city: "" });
+              }
+              refresh();
             }
           },
         });
       }
     },
-    onSuccess: (_d, vars) =>
-      qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] });
+      qc.invalidateQueries({ queryKey: ["clients"] });
+    },
   });
 }
 

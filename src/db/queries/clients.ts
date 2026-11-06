@@ -1,5 +1,6 @@
 import { getDb, validateFields, TransactionBatch } from "../index";
 import type { Client, ClientContact, ClientAddress } from "../../types/client";
+import { AppError } from "../../lib/errors";
 
 export async function getClients(): Promise<Client[]> {
   const db = await getDb();
@@ -46,6 +47,15 @@ export async function createClient(
       data.notes,
     ]
   );
+  // The address typed in the new-client form also becomes the client's
+  // "Main" billing address (startup no longer copies it over).
+  if (data.address_line1 || data.postal_city) {
+    await db.execute(
+      `INSERT INTO client_addresses (client_id, label, billing_name, address_line1, address_line2, postal_city)
+       VALUES ($1, 'Main', $2, $3, $4, $5)`,
+      [data.id, data.billing_name || data.name, data.address_line1, data.address_line2 || "", data.postal_city || ""]
+    );
+  }
 }
 
 export async function updateClient(
@@ -60,6 +70,39 @@ export async function updateClient(
   await db.execute(
     `UPDATE clients SET ${sets}, updated_at = datetime('now') WHERE id = $1`,
     values
+  );
+}
+
+/**
+ * Thrown by deleteClient when the client has issued invoices (a real
+ * reference, not DRAFT-): those are kept for 10 years (OR art. 958f), so the
+ * client is archived instead.
+ */
+export class ClientHasIssuedInvoicesError extends AppError {
+  constructor(public readonly clientId: string, public readonly count: number) {
+    super("error_client_has_issued_invoices", `Client ${clientId} has ${count} issued invoice(s) and can't be deleted`);
+    this.name = "ClientHasIssuedInvoicesError";
+  }
+}
+
+/** How many invoices of the client carry a real reference (sent, paid, overdue, cancelled). */
+export async function countIssuedInvoices(clientId: string): Promise<number> {
+  const db = await getDb();
+  const rows = await db.select<{ n: number }[]>(
+    "SELECT COUNT(*) AS n FROM invoices WHERE client_id = $1 AND reference NOT LIKE 'DRAFT-%'",
+    [clientId]
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
+/** Archive (a timestamp) or restore (null) a client. */
+export async function setClientArchived(id: string, archived: boolean): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    archived
+      ? "UPDATE clients SET archived_at = datetime('now'), updated_at = datetime('now') WHERE id = $1"
+      : "UPDATE clients SET archived_at = NULL, updated_at = datetime('now') WHERE id = $1",
+    [id]
   );
 }
 
@@ -85,15 +128,22 @@ export async function updateClient(
  * The only circular FK pair (invoices.from_quote_id <->
  * quotes.converted_to_invoice_id, no ON DELETE actions) is broken by
  * clearing the quote-side pointer first.
+ *
+ * Refuses (ClientHasIssuedInvoicesError, nothing deleted) when the client has
+ * an issued invoice. The cascade itself only deletes DRAFT- invoices, so an
+ * issued one created after the check makes the final client DELETE fail on
+ * its foreign key and the whole batch rolls back.
  */
 export async function deleteClient(id: string): Promise<void> {
+  const issued = await countIssuedInvoices(id);
+  if (issued > 0) throw new ClientHasIssuedInvoicesError(id, issued);
   const batch = new TransactionBatch();
   // 1. Break the circular FK so invoices can be deleted mid-batch
   batch.add("UPDATE quotes SET converted_to_invoice_id = NULL WHERE client_id = $1", [id]);
   // 2. Invoice/quote subtree (children before parents)
   batch.add("DELETE FROM recurring_invoice_templates WHERE client_id = $1", [id]);
-  batch.add("DELETE FROM invoice_line_items WHERE invoice_id IN (SELECT id FROM invoices WHERE client_id = $1)", [id]);
-  batch.add("DELETE FROM invoices WHERE client_id = $1", [id]);
+  batch.add("DELETE FROM invoice_line_items WHERE invoice_id IN (SELECT id FROM invoices WHERE client_id = $1 AND reference LIKE 'DRAFT-%')", [id]);
+  batch.add("DELETE FROM invoices WHERE client_id = $1 AND reference LIKE 'DRAFT-%'", [id]);
   batch.add("DELETE FROM quote_line_items WHERE quote_id IN (SELECT id FROM quotes WHERE client_id = $1)", [id]);
   batch.add("DELETE FROM quotes WHERE client_id = $1", [id]);
   // 3. Project subtree (children before parents)
@@ -334,6 +384,46 @@ export async function updateClientAddress(
 export async function deleteClientAddress(id: number): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM client_addresses WHERE id = $1", [id]);
+}
+
+export type OwnAddress = Pick<Client, "address_line1" | "address_line2" | "postal_city">;
+
+/**
+ * The client's own address (clients.address_line1/2, postal_city) feeds the
+ * "Main address" card, PDFs without a chosen address and the QR bill. Clear
+ * it after the user deletes that same address, or the client's last one, so
+ * a deleted address stays gone. Returns what was cleared (for undo), or null.
+ */
+export async function clearOwnAddressAfterDelete(
+  clientId: string,
+  deleted: Pick<ClientAddress, "address_line1" | "address_line2" | "postal_city">
+): Promise<OwnAddress | null> {
+  const db = await getDb();
+  const own = (await db.select<OwnAddress[]>(
+    "SELECT address_line1, address_line2, postal_city FROM clients WHERE id = $1",
+    [clientId]
+  ))[0];
+  if (!own || (!own.address_line1 && !own.address_line2 && !own.postal_city)) return null;
+  const left = await db.select<{ cnt: number }[]>(
+    "SELECT COUNT(*) as cnt FROM client_addresses WHERE client_id = $1",
+    [clientId]
+  );
+  const same = (a?: string | null, b?: string | null) => (a ?? "").trim() === (b ?? "").trim();
+  const isOwn =
+    same(own.address_line1, deleted.address_line1) &&
+    same(own.address_line2, deleted.address_line2) &&
+    same(own.postal_city, deleted.postal_city);
+  if (!isOwn && (left[0]?.cnt ?? 0) > 0) return null;
+  await setOwnAddress(clientId, { address_line1: "", address_line2: "", postal_city: "" });
+  return { address_line1: own.address_line1 ?? "", address_line2: own.address_line2 ?? "", postal_city: own.postal_city ?? "" };
+}
+
+export async function setOwnAddress(clientId: string, addr: OwnAddress): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "UPDATE clients SET address_line1 = $2, address_line2 = $3, postal_city = $4 WHERE id = $1",
+    [clientId, addr.address_line1, addr.address_line2, addr.postal_city]
+  );
 }
 
 // ── Client Activity Timeline ─────────────────────────────────

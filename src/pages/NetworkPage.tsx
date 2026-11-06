@@ -5,10 +5,12 @@ import { Button, CARD_GAP, CARD_STACK, Card, EmptyState, ICONS, IconButton, List
 import { MachineCard } from "../components/network/MachineCard";
 import { BackupsCard } from "../components/network/BackupsCard";
 import { UpkeepDueCard } from "../components/network/UpkeepDueCard";
+import { TailscaleCard } from "../components/network/TailscaleCard";
 import { useEquipmentConnections } from "../db/hooks/useConnections";
 import { useMachineLinks, useMachines, useUpkeepOverview } from "../db/hooks/useUpkeep";
 import { useAppStore } from "../stores/app-store";
 import { useTimeMachine } from "../hooks/useTimeMachine";
+import { useTailscale } from "../hooks/useTailscale";
 import { useNetworkChecks } from "../hooks/useNetworkChecks";
 import { timeMachineState } from "../lib/network/backups";
 import { formatAgo } from "../lib/network/format";
@@ -25,6 +27,7 @@ export function NetworkPage() {
   const connections = useEquipmentConnections();
   const { due } = useUpkeepOverview();
   const tm = useTimeMachine();
+  const tailscale = useTailscale();
   const noChecks = useAppStore((s) => s.testMode || s.presentationMode);
 
   const cards = useMemo(
@@ -68,8 +71,14 @@ export function NetworkPage() {
     refetch: () => queries.forEach((x) => void x.refetch()),
   };
 
-  // Empty only when there is nothing to list and Time Machine is off: backups of this Mac still deserve the page.
+  // Empty only when there is nothing to list, Time Machine is off and Tailscale isn't installed:
+  // backups of this Mac and the tailnet still deserve the page.
   const hasBackups = tm.isPending || timeMachineState(tm.data ?? null, new Date(now)).show;
+  const hasTailnet = tailscale.isPending || !!tailscale.data;
+  const checkAll = () => {
+    void refresh();
+    void tailscale.refetch();
+  };
 
   const ids = new Set((cards ?? []).map((c) => c.machine.id));
   const dueRows = due.filter((r) => ids.has(r.machine.id));
@@ -83,7 +92,7 @@ export function NetworkPage() {
             {checkedAt !== null && (
               <span className="text-xs text-muted">{t.net_checked_ago.replace("{time}", formatAgo(checkedAt, now, t))}</span>
             )}
-            <IconButton icon={ICONS.updates} label={t.net_check_now} onClick={refresh} disabled={checking || noChecks} />
+            <IconButton icon={ICONS.updates} label={t.net_check_now} onClick={checkAll} disabled={checking || noChecks} />
           </>
         }
       />
@@ -96,7 +105,7 @@ export function NetworkPage() {
             <Card><ListSkeleton size="sm" rows={3} /></Card>
           </div>
         }
-        isEmpty={(list) => list.length === 0 && !hasBackups}
+        isEmpty={(list) => list.length === 0 && !hasBackups && !hasTailnet}
         empty={
           <EmptyState
             icon={ICONS.network}
@@ -114,6 +123,7 @@ export function NetworkPage() {
               ))}
             </div>
             <div className={CARD_STACK}>
+              <TailscaleCard now={now} />
               <BackupsCard cards={list} now={now} />
               <UpkeepDueCard rows={dueRows} />
             </div>

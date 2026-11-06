@@ -1,30 +1,17 @@
-import { getDb, validateFields, TransactionBatch } from "../index";
+import { TransactionBatch } from "../index";
 import { getNextReference } from "./referenceGenerator";
+import { documentQueries } from "./documents";
 import type { Quote, QuoteLineItem } from "../../types/quote";
 
-export async function getQuotes(): Promise<Quote[]> {
-  const db = await getDb();
-  return db.select<Quote[]>("SELECT * FROM quotes ORDER BY quote_date DESC");
-}
+const docs = documentQueries<Quote, QuoteLineItem>("quote");
 
-export async function getQuote(id: number): Promise<Quote | null> {
-  const db = await getDb();
-  const rows = await db.select<Quote[]>(
-    "SELECT * FROM quotes WHERE id = $1",
-    [id]
-  );
-  return rows[0] ?? null;
-}
-
-export async function getQuotesByProject(
-  projectId: number
-): Promise<Quote[]> {
-  const db = await getDb();
-  return db.select<Quote[]>(
-    "SELECT * FROM quotes WHERE project_id = $1 ORDER BY quote_date DESC",
-    [projectId]
-  );
-}
+export const getQuotes = docs.list;
+export const getQuote = docs.get;
+export const getQuotesByProject = docs.listByProject;
+/** Update quote fields only (no line items) */
+export const updateQuote = docs.update;
+export const updateQuoteWithLineItems = docs.updateWithLineItems;
+export const getQuoteLineItems = docs.lineItems;
 
 export async function getNextQuoteReference(year: number): Promise<string> {
   return getNextReference("quotes", "reference", `D-${year}-`);
@@ -45,56 +32,9 @@ export async function createQuoteWithLineItems(
       data.converted_to_invoice_id, data.notes,
     ]
   );
-  for (const item of lineItems) {
-    batch.add(
-      `INSERT INTO quote_line_items (quote_id, designation, rate, unit, quantity, amount, sort_order)
-       VALUES ($LAST_INSERT_ID, $1, $2, $3, $4, $5, $6)`,
-      [item.designation, item.rate, item.unit, item.quantity, item.amount, item.sort_order]
-    );
-  }
+  docs.addNewLineItems(batch, lineItems);
   const result = await batch.commit();
   return result.lastInsertId;
-}
-
-/** Update quote fields only (no line items) */
-export async function updateQuote(
-  id: number,
-  data: Partial<Omit<Quote, "id" | "created_at" | "updated_at">>
-): Promise<void> {
-  const db = await getDb();
-  const fields = Object.keys(data);
-  validateFields(fields);
-  const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(", ");
-  const values = [id, ...fields.map((f) => data[f as keyof typeof data])];
-  await db.execute(
-    `UPDATE quotes SET ${sets}, updated_at = datetime('now') WHERE id = $1`,
-    values
-  );
-}
-
-export async function updateQuoteWithLineItems(
-  id: number,
-  data: Partial<Omit<Quote, "id" | "created_at" | "updated_at">>,
-  lineItems?: Omit<QuoteLineItem, "id" | "quote_id">[]
-): Promise<void> {
-  const fields = Object.keys(data);
-  validateFields(fields);
-  const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(", ");
-  const values = [id, ...fields.map((f) => data[f as keyof typeof data])];
-
-  const batch = new TransactionBatch();
-  batch.add(`UPDATE quotes SET ${sets}, updated_at = datetime('now') WHERE id = $1`, values);
-  if (lineItems) {
-    batch.add("DELETE FROM quote_line_items WHERE quote_id = $1", [id]);
-    for (const item of lineItems) {
-      batch.add(
-        `INSERT INTO quote_line_items (quote_id, designation, rate, unit, quantity, amount, sort_order)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [id, item.designation, item.rate, item.unit, item.quantity, item.amount, item.sort_order]
-      );
-    }
-  }
-  await batch.commit();
 }
 
 export async function deleteQuote(id: number): Promise<void> {
@@ -107,12 +47,4 @@ export async function deleteQuote(id: number): Promise<void> {
   batch.add("DELETE FROM quote_line_items WHERE quote_id = $1", [id]);
   batch.add("DELETE FROM quotes WHERE id = $1", [id]);
   await batch.commit();
-}
-
-export async function getQuoteLineItems(quoteId: number): Promise<QuoteLineItem[]> {
-  const db = await getDb();
-  return db.select<QuoteLineItem[]>(
-    "SELECT * FROM quote_line_items WHERE quote_id = $1 ORDER BY sort_order",
-    [quoteId]
-  );
 }

@@ -2,12 +2,11 @@ import { useState, useEffect, useRef } from "react";
 import { IconButton } from "../components/ui/IconButton";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { notify } from "../lib/notify";
-import { ICONS, Checkbox, Button, Input, PageHeader, EmptyState, QueryError, DetailSkeleton, ListSkeleton, Card, Select, SectionLabel, Textarea, ConfirmButton, FormField, FormGrid, FormActions, FormLayout, CARD_GAP, CARD_STACK } from "../components/ui";
+import { ICONS, Checkbox, Button, Input, PageHeader, EmptyState, QueryError, DetailSkeleton, ListSkeleton, Card, Select, SectionLabel, Textarea, FormField, FormGrid, FormActions, FormLayout, CARD_GAP, CARD_STACK } from "../components/ui";
 import { useTabStore } from "../stores/tab-store";
 import {
   useClient,
   useUpdateClient,
-  useDeleteClient,
   useClientContacts,
   useCreateClientContact,
   useUpdateClientContact,
@@ -23,7 +22,8 @@ import { useT } from "../i18n/useT";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { ClientTimeline } from "../components/ClientTimeline";
 import { ContextMenu } from "../components/ui/ContextMenu";
-import { deleteWithUndo, undoableFromStore, undoTop } from "../lib/undo";
+import { undoableFromStore, undoTop } from "../lib/undo";
+import { useClientRemoval } from "../hooks/useClientRemoval";
 import type { Client, ClientContact, ClientAddress } from "../types/client";
 
 export function ClientDetailPage() {
@@ -35,7 +35,7 @@ export function ClientDetailPage() {
   const { data: contacts } = useClientContacts(id!);
   const { data: addresses } = useClientAddresses(id!);
   const updateClient = useUpdateClient();
-  const deleteClient = useDeleteClient();
+  const clientRemoval = useClientRemoval();
   const navigate = useNavigate();
   const updateActiveTab = useTabStore((s) => s.updateActiveTab);
   const t = useT();
@@ -47,8 +47,13 @@ export function ClientDetailPage() {
   // window close, and programmatic navigations via the dirty-guard registry)
   useUnsavedChangesWarning(dirty);
 
+  // A refetch while editing (Archive, Restore) only brings archived_at in,
+  // so unsaved edits survive
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
   useEffect(() => {
-    if (client) setForm(client);
+    if (!client) return;
+    setForm((prev) => (dirtyRef.current ? { ...prev, archived_at: client.archived_at } : client));
   }, [client]);
 
   // Update tab label with client name
@@ -72,7 +77,8 @@ export function ClientDetailPage() {
 
   const save = () => {
     if (!id) return;
-    const { id: _, created_at, updated_at, ...data } = form as Client;
+    // archived_at is changed only by Archive/Restore, never by a form save
+    const { id: _, created_at, updated_at, archived_at, ...data } = form as Client;
     updateClient.mutate(
       { id, data },
       {
@@ -107,19 +113,29 @@ export function ClientDetailPage() {
       <PageHeader
         title={client.name}
         back={() => navigate(-1)}
+        meta={client.archived_at ? t.client_archived_notice : undefined}
         actions={<>
           {dirty && (
             <Button icon={ICONS.save} onClick={save}>
               {t.save}
             </Button>
           )}
-          <ConfirmButton
-            label={t.delete}
-            question={t.confirm_delete_client}
-            icon={ICONS.delete}
+          {client.archived_at ? (
+            <Button variant="secondary" icon={ICONS.restore} onClick={() => clientRemoval.restore(client)}>
+              {t.restore_client}
+            </Button>
+          ) : (
+            <Button variant="secondary" icon={ICONS.archive} onClick={() => clientRemoval.archive(client)}>
+              {t.archive_client}
+            </Button>
+          )}
+          <Button
             variant="danger"
-            onConfirm={() => deleteWithUndo(deleteClient, id!, t.toast_client_deleted, () => navigate("/clients"))}
-          />
+            icon={ICONS.delete}
+            onClick={() => void clientRemoval.remove(client, () => navigate("/clients"))}
+          >
+            {t.delete}
+          </Button>
         </>}
       />
 

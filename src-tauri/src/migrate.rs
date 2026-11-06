@@ -21,13 +21,15 @@ pub const MIGRATIONS: &[SqlMigration] = &[
     SqlMigration { version: 8, sql: include_str!("../migrations/008_machine_linked_at.sql") },
     SqlMigration { version: 9, sql: include_str!("../migrations/009_paperless.sql") },
     SqlMigration { version: 10, sql: include_str!("../migrations/010_upkeep_backup.sql") },
+    SqlMigration { version: 11, sql: include_str!("../migrations/011_client_archived.sql") },
+    SqlMigration { version: 12, sql: include_str!("../migrations/012_meta.sql") },
 ];
 
 // Only referenced from this module's own tests (as the expected "fully
 // migrated" version); nothing in the production path needs it, since
 // `migrate_db` derives what to apply from `MIGRATIONS` itself.
 #[allow(dead_code)]
-pub const LATEST_VERSION: i64 = 10;
+pub const LATEST_VERSION: i64 = 12;
 
 fn table_exists(conn: &rusqlite::Connection, name: &str) -> Result<bool, String> {
     conn.query_row(
@@ -39,6 +41,22 @@ fn table_exists(conn: &rusqlite::Connection, name: &str) -> Result<bool, String>
     .map_err(|e| format!("sqlite_master lookup failed: {e}"))
 }
 
+/// Put the file in WAL mode. The mode is stored in the file, so every later
+/// connection (app, MCP server, `sm`) uses it too. Nothing sets it otherwise:
+/// tauri-plugin-sql only asks for WAL when it creates the file, and
+/// `migrate_db` always creates it first.
+///
+/// Best-effort: switching needs an exclusive lock that the busy timeout does
+/// not wait for, so if another process has the file open right now the switch
+/// is skipped and retried on the next open.
+fn ensure_wal(conn: &rusqlite::Connection) {
+    match conn.query_row("PRAGMA journal_mode=WAL", [], |r| r.get::<_, String>(0)) {
+        Ok(mode) if mode.eq_ignore_ascii_case("wal") => {}
+        Ok(mode) => eprintln!("[migrate] journal_mode is still {mode}; WAL will be retried on next open"),
+        Err(e) => eprintln!("[migrate] could not switch to WAL: {e}"),
+    }
+}
+
 /// Apply every migration newer than the file's recorded version.
 /// Returns how many were applied.
 pub fn migrate_db(path: &Path) -> Result<u32, String> {
@@ -48,6 +66,7 @@ pub fn migrate_db(path: &Path) -> Result<u32, String> {
     let mut conn = rusqlite::Connection::open(path).map_err(|e| format!("open {}: {e}", path.display()))?;
     conn.busy_timeout(std::time::Duration::from_millis(5000))
         .map_err(|e| format!("busy_timeout: {e}"))?;
+    ensure_wal(&conn);
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)",
     )
@@ -106,6 +125,48 @@ mod tests {
         )
         .unwrap()
             == 1
+    }
+
+    fn journal_mode(path: &std::path::Path) -> String {
+        Connection::open(path)
+            .unwrap()
+            .query_row("PRAGMA journal_mode", [], |r| r.get(0))
+            .unwrap()
+    }
+
+    #[test]
+    fn fresh_file_is_in_wal_mode() {
+        let db = temp_db("wal-fresh");
+        migrate_db(&db).unwrap();
+        assert_eq!(journal_mode(&db), "wal");
+        crate::dbfiles::remove_db_files(&db);
+    }
+
+    #[test]
+    fn rollback_journal_file_is_switched_to_wal() {
+        let db = temp_db("wal-existing");
+        let conn = Connection::open(&db).unwrap();
+        conn.execute_batch("PRAGMA journal_mode=DELETE; CREATE TABLE t (x)").unwrap();
+        drop(conn);
+        assert_eq!(journal_mode(&db), "delete");
+        migrate_db(&db).unwrap();
+        assert_eq!(journal_mode(&db), "wal");
+        crate::dbfiles::remove_db_files(&db);
+    }
+
+    /// The bundled SQLite is built with SQLITE_DEFAULT_WAL_SYNCHRONOUS=1
+    /// (src-tauri/.cargo/config.toml), so every WAL connection, including the
+    /// tauri-plugin-sql pool, starts at synchronous=NORMAL.
+    #[test]
+    fn wal_connections_default_to_synchronous_normal() {
+        let db = temp_db("wal-sync");
+        migrate_db(&db).unwrap();
+        let sync: i64 = Connection::open(&db)
+            .unwrap()
+            .query_row("PRAGMA synchronous", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(sync, 1, "LIBSQLITE3_FLAGS did not reach the bundled SQLite build");
+        crate::dbfiles::remove_db_files(&db);
     }
 
     #[test]
@@ -180,6 +241,53 @@ mod tests {
     }
 
     #[test]
+    fn migrates_to_011_adds_client_archived_at() {
+        let path = temp_db("m011");
+        migrate_db(&path).unwrap();
+        let conn = Connection::open(&path).unwrap();
+        conn.execute("INSERT INTO clients (id, name) VALUES ('C-001', 'Acme')", []).unwrap();
+        let v: Option<String> = conn.query_row("SELECT archived_at FROM clients", [], |r| r.get(0)).unwrap();
+        assert_eq!(v, None);
+    }
+
+    #[test]
+    fn migrates_to_012_adds_meta() {
+        let path = temp_db("m012");
+        migrate_db(&path).unwrap();
+        assert!(table_exists(&path, "meta"));
+        let conn = Connection::open(&path).unwrap();
+        conn.execute("INSERT INTO meta (key, value) VALUES ('seeded:resources', '1')", []).unwrap();
+        assert!(conn.execute("INSERT INTO meta (key, value) VALUES ('seeded:resources', '1')", []).is_err());
+    }
+
+    #[test]
+    fn file_at_010_applies_011_then_012() {
+        let db = temp_db("m010to012");
+        let conn = Connection::open(&db).unwrap();
+        conn.execute_batch("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);").unwrap();
+        for m in MIGRATIONS.iter().filter(|m| m.version <= 10) {
+            conn.execute_batch(m.sql).unwrap();
+            conn.execute("INSERT INTO schema_migrations (version, applied_at) VALUES (?1, datetime('now'))", [m.version]).unwrap();
+        }
+        drop(conn);
+        assert_eq!(migrate_db(&db).unwrap(), 2);
+        let conn = Connection::open(&db).unwrap();
+        let versions: Vec<i64> = conn
+            .prepare("SELECT version FROM schema_migrations WHERE version > 10 ORDER BY rowid")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(versions, vec![11, 12]);
+        let archived: i64 = conn
+            .query_row("SELECT COUNT(*) FROM pragma_table_info('clients') WHERE name='archived_at'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(archived, 1);
+        assert!(table_exists(&db, "meta"));
+    }
+
+    #[test]
     fn migration_009_keeps_machine_connection_links() {
         let db = temp_db("m009keep");
         let conn = Connection::open(&db).unwrap();
@@ -192,7 +300,7 @@ mod tests {
         let cid: i64 = conn.last_insert_rowid();
         conn.execute("INSERT INTO machines (name, connection_id) VALUES ('M', ?1)", [cid]).unwrap();
         drop(conn);
-        assert_eq!(migrate_db(&db).unwrap(), 2);
+        assert_eq!(migrate_db(&db).unwrap() as i64, LATEST_VERSION - 8);
         let conn = Connection::open(&db).unwrap();
         let (mcid, kind, label): (i64, String, String) = conn
             .query_row(
@@ -213,7 +321,7 @@ mod tests {
         conn.execute_batch(
             "DROP TABLE schema_migrations;
              CREATE TABLE _sqlx_migrations (version BIGINT PRIMARY KEY, description TEXT NOT NULL, installed_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, success BOOLEAN NOT NULL, checksum BLOB NOT NULL, execution_time BIGINT NOT NULL);
-             INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) VALUES (1,'a',1,x'00',0),(2,'b',1,x'00',0),(3,'c',1,x'00',0),(4,'d',1,x'00',0),(5,'e',1,x'00',0),(6,'f',1,x'00',0),(7,'g',1,x'00',0),(8,'h',1,x'00',0),(9,'i',1,x'00',0),(10,'j',1,x'00',0);",
+             INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) VALUES (1,'a',1,x'00',0),(2,'b',1,x'00',0),(3,'c',1,x'00',0),(4,'d',1,x'00',0),(5,'e',1,x'00',0),(6,'f',1,x'00',0),(7,'g',1,x'00',0),(8,'h',1,x'00',0),(9,'i',1,x'00',0),(10,'j',1,x'00',0),(11,'k',1,x'00',0),(12,'l',1,x'00',0);",
         )
         .unwrap();
         drop(conn);

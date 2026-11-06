@@ -27,6 +27,7 @@ import { currencies, getExchangeRate, toCHF, type Currency } from "../lib/exchan
 import { useTabStore } from "../stores/tab-store";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { confirmIfDirty } from "../lib/dirty-guard";
+import { pickableClients } from "../types/client";
 
 // Phase 2 E2 — inline validation (additive; only fields with rules appear in
 // the schema, the rest are unvalidated). "line_items" has no schema rules —
@@ -525,7 +526,7 @@ export function InvoiceFormPage() {
               onBlur={() => setFieldError("client_id", v.validateField(clientId, invoiceSchema.client_id))}
             >
               <option value="">{t.select_client}</option>
-              {clients?.map((c) => (
+              {pickableClients(clients, clientId).map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </Select>

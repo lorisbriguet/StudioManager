@@ -5,6 +5,7 @@ type Row = { metric: string; value: number };
 const TOTAL = "volume_total_bytes:";
 const USED = "volume_used_bytes:";
 const SNAPSHOT = "snapshot_latest_at:";
+const TIME_MACHINE = "time_machine_latest_at:";
 
 /** Used and total bytes per volume (a volume missing one of them is left out), by id. */
 export function volumesFrom(rows: Row[]): { id: string; used: number; total: number }[] {
@@ -43,4 +44,11 @@ export function usedOfTotal(used: number, total: number, template: string): stri
   const unit = (s: string) => s.slice(s.indexOf(" ") + 1);
   const usedText = unit(u) === unit(t) ? u.slice(0, u.indexOf(" ")) : u;
   return template.replace("{used}", usedText).replace("{total}", t);
+}
+
+/** The Time Machine backups kept on a NAS: the computer each belongs to and its last backup (Unix seconds). */
+export function timeMachineBackups(rows: Row[]): { computer: string; at: number }[] {
+  return rows
+    .filter((r) => r.metric.startsWith(TIME_MACHINE) && r.metric.length > TIME_MACHINE.length)
+    .map((r) => ({ computer: r.metric.slice(TIME_MACHINE.length), at: r.value }));
 }

@@ -22,6 +22,9 @@ if [ -z "$triple" ]; then
 fi
 
 build() {
+  # Same SQLite flag as src-tauri/.cargo/config.toml (WAL commits use
+  # synchronous=NORMAL); that config is not read when cargo runs from the root.
+  LIBSQLITE3_FLAGS="-DSQLITE_DEFAULT_WAL_SYNCHRONOUS=1" \
   CARGO_TARGET_DIR="$TARGET_DIR" cargo build --release \
     --manifest-path "$ROOT/src-tauri/mcp/Cargo.toml" --target "$1" >&2
 }

@@ -57,7 +57,7 @@ vi.mock("@tauri-apps/plugin-fs", async (orig) => ({
 }));
 
 import { freshRealDb, rawDb } from "./fixtures/realSqlite";
-import { TABLES, createBackup, restoreFromBackup } from "../lib/backup";
+import { TABLES, NOT_BACKED_UP, createBackup, restoreFromBackup } from "../lib/backup";
 import { useOrgStore } from "../stores/org-store";
 
 const count = (table: string) => (rawDb().prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
@@ -75,7 +75,7 @@ describe("backup TABLES against the real schema", () => {
         .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
         .all() as { name: string }[]
     ).map((r) => r.name);
-    const missing = tables.filter((t) => !TABLES.includes(t));
+    const missing = tables.filter((t) => !TABLES.includes(t) && !NOT_BACKED_UP.includes(t));
     expect(missing, "tables missing from TABLES in src/lib/backup.ts").toEqual([]);
   });
 
