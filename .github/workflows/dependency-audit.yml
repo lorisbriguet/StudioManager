@@ -5,6 +5,8 @@ on:
     # Mondays 06:00 UTC — failures email the repo owner
     - cron: "0 6 * * 1"
   workflow_dispatch:
+  # release.yml runs it on the tag before building: no release ships on a red audit.
+  workflow_call:
   push:
     branches: [main]
     paths:

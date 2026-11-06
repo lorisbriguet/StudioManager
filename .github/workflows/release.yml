@@ -7,6 +7,9 @@ name: Release build
 # Never runs on pushes or pull requests, so code from a fork can't reach the
 # signing key.
 #
+# First the dependency audit (dependency-audit.yml) runs on the tag: a red audit
+# stops the release before anything is built.
+#
 # Two jobs, so the updater key never meets the build:
 # - build: gates, then `tauri build` with no key. Every npm package, build.rs
 #   and proc-macro runs here, on a runner that never holds a secret.
@@ -44,8 +47,12 @@ env:
   TAURI_CLI_VERSION: 2.12.4
 
 jobs:
+  audit:
+    uses: ./.github/workflows/dependency-audit.yml
+
   build:
     name: build v${{ inputs.version }}
+    needs: audit
     runs-on: macos-latest
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/../cargo-target
