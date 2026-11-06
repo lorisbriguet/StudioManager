@@ -34,10 +34,12 @@ function defaultOperator(type: FilterableField["type"]): FilterOperator {
   return operatorsForType(type)[0];
 }
 
-const LOGIC_OPTIONS: SegmentedOption<ConditionLogic>[] = [
-  { value: "and", label: "AND" },
-  { value: "or", label: "OR" },
-];
+function logicOptions(t: Record<string, string>): SegmentedOption<ConditionLogic>[] {
+  return [
+    { value: "and", label: t.filter_and },
+    { value: "or", label: t.filter_or },
+  ];
+}
 /** Width of the AND/OR column, so condition rows line up (the first row has no control). */
 const LOGIC_COLUMN = "w-26";
 
@@ -312,7 +314,7 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
                 aria-label={t.condition_logic}
                 value={conditionLogic}
                 onChange={setConditionLogic}
-                options={LOGIC_OPTIONS}
+                options={logicOptions(t)}
                 fullWidth
               />
             )}
