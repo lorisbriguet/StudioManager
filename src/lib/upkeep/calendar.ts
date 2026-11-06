@@ -8,7 +8,7 @@ import { notify, getLabels } from "../notify";
 import { modeActive } from "../activeMode";
 import { effectiveDue, shouldMoveEvent } from "./schedule";
 import { equipmentOrgId } from "../../db";
-import { getMachine } from "../../db/queries/machines";
+import { getMachine, getMachines } from "../../db/queries/machines";
 import { getUpkeepItem, getUpkeepItems, setItemCalendarEvent } from "../../db/queries/upkeepItems";
 import { getSubscription, getSubscriptions, setSubscriptionCalendarEvent } from "../../db/queries/subscriptions";
 import type { Machine, Subscription, UpkeepAlert, UpkeepItem } from "../../types/upkeep";
@@ -97,6 +97,42 @@ export function upkeepEventTitle(
   return `${item.title} · ${machine.name}`;
 }
 
+/** The date the item's event should be on, or null when it should have none. */
+function wantedItemDue(item: UpkeepItem, machine: Machine): string | null {
+  const due = effectiveDue(item);
+  const wanted =
+    useAppStore.getState().calendarSync &&
+    !item.archived &&
+    item.in_calendar !== 0 &&
+    machine.status !== "retired";
+  return wanted ? due : null;
+}
+
+function subscriptionWanted(sub: Subscription): boolean {
+  return useAppStore.getState().calendarSync && sub.status !== "cancelled" && sub.in_calendar !== 0;
+}
+
+/**
+ * True when syncing this item would change nothing: the same decisions as
+ * `syncItemEvent`, without touching the calendar or the database.
+ */
+function itemInStep(item: UpkeepItem, machine: Machine, force: boolean): boolean {
+  if (equipmentOrgId()) return true;
+  const due = wantedItemDue(item, machine);
+  if (due === null) return !item.calendar_event_id && !item.calendar_event_date;
+  return (
+    !!item.calendar_event_id &&
+    !force &&
+    !shouldMoveEvent(item.calendar_event_date, due, item.schedule)
+  );
+}
+
+/** Same for a subscription and `syncSubscriptionEvent`. */
+function subscriptionInStep(sub: Subscription, force: boolean): boolean {
+  if (!subscriptionWanted(sub)) return !sub.calendar_event_id;
+  return !!sub.calendar_event_id && !force;
+}
+
 export async function syncItemEvent(
   item: UpkeepItem,
   machine: Machine,
@@ -109,15 +145,9 @@ export async function syncItemEvent(
   if (calendarOff()) return current;
   // Borrowed equipment: the organisation that owns it keeps the calendar events.
   if (equipmentOrgId()) return current;
-  const due = effectiveDue(item);
-  const wanted =
-    useAppStore.getState().calendarSync &&
-    !item.archived &&
-    item.in_calendar !== 0 &&
-    machine.status !== "retired" &&
-    due !== null;
+  const due = wantedItemDue(item, machine);
 
-  if (!wanted || due === null) {
+  if (due === null) {
     const removed = await removeUpkeepEvent(item.calendar_event_id);
     return removed ? { calendar_event_id: null, calendar_event_date: null } : current;
   }
@@ -154,10 +184,7 @@ export async function syncSubscriptionEvent(
 ): Promise<SubscriptionEventIds> {
   const current: SubscriptionEventIds = { calendar_event_id: sub.calendar_event_id };
   if (calendarOff()) return current;
-  const wanted =
-    useAppStore.getState().calendarSync && sub.status !== "cancelled" && sub.in_calendar !== 0;
-
-  if (!wanted) {
+  if (!subscriptionWanted(sub)) {
     const removed = await removeUpkeepEvent(sub.calendar_event_id);
     return removed ? { calendar_event_id: null } : current;
   }
@@ -360,17 +387,31 @@ export interface SyncAllOptions {
  * in the calendar its event. With `forceDefaultAlert`, also rebuild existing
  * events whose alert is "default" so they carry the new alarm. Returns how
  * many events were created.
+ *
+ * Rows the list read already shows in step are skipped without another
+ * query; the rest are re-read and synced one at a time on their own chain.
+ * A row with a sync in flight always takes that path, since the list read
+ * may predate it.
  */
 export async function syncAllUpkeepEvents(opts: SyncAllOptions = {}): Promise<number> {
   if (calendarOff()) return 0;
   const force = (alert: UpkeepAlert) => !!opts.forceDefaultAlert && alert === "default";
   let count = 0;
   try {
-    for (const i of await getUpkeepItems()) {
-      if (await syncItemById(i.id, { force: force(i.alert) })) count++;
+    const items = await getUpkeepItems();
+    const machines = items.length
+      ? new Map((await getMachines()).map((m) => [m.id, m]))
+      : new Map<number, Machine>();
+    for (const i of items) {
+      const f = force(i.alert);
+      const m = machines.get(i.machine_id);
+      if (m && !chains.has(`item:${i.id}`) && itemInStep(i, m, f)) continue;
+      if (await syncItemById(i.id, { force: f })) count++;
     }
     for (const s of await getSubscriptions()) {
-      if (await syncSubscriptionById(s.id, { force: force(s.alert) })) count++;
+      const f = force(s.alert);
+      if (!chains.has(`sub:${s.id}`) && subscriptionInStep(s, f)) continue;
+      if (await syncSubscriptionById(s.id, { force: f })) count++;
     }
   } catch (e) {
     notifyFailure(e);

@@ -459,6 +459,36 @@ describe("turning calendar sync on", () => {
     expect(calls("calendar_create_event")).toHaveLength(2);
   });
 
+  it("rows already in step cost no query of their own; machines load once", async () => {
+    const selects: string[] = [];
+    setSelectHandler((sql) => {
+      selects.push(sql);
+      if (sql.includes("FROM upkeep_items WHERE id")) return [item({ id: 9 })];
+      if (sql.includes("FROM upkeep_items")) {
+        return [
+          item({ id: 7, calendar_event_id: "E7", calendar_event_date: "2026-11-10" }),
+          item({ id: 8, archived: 1 }),
+          item({ id: 9 }), // wanted, no event yet
+        ];
+      }
+      if (sql.includes("FROM machines")) return [machine()];
+      if (sql.includes("FROM subscriptions WHERE id")) return [sub({ id: 6 })];
+      if (sql.includes("FROM subscriptions")) {
+        return [sub({ id: 5, calendar_event_id: "S5" }), sub({ id: 6 }), sub({ id: 4, status: "cancelled" })];
+      }
+      return [];
+    });
+    const count = await syncAllUpkeepEvents();
+    expect(count).toBe(2); // item 9 and subscription 6
+    const byId = (table: string) => selects.filter((q) => q.includes(`FROM ${table} WHERE id`)).length;
+    expect(byId("upkeep_items")).toBe(2); // item 9: read, then re-checked before storing
+    expect(byId("machines")).toBe(1); // item 9's machine
+    expect(byId("subscriptions")).toBe(2); // subscription 6, same
+    expect(selects.filter((q) => q.includes("FROM machines") && !q.includes("WHERE"))).toHaveLength(1);
+    expect(calls("calendar_create_event")).toHaveLength(2);
+    expect(calls("calendar_delete_event")).toHaveLength(0);
+  });
+
   it("purgeAllCalendarEvents also deletes and forgets upkeep and renewal events", async () => {
     setSelectHandler((sql) => {
       if (sql.includes("FROM upkeep_items")) return [{ calendar_event_id: "U1" }];
