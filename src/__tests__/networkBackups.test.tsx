@@ -25,7 +25,7 @@ vi.mock("../db/hooks/useUpkeep", () => ({
 }));
 vi.mock("../hooks/useUnsavedChangesWarning", () => ({ useUnsavedChangesWarning: () => {} }));
 
-import { timeMachineState, ageTone } from "../lib/network/backups";
+import { timeMachineState, timeMachineRows, ageTone } from "../lib/network/backups";
 import { BackupsCard } from "../components/network/BackupsCard";
 import { UpkeepItemForm } from "../components/upkeep/UpkeepItemForm";
 
@@ -33,7 +33,7 @@ const t = uiLabels.EN;
 const NOW = new Date("2026-11-02T12:00:00Z");
 const ago = (days: number) => new Date(NOW.getTime() - days * 86_400_000).toISOString();
 const status = (over: Partial<TimeMachineStatus> = {}): TimeMachineStatus => ({
-  enabled: true, lastBackupAt: ago(1), lastResult: 0, running: false, ...over,
+  enabled: true, lastBackupAt: ago(1), lastResult: 0, running: false, computerName: "Studio MacBook", ...over,
 });
 
 describe("timeMachineState", () => {
@@ -73,6 +73,52 @@ describe("ageTone", () => {
     expect(ageTone(ago(1), NOW)).toBe("success");
     expect(ageTone(ago(3), NOW)).toBe("warning");
     expect(ageTone(ago(8), NOW)).toBe("danger");
+  });
+});
+
+const sec = (iso: string) => Date.parse(iso) / 1000;
+
+describe("timeMachineRows", () => {
+  it("keeps the plain local row when the NAS holds no backup", () => {
+    const rows = timeMachineRows(status(), [], NOW);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ key: "tm", name: null, isThisMac: true, tone: "success" });
+  });
+
+  it("merges this Mac's bundle with the local reading, apostrophes aside, and lists the others", () => {
+    const rows = timeMachineRows(
+      status({ computerName: "Loris’s MacBook Pro", lastBackupAt: ago(1) }),
+      [
+        { computer: "Loris's MacBook Pro", at: sec(ago(2)) },
+        { computer: "Loris’s Mac mini", at: sec(ago(3)) },
+      ],
+      NOW
+    );
+    expect(rows.map((r) => r.name)).toEqual(["Loris’s MacBook Pro", "Loris’s Mac mini"]);
+    expect(rows[0]).toMatchObject({ isThisMac: true, lastBackupAt: ago(1), tone: "success" });
+    expect(rows[1]).toMatchObject({ isThisMac: false, tone: "warning", label: "last" });
+  });
+
+  it("takes the NAS date when it is newer than the local one", () => {
+    const rows = timeMachineRows(status({ lastBackupAt: ago(9), lastResult: 21 }), [{ computer: "Studio MacBook", at: sec(ago(1)) }], NOW);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ tone: "success", lastBackupAt: ago(1) });
+  });
+
+  it("still lists the NAS backups when Time Machine is off on this Mac", () => {
+    const rows = timeMachineRows(status({ enabled: false }), [{ computer: "Studio Mac mini", at: sec(ago(8)) }], NOW);
+    expect(rows).toEqual([
+      { key: "tm-nas:Studio Mac mini", name: "Studio Mac mini", isThisMac: false, tone: "danger", label: "last", lastBackupAt: ago(8) },
+    ]);
+  });
+
+  it("shows a computer backed up to two NASes once, with its newest backup", () => {
+    const rows = timeMachineRows(null, [
+      { computer: "Mini", at: sec(ago(5)) },
+      { computer: "Mini", at: sec(ago(1)) },
+    ], NOW);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].lastBackupAt).toBe(ago(1));
   });
 });
 
@@ -161,6 +207,20 @@ describe("BackupsCard", () => {
     expect(screen.queryByText(t.net_backups_none)).toBeNull();
     fireEvent.click(screen.getByText(t.retry));
     expect(refetch).toHaveBeenCalled();
+  });
+
+  it("shows one Time Machine row per Mac when the NAS keeps their backups", () => {
+    tm = status({ computerName: "Studio MacBook", lastBackupAt: "2026-11-02T09:00:00Z" });
+    metrics = [
+      { metric: "time_machine_latest_at:Studio MacBook", value: sec("2026-11-01T09:00:00Z") },
+      { metric: "time_machine_latest_at:Studio Mac mini", value: sec("2026-10-31T09:00:00Z") },
+    ];
+    renderCard();
+    expect(screen.getByText(`${t.net_time_machine} · Studio MacBook`)).toBeTruthy();
+    expect(screen.getByText("Last 02/11/2026")).toBeTruthy();
+    expect(screen.getByText(`${t.net_time_machine} · Studio Mac mini`)).toBeTruthy();
+    expect(screen.getByText("Last 31/10/2026")).toBeTruthy();
+    expect(screen.queryByText(t.net_time_machine)).toBeNull();
   });
 
   it("says Running while a backup runs", () => {

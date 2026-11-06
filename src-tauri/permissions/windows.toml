@@ -42,6 +42,7 @@ permissions = [
   "allow-network-check",
   "allow-open-remote-link",
   "allow-time-machine-status",
+  "allow-tailscale-status",
   "allow-connection-test",
   "allow-connection-sync",
   "allow-paperless-inbox",

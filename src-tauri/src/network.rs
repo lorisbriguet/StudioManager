@@ -196,13 +196,15 @@ pub struct TimeMachineStatus {
     /// The destination's last result code (0 is success).
     pub last_result: Option<i64>,
     pub running: bool,
+    /// This Mac's name (Sharing settings): Time Machine names its bundle on a NAS after it.
+    pub computer_name: Option<String>,
 }
 
 const TIME_MACHINE_PREFS: &str = "/Library/Preferences/com.apple.TimeMachine.plist";
 
 /// Reads the preferences plist: `AutoBackup`, then the destination named by
 /// `LastDestinationID` for its newest `SnapshotDates` entry and its `RESULT`.
-/// `running` is left false; the command fills it from `tmutil`.
+/// `running` and `computer_name` are left empty; the command fills them.
 pub fn parse_time_machine(prefs: &plist::Value) -> TimeMachineStatus {
     let root = prefs.as_dictionary();
     let enabled = root
@@ -223,7 +225,7 @@ pub fn parse_time_machine(prefs: &plist::Value) -> TimeMachineStatus {
         .and_then(|v| v.as_array())
         .and_then(|dates| dates.iter().filter_map(|v| v.as_date()).map(|d| d.to_xml_format()).max());
     let last_result = dest.and_then(|d| d.get("RESULT")).and_then(|v| v.as_signed_integer());
-    TimeMachineStatus { enabled, last_backup_at, last_result, running: false }
+    TimeMachineStatus { enabled, last_backup_at, last_result, running: false, computer_name: None }
 }
 
 /// The preferences through `defaults`: macOS lets `cfprefsd` read the domain
@@ -241,6 +243,12 @@ fn read_time_machine_prefs() -> Result<plist::Value, String> {
         }
     }
     plist::Value::from_file(TIME_MACHINE_PREFS).map_err(|e| format!("Time Machine preferences: {e}"))
+}
+
+fn computer_name() -> Option<String> {
+    let out = std::process::Command::new("/usr/sbin/scutil").args(["--get", "ComputerName"]).output().ok()?;
+    let name = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (out.status.success() && !name.is_empty()).then_some(name)
 }
 
 fn time_machine_running() -> bool {
@@ -265,10 +273,112 @@ pub async fn time_machine_status(app: tauri::AppHandle) -> Result<Option<TimeMac
         let prefs = read_time_machine_prefs()?;
         let mut status = parse_time_machine(&prefs);
         status.running = status.enabled && time_machine_running();
+        status.computer_name = computer_name();
         Ok(Some(status))
     })
     .await
     .map_err(|e| format!("Time Machine check failed: {e}"))?
+}
+
+/// The tailnet as this Mac's Tailscale sees it, for the Tailscale card.
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TailscaleStatus {
+    /// Tailscale is connected on this Mac (`BackendState` is `Running`).
+    pub running: bool,
+    pub tailnet: Option<String>,
+    /// This Mac first, then online devices, then by name.
+    pub devices: Vec<TailscaleDevice>,
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TailscaleDevice {
+    pub name: String,
+    /// MagicDNS name without the trailing dot.
+    pub dns_name: Option<String>,
+    pub os: Option<String>,
+    /// First Tailscale IPv4 address.
+    pub ip: Option<String>,
+    pub online: bool,
+    /// ISO 8601; None while online or never seen.
+    pub last_seen: Option<String>,
+    pub is_self: bool,
+}
+
+/// Where the CLI lives: Homebrew, the standalone app's `/usr/local/bin` link, then the app itself.
+const TAILSCALE_PATHS: &[&str] = &[
+    "/usr/local/bin/tailscale",
+    "/opt/homebrew/bin/tailscale",
+    "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+];
+
+/// One node of `tailscale status --json`. iOS reports its host name as
+/// `localhost`, so the first label of the MagicDNS name stands in for it.
+fn tailscale_device(node: &serde_json::Value, is_self: bool, running: bool) -> TailscaleDevice {
+    let text = |k: &str| node.get(k).and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty());
+    let dns_name = text("DNSName").map(|d| d.trim_end_matches('.').to_string()).filter(|d| !d.is_empty());
+    let label = dns_name.as_deref().and_then(|d| d.split('.').next()).map(String::from);
+    let name = match text("HostName") {
+        Some(h) if !h.eq_ignore_ascii_case("localhost") => h.to_string(),
+        _ => label.unwrap_or_else(|| "?".into()),
+    };
+    let ip = node
+        .get("TailscaleIPs")
+        .and_then(|v| v.as_array())
+        .and_then(|ips| ips.iter().filter_map(|v| v.as_str()).find(|ip| ip.contains('.')))
+        .map(String::from);
+    let online = if is_self { running } else { node.get("Online").and_then(|v| v.as_bool()).unwrap_or(false) };
+    // Go's zero time (year 1) means "never seen" or "online now".
+    let last_seen = text("LastSeen").filter(|t| !online && !t.starts_with("0001-")).map(String::from);
+    TailscaleDevice { name, dns_name, os: text("OS").map(String::from), ip, online, last_seen, is_self }
+}
+
+pub fn parse_tailscale(v: &serde_json::Value) -> TailscaleStatus {
+    let running = v.get("BackendState").and_then(|s| s.as_str()) == Some("Running");
+    let tailnet = v
+        .get("CurrentTailnet")
+        .and_then(|t| t.get("Name"))
+        .and_then(|n| n.as_str())
+        .map(String::from);
+    let mut devices: Vec<TailscaleDevice> = v
+        .get("Peer")
+        .and_then(|p| p.as_object())
+        .into_iter()
+        .flat_map(|m| m.values())
+        .map(|n| tailscale_device(n, false, running))
+        .collect();
+    if let Some(me) = v.get("Self").filter(|s| s.is_object()) {
+        devices.push(tailscale_device(me, true, running));
+    }
+    devices.sort_by(|a, b| {
+        b.is_self
+            .cmp(&a.is_self)
+            .then(b.online.cmp(&a.online))
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+    TailscaleStatus { running, tailnet, devices }
+}
+
+/// The tailnet from `tailscale status --json`, or None when the CLI isn't
+/// installed, and in test and presentation mode. Answers within 5 seconds.
+#[tauri::command]
+pub async fn tailscale_status(app: tauri::AppHandle) -> Result<Option<TailscaleStatus>, String> {
+    if crate::active_org(&app)?.in_mode() {
+        return Ok(None);
+    }
+    let Some(cli) = TAILSCALE_PATHS.iter().find(|p| std::path::Path::new(p).exists()) else {
+        return Ok(None);
+    };
+    let out = within(TOTAL_TIMEOUT, move || {
+        std::process::Command::new(cli).args(["status", "--json"]).output()
+    })
+    .ok_or("Tailscale did not answer")?
+    .map_err(|e| format!("Tailscale: {e}"))?;
+    // A stopped Tailscale still prints its status, with a non-zero exit.
+    let v: serde_json::Value =
+        serde_json::from_slice(&out.stdout).map_err(|_| "Tailscale sent an unreadable status".to_string())?;
+    Ok(Some(parse_tailscale(&v)))
 }
 
 /// Schemes a remote-access button may open. `vnc` is Screen Sharing. The Jump
@@ -561,5 +671,62 @@ mod tests {
         assert!(!s.enabled);
         assert_eq!(s.last_backup_at, None);
         assert_eq!(s.last_result, None);
+    }
+
+    const TAILSCALE: &str = r#"{
+      "BackendState": "Running",
+      "CurrentTailnet": { "Name": "studio.github" },
+      "Self": { "HostName": "Studio MacBook", "DNSName": "studio-macbook.tail1.ts.net.", "OS": "macOS",
+                "TailscaleIPs": ["100.1.1.1", "fd7a::1"], "Online": true, "LastSeen": "0001-01-01T00:00:00Z" },
+      "Peer": {
+        "a": { "HostName": "localhost", "DNSName": "iphone-15.tail1.ts.net.", "OS": "iOS",
+               "TailscaleIPs": ["fd7a::2", "100.1.1.2"], "Online": false, "LastSeen": "2026-11-04T10:00:50.1Z" },
+        "b": { "HostName": "nas", "DNSName": "nas.tail1.ts.net.", "OS": "linux",
+               "TailscaleIPs": ["100.1.1.3"], "Online": true, "LastSeen": "0001-01-01T00:00:00Z" },
+        "c": { "HostName": "Apple TV", "DNSName": "apple-tv.tail1.ts.net.", "OS": "tvOS",
+               "TailscaleIPs": ["100.1.1.4"], "Online": true, "LastSeen": "2026-11-01T00:00:00Z" }
+      }
+    }"#;
+
+    #[test]
+    fn parse_tailscale_lists_this_mac_first_then_online_then_by_name() {
+        let s = parse_tailscale(&serde_json::from_str(TAILSCALE).unwrap());
+        assert!(s.running);
+        assert_eq!(s.tailnet.as_deref(), Some("studio.github"));
+        let names: Vec<_> = s.devices.iter().map(|d| d.name.as_str()).collect();
+        assert_eq!(names, ["Studio MacBook", "Apple TV", "nas", "iphone-15"]);
+        assert!(s.devices[0].is_self && s.devices[0].online);
+    }
+
+    #[test]
+    fn parse_tailscale_names_ios_devices_from_their_dns_name_and_keeps_ipv4() {
+        let s = parse_tailscale(&serde_json::from_str(TAILSCALE).unwrap());
+        let phone = s.devices.iter().find(|d| d.name == "iphone-15").unwrap();
+        assert_eq!(phone.ip.as_deref(), Some("100.1.1.2"));
+        assert_eq!(phone.dns_name.as_deref(), Some("iphone-15.tail1.ts.net"));
+        assert!(!phone.online);
+        assert_eq!(phone.last_seen.as_deref(), Some("2026-11-04T10:00:50.1Z"));
+    }
+
+    #[test]
+    fn parse_tailscale_drops_last_seen_of_online_devices() {
+        let s = parse_tailscale(&serde_json::from_str(TAILSCALE).unwrap());
+        for d in s.devices.iter().filter(|d| d.online) {
+            assert_eq!(d.last_seen, None, "{}", d.name);
+        }
+    }
+
+    #[test]
+    fn parse_tailscale_stopped_marks_this_mac_offline() {
+        let v = serde_json::json!({
+            "BackendState": "Stopped",
+            "Self": { "HostName": "Studio MacBook", "Online": true, "TailscaleIPs": [] },
+            "Peer": null
+        });
+        let s = parse_tailscale(&v);
+        assert!(!s.running);
+        assert_eq!(s.devices.len(), 1);
+        assert!(!s.devices[0].online);
+        assert_eq!(s.devices[0].ip, None);
     }
 }
