@@ -1,5 +1,6 @@
 import { getDb, validateFields, TransactionBatch } from "../index";
 import type { Client, ClientContact, ClientAddress } from "../../types/client";
+import { AppError } from "../../lib/errors";
 
 export async function getClients(): Promise<Client[]> {
   const db = await getDb();
@@ -63,6 +64,39 @@ export async function updateClient(
   );
 }
 
+/**
+ * Thrown by deleteClient when the client has issued invoices (a real
+ * reference, not DRAFT-): those are kept for 10 years (OR art. 958f), so the
+ * client is archived instead.
+ */
+export class ClientHasIssuedInvoicesError extends AppError {
+  constructor(public readonly clientId: string, public readonly count: number) {
+    super("error_client_has_issued_invoices", `Client ${clientId} has ${count} issued invoice(s) and can't be deleted`);
+    this.name = "ClientHasIssuedInvoicesError";
+  }
+}
+
+/** How many invoices of the client carry a real reference (sent, paid, overdue, cancelled). */
+export async function countIssuedInvoices(clientId: string): Promise<number> {
+  const db = await getDb();
+  const rows = await db.select<{ n: number }[]>(
+    "SELECT COUNT(*) AS n FROM invoices WHERE client_id = $1 AND reference NOT LIKE 'DRAFT-%'",
+    [clientId]
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
+/** Archive (a timestamp) or restore (null) a client. */
+export async function setClientArchived(id: string, archived: boolean): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    archived
+      ? "UPDATE clients SET archived_at = datetime('now'), updated_at = datetime('now') WHERE id = $1"
+      : "UPDATE clients SET archived_at = NULL, updated_at = datetime('now') WHERE id = $1",
+    [id]
+  );
+}
+
 // MAINTENANCE — adding a table to the client graph requires co-updating:
 //   (a) the cascade list in deleteClient below
 //   (b) snapshotClientGraph
@@ -85,15 +119,22 @@ export async function updateClient(
  * The only circular FK pair (invoices.from_quote_id <->
  * quotes.converted_to_invoice_id, no ON DELETE actions) is broken by
  * clearing the quote-side pointer first.
+ *
+ * Refuses (ClientHasIssuedInvoicesError, nothing deleted) when the client has
+ * an issued invoice. The cascade itself only deletes DRAFT- invoices, so an
+ * issued one created after the check makes the final client DELETE fail on
+ * its foreign key and the whole batch rolls back.
  */
 export async function deleteClient(id: string): Promise<void> {
+  const issued = await countIssuedInvoices(id);
+  if (issued > 0) throw new ClientHasIssuedInvoicesError(id, issued);
   const batch = new TransactionBatch();
   // 1. Break the circular FK so invoices can be deleted mid-batch
   batch.add("UPDATE quotes SET converted_to_invoice_id = NULL WHERE client_id = $1", [id]);
   // 2. Invoice/quote subtree (children before parents)
   batch.add("DELETE FROM recurring_invoice_templates WHERE client_id = $1", [id]);
-  batch.add("DELETE FROM invoice_line_items WHERE invoice_id IN (SELECT id FROM invoices WHERE client_id = $1)", [id]);
-  batch.add("DELETE FROM invoices WHERE client_id = $1", [id]);
+  batch.add("DELETE FROM invoice_line_items WHERE invoice_id IN (SELECT id FROM invoices WHERE client_id = $1 AND reference LIKE 'DRAFT-%')", [id]);
+  batch.add("DELETE FROM invoices WHERE client_id = $1 AND reference LIKE 'DRAFT-%'", [id]);
   batch.add("DELETE FROM quote_line_items WHERE quote_id IN (SELECT id FROM quotes WHERE client_id = $1)", [id]);
   batch.add("DELETE FROM quotes WHERE client_id = $1", [id]);
   // 3. Project subtree (children before parents)
