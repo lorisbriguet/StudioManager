@@ -14,8 +14,7 @@ import { useTabStore } from "../stores/tab-store";
 import { useListNavigation } from "../hooks/useListNavigation";
 import { ICONS, Checkbox, Button, Badge, Input, Select, FormField, FormGrid, FormGridItem, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, QueryState, NoResults } from "../components/ui";
 import * as v from "../lib/validate";
-import { deleteWithUndo } from "../lib/undo";
-import { confirmDelete } from "../lib/confirm";
+import { useClientRemoval } from "../hooks/useClientRemoval";
 import { useBulkDelete } from "../hooks/useBulkDelete";
 import { clientStatusVariant } from "../lib/statusColors";
 import type { Client } from "../types/client";
@@ -33,6 +32,9 @@ export function ClientsPage() {
   const openTab = useTabStore((s) => s.openTab);
   const createClient = useCreateClient();
   const deleteClient = useDeleteClient();
+  const clientRemoval = useClientRemoval();
+  const [showArchived, setShowArchived] = useState(false);
+  const hasArchived = useMemo(() => !!clients?.some((c) => c.archived_at), [clients]);
   // Synchronous guard for the quick-create form: `onSave` awaits
   // getNextClientId() before calling createClient.mutate(), so isPending
   // stays false for that whole await — a second click/Enter in that window
@@ -75,6 +77,7 @@ export function ClientsPage() {
     { key: "status", label: "Status", type: "select", options: [
       { value: "active", label: t.active },
       { value: "inactive", label: t.inactive },
+      { value: "archived", label: t.client_archived },
     ]},
   ], [t]);
 
@@ -88,10 +91,14 @@ export function ClientsPage() {
   const filtered = useMemo(() => {
     if (!clients) return [];
     const q = search.toLowerCase();
-    const withStatus = clients.map((c) => ({
-      ...c,
-      status: activeClientIds.has(c.id) ? "active" : "inactive",
-    }));
+    // Archived clients show when asked for: the checkbox, or a status filter on "archived"
+    const withArchived = showArchived || filterConditions.some((f) => f.field === "status" && f.value === "archived");
+    const withStatus = clients
+      .filter((c) => withArchived || !c.archived_at)
+      .map((c) => ({
+        ...c,
+        status: c.archived_at ? "archived" : activeClientIds.has(c.id) ? "active" : "inactive",
+      }));
     let rows = q
       ? withStatus.filter(
           (c) =>
@@ -101,7 +108,7 @@ export function ClientsPage() {
       : withStatus;
     rows = applyFilterConditions(rows, filterConditions, filterLogic);
     return sortRows(rows, sort.key, sort.dir);
-  }, [clients, search, sort, activeClientIds, filterConditions, filterLogic]);
+  }, [clients, search, sort, activeClientIds, filterConditions, filterLogic, showArchived]);
 
   // Keyboard row navigation (flat list — every filtered row is visible).
   const openClient = useCallback((c: (typeof filtered)[0]) => navigate(`/clients/${c.id}`), [navigate]);
@@ -134,7 +141,12 @@ export function ClientsPage() {
         </Button>
       </PageHeader>
 
-      <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); setFilterConditions([]); }} placeholder={t.search_clients} className="mb-4 w-64" />
+      <div className="mb-4 flex items-center gap-4">
+        <SearchBar value={search} onChange={(v) => { setSearch(v); setActiveFilterId(null); setFilterConditions([]); }} placeholder={t.search_clients} className="w-64" />
+        {hasArchived && (
+          <Checkbox label={t.show_archived_clients} checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+        )}
+      </div>
       <SavedFilterBar
         page="clients"
         currentFilters={{ search, sort, conditions: filterConditions, conditionLogic: filterLogic }}
@@ -206,7 +218,7 @@ export function ClientsPage() {
               </Table.Td>
               <Table.Td>
                 <Badge variant={clientStatusVariant(c.status)}>
-                  {c.status === "active" ? t.active : t.inactive}
+                  {c.status === "archived" ? t.client_archived : c.status === "active" ? t.active : t.inactive}
                 </Badge>
               </Table.Td>
             </Table.Row>
@@ -241,11 +253,10 @@ export function ClientsPage() {
             { label: t.view_details, icon: ICONS.preview, onClick: () => navigate(`/clients/${ctxMenu.item.id}`) },
             { label: t.open_in_new_tab, icon: ICONS.newTab, onClick: () => openTab(`/clients/${ctxMenu.item.id}`, ctxMenu.item.name) },
             { label: "", divider: true, onClick: () => {} },
-            { label: t.delete, icon: ICONS.delete, danger: true, onClick: async () => {
-              const client = ctxMenu.item;
-              if (!(await confirmDelete(client.name, t.delete_client_cascade))) return;
-              deleteWithUndo(deleteClient, client.id, t.toast_client_deleted);
-            } },
+            ctxMenu.item.archived_at
+              ? { label: t.restore_client, icon: ICONS.restore, onClick: () => clientRemoval.restore(ctxMenu.item) }
+              : { label: t.archive_client, icon: ICONS.archive, onClick: () => clientRemoval.archive(ctxMenu.item) },
+            { label: t.delete, icon: ICONS.delete, danger: true, onClick: () => void clientRemoval.remove(ctxMenu.item) },
           ]}
         />
       )}
@@ -253,6 +264,10 @@ export function ClientsPage() {
         count={bulk.count}
         onClear={bulk.clearSelection}
         actions={[
+          { label: t.archive_client, icon: ICONS.archive, onClick: () => void clientRemoval.archiveMany(
+            ([...bulk.selected] as string[]).filter((id) => !clients?.find((c) => c.id === id)?.archived_at),
+            bulk.clearSelection
+          ) },
           { label: t.delete, icon: ICONS.delete, onClick: bulkDelete, danger: true },
         ]}
       />

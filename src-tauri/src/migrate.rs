@@ -21,13 +21,14 @@ pub const MIGRATIONS: &[SqlMigration] = &[
     SqlMigration { version: 8, sql: include_str!("../migrations/008_machine_linked_at.sql") },
     SqlMigration { version: 9, sql: include_str!("../migrations/009_paperless.sql") },
     SqlMigration { version: 10, sql: include_str!("../migrations/010_upkeep_backup.sql") },
+    SqlMigration { version: 11, sql: include_str!("../migrations/011_client_archived.sql") },
 ];
 
 // Only referenced from this module's own tests (as the expected "fully
 // migrated" version); nothing in the production path needs it, since
 // `migrate_db` derives what to apply from `MIGRATIONS` itself.
 #[allow(dead_code)]
-pub const LATEST_VERSION: i64 = 10;
+pub const LATEST_VERSION: i64 = 11;
 
 fn table_exists(conn: &rusqlite::Connection, name: &str) -> Result<bool, String> {
     conn.query_row(
@@ -180,6 +181,16 @@ mod tests {
     }
 
     #[test]
+    fn migrates_to_011_adds_client_archived_at() {
+        let path = temp_db("m011");
+        migrate_db(&path).unwrap();
+        let conn = Connection::open(&path).unwrap();
+        conn.execute("INSERT INTO clients (id, name) VALUES ('C-001', 'Acme')", []).unwrap();
+        let v: Option<String> = conn.query_row("SELECT archived_at FROM clients", [], |r| r.get(0)).unwrap();
+        assert_eq!(v, None);
+    }
+
+    #[test]
     fn migration_009_keeps_machine_connection_links() {
         let db = temp_db("m009keep");
         let conn = Connection::open(&db).unwrap();
@@ -192,7 +203,7 @@ mod tests {
         let cid: i64 = conn.last_insert_rowid();
         conn.execute("INSERT INTO machines (name, connection_id) VALUES ('M', ?1)", [cid]).unwrap();
         drop(conn);
-        assert_eq!(migrate_db(&db).unwrap(), 2);
+        assert_eq!(migrate_db(&db).unwrap() as i64, LATEST_VERSION - 8);
         let conn = Connection::open(&db).unwrap();
         let (mcid, kind, label): (i64, String, String) = conn
             .query_row(
@@ -213,7 +224,7 @@ mod tests {
         conn.execute_batch(
             "DROP TABLE schema_migrations;
              CREATE TABLE _sqlx_migrations (version BIGINT PRIMARY KEY, description TEXT NOT NULL, installed_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, success BOOLEAN NOT NULL, checksum BLOB NOT NULL, execution_time BIGINT NOT NULL);
-             INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) VALUES (1,'a',1,x'00',0),(2,'b',1,x'00',0),(3,'c',1,x'00',0),(4,'d',1,x'00',0),(5,'e',1,x'00',0),(6,'f',1,x'00',0),(7,'g',1,x'00',0),(8,'h',1,x'00',0),(9,'i',1,x'00',0),(10,'j',1,x'00',0);",
+             INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) VALUES (1,'a',1,x'00',0),(2,'b',1,x'00',0),(3,'c',1,x'00',0),(4,'d',1,x'00',0),(5,'e',1,x'00',0),(6,'f',1,x'00',0),(7,'g',1,x'00',0),(8,'h',1,x'00',0),(9,'i',1,x'00',0),(10,'j',1,x'00',0),(11,'k',1,x'00',0);",
         )
         .unwrap();
         drop(conn);

@@ -3,7 +3,12 @@ import {
   deleteClient,
   snapshotClientGraph,
   restoreClientGraph,
+  countIssuedInvoices,
+  setClientArchived,
+  ClientHasIssuedInvoicesError,
 } from "../db/queries/clients";
+import { isAppError } from "../lib/errors";
+import { pickableClients } from "../types/client";
 import { getDb } from "../db";
 import {
   executedStatements,
@@ -16,8 +21,8 @@ import {
 const CASCADE_SQL = [
   "UPDATE quotes SET converted_to_invoice_id = NULL WHERE client_id = $1",
   "DELETE FROM recurring_invoice_templates WHERE client_id = $1",
-  "DELETE FROM invoice_line_items WHERE invoice_id IN (SELECT id FROM invoices WHERE client_id = $1)",
-  "DELETE FROM invoices WHERE client_id = $1",
+  "DELETE FROM invoice_line_items WHERE invoice_id IN (SELECT id FROM invoices WHERE client_id = $1 AND reference LIKE 'DRAFT-%')",
+  "DELETE FROM invoices WHERE client_id = $1 AND reference LIKE 'DRAFT-%'",
   "DELETE FROM quote_line_items WHERE quote_id IN (SELECT id FROM quotes WHERE client_id = $1)",
   "DELETE FROM quotes WHERE client_id = $1",
   "DELETE FROM time_entries WHERE project_id IN (SELECT id FROM projects WHERE client_id = $1)",
@@ -50,6 +55,30 @@ describe("deleteClient cascade", () => {
     for (const s of executedStatements) {
       expect(s.params).toEqual(["C-001"]);
     }
+  });
+
+  it("refuses a client with issued invoices and deletes nothing", async () => {
+    setSelectHandler((sql) =>
+      sql.includes("reference NOT LIKE 'DRAFT-%'") ? [{ n: 3 }] : []
+    );
+    const err = await deleteClient("C-001").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ClientHasIssuedInvoicesError);
+    expect(isAppError(err)).toBe(true);
+    expect((err as ClientHasIssuedInvoicesError).count).toBe(3);
+    expect(executedStatements).toEqual([]);
+  });
+
+  it("counts only invoices with a real reference as issued", async () => {
+    const seen: { sql: string; params: unknown[] }[] = [];
+    setSelectHandler((sql, params) => {
+      seen.push({ sql, params });
+      return [{ n: 0 }];
+    });
+    expect(await countIssuedInvoices("C-007")).toBe(0);
+    expect(seen[0]?.sql).toBe(
+      "SELECT COUNT(*) AS n FROM invoices WHERE client_id = $1 AND reference NOT LIKE 'DRAFT-%'"
+    );
+    expect(seen[0]?.params).toEqual(["C-007"]);
   });
 
   it("breaks the circular quotes<->invoices FK as the very first statement", async () => {
@@ -176,5 +205,32 @@ describe("client graph snapshot -> restore round trip", () => {
     expect(executedStatements[firstIdx("INSERT INTO tasks (")].params).toContain(41);
     expect(executedStatements[invoiceInsertIdx].params).toContain(71);
     expect(executedStatements[firstIdx("INSERT INTO time_entries (")].params).toContain(111);
+  });
+});
+
+describe("archived clients", () => {
+  beforeEach(() => {
+    setSelectHandler(null);
+    clearExecutedStatements();
+  });
+
+  it("archives with a timestamp and restores to NULL", async () => {
+    await setClientArchived("C-001", true);
+    await setClientArchived("C-001", false);
+    expect(executedStatements.map((s) => s.sql)).toEqual([
+      "UPDATE clients SET archived_at = datetime('now'), updated_at = datetime('now') WHERE id = $1",
+      "UPDATE clients SET archived_at = NULL, updated_at = datetime('now') WHERE id = $1",
+    ]);
+  });
+
+  it("pickers leave archived clients out, except the selected one", () => {
+    const clients = [
+      { id: "C-001", archived_at: null },
+      { id: "C-002", archived_at: "2026-11-06 10:00:00" },
+      { id: "C-003" },
+    ];
+    expect(pickableClients(clients).map((c) => c.id)).toEqual(["C-001", "C-003"]);
+    expect(pickableClients(clients, "C-002").map((c) => c.id)).toEqual(["C-001", "C-002", "C-003"]);
+    expect(pickableClients(undefined)).toEqual([]);
   });
 });

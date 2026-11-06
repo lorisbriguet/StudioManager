@@ -30,6 +30,7 @@ import type { SavedFilterData, FilterCondition, FilterableField } from "../types
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 
 import { projectStatusVariant } from "../lib/statusColors";
+import { pickableClients } from "../types/client";
 
 const statusKeys: Record<ProjectStatus, UIKey> = {
   active: "active",
@@ -297,7 +298,7 @@ export function ProjectsPage() {
 
         {showForm && (
           <NewProjectForm
-            clients={clients ?? []}
+            clients={pickableClients(clients)}
             submitting={createProject.isPending}
             onSave={(data) => createProject.mutateAsync(data).then(
               () => {

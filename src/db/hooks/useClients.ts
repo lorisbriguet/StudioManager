@@ -103,6 +103,35 @@ export function useUpdateClient() {
   });
 }
 
+/** Archive or restore a client, with undo. */
+export function useSetClientArchived() {
+  const qc = useQueryClient();
+  return useMutation({
+    meta: { errorLabel: "error_save_client" },
+    mutationFn: async ({ id, archived }: { id: string; archived: boolean }) => {
+      const prev = await q.getClient(id);
+      await q.setClientArchived(id, archived);
+      if (prev) {
+        const l = getLabels();
+        useUndoStore.getState().push({
+          label: `${archived ? l.undo_archive_client : l.undo_restore_client} "${prev.name}"`,
+          // Undo puts back the exact previous state (an already archived
+          // client keeps its original date)
+          execute: async () => {
+            await q.updateClient(id, { archived_at: prev.archived_at ?? null });
+            qc.invalidateQueries({ queryKey: ["clients"] });
+          },
+          redo: async () => {
+            await q.setClientArchived(id, archived);
+            qc.invalidateQueries({ queryKey: ["clients"] });
+          },
+        });
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["clients"] }),
+  });
+}
+
 export function useDeleteClient() {
   const qc = useQueryClient();
   const invalidateGraph = () => {
@@ -111,6 +140,7 @@ export function useDeleteClient() {
     }
   };
   return useMutation({
+    // A refused delete (issued invoices) is an AppError: the toast says why.
     meta: { errorLabel: "error_delete_client" },
     mutationFn: async (id: string) => {
       // Snapshot the FULL graph before the cascade destroys it, so undo

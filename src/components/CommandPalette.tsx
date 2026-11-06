@@ -9,6 +9,7 @@ import { Modal, Kbd, ICONS, ICON_SIZE, ICON_STROKE, MENU_GROUP_LABEL } from "./u
 import { useClients } from "../db/hooks/useClients";
 import { useProjects } from "../db/hooks/useProjects";
 import { useInvoices } from "../db/hooks/useInvoices";
+import { pickableClients } from "../types/client";
 
 export function CommandPalette() {
   const open = useAppStore((s) => s.commandPaletteOpen);
@@ -88,9 +89,9 @@ export function CommandPalette() {
           </Command.Group>
 
           {/* Clients search */}
-          {clients && clients.length > 0 && (
+          {pickableClients(clients).length > 0 && (
             <Command.Group heading={<GroupHeading>{t.clients}</GroupHeading>}>
-              {clients.map((c) => (
+              {pickableClients(clients).map((c) => (
                 <PaletteItem
                   key={c.id}
                   icon={ICONS.client}
