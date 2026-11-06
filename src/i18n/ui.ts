@@ -606,6 +606,7 @@ const ui = {
     // Empty, loading and error states
     clear_filters: "Clear filters",
     widget_error: "This widget couldn't load",
+    widget_removed: "Widget removed",
     load_error_generic: "Couldn't load this",
     load_error_projects: "Couldn't load projects",
     load_error_project: "Couldn't load this project",
@@ -2447,6 +2448,7 @@ const ui = {
     // Empty, loading and error states
     clear_filters: "Effacer les filtres",
     widget_error: "Ce widget n'a pas pu se charger",
+    widget_removed: "Widget retiré",
     load_error_generic: "Impossible de charger ces données",
     load_error_projects: "Impossible de charger les projets",
     load_error_project: "Impossible de charger ce projet",
