@@ -141,7 +141,10 @@ export async function getEquipmentDb(): Promise<Database> {
   const orgId = equipmentOrgId();
   if (!orgId) return getDb();
   if (equipmentDb?.orgId !== orgId) {
-    equipmentDb = { orgId, promise: Database.load(`sqlite:orgs/${orgId}/studiomanager.db`) };
+    // Only the open organisation is migrated at startup: bring the lender up to date first.
+    const promise = invoke("prepare_equipment_org", { id: orgId })
+      .then(() => Database.load(`sqlite:orgs/${orgId}/studiomanager.db`));
+    equipmentDb = { orgId, promise };
     equipmentDb.promise.catch(() => { equipmentDb = null; });
   }
   return equipmentDb.promise;
