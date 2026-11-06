@@ -11,6 +11,7 @@ import { useUndoStore } from "../../stores/undo-store";
 import { snapshotRows, restoreRows } from "../undoRestore";
 import { getLabels, notify } from "../../lib/notify";
 import { todayLocalISO } from "../../utils/localDate";
+import { modeActive } from "../../lib/activeMode";
 
 // Guards against concurrent calendar syncs for the same item
 // In-flight syncs per item. A sync requested meanwhile is chained after it (so
@@ -37,8 +38,9 @@ const notifyCalendarSyncFailure = (e: unknown) =>
 let _qc: QueryClient | null = null;
 
 /** Fire-and-forget calendar sync — never blocks the UI */
-function syncTaskCalendar(id: number): Promise<void> {
-  if (!useAppStore.getState().calendarSync) return Promise.resolve();
+export function syncTaskCalendar(id: number): Promise<void> {
+  // Test and presentation data is a copy: its event ids are the real ones.
+  if (!useAppStore.getState().calendarSync || modeActive()) return Promise.resolve();
   return chainSync(pendingTaskSyncs, id, async () => {
     try {
       const task = await q.getTaskById(id);
@@ -75,8 +77,9 @@ function syncTaskCalendar(id: number): Promise<void> {
   });
 }
 
-function syncSubtaskCalendar(id: number): Promise<void> {
-  if (!useAppStore.getState().calendarSync) return Promise.resolve();
+export function syncSubtaskCalendar(id: number): Promise<void> {
+  // Test and presentation data is a copy: its event ids are the real ones.
+  if (!useAppStore.getState().calendarSync || modeActive()) return Promise.resolve();
   return chainSync(pendingSubtaskSyncs, id, async () => {
     try {
       const sub = await q.getSubtaskById(id);

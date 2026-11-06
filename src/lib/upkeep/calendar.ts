@@ -5,6 +5,7 @@ import {
 import { useAppStore } from "../../stores/app-store";
 import { useOrgStore } from "../../stores/org-store";
 import { notify, getLabels } from "../notify";
+import { modeActive } from "../activeMode";
 import { effectiveDue, shouldMoveEvent } from "./schedule";
 import { equipmentOrgId } from "../../db";
 import { getMachine } from "../../db/queries/machines";
@@ -55,10 +56,7 @@ type SubscriptionEventIds = Pick<Subscription, "calendar_event_id">;
 const notifyFailure = (e: unknown) => notify.error(getLabels().calendar_sync_failed, e);
 
 /** Test or presentation mode: leave the real Apple Calendar alone. */
-function calendarOff(): boolean {
-  const app = useAppStore.getState();
-  return app.testMode || app.presentationMode;
-}
+const calendarOff = modeActive;
 
 function resolveAlert(alert: UpkeepAlert): number | null {
   return alertMinutes(alert, useAppStore.getState().upkeepAlertDefault ?? "day_9am");

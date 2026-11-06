@@ -320,6 +320,9 @@ fn enter_test_mode_now(app: tauri::AppHandle) -> Result<String, String> {
     dbfiles::snapshot_db_file(&prod_db, &test_db)
         .map_err(|e| format!("Failed to create test DB: {e}"))?;
 
+    // Start from an empty document folder (a crash may have left one behind)
+    remove_mode_files(&org, "test");
+
     // Switch active DB to test
     set_active_db_name(&app, "studiomanager_test.db")?;
 
@@ -347,8 +350,19 @@ fn exit_test_mode_now(app: tauri::AppHandle) -> Result<(), String> {
 
     // Remove test DB together with its WAL/SHM companions
     dbfiles::remove_db_files(&test_db);
+    remove_mode_files(&org, "test");
 
     Ok(())
+}
+
+/// Remove a mode's document folder (`<org>/test` or `<org>/presentation`),
+/// where invoice PDFs, receipts and machine files go while the mode is on.
+/// The folder name must match `orgPaths()` in src/lib/orgPaths.ts.
+fn remove_mode_files(org: &ActiveOrg, folder: &str) {
+    let dir = org.file(folder);
+    if dir.is_dir() {
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
 
 /// Enter presentation mode: snapshot prod DB, create empty presentation DB, switch to it.
@@ -377,6 +391,9 @@ fn enter_presentation_mode_now(app: tauri::AppHandle) -> Result<String, String> 
     dbfiles::snapshot_db_file(&prod_db, &pres_db)
         .map_err(|e| format!("Failed to create presentation DB: {e}"))?;
 
+    // Start from an empty document folder (a crash may have left one behind)
+    remove_mode_files(&org, "presentation");
+
     // Switch active DB to presentation
     set_active_db_name(&app, "studiomanager_presentation.db")?;
 
@@ -404,6 +421,7 @@ fn exit_presentation_mode_now(app: tauri::AppHandle) -> Result<(), String> {
 
     // Remove presentation DB together with its WAL/SHM companions
     dbfiles::remove_db_files(&pres_db);
+    remove_mode_files(&org, "presentation");
 
     Ok(())
 }

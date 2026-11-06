@@ -225,7 +225,7 @@ export function SettingsPage() {
   };
 
   const runBackup = async () => {
-    if (!backupPath) return; // the button is disabled without a folder
+    if (!backupPath || testMode || presentationMode) return; // the button is disabled then
     if (isBackupRunning()) {
       notify.info(t.backup_already_running);
       return;
@@ -741,7 +741,7 @@ export function SettingsPage() {
                 </div>
               </SettingRow>
               <div className="py-3 flex items-center gap-2">
-                <Button type="button" icon={ICONS.disk} onClick={runBackup} disabled={backing || !backupPath}>
+                <Button type="button" icon={ICONS.disk} onClick={runBackup} disabled={backing || !backupPath || testMode || presentationMode} title={testMode ? t.demo_data_blocked_test : presentationMode ? t.demo_data_blocked_presentation : undefined}>
                   {backing ? t.backing_up : t.backup_now}
                 </Button>
               </div>
