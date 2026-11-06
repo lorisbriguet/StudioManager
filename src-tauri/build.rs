@@ -72,6 +72,7 @@ const COMMANDS: &[&str] = &[
     "agents_prompt",
     "agents_answer",
     "agents_list",
+    "agents_watch",
     "agents_login_status",
     "agents_login_check",
     "agents_save_image",

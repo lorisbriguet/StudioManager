@@ -76,6 +76,7 @@ permissions = [
   "allow-agents-prompt",
   "allow-agents-answer",
   "allow-agents-list",
+  "allow-agents-watch",
   "allow-agents-login-status",
   "allow-agents-login-check",
   "allow-agents-save-image",
@@ -94,6 +95,7 @@ identifier = "menubar-window"
 description = "The menu bar panel: list agents and answer their prompts, the Claude sign-in, plan usage, the day's routines, and opening the main window. No database, files, settings, terminals or routine editing."
 permissions = [
   "allow-agents-list",
+  "allow-agents-watch",
   "allow-agents-prompt",
   "allow-agents-answer",
   "allow-agents-login-status",
