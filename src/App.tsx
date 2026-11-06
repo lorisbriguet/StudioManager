@@ -24,8 +24,13 @@ import { QuoteFormPage } from "./pages/QuoteFormPage";
 import { ExpensesPage } from "./pages/ExpensesPage";
 import { IncomePage } from "./pages/IncomePage";
 import { FinancesPage } from "./pages/FinancesPage";
-import { InvoicePreviewPage } from "./pages/InvoicePreviewPage";
-import { QuotePreviewPage } from "./pages/QuotePreviewPage";
+// Lazy: the preview pages carry @react-pdf, which is loaded on first use.
+const InvoicePreviewPage = lazy(() =>
+  import("./pages/InvoicePreviewPage").then((m) => ({ default: m.InvoicePreviewPage }))
+);
+const QuotePreviewPage = lazy(() =>
+  import("./pages/QuotePreviewPage").then((m) => ({ default: m.QuotePreviewPage }))
+);
 import { ResourcesPage } from "./pages/ResourcesPage";
 import { NetworkPage } from "./pages/NetworkPage";
 import { UpkeepPage } from "./pages/UpkeepPage";
@@ -234,11 +239,11 @@ function MainApp() {
                 <Route path="invoices" element={<InvoicesPage />} />
                 <Route path="invoices/new" element={<InvoiceFormPage />} />
                 <Route path="invoices/:id/edit" element={<InvoiceFormPage />} />
-                <Route path="invoices/:id/preview" element={<InvoicePreviewPage />} />
+                <Route path="invoices/:id/preview" element={<Suspense fallback={<PageSpinner />}><InvoicePreviewPage /></Suspense>} />
                 <Route path="quotes" element={<QuotesPage />} />
                 <Route path="quotes/new" element={<QuoteFormPage />} />
                 <Route path="quotes/:id/edit" element={<QuoteFormPage />} />
-                <Route path="quotes/:id/preview" element={<QuotePreviewPage />} />
+                <Route path="quotes/:id/preview" element={<Suspense fallback={<PageSpinner />}><QuotePreviewPage /></Suspense>} />
                 <Route path="expenses" element={<ExpensesPage />} />
                 <Route path="income" element={<IncomePage />} />
                 <Route path="finances" element={<FinancesPage />} />

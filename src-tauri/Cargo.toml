@@ -43,7 +43,7 @@ pulldown-cmark = { version = "0.13.5", default-features = false, features = ["ht
 # (CI and releases build on stable; rust-version above is not raised yet).
 portable-pty = "0.9.0"
 vt100 = "0.18.1"
-base64 = "0.22.1"
+base64 = "0.23.1"
 # Routines: the command timeout kills the routine's whole process group.
 libc = "0.2"
 # Upkeep connections: HTTPS for the Synology and Bambu connectors (Tasks 13–14).
@@ -64,7 +64,7 @@ sha2 = "0.11"
 # Mock runtime: the per-window command check is tested against the real capabilities.
 tauri = { version = "2", features = ["test"] }
 # Self-signed certificates for the pinning verifier's tests (no network).
-rcgen = "0.13"
+rcgen = "0.14"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # Menu bar panel as a non-activating NSPanel: opening it doesn't activate the app

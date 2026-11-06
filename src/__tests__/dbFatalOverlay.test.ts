@@ -72,6 +72,17 @@ describe("fatal overlay", () => {
     expect(overlay.textContent).not.toContain("restore a backup");
   });
 
+  it("asks for the latest version when the database is newer than the app", async () => {
+    const { overlay } = await show(
+      new Error("database newer than this app: it is at schema version 14, this app knows up to 13"),
+    );
+    expect(overlay.textContent).toContain(
+      "This data was saved by a newer version of StudioManager. Install the latest version to open it.",
+    );
+    expect(overlay.textContent).toContain("schema version 14");
+    expect(overlay.textContent).not.toContain("restore a backup");
+  });
+
   it("keeps the generic message and the error for other failures", async () => {
     const { overlay } = await show(new Error("unable to open database file"));
     expect(overlay.textContent).toContain("Database initialization failed");

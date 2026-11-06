@@ -29,12 +29,15 @@ export interface LineItem {
  * toPrecision(12) on the centime value drops the binary noise before
  * rounding, in one step, so values with more decimals (0.2845) are not
  * rounded twice. Exact for amounts up to about CHF 1 billion.
- * Negative halfway cases round toward +∞ (Math.round semantics) — no
- * negative-money path exists in the app today. Idempotent, so re-rounding
- * an already-rounded value is safe.
+ * Halves round away from zero, so a negative value mirrors its positive
+ * (-4.025 gives -4.03). Idempotent, so re-rounding an already-rounded value
+ * is safe.
  */
 export function round2(n: number): number {
-  return Math.round(Number((n * 100).toPrecision(12))) / 100;
+  const cents = Number((Math.abs(n) * 100).toPrecision(12));
+  const rounded = Math.round(cents) / 100;
+  // n < 0 keeps -0 out: round2(-0.004) is 0, not -0.
+  return n < 0 && rounded !== 0 ? -rounded : rounded;
 }
 
 let nextLineItemId = 1;

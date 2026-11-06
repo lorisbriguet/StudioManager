@@ -58,8 +58,76 @@ fn ensure_wal(conn: &rusqlite::Connection) {
     }
 }
 
+/// Start of the error for a database saved by a newer app. The frontend
+/// matches it to explain that the app needs updating.
+pub const DB_NEWER_THAN_APP: &str = "database newer than this app: ";
+
+/// The copy taken right before migrations run on a file that has data:
+/// `studiomanager.db` -> `studiomanager.pre-migration.db`, next to it. Only
+/// the latest one is kept.
+pub fn pre_migration_snapshot_path(db: &Path) -> std::path::PathBuf {
+    let stem = db.file_stem().and_then(|s| s.to_str()).unwrap_or("studiomanager");
+    db.with_file_name(format!("{stem}.pre-migration.db"))
+}
+
+fn recorded_version(conn: &rusqlite::Connection) -> Result<i64, String> {
+    conn.query_row("SELECT COALESCE(MAX(version), 0) FROM schema_migrations", [], |r| r.get(0))
+        .map_err(|e| format!("read schema_migrations: {e}"))
+}
+
+/// Refuse a file migrated by a newer app: this app's code and its
+/// ensureSchema() would write to a schema they don't know.
+fn refuse_newer(version: i64) -> Result<(), String> {
+    let latest = MIGRATIONS.last().map(|m| m.version).unwrap_or(0);
+    if version > latest {
+        return Err(format!(
+            "{DB_NEWER_THAN_APP}it is at schema version {version}, this app knows up to {latest}"
+        ));
+    }
+    Ok(())
+}
+
+/// `VACUUM INTO` a temporary file, then rename it over the previous copy,
+/// so a failed snapshot never loses the last good one.
+fn snapshot_before_migrating(conn: &rusqlite::Connection, db: &Path) -> Result<(), String> {
+    let dest = pre_migration_snapshot_path(db);
+    let tmp = dest.with_extension("db.tmp");
+    let _ = std::fs::remove_file(&tmp);
+    conn.execute("VACUUM INTO ?1", [tmp.to_string_lossy().as_ref()])
+        .map_err(|e| format!("snapshot before migrating failed: {e}"))?;
+    std::fs::rename(&tmp, &dest).map_err(|e| format!("snapshot before migrating failed: {e}"))?;
+    Ok(())
+}
+
+/// Note in `meta` which schema and app version last opened the file
+/// (diagnostics only; the refusal reads `schema_migrations`). The MCP server
+/// compiles this module too: only the app writes its version.
+fn record_versions(conn: &rusqlite::Connection, schema: i64) -> Result<(), String> {
+    if !table_exists(conn, "meta")? {
+        return Ok(());
+    }
+    let mut rows = vec![("schema_version", schema.to_string())];
+    if env!("CARGO_PKG_NAME") == "studiomanager" {
+        rows.push(("app_version", env!("CARGO_PKG_VERSION").to_string()));
+    }
+    for (key, value) in rows {
+        conn.execute(
+            "INSERT INTO meta (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+             WHERE meta.value <> excluded.value",
+            rusqlite::params![key, value],
+        )
+        .map_err(|e| format!("record {key}: {e}"))?;
+    }
+    Ok(())
+}
+
 /// Apply every migration newer than the file's recorded version.
 /// Returns how many were applied.
+///
+/// A file from a newer app is refused before anything is written to it. A
+/// file that has data is copied to [`pre_migration_snapshot_path`] before
+/// the first pending migration runs.
 pub fn migrate_db(path: &Path) -> Result<u32, String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("create db folder: {e}"))?;
@@ -67,16 +135,16 @@ pub fn migrate_db(path: &Path) -> Result<u32, String> {
     let mut conn = rusqlite::Connection::open(path).map_err(|e| format!("open {}: {e}", path.display()))?;
     conn.busy_timeout(std::time::Duration::from_millis(5000))
         .map_err(|e| format!("busy_timeout: {e}"))?;
+    if table_exists(&conn, "schema_migrations")? {
+        refuse_newer(recorded_version(&conn)?)?;
+    }
     ensure_wal(&conn);
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)",
     )
     .map_err(|e| format!("create schema_migrations: {e}"))?;
 
-    let recorded: i64 = conn
-        .query_row("SELECT COALESCE(MAX(version), 0) FROM schema_migrations", [], |r| r.get(0))
-        .map_err(|e| format!("read schema_migrations: {e}"))?;
-    let mut current = recorded;
+    let mut current = recorded_version(&conn)?;
     if current == 0 && table_exists(&conn, "_sqlx_migrations")? {
         conn.execute(
             "INSERT OR IGNORE INTO schema_migrations (version, applied_at)
@@ -84,13 +152,17 @@ pub fn migrate_db(path: &Path) -> Result<u32, String> {
             [],
         )
         .map_err(|e| format!("adopt plugin migrations: {e}"))?;
-        current = conn
-            .query_row("SELECT COALESCE(MAX(version), 0) FROM schema_migrations", [], |r| r.get(0))
-            .map_err(|e| format!("read schema_migrations: {e}"))?;
+        current = recorded_version(&conn)?;
+        refuse_newer(current)?;
+    }
+
+    let pending: Vec<&SqlMigration> = MIGRATIONS.iter().filter(|m| m.version > current).collect();
+    if current > 0 && !pending.is_empty() {
+        snapshot_before_migrating(&conn, path)?;
     }
 
     let mut applied = 0u32;
-    for m in MIGRATIONS.iter().filter(|m| m.version > current) {
+    for m in pending {
         let tx = conn.transaction().map_err(|e| format!("begin migration {}: {e}", m.version))?;
         tx.execute_batch(m.sql).map_err(|e| format!("migration {} failed: {e}", m.version))?;
         tx.execute(
@@ -100,7 +172,9 @@ pub fn migrate_db(path: &Path) -> Result<u32, String> {
         .map_err(|e| format!("record migration {}: {e}", m.version))?;
         tx.commit().map_err(|e| format!("commit migration {}: {e}", m.version))?;
         applied += 1;
+        current = m.version;
     }
+    record_versions(&conn, current)?;
     Ok(applied)
 }
 
@@ -366,5 +440,113 @@ mod tests {
         drop(conn);
         assert_eq!(migrate_db(&db).unwrap() as i64, LATEST_VERSION - 1);
         assert!(table_exists(&db, "activities"));
+    }
+
+    /// A file migrated up to `version` the way the app would have left it.
+    fn db_at(name: &str, version: i64) -> std::path::PathBuf {
+        let db = temp_db(name);
+        let conn = Connection::open(&db).unwrap();
+        conn.execute_batch("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);").unwrap();
+        for m in MIGRATIONS.iter().filter(|m| m.version <= version) {
+            conn.execute_batch(m.sql).unwrap();
+            conn.execute("INSERT INTO schema_migrations (version, applied_at) VALUES (?1, datetime('now'))", [m.version]).unwrap();
+        }
+        db
+    }
+
+    fn cleanup(db: &std::path::Path) {
+        crate::dbfiles::remove_db_files(db);
+        crate::dbfiles::remove_db_files(&pre_migration_snapshot_path(db));
+    }
+
+    fn meta(db: &std::path::Path, key: &str) -> Option<String> {
+        Connection::open(db)
+            .unwrap()
+            .query_row("SELECT value FROM meta WHERE key = ?1", [key], |r| r.get(0))
+            .ok()
+    }
+
+    #[test]
+    fn newer_file_is_refused_and_left_untouched() {
+        let db = db_at("newer", LATEST_VERSION);
+        let conn = Connection::open(&db).unwrap();
+        conn.execute("INSERT INTO schema_migrations (version, applied_at) VALUES (?1, 'x')", [LATEST_VERSION + 1]).unwrap();
+        conn.execute_batch("PRAGMA journal_mode=DELETE").unwrap();
+        drop(conn);
+        let before = std::fs::read(&db).unwrap();
+
+        let err = migrate_db(&db).unwrap_err();
+        assert!(err.starts_with(DB_NEWER_THAN_APP), "{err}");
+        assert!(err.contains(&format!("version {}", LATEST_VERSION + 1)), "{err}");
+        assert_eq!(std::fs::read(&db).unwrap(), before);
+        assert_eq!(journal_mode(&db), "delete");
+        assert!(!pre_migration_snapshot_path(&db).exists());
+        cleanup(&db);
+    }
+
+    #[test]
+    fn snapshot_is_taken_before_migrating_a_file_with_data() {
+        let db = db_at("snap", LATEST_VERSION - 1);
+        Connection::open(&db)
+            .unwrap()
+            .execute("INSERT INTO meta (key, value) VALUES ('marker', 'before')", [])
+            .unwrap();
+        assert_eq!(migrate_db(&db).unwrap(), 1);
+
+        let snap = pre_migration_snapshot_path(&db);
+        assert_eq!(snap.file_name().unwrap().to_str().unwrap(), format!("{}.pre-migration.db", db.file_stem().unwrap().to_str().unwrap()));
+        let conn = Connection::open(&snap).unwrap();
+        let v: i64 = conn.query_row("SELECT MAX(version) FROM schema_migrations", [], |r| r.get(0)).unwrap();
+        assert_eq!(v, LATEST_VERSION - 1);
+        assert_eq!(meta(&snap, "marker").as_deref(), Some("before"));
+        assert!(!snap.with_extension("db.tmp").exists());
+        cleanup(&db);
+    }
+
+    #[test]
+    fn only_the_latest_snapshot_is_kept() {
+        let db = db_at("snap-latest", LATEST_VERSION - 1);
+        migrate_db(&db).unwrap();
+        // A later migration run must replace the first copy, not add one.
+        let conn = Connection::open(&db).unwrap();
+        conn.execute("INSERT INTO meta (key, value) VALUES ('marker', 'second')", []).unwrap();
+        snapshot_before_migrating(&conn, &db).unwrap();
+        drop(conn);
+        assert_eq!(meta(&pre_migration_snapshot_path(&db), "marker").as_deref(), Some("second"));
+        let siblings = std::fs::read_dir(db.parent().unwrap())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().starts_with(db.file_stem().unwrap().to_str().unwrap()))
+            .filter(|e| e.file_name().to_string_lossy().contains("pre-migration"))
+            .count();
+        assert_eq!(siblings, 1);
+        cleanup(&db);
+    }
+
+    #[test]
+    fn fresh_file_gets_no_snapshot() {
+        let db = temp_db("snap-fresh");
+        migrate_db(&db).unwrap();
+        assert!(!pre_migration_snapshot_path(&db).exists());
+        cleanup(&db);
+    }
+
+    #[test]
+    fn up_to_date_file_gets_no_snapshot() {
+        let db = db_at("snap-current", LATEST_VERSION);
+        assert_eq!(migrate_db(&db).unwrap(), 0);
+        assert!(!pre_migration_snapshot_path(&db).exists());
+        cleanup(&db);
+    }
+
+    #[test]
+    fn versions_are_recorded_in_meta() {
+        let db = temp_db("meta-versions");
+        migrate_db(&db).unwrap();
+        assert_eq!(meta(&db, "schema_version"), Some(LATEST_VERSION.to_string()));
+        // The MCP crate runs these tests too, and never writes its own version.
+        let expected = (env!("CARGO_PKG_NAME") == "studiomanager").then(|| env!("CARGO_PKG_VERSION").to_string());
+        assert_eq!(meta(&db, "app_version"), expected);
+        cleanup(&db);
     }
 }

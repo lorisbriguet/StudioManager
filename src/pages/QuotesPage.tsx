@@ -10,7 +10,6 @@ import { useBulkDelete } from "../hooks/useBulkDelete";
 import { pdfFileName } from "../lib/pdfFilename";
 import { orgPaths } from "../lib/orgPaths";
 import { runBulkPdfExport } from "../lib/bulkPdfExport";
-import { buildQuotePdf } from "../lib/documentPdf";
 import { getQuoteLineItems } from "../db/queries/quotes";
 import { useClients } from "../db/hooks/useClients";
 import { useQuotes, useUpdateQuote, useDeleteQuote } from "../db/hooks/useQuotes";
@@ -30,6 +29,10 @@ import type { Quote, QuoteStatus, QuoteLineItem } from "../types/quote";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 import { PILL } from "../components/ui/tokens";
+
+// Dynamic import keeps @react-pdf out of the main chunk until a PDF is needed.
+const buildQuotePdf = async (id: number) =>
+  (await import("../lib/documentPdf")).buildQuotePdf(id);
 
 type SortKey = "reference" | "client_name" | "quote_date" | "status" | "total";
 
