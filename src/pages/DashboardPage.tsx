@@ -10,6 +10,7 @@ import { renderWidget } from "../components/dashboard/widgets";
 import { ErrorBoundary } from "react-error-boundary";
 import { WidgetErrorFallback } from "../components/ErrorFallback";
 import { DashboardYearContext } from "../components/dashboard/DashboardYearContext";
+import { VatThresholdCallout } from "../components/dashboard/VatThresholdCallout";
 import { ICONS, ICON_SIZE, MenuItem, PageHeader, Button, EmptyState, Select, Popover, IconButton, SectionLabel, AddRow, Card } from "../components/ui";
 import { MENU_ITEM, MENU_DIVIDER } from "../components/ui/Dropdown";
 import { useT } from "../i18n/useT";
@@ -254,6 +255,8 @@ export function DashboardPage() {
           {t.add}
         </Button>
       </PageHeader>
+
+      <VatThresholdCallout />
 
       {/* Widget store panel */}
       {showWidgetPanel && (() => {
