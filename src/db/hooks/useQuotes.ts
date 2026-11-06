@@ -1,164 +1,39 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as q from "../queries/quotes";
-import { getNextQuoteReference } from "../queries/quotes";
 import type { Quote, QuoteLineItem } from "../../types/quote";
-import { useUndoStore } from "../../stores/undo-store";
-import { getLabels } from "../../lib/notify";
-import { AppError } from "../../lib/errors";
+import { documentHooks } from "./documentHooks";
 
-export function useQuotes() {
-  return useQuery({ queryKey: ["quotes"], queryFn: q.getQuotes });
-}
+/** Quote line items are cached under the quote, so refreshing ["quotes"] covers them. */
+export const quoteLineItemsKey = (id: number) => ["quotes", id, "lineItems"];
 
-export function useQuote(id: number) {
-  return useQuery({
-    queryKey: ["quotes", id],
-    queryFn: () => q.getQuote(id),
-    enabled: !!id,
-  });
-}
+const hooks = documentHooks<Quote, QuoteLineItem>({
+  key: "quotes",
+  lineItemsKey: quoteLineItemsKey,
+  dateField: "quote_date",
+  lineItemForeignKey: "quote_id",
+  labels: {
+    saveError: "error_save_quote",
+    deleteError: "error_delete_quote",
+    undoCreate: "undo_create_quote",
+    undoUpdate: "undo_update_quote",
+    undoDelete: "undo_delete_quote",
+  },
+  queries: {
+    list: q.getQuotes,
+    get: q.getQuote,
+    listByProject: q.getQuotesByProject,
+    lineItems: q.getQuoteLineItems,
+    create: q.createQuoteWithLineItems,
+    updateWithLineItems: q.updateQuoteWithLineItems,
+    delete: q.deleteQuote,
+    nextReference: q.getNextQuoteReference,
+  },
+  // Quotes can be deleted at any status.
+});
 
-export function useQuotesByProject(projectId: number) {
-  return useQuery({
-    queryKey: ["quotes", "project", projectId],
-    queryFn: () => q.getQuotesByProject(projectId),
-    enabled: !!projectId,
-  });
-}
-
-export function useCreateQuote() {
-  const qc = useQueryClient();
-  return useMutation({
-    meta: { errorLabel: "error_save_quote" },
-    mutationFn: async ({ data, lineItems }: {
-      data: Omit<Quote, "id" | "created_at" | "updated_at">;
-      lineItems: Omit<QuoteLineItem, "id" | "quote_id">[];
-    }) => {
-      const id = await q.createQuoteWithLineItems(data, lineItems);
-      useUndoStore.getState().push({
-        label: `${getLabels().undo_create_quote} "${data.reference}"`,
-        execute: async () => {
-          await q.deleteQuote(id);
-          qc.invalidateQueries({ queryKey: ["quotes"] });
-          qc.invalidateQueries({ queryKey: ["finance"] });
-        },
-        redo: async () => {
-          await q.createQuoteWithLineItems(data, lineItems);
-          qc.invalidateQueries({ queryKey: ["quotes"] });
-          qc.invalidateQueries({ queryKey: ["finance"] });
-        },
-      });
-      return id;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["quotes"] });
-      qc.invalidateQueries({ queryKey: ["finance"] });
-    },
-  });
-}
-
-export function useUpdateQuote() {
-  const qc = useQueryClient();
-  return useMutation({
-    meta: { errorLabel: "error_save_quote" },
-    mutationFn: async ({
-      id,
-      data,
-      lineItems,
-    }: {
-      id: number;
-      data: Partial<Omit<Quote, "id" | "created_at" | "updated_at">>;
-      lineItems?: Omit<QuoteLineItem, "id" | "quote_id">[];
-    }) => {
-      const prev = await q.getQuote(id);
-      const prevLineItems = lineItems ? await q.getQuoteLineItems(id) : undefined;
-
-      // Auto-assign reference when status changes to "sent" and ref is still DRAFT
-      if (data.status === "sent" && prev?.reference.startsWith("DRAFT")) {
-        const year = prev.quote_date
-          ? parseInt(prev.quote_date.substring(0, 4))
-          : new Date().getFullYear();
-        data.reference = await getNextQuoteReference(year);
-      }
-
-      // Prevent changing back to draft once it's been set to another status
-      if (data.status === "draft" && prev && prev.status !== "draft") {
-        throw new AppError("error_revert_to_draft", "Cannot revert to draft status");
-      }
-
-      await q.updateQuoteWithLineItems(id, data, lineItems);
-      if (prev) {
-        const prevData: Record<string, unknown> = {};
-        for (const key of Object.keys(data)) {
-          prevData[key] = (prev as unknown as Record<string, unknown>)[key];
-        }
-        const prevItems = prevLineItems?.map(({ id: _iid, quote_id, ...rest }) => rest);
-        useUndoStore.getState().push({
-          label: `${getLabels().undo_update_quote} "${prev.reference}"`,
-          execute: async () => {
-            await q.updateQuoteWithLineItems(
-              id,
-              prevData as Partial<Omit<Quote, "id" | "created_at" | "updated_at">>,
-              prevItems
-            );
-            qc.invalidateQueries({ queryKey: ["quotes"] });
-            qc.invalidateQueries({ queryKey: ["quote-line-items", id] });
-            qc.invalidateQueries({ queryKey: ["finance"] });
-          },
-          redo: async () => {
-            await q.updateQuoteWithLineItems(id, data, lineItems);
-            qc.invalidateQueries({ queryKey: ["quotes"] });
-            qc.invalidateQueries({ queryKey: ["quote-line-items", id] });
-            qc.invalidateQueries({ queryKey: ["finance"] });
-          },
-        });
-      }
-    },
-    onSuccess: (_data, { id }) => {
-      qc.invalidateQueries({ queryKey: ["quotes"] });
-      qc.invalidateQueries({ queryKey: ["quote-line-items", id] });
-      qc.invalidateQueries({ queryKey: ["finance"] });
-    },
-  });
-}
-
-export function useDeleteQuote() {
-  const qc = useQueryClient();
-  return useMutation({
-    meta: { errorLabel: "error_delete_quote" },
-    mutationFn: async (id: number) => {
-      const prev = await q.getQuote(id);
-      const prevItems = await q.getQuoteLineItems(id);
-      await q.deleteQuote(id);
-      if (prev) {
-        const { id: _id, created_at, updated_at, ...data } = prev;
-        const items = prevItems.map(({ id: _iid, quote_id, ...rest }) => rest);
-        // The restore assigns a fresh rowid; redo targets exactly that id —
-        // a reference lookup could hit a different row with the same reference.
-        let restoredId: number | null = null;
-        useUndoStore.getState().push({
-          label: `${getLabels().undo_delete_quote} "${prev.reference}"`,
-          execute: async () => {
-            restoredId = await q.createQuoteWithLineItems(
-              data as Omit<Quote, "id" | "created_at" | "updated_at">,
-              items
-            );
-            qc.invalidateQueries({ queryKey: ["quotes"] });
-            qc.invalidateQueries({ queryKey: ["finance"] });
-          },
-          redo: async () => {
-            if (restoredId !== null) {
-              await q.deleteQuote(restoredId);
-              qc.invalidateQueries({ queryKey: ["quotes"] });
-              qc.invalidateQueries({ queryKey: ["finance"] });
-            }
-          },
-        });
-      }
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["quotes"] });
-      qc.invalidateQueries({ queryKey: ["finance"] });
-    },
-  });
-}
+export const useQuotes = hooks.useList;
+export const useQuote = hooks.useOne;
+export const useQuotesByProject = hooks.useByProject;
+export const useQuoteLineItems = hooks.useLineItems;
+export const useCreateQuote = hooks.useCreate;
+export const useUpdateQuote = hooks.useUpdate;
+export const useDeleteQuote = hooks.useDelete;
