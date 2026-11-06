@@ -1,5 +1,6 @@
-import { getDb, validateFields, TransactionBatch } from "../index";
+import { getDb, TransactionBatch } from "../index";
 import { getNextReference } from "./referenceGenerator";
+import { documentQueries } from "./documents";
 import { isDraftReference } from "../../types/invoice";
 import { todayLocalISO } from "../../utils/localDate";
 import type { Invoice, InvoiceLineItem } from "../../types/invoice";
@@ -33,21 +34,15 @@ export async function getInvoiceAging(): Promise<InvoiceAgingRow[]> {
   `, [todayLocalISO()]);
 }
 
-export async function getInvoices(): Promise<Invoice[]> {
-  const db = await getDb();
-  return db.select<Invoice[]>(
-    "SELECT * FROM invoices ORDER BY invoice_date DESC"
-  );
-}
+const docs = documentQueries<Invoice, InvoiceLineItem>("invoice");
 
-export async function getInvoice(id: number): Promise<Invoice | null> {
-  const db = await getDb();
-  const rows = await db.select<Invoice[]>(
-    "SELECT * FROM invoices WHERE id = $1",
-    [id]
-  );
-  return rows[0] ?? null;
-}
+export const getInvoices = docs.list;
+export const getInvoice = docs.get;
+export const getInvoicesByProject = docs.listByProject;
+/** Update invoice fields only (no line items) */
+export const updateInvoice = docs.update;
+export const updateInvoiceWithLineItems = docs.updateWithLineItems;
+export const getInvoiceLineItems = docs.lineItems;
 
 export async function getInvoicesByClient(
   clientId: string
@@ -56,16 +51,6 @@ export async function getInvoicesByClient(
   return db.select<Invoice[]>(
     "SELECT * FROM invoices WHERE client_id = $1 ORDER BY invoice_date DESC",
     [clientId]
-  );
-}
-
-export async function getInvoicesByProject(
-  projectId: number
-): Promise<Invoice[]> {
-  const db = await getDb();
-  return db.select<Invoice[]>(
-    "SELECT * FROM invoices WHERE project_id = $1 ORDER BY invoice_date DESC",
-    [projectId]
   );
 }
 
@@ -96,56 +81,9 @@ export async function createInvoiceWithLineItems(
       data.chf_equivalent ?? data.total, data.template_id ?? null,
     ]
   );
-  for (const item of lineItems) {
-    batch.add(
-      `INSERT INTO invoice_line_items (invoice_id, designation, rate, unit, quantity, amount, sort_order)
-       VALUES ($LAST_INSERT_ID, $1, $2, $3, $4, $5, $6)`,
-      [item.designation, item.rate, item.unit, item.quantity, item.amount, item.sort_order]
-    );
-  }
+  docs.addNewLineItems(batch, lineItems);
   const result = await batch.commit();
   return result.lastInsertId;
-}
-
-/** Update invoice fields only (no line items) */
-export async function updateInvoice(
-  id: number,
-  data: Partial<Omit<Invoice, "id" | "created_at" | "updated_at">>
-): Promise<void> {
-  const db = await getDb();
-  const fields = Object.keys(data);
-  validateFields(fields);
-  const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(", ");
-  const values = [id, ...fields.map((f) => data[f as keyof typeof data])];
-  await db.execute(
-    `UPDATE invoices SET ${sets}, updated_at = datetime('now') WHERE id = $1`,
-    values
-  );
-}
-
-export async function updateInvoiceWithLineItems(
-  id: number,
-  data: Partial<Omit<Invoice, "id" | "created_at" | "updated_at">>,
-  lineItems?: Omit<InvoiceLineItem, "id" | "invoice_id">[]
-): Promise<void> {
-  const fields = Object.keys(data);
-  validateFields(fields);
-  const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(", ");
-  const values = [id, ...fields.map((f) => data[f as keyof typeof data])];
-
-  const batch = new TransactionBatch();
-  batch.add(`UPDATE invoices SET ${sets}, updated_at = datetime('now') WHERE id = $1`, values);
-  if (lineItems) {
-    batch.add("DELETE FROM invoice_line_items WHERE invoice_id = $1", [id]);
-    for (const item of lineItems) {
-      batch.add(
-        `INSERT INTO invoice_line_items (invoice_id, designation, rate, unit, quantity, amount, sort_order)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [id, item.designation, item.rate, item.unit, item.quantity, item.amount, item.sort_order]
-      );
-    }
-  }
-  await batch.commit();
 }
 
 export async function markOverdueInvoices(): Promise<Invoice[]> {
@@ -195,16 +133,6 @@ export async function deleteInvoice(id: number): Promise<void> {
     [id]
   );
   await db.execute("DELETE FROM invoices WHERE id = $1", [id]);
-}
-
-export async function getInvoiceLineItems(
-  invoiceId: number
-): Promise<InvoiceLineItem[]> {
-  const db = await getDb();
-  return db.select<InvoiceLineItem[]>(
-    "SELECT * FROM invoice_line_items WHERE invoice_id = $1 ORDER BY sort_order",
-    [invoiceId]
-  );
 }
 
 /**
