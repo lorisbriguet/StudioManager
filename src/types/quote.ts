@@ -1,3 +1,5 @@
+import type { LineItemFields } from "./document";
+
 export type QuoteStatus = "draft" | "sent" | "accepted" | "rejected" | "expired";
 
 export interface Quote {
@@ -25,13 +27,7 @@ export interface Quote {
   updated_at: string;
 }
 
-export interface QuoteLineItem {
+export interface QuoteLineItem extends LineItemFields {
   id: number;
   quote_id: number;
-  designation: string;
-  rate: number | null;
-  unit: string | null;
-  quantity: number;
-  amount: number;
-  sort_order: number;
 }
