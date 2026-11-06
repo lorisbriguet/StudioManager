@@ -8,6 +8,8 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 const LIMIT: usize = 300;
+/// First slice of a transcript `read_tail` reads, from the end.
+const TAIL_START_BYTES: u64 = 1 << 20;
 const SUMMARY_MAX: usize = 200;
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -214,10 +216,29 @@ pub fn summarise(jsonl: &str, limit: usize) -> Vec<Item> {
     summarise_lines(jsonl.lines().map(String::from), limit)
 }
 
-/// Streams the file line by line, keeping only the tail in memory.
+/// The last `limit` items of the file. Reads only its end (`TAIL_START_BYTES`, doubled while
+/// that holds fewer than `limit` items), so a long transcript stays cheap to refresh.
 pub fn read_tail(path: &Path, limit: usize) -> Vec<Item> {
-    let Ok(f) = std::fs::File::open(path) else { return vec![] };
-    summarise_lines(BufReader::new(f).lines().map_while(Result::ok), limit)
+    use std::io::{Seek, SeekFrom};
+    let Ok(mut f) = std::fs::File::open(path) else { return vec![] };
+    let len = f.metadata().map(|m| m.len()).unwrap_or(u64::MAX);
+    let mut window = TAIL_START_BYTES;
+    loop {
+        let start = len.saturating_sub(window);
+        if f.seek(SeekFrom::Start(start)).is_err() {
+            return vec![];
+        }
+        let mut lines = BufReader::new(&mut f).lines().map_while(Result::ok);
+        // A read starting mid-file begins mid-line: skip that partial line.
+        if start > 0 {
+            lines.next();
+        }
+        let items = summarise_lines(lines, limit);
+        if start == 0 || items.len() >= limit {
+            return items;
+        }
+        window = window.saturating_mul(2);
+    }
 }
 
 #[tauri::command]
@@ -393,7 +414,28 @@ mod tests {
         assert_eq!(locate(&dir, id), Some(file.clone()));
         assert_eq!(locate(&dir, "00000000-0000-4000-8000-000000000002"), None);
         assert_eq!(read_tail(&file, 3).len(), 3);
+        assert_eq!(read_tail(&file, 3), summarise(FIXTURE, 3));
         assert!(last_change_ms(&file).is_some());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_tail_widens_past_a_long_end() {
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("sm-agents-tail-{nanos}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("t.jsonl");
+        // The fixture, then more than one first window of lines that hold no items.
+        let filler = format!("{{\"type\":\"noise\",\"pad\":\"{}\"}}\n", "x".repeat(1000));
+        let mut body = String::from(FIXTURE);
+        if !body.ends_with('\n') {
+            body.push('\n');
+        }
+        for _ in 0..(TAIL_START_BYTES as usize / filler.len() + 10) {
+            body.push_str(&filler);
+        }
+        std::fs::write(&file, &body).unwrap();
+        assert_eq!(read_tail(&file, 3), summarise(FIXTURE, 3));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
