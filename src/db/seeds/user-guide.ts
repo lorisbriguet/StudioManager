@@ -570,9 +570,9 @@ const articles: ArticleSeed[] = [
 
 <h2>Backup</h2>
 <ul>
-  <li><strong>Backup paths</strong> — Set one or two backup directories</li>
-  <li><strong>Max backups</strong> — How many backups to keep before rotating</li>
-  <li><strong>Auto-backup interval</strong> — Automatic backups every X minutes (0 = disabled)</li>
+  <li><strong>Backup paths</strong> — Set one or two backup directories. Every organisation is backed up: into its own backup folder when it has one, otherwise into this organisation's. The second folder gets a copy of every organisation.</li>
+  <li><strong>Auto-backup interval</strong> — Daily by default; choose Disabled to turn it off. Each organisation keeps the newest backup of each of its last 30 days with a backup, plus the newest of each of the last 12 months.</li>
+  <li><strong>What a backup holds</strong> — An exact copy of the database, a CSV per table, and the list of receipts and invoice PDFs. The PDFs themselves sit once in a shared <code>files-…</code> folder next to the backups; each backup copies only new or changed files. If any table or file fails, the backup fails and you are told.</li>
   <li><strong>Manual backup</strong> — Create a backup on demand</li>
   <li><strong>Restore</strong> — Restore from a previous backup. Each organisation only sees its own backups.</li>
   <li><strong>Snapshot</strong> — Take a quick safety copy of the current organisation's database before a risky change, and restore it in one click.</li>

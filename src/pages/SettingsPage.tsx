@@ -18,7 +18,7 @@ import { useT } from "../i18n/useT";
 import type { AppLanguage } from "../i18n/ui";
 import { UpdateChecker } from "../components/UpdateChecker";
 import { WorkloadTemplateManager } from "../components/workload/WorkloadTemplateManager";
-import { ICONS, ICON_SIZE, Input, Select, Button, IconButton, SectionLabel, SidebarTitle, SettingRow, SettingsCard, NavItem, Tooltip, FieldError, Spinner } from "../components/ui";
+import { ICONS, ICON_SIZE, Select, Button, IconButton, SectionLabel, SidebarTitle, SettingRow, SettingsCard, NavItem, Tooltip, FieldError, Spinner } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
 import { UpkeepSettingsCard } from "../components/settings/UpkeepSettingsCard";
@@ -67,8 +67,6 @@ export function SettingsPage() {
   const setBackupPath = useAppStore((s) => s.setBackupPath);
   const backupPath2 = useAppStore((s) => s.backupPath2);
   const setBackupPath2 = useAppStore((s) => s.setBackupPath2);
-  const maxBackups = useAppStore((s) => s.maxBackups);
-  const setMaxBackups = useAppStore((s) => s.setMaxBackups);
   const autoBackupInterval = useAppStore((s) => s.autoBackupInterval);
   const setAutoBackupInterval = useAppStore((s) => s.setAutoBackupInterval);
   const lastAutoBackup = useAppStore((s) => s.lastAutoBackup);
@@ -233,9 +231,9 @@ export function SettingsPage() {
     setBacking(true);
     setBackupRunning(true);
     try {
-      const path = await createBackup(backupPath, maxBackups);
+      const path = await createBackup(backupPath, { ownFolders: true });
       if (backupPath2) {
-        await createBackup(backupPath2, maxBackups);
+        await createBackup(backupPath2);
       }
       notify.success(t.backup_created.replace("{name}", path.split("/").pop() ?? ""));
     } catch (e) {
@@ -708,18 +706,7 @@ export function SettingsPage() {
                 </div>
                 {backupDirError?.which === "secondary" && <FieldError className="text-right">{backupDirError.message}</FieldError>}
               </SettingRow>
-              <SettingRow label={t.keep_last_n}>
-                <Input
-                  numeric
-                  min={1}
-                  max={50}
-                  value={maxBackups}
-                  onChange={(e) => setMaxBackups(Math.max(1, Number(e.target.value) || 5))}
-                  width="xs"
-                  aria-label={t.keep_last_n}
-                />
-              </SettingRow>
-              <SettingRow label={t.auto_backup_interval}>
+              <SettingRow label={t.auto_backup_interval} desc={t.backup_retention_desc}>
                 <div className="flex items-center gap-2">
                   <Select
                     value={autoBackupInterval}

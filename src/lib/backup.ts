@@ -8,6 +8,7 @@ import {
   readTextFile,
   remove,
 } from "@tauri-apps/plugin-fs";
+import { invoke } from "@tauri-apps/api/core";
 import { logWarn, logInfo } from "./log";
 import { orgPaths } from "./orgPaths";
 import { useOrgStore } from "../stores/org-store";
@@ -123,7 +124,7 @@ export const NOT_BACKED_UP = ["meta"];
 /** Backup folder name prefix for the active organisation. No active
  *  organisation (empty id, e.g. before the org registry loads) falls back to
  *  the legacy unprefixed "backup-" naming — same convention as orgPaths.ts,
- *  and keeps pre-organisation backups discoverable by rotation/listing. */
+ *  and keeps pre-organisation backups discoverable by listing. */
 function backupPrefix(): string {
   const id = useOrgStore.getState().activeId;
   return id ? `backup-${id}-` : "backup-";
@@ -167,86 +168,61 @@ export function serializeCsv(
   return lines.join("\n");
 }
 
-async function exportTableCsv(tableName: string): Promise<string> {
-  if (!TABLES.includes(tableName)) {
-    throw new Error(`Invalid table name: ${tableName}`);
-  }
-  const db = await getDb();
-  const rows = await db.select<Record<string, unknown>[]>(
-    `SELECT * FROM ${tableName}`
-  );
-  if (rows.length === 0) return "";
-  return serializeCsv(rows, Object.keys(rows[0]));
+/** One organisation's result from the `create_backups` command (src-tauri/src/backup.rs). */
+interface BackupOutcome {
+  orgId: string;
+  dir: string;
+  path: string | null;
+  error: string | null;
 }
 
+export interface BackupOptions {
+  /** "all" (default) backs up every organisation, "active" only the open one. */
+  orgs?: "all" | "active";
+  /** Send each other organisation to its own backup folder when it has one
+   *  (the primary backup). Off: every organisation goes to `backupDir`. */
+  ownFolders?: boolean;
+  /** false skips rotation (the safety backup taken before a restore). */
+  rotate?: boolean;
+}
+
+/** Back up organisations through Rust: a `VACUUM INTO` snapshot, CSVs read
+ *  from that snapshot, and the receipts and invoice PDFs synced into a shared
+ *  `files-<org id>/` folder (see src-tauri/src/backup.rs). Any error in a
+ *  table or a file fails that organisation's backup, which then leaves no
+ *  folder behind. Rotation runs only for the backups that succeeded; if any
+ *  organisation failed, this throws after rotating the others. Returns the
+ *  active organisation's new backup folder. */
 export async function createBackup(
   backupDir: string,
-  maxBackups: number
+  options: BackupOptions = {}
 ): Promise<string> {
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const ts = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
-  const backupPath = `${backupDir}/${backupPrefix()}${ts}`;
+  const { organisations, activeId } = useOrgStore.getState();
+  if (!activeId) throw new Error("No active organisation to back up");
+  const others = options.orgs === "active" ? [] : organisations.filter((o) => o.id !== activeId);
+  const targets = [
+    { orgId: activeId, dir: backupDir },
+    ...others.map((o) => ({
+      orgId: o.id,
+      dir: (options.ownFolders && o.prefs?.backupPath) || backupDir,
+    })),
+  ];
+  const outcomes = await invoke<BackupOutcome[]>("create_backups", { targets, tables: TABLES });
 
-  // Create directory structure
-  await mkdir(`${backupPath}/data`, { recursive: true });
-  await mkdir(`${backupPath}/receipts`, { recursive: true });
-  await mkdir(`${backupPath}/invoices`, { recursive: true });
-
-  // Export each table as CSV
-  for (const table of TABLES) {
-    try {
-      const csv = await exportTableCsv(table);
-      if (csv) {
-        const bytes = new TextEncoder().encode(csv);
-        await writeFile(`${backupPath}/data/${table}.csv`, bytes);
-      }
-    } catch {
-      // Table may not exist yet (subtasks, notifications)
+  if (options.rotate !== false) {
+    for (const o of outcomes) {
+      if (o.path) await rotateBackups(o.dir, `backup-${o.orgId}-`);
     }
   }
 
-  // Copy receipt files
-  const { invoicesDir, receiptsDir } = await orgPaths();
-  if (await exists(receiptsDir)) {
-    try {
-      const entries = await readDir(receiptsDir);
-      for (const entry of entries) {
-        const name = entry.name ? safeName(entry.name) : null;
-        if (entry.isFile && name) {
-          await copyFile(
-            `${receiptsDir}/${name}`,
-            `${backupPath}/receipts/${name}`
-          );
-        }
-      }
-    } catch {
-      // receipts dir may be empty
-    }
+  const failed = outcomes.filter((o) => o.error);
+  if (failed.length > 0) {
+    const name = (id: string) => organisations.find((o) => o.id === id)?.name ?? id;
+    throw new Error(failed.map((o) => `${name(o.orgId)}: ${o.error}`).join("; "));
   }
-
-  // Copy stored invoice PDFs
-  if (await exists(invoicesDir)) {
-    try {
-      const entries = await readDir(invoicesDir);
-      for (const entry of entries) {
-        const name = entry.name ? safeName(entry.name) : null;
-        if (entry.isFile && name) {
-          await copyFile(
-            `${invoicesDir}/${name}`,
-            `${backupPath}/invoices/${name}`
-          );
-        }
-      }
-    } catch {
-      // invoices dir may be empty
-    }
-  }
-
-  // Rotate old backups
-  await rotateBackups(backupDir, maxBackups);
-
-  return backupPath;
+  const active = outcomes.find((o) => o.orgId === activeId);
+  if (!active?.path) throw new Error("Backup of the active organisation is missing");
+  return active.path;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -273,26 +249,51 @@ async function removeBackupDir(path: string): Promise<void> {
   }
 }
 
-async function rotateBackups(
-  backupDir: string,
-  maxBackups: number
-): Promise<void> {
-  const limit = Number(maxBackups);
-  if (!Number.isFinite(limit) || limit <= 0) return;
+/** Backups kept per organisation: the newest of each of the last 30 days
+ *  that have a backup, plus the newest of each of the last 12 months. Days
+ *  without a backup don't count, so a long break never rotates every copy
+ *  away. */
+export const KEEP_DAILY = 30;
+export const KEEP_MONTHLY = 12;
+
+const BACKUP_STAMP = /^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}$/;
+
+/** The backup folders under `prefix` that retention drops, oldest first.
+ *  Names that don't end in a timestamp are never dropped. */
+export function backupsToRemove(names: string[], prefix: string): string[] {
+  const dated = names
+    .filter((n) => n.startsWith(prefix) && BACKUP_STAMP.test(n.slice(prefix.length)))
+    .sort()
+    .reverse(); // newest first
+  const keep = new Set<string>();
+  const days = new Set<string>();
+  const months = new Set<string>();
+  for (const name of dated) {
+    const stamp = name.slice(prefix.length);
+    const day = stamp.slice(0, 10);
+    const month = stamp.slice(0, 7);
+    if (!days.has(day) && days.size < KEEP_DAILY) {
+      days.add(day);
+      keep.add(name);
+    }
+    if (!months.has(month) && months.size < KEEP_MONTHLY) {
+      months.add(month);
+      keep.add(name);
+    }
+  }
+  return dated.filter((n) => !keep.has(n)).reverse();
+}
+
+/** Apply retention to one organisation's backups (`prefix` = `backup-<id>-`)
+ *  in `backupDir`. Never touches another organisation's backups, pre-upgrade
+ *  backups without an id, or the shared files folders. */
+async function rotateBackups(backupDir: string, prefix: string): Promise<void> {
   try {
     const entries = await readDir(backupDir);
-    // Use name prefix as primary filter — isFile may be unreliable in Tauri v2 DirEntry.
-    // Prefix is org-scoped so rotation only ever touches the active organisation's backups.
-    const prefix = backupPrefix();
-    const backups = entries
-      .filter((e) => e.name?.startsWith(prefix))
-      .map((e) => e.name as string)
-      .sort();
-
-    while (backups.length > limit) {
-      const oldest = backups.shift();
-      if (!oldest) break;
-      const safe = safeName(oldest);
+    // Name filter only — isFile may be unreliable in Tauri v2 DirEntry.
+    const names = entries.map((e) => e.name).filter((n): n is string => !!n);
+    for (const old of backupsToRemove(names, prefix)) {
+      const safe = safeName(old);
       if (!safe) continue;
       try {
         await removeBackupDir(`${backupDir}/${safe}`);
@@ -483,6 +484,58 @@ export function assertRestorableData(parsed: { rows: unknown[][] }[]): void {
   }
 }
 
+/** `manifest.json` written by src-tauri/src/backup.rs. */
+interface BackupManifest {
+  filesDir: string;
+  receipts: string[];
+  invoices: string[];
+}
+
+const FILES_DIR = /^files-[a-z0-9]+$/;
+
+/** The backup's manifest, or null for a backup written before manifests. */
+async function readManifest(backupPath: string): Promise<BackupManifest | null> {
+  const path = `${backupPath}/manifest.json`;
+  if (!(await exists(path))) return null;
+  const m = JSON.parse(await readTextFile(path)) as Partial<BackupManifest>;
+  if (typeof m.filesDir !== "string" || !FILES_DIR.test(m.filesDir)) {
+    throw new Error("Backup manifest names an invalid files folder");
+  }
+  return {
+    filesDir: m.filesDir,
+    receipts: Array.isArray(m.receipts) ? m.receipts : [],
+    invoices: Array.isArray(m.invoices) ? m.invoices : [],
+  };
+}
+
+/** Copy the named files from `from` into `to`. A missing file is logged and
+ *  skipped: the database restore already succeeded. */
+async function copyListed(from: string, to: string, names: string[]): Promise<void> {
+  if (names.length === 0) return;
+  await mkdir(to, { recursive: true });
+  for (const raw of names) {
+    const name = safeName(raw);
+    if (!name) continue;
+    try {
+      await copyFile(`${from}/${name}`, `${to}/${name}`);
+    } catch (e) {
+      logWarn(`Restore: could not copy ${name}:`, String(e));
+    }
+  }
+}
+
+/** Copy every file of an older backup's own `receipts/` or `invoices/` folder. */
+async function copyFolder(from: string, to: string): Promise<void> {
+  if (!(await exists(from))) return;
+  try {
+    const entries = await readDir(from);
+    const names = entries.filter((e) => e.isFile && e.name).map((e) => e.name as string);
+    await copyListed(from, to, names);
+  } catch (e) {
+    logWarn(`Restore: could not read ${from}:`, String(e));
+  }
+}
+
 /** Restore the database and files from a backup folder.
  *  A safety backup of the current data is created first (restore aborts if
  *  that fails). The database restore (delete + insert, all tables) then runs
@@ -512,17 +565,19 @@ export async function restoreFromBackup(
     parsed.push({ table, ...parseCsv(csv) });
   }
 
-  // Abort before touching anything if the backup holds no data at all
+  // Abort before touching anything if the backup holds no data at all, or
+  // its manifest is unreadable.
   assertRestorableData(parsed);
+  const manifest = await readManifest(backupPath);
 
-  // Safety net: snapshot the current data into the normal backup location
-  // (normal timestamped naming) before wiping anything, so even restoring
-  // the wrong backup can be undone. maxBackups=0 disables rotation, so this
-  // snapshot can never rotate away the very backup being restored; the next
-  // regular backup rotates as usual. Abort if the snapshot fails.
+  // Safety net: back up the active organisation into the normal backup
+  // location (normal timestamped naming) before wiping anything, so even
+  // restoring the wrong backup can be undone. No rotation, so this backup
+  // can never rotate away the very backup being restored; the next regular
+  // backup rotates as usual. Abort if the safety backup fails.
   const slash = backupPath.lastIndexOf("/");
   const backupDir = slash > 0 ? backupPath.slice(0, slash) : backupPath;
-  const safetyBackupPath = await createBackup(backupDir, 0).catch((e) => {
+  const safetyBackupPath = await createBackup(backupDir, { orgs: "active", rotate: false }).catch((e) => {
     throw new RestoreError("safety_backup_failed", String(e));
   });
 
@@ -617,39 +672,18 @@ export async function restoreFromBackup(
     logInfo("Restore integrity check passed for all tables");
   }
 
-  // Restore receipt files
+  // Restore receipts and invoice PDFs
   const { invoicesDir, receiptsDir } = await orgPaths();
-  const receiptsBackup = `${backupPath}/receipts`;
-  if (await exists(receiptsBackup)) {
-    await mkdir(receiptsDir, { recursive: true });
-    try {
-      const entries = await readDir(receiptsBackup);
-      for (const entry of entries) {
-        const name = entry.name ? safeName(entry.name) : null;
-        if (entry.isFile && name) {
-          await copyFile(`${receiptsBackup}/${name}`, `${receiptsDir}/${name}`);
-        }
-      }
-    } catch {
-      // non-critical
-    }
-  }
-
-  // Restore invoice PDFs
-  const invoicesBackup = `${backupPath}/invoices`;
-  if (await exists(invoicesBackup)) {
-    await mkdir(invoicesDir, { recursive: true });
-    try {
-      const entries = await readDir(invoicesBackup);
-      for (const entry of entries) {
-        const name = entry.name ? safeName(entry.name) : null;
-        if (entry.isFile && name) {
-          await copyFile(`${invoicesBackup}/${name}`, `${invoicesDir}/${name}`);
-        }
-      }
-    } catch {
-      // non-critical
-    }
+  if (manifest) {
+    // Current layout: the files sit in the shared files folder next to the
+    // backups; the manifest lists the ones this backup had.
+    const store = `${backupDir}/${manifest.filesDir}`;
+    await copyListed(`${store}/receipts`, receiptsDir, manifest.receipts);
+    await copyListed(`${store}/invoices`, invoicesDir, manifest.invoices);
+  } else {
+    // Older backups hold their own copies inside the backup folder.
+    await copyFolder(`${backupPath}/receipts`, receiptsDir);
+    await copyFolder(`${backupPath}/invoices`, invoicesDir);
   }
 
   if (valuesDefaulted > 0) {

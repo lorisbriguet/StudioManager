@@ -9,6 +9,7 @@ const COMMANDS: &[&str] = &[
     "enter_presentation_mode",
     "exit_presentation_mode",
     "snapshot_db",
+    "create_backups",
     "restore_snapshot",
     "has_snapshot",
     "get_active_db",
