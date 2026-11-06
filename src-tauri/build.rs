@@ -3,6 +3,7 @@
 /// (permissions/windows.toml). A test in lib.rs keeps this list equal to the handler.
 const COMMANDS: &[&str] = &[
     "execute_batch",
+    "prepare_equipment_org",
     "enter_test_mode",
     "exit_test_mode",
     "enter_presentation_mode",

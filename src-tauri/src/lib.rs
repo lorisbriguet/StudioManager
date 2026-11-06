@@ -134,11 +134,31 @@ fn resolve_batch_db(app_dir: &Path, org: &ActiveOrg, target: Option<&str>) -> Re
     if org.in_mode() {
         return Err("another organisation's data is not available in test or presentation mode".into());
     }
-    let dir = orgs::org_dir(app_dir, target);
-    if !dir.join(DB_FILE).exists() {
+    let db = orgs::org_dir(app_dir, target).join(DB_FILE);
+    if !db.exists() {
         return Err(format!("unknown organisation: {target}"));
     }
-    Ok(dir.join(DB_FILE))
+    // Only the open organisation is migrated at startup or on a switch: bring
+    // the lender up to date too, or its tables may lack a column we write.
+    let _one_at_a_time = LENDER_MIGRATE.lock().unwrap_or_else(|e| e.into_inner());
+    migrate::migrate_db(&db)?;
+    Ok(db)
+}
+
+/// Batches run under the shared organisation lock, so two of them could reach
+/// the same lender at once and both try to apply its pending migrations.
+static LENDER_MIGRATE: Mutex<()> = Mutex::new(());
+
+/// Bring a borrowed-equipment organisation's database up to date before the
+/// window opens its own connection to it (see `getEquipmentDb`).
+#[tauri::command]
+async fn prepare_equipment_org(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    run_blocking(move || {
+        let _guard = org_shared();
+        let org = active_org(&app)?;
+        batch_db_path(&app, &org, Some(&id)).map(|_| ())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -913,6 +933,7 @@ pub fn run() {
         ))
         .invoke_handler(tauri::generate_handler![
             execute_batch,
+            prepare_equipment_org,
             enter_test_mode,
             exit_test_mode,
             enter_presentation_mode,
@@ -1166,6 +1187,32 @@ mod tests {
         assert!(resolve_batch_db(&app, &own, Some("nope00")).unwrap_err().contains("unknown organisation"));
         // the open organisation itself needs no target
         assert_eq!(resolve_batch_db(&app, &own, Some("abc123")).unwrap(), own.db_path());
+        std::fs::remove_dir_all(&app).ok();
+    }
+
+    #[test]
+    fn a_lender_database_is_migrated_before_a_batch_reaches_it() {
+        let app = std::env::temp_dir().join(format!("sm-lender-{}", std::process::id()));
+        let own = active("abc123", DB_FILE);
+        let dir = orgs::org_dir(&app, "xyz789");
+        std::fs::create_dir_all(&dir).unwrap();
+        // The lender was last opened by an older version: only the first migration ran.
+        let conn = rusqlite::Connection::open(dir.join(DB_FILE)).unwrap();
+        conn.execute_batch(migrate::MIGRATIONS[0].sql).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
+             INSERT INTO schema_migrations VALUES (1, 'x');",
+        )
+        .unwrap();
+        drop(conn);
+
+        resolve_batch_db(&app, &own, Some("xyz789")).unwrap();
+
+        let conn = rusqlite::Connection::open(dir.join(DB_FILE)).unwrap();
+        let version: i64 =
+            conn.query_row("SELECT MAX(version) FROM schema_migrations", [], |r| r.get(0)).unwrap();
+        assert_eq!(version, migrate::LATEST_VERSION);
+        drop(conn);
         std::fs::remove_dir_all(&app).ok();
     }
 

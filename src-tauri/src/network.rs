@@ -429,8 +429,9 @@ fn ensure_live(in_mode: bool) -> Result<(), String> {
 pub async fn open_remote_link(app: tauri::AppHandle, target_org: Option<String>, file_id: i64) -> Result<(), String> {
     let org = crate::active_org(&app)?;
     ensure_live(org.in_mode())?;
-    let db_path = crate::batch_db_path(&app, &org, target_org.as_deref())?;
     tauri::async_runtime::spawn_blocking(move || {
+        // Resolving another organisation's database may migrate it: keep that off the async thread.
+        let db_path = crate::batch_db_path(&app, &org, target_org.as_deref())?;
         let conn = rusqlite::Connection::open_with_flags(&db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
             .map_err(|e| format!("Failed to open DB: {e}"))?;
         let url = remote_link_url(&conn, file_id)?;
