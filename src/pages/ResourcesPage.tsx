@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useChanged } from "../hooks/useChanged";
 import { ICONS, ICON_SIZE, PageHeader, Button, EmptyState, QueryState, NoResults, FormField, Select, IconButton, Tag, FilterChip, Input, Callout, FormGrid, FormModal, Table, TableSkeleton, SearchBar } from "../components/ui";
 import { TagInput } from "../components/shared/TagInput";
 import * as v from "../lib/validate";
@@ -445,12 +446,12 @@ function ResourceTableRow({
   const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingRef = useRef(false);
 
-  useEffect(() => {
+  if (useChanged(resource, isEditing)) {
     setName(resource.name);
     setUrl(resource.url);
     setPrice(resource.price);
     setTags(resource.tags);
-  }, [resource, isEditing]);
+  }
 
   // Clean up blur timeout on unmount
   useEffect(() => {
