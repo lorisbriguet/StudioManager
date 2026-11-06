@@ -2,18 +2,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as q from "../queries/timeEntries";
 import { snapshotRows, pushRestore } from "../undoRestore";
 import { getLabels } from "../../lib/notify";
+import { qk, invalidateTimeTracking } from "../queryKeys";
 
 export function useDeleteTimeEntry() {
   const qc = useQueryClient();
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ["time-entries"] });
-    qc.invalidateQueries({ queryKey: ["tasks"] });
-    qc.invalidateQueries({ queryKey: ["time-this-week"] });
-    qc.invalidateQueries({ queryKey: ["weekly-trend"] });
-    qc.invalidateQueries({ queryKey: ["top-time-consumers"] });
-    qc.invalidateQueries({ queryKey: ["project-time-distribution"] });
-    qc.invalidateQueries({ queryKey: ["workload-rows"] });
-  };
+  const invalidate = () => invalidateTimeTracking(qc);
   return useMutation({
     meta: { errorLabel: "error_delete_time_entry" },
     mutationFn: async (id: number) => {
@@ -32,7 +25,7 @@ export function useDeleteTimeEntry() {
 
 export function useTimeEntriesWithDetails(startDate?: string, endDate?: string, projectId?: number) {
   return useQuery({
-    queryKey: ["time-entries", "details", startDate, endDate, projectId],
+    queryKey: qk.timeEntries.details(startDate, endDate, projectId),
     queryFn: () => q.getTimeEntriesWithDetails(startDate, endDate, projectId),
   });
 }
@@ -43,11 +36,6 @@ export function useUpdateTimeEntry() {
     meta: { errorLabel: "error_save_time_entry" },
     mutationFn: (args: { id: number; data: { date?: string; duration_minutes?: number; description?: string } }) =>
       q.updateTimeEntry(args.id, args.data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["time-entries"] });
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-      qc.invalidateQueries({ queryKey: ["time-this-week"] });
-      qc.invalidateQueries({ queryKey: ["weekly-trend"] });
-    },
+    onSuccess: () => invalidateTimeTracking(qc),
   });
 }

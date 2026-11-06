@@ -260,14 +260,14 @@ for (const [path, seedSql] of Object.entries(DATA_SEEDS)) {
           ["expenses", "substr(strftime('%Y', invoice_date), 3, 2)"],
           ["income", "substr(strftime('%Y', date), 3, 2)"],
         ]) {
-          const u = updates.find((s) => new RegExp(`^UPDATE ${table}\\s+SET reference`, "i").test(s));
+          const u = [...updates].reverse().find((s) => new RegExp(`^UPDATE ${table}\\s+SET reference`, "i").test(s));
           expect(u, `no reference renumbering for ${table}`).toBeDefined();
           expect(u).toContain(yearExpr);
           expect(u, `${table} uses unsupported %y`).not.toContain("%y");
           expect(u).toMatch(/printf\('%03d'/);
         }
         // Drafts keep their DRAFT- placeholder
-        const inv = updates.find((s) => /^UPDATE invoices\s+SET reference/i.test(s))!;
+        const inv = [...updates].reverse().find((s) => /^UPDATE invoices\s+SET reference/i.test(s))!;
         expect(inv).toMatch(/WHERE reference NOT LIKE 'DRAFT-%'/);
       });
 

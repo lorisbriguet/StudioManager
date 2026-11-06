@@ -75,4 +75,15 @@ describe("DemoDataCard", () => {
     expect(useAppStore.getState().showTasksPage).toBe(true);
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith(expect.stringContaining("Aurore")));
   });
+
+  it("drops the cached pages when the load fails part way", async () => {
+    seedPersona.mockRejectedValueOnce(new Error("UNIQUE constraint failed: quotes.reference"));
+    const qc = new QueryClient();
+    qc.setQueryData(["invoices"], []);
+    render(<QueryClientProvider client={qc}><MemoryRouter><DemoDataCard /><ConfirmHost /></MemoryRouter></QueryClientProvider>);
+    fireEvent.click(screen.getByRole("button", { name: /load into this organisation/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /replace data/i }));
+    await waitFor(() => expect(notify.error).toHaveBeenCalled());
+    expect(qc.getQueryData(["invoices"])).toBeUndefined();
+  });
 });

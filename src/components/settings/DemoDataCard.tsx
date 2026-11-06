@@ -45,6 +45,9 @@ export function DemoDataCard() {
       navigate("/");
       notify.success(t.demo_data_loaded.replace("{name}", orgName));
     } catch (e) {
+      // A failed load may still have replaced part of the data: drop the
+      // cached pages so they show what is in the database now.
+      queryClient.clear();
       notify.error(t.error_load_demo_data, e);
     } finally {
       setLoading(false);

@@ -3,6 +3,7 @@ import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { getDueTemplates, updateRecurringTemplate } from "../db/queries/recurring";
 import { getInvoice, getInvoiceLineItems, createInvoiceWithLineItems } from "../db/queries/invoices";
 import { createNotification } from "../db/queries/notifications";
+import { qk, invalidateMoney } from "../db/queryKeys";
 import { sendNativeNotification } from "../lib/nativeNotification";
 import { getLabels, notify } from "../lib/notify";
 import { logWarn } from "../lib/log";
@@ -158,8 +159,8 @@ export async function runRecurringCheck(qc: QueryClient): Promise<number> {
     }
 
     if (generated > 0 && sameOrg()) {
-      qc.invalidateQueries({ queryKey: ["invoices"] });
-      qc.invalidateQueries({ queryKey: ["finance"] });
+      qc.invalidateQueries({ queryKey: qk.invoices.all });
+      invalidateMoney(qc);
       qc.invalidateQueries({ queryKey: ["recurring_templates"] });
 
       const labels = getLabels();

@@ -1,15 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAppStore } from "../stores/app-store";
-
-/** Pages whose "new item" is a route. */
-const NEW_ROUTES: Record<string, string> = {
-  "/invoices": "/invoices/new",
-  "/quotes": "/quotes/new",
-};
-
-/** Pages whose "new item" is an inline form — they listen for this event. */
-const NEW_EVENT_PAGES = ["/expenses", "/income"];
+import { newEntityFor, requestNewItem } from "../lib/newEntity";
 
 /** True while the user is typing somewhere Cmd+B could mean formatting. */
 function inTypingContext(e: KeyboardEvent): boolean {
@@ -47,14 +39,12 @@ export function GlobalShortcuts() {
       }
 
       if (e.key !== "n" && e.key !== "N") return;
-      const path = location.pathname;
-      if (NEW_ROUTES[path]) {
-        e.preventDefault();
-        navigate(NEW_ROUTES[path]);
-      } else if (NEW_EVENT_PAGES.includes(path)) {
-        e.preventDefault();
-        window.dispatchEvent(new CustomEvent("sm:new-item"));
-      }
+      const entity = newEntityFor(location.pathname);
+      if (!entity) return;
+      e.preventDefault();
+      if (entity.kind === "route") navigate(entity.to);
+      else if (entity.kind === "form") requestNewItem(entity.path);
+      else useAppStore.getState().openNewTask(entity.projectId);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);

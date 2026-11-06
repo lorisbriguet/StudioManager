@@ -10,6 +10,7 @@ import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu
 import { BulkActionBar } from "../components/ui/BulkActionBar";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
+import { useNewItem } from "../hooks/useNewItem";
 import { useTabStore } from "../stores/tab-store";
 import { useListNavigation } from "../hooks/useListNavigation";
 import { ICONS, Checkbox, Button, Badge, Input, Select, FormField, FormGrid, FormGridItem, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, QueryState, NoResults } from "../components/ui";
@@ -48,6 +49,8 @@ export function ClientsPage() {
   const setClientsSortKey = useAppStore((s) => s.setClientsSortKey);
   const setClientsSortDir = useAppStore((s) => s.setClientsSortDir);
   const [showForm, setShowForm] = useState(false);
+  // Cmd+N and the palette's New client open the form (lib/newEntity.ts).
+  useNewItem("/clients", () => setShowForm(true));
   const [search, setSearch] = useState("");
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);

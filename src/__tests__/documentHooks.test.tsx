@@ -76,6 +76,10 @@ beforeEach(() => {
   useUndoStore.setState({ stack: [], redoStack: [] });
 });
 
+// What every write refreshes besides its own list: finance and the dashboard
+// money widgets (invalidateMoney in src/db/queryKeys.ts).
+const MONEY = [["finance"], ["invoice-aging"], ["expense-categories-all"]];
+
 const item = { designation: "Logo", rate: 100, unit: "h", quantity: 2, amount: 200, sort_order: 0 };
 
 const kinds = [
@@ -163,7 +167,7 @@ describe.each(kinds)("$name hooks", (k) => {
     const data = { reference: "DRAFT-9" } as never;
     expect(await result.current.mutateAsync({ data, lineItems: [item] })).toBe(41);
     expect(k.q.create).toHaveBeenCalledWith(data, [item]);
-    expect(invalidated()).toEqual([[k.key], ["finance"]]);
+    expect(invalidated()).toEqual([[k.key], ...MONEY]);
 
     const action = useUndoStore.getState().stack[0];
     expect(action.label).toBe(`Create ${k.word} "DRAFT-9"`);
@@ -308,7 +312,7 @@ describe.each(kinds)("$name hooks", (k) => {
     const { result } = renderHook(() => k.h.useUpdate(), { wrapper });
     await result.current.mutateAsync({ id: 5, data: { notes: "new" } as never, lineItems: [item] });
     expect(k.q.update).toHaveBeenCalledWith(5, { notes: "new" }, [item]);
-    expect(invalidated()).toEqual([[k.key], k.lineItemsKey(5), ["finance"]]);
+    expect(invalidated()).toEqual([[k.key], k.lineItemsKey(5), ...MONEY]);
 
     const action = useUndoStore.getState().stack[0];
     expect(action.label).toBe(`Update ${k.word} "DRAFT-1"`);
@@ -324,7 +328,7 @@ describe.each(kinds)("$name hooks", (k) => {
     const { result } = renderHook(() => k.h.useDelete(), { wrapper });
     await result.current.mutateAsync(5);
     expect(k.q.remove).toHaveBeenCalledWith(5);
-    expect(invalidated()).toEqual([[k.key], ["finance"]]);
+    expect(invalidated()).toEqual([[k.key], ...MONEY]);
 
     const action = useUndoStore.getState().stack[0];
     expect(action.label).toBe(`Delete ${k.word} "DRAFT-1"`);

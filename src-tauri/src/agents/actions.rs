@@ -248,7 +248,8 @@ pub fn start(
         return Err("Folder not trusted: open it once with Claude Code first".into());
     }
     let since = now_ms();
-    let argv = args(&["--bg", "--model", model, "--name", name, task]);
+    // `--` ends the options: the task is never read as a flag.
+    let argv = args(&["--bg", "--model", model, "--name", name, "--", task]);
     let out = cli.run_start(&argv, Path::new(folder));
     backgrounded(cli, &out, (name, folder), since, None, "Failed to start the agent")
 }
@@ -510,7 +511,7 @@ mod tests {
         start(&cli, &trusted(), "/work/proj/", "do it", "opus", "job").unwrap();
         let calls = cli.calls();
         assert_eq!(calls.len(), 1);
-        assert_eq!(calls[0].0, args(&["--bg", "--model", "opus", "--name", "job", "do it"]));
+        assert_eq!(calls[0].0, args(&["--bg", "--model", "opus", "--name", "job", "--", "do it"]));
         assert_eq!(calls[0].1, PathBuf::from("/work/proj/"));
     }
 
