@@ -1,3 +1,4 @@
+import { formatMoney } from "../lib/money";
 import { useState, useEffect, useRef } from "react";
 import { IconButton } from "../components/ui/IconButton";
 import { useParams, Link, useNavigate } from "react-router-dom";
@@ -220,7 +221,7 @@ export function ClientDetailPage() {
               <div key={inv.id} className="flex items-center justify-between py-1.5 text-sm group">
                 <span>{inv.reference}</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-muted">CHF {inv.total.toFixed(2)}</span>
+                  <span className="text-muted">{formatMoney(inv.total, "CHF")}</span>
                   <IconButton to={`/invoices/${inv.id}/preview`} icon={ICONS.preview} label={t.preview} size="xs" tone="accent" reveal />
                   <IconButton to={`/invoices/${inv.id}/edit`} icon={ICONS.edit} label={t.edit} size="xs" tone="accent" reveal />
                 </div>

@@ -1,3 +1,4 @@
+import { formatMoney } from "../money";
 import type { QueryClient } from "@tanstack/react-query";
 import { getDb, getEquipmentDb, equipmentOrgId, TransactionBatch } from "../../db";
 import { getActiveUpkeepItems } from "../../db/queries/upkeepItems";
@@ -152,7 +153,7 @@ export function planNotifications(input: PlanInput): PlannedNotice[] {
       title: t.notice_renewal_happened_title,
       message: fill(t.notice_renewal_happened_msg, {
         name: r.name, date: r.renewed_on,
-        amount: `${r.amount.toFixed(2)}${r.currency ? ` ${r.currency}` : ""}`,
+        amount: formatMoney(r.amount, r.currency),
       }),
       link: "/upkeep?tab=subscriptions",
     });

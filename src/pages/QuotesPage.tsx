@@ -1,3 +1,4 @@
+import { formatMoney } from "../lib/money";
 import { useState, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { notify } from "../lib/notify";
@@ -291,7 +292,7 @@ export function QuotesPage() {
                 </Select>
               </Table.Td>
               <Table.Td numeric className="font-medium">
-                CHF {q.total.toFixed(2)}
+                {formatMoney(q.total, "CHF")}
               </Table.Td>
               <Table.Actions>
                 <IconButton

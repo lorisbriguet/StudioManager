@@ -1,3 +1,4 @@
+import { formatMoney } from "../lib/money";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Command } from "cmdk";
@@ -126,7 +127,7 @@ export function CommandPalette() {
                   key={inv.id}
                   icon={ICONS.invoice}
                   label={inv.reference}
-                  subtitle={`CHF ${inv.total.toFixed(2)}`}
+                  subtitle={formatMoney(inv.total, "CHF")}
                   onSelect={() => go(`/invoices/${inv.id}/edit`)}
                 />
               ))}

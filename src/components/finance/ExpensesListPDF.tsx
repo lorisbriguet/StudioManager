@@ -1,3 +1,4 @@
+import { formatMoneyPdf } from "../../lib/money";
 import {
   Document,
   Page,
@@ -18,11 +19,9 @@ export interface Props {
   lang?: AppLanguage;
 }
 
+// Expense amounts print unsigned: the list is all expenses.
 function formatCHF(amount: number): string {
-  return `CHF ${Math.abs(amount).toLocaleString("de-CH", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return formatMoneyPdf(Math.abs(amount), "CHF");
 }
 
 const s = StyleSheet.create({

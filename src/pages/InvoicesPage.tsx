@@ -1,3 +1,4 @@
+import { formatMoney } from "../lib/money";
 import React, { useState, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { notify } from "../lib/notify";
@@ -455,7 +456,7 @@ export function InvoicesPage() {
                     </Table.Td>
                     <Table.Td>{clientsMap.get(tmpl.client_id) ?? tmpl.client_id}</Table.Td>
                     <Table.Td numeric>
-                      {baseInv ? `CHF ${(baseInv.chf_equivalent ?? baseInv.total).toFixed(2)}` : "—"}
+                      {baseInv ? formatMoney(baseInv.chf_equivalent ?? baseInv.total, "CHF") : "—"}
                     </Table.Td>
                     <Table.Td>
                       <Select
@@ -535,7 +536,7 @@ export function InvoicesPage() {
                     colSpan={7}
                     label={year}
                     count={`${yearInvoices.length} ${yearInvoices.length !== 1 ? t.invoices_count_plural : t.invoices_count_singular}`}
-                    total={`CHF ${yearTotal.toFixed(2)}`}
+                    total={formatMoney(yearTotal, "CHF")}
                     open={isOpen}
                     onToggle={() => toggleYear(year)}
                   />
@@ -592,12 +593,12 @@ export function InvoicesPage() {
                             <span className="text-muted">CHF 0.00</span>
                           ) : inv.currency && inv.currency !== "CHF" ? (
                             <span>
-                              <span className="text-muted text-xs">{inv.currency} {inv.total.toFixed(2)}</span>
+                              <span className="text-muted text-xs">{formatMoney(inv.total, inv.currency)}</span>
                               {" "}
-                              <span>CHF {(inv.chf_equivalent ?? inv.total).toFixed(2)}</span>
+                              <span>{formatMoney(inv.chf_equivalent ?? inv.total, "CHF")}</span>
                             </span>
                           ) : (
-                            <span>CHF {inv.total.toFixed(2)}</span>
+                            <span>{formatMoney(inv.total, "CHF")}</span>
                           )}
                         </Table.Td>
                         <Table.Actions>
