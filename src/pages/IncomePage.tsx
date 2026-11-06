@@ -1,5 +1,5 @@
 import { formatMoney } from "../lib/money";
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { ICONS, ICON_SIZE, PageHeader, SearchBar, Button, DatePicker, EmptyState, QueryState, NoResults, FormField, FormGrid, FormModal, Input, Select, Table, TableSkeleton, IconButton, Tag } from "../components/ui";
 import * as v from "../lib/validate";
 import { deleteWithUndo } from "../lib/undo";
@@ -34,6 +34,7 @@ import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { ReceiptNote } from "../components/shared/ReceiptNote";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
+import { useChanged } from "../hooks/useChanged";
 
 type SortKey = "reference" | "source" | "category" | "date" | "amount";
 
@@ -478,26 +479,25 @@ export function NewIncomeForm({
 
   const clearError = (field: IncomeFormField) => setFieldError(field, null);
 
-  useEffect(() => {
-    if (prefill) {
-      setForm((prev) => ({
-        ...prev,
-        source: prefill.source ?? prev.source,
-        date: prefill.date ?? prev.date,
-        amount: prefill.amount ?? prev.amount,
-      }));
-      // Receipt-parse prefill fills fields programmatically — clear any stale
-      // inline error on exactly the fields it fills.
-      setErrors((e) => {
-        const next = { ...e };
-        if (prefill.source != null) delete next.source;
-        if (prefill.date != null) delete next.date;
-        if (prefill.amount != null) delete next.amount;
-        return next;
-      });
-      resetDetected(detectedIncomeFields(prefill));
-    }
-  }, [prefill, resetDetected]);
+  // A new receipt-parse prefill (one present on open is already in the initial form).
+  if (useChanged(prefill) && prefill) {
+    setForm((prev) => ({
+      ...prev,
+      source: prefill.source ?? prev.source,
+      date: prefill.date ?? prev.date,
+      amount: prefill.amount ?? prev.amount,
+    }));
+    // Receipt-parse prefill fills fields programmatically — clear any stale
+    // inline error on exactly the fields it fills.
+    setErrors((e) => {
+      const next = { ...e };
+      if (prefill.source != null) delete next.source;
+      if (prefill.date != null) delete next.date;
+      if (prefill.amount != null) delete next.amount;
+      return next;
+    });
+    resetDetected(detectedIncomeFields(prefill));
+  }
 
   const submit = () => {
     const errs = v.validateForm(

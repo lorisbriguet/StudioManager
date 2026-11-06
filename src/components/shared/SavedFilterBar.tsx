@@ -15,6 +15,7 @@ import {
 import { useT } from "../../i18n/useT";
 import type { SavedFilter, SavedFilterData, FilterCondition, FilterableField, FilterOperator, ConditionLogic } from "../../types/saved-filter";
 import { IconButton } from "../ui/IconButton";
+import { useChanged } from "../../hooks/useChanged";
 
 const STRING_OPERATORS: FilterOperator[] = ["eq", "neq", "contains"];
 const NUMBER_OPERATORS: FilterOperator[] = ["eq", "neq", "gt", "lt", "gte", "lte"];
@@ -192,8 +193,8 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
   const [nameInput, setNameInput] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; filter: SavedFilter } | null>(null);
-  const [conditions, setConditions] = useState<FilterCondition[]>([]);
-  const [conditionLogic, setConditionLogic] = useState<ConditionLogic>("and");
+  const [conditions, setConditions] = useState<FilterCondition[]>(currentFilters.conditions ?? []);
+  const [conditionLogic, setConditionLogic] = useState<ConditionLogic>(currentFilters.conditionLogic ?? "and");
   const [showConditions, setShowConditions] = useState(false);
   const [editingFilterId, setEditingFilterId] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -203,10 +204,10 @@ export function SavedFilterBar({ page, currentFilters, onApply, activeFilterId, 
   }, [naming]);
 
   // Sync internal conditions state when parent filters change (e.g. saved filter loaded)
-  useEffect(() => {
+  if (useChanged(currentFilters.conditions, currentFilters.conditionLogic)) {
     setConditions(currentFilters.conditions ?? []);
     setConditionLogic(currentFilters.conditionLogic ?? "and");
-  }, [currentFilters.conditions, currentFilters.conditionLogic]);
+  }
 
   const handleStartNaming = () => {
     setNaming(true);

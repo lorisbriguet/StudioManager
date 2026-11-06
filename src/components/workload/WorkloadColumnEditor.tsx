@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Ban } from "lucide-react";
 import { Checkbox, Button, Select, Input, FormModal, Tooltip, FormField, FormGrid, FormGroup, ICONS, ICON_SIZE } from "../ui";
 import { notify } from "../../lib/notify";
@@ -8,6 +8,7 @@ import { evaluateFormula } from "../../lib/formulaEval";
 import { useT } from "../../i18n/useT";
 import { useCustomLists, useCustomListItems, useCreateCustomList, useSetCustomListItems } from "../../db/hooks/useCustomLists";
 import { OptionsEditor } from "../shared/OptionsEditor";
+import { useChanged } from "../../hooks/useChanged";
 
 interface Props {
   column: WorkloadColumn | null; // null = creating new
@@ -40,12 +41,11 @@ export function WorkloadColumnEditor({ column, existingKeys = [], onSave, onDele
   const setCustomListItems = useSetCustomListItems();
 
   // When import list items arrive, apply them
-  useEffect(() => {
-    if (!importListItems || importListId === null) return;
+  if (useChanged(importListItems, importListId) && importListItems && importListId !== null) {
     setOptions(importListItems.map((i) => ({ value: i.value, color: i.color ?? "gray" })));
     setLinkedListId(importListId);
     setImportListId(null);
-  }, [importListItems, importListId]);
+  }
 
   const validateFormula = (f: string): string => {
     if (!f.trim()) return "";

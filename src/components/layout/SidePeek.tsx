@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { PeekHeader } from "../ui";
 import { useT } from "../../i18n/useT";
+import { useChanged } from "../../hooks/useChanged";
 
 export const PEEK_MIN = 20;
 export const PEEK_MAX = 70;
@@ -82,7 +83,7 @@ export function SidePeek({
   const close = useCallback(() => setClosing(true), []);
 
   // Opening another record while the panel slides out keeps it open.
-  useEffect(() => { setClosing(false); }, [focusKey]);
+  if (useChanged(focusKey)) setClosing(false);
 
   // Focus the peeked page's heading. The content may still be loading, so wait for it.
   useLayoutEffect(() => {

@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button, Input, Modal, FormField, FormGrid, FormGroup, EmptyState, ICONS, MenuItem, Popover, SURFACE } from "./ui";
 import { useAppStore } from "../stores/app-store";
 import { useProjects } from "../db/hooks/useProjects";
 import { useTasksByProject } from "../db/hooks/useTasks";
 import { useTimerActions } from "../hooks/useTimerActions";
 import { useT } from "../i18n/useT";
+import { useChanged } from "../hooks/useChanged";
 
 export function QuickTimerModal() {
   const open = useAppStore((s) => s.quickTimerOpen);
@@ -23,14 +24,12 @@ export function QuickTimerModal() {
   const { startTimer, stopAndSave } = useTimerActions();
 
   // Reset state when modal opens
-  useEffect(() => {
-    if (open) {
-      setProjectSearch("");
-      setSelectedProjectId(null);
-      setSelectedTaskId(null);
-      setSuggestOpen(false);
-    }
-  }, [open]);
+  if (useChanged(open) && open) {
+    setProjectSearch("");
+    setSelectedProjectId(null);
+    setSelectedTaskId(null);
+    setSuggestOpen(false);
+  }
 
   const filteredProjects = useMemo(() => {
     if (!projects) return [];

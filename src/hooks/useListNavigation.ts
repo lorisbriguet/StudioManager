@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useChanged } from "./useChanged";
 
 /** Where the caller should open the row's context menu. */
 export interface MenuPosition {
@@ -39,9 +40,7 @@ export function useListNavigation<T>({
   const [focusIdx, setFocusIdx] = useState(-1);
 
   // Clamp when the list shrinks (filter, deletion, collapsed year).
-  useEffect(() => {
-    setFocusIdx((i) => (i >= items.length ? items.length - 1 : i));
-  }, [items.length]);
+  if (useChanged(items.length) && focusIdx >= items.length) setFocusIdx(items.length - 1);
 
   useEffect(() => {
     if (!enabled) return;

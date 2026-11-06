@@ -27,6 +27,7 @@ import { undoableFromStore, undoTop } from "../lib/undo";
 import { useClientRemoval } from "../hooks/useClientRemoval";
 import { sameAddress, type Client, type ClientContact, type ClientAddress } from "../types/client";
 import { useKeepCurrent } from "../hooks/useKeepCurrent";
+import { useChanged } from "../hooks/useChanged";
 
 export function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -899,10 +900,7 @@ function MiniField({
   onKeyDown?: (e: React.KeyboardEvent) => void;
 }) {
   const [local, setLocal] = useState(value);
-
-  useEffect(() => {
-    setLocal(value);
-  }, [value]);
+  if (useChanged(value)) setLocal(value);
 
   return (
     <FormField label={label}>

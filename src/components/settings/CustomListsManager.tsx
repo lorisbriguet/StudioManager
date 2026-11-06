@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { notify } from "../../lib/notify";
 import { undoableFromStore, undoTop } from "../../lib/undo";
 import { ListChecks } from "lucide-react";
@@ -7,6 +7,7 @@ import { useCustomLists, useCustomListItems, useCreateCustomList, useUpdateCusto
 import { AddRow, Button, ICONS, IconButton, InlineRename, FormActions, FORM_GAP, EmptyState } from "../ui";
 import { navItemClass } from "../ui/NavItem";
 import { OptionsEditor } from "../shared/OptionsEditor";
+import { useChanged } from "../../hooks/useChanged";
 
 export function CustomListsManager() {
   const t = useT();
@@ -23,14 +24,15 @@ export function CustomListsManager() {
   const [addingList, setAddingList] = useState(false);
 
   // Local editable items for the selected list
-  const [localItems, setLocalItems] = useState<{ value: string; color: string }[]>([]);
+  const toLocal = (list: typeof items) => (list ?? []).map((i) => ({ value: i.value, color: i.color ?? "gray" }));
+  const [localItems, setLocalItems] = useState<{ value: string; color: string }[]>(() => toLocal(items));
   const [dirty, setDirty] = useState(false);
 
   // Sync local items when selection or remote items change
-  useEffect(() => {
-    setLocalItems((items ?? []).map((i) => ({ value: i.value, color: i.color ?? "gray" })));
+  if (useChanged(items, selectedId)) {
+    setLocalItems(toLocal(items));
     setDirty(false);
-  }, [items, selectedId]);
+  }
 
   // A failed mutation is already reported by the mutation cache: the catches
   // only keep the rejection from going unhandled.
