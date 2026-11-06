@@ -299,7 +299,16 @@ pub(crate) fn mcp_path() -> String {
 // ---------------------------------------------------------------- commands
 
 #[tauri::command]
-pub fn get_agent_access(app: tauri::AppHandle) -> Result<AgentAccess, String> {
+pub async fn get_agent_access(
+    app: tauri::AppHandle,
+) -> Result<AgentAccess, String> {
+    crate::run_blocking(move || {
+        get_agent_access_now(app)
+    })
+    .await
+}
+
+fn get_agent_access_now(app: tauri::AppHandle) -> Result<AgentAccess, String> {
     let dir = crate::app_data_dir(&app)?;
     let settings = read_access(&dir);
     let path = mcp_path();
@@ -316,7 +325,16 @@ pub fn get_agent_access(app: tauri::AppHandle) -> Result<AgentAccess, String> {
 }
 
 #[tauri::command]
-pub fn set_agent_access(
+pub async fn set_agent_access(
+    app: tauri::AppHandle,
+    enabled: bool,
+    allow_money: bool,
+    orgs: HashMap<String, bool>,
+) -> Result<(), String> {
+    crate::run_blocking(move || set_agent_access_now(app, enabled, allow_money, orgs)).await
+}
+
+fn set_agent_access_now(
     app: tauri::AppHandle,
     enabled: bool,
     allow_money: bool,
@@ -334,7 +352,16 @@ pub fn set_agent_access(
 }
 
 #[tauri::command]
-pub fn preview_claude_desktop(app: tauri::AppHandle) -> Result<String, String> {
+pub async fn preview_claude_desktop(
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    crate::run_blocking(move || {
+        preview_claude_desktop_now(app)
+    })
+    .await
+}
+
+fn preview_claude_desktop_now(app: tauri::AppHandle) -> Result<String, String> {
     let existing = match std::fs::read_to_string(claude_config_path()) {
         Ok(text) => Some(text),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
@@ -351,7 +378,17 @@ pub fn preview_claude_desktop(app: tauri::AppHandle) -> Result<String, String> {
 /// approved; it is written as-is, or refused if the file changed meanwhile.
 /// Returns the backup path, or an empty string when there was no file to back up.
 #[tauri::command]
-pub fn install_claude_desktop(app: tauri::AppHandle, expected: String) -> Result<String, String> {
+pub async fn install_claude_desktop(
+    app: tauri::AppHandle,
+    expected: String,
+) -> Result<String, String> {
+    crate::run_blocking(move || {
+        install_claude_desktop_now(app, expected)
+    })
+    .await
+}
+
+fn install_claude_desktop_now(app: tauri::AppHandle, expected: String) -> Result<String, String> {
     let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
     let backup = install_claude_config_at(
         &claude_config_path(),
@@ -366,7 +403,17 @@ pub fn install_claude_desktop(app: tauri::AppHandle, expected: String) -> Result
 }
 
 #[tauri::command]
-pub fn recent_agent_changes(app: tauri::AppHandle, limit: u32) -> Result<Vec<LogEntry>, String> {
+pub async fn recent_agent_changes(
+    app: tauri::AppHandle,
+    limit: u32,
+) -> Result<Vec<LogEntry>, String> {
+    crate::run_blocking(move || {
+        recent_agent_changes_now(app, limit)
+    })
+    .await
+}
+
+fn recent_agent_changes_now(app: tauri::AppHandle, limit: u32) -> Result<Vec<LogEntry>, String> {
     let dir = crate::app_data_dir(&app)?;
     Ok(read_recent(&dir, limit as usize))
 }
