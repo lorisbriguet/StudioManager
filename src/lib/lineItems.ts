@@ -24,15 +24,17 @@ export interface LineItem {
  * Round a newly computed money value to exactly 2 decimals.
  * Every arithmetic write into a stored money field (amount, subtotal,
  * discount, total, chf_equivalent) must pass through this — raw float math
- * stores values like 65.69999999999999. The Number.EPSILON nudge fixes
- * halfway cases at typical invoice magnitudes (e.g. 1.005, stored as
- * 1.00499…, rounds up to 1.01); it stops working around magnitude 8192.
+ * stores values like 65.69999999999999. Half-centimes round up
+ * (commercial rounding): 4.025, stored as 4.02499…, gives 4.03.
+ * toPrecision(12) on the centime value drops the binary noise before
+ * rounding, in one step, so values with more decimals (0.2845) are not
+ * rounded twice. Exact for amounts up to about CHF 1 billion.
  * Negative halfway cases round toward +∞ (Math.round semantics) — no
  * negative-money path exists in the app today. Idempotent, so re-rounding
  * an already-rounded value is safe.
  */
 export function round2(n: number): number {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
+  return Math.round(Number((n * 100).toPrecision(12))) / 100;
 }
 
 let nextLineItemId = 1;
