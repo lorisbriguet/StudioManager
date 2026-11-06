@@ -5,6 +5,12 @@
 //!   GET    /brief/<date>/comments
 //!   POST   /brief/<date>/comments        {quote, note, section}  -> stored, then sent to the agent
 //!   DELETE /brief/<date>/comments/<id>
+//!   POST   /review/agent                 {id, title, folder, prompt} -> {agent}
+//!
+//! `/review/agent` is the review report's "Start work with agent" (right-click on a finding): the
+//! same start as on a task (Opus, in a folder Claude Code trusts; the agent reads first and asks
+//! before changing anything), then the main window opens on the new agent. The report is a local
+//! page too; the script that renders it writes the token and each finding's folder into it.
 //!
 //! Only once the Agents switch is on (then until StudioManager quits); loopback only. Every request needs the token from `<app dir>/brief-token`, which the page
 //! renderer (agent-bar/brief/personal_brief.py) writes into the page. Comments are kept per
@@ -17,7 +23,7 @@ use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 pub const PORT: u16 = 47480;
 const TOKEN_FILE: &str = "brief-token";
@@ -28,8 +34,14 @@ const MAX_REQUEST: usize = 64 * 1024;
 const QUOTE_MAX: usize = 1000;
 const NOTE_MAX: usize = 2000;
 const SECTION_MAX: usize = 80;
+const REVIEW_ID_MAX: usize = 16;
+const REVIEW_TITLE_MAX: usize = 200;
+const REVIEW_PROMPT_MAX: usize = 6000;
+const REVIEW_FOLDER_MAX: usize = 1024;
 
 static STORE_LOCK: Mutex<()> = Mutex::new(());
+/// Findings an agent is being started on: a second click while one starts is turned away.
+static REVIEW_IN_FLIGHT: Mutex<Vec<String>> = Mutex::new(Vec::new());
 /// The server starts once, when the Agents switch is first on, and runs until the app quits.
 static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
@@ -167,6 +179,9 @@ pub trait Backend {
     fn deliver(&self, date: &str, text: &str) -> Result<(), String>;
     fn now_hhmm(&self) -> String;
     fn new_id(&self) -> String;
+    /// Starts an Opus background agent in `folder` (which Claude Code must trust) and opens it in
+    /// the main window; Ok is its short id, Err the reason shown on the page.
+    fn start_agent(&self, folder: &str, task: &str, name: &str) -> Result<String, String>;
 }
 
 /// What the agent receives: where the passage is, the passage quoted, then the note.
@@ -217,6 +232,9 @@ pub fn route(b: &dyn Backend, r: &Request) -> Response {
         _ => return error(401, "Unauthorized"),
     }
     let parts: Vec<&str> = r.path.split('?').next().unwrap_or("").split('/').filter(|p| !p.is_empty()).collect();
+    if parts == ["review", "agent"] {
+        return if r.method == "POST" { review_agent(b, &r.body) } else { error(404, "Not found") };
+    }
     if parts.len() < 3 || parts[0] != "brief" || parts[2] != "comments" || !valid_date(parts[1]) {
         return error(404, "Not found");
     }
@@ -258,6 +276,79 @@ pub fn route(b: &dyn Backend, r: &Request) -> Response {
             }
         }
         _ => error(404, "Not found"),
+    }
+}
+
+// ---------------------------------------------------------------- review findings
+
+/// What the agent is asked first: the finding, then the same rule as on a task (read, report,
+/// ask before changing anything).
+pub fn review_task(id: &str, title: &str, prompt: &str) -> String {
+    format!(
+        "Work on finding {id} \"{title}\" from the studio review report.\n\n{prompt}\n\n\
+         First check that the finding still holds here (read the code or the notes it names). \
+         Then tell me briefly what you found and how you would fix it, and ask me what to do. \
+         Don't change anything before I answer."
+    )
+}
+
+/// `review-d1-backups-skip-activities`: the id, then the title as lowercase ASCII words; at most 64.
+pub fn review_name(id: &str, title: &str) -> String {
+    let words: String = title
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
+        .collect();
+    let words: Vec<&str> = words.split('-').filter(|w| !w.is_empty()).collect();
+    let mut name = format!("review-{}", id.to_ascii_lowercase());
+    if !words.is_empty() {
+        name = format!("{name}-{}", words.join("-"));
+    }
+    let name: String = name.chars().take(64).collect();
+    name.trim_end_matches('-').to_string()
+}
+
+fn valid_review_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= REVIEW_ID_MAX
+        && id.starts_with(|c: char| c.is_ascii_alphanumeric())
+        && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+}
+
+/// An absolute folder with no `..` (the start also requires Claude Code to trust it).
+fn valid_review_folder(f: &str) -> bool {
+    f.starts_with('/') && f.len() <= REVIEW_FOLDER_MAX && !f.split('/').any(|p| p == "..") && !f.contains('\0')
+}
+
+fn review_agent(b: &dyn Backend, body: &[u8]) -> Response {
+    const REQUIRED: &str = "id, title, folder and prompt are required";
+    let Ok(v) = serde_json::from_slice::<Value>(body) else {
+        return error(400, REQUIRED);
+    };
+    let s = |k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").trim().to_string();
+    let (id, title, folder, prompt) = (s("id"), s("title"), s("folder"), s("prompt"));
+    if !valid_review_id(&id) {
+        return error(400, "Invalid finding id");
+    }
+    if title.is_empty() || prompt.is_empty() {
+        return error(400, REQUIRED);
+    }
+    if !valid_review_folder(&folder) {
+        return error(400, "Invalid folder");
+    }
+    let title = clip(&title.replace(['\n', '\r'], " "), REVIEW_TITLE_MAX);
+    let prompt = clip(&prompt, REVIEW_PROMPT_MAX);
+    {
+        let mut busy = REVIEW_IN_FLIGHT.lock().unwrap_or_else(|e| e.into_inner());
+        if busy.contains(&id) {
+            return error(409, "An agent is already starting on this finding");
+        }
+        busy.push(id.clone());
+    }
+    let result = b.start_agent(&folder, &review_task(&id, &title, &prompt), &review_name(&id, &title));
+    REVIEW_IN_FLIGHT.lock().unwrap_or_else(|e| e.into_inner()).retain(|x| x != &id);
+    match result {
+        Ok(agent) => ok(json!({ "agent": agent })),
+        Err(reason) => error(502, &reason),
     }
 }
 
@@ -306,6 +397,21 @@ impl Backend for AppBackend {
         let mut b = [0u8; 4];
         let _ = std::fs::File::open("/dev/urandom").and_then(|mut f| f.read_exact(&mut b));
         b.iter().map(|x| format!("{x:02x}")).collect()
+    }
+    fn start_agent(&self, folder: &str, task: &str, name: &str) -> Result<String, String> {
+        let state = self.app.try_state::<super::AgentsState>().ok_or("StudioManager is starting")?;
+        let login = super::actions::ready(&state)?;
+        let cli = super::actions::cli(&login)?;
+        let trusted = super::projects::read_trusted(&super::actions::home_dir());
+        let short_id = super::actions::start(&cli, &trusted, folder, task, "opus", name)?;
+        // Like "Start work with agent" on a task: open the new agent on the Agents page.
+        let app = self.app.clone();
+        let path = format!("/agents?started={short_id}");
+        let _ = self.app.run_on_main_thread(move || {
+            crate::menubar::show_main(&app);
+            let _ = app.emit_to("main", crate::menubar::NAVIGATE_EVENT, json!({ "path": path }));
+        });
+        Ok(short_id)
     }
 }
 
@@ -389,6 +495,10 @@ mod tests {
         fn new_id(&self) -> String {
             format!("id{}", self.sent.borrow().len())
         }
+        fn start_agent(&self, folder: &str, task: &str, name: &str) -> Result<String, String> {
+            self.sent.borrow_mut().push((format!("{folder} {name}"), task.into()));
+            self.result.clone().map(|_| "abcd1234".to_string())
+        }
     }
 
     fn fake(name: &str, result: Result<(), String>) -> Fake {
@@ -459,6 +569,61 @@ mod tests {
         assert_eq!(route(&b, &req("POST", "/brief/2026-11-01/comments", T, r#"{"quote":"q","note":"  "}"#)).status, 400);
         assert_eq!(route(&b, &req("POST", "/brief/2026-11-01/comments", T, "not json")).status, 400);
         assert!(b.sent.borrow().is_empty());
+    }
+
+    #[test]
+    fn review_agent_starts_on_the_finding_in_its_folder() {
+        let b = fake("review", Ok(()));
+        let body = r#"{"id":"D1","title":"Backups skip activities, and a restore loses them","folder":"/Users/x/StudioManager","prompt":"Evidence: backup.ts:59"}"#;
+        let r = route(&b, &req("POST", "/review/agent", T, body));
+        assert_eq!(r.status, 200, "{:?}", r.body);
+        assert_eq!(r.body["agent"], "abcd1234");
+        let (target, task) = b.sent.borrow()[0].clone();
+        assert_eq!(target, "/Users/x/StudioManager review-d1-backups-skip-activities-and-a-restore-loses-them");
+        assert!(task.starts_with("Work on finding D1 \"Backups skip activities, and a restore loses them\""), "{task}");
+        assert!(task.contains("Evidence: backup.ts:59"));
+        assert!(task.ends_with("Don't change anything before I answer."));
+        assert!(!REVIEW_IN_FLIGHT.lock().unwrap().contains(&"D1".to_string()), "released after the start");
+    }
+
+    #[test]
+    fn review_agent_reports_why_the_start_failed() {
+        let b = fake("review-fail", Err("Folder not trusted: open it once with Claude Code first".into()));
+        let body = r#"{"id":"N-R2","title":"t","folder":"/a/b","prompt":"p"}"#;
+        let r = route(&b, &req("POST", "/review/agent", T, body));
+        assert_eq!(r.status, 502);
+        assert_eq!(r.body["error"], "Folder not trusted: open it once with Claude Code first");
+    }
+
+    #[test]
+    fn review_agent_needs_the_token_and_valid_fields() {
+        let b = fake("review-bad", Ok(()));
+        let good = r#"{"id":"X9","title":"t","folder":"/a/b","prompt":"p"}"#;
+        assert_eq!(route(&b, &req("POST", "/review/agent", None, good)).status, 401);
+        assert_eq!(route(&b, &req("GET", "/review/agent", T, "")).status, 404);
+        for body in [
+            r#"{"id":"","title":"t","folder":"/a/b","prompt":"p"}"#,
+            r#"{"id":"-rf","title":"t","folder":"/a/b","prompt":"p"}"#,
+            r#"{"id":"D1 x","title":"t","folder":"/a/b","prompt":"p"}"#,
+            r#"{"id":"D1","title":"t","folder":"relative/b","prompt":"p"}"#,
+            r#"{"id":"D1","title":"t","folder":"/a/../etc","prompt":"p"}"#,
+            r#"{"id":"D1","title":"t","folder":"/a/b","prompt":"   "}"#,
+            "not json",
+        ] {
+            assert_eq!(route(&b, &req("POST", "/review/agent", T, body)).status, 400, "{body}");
+        }
+        assert!(b.sent.borrow().is_empty());
+    }
+
+    #[test]
+    fn review_names_are_valid_agent_names() {
+        assert_eq!(review_name("N-S2", "Unbound 1.22: Critical CVEs!"), "review-n-s2-unbound-1-22-critical-cves");
+        assert_eq!(review_name("D1", "   "), "review-d1");
+        let long = review_name("D19", &"word ".repeat(40));
+        assert!(long.len() <= 64 && !long.ends_with('-'));
+        for n in [review_name("A1", "été ça"), long] {
+            assert!(crate::agents::validate::valid_name(&n), "{n}");
+        }
     }
 
     #[test]

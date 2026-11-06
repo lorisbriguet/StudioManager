@@ -1,6 +1,6 @@
 # Agents
 
-The Agents page shows every Claude Code agent running on your Mac in one place, so you can see which ones need you without opening each terminal. It is off until you turn it on. The app talks to the `claude` command on your Mac; the only port it opens is the one for [morning brief comments](#morning-brief-comments), on this Mac only.
+The Agents page shows every Claude Code agent running on your Mac in one place, so you can see which ones need you without opening each terminal. It is off until you turn it on. The app talks to the `claude` command on your Mac; the only port it opens is the one for [morning brief comments](#morning-brief-comments) and [review reports](#start-from-a-review-report), on this Mac only.
 
 Design and reasons: [the design spec](superpowers/specs/2026-10-28-agents-window-design.md). For letting AI apps read your StudioManager data, see [Agent access](agent-access.md), which is a separate feature. To see and answer agents from the Mac menu bar, see [Menu bar](menu-bar.md).
 
@@ -90,3 +90,13 @@ The personal morning brief (the page the Start of day routine opens) lets you se
 - Comments are kept per day in `brief-comments/<date>.json` in the app data folder.
 
 If the page says comments stay in the browser and its button reads **Keep**, StudioManager isn't answering: open it and check that Agents is on.
+
+## Start from a review report
+
+A studio review report (a local HTML page of findings) can start agents the same way as [Start from a task](#start-from-a-task): right-click a finding and choose **Start work with agent**. The report sends the finding to the same local server as the morning brief (`POST /review/agent`, with the same token), and StudioManager:
+
+- starts an agent on Opus in the folder the report gives for that finding, named after it (`review-d1-backups-skip-activities`). The folder must already be trusted in Claude Code: from a report there is no trust question, so an untrusted folder is refused with the reason, shown on the page;
+- tells the agent which finding to work on (its id, title and text), to check that it still holds, then to say what it found and ask what to do before changing anything;
+- brings its window forward on the Agents page, on the new agent.
+
+A second click while an agent is starting on the same finding is turned away. The report's renderer writes the token and each finding's folder into the page, so only a copy made on this Mac can start agents; copies elsewhere (a phone, the NAS) can still copy the finding's prompt.
