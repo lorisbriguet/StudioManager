@@ -15,7 +15,14 @@ export interface Expense {
   category_code: string;
   invoice_date: string;
   due_date: string | null;
+  /** CHF, always: what P&L and exports add up. */
   amount: number;
+  /** What the receipt was in; CHF for most. */
+  currency: string;
+  /** Units of `currency` per 1 CHF; 1 for CHF. */
+  exchange_rate: number;
+  /** The receipt's own amount in `currency`; null for CHF. */
+  original_amount: number | null;
   paid_date: string | null;
   receipt_path: string | null;
   notes: string;

@@ -23,13 +23,14 @@ pub const MIGRATIONS: &[SqlMigration] = &[
     SqlMigration { version: 10, sql: include_str!("../migrations/010_upkeep_backup.sql") },
     SqlMigration { version: 11, sql: include_str!("../migrations/011_client_archived.sql") },
     SqlMigration { version: 12, sql: include_str!("../migrations/012_meta.sql") },
+    SqlMigration { version: 13, sql: include_str!("../migrations/013_expense_currency.sql") },
 ];
 
 // Only referenced from this module's own tests (as the expected "fully
 // migrated" version); nothing in the production path needs it, since
 // `migrate_db` derives what to apply from `MIGRATIONS` itself.
 #[allow(dead_code)]
-pub const LATEST_VERSION: i64 = 12;
+pub const LATEST_VERSION: i64 = 13;
 
 fn table_exists(conn: &rusqlite::Connection, name: &str) -> Result<bool, String> {
     conn.query_row(
@@ -261,6 +262,31 @@ mod tests {
     }
 
     #[test]
+    fn migrates_to_013_adds_expense_currency() {
+        let db = temp_db("m013");
+        let conn = Connection::open(&db).unwrap();
+        conn.execute_batch("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);").unwrap();
+        for m in MIGRATIONS.iter().filter(|m| m.version <= 12) {
+            conn.execute_batch(m.sql).unwrap();
+            conn.execute("INSERT INTO schema_migrations (version, applied_at) VALUES (?1, datetime('now'))", [m.version]).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO expenses (reference, supplier, category_code, invoice_date, amount) VALUES ('F-26-001','X','FA','2026-01-01',42.5)",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        migrate_db(&db).unwrap();
+        let conn = Connection::open(&db).unwrap();
+        let (cur, rate, orig, amount): (String, f64, Option<f64>, f64) = conn
+            .query_row("SELECT currency, exchange_rate, original_amount, amount FROM expenses", [], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            })
+            .unwrap();
+        assert_eq!((cur.as_str(), rate, orig, amount), ("CHF", 1.0, None, 42.5), "existing rows stay CHF");
+    }
+
+    #[test]
     fn file_at_010_applies_011_then_012() {
         let db = temp_db("m010to012");
         let conn = Connection::open(&db).unwrap();
@@ -270,10 +296,10 @@ mod tests {
             conn.execute("INSERT INTO schema_migrations (version, applied_at) VALUES (?1, datetime('now'))", [m.version]).unwrap();
         }
         drop(conn);
-        assert_eq!(migrate_db(&db).unwrap(), 2);
+        assert_eq!(migrate_db(&db).unwrap() as i64, LATEST_VERSION - 10);
         let conn = Connection::open(&db).unwrap();
         let versions: Vec<i64> = conn
-            .prepare("SELECT version FROM schema_migrations WHERE version > 10 ORDER BY rowid")
+            .prepare("SELECT version FROM schema_migrations WHERE version IN (11, 12) ORDER BY rowid")
             .unwrap()
             .query_map([], |r| r.get(0))
             .unwrap()
@@ -321,7 +347,7 @@ mod tests {
         conn.execute_batch(
             "DROP TABLE schema_migrations;
              CREATE TABLE _sqlx_migrations (version BIGINT PRIMARY KEY, description TEXT NOT NULL, installed_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, success BOOLEAN NOT NULL, checksum BLOB NOT NULL, execution_time BIGINT NOT NULL);
-             INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) VALUES (1,'a',1,x'00',0),(2,'b',1,x'00',0),(3,'c',1,x'00',0),(4,'d',1,x'00',0),(5,'e',1,x'00',0),(6,'f',1,x'00',0),(7,'g',1,x'00',0),(8,'h',1,x'00',0),(9,'i',1,x'00',0),(10,'j',1,x'00',0),(11,'k',1,x'00',0),(12,'l',1,x'00',0);",
+             INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) VALUES (1,'a',1,x'00',0),(2,'b',1,x'00',0),(3,'c',1,x'00',0),(4,'d',1,x'00',0),(5,'e',1,x'00',0),(6,'f',1,x'00',0),(7,'g',1,x'00',0),(8,'h',1,x'00',0),(9,'i',1,x'00',0),(10,'j',1,x'00',0),(11,'k',1,x'00',0),(12,'l',1,x'00',0),(13,'m',1,x'00',0);",
         )
         .unwrap();
         drop(conn);

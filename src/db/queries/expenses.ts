@@ -22,16 +22,19 @@ export async function getNextExpenseReference(year: number): Promise<string> {
   return getNextReference("expenses", "reference", `F-${shortYear}-`);
 }
 
-export async function createExpense(
-  data: Omit<Expense, "id" | "created_at" | "updated_at">
-): Promise<number> {
+/** A new expense; CHF when the currency fields are left out. */
+export type NewExpense = Omit<Expense, "id" | "created_at" | "updated_at" | "currency" | "exchange_rate" | "original_amount">
+  & Partial<Pick<Expense, "currency" | "exchange_rate" | "original_amount">>;
+
+export async function createExpense(data: NewExpense): Promise<number> {
   const db = await getDb();
   const result = await db.execute(
-    `INSERT INTO expenses (reference, supplier, category_code, invoice_date, due_date, amount, paid_date, receipt_path, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    `INSERT INTO expenses (reference, supplier, category_code, invoice_date, due_date, amount, paid_date, receipt_path, notes, currency, exchange_rate, original_amount)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
     [
       data.reference, data.supplier, data.category_code, data.invoice_date,
       data.due_date, data.amount, data.paid_date, data.receipt_path, data.notes,
+      data.currency ?? "CHF", data.exchange_rate ?? 1, data.original_amount ?? null,
     ]
   );
   return result.lastInsertId ?? 0;
@@ -52,12 +55,20 @@ export async function updateExpense(
   );
 }
 
-export async function getDistinctSuppliers(): Promise<
-  { supplier: string; category_code: string; amount: number }[]
-> {
+/** A supplier's last expense, to prefill the next one. */
+export interface PastSupplier {
+  supplier: string;
+  category_code: string;
+  /** CHF. */
+  amount: number;
+  currency: string;
+  original_amount: number | null;
+}
+
+export async function getDistinctSuppliers(): Promise<PastSupplier[]> {
   const db = await getDb();
   return db.select(
-    `SELECT supplier, category_code, amount
+    `SELECT supplier, category_code, amount, currency, original_amount
      FROM expenses
      WHERE id IN (
        SELECT MAX(id) FROM expenses GROUP BY supplier

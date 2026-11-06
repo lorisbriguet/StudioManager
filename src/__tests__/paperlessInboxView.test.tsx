@@ -200,7 +200,7 @@ describe("Paperless inbox on the Expenses page", () => {
       <QueryClientProvider client={new QueryClient()}>
       <NewExpenseForm
         categories={[{ code: "TE", name_fr: "Télécommunications" }]}
-        pastSuppliers={[{ supplier: "Sunrise", category_code: "TE", amount: 49.9 }]}
+        pastSuppliers={[{ supplier: "Sunrise", category_code: "TE", amount: 49.9, currency: "CHF", original_amount: null }]}
         prefill={{ supplier: "Sunrise", receiptPath: "/Users/me/Downloads/x.pdf" }}
         onSave={() => {}}
         onCancel={() => {}}

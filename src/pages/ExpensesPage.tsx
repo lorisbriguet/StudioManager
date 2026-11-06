@@ -1,5 +1,4 @@
-import { formatMoney } from "../lib/money";
-import React, { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { CalendarCheck } from "lucide-react";
 import { ICONS, ICON_SIZE, Button, DatePicker, Input, Select, FormField, FormGrid, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, QueryState, NoResults, Spinner, Popover, IconButton, Tag, Callout, Tooltip, SegmentedControl, CountBadge } from "../components/ui";
 import * as v from "../lib/validate";
@@ -30,7 +29,10 @@ import { useDetectedFields } from "../hooks/useDetectedFields";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useBulkDelete } from "../hooks/useBulkDelete";
 import type { Expense } from "../types/expense";
-import { getNextExpenseReference } from "../db/queries/expenses";
+import { getNextExpenseReference, type PastSupplier } from "../db/queries/expenses";
+import { currencies, getExchangeRate, type Currency } from "../lib/exchangeRate";
+import { asCurrency, expenseMoney, type ExpenseMoney } from "../lib/expenseCurrency";
+import { formatMoney } from "../lib/money";
 import { SortHeader, sortRows, type SortState } from "../components/ui/SortHeader";
 import { useT } from "../i18n/useT";
 import { type ExtractedExpenseData } from "../lib/expenseParse";
@@ -412,6 +414,9 @@ export function ExpensesPage() {
                       </Table.Td>
                       <Table.Td numeric className="font-medium">
                         {formatMoney(exp.amount, "CHF")}
+                        {exp.original_amount != null && exp.currency !== "CHF" && (
+                          <div className="text-xs text-muted font-normal">{formatMoney(exp.original_amount, exp.currency)}</div>
+                        )}
                       </Table.Td>
                       <Table.Actions>
                         <IconButton size="xs"
@@ -531,6 +536,42 @@ function detectedFields(
   return s;
 }
 
+/** A supplier's last amount in the currency it was booked in. */
+function lastAmount(s: PastSupplier): { amount: number; currency: Currency } {
+  const currency = asCurrency(s.currency) ?? "CHF";
+  return currency !== "CHF" && s.original_amount != null
+    ? { amount: s.original_amount, currency }
+    : { amount: s.amount, currency: "CHF" };
+}
+
+/** The form's first values from a prefill and the supplier's last expense. */
+function initialForm(
+  prefill: ExpensePrefill | null | undefined,
+  categories: { code: string }[],
+  pastSuppliers: PastSupplier[]
+) {
+  let categoryCode = categories[0]?.code ?? "FA";
+  let amount = 0;
+  let currency: Currency = "CHF";
+  if (prefill?.supplier && pastSuppliers.length > 0) {
+    const match = pastSuppliers.find(
+      (s) => s.supplier.trim().toLowerCase() === prefill.supplier!.trim().toLowerCase()
+    );
+    if (match) {
+      categoryCode = match.category_code;
+      if (!prefill.noAmountGuess && prefill.amount == null) ({ amount, currency } = lastAmount(match));
+    }
+  }
+  return {
+    supplier: prefill?.supplier ?? "",
+    category_code: categoryCode,
+    invoice_date: prefill?.invoice_date ?? format(new Date(), "yyyy-MM-dd"),
+    amount: prefill?.amount ?? amount,
+    currency: (prefill?.amount != null ? asCurrency(prefill.currency) : null) ?? currency,
+    notes: "",
+  };
+}
+
 export function NewExpenseForm({
   categories,
   pastSuppliers,
@@ -539,51 +580,53 @@ export function NewExpenseForm({
   submitting,
   onSave,
   onCancel,
-  amountHint,
 }: {
   categories: { code: string; name_fr: string }[];
-  pastSuppliers: { supplier: string; category_code: string; amount: number }[];
+  pastSuppliers: PastSupplier[];
   prefill: ExpensePrefill | null;
   /** The dialog title; "New expense" by default. */
   title?: string;
   /** The save is running (spinner, no second submit). */
   submitting?: boolean;
+  /** `amount` is CHF; a foreign receipt also carries its currency, rate and own amount. */
   onSave: (data: {
     supplier: string;
     category_code: string;
     invoice_date: string;
     due_date: string | null;
-    amount: number;
     paid_date: string | null;
     receipt_path: string | null;
     notes: string;
-  }) => void | Promise<void>;
+  } & ExpenseMoney) => void | Promise<void>;
   onCancel: () => void;
-  /** A muted line under the amount (e.g. the currency conversion of a prefilled renewal). */
-  amountHint?: ReactNode;
 }) {
   const t = useT();
-  const [form, setForm] = useState(() => {
-    let categoryCode = categories[0]?.code ?? "FA";
-    let amount = 0;
-    if (prefill?.supplier && pastSuppliers.length > 0) {
-      const match = pastSuppliers.find(
-        (s) => s.supplier.trim().toLowerCase() === prefill.supplier!.trim().toLowerCase()
-      );
-      if (match) {
-        categoryCode = match.category_code;
-        if (!prefill.noAmountGuess) amount = match.amount;
-      }
+  const [form, setForm] = useState(() => initialForm(prefill, categories, pastSuppliers));
+  // Units of form.currency per 1 CHF: today's rate, editable. 0 while unknown.
+  const [rate, setRate] = useState(1);
+  const [rateError, setRateError] = useState<string | null>(null);
+  useEffect(() => {
+    if (form.currency === "CHF") {
+      setRate(1);
+      setRateError(null);
+      return;
     }
-
-    return {
-      supplier: prefill?.supplier ?? "",
-      category_code: categoryCode,
-      invoice_date: prefill?.invoice_date ?? format(new Date(), "yyyy-MM-dd"),
-      amount: prefill?.amount ?? amount,
-      notes: "",
-    };
-  });
+    let live = true;
+    setRate(0);
+    void getExchangeRate(form.currency).then((r) => {
+      if (!live) return;
+      if (r == null) {
+        notify.warning(t.expense_rate_unavailable);
+        return;
+      }
+      setRate(r);
+      setRateError(null);
+    });
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch on a currency change only; a locale switch must not refetch
+  }, [form.currency]);
+  const foreign = form.currency !== "CHF";
+  const money = expenseMoney(form.amount, form.currency, rate);
   const [errors, setErrors] = useState<Partial<Record<ExpenseFormField, string>>>({});
   const { undetect, resetDetected, detectedBadge, isDetected } =
     useDetectedFields<DetectableExpenseField>(() => detectedFields(prefill));
@@ -609,24 +652,7 @@ export function NewExpenseForm({
   // Sync prefill into form when it changes (e.g. new file dropped while form is open)
   useEffect(() => {
     if (!prefill) return;
-    let categoryCode = categories[0]?.code ?? "FA";
-    let amount = 0;
-    if (prefill.supplier && pastSuppliers.length > 0) {
-      const match = pastSuppliers.find(
-        (s) => s.supplier.trim().toLowerCase() === prefill.supplier!.trim().toLowerCase()
-      );
-      if (match) {
-        categoryCode = match.category_code;
-        if (!prefill.noAmountGuess) amount = match.amount;
-      }
-    }
-    setForm({
-      supplier: prefill.supplier ?? "",
-      category_code: categoryCode,
-      invoice_date: prefill.invoice_date ?? format(new Date(), "yyyy-MM-dd"),
-      amount: prefill.amount ?? amount,
-      notes: "",
-    });
+    setForm(initialForm(prefill, categories, pastSuppliers));
     // OCR prefill overwrites the whole form programmatically — any stale
     // inline errors no longer describe what is on screen, so clear them all.
     setErrors({});
@@ -644,9 +670,9 @@ export function NewExpenseForm({
   const duplicateCheck = useDuplicateCheck();
 
   const checkForDuplicates = () => {
-    if (form.supplier.trim() && form.amount > 0 && form.invoice_date) {
+    if (form.supplier.trim() && money.amount > 0 && form.invoice_date) {
       duplicateCheck.mutate(
-        { supplier: form.supplier, amount: form.amount, date: form.invoice_date },
+        { supplier: form.supplier, amount: money.amount, date: form.invoice_date },
         {
           onSuccess: (dupes) => {
             if (dupes.length > 0) {
@@ -666,12 +692,12 @@ export function NewExpenseForm({
       )
     : pastSuppliers;
 
-  const selectSupplier = (s: { supplier: string; category_code: string; amount: number }) => {
+  const selectSupplier = (s: PastSupplier) => {
     setForm({
       ...form,
       supplier: s.supplier,
       category_code: s.category_code,
-      amount: s.amount,
+      ...lastAmount(s),
     });
     setShowSuggestions(false);
     setDuplicateWarning(null);
@@ -689,11 +715,16 @@ export function NewExpenseForm({
       expenseSchema
     );
     setErrors(errs);
-    if (Object.keys(errs).length > 0) return;
+    // Never book a foreign amount without a rate: it would land as CHF.
+    const badRate = foreign && !(rate > 0);
+    setRateError(badRate ? t.expense_rate_required : null);
+    if (Object.keys(errs).length > 0 || badRate) return;
     // DB failures surface via the mutation's onError toast (backstop).
     // Returned so FormModal ignores a second submit while it runs.
+    const { currency: _c, amount: _a, ...rest } = form;
     return onSave({
-      ...form,
+      ...rest,
+      ...money,
       due_date: prefill?.due_date ?? null,
       paid_date: null,
       receipt_path: null,
@@ -769,7 +800,7 @@ export function NewExpenseForm({
                 >
                   <span>{s.supplier}</span>
                   <span className="text-xs text-muted">
-                    {s.category_code} / {formatMoney(s.amount, "CHF")}
+                    {s.category_code} / {formatMoney(lastAmount(s).amount, lastAmount(s).currency)}
                   </span>
                 </button>
               ))}
@@ -811,13 +842,13 @@ export function NewExpenseForm({
           label={t.amount}
           required
           error={errors.amount}
-          hint={amountHint}
+          hint={foreign && rate > 0 && form.amount > 0 ? formatMoney(money.amount, "CHF") : undefined}
           badge={detectedBadge("amount", () => setForm((f) => ({ ...f, amount: 0 })))}
         >
           <Input
             numeric
             step="0.01"
-            unit="CHF"
+            unit={form.currency}
             value={form.amount || ""}
             onChange={(e) => {
               setForm({ ...form, amount: Number(e.target.value) });
@@ -831,6 +862,30 @@ export function NewExpenseForm({
             detected={isDetected("amount")}
           />
         </FormField>
+        <FormField label={t.currency}>
+          <Select
+            value={form.currency}
+            onChange={(e) => setForm({ ...form, currency: e.target.value as Currency })}
+          >
+            {currencies.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </Select>
+        </FormField>
+        {foreign && (
+          <FormField label={t.exchange_rate} error={rateError ?? undefined} hint={t.expense_rate_hint.replace("{currency}", form.currency)}>
+            <Input
+              numeric
+              step="0.0001"
+              unit={form.currency}
+              value={rate || ""}
+              onChange={(e) => {
+                setRate(e.target.value ? Number(e.target.value) : 0);
+                setRateError(null);
+              }}
+            />
+          </FormField>
+        )}
       </FormGrid>
       {duplicateWarning && (
         <Callout tone="warning">

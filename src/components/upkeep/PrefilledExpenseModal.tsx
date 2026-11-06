@@ -1,10 +1,10 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { useT } from "../../i18n/useT";
 import { notify } from "../../lib/notify";
 import { useCreateExpense, useDistinctSuppliers, useExpenseCategories } from "../../db/hooks/useExpenses";
 import { getNextExpenseReference } from "../../db/queries/expenses";
 import { todayLocalISO } from "../../utils/localDate";
-import { conversionHint, conversionNote, refusalText, toBaseAmount } from "../../lib/upkeep/expenseAmount";
+import { asCurrency } from "../../lib/expenseCurrency";
 
 // The expense form is the Expenses page's own (a FormModal); load it only when asked for.
 const NewExpenseForm = lazy(() =>
@@ -16,7 +16,10 @@ interface Props {
   title?: string;
   supplier?: string;
   amount?: number;
-  /** Currency of `amount`: converted to CHF (expenses have no currency), or refused without a rate. */
+  /**
+   * Currency of `amount`; CHF when empty. The form converts it at today's
+   * rate (editable); a currency the app can't convert is refused.
+   */
   currency?: string | null;
   date?: string;
   /** Closing without saving: nothing was written. */
@@ -31,8 +34,10 @@ export function PrefilledExpenseModal({ title, supplier, amount, currency, date,
   const { data: suppliers = [] } = useDistinctSuppliers();
   const createExpense = useCreateExpense();
   const t = useT();
-  const base = useBaseAmount(amount, currency, onCancel);
-  if (!base) return null;
+  const code = (currency ?? "").trim() || "CHF";
+  const supported = asCurrency(code);
+  useRefusal(supported ? null : code, onCancel);
+  if (!supported) return null;
 
   return (
     <Suspense fallback={null}>
@@ -40,15 +45,13 @@ export function PrefilledExpenseModal({ title, supplier, amount, currency, date,
         categories={categories}
         pastSuppliers={suppliers}
         title={title}
-        prefill={{ supplier, amount: base.amount, invoice_date: date ?? todayLocalISO() }}
-        amountHint={base.hint ?? undefined}
+        prefill={{ supplier, amount, currency: supported, invoice_date: date ?? todayLocalISO() }}
         onCancel={onCancel}
         onSave={async (data) => {
           const reference = await getNextExpenseReference(
             Number((data.invoice_date || todayLocalISO()).slice(0, 4))
           );
-          const notes = [data.notes, base.note].filter(Boolean).join("\n");
-          const id = await createExpense.mutateAsync({ ...data, notes, reference });
+          const id = await createExpense.mutateAsync({ ...data, reference });
           try {
             await onSaved(id);
           } catch (e) {
@@ -62,36 +65,15 @@ export function PrefilledExpenseModal({ title, supplier, amount, currency, date,
   );
 }
 
-/**
- * `amount` in CHF, with the hint and note on what was converted; null until known.
- * Another currency is converted at today's rate and said so under the amount; with
- * no rate the dialog closes with the reason instead of booking the raw number.
- */
-function useBaseAmount(amount: number | undefined, currency: string | null | undefined, onCancel: () => void) {
+/** A currency the app can't convert: say so and close, never book the raw number as CHF. */
+function useRefusal(unsupported: string | null, onCancel: () => void) {
   const t = useT();
-  const [base, setBase] = useState<{ amount?: number; hint: string | null; note: string | null } | null>(
-    amount == null ? { amount, hint: null, note: null } : null
-  );
   const latest = useRef({ t, onCancel });
   latest.current = { t, onCancel };
   useEffect(() => {
-    if (amount == null) return;
-    let live = true;
-    void toBaseAmount(amount, currency).then((r) => {
-      if (!live) return;
-      const { t, onCancel } = latest.current;
-      if (!r.ok) {
-        notify.error(refusalText(r, t));
-        onCancel();
-        return;
-      }
-      setBase({
-        amount: r.amount,
-        hint: r.converted ? conversionHint(r.converted, r.amount, t) : null,
-        note: r.converted ? conversionNote(r.converted, todayLocalISO(), t) : null,
-      });
-    });
-    return () => { live = false; };
-  }, [amount, currency]);
-  return base;
+    if (!unsupported) return;
+    const { t, onCancel } = latest.current;
+    notify.error(t.upkeep_expense_unsupported_currency.replace("{currency}", unsupported.toUpperCase()));
+    onCancel();
+  }, [unsupported]);
 }

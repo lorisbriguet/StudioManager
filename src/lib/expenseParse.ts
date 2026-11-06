@@ -4,6 +4,8 @@
 export interface ExtractedExpenseData {
   supplier?: string;
   amount?: number;
+  /** ISO code of `amount` when the receipt names one ("EUR", "USD"). */
+  currency?: string;
   invoice_date?: string;
   due_date?: string;
 }
@@ -35,18 +37,18 @@ const STRONG_POSITIVE =
 const WEAK_POSITIVE = /\btotal\b|\bmontant\b|\bbetrag\b|\bamount\b|\bsumme\b/i;
 const NEGATIVE =
   /sous[-\s]?total|subtotal|zwischensumme|\bht\b|hors\s*taxe|\btva\b|mwst|\bvat\b|\btax\b|rabais|rabatt|discount/i;
-const CURRENCY = /\bchf\b|\bfr\.?(\s|$)|\beur\b|€/i;
+const CURRENCY = /\bchf\b|\bfr\.?(\s|$)|\beur\b|€|\busd\b|\$|\bgbp\b|£/i;
 
 // Money tokens: grouped thousands with 2 decimals, plain 2-decimal numbers,
 // or apostrophe-grouped integers (unambiguous Swiss format).
 const MONEY_TOKEN =
   /\d{1,3}(?:[.,'\u2019\u00a0 ]\d{3})*[.,]\d{2}|\d+[.,]\d{2}|\d{1,3}(?:['\u2019]\d{3})+/g;
 // Integers directly prefixed by a currency marker (e.g. "CHF 25").
-const CURRENCY_INT = /(?:chf|fr\.?|eur|€)\s*(\d{1,6})(?![\d.,'])/i;
+const CURRENCY_INT = /(?:chf|fr\.?|eur|€|usd|\$|gbp|£)\s*(\d{1,6})(?![\d.,'])/i;
 const DATE_LIKE = /\d{1,2}[./]\d{1,2}[./]\d{2,4}|\d{4}-\d{2}-\d{2}/g;
 
-function detectAmount(lines: string[]): number | undefined {
-  const candidates: { value: number; score: number }[] = [];
+function detectAmount(lines: string[]): { value: number; line: string } | undefined {
+  const candidates: { value: number; score: number; line: string }[] = [];
 
   const addCandidate = (value: number | null, line: string) => {
     if (value === null || value <= 0 || value >= 1_000_000) return;
@@ -55,7 +57,7 @@ function detectAmount(lines: string[]): number | undefined {
     else if (WEAK_POSITIVE.test(line)) score += 3;
     if (NEGATIVE.test(line)) score -= 4;
     if (CURRENCY.test(line)) score += 1;
-    candidates.push({ value, score });
+    candidates.push({ value, score, line });
   };
 
   lines.forEach((line) => {
@@ -77,7 +79,47 @@ function detectAmount(lines: string[]): number | undefined {
 
   if (candidates.length === 0) return undefined;
   candidates.sort((a, b) => b.score - a.score || b.value - a.value);
-  return Math.round(candidates[0].value * 100) / 100;
+  return { value: Math.round(candidates[0].value * 100) / 100, line: candidates[0].line };
+}
+
+// Currency markers, checked in this order: "C$" and "A$" before a bare "$".
+// "kr" is left out: it is DKK, SEK and NOK alike.
+const CURRENCY_MARKERS: [string, RegExp][] = [
+  ["CHF", /\bchf\b|\bs?fr\.|\bsfr\b/gi],
+  ["EUR", /\beur\b|€/gi],
+  ["CAD", /\bcad\b|\bc\$/gi],
+  ["AUD", /\baud\b|\ba\$/gi],
+  ["USD", /\busd\b|(?<![a-z])\$/gi],
+  ["GBP", /\bgbp\b|£/gi],
+  ["JPY", /\bjpy\b|¥/gi],
+  ["DKK", /\bdkk\b/gi],
+  ["SEK", /\bsek\b/gi],
+  ["NOK", /\bnok\b/gi],
+];
+
+function currenciesIn(text: string): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const [code, re] of CURRENCY_MARKERS) {
+    const n = text.match(re)?.length ?? 0;
+    if (n > 0) counts.set(code, n);
+  }
+  return counts;
+}
+
+/**
+ * The receipt's currency: the one written on the total's line, else the one
+ * the text names most often. Undefined when it names none.
+ */
+export function detectCurrency(text: string, totalLine?: string): string | undefined {
+  const onLine = totalLine ? currenciesIn(totalLine) : new Map<string, number>();
+  if (onLine.size === 1) return [...onLine.keys()][0];
+  const all = currenciesIn(text);
+  let best: string | undefined;
+  let bestCount = 0;
+  for (const [code, n] of all) {
+    if (n > bestCount) { best = code; bestCount = n; }
+  }
+  return best;
 }
 
 const DUE_KEYWORDS =
@@ -296,7 +338,10 @@ export function parseExpenseFromText(
   const result: ExtractedExpenseData = {};
 
   const amount = detectAmount(lines);
-  if (amount !== undefined) result.amount = amount;
+  if (amount !== undefined) result.amount = amount.value;
+
+  const currency = detectCurrency(text, amount?.line);
+  if (currency) result.currency = currency;
 
   Object.assign(result, detectDates(lines));
 
