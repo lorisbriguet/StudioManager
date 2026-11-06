@@ -16,7 +16,7 @@ use tauri::Manager;
 use orgs::{OrgPrefs, Registry, DB_FILE};
 use serde_json::Value as JsonValue;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// Global state: the active organisation folder and which database file
 /// inside it is live (production, test or presentation copy).
@@ -36,6 +36,38 @@ impl ActiveOrg {
 }
 
 struct ActiveOrgState(Mutex<ActiveOrg>);
+
+/// Commands that touch files or the database run off the main thread (see
+/// `run_blocking`), so they no longer queue behind each other. This lock
+/// keeps the order that matters: batches share it, while a change of
+/// organisation, mode, snapshot or registry takes it alone, so a batch never
+/// writes into a database that is being swapped, copied or removed, and two
+/// registry edits never overwrite each other.
+static ORG_LOCK: RwLock<()> = RwLock::new(());
+
+/// The guarded value is `()`, so a panic elsewhere leaves nothing broken:
+/// a poisoned lock is still usable.
+fn org_shared() -> RwLockReadGuard<'static, ()> {
+    ORG_LOCK.read().unwrap_or_else(|e| e.into_inner())
+}
+
+fn org_exclusive() -> RwLockWriteGuard<'static, ()> {
+    ORG_LOCK.write().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Run blocking work (SQLite, file copies, the registry) on Tauri's blocking
+/// thread pool. A plain `fn` command runs on the main thread and freezes the
+/// window for as long as it takes: up to the 5 s busy timeout when the MCP
+/// server or `sm` holds the write lock, or a whole `VACUUM INTO`.
+pub(crate) async fn run_blocking<T, F>(work: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(work)
+        .await
+        .map_err(|e| format!("background task failed: {e}"))?
+}
 
 /// The startup error, when `init_organisations` failed. The app still starts
 /// (with `ActiveOrgState` pointing at the legacy root) so no command panics;
@@ -110,7 +142,20 @@ fn resolve_batch_db(app_dir: &Path, org: &ActiveOrg, target: Option<&str>) -> Re
 }
 
 #[tauri::command]
-fn execute_batch(
+async fn execute_batch(
+    app: tauri::AppHandle,
+    statements: Vec<SqlStatement>,
+    expected_org: Option<String>,
+    target_org: Option<String>,
+) -> Result<serde_json::Value, String> {
+    run_blocking(move || {
+        let _guard = org_shared();
+        execute_batch_now(app, statements, expected_org, target_org)
+    })
+    .await
+}
+
+fn execute_batch_now(
     app: tauri::AppHandle,
     statements: Vec<SqlStatement>,
     expected_org: Option<String>,
@@ -249,7 +294,17 @@ fn json_to_sql(v: &JsonValue) -> Box<dyn rusqlite::types::ToSql> {
 
 /// Snapshot production DB and copy to test DB. Returns the test DB path.
 #[tauri::command]
-fn enter_test_mode(app: tauri::AppHandle) -> Result<String, String> {
+async fn enter_test_mode(
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    run_blocking(move || {
+        let _guard = org_exclusive();
+        enter_test_mode_now(app)
+    })
+    .await
+}
+
+fn enter_test_mode_now(app: tauri::AppHandle) -> Result<String, String> {
     let org = active_org(&app)?;
     let prod_db = org.prod_db_path();
     let snapshot_db = org.file("studiomanager_snapshot.db");
@@ -271,7 +326,17 @@ fn enter_test_mode(app: tauri::AppHandle) -> Result<String, String> {
 
 /// Exit test mode: switch back to production DB and remove test DB.
 #[tauri::command]
-fn exit_test_mode(app: tauri::AppHandle) -> Result<(), String> {
+async fn exit_test_mode(
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    run_blocking(move || {
+        let _guard = org_exclusive();
+        exit_test_mode_now(app)
+    })
+    .await
+}
+
+fn exit_test_mode_now(app: tauri::AppHandle) -> Result<(), String> {
     let org = active_org(&app)?;
     let test_db = org.file("studiomanager_test.db");
 
@@ -286,7 +351,17 @@ fn exit_test_mode(app: tauri::AppHandle) -> Result<(), String> {
 
 /// Enter presentation mode: snapshot prod DB, create empty presentation DB, switch to it.
 #[tauri::command]
-fn enter_presentation_mode(app: tauri::AppHandle) -> Result<String, String> {
+async fn enter_presentation_mode(
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    run_blocking(move || {
+        let _guard = org_exclusive();
+        enter_presentation_mode_now(app)
+    })
+    .await
+}
+
+fn enter_presentation_mode_now(app: tauri::AppHandle) -> Result<String, String> {
     let org = active_org(&app)?;
     let prod_db = org.prod_db_path();
     let snapshot_db = org.file("studiomanager_snapshot.db");
@@ -308,7 +383,17 @@ fn enter_presentation_mode(app: tauri::AppHandle) -> Result<String, String> {
 
 /// Exit presentation mode: switch back to production DB and remove presentation DB.
 #[tauri::command]
-fn exit_presentation_mode(app: tauri::AppHandle) -> Result<(), String> {
+async fn exit_presentation_mode(
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    run_blocking(move || {
+        let _guard = org_exclusive();
+        exit_presentation_mode_now(app)
+    })
+    .await
+}
+
+fn exit_presentation_mode_now(app: tauri::AppHandle) -> Result<(), String> {
     let org = active_org(&app)?;
     let pres_db = org.file("studiomanager_presentation.db");
 
@@ -323,7 +408,17 @@ fn exit_presentation_mode(app: tauri::AppHandle) -> Result<(), String> {
 
 /// Create a manual snapshot of the production DB.
 #[tauri::command]
-fn snapshot_db(app: tauri::AppHandle) -> Result<String, String> {
+async fn snapshot_db(
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    run_blocking(move || {
+        let _guard = org_exclusive();
+        snapshot_db_now(app)
+    })
+    .await
+}
+
+fn snapshot_db_now(app: tauri::AppHandle) -> Result<String, String> {
     let org = active_org(&app)?;
     let prod_db = org.prod_db_path();
     let snapshot_db = org.file("studiomanager_snapshot.db");
@@ -336,7 +431,17 @@ fn snapshot_db(app: tauri::AppHandle) -> Result<String, String> {
 
 /// Restore production DB from snapshot.
 #[tauri::command]
-fn restore_snapshot(app: tauri::AppHandle) -> Result<(), String> {
+async fn restore_snapshot(
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    run_blocking(move || {
+        let _guard = org_exclusive();
+        restore_snapshot_now(app)
+    })
+    .await
+}
+
+fn restore_snapshot_now(app: tauri::AppHandle) -> Result<(), String> {
     let org = active_org(&app)?;
     let prod_db = org.prod_db_path();
     let snapshot_db = org.file("studiomanager_snapshot.db");
@@ -384,12 +489,35 @@ fn save_registry(app: &tauri::AppHandle, reg: &Registry) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn list_organisations(app: tauri::AppHandle) -> Result<Registry, String> {
+async fn list_organisations(
+    app: tauri::AppHandle,
+) -> Result<Registry, String> {
+    run_blocking(move || {
+        let _guard = org_shared();
+        list_organisations_now(app)
+    })
+    .await
+}
+
+fn list_organisations_now(app: tauri::AppHandle) -> Result<Registry, String> {
     load_registry(&app)
 }
 
 #[tauri::command]
-fn create_organisation(app: tauri::AppHandle, name: String, seed_from_current: bool, prefs: OrgPrefs) -> Result<Registry, String> {
+async fn create_organisation(
+    app: tauri::AppHandle,
+    name: String,
+    seed_from_current: bool,
+    prefs: OrgPrefs,
+) -> Result<Registry, String> {
+    run_blocking(move || {
+        let _guard = org_exclusive();
+        create_organisation_now(app, name, seed_from_current, prefs)
+    })
+    .await
+}
+
+fn create_organisation_now(app: tauri::AppHandle, name: String, seed_from_current: bool, prefs: OrgPrefs) -> Result<Registry, String> {
     let app_dir = app_data_dir(&app)?;
     let mut reg = load_registry(&app)?;
     let id = reg.add(&name, Some(prefs))?.id.clone();
@@ -419,7 +547,19 @@ fn create_organisation(app: tauri::AppHandle, name: String, seed_from_current: b
 }
 
 #[tauri::command]
-fn rename_organisation(app: tauri::AppHandle, id: String, name: String) -> Result<Registry, String> {
+async fn rename_organisation(
+    app: tauri::AppHandle,
+    id: String,
+    name: String,
+) -> Result<Registry, String> {
+    run_blocking(move || {
+        let _guard = org_exclusive();
+        rename_organisation_now(app, id, name)
+    })
+    .await
+}
+
+fn rename_organisation_now(app: tauri::AppHandle, id: String, name: String) -> Result<Registry, String> {
     let mut reg = load_registry(&app)?;
     reg.rename(&id, &name)?;
     save_registry(&app, &reg)?;
@@ -427,7 +567,18 @@ fn rename_organisation(app: tauri::AppHandle, id: String, name: String) -> Resul
 }
 
 #[tauri::command]
-fn reorder_organisations(app: tauri::AppHandle, ids: Vec<String>) -> Result<Registry, String> {
+async fn reorder_organisations(
+    app: tauri::AppHandle,
+    ids: Vec<String>,
+) -> Result<Registry, String> {
+    run_blocking(move || {
+        let _guard = org_exclusive();
+        reorder_organisations_now(app, ids)
+    })
+    .await
+}
+
+fn reorder_organisations_now(app: tauri::AppHandle, ids: Vec<String>) -> Result<Registry, String> {
     let mut reg = load_registry(&app)?;
     reg.reorder(&ids)?;
     save_registry(&app, &reg)?;
@@ -435,7 +586,18 @@ fn reorder_organisations(app: tauri::AppHandle, ids: Vec<String>) -> Result<Regi
 }
 
 #[tauri::command]
-fn delete_organisation(app: tauri::AppHandle, id: String) -> Result<Registry, String> {
+async fn delete_organisation(
+    app: tauri::AppHandle,
+    id: String,
+) -> Result<Registry, String> {
+    run_blocking(move || {
+        let _guard = org_exclusive();
+        delete_organisation_now(app, id)
+    })
+    .await
+}
+
+fn delete_organisation_now(app: tauri::AppHandle, id: String) -> Result<Registry, String> {
     let app_dir = app_data_dir(&app)?;
     let mut reg = load_registry(&app)?;
     if id == active_org(&app)?.id {
@@ -456,7 +618,18 @@ fn delete_organisation(app: tauri::AppHandle, id: String) -> Result<Registry, St
 }
 
 #[tauri::command]
-fn switch_organisation(app: tauri::AppHandle, id: String) -> Result<Registry, String> {
+async fn switch_organisation(
+    app: tauri::AppHandle,
+    id: String,
+) -> Result<Registry, String> {
+    run_blocking(move || {
+        let _guard = org_exclusive();
+        switch_organisation_now(app, id)
+    })
+    .await
+}
+
+fn switch_organisation_now(app: tauri::AppHandle, id: String) -> Result<Registry, String> {
     let app_dir = app_data_dir(&app)?;
     if active_org(&app)?.in_mode() {
         return Err("leave test or presentation mode before switching organisation".to_string());
@@ -479,7 +652,19 @@ fn switch_organisation(app: tauri::AppHandle, id: String) -> Result<Registry, St
 }
 
 #[tauri::command]
-fn set_organisation_prefs(app: tauri::AppHandle, id: String, prefs: OrgPrefs) -> Result<Registry, String> {
+async fn set_organisation_prefs(
+    app: tauri::AppHandle,
+    id: String,
+    prefs: OrgPrefs,
+) -> Result<Registry, String> {
+    run_blocking(move || {
+        let _guard = org_exclusive();
+        set_organisation_prefs_now(app, id, prefs)
+    })
+    .await
+}
+
+fn set_organisation_prefs_now(app: tauri::AppHandle, id: String, prefs: OrgPrefs) -> Result<Registry, String> {
     let mut reg = load_registry(&app)?;
     reg.set_prefs(&id, prefs)?;
     save_registry(&app, &reg)?;
@@ -1186,5 +1371,47 @@ mod tests {
         let t = ActiveOrg { db_name: "studiomanager_test.db".into(), ..a.clone() };
         assert_eq!(t.db_path(), PathBuf::from("/tmp/app/orgs/abc123/studiomanager_test.db"));
         assert!(t.in_mode());
+    }
+
+    #[test]
+    fn run_blocking_returns_the_work_result_off_the_calling_thread() {
+        let caller = std::thread::current().id();
+        let ran_on = tauri::async_runtime::block_on(run_blocking(|| Ok(std::thread::current().id()))).unwrap();
+        assert_ne!(ran_on, caller);
+        let err = tauri::async_runtime::block_on(run_blocking(|| Err::<(), _>("nope".to_string())));
+        assert_eq!(err, Err("nope".to_string()));
+    }
+
+    /// A plain `fn` command runs on the main thread and freezes the window
+    /// while it works. Commands here and in agent_access.rs touch SQLite or
+    /// files, so they must be `async` (and use `run_blocking`); only these
+    /// in-memory lookups may stay plain.
+    #[test]
+    fn commands_that_touch_disk_are_async() {
+        const PLAIN_OK: &[&str] = &["has_snapshot", "get_active_db", "get_init_error"];
+        for (file, src) in [("lib.rs", include_str!("lib.rs")), ("agent_access.rs", include_str!("agent_access.rs"))] {
+            for chunk in src.split("#[tauri::command]\n").skip(1) {
+                let sig = chunk.lines().next().unwrap();
+                let name = sig.split("fn ").nth(1).unwrap().split('(').next().unwrap();
+                assert!(
+                    sig.contains("async fn") || PLAIN_OK.contains(&name),
+                    "{file}: command `{name}` runs on the main thread; make it async with run_blocking"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_exclusive_org_change_waits_for_running_batches() {
+        let shared = org_shared();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let writer = std::thread::spawn(move || {
+            let _g = org_exclusive();
+            tx.send(()).unwrap();
+        });
+        assert!(rx.recv_timeout(std::time::Duration::from_millis(100)).is_err());
+        drop(shared);
+        rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+        writer.join().unwrap();
     }
 }
