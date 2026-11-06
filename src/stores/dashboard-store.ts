@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { LayoutItem } from "react-grid-layout";
+import { useOrgStore } from "./org-store";
 
 export type WidgetType =
   | "kpi-invoiced"
@@ -148,12 +149,28 @@ const DEFAULT_LAYOUT: LayoutItem[] = [
   { i: "w-upkeep", x: 0, y: 11, w: 4, h: 4, minW: 3, minH: 3 },
 ];
 
-const STORAGE_KEY = "dashboard-layout";
-const WIDGETS_KEY = "dashboard-widgets";
+export const DASHBOARD_BREAKPOINTS = { lg: 1200, md: 996, sm: 768, xs: 480 };
+export const DASHBOARD_COLS = { lg: 12, md: 10, sm: 6, xs: 4 };
+
+/** The saved layout is the 12-column one. Narrower windows show a copy the
+ *  grid squeezes to fewer columns, which must never be saved over it.
+ *  Same rule as react-grid-layout: `lg` once the width is above 1200. */
+export function isFullWidthLayout(width: number): boolean {
+  return width > DASHBOARD_BREAKPOINTS.lg;
+}
+
+// Each organisation keeps its own dashboard: these keys are written as
+// `<key>:<organisation id>` (listed in org-store's NAMESPACED_KEYS).
+const orgKey = (base: string) => useOrgStore.getState().orgKey(base);
+const STORAGE_KEY = () => orgKey("dashboard-layout");
+const WIDGETS_KEY = () => orgKey("dashboard-widgets");
+const NOTES_KEY = () => orgKey("dashboard-pinned-notes");
+const PRESET_ID_KEY = () => orgKey("dashboard-preset-id");
+const PRESET_NAME_KEY = () => orgKey("dashboard-preset-name");
 
 function loadLayout(): LayoutItem[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY());
     return raw ? JSON.parse(raw) : DEFAULT_LAYOUT;
   } catch {
     return DEFAULT_LAYOUT;
@@ -162,28 +179,35 @@ function loadLayout(): LayoutItem[] {
 
 function loadWidgets(): DashboardWidget[] {
   try {
-    const raw = localStorage.getItem(WIDGETS_KEY);
+    const raw = localStorage.getItem(WIDGETS_KEY());
     return raw ? JSON.parse(raw) : DEFAULT_WIDGETS;
   } catch {
     return DEFAULT_WIDGETS;
   }
 }
 
-const NOTES_KEY = "dashboard-pinned-notes";
-const PRESET_ID_KEY = "dashboard-preset-id";
-const PRESET_NAME_KEY = "dashboard-preset-name";
-
 function loadNotes(): string {
-  return localStorage.getItem(NOTES_KEY) ?? "";
+  return localStorage.getItem(NOTES_KEY()) ?? "";
 }
 
 function loadPresetId(): number | null {
-  const raw = localStorage.getItem(PRESET_ID_KEY);
+  const raw = localStorage.getItem(PRESET_ID_KEY());
   return raw ? Number(raw) : null;
 }
 
+/** Empty when no preset is active: the page then shows the translated "Custom". */
 function loadPresetName(): string {
-  return localStorage.getItem(PRESET_NAME_KEY) ?? "Custom";
+  return localStorage.getItem(PRESET_NAME_KEY()) ?? "";
+}
+
+function loadAll() {
+  return {
+    widgets: loadWidgets(),
+    layout: loadLayout(),
+    pinnedNotes: loadNotes(),
+    activePresetId: loadPresetId(),
+    activePresetName: loadPresetName(),
+  };
 }
 
 interface DashboardState {
@@ -198,22 +222,20 @@ interface DashboardState {
   resetDashboard: () => void;
   setPinnedNotes: (text: string) => void;
   setActivePreset: (id: number | null, name: string, widgets: DashboardWidget[], layout: LayoutItem[]) => void;
+  /** Re-read the active organisation's dashboard (after an organisation switch). */
+  reloadForOrg: () => void;
 }
 
 function clearPresetTracking() {
-  localStorage.removeItem(PRESET_ID_KEY);
-  localStorage.setItem(PRESET_NAME_KEY, "Custom");
+  localStorage.removeItem(PRESET_ID_KEY());
+  localStorage.removeItem(PRESET_NAME_KEY());
 }
 
 export const useDashboardStore = create<DashboardState>((set, get) => ({
-  widgets: loadWidgets(),
-  layout: loadLayout(),
-  pinnedNotes: loadNotes(),
-  activePresetId: loadPresetId(),
-  activePresetName: loadPresetName(),
+  ...loadAll(),
 
   setLayout: (layout) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
+    localStorage.setItem(STORAGE_KEY(), JSON.stringify(layout));
     set({ layout });
   },
 
@@ -228,42 +250,50 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       ...get().layout,
       { i: id, x: 0, y: maxY, w: catalog.defaultW, h: catalog.defaultH, minW: catalog.minW, minH: catalog.minH },
     ];
-    localStorage.setItem(WIDGETS_KEY, JSON.stringify(widgets));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
+    localStorage.setItem(WIDGETS_KEY(), JSON.stringify(widgets));
+    localStorage.setItem(STORAGE_KEY(), JSON.stringify(layout));
     clearPresetTracking();
-    set({ widgets, layout, activePresetId: null, activePresetName: "Custom" });
+    set({ widgets, layout, activePresetId: null, activePresetName: "" });
   },
 
   removeWidget: (id) => {
     const widgets = get().widgets.filter((w) => w.id !== id);
     const layout = get().layout.filter((l) => l.i !== id);
-    localStorage.setItem(WIDGETS_KEY, JSON.stringify(widgets));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
+    localStorage.setItem(WIDGETS_KEY(), JSON.stringify(widgets));
+    localStorage.setItem(STORAGE_KEY(), JSON.stringify(layout));
     clearPresetTracking();
-    set({ widgets, layout, activePresetId: null, activePresetName: "Custom" });
+    set({ widgets, layout, activePresetId: null, activePresetName: "" });
   },
 
   resetDashboard: () => {
-    localStorage.setItem(WIDGETS_KEY, JSON.stringify(DEFAULT_WIDGETS));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_LAYOUT));
+    localStorage.setItem(WIDGETS_KEY(), JSON.stringify(DEFAULT_WIDGETS));
+    localStorage.setItem(STORAGE_KEY(), JSON.stringify(DEFAULT_LAYOUT));
     clearPresetTracking();
-    set({ widgets: DEFAULT_WIDGETS, layout: DEFAULT_LAYOUT, activePresetId: null, activePresetName: "Custom" });
+    set({ widgets: DEFAULT_WIDGETS, layout: DEFAULT_LAYOUT, activePresetId: null, activePresetName: "" });
   },
 
   setPinnedNotes: (text) => {
-    localStorage.setItem(NOTES_KEY, text);
+    localStorage.setItem(NOTES_KEY(), text);
     set({ pinnedNotes: text });
   },
 
   setActivePreset: (id, name, widgets, layout) => {
-    localStorage.setItem(WIDGETS_KEY, JSON.stringify(widgets));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
+    localStorage.setItem(WIDGETS_KEY(), JSON.stringify(widgets));
+    localStorage.setItem(STORAGE_KEY(), JSON.stringify(layout));
     if (id !== null) {
-      localStorage.setItem(PRESET_ID_KEY, String(id));
+      localStorage.setItem(PRESET_ID_KEY(), String(id));
+      localStorage.setItem(PRESET_NAME_KEY(), name);
     } else {
-      localStorage.removeItem(PRESET_ID_KEY);
+      clearPresetTracking();
     }
-    localStorage.setItem(PRESET_NAME_KEY, name);
-    set({ widgets, layout, activePresetId: id, activePresetName: name });
+    set({ widgets, layout, activePresetId: id, activePresetName: id !== null ? name : "" });
   },
+
+  reloadForOrg: () => set(loadAll()),
 }));
+
+// org-store must not import this store (import cycle), so the reload on an
+// organisation switch is wired here, as tab-store does.
+useOrgStore.subscribe((s, prev) => {
+  if (s.activeId !== prev.activeId) useDashboardStore.getState().reloadForOrg();
+});

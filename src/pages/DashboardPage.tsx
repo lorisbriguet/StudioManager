@@ -1,10 +1,10 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { ResponsiveGridLayout, useContainerWidth, verticalCompactor } from "react-grid-layout";
-import type { Layout, ResponsiveLayouts } from "react-grid-layout";
+import type { Layout } from "react-grid-layout";
 import { ChevronDown, Lock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useClients } from "../db/hooks/useClients";
-import { useDashboardStore, WIDGET_CATALOG, type WidgetType, type DashboardWidget } from "../stores/dashboard-store";
+import { useDashboardStore, WIDGET_CATALOG, DASHBOARD_BREAKPOINTS, DASHBOARD_COLS, isFullWidthLayout, type WidgetType, type DashboardWidget } from "../stores/dashboard-store";
 import type { LayoutItem } from "react-grid-layout";
 import { renderWidget } from "../components/dashboard/widgets";
 import { ErrorBoundary } from "react-error-boundary";
@@ -209,9 +209,13 @@ export function DashboardPage() {
     });
   }, [widgets, layout]);
 
-  const handleLayoutChange = useCallback((currentLayout: Layout, _allLayouts: ResponsiveLayouts) => {
-    setLayout([...currentLayout]);
-  }, [setLayout]);
+  // Save only what the user arranged, after a drag or resize at full width.
+  // onLayoutChange also fires when the grid fits the layout to a narrower
+  // window, so it must not save.
+  const handleInteractionStop = useCallback((currentLayout: Layout) => {
+    unlockSelection();
+    if (isFullWidthLayout(width)) setLayout([...currentLayout]);
+  }, [setLayout, width]);
 
   // Block selectstart event while grid is being dragged/resized
   useEffect(() => {
@@ -301,14 +305,13 @@ export function DashboardPage() {
         <ResponsiveGridLayout
           width={width}
           layouts={{ lg: layout }}
-          breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480 }}
-          cols={{ lg: 12, md: 10, sm: 6, xs: 4 }}
+          breakpoints={DASHBOARD_BREAKPOINTS}
+          cols={DASHBOARD_COLS}
           rowHeight={ROW_HEIGHT}
-          onLayoutChange={handleLayoutChange}
           onDragStart={lockSelection}
-          onDragStop={unlockSelection}
+          onDragStop={handleInteractionStop}
           onResizeStart={lockSelection}
-          onResizeStop={unlockSelection}
+          onResizeStop={handleInteractionStop}
           resizeConfig={{ enabled: true, handles: ["s", "w", "e", "n", "sw", "nw", "se", "ne"] }}
           compactor={verticalCompactor}
           margin={[16, 16] as [number, number]}
