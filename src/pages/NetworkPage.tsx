@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useT } from "../i18n/useT";
 import { Button, CARD_GAP, CARD_STACK, Card, EmptyState, ICONS, IconButton, ListSkeleton, PageHeader, QueryState } from "../components/ui";
@@ -12,6 +12,7 @@ import { useAppStore } from "../stores/app-store";
 import { useTimeMachine } from "../hooks/useTimeMachine";
 import { useTailscale } from "../hooks/useTailscale";
 import { useNetworkChecks } from "../hooks/useNetworkChecks";
+import { useNow } from "../hooks/useNow";
 import { timeMachineState } from "../lib/network/backups";
 import { formatAgo } from "../lib/network/format";
 import { buildNetworkCards, linkUrl, pinFor, vncLink } from "../lib/network/model";
@@ -56,11 +57,7 @@ export function NetworkPage() {
   const { results, checkedAt, checking, refresh } = useNetworkChecks(targets);
 
   // Re-render every 30 s so "Checked … ago" stays true.
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
+  const now = useNow(30_000);
 
   const queries = [machines, links, connections];
   const state = {

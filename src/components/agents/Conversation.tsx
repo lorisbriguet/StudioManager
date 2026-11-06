@@ -16,6 +16,33 @@ const STICK_PX = 80;
 /** An agent's own reply as the last message, older than this, means its turn is over. */
 const REPLY_SETTLED_MS = 8000;
 
+type Anchor = { key: string; top: number };
+
+/**
+ * The first message in view in the scroller around `root`, and where it sits; null when none
+ * is, undefined when the conversation isn't mounted in a scroller (the anchor then stays).
+ */
+function findAnchor(root: HTMLElement | null): Anchor | null | undefined {
+  const scroller = root?.parentElement;
+  if (!root || !scroller) return undefined;
+  const base = scroller.getBoundingClientRect().top;
+  for (const el of root.querySelectorAll<HTMLElement>("[data-anchor-key]")) {
+    const r = el.getBoundingClientRect();
+    if (r.bottom > base + 1) return { key: el.dataset.anchorKey ?? "", top: r.top - base };
+  }
+  return null;
+}
+
+/** Scroll by however far the anchored message moved, so it stays where the reader saw it. */
+function keepAnchor(root: HTMLElement, scroller: HTMLElement, a: Anchor) {
+  const el = Array.from(root.querySelectorAll<HTMLElement>("[data-anchor-key]")).find(
+    (e) => e.dataset.anchorKey === a.key,
+  );
+  if (!el) return;
+  const moved = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top - a.top;
+  if (moved !== 0) scroller.scrollTop += moved;
+}
+
 /**
  * Whether the agent is working on something right now. The status alone is not enough: it
  * stays "busy" while the agent only waits on a background task, long after its last reply.
@@ -82,6 +109,16 @@ export function Conversation({ sessionId, working }: ConversationProps) {
   /** Where the scroller was at the last scroll event or jump of ours, to tell which way it moved. */
   const lastTopRef = useRef(Number.POSITIVE_INFINITY);
 
+  // The transcript is the last 300 items: a new message pushes the oldest off the top and
+  // everything below moves up. WebKit has no scroll anchoring, so a reader scrolled up would
+  // be carried along by the height of what was dropped. Remember the first message in view
+  // and where it sat; after each update, scroll by however far it moved.
+  const anchorRef = useRef<Anchor | null>(null);
+  const captureAnchor = () => {
+    const a = findAnchor(rootRef.current);
+    if (a !== undefined) anchorRef.current = a;
+  };
+
   // The panel's scroller is the parent. New replies pull the view down only while the reader
   // is already at the bottom; once they scroll up they stay where they are.
   // Only a move up lets go of the bottom. The scroll event of our own jump arrives a frame
@@ -128,39 +165,12 @@ export function Conversation({ sessionId, working }: ConversationProps) {
     scroller?.scrollTo?.({ top: scroller.scrollHeight, behavior: "smooth" });
   };
 
-  // The transcript is the last 300 items: a new message pushes the oldest off the top and
-  // everything below moves up. WebKit has no scroll anchoring, so a reader scrolled up would
-  // be carried along by the height of what was dropped. Remember the first message in view
-  // and where it sat; after each update, scroll by however far it moved.
-  const anchorRef = useRef<{ key: string; top: number } | null>(null);
-  const captureAnchor = () => {
-    const root = rootRef.current;
-    const scroller = root?.parentElement;
-    if (!root || !scroller) return;
-    const base = scroller.getBoundingClientRect().top;
-    for (const el of root.querySelectorAll<HTMLElement>("[data-anchor-key]")) {
-      const r = el.getBoundingClientRect();
-      if (r.bottom > base + 1) {
-        anchorRef.current = { key: el.dataset.anchorKey ?? "", top: r.top - base };
-        return;
-      }
-    }
-    anchorRef.current = null;
-  };
   const groups = useMemo(() => keyed(groupTools(items)), [items]);
   useLayoutEffect(() => {
     const root = rootRef.current;
     const scroller = root?.parentElement;
     const a = anchorRef.current;
-    if (root && scroller && a && !stickRef.current) {
-      const el = Array.from(root.querySelectorAll<HTMLElement>("[data-anchor-key]")).find(
-        (e) => e.dataset.anchorKey === a.key,
-      );
-      if (el) {
-        const moved = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top - a.top;
-        if (moved !== 0) scroller.scrollTop += moved;
-      }
-    }
+    if (root && scroller && a && !stickRef.current) keepAnchor(root, scroller, a);
     captureAnchor();
   }, [groups]);
 

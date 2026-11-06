@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { EmptyState, ICONS, StatTile } from "../ui";
 import { WidgetShell, WidgetTitle } from "./WidgetShell";
 import { useWikiArticles } from "../../db/hooks/useWiki";
+import { useNow } from "../../hooks/useNow";
 import { useT } from "../../i18n/useT";
 import { formatDisplayDate, parseDbDate } from "../../utils/formatDate";
 
@@ -52,15 +53,16 @@ export function WikiOverviewWidget() {
   const t = useT();
   const { data: articles } = useWikiArticles();
 
+  const now = useNow();
   const { total, week, projects } = useMemo(() => {
     const list = articles ?? [];
-    const since = Date.now() - WEEK_MS;
+    const since = now - WEEK_MS;
     return {
       total: list.length,
       week: list.filter((a) => parseDbDate(a.updated_at).getTime() >= since).length,
       projects: new Set(list.filter((a) => a.project_id != null).map((a) => a.project_id)).size,
     };
-  }, [articles]);
+  }, [articles, now]);
 
   return (
     <Link to="/wiki" className="block h-full">

@@ -37,7 +37,7 @@ const unixDate = (seconds: number) => formatDisplayDate(new Date(seconds * 1000)
  * snapshot and the upkeep items marked as backups. A source that was never set up is not listed; with
  * none, the card says so.
  */
-export function BackupsCard({ cards, now = Date.now() }: { cards: NetworkCard[]; now?: number }) {
+export function BackupsCard({ cards, now }: { cards: NetworkCard[]; now: number }) {
   const t = useT();
   const soonDays = useAppStore((s) => s.upkeepSoonDays);
   const tm = useTimeMachine();

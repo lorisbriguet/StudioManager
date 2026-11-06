@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { networkCheck, type CheckResult, type CheckTarget } from "../lib/network/commands";
 import { useAppStore } from "../stores/app-store";
 
@@ -19,12 +19,14 @@ export function useNetworkChecks(targets: CheckTarget[]) {
   const pending = useRef(false);
   const alive = useRef(true);
   const latest = useRef(targets);
-  latest.current = targets;
+  // Before the effects below run, so a check started by them reads these targets.
+  useLayoutEffect(() => {
+    latest.current = targets;
+  });
   const signature = JSON.stringify(targets);
 
   const refresh = useCallback(async (): Promise<void> => {
-    const list = latest.current;
-    if (skip || list.length === 0) return;
+    if (skip || latest.current.length === 0) return;
     if (running.current) {
       // Targets may have changed mid-run: go again once, with the latest, when this one ends.
       pending.current = true;
@@ -33,27 +35,28 @@ export function useNetworkChecks(targets: CheckTarget[]) {
     running.current = true;
     setChecking(true);
     try {
-      const next = new Map<string, CheckResult>();
-      let ok = false;
-      for (let i = 0; i < list.length; i += BATCH) {
-        try {
-          for (const r of await networkCheck(list.slice(i, i + BATCH))) next.set(r.key, r);
-          ok = true;
-        } catch {
-          // Rows of a failed batch stay "not checked".
+      do {
+        pending.current = false;
+        const list = latest.current;
+        if (list.length === 0) break;
+        const next = new Map<string, CheckResult>();
+        let ok = false;
+        for (let i = 0; i < list.length; i += BATCH) {
+          try {
+            for (const r of await networkCheck(list.slice(i, i + BATCH))) next.set(r.key, r);
+            ok = true;
+          } catch {
+            // Rows of a failed batch stay "not checked".
+          }
         }
-      }
-      if (ok && alive.current) {
-        setResults(next);
-        setCheckedAt(Date.now());
-      }
+        if (ok && alive.current) {
+          setResults(next);
+          setCheckedAt(Date.now());
+        }
+      } while (pending.current && alive.current);
     } finally {
       running.current = false;
       if (alive.current) setChecking(false);
-      if (pending.current && alive.current) {
-        pending.current = false;
-        void refresh();
-      }
     }
   }, [skip]);
 

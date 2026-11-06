@@ -17,6 +17,7 @@ import { Input } from "./Input";
 import { FormModalContext } from "./Form";
 import { Kbd } from "./Kbd";
 import { Popover } from "./Popover";
+import { nowMs } from "../../lib/clock";
 import { SECTION_LABEL } from "./SectionLabel";
 import { CONTROL_BOX } from "./tokens";
 import { ICON_SIZE, ICON_STROKE, renderIcon, type IconProp } from "./icons";
@@ -177,7 +178,7 @@ function MenuPanel({
         return;
     }
     if (!search && e.key.length === 1 && !e.metaKey && !e.ctrlKey && /\S/.test(e.key)) {
-      const now = Date.now();
+      const now = nowMs();
       const ta = typeahead.current;
       ta.buf = now - ta.at > 500 ? e.key.toLowerCase() : ta.buf + e.key.toLowerCase();
       ta.at = now;
