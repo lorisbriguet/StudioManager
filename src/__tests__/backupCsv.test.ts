@@ -51,6 +51,7 @@ describe("TABLES", () => {
     // Root tables (no FK dependencies)
     "business_profile",
     "expense_categories",
+    "activities",
     "clients",
     "invoice_templates",
     "workload_templates",
@@ -100,6 +101,7 @@ describe("TABLES", () => {
     "subscription_renewals",
     "machine_readings",
     "machine_disks",
+    "paperless_links",
   ];
 
   it("pins the full table list in parent-first restore order", () => {
@@ -186,6 +188,8 @@ describe("TABLES", () => {
       ["wiki_folders", "wiki_articles"],
       ["wiki_articles", "wiki_article_tags"],
       ["custom_lists", "custom_list_items"],
+      ["connections", "paperless_links"],
+      ["expenses", "paperless_links"],
     ];
     for (const [parent, child] of edges) {
       const pi = TABLES.indexOf(parent);

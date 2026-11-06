@@ -51,7 +51,8 @@ export async function validateBackupPath(dir: string): Promise<boolean> {
 /** Every user-data table, ordered parents-before-children (FK-safe insert
  *  order). Single source of truth for both backup export and restore: inserts
  *  iterate this list as-is, deletes iterate it reversed (children first).
- *  Sources: src-tauri/migrations/001-005 + ensureSchema in src/db/index.ts.
+ *  Sources: src-tauri/migrations + ensureSchema in src/db/index.ts
+ *  (backupSchema.test.ts fails when a table is missing here).
  *  workload_rows is a legacy staging table drained by ensureSchema on every
  *  startup, but is included for completeness (empty in practice).
  *  When adding a table: insert it here in FK position AND update
@@ -60,6 +61,7 @@ export const TABLES = [
   // Root tables (no FK dependencies)
   "business_profile",
   "expense_categories",
+  "activities",
   "clients",
   "invoice_templates",
   "workload_templates",
@@ -109,6 +111,8 @@ export const TABLES = [
   "subscription_renewals",
   "machine_readings",
   "machine_disks",
+  // Paperless documents linked to expenses (after connections and expenses)
+  "paperless_links",
 ];
 
 /** Backup folder name prefix for the active organisation. No active
