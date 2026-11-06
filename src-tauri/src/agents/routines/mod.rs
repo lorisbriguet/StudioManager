@@ -273,23 +273,23 @@ fn stored_folder(all: &Routines, id: &str) -> Result<String, String> {
     })
 }
 
-/// Opens an http(s) URL in the browser or an existing absolute path in its default app
-/// (a folder in Finder), through the system `open`; `--` keeps a target from reading as a flag.
-fn open_target(target: &str) -> Result<(), String> {
+/// The `open` arguments for a link or folder target. An http(s) URL opens in the browser
+/// (`--` keeps it from reading as a flag). A path never opens in its default app: the webview
+/// can write `routines.json`, so a link must not launch what it points at. It is resolved and
+/// handed to Finder: a folder opens, a file is revealed, an app or script is refused.
+fn open_args(target: &str) -> Result<Vec<std::ffi::OsString>, String> {
     // A hand-edited routines.json must not open file: or custom schemes.
     if !store::link_target(target) {
         return Err("Only an absolute path or an http(s) URL can be opened".into());
     }
-    let is_url = target.starts_with("http://") || target.starts_with("https://");
-    if !is_url && !std::path::Path::new(target).exists() {
-        return Err(format!("Not found: {target}"));
+    if target.starts_with("http://") || target.starts_with("https://") {
+        return Ok(vec!["--".into(), target.into()]);
     }
-    let out = std::process::Command::new("open").arg("--").arg(target).output().map_err(|e| e.to_string())?;
-    if out.status.success() {
-        Ok(())
-    } else {
-        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
-    }
+    crate::finder::path_open_args(target)
+}
+
+fn open_target(target: &str) -> Result<(), String> {
+    crate::finder::run_open(&open_args(target)?)
 }
 
 /// Opens the result link of the saved routine `id`.
@@ -402,6 +402,57 @@ mod open_tests {
         assert!(stored_target(&all, "s1", Some(1)).is_err());
         assert!(stored_target(&all, "nope", None).is_err());
         assert!(stored_target(&all, "nope", Some(0)).is_err());
+    }
+
+    fn tmp_dir(name: &str) -> PathBuf {
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("sm-routine-open-{nanos}-{name}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        // The temp folder sits behind a symlink on macOS (/var -> /private/var).
+        std::fs::canonicalize(&dir).unwrap()
+    }
+
+    fn args(target: &str) -> Result<Vec<String>, String> {
+        open_args(target).map(|a| a.into_iter().map(|a| a.into_string().unwrap()).collect())
+    }
+
+    #[test]
+    fn a_url_opens_in_the_browser_unchanged() {
+        let url = "https://example.com/report?x=1";
+        assert_eq!(args(url).unwrap(), vec!["--".to_string(), url.into()]);
+    }
+
+    #[test]
+    fn a_folder_opens_in_finder_and_a_file_is_revealed() {
+        let dir = tmp_dir("plain");
+        let file = dir.join("report.pdf");
+        std::fs::write(&file, b"%PDF").unwrap();
+        let d = dir.display().to_string();
+        let f = file.display().to_string();
+        assert_eq!(args(&d).unwrap(), vec!["-a".to_string(), "Finder".into(), d.clone()]);
+        assert_eq!(args(&f).unwrap(), vec!["-R".to_string(), f.clone()]);
+        // a symlink is followed: what Finder shows is the real file
+        let link = dir.join("latest.pdf");
+        std::os::unix::fs::symlink(&file, &link).unwrap();
+        assert_eq!(args(&link.display().to_string()).unwrap(), vec!["-R".to_string(), f]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn apps_and_scripts_are_refused() {
+        let dir = tmp_dir("exec");
+        let app = dir.join("Invoice.app");
+        std::fs::create_dir_all(app.join("Contents")).unwrap();
+        let script = dir.join("run.command");
+        std::fs::write(&script, b"#!/bin/sh").unwrap();
+        // a harmless-looking name pointing at the app
+        let link = dir.join("Report");
+        std::os::unix::fs::symlink(&app, &link).unwrap();
+        for target in [&app, &script, &link] {
+            let err = args(&target.display().to_string()).unwrap_err();
+            assert!(err.contains("refusing"), "{}: {err}", target.display());
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
