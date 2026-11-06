@@ -97,7 +97,15 @@ export function showFatalDbError(err: unknown): void {
     detail.textContent = err instanceof Error ? err.message : String(err);
     detail.className = "db-fatal-detail";
     detail.setAttribute("style", "font-size:12px;max-width:480px;margin:0;word-break:break-word;");
-    overlay.append(title, message, detail);
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.textContent = t.retry;
+    retry.setAttribute("style", "margin-top:8px;padding:6px 14px;font:inherit;font-size:13px;border-radius:6px;border:1px solid currentColor;background:transparent;color:inherit;cursor:pointer;");
+    // Reload rather than retry in place: the screens' queries have already
+    // failed, and a reload runs the whole startup again. ensureSchema is safe
+    // to re-run after it stopped partway.
+    retry.addEventListener("click", () => window.location.reload());
+    overlay.append(title, message, detail, retry);
     overlay.setAttribute("role", "alert");
     overlay.tabIndex = -1;
     document.body.appendChild(overlay);
@@ -151,7 +159,7 @@ export async function closeEquipmentDb(): Promise<void> {
 
 export async function getDb(): Promise<Database> {
   if (!dbPromise) {
-    dbPromise = (async () => {
+    const opening = (async () => {
       // Dev only: a hot reload can re-run the organisation store behind OrgGate,
       // leaving no active organisation, and dbUrlFor would then open (and create)
       // an empty file at the data-folder root. Reload the registry first.
@@ -171,6 +179,10 @@ export async function getDb(): Promise<Database> {
       }
       return database;
     })();
+    // Don't keep a failure: a busy database at startup must not stay broken
+    // until a restart. The next getDb() (or the overlay's Retry) opens again.
+    opening.catch(() => { if (dbPromise === opening) dbPromise = null; });
+    dbPromise = opening;
   }
   return dbPromise;
 }

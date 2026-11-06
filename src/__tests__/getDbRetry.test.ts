@@ -1,0 +1,86 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
+// A real SQLite (src-tauri migrations + ensureSchema). A failed open must not
+// stay cached: the next getDb() tries again, and a schema run cut short
+// halfway can run again cleanly (that is what the overlay's Retry does).
+vi.mock("@tauri-apps/plugin-sql", async () => ({ default: (await import("./fixtures/realSqlite")).RealDatabase }));
+vi.mock("@tauri-apps/api/core", async (orig) => ({
+  ...(await orig<object>()),
+  invoke: (await import("./fixtures/realSqlite")).realInvoke,
+}));
+vi.mock("../lib/log", () => ({ logError: vi.fn() }));
+vi.mock("../db/seeds/user-guide", () => ({
+  seedUserGuide: async (db: { execute: (sql: string) => Promise<unknown> }) => {
+    await db.execute("INSERT INTO wiki_folders (name) VALUES ('User Guide')");
+  },
+}));
+
+import { RealDatabase, freshRealDb, rawDb } from "./fixtures/realSqlite";
+import { closeDb, getDb } from "../db/index";
+
+const SEEDED = ["resources", "dashboard_presets", "workload_templates", "invoice_templates", "wiki_folders"];
+const counts = () =>
+  Object.fromEntries(
+    SEEDED.map((t) => [t, (rawDb().prepare(`SELECT COUNT(*) AS n FROM ${t}`).get() as { n: number }).n]),
+  );
+
+beforeEach(async () => {
+  await freshRealDb();
+  await closeDb();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  document.querySelectorAll(".db-fatal").forEach((el) => el.remove());
+});
+
+describe("getDb after a failure", () => {
+  it("tries again when opening the database failed once (database busy)", async () => {
+    const load = vi.spyOn(RealDatabase, "load").mockRejectedValueOnce(new Error("database is locked"));
+    await expect(getDb()).rejects.toThrow("database is locked");
+    await expect(getDb()).resolves.toBeInstanceOf(RealDatabase);
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it("runs the schema again after it stopped halfway, without doubling the seed data", async () => {
+    const before = counts();
+    const execute = RealDatabase.prototype.execute;
+    vi.spyOn(RealDatabase.prototype, "execute").mockImplementation(function (this: RealDatabase, sql, params) {
+      if (sql.includes("CREATE TABLE IF NOT EXISTS custom_lists")) throw new Error("disk I/O error");
+      return execute.call(this, sql, params);
+    });
+    await expect(getDb()).rejects.toThrow("disk I/O error");
+
+    vi.mocked(RealDatabase.prototype.execute).mockRestore();
+    await expect(getDb()).resolves.toBeInstanceOf(RealDatabase);
+    expect(counts()).toEqual(before);
+  });
+
+  it("keeps the new connection cached after a switch waited on a failed attempt", async () => {
+    let failOld!: (e: Error) => void;
+    const load = vi.spyOn(RealDatabase, "load").mockReturnValueOnce(new Promise((_, reject) => { failOld = reject; }));
+    const old = getDb();
+    const closing = closeDb(); // organisation switch: waits on the old attempt
+    failOld(new Error("database is locked"));
+    await expect(old).rejects.toThrow();
+    await closing;
+    const fresh = await getDb();
+    expect(await getDb()).toBe(fresh);
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("fatal overlay", () => {
+  it("offers Retry, which reloads the app", async () => {
+    vi.resetModules();
+    const { showFatalDbError } = await import("../db/index");
+    const reload = vi.fn();
+    vi.spyOn(window, "location", "get").mockReturnValue({ ...window.location, reload } as Location);
+
+    showFatalDbError(new Error("database is locked"));
+    const button = document.querySelector<HTMLButtonElement>(".db-fatal button");
+    expect(button?.textContent).toBe("Retry");
+    button!.click();
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+});
