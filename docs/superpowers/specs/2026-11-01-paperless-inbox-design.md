@@ -19,7 +19,7 @@ Today, an invoice that arrives by email ends up in Paperless but **not** in Stud
 - Turning an inbox item into an **expense in one step**: supplier, date, amount and category pre-filled, Loris confirms or corrects, the PDF becomes the expense's receipt.
 - **No duplicates in either direction:** an expense created from Paperless is never uploaded back to Paperless by the nightly script, and an expense that came from StudioManager never shows up in the inbox.
 - **Dismiss** an item that isn't an expense (newsletter PDF, duplicate, private bill) so it stops appearing.
-- Works over Tailscale (`https://dsm-lorisb.tail47efa3.ts.net:8443`) from anywhere.
+- Works over Tailscale (`https://<nas>.<tailnet>.ts.net:8443`) from anywhere.
 
 ## Non-goals
 
@@ -41,7 +41,7 @@ Today, an invoice that arrives by email ends up in Paperless but **not** in Stud
 Extends the existing connections system (`src-tauri/src/connectors/`, `connections` table).
 
 - `connections.kind` gains `'paperless'` (migration: rebuild the `CHECK` constraint, as SQLite requires).
-- Fields used: `label`, `host` (`dsm-lorisb.tail47efa3.ts.net`), `port` (`8443`). The **API token** is the secret, stored in the Keychain like the Synology password. No `cert_fingerprint` needed: the certificate is publicly trusted (Let's Encrypt via Tailscale); the existing pinning stays available for self-signed setups.
+- Fields used: `label`, `host` (`<nas>.<tailnet>.ts.net`), `port` (`8443`). The **API token** is the secret, stored in the Keychain like the Synology password. No `cert_fingerprint` needed: the certificate is publicly trusted (Let's Encrypt via Tailscale); the existing pinning stays available for self-signed setups.
 - Settings › Connections: "Paperless" option with host, port, token field, and **Test** (calls `GET /api/documents/?page_size=1`).
 - One Paperless connection per organisation (Studio). Personal org: none.
 
