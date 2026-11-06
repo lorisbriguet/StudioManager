@@ -47,6 +47,15 @@ export async function createClient(
       data.notes,
     ]
   );
+  // The address typed in the new-client form also becomes the client's
+  // "Main" billing address (startup no longer copies it over).
+  if (data.address_line1 || data.postal_city) {
+    await db.execute(
+      `INSERT INTO client_addresses (client_id, label, billing_name, address_line1, address_line2, postal_city)
+       VALUES ($1, 'Main', $2, $3, $4, $5)`,
+      [data.id, data.billing_name || data.name, data.address_line1, data.address_line2 || "", data.postal_city || ""]
+    );
+  }
 }
 
 export async function updateClient(
@@ -375,6 +384,46 @@ export async function updateClientAddress(
 export async function deleteClientAddress(id: number): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM client_addresses WHERE id = $1", [id]);
+}
+
+export type OwnAddress = Pick<Client, "address_line1" | "address_line2" | "postal_city">;
+
+/**
+ * The client's own address (clients.address_line1/2, postal_city) feeds the
+ * "Main address" card, PDFs without a chosen address and the QR bill. Clear
+ * it after the user deletes that same address, or the client's last one, so
+ * a deleted address stays gone. Returns what was cleared (for undo), or null.
+ */
+export async function clearOwnAddressAfterDelete(
+  clientId: string,
+  deleted: Pick<ClientAddress, "address_line1" | "address_line2" | "postal_city">
+): Promise<OwnAddress | null> {
+  const db = await getDb();
+  const own = (await db.select<OwnAddress[]>(
+    "SELECT address_line1, address_line2, postal_city FROM clients WHERE id = $1",
+    [clientId]
+  ))[0];
+  if (!own || (!own.address_line1 && !own.address_line2 && !own.postal_city)) return null;
+  const left = await db.select<{ cnt: number }[]>(
+    "SELECT COUNT(*) as cnt FROM client_addresses WHERE client_id = $1",
+    [clientId]
+  );
+  const same = (a?: string | null, b?: string | null) => (a ?? "").trim() === (b ?? "").trim();
+  const isOwn =
+    same(own.address_line1, deleted.address_line1) &&
+    same(own.address_line2, deleted.address_line2) &&
+    same(own.postal_city, deleted.postal_city);
+  if (!isOwn && (left[0]?.cnt ?? 0) > 0) return null;
+  await setOwnAddress(clientId, { address_line1: "", address_line2: "", postal_city: "" });
+  return { address_line1: own.address_line1 ?? "", address_line2: own.address_line2 ?? "", postal_city: own.postal_city ?? "" };
+}
+
+export async function setOwnAddress(clientId: string, addr: OwnAddress): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "UPDATE clients SET address_line1 = $2, address_line2 = $3, postal_city = $4 WHERE id = $1",
+    [clientId, addr.address_line1, addr.address_line2, addr.postal_city]
+  );
 }
 
 // ── Client Activity Timeline ─────────────────────────────────
