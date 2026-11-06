@@ -60,7 +60,7 @@
 - [x] Presentation seed rebuilt for the current schema: relative dates, per-year reference renumbering, activity entities, correct expense categories, VAT-exempt totals, time entries / named table / project wiki / layouts / income, personal data cleared, user guide restored; guarded by `src/__tests__/presentationSeed.test.ts`
 - [x] Seed statement splitter made comment- and quote-aware (`src/db/seeds/splitSql.ts`)
 - [x] Tester guide [docs/GUIDE.md](docs/GUIDE.md), [README](README.md) corrections, landing page rebuilt and published via GitHub Pages
-- [ ] Retake the four screenshots in `docs/screenshots/` with the new seed (current ones show the old Jan–Mar data and the real business profile on the invoice)
+- [x] Retake the four screenshots in `docs/screenshots/` with the new seed (current ones show the old Jan–Mar data and the real business profile on the invoice)
 
 ## V2.0.0 — Done (organisations)
 
@@ -164,10 +164,10 @@ Follow-ups:
 - [x] `studiomanager-mcp`, a stdio MCP server bundled in the app (`src-tauri/mcp`): 26 tools for projects, tasks, subtasks, clients, wiki, tool links, folder linking and the due list; invoices, quotes, expenses and P&L read-only behind their own switch
 - [x] Safety: no deletes, backup before the first write per session and organisation, writes paused in test/presentation mode, refuses databases the app has not opened, exact-name matching, hidden organisations never named, demo build isolated
 - [x] Settings › Agent access card: main switch, per-organisation switches, money switch, connect Claude Desktop (preview + confirm + backup), copy Claude Code command / generic config, recent agent changes
-- [x] Live refresh: the app watches `PRAGMA data_version` and refreshes when another process changes the database
-- [ ] Follow-up: in-app user guide article for Agent access
+- [x] Live refresh: the app watches the agent change log (`agent-log.jsonl`) and refreshes what an agent's write touched
+- [x] Follow-up: in-app user guide article for Agent access
 - [ ] Follow-up: agent edits to a task's dates/status reach Apple Calendar only on the next in-app edit
-- [ ] Follow-up: decide whether new organisations start allowed or unticked once Agent access is on
+- [x] Follow-up: decide whether new organisations start allowed or unticked once Agent access is on (they start unticked)
 
 ## V2.1.0 — Done (demo app)
 
@@ -429,7 +429,7 @@ Follow-ups to [the Studio upkeep spec](docs/superpowers/specs/2026-10-28-studio-
 - [ ] Bambu Lab over the LAN only (MQTT, no cloud account), for people who keep the printer offline
 - [ ] Prusa printers (PrusaLink / Connect): print hours and job state
 - [ ] UniFi (network gear): firmware age and device health
-- [ ] Agent write access for upkeep (mark done, log a service) once the read tools have proven themselves
+- [x] Agent write access for upkeep (mark done, log a service) once the read tools have proven themselves
 
 ## Dashboard pages (set aside 2026-11-02)
 
