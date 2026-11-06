@@ -575,6 +575,31 @@ fn get_init_error(app: tauri::AppHandle) -> Result<Option<String>, String> {
     Ok(guard.clone())
 }
 
+/// The fatal overlay's Retry: run the startup again (the disk is connected,
+/// the file is readable again) instead of keeping the error saved at launch.
+/// Returns the error that remains, `None` once startup succeeded. Does nothing
+/// after a healthy launch.
+#[tauri::command]
+async fn retry_init(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    run_blocking(move || {
+        let _guard = org_exclusive();
+        retry_init_now(&app)
+    })
+    .await
+}
+
+fn retry_init_now(app: &tauri::AppHandle) -> Result<Option<String>, String> {
+    let init_state = app.state::<InitError>();
+    if init_state.0.lock().map_err(|e| format!("Lock error: {e}"))?.is_none() {
+        return Ok(None);
+    }
+    let app_dir = app_data_dir(app).unwrap_or_default();
+    let (active, error) = startup_state(&app_dir, init_organisations_in(&app_dir));
+    *app.state::<ActiveOrgState>().0.lock().map_err(|e| format!("Lock error: {e}"))? = active;
+    *init_state.0.lock().map_err(|e| format!("Lock error: {e}"))? = error.clone();
+    Ok(error)
+}
+
 fn load_registry(app: &tauri::AppHandle) -> Result<Registry, String> {
     Registry::load(&app_data_dir(app)?)?.ok_or_else(|| "organisation registry missing".to_string())
 }
@@ -733,12 +758,9 @@ fn switch_organisation_now(app: tauri::AppHandle, id: String) -> Result<Registry
     reg.set_active(&id)?;
     let dir = orgs::org_dir(&app_dir, &id);
     // migrate_db would happily create a fresh, empty database here. A missing
-    // folder means the organisation's data is gone (moved or removed outside
-    // the app) — say so instead of silently manufacturing an empty replacement
-    // and switching the user into it.
-    if !dir.is_dir() {
-        return Err(format!("organisation folder is missing: {}", dir.display()));
-    }
+    // folder or database means the data was moved, removed, or sits on a disk
+    // that is not connected: say so instead of switching into an empty one.
+    require_org_data(&dir)?;
     migrate::migrate_db(&dir.join(DB_FILE))?;
     save_registry(&app, &reg)?;
     let state = app.state::<ActiveOrgState>();
@@ -792,13 +814,21 @@ fn orgs_dir_has_subfolders(app_dir: &Path) -> Result<bool, String> {
 /// organisation on a fresh install, migrate the active database, and
 /// return the ActiveOrg to install as state.
 fn init_organisations(app: &tauri::AppHandle) -> Result<ActiveOrg, String> {
-    let app_dir = app_data_dir(app)?;
+    init_organisations_in(&app_data_dir(app)?)
+}
+
+fn init_organisations_in(app_dir: &Path) -> Result<ActiveOrg, String> {
+    let app_dir = app_dir.to_path_buf();
     std::fs::create_dir_all(&app_dir).map_err(|e| format!("create app dir: {e}"))?;
+    // Only an organisation the registry already listed must have its data on
+    // disk: the upgrade and a fresh install create theirs.
+    let mut listed = false;
     let reg = if upgrade::needs_upgrade(&app_dir) {
         upgrade::run(&app_dir)?
     } else if let Some(reg) = Registry::load(&app_dir)? {
         upgrade::clear_finished_journal(&app_dir, &reg);
         upgrade::discard_snapshot(&app_dir);
+        listed = true;
         reg
     } else {
         match orgs_dir_has_subfolders(&app_dir) {
@@ -826,8 +856,32 @@ fn init_organisations(app: &tauri::AppHandle) -> Result<ActiveOrg, String> {
     };
     let active = reg.active().ok_or_else(|| "registry has no active organisation".to_string())?;
     let dir = orgs::org_dir(&app_dir, &active.id);
+    if listed {
+        require_org_data(&dir)?;
+    }
     migrate::migrate_db(&dir.join(DB_FILE))?;
     Ok(ActiveOrg { id: active.id.clone(), dir, db_name: DB_FILE.to_string() })
+}
+
+/// Start of the error for an organisation whose data is not on disk. The
+/// frontend matches it to show the "connect the disk" message.
+const DATA_MISSING: &str = "data folder missing: ";
+
+/// A listed organisation's folder and database must already exist:
+/// `migrate_db` would otherwise create an empty one, and the user would work
+/// in it while the real data sits on a disk that is not connected. Any other
+/// failure to look (permissions) is reported as it is.
+fn require_org_data(dir: &Path) -> Result<(), String> {
+    for path in [dir.to_path_buf(), dir.join(DB_FILE)] {
+        match std::fs::metadata(&path) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Err(format!("{DATA_MISSING}{}", path.display()))
+            }
+            Err(e) => return Err(format!("read {}: {e}", path.display())),
+        }
+    }
+    Ok(())
 }
 
 /// The state to install at startup, from the outcome of `init_organisations`.
@@ -943,6 +997,7 @@ pub fn run() {
             has_snapshot,
             get_active_db,
             get_init_error,
+            retry_init,
             list_organisations,
             create_organisation,
             rename_organisation,
@@ -1399,6 +1454,58 @@ mod tests {
         let t = ActiveOrg { db_name: "studiomanager_test.db".into(), ..a.clone() };
         assert_eq!(t.db_path(), PathBuf::from("/tmp/app/orgs/abc123/studiomanager_test.db"));
         assert!(t.in_mode());
+    }
+
+    /// An app folder whose registry lists one active organisation, with no
+    /// organisation folder on disk yet.
+    fn app_with_listed_org(name: &str) -> (PathBuf, PathBuf) {
+        let app = tmp_dir(name);
+        let mut reg = Registry::empty();
+        let id = reg.add("Atelier", Some(OrgPrefs::default())).unwrap().id.clone();
+        reg.set_active(&id).unwrap();
+        reg.save(&app).unwrap();
+        let dir = orgs::org_dir(&app, &id);
+        (app, dir)
+    }
+
+    #[test]
+    fn a_listed_organisation_whose_folder_is_missing_is_never_recreated() {
+        let (app, dir) = app_with_listed_org("missing-folder");
+        let err = init_organisations_in(&app).unwrap_err();
+        assert!(err.starts_with(DATA_MISSING), "{err}");
+        assert!(err.ends_with(&dir.display().to_string()), "{err}");
+        assert!(!dir.exists(), "startup created an empty organisation folder");
+        std::fs::remove_dir_all(&app).unwrap();
+    }
+
+    #[test]
+    fn a_listed_organisation_whose_database_is_missing_is_never_recreated() {
+        let (app, dir) = app_with_listed_org("missing-db");
+        std::fs::create_dir_all(dir.join("invoices")).unwrap();
+        let err = init_organisations_in(&app).unwrap_err();
+        assert_eq!(err, format!("{DATA_MISSING}{}", dir.join(DB_FILE).display()));
+        assert!(!dir.join(DB_FILE).exists(), "startup created an empty database");
+        std::fs::remove_dir_all(&app).unwrap();
+    }
+
+    #[test]
+    fn startup_succeeds_once_the_missing_data_is_back() {
+        let (app, dir) = app_with_listed_org("data-back");
+        assert!(init_organisations_in(&app).is_err());
+        // The disk is connected again: the same startup (what Retry runs) opens it.
+        migrate::migrate_db(&dir.join(DB_FILE)).unwrap();
+        let org = init_organisations_in(&app).unwrap();
+        assert_eq!(org.dir, dir);
+        assert_eq!(org.db_path(), dir.join(DB_FILE));
+        std::fs::remove_dir_all(&app).unwrap();
+    }
+
+    #[test]
+    fn a_fresh_install_still_creates_its_first_organisation() {
+        let app = tmp_dir("fresh-install");
+        let org = init_organisations_in(&app).unwrap();
+        assert!(org.db_path().is_file());
+        std::fs::remove_dir_all(&app).unwrap();
     }
 
     #[test]

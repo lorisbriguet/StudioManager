@@ -14,6 +14,7 @@ const COMMANDS: &[&str] = &[
     "has_snapshot",
     "get_active_db",
     "get_init_error",
+    "retry_init",
     "list_organisations",
     "create_organisation",
     "rename_organisation",

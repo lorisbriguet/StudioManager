@@ -76,6 +76,7 @@ export async function check(): Promise<null> {
   return null;
 }
 export async function relaunch(): Promise<void> {}
+export async function exit(): Promise<void> {}
 export function getCurrentWebview() {
   return {
     listen: () => () => {},

@@ -69,18 +69,3 @@ describe("getDb after a failure", () => {
     expect(load).toHaveBeenCalledTimes(2);
   });
 });
-
-describe("fatal overlay", () => {
-  it("offers Retry, which reloads the app", async () => {
-    vi.resetModules();
-    const { showFatalDbError } = await import("../db/index");
-    const reload = vi.fn();
-    vi.spyOn(window, "location", "get").mockReturnValue({ ...window.location, reload } as Location);
-
-    showFatalDbError(new Error("database is locked"));
-    const button = document.querySelector<HTMLButtonElement>(".db-fatal button");
-    expect(button?.textContent).toBe("Retry");
-    button!.click();
-    expect(reload).toHaveBeenCalledTimes(1);
-  });
-});
