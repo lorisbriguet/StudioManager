@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Badge, Button, EmptyState, ICONS, PanelTitle, PeekHeader, Table } from "../ui";
+import { Badge, Button, EmptyState, ICONS, PanelTitle, Table } from "../ui";
+import { SidePeek } from "../layout/SidePeek";
 import { MachineDetail } from "./MachineDetail";
 import { MachineForm } from "./MachineForm";
 import { useT } from "../../i18n/useT";
@@ -16,7 +17,6 @@ export function MachinesTab() {
   const { data: machines = [] } = useMachines();
   const { data: items = [] } = useActiveUpkeepItems();
   const [peekId, setPeekId] = useState<number | null>(null);
-  const [closing, setClosing] = useState(false);
   const [adding, setAdding] = useState(false);
 
   const nextByMachine = useMemo(() => {
@@ -51,7 +51,8 @@ export function MachinesTab() {
                 <Table.Row
                   key={m.id}
                   selected={peekId === m.id}
-                  onOpen={() => { setClosing(false); setPeekId(m.id); }}
+                  data-machine-id={m.id}
+                  onOpen={() => setPeekId(m.id)}
                 >
                   <Table.Td className="font-medium">{m.name}</Table.Td>
                   <Table.Td muted>{m.kind}</Table.Td>
@@ -75,18 +76,18 @@ export function MachinesTab() {
       </div>
 
       {peekId !== null && (
-        <div
-          className={`shrink-0 w-1/2 ml-4 border-l border-[var(--color-border-divider)] ${closing ? "peek-exit" : "peek-enter"}`}
-          onAnimationEnd={() => { if (closing) { setPeekId(null); setClosing(false); } }}
+        <SidePeek
+          focusKey={peekId}
+          className="ml-4 border-l border-[var(--color-border-divider)]"
+          onClose={() => setPeekId(null)}
+          onOpenFull={() => navigate(`/upkeep/machines/${peekId}`)}
+          returnFocus={() => document.querySelector<HTMLElement>(`[data-machine-id="${peekId}"]`)}
         >
-          <PeekHeader onClose={() => setClosing(true)} onOpenFull={() => navigate(`/upkeep/machines/${peekId}`)} />
-          <div className="p-4">
-            <MachineDetail key={peekId} machineId={peekId} compact onDeleted={() => { setPeekId(null); setClosing(false); }} />
-          </div>
-        </div>
+          <MachineDetail key={peekId} machineId={peekId} compact onDeleted={() => setPeekId(null)} />
+        </SidePeek>
       )}
 
-      {adding && <MachineForm onClose={() => setAdding(false)} onSaved={(id) => { setClosing(false); setPeekId(id); }} />}
+      {adding && <MachineForm onClose={() => setAdding(false)} onSaved={(id) => setPeekId(id)} />}
     </div>
   );
 }

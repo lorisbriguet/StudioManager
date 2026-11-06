@@ -8,7 +8,7 @@ import interactionPlugin from "@fullcalendar/interaction";
 import type { EventInput, EventContentArg, EventDropArg } from "@fullcalendar/core";
 import type { DateClickArg, EventResizeDoneArg } from "@fullcalendar/interaction";
 import { ICONS, ICON_SIZE } from "../components/ui/icons";
-import { Button, Select, Popover, Input, FormActions, PageHeader, PeekHeader, Callout, FilterChip } from "../components/ui";
+import { Button, Select, Popover, Input, FormActions, PageHeader, Callout, FilterChip } from "../components/ui";
 import { useT } from "../i18n/useT";
 import { useTasksWithDueDate, useUpdateTask, useUpdateSubtask, useCreateTask, useCreateSubtask, useTasksByProject } from "../db/hooks/useTasks";
 import { useProjects, useUpdateProject } from "../db/hooks/useProjects";
@@ -17,6 +17,7 @@ import { useQuotes } from "../db/hooks/useQuotes";
 import { useAppStore } from "../stores/app-store";
 import { useOrgStore } from "../stores/org-store";
 import { ProjectDetailContent } from "../components/ProjectDetailContent";
+import { SidePeek } from "../components/layout/SidePeek";
 import { getSubtasksWithDueDate } from "../db/queries/tasks";
 import { useQuery } from "@tanstack/react-query";
 import { effectivePriority } from "../types/task";
@@ -141,14 +142,6 @@ export function CalendarPage() {
 
   const [quickCreate, setQuickCreate] = useState<QuickCreateState | null>(null);
   const [peekId, setPeekId] = useState<number | null>(null);
-  const [closingPeek, setClosingPeek] = useState(false);
-  const [peekWidth, setPeekWidth] = useState(() => {
-    const saved = localStorage.getItem("peekWidth");
-    return saved ? Math.max(20, Math.min(70, Number(saved))) : 50;
-  });
-  const peekRef = useRef<HTMLDivElement>(null);
-  const calContainerRef = useRef<HTMLDivElement>(null);
-  const draggingRef = useRef(false);
   const lastClickRef = useRef<{ time: number; date: string }>({ time: 0, date: "" });
   const calRef = useRef<FullCalendar>(null);
   const [calTitle, setCalTitle] = useState("");
@@ -360,7 +353,6 @@ export function CalendarPage() {
     }
     if (!projectId) return;
     if (projectOpenMode === "peek") {
-      setClosingPeek(false);
       setPeekId(projectId as number);
     } else {
       navigate(`/projects/${projectId}`);
@@ -390,10 +382,6 @@ export function CalendarPage() {
   const handleEventWillUnmount = useCallback((arg: EventMountArg) => {
     const onMenu = menuListeners.current.get(arg.el);
     if (onMenu) arg.el.removeEventListener("contextmenu", onMenu);
-  }, []);
-
-  const handleClosePeek = useCallback(() => {
-    setClosingPeek(true);
   }, []);
 
   const handleDateClick = useCallback((info: DateClickArg) => {
@@ -485,45 +473,8 @@ export function CalendarPage() {
     [projects]
   );
 
-  const handleDividerPointerDown = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    draggingRef.current = true;
-    const container = calContainerRef.current;
-    if (!container) return;
-
-    const onPointerMove = (ev: PointerEvent) => {
-      if (!draggingRef.current || !container) return;
-      const rect = container.getBoundingClientRect();
-      const offsetFromRight = rect.right - ev.clientX;
-      const pct = Math.max(20, Math.min(70, (offsetFromRight / rect.width) * 100));
-      if (peekRef.current) {
-        peekRef.current.style.width = `${pct}%`;
-      }
-    };
-
-    const onPointerUp = (ev: PointerEvent) => {
-      draggingRef.current = false;
-      document.removeEventListener("pointermove", onPointerMove);
-      document.removeEventListener("pointerup", onPointerUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      if (container) {
-        const rect = container.getBoundingClientRect();
-        const offsetFromRight = rect.right - ev.clientX;
-        const pct = Math.max(20, Math.min(70, (offsetFromRight / rect.width) * 100));
-        setPeekWidth(pct);
-        localStorage.setItem("peekWidth", String(Math.round(pct)));
-      }
-    };
-
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    document.addEventListener("pointermove", onPointerMove);
-    document.addEventListener("pointerup", onPointerUp);
-  }, []);
-
   return (
-    <div ref={calContainerRef} className="flex h-full -m-8">
+    <div className="flex h-full -m-8">
       <div className="min-w-0 flex-1 p-8">
         {/* Custom toolbar */}
         <PageHeader
@@ -612,27 +563,15 @@ export function CalendarPage() {
       </div>
 
       {peekId !== null && (
-        <>
-        {/* Drag divider */}
-        <div
-          onPointerDown={handleDividerPointerDown}
-          className="shrink-0 w-[5px] cursor-col-resize relative group"
+        <SidePeek
+          resizable
+          focusKey={peekId}
+          className="h-[calc(100vh-6rem)]"
+          onClose={() => setPeekId(null)}
+          onOpenFull={() => navigate(`/projects/${peekId}`)}
         >
-          <div className="absolute inset-y-0 left-1/2 w-px bg-[var(--color-border-divider)] -translate-x-1/2" />
-          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-accent-handle transition-opacity" />
-        </div>
-        <div
-          ref={peekRef}
-          className={`shrink-0 h-[calc(100vh-6rem)] ${closingPeek ? "peek-exit overflow-hidden" : "peek-enter overflow-y-auto"}`}
-          style={closingPeek ? undefined : { width: `${peekWidth}%`, minWidth: 0 }}
-          onAnimationEnd={() => { if (closingPeek) { setPeekId(null); setClosingPeek(false); } }}
-        >
-          <PeekHeader onClose={handleClosePeek} onOpenFull={() => navigate(`/projects/${peekId}`)} />
-          <div className="p-4">
-            <ProjectDetailContent projectId={peekId} compact />
-          </div>
-        </div>
-        </>
+          <ProjectDetailContent projectId={peekId} compact />
+        </SidePeek>
       )}
     </div>
   );

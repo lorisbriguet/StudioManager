@@ -130,11 +130,9 @@ describe("ProjectsPage arrow-key navigation", () => {
     expect(await screen.findByTestId("project-detail")).toBeInTheDocument();
   });
 
-  // Item 2 — the peek panel is not role="dialog", so the list stayed
-  // mounted underneath it and the hook kept handling keys: ArrowDown moved
-  // the focus ring on a card hidden behind the peek, Space opened a context
-  // menu on it, and Enter swapped the peek to a different project.
-  it("does not move the focus ring while the side peek panel is open", async () => {
+  // U4 — with the side peek open, the arrows in the list switch the peeked
+  // project; keys inside the peek stay there.
+  it("switches the peeked project with the arrows while the side peek is open", async () => {
     useAppStore.setState({ projectOpenMode: "peek" });
     setSelectHandler((sql) => {
       const flat = sql.replace(/\s+/g, " ");
@@ -148,15 +146,21 @@ describe("ProjectsPage arrow-key navigation", () => {
     renderRoute(<ProjectsPage />, "/projects", "/projects/:id", "project-detail");
 
     const cardA = (await screen.findByText("Website Revamp")).closest("[data-list-row]") as HTMLElement;
-    // The card's title is its button, stretched over the card (Card interactive="link").
+    const cardB = screen.getByText("Brand Refresh").closest("[data-list-row]") as HTMLElement;
     fireEvent.click(screen.getByRole("button", { name: "Website Revamp" }));
-
-    // Peek panel open — its "open full page" button only renders inside it.
     await screen.findByRole("button", { name: "Open full page" });
+    expect(cardA.className).toContain("outline-accent");
+
+    // A key inside the peek does not move the list.
+    fireEvent.keyDown(screen.getByRole("region", { name: "Side Peek" }), { key: "ArrowDown" });
     expect(cardA.className).not.toContain("focus-row");
 
     fireEvent.keyDown(window, { key: "ArrowDown" });
-    expect(cardA.className).not.toContain("focus-row");
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    expect(cardB.className).toContain("focus-row");
+    expect(cardB.className).toContain("outline-accent");
+    expect(cardA.className).not.toContain("outline-accent");
+    expect(screen.getByRole("button", { name: "Open full page" })).toBeInTheDocument();
   });
 });
 

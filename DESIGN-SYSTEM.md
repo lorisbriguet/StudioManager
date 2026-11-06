@@ -195,7 +195,7 @@ Every page's title row is `ui/PageHeader`: the page's one `h1`.
 - `actions` (or `children`): right-aligned.
 - `compact`: preview pages. The `h1` at level 2 in a full-bleed bar with a bottom border on the surface fill.
 - `as="h2"`: a page inside another page. `ProjectDetailContent` uses it in peek panels and is the `h1` on the project page.
-- **Peek panels** (Projects, Calendar) open with `ui/PeekHeader`: close on the left, open the full page on the right, then the project's `PageHeader as="h2"`.
+- **Peek panels** (Projects, Calendar, Machines) are `layout/SidePeek`, which opens with `ui/PeekHeader`: close on the left, open the full page on the right, then the project's `PageHeader as="h2"`.
 - **Sidebar pages** (Settings, Profile) put the title at the top of their sidebar with `ui/SidebarTitle` (level 1 `h1`).
 - **Flat list-and-detail pages** (Agents, Wiki) keep the normal `PageHeader` on the `p-8` canvas (never `-m-8`), with the page's primary action on the right, the same whether the feature is on or off. Below it the columns sit side by side `gap-8`, the right one opening with `border-l border-divider pl-8`; no cards. Lists are flat rows like a `Table`: a group row per group (32px, chevron, status dot, `SectionLabel` label, plain `text-xs text-muted` count, the header line `border-[var(--color-border)]` under it, like `Table.Group`), then rows with `border-divider` hairlines, `hover-row` on hover and `bg-accent-tint` when selected (as `Table.Row`), never a status-tinted background or a coloured count `Badge`. The detail opens with one 32px header row over the header line (the `HEADING_2` name, a muted status line, its buttons, and an `ICONS.more` `Dropdown` for the rarer and destructive actions), level with the list's first group row. The Wiki has three such columns (explorer with its `SearchBar` on top, the article, the links column) with no tab strip and no bottom bar: the article's header row holds back/forward, the breadcrumb, the word count and save state, the Edit/Read button and the "more" menu (Delete); the `PageHeader` holds the column toggles, "Graph view" (secondary, pressed while the graph shows) and "New article"; the links column is group rows (Backlinks, Outgoing links, Outline, Unlinked mentions) over plain 36px rows. Under 1000px the links column floats over the article (`shadow-menu`).
 - **Wiki:** the page `h1` is its `PageHeader` "Wiki". An open article's title is an editable field inside an `h2` at level-1 size (`HEADING_1`), the document's own title under the page title; a project file shows its file name the same way unless the Markdown opens with its own `# …`. Prose headings are content and sit below the article title: `h1` 15px, `h2` 14px, `h3` 13px, all semibold (`src/index.css`, `.tiptap-editor .ProseMirror`, also used by DocView).
@@ -1272,13 +1272,22 @@ Item icons are components, drawn at 14px. A popover that holds more than command
 
 ## Peek Panel
 
-- Width: half of content area (`w-1/2`)
-- Border: `border-l border-[var(--color-border-divider)]`
+Always `layout/SidePeek` (Projects, Calendar, Machines), never a hand-built panel. It renders the header, the slide in and out, and the keyboard behaviour below.
+
+```tsx
+{peekId !== null && (
+  <SidePeek resizable focusKey={openCount} onClose={() => setPeekId(null)}
+    onOpenFull={() => navigate(`/projects/${peekId}`)} returnFocus={() => cardOf(peekId)}>
+    <ProjectDetailContent projectId={peekId} compact />
+  </SidePeek>
+)}
+```
+
+- Width: half of the content area. `resizable` adds a divider (drag, or Tab to it and use Left/Right, Shift for bigger steps, Home/End) between 20% and 70%, remembered across launches. The divider is a focusable `role="separator"`.
+- Border: the divider, or `border-l border-[var(--color-border-divider)]` through `className` when it isn't resizable.
 - No shadow (flat, consistent with borders approach)
-- Header: `ui/PeekHeader` — a bar with only two `IconButton`s, close (X) on the left and open the full page (Maximize2) on the right, a header-border rule under it. No title or label in the bar, no footer.
-  ```tsx
-  <PeekHeader onClose={closePeek} onOpenFull={() => navigate(`/projects/${id}`)} />
-  ```
+- Keyboard: Escape closes it (not while a field, menu or dialog has the key). On open, and when `focusKey` changes, focus moves to the peeked page's heading; on close it goes back to `returnFocus()`, or to what had focus before. Keys inside the panel don't reach the list's `useListNavigation`; on Projects, Up/Down in the list switch the peeked project (`onMove`).
+- Header: `ui/PeekHeader` — a bar with only two `IconButton`s, close (X) on the left and open the full page (Maximize2) on the right, a header-border rule under it. No title or label in the bar, no footer. `SidePeek` renders it.
 - Title: in the content, below the bar — the peeked page's `PageHeader as="h2"` (the host page owns the `h1`). `ProjectDetailContent compact` does this.
 - Content uses the same block card pattern as the full page, one heading level down: project blocks are `h3` in a peek (`ProjectBlockLayout headingAs="h3"`), `h2` on the full page.
 
@@ -1322,7 +1331,7 @@ Counts use `plural()` from `src/i18n/plural.ts` with a `_one` / `_other` pair of
 | Directory | Contents |
 |-----------|----------|
 | `src/components/ui/` | Shared design system components (Card, Button, Badge, etc.) |
-| `src/components/layout/` | Layout shell (Sidebar, TabBar, MainLayout) |
+| `src/components/layout/` | Layout shell (Sidebar, TabBar, MainLayout, SidePeek) |
 | `src/components/shared/` | Shared feature components used by several features (LineItemsTable, SavedFilterBar, OptionsEditor) |
 | `src/components/` | Feature components (NamedTable, CommandPalette, etc.) |
 | `src/pages/` | One file per route |
