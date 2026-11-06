@@ -743,6 +743,7 @@ fn init_organisations(app: &tauri::AppHandle) -> Result<ActiveOrg, String> {
     let reg = if upgrade::needs_upgrade(&app_dir) {
         upgrade::run(&app_dir)?
     } else if let Some(reg) = Registry::load(&app_dir)? {
+        upgrade::clear_finished_journal(&app_dir, &reg);
         upgrade::discard_snapshot(&app_dir);
         reg
     } else {
