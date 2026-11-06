@@ -95,16 +95,12 @@ The in-app updater fetches `releases/latest/download/latest.json`. **If it's mis
     "darwin-aarch64": {
       "signature": "<contents of StudioManager.app.tar.gz.sig>",
       "url": "https://github.com/lorisbriguet/StudioManager/releases/download/vX.Y.Z/StudioManager.app.tar.gz"
-    },
-    "darwin-x86_64": {
-      "signature": "<same signature>",
-      "url": "https://github.com/lorisbriguet/StudioManager/releases/download/vX.Y.Z/StudioManager.app.tar.gz"
     }
   }
 }
 ```
 
-The signature is the literal contents of the `.sig` file from step 4. The `url` must reference the tag you are about to create (`vX.Y.Z`).
+The build is Apple silicon only, so there is no `darwin-x86_64` entry: an Intel Mac would download a bundle it cannot run. The signature is the literal contents of the `.sig` file from step 4. The `url` must reference the tag you are about to create (`vX.Y.Z`).
 
 ## 7. Commit, tag, release
 

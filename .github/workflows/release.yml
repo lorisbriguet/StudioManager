@@ -193,7 +193,7 @@ jobs:
             const url = `https://github.com/lorisbriguet/StudioManager/releases/download/v${v}/StudioManager.app.tar.gz`;
             const p = { signature: sig, url };
             const out = { version: v, notes: `StudioManager v${v}`, pub_date: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
-                          platforms: { "darwin-aarch64": p, "darwin-x86_64": p } };
+                          platforms: { "darwin-aarch64": p } };
             fs.writeFileSync("latest.json", JSON.stringify(out, null, 2) + "\n");
           ' bundle/StudioManager.app.tar.gz.sig
           cat latest.json
