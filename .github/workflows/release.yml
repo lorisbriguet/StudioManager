@@ -119,6 +119,13 @@ jobs:
           ' "$b/macos/StudioManager.app.tar.gz.sig"
           cat latest.json
 
+      # The check the installed app runs before it installs the update: the
+      # signature in latest.json against the pubkey in tauri.conf.json.
+      - name: Check the update signature
+        run: |
+          brew install minisign
+          scripts/verify-update-signature.sh "$CARGO_TARGET_DIR/release/bundle/macos/StudioManager.app.tar.gz" latest.json
+
       # RELEASING.md step 7, as a draft: Loris publishes it after the smoke test
       - name: Draft release with the three assets
         env:
@@ -127,10 +134,12 @@ jobs:
           b="$CARGO_TARGET_DIR/release/bundle"
           dmg="$b/dmg/StudioManager_${VERSION}_aarch64.dmg"
           assets=("$dmg" "$b/macos/StudioManager.app.tar.gz" latest.json)
+          # A version with a suffix (3.4.1-rc.1) is a prerelease: never "latest", so the updater skips it.
+          pre=(); [[ "$VERSION" == *-* ]] && pre=(--prerelease)
           if gh release view "v$VERSION" >/dev/null 2>&1; then
             gh release upload "v$VERSION" "${assets[@]}" --clobber
           else
-            gh release create "v$VERSION" --draft --verify-tag --title "StudioManager v$VERSION" \
+            gh release create "v$VERSION" --draft "${pre[@]}" --verify-tag --title "StudioManager v$VERSION" \
               --notes "Built by the Release build workflow. Replace with the changelog before publishing." "${assets[@]}"
           fi
           echo "Draft ready: smoke-test the .dmg, then publish (RELEASING.md steps 4 and 8)."

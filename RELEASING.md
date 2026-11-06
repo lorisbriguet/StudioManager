@@ -2,7 +2,7 @@
 
 Step-by-step guidelines for publishing a new release on GitHub. Follow in order; every gate must pass before moving on. (Claude Code users: the `GitPublisher` skill automates this process — these are the same rules in human-readable form.)
 
-**Building on GitHub instead of this Mac:** after the version bump, the changelog and the tag (steps 3, 5, 7 up to `git push origin main --tags`), start the **Release build** workflow on the tag (`gh workflow run release.yml --ref vX.Y.Z -f version=X.Y.Z`, or Actions › Release build › Run workflow with "Use workflow from" set to the tag) and approve it when it asks (the `release` environment). It runs the gates of steps 1 and 2, builds and signs (step 4), writes `latest.json` (step 6) and creates a **draft** release with the three assets. Download the `.dmg` from the draft, smoke-test it, then publish the draft and do step 8. One-time setup: the updater key as the `TAURI_SIGNING_PRIVATE_KEY` secret of the `release` environment (`gh secret set TAURI_SIGNING_PRIVATE_KEY --env release < ~/.tauri/StudioManager.key`). The workflow is [.github/workflows/release.yml](.github/workflows/release.yml).
+**Building on GitHub instead of this Mac:** after the version bump, the changelog and the tag (steps 3, 5, 7 up to `git push origin main --tags`), start the **Release build** workflow on the tag (`gh workflow run release.yml --ref vX.Y.Z -f version=X.Y.Z`, or Actions › Release build › Run workflow with "Use workflow from" set to the tag) and approve it when it asks (the `release` environment). It runs the gates of steps 1 and 2, builds and signs (step 4), writes `latest.json` (step 6), checks the update signature against the app's pubkey ([scripts/verify-update-signature.sh](scripts/verify-update-signature.sh)) and creates a **draft** release with the three assets. A version with a suffix (`3.4.1-rc.1`) becomes a prerelease draft: once published it is never "latest", so installed apps don't update to it. Download the `.dmg` from the draft, smoke-test it, then publish the draft and do step 8. One-time setup: the updater key as the `TAURI_SIGNING_PRIVATE_KEY` secret of the `release` environment (`gh secret set TAURI_SIGNING_PRIVATE_KEY --env release < ~/.tauri/StudioManager.key`). The workflow is [.github/workflows/release.yml](.github/workflows/release.yml).
 
 ---
 
@@ -45,12 +45,13 @@ Plus the checklist: badges/tags `rounded-full`, inputs/selects `rounded-lg`, sma
 
 ## 3. Version bump (SemVer)
 
-Decide the bump from the actual changes: MAJOR = breaking, MINOR = features, PATCH = fixes only. Then update the version in **all four places** — they must match exactly:
+Decide the bump from the actual changes: MAJOR = breaking, MINOR = features, PATCH = fixes only. Then update the version in **all three places** — they must match exactly (the Release build workflow checks them against the tag):
 
 1. `package.json` → `"version"`
 2. `src-tauri/tauri.conf.json` → `"version"`
 3. `src-tauri/Cargo.toml` → `version` (then run a build/`cargo check` so `Cargo.lock` updates)
-4. [README.md](README.md) → the version badge
+
+The version badge in [README.md](README.md) reads the latest GitHub release by itself: nothing to change there.
 
 ## 4. Build (signing is load-bearing)
 
@@ -73,7 +74,7 @@ Smoke-test the built .dmg app (launch, open a few pages, create+delete a draft i
 ## 5. Changelog + docs
 
 - Write the changelog from real commits/changes, grouped: Features / Fixes / Refactors / Breaking. Concise, user-facing wording; no noise.
-- Update [README.md](README.md): version badge, feature list if features shipped, remove anything now inaccurate.
+- Update [README.md](README.md): feature list if features shipped, remove anything now inaccurate.
 - Keep [IDEAS.md](IDEAS.md) in sync (move shipped items to the Done section).
 
 ## 6. latest.json (the auto-updater manifest)
@@ -100,6 +101,8 @@ The in-app updater fetches `releases/latest/download/latest.json`. **If it's mis
 
 The signature is the literal contents of the `.sig` file from step 4. The `url` must reference the tag you are about to create (`vX.Y.Z`).
 
+Check it before uploading (needs `brew install minisign`): `scripts/verify-update-signature.sh $CARGO_TARGET_DIR/release/bundle/macos/StudioManager.app.tar.gz latest.json` must print "Signature and comment signature verified".
+
 ## 7. Commit, tag, release
 
 ```bash
@@ -120,7 +123,7 @@ gh release create vX.Y.Z \
 
 ## 8. Post-release validation
 
-- `git status` clean; tag, `package.json`, `tauri.conf.json`, `Cargo.toml`, [README](README.md) badge all agree.
+- `git status` clean; tag, `package.json`, `tauri.conf.json`, `Cargo.toml` all agree; the [README](README.md) badge shows the new version.
 - `curl -sL https://github.com/lorisbriguet/StudioManager/releases/latest/download/latest.json` returns the new version with a non-empty signature.
 - On an installed previous version: Settings → check for updates → the update downloads AND installs (this is the real signature test).
 - Menu bar, by hand on the installed build (no test covers macOS windows, Spaces or focus): see [Menu bar checks](#menu-bar-checks) below.
