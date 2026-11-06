@@ -74,7 +74,6 @@ describe("seed data", () => {
     const keys = (rawDb().prepare("SELECT key FROM meta ORDER BY key").all() as { key: string }[]).map((r) => r.key);
     expect(keys).toEqual([
       "moved:client_addresses",
-      "schema_fixups",
       "seeded:dashboard_presets",
       "seeded:invoice_templates",
       "seeded:resources",
@@ -94,14 +93,33 @@ describe("seed data", () => {
   });
 
   it("does not come back in a database the previous version already opened", async () => {
-    // Opened by the old code: its tables exist, but nothing is recorded yet.
+    // Opened by the old code: its tables existed before migration 014, which
+    // noted it, but no seed is recorded yet.
     run("DELETE FROM meta");
+    for (const t of ["client_addresses", "resources", "dashboard_presets", "wiki_folders", "invoice_templates"]) {
+      run("INSERT INTO meta (key, value) VALUES (?, '1')", `before_014:${t}`);
+    }
+    run("DELETE FROM resources");
+    run("DELETE FROM dashboard_presets");
+    run("DELETE FROM workload_templates");
+    await restart();
+    expect(count("resources")).toBe(0);
+    expect(count("dashboard_presets")).toBe(0);
+    expect(count("workload_templates")).toBe(0);
+    expect(count("meta", "key = 'seeded:resources'")).toBe(1);
+  });
+
+  it("fills a seeded table that only migration 014 created in an old database", async () => {
+    // Old file without dashboard_presets (made before that feature).
+    run("DELETE FROM meta");
+    for (const t of ["client_addresses", "resources", "wiki_folders", "invoice_templates"]) {
+      run("INSERT INTO meta (key, value) VALUES (?, '1')", `before_014:${t}`);
+    }
     run("DELETE FROM resources");
     run("DELETE FROM dashboard_presets");
     await restart();
     expect(count("resources")).toBe(0);
-    expect(count("dashboard_presets")).toBe(0);
-    expect(count("meta", "key = 'seeded:resources'")).toBe(1);
+    expect(count("dashboard_presets")).toBeGreaterThan(0);
   });
 });
 

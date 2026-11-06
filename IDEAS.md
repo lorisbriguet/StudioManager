@@ -205,7 +205,7 @@ Follow-ups:
 
 Exchange rates now follow the invoice or expense date, and the dashboard warns a VAT-exempt profile from 80% of the CHF 100,000 threshold (calendar-year invoiced turnover). Left for when the studio registers for VAT:
 
-- [ ] **VAT path:** a VAT rate on the business profile (and per line if rates ever differ), a VAT line on invoices, quotes and their PDFs (new golden snapshots), the VAT number on the documents, and VAT in the trustee export and P&L. Needs a schema change (bump `SCHEMA_FIXUPS_VERSION`) and a migration that keeps old invoices exempt.
+- [ ] **VAT path:** a VAT rate on the business profile (and per line if rates ever differ), a VAT line on invoices, quotes and their PDFs (new golden snapshots), the VAT number on the documents, and VAT in the trustee export and P&L. Needs a new numbered migration that keeps old invoices exempt.
 - [ ] **Round totals to 0.05:** a `round_to_0_05` business setting applied to CHF invoice totals, with a rounding line on the PDF. Only matters for cash payments: QR bills and bank transfers take cents, so low priority.
 
 ## Full check (2026-10-29)

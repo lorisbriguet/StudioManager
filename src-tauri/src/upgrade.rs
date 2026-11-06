@@ -66,8 +66,8 @@ struct Counts {
 }
 
 /// Every (table, column, folder) whose stored absolute paths point into the
-/// app's document folders. `income` is created by the frontend schema, not
-/// the Rust migrations, so a legacy database may not have it yet.
+/// app's document folders. `income` only exists from migration 014 on (the
+/// frontend created it before), so a legacy database may not have it yet.
 fn path_columns(conn: &rusqlite::Connection) -> Result<Vec<(&'static str, &'static str, &'static str)>, String> {
     let mut cols = vec![("expenses", "receipt_path", "receipts"), ("invoices", "pdf_path", "invoices")];
     if crate::migrate::table_exists(conn, "income")? {
@@ -467,12 +467,9 @@ mod tests {
             "INSERT INTO expenses (reference, supplier, category_code, invoice_date, amount, receipt_path) VALUES ('F-26-002','Y','FA','2026-01-02',1,'/Volumes/External/keep.pdf')",
             [],
         ).unwrap();
-        // `income` comes from the frontend schema (ensureSchema), not the Rust
-        // migrations; create the columns the upgrade reads.
-        c.execute_batch("CREATE TABLE income (id INTEGER PRIMARY KEY AUTOINCREMENT, reference TEXT NOT NULL, receipt_path TEXT)").unwrap();
         let inc = app.join("receipts/R-26-001_HEAD.pdf");
         std::fs::write(&inc, b"pdf").unwrap();
-        c.execute("INSERT INTO income (reference, receipt_path) VALUES ('R-26-001', ?1)", [inc.to_string_lossy().as_ref()]).unwrap();
+        c.execute("INSERT INTO income (reference, date, receipt_path) VALUES ('R-26-001', '2026-01-01', ?1)", [inc.to_string_lossy().as_ref()]).unwrap();
         // disposable companions that must be deleted, not moved
         std::fs::write(app.join("studiomanager_test.db"), b"x").unwrap();
         std::fs::write(app.join("studiomanager_presentation.db-wal"), b"x").unwrap();
