@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // notify is the one module that talks to sonner, so its own test spies on sonner.
 // eslint-disable-next-line no-restricted-imports -- testing notify itself
 import { toast } from "sonner";
-import { notify, TOAST_DURATION, resetNotifyDedupe } from "../lib/notify";
+import { notify, TOAST_DURATION, resetNotifyDedupe, errorDetails } from "../lib/notify";
 import { logError } from "../lib/log";
 import { useAppStore } from "../stores/app-store";
 import { uiLabels } from "../i18n/ui";
@@ -61,6 +61,22 @@ describe("notify", () => {
     expect(opts.action?.label).toBe(t.copy_details);
     opts.action!.onClick();
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("boom"));
+  });
+
+  // WebKit (the app's web view) puts only the frames in `stack`, not the message.
+  it("the details name the error even when the stack is only frames", () => {
+    const err = new Error("Only draft invoices can be deleted");
+    err.stack = "Lwe@tauri://localhost/assets/index-DCnclnU2.js:237:182";
+    const details = errorDetails(err);
+    expect(details).toBe(
+      "Error: Only draft invoices can be deleted\nLwe@tauri://localhost/assets/index-DCnclnU2.js:237:182"
+    );
+  });
+
+  it("the details don't repeat a message the stack already starts with (V8)", () => {
+    const err = new Error("boom");
+    err.stack = "Error: boom\n    at f (x.js:1:1)";
+    expect(errorDetails(err)).toBe("Error: boom\n    at f (x.js:1:1)");
   });
 
   it("an error without a cause has no Details action", () => {

@@ -48,7 +48,13 @@ export function resetNotifyDedupe(): void {
 
 /** The raw text of an error, for the log and the "Details" copy. Never shown in a toast. */
 export function errorDetails(err: unknown): string {
-  if (err instanceof Error) return err.stack ?? `${err.name}: ${err.message}`;
+  if (err instanceof Error) {
+    const head = `${err.name}: ${err.message}`;
+    // V8 starts the stack with "Name: message"; WebKit (the app's web view)
+    // gives only the frames, so name the error first.
+    if (!err.stack) return head;
+    return err.stack.startsWith(head) ? err.stack : `${head}\n${err.stack}`;
+  }
   if (typeof err === "string") return err;
   try {
     return JSON.stringify(err) ?? String(err);

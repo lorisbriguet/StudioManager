@@ -341,9 +341,12 @@ export function InvoiceFormPage() {
   const { data: clientAddresses } = useClientAddresses(clientId);
   const { data: clientProjects } = useProjectsByClient(clientId);
 
-  // Auto-select address when client has exactly one
+  // Fill in the client's only address on a new document, or once the client
+  // is picked by hand. An existing document keeps what it is stored with, so
+  // the form never shows an address the database doesn't hold.
+  const autoSelectAddressRef = useRef(!isEdit);
   useEffect(() => {
-    if (clientAddresses && clientAddresses.length === 1 && !billingAddressId) {
+    if (autoSelectAddressRef.current && clientAddresses && clientAddresses.length === 1 && !billingAddressId) {
       setBillingAddressId(clientAddresses[0].id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot auto-select when the address list loads; adding billingAddressId would re-select right after the user deselects
@@ -517,6 +520,7 @@ export function InvoiceFormPage() {
                 setClientId(e.target.value);
                 setContactId(null);
                 setBillingAddressId(null);
+                autoSelectAddressRef.current = true;
                 setProjectId(null);
                 // User picked a (new) client: derive discount from that client
                 const newClient = clients?.find((c) => c.id === e.target.value);

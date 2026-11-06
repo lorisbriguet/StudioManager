@@ -122,16 +122,19 @@ export async function batchUndo(label: string, run: () => Promise<void>): Promis
   } finally {
     unsubscribe();
   }
-  if (captured.length === 0) return undefined;
-  if (captured.length === 1) return captured[0];
+  // A step cleared from the history while `run` was in flight (a send that
+  // numbered a document clears it) must not come back inside the fold.
   const store = useUndoStore.getState();
-  captured.forEach((a) => store.remove(a));
+  const kept = captured.filter((a) => store.stack.includes(a));
+  if (kept.length === 0) return undefined;
+  if (kept.length === 1) return kept[0];
+  kept.forEach((a) => store.remove(a));
   const undoAll = async () => {
-    for (const a of [...captured].reverse()) await a.execute();
+    for (const a of [...kept].reverse()) await a.execute();
   };
-  const redoAll = captured.every((a) => a.redo)
+  const redoAll = kept.every((a) => a.redo)
     ? async () => {
-        for (const a of captured) await a.redo!();
+        for (const a of kept) await a.redo!();
       }
     : undefined;
   const combined: UndoAction = { label, execute: undoAll, redo: redoAll };
