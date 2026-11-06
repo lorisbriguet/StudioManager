@@ -57,15 +57,9 @@ vi.mock("../components/finance/PLPDF", () => ({ PLPDF: () => null }));
 vi.mock("../components/finance/InvoicesListPDF", () => ({ InvoicesListPDF: () => null }));
 vi.mock("../components/finance/ExpensesListPDF", () => ({ ExpensesListPDF: () => null }));
 
-// The bad invoice's own reference is used to decide which render fails.
 vi.mock("@react-pdf/renderer", () => ({
-  pdf: (doc: { props?: { invoice?: { reference?: string } } }) => ({
-    toBlob: async () => {
-      if (doc?.props?.invoice?.reference === "2026-0002") {
-        throw new Error("PDF generation failed");
-      }
-      return new Blob([new Uint8Array([1, 2, 3])], { type: "application/pdf" });
-    },
+  pdf: () => ({
+    toBlob: async () => new Blob([new Uint8Array([1, 2, 3])], { type: "application/pdf" }),
   }),
 }));
 
@@ -124,8 +118,13 @@ vi.mock("../db/hooks/useBusinessProfile", () => ({
 vi.mock("../db/queries/finance", () => ({
   getMonthlyData: async () => [],
 }));
-vi.mock("../db/queries/invoices", () => ({
-  getLineItemsForInvoices: async () => new Map(),
+// Each invoice PDF goes through the shared builder; the bad invoice's id
+// decides which one fails.
+vi.mock("../lib/documentPdf", () => ({
+  buildInvoicePdf: async (id: number) => {
+    if (id === badInvoice.id) throw new Error("PDF generation failed");
+    return { bytes: new Uint8Array([1, 2, 3]), invoice: goodInvoice, client, reference: goodInvoice.reference };
+  },
 }));
 
 function renderPage() {

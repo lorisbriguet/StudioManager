@@ -1,15 +1,8 @@
-import { createElement } from "react";
-import { pdf } from "@react-pdf/renderer";
 import { writeFile, mkdir, exists } from "@tauri-apps/plugin-fs";
-import { InvoicePDF } from "../components/invoice/InvoicePDF";
-import { getInvoice, getInvoiceLineItems, updateInvoice } from "../db/queries/invoices";
-import { getClient, getClientContact, getClientAddresses } from "../db/queries/clients";
-import { getBusinessProfile } from "../db/queries/business-profile";
-import { getInvoiceTemplate } from "../db/queries/invoiceTemplates";
-import { getProject } from "../db/queries/projects";
+import { updateInvoice } from "../db/queries/invoices";
+import { buildInvoicePdf } from "./documentPdf";
 import { logError } from "./log";
 import { orgPaths } from "./orgPaths";
-import { postProcessInvoicePdf } from "./pdfPostProcess";
 
 function sanitizeFilename(name: string): string {
   return name
@@ -32,56 +25,9 @@ export async function generateAndStoreInvoicePdf(
   invoiceId: number
 ): Promise<string | null> {
   try {
-    const invoice = await getInvoice(invoiceId);
-    if (!invoice) return null;
-
-    const client = await getClient(invoice.client_id);
-    if (!client) return null;
-
-    const profile = await getBusinessProfile();
-    if (!profile) return null;
-
-    const lineItems = await getInvoiceLineItems(invoiceId);
-
-    let contactName: string | undefined;
-    if (invoice.contact_id) {
-      const contact = await getClientContact(invoice.contact_id);
-      if (contact) {
-        contactName = `${contact.first_name} ${contact.last_name}`.trim();
-      }
-    }
-
-    // Render with the same props as the live preview so the stored PDF
-    // (shown in the preview iframe and used for exports) is identical.
-    const template = invoice.template_id
-      ? await getInvoiceTemplate(invoice.template_id)
-      : null;
-    const billingAddress = invoice.billing_address_id
-      ? (await getClientAddresses(invoice.client_id)).find(
-          (a) => a.id === invoice.billing_address_id
-        ) ?? null
-      : null;
-    const project = invoice.project_id ? await getProject(invoice.project_id) : null;
-
-    const doc = createElement(InvoicePDF, {
-      invoice,
-      lineItems,
-      client,
-      profile,
-      contactName,
-      billingAddress,
-      projectName: project?.name,
-      reminderCount: invoice.reminder_count,
-      template: template ?? undefined,
-    });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const blob = await pdf(doc as any).toBlob();
-    let bytes = new Uint8Array(await blob.arrayBuffer());
-
-    // Post-process: VOID overlay for cancelled invoices
-    bytes = new Uint8Array(await postProcessInvoicePdf(bytes, {
-      isCancelled: invoice.status === "cancelled",
-    }));
+    const built = await buildInvoicePdf(invoiceId);
+    if (!built) return null;
+    const { bytes, invoice, client } = built;
 
     const { invoicesDir } = await orgPaths();
     if (!(await exists(invoicesDir))) {

@@ -4,21 +4,15 @@ import { notify } from "../lib/notify";
 import { useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { writeFile } from "@tauri-apps/plugin-fs";
-import { pdf } from "@react-pdf/renderer";
 import { undoable, deleteWithUndo } from "../lib/undo";
 import { useConfirm } from "../lib/confirm";
 import { settleDraftBeforeExport } from "../lib/confirmDraftExport";
 import { useBulkDelete } from "../hooks/useBulkDelete";
 import { useInvoices, useUpdateInvoice, useDeleteInvoice } from "../db/hooks/useInvoices";
-import { getInvoice, getInvoiceLineItems } from "../db/queries/invoices";
-import { getClient, getClientContacts, getClientAddresses } from "../db/queries/clients";
-import { getBusinessProfile } from "../db/queries/business-profile";
-import { getProject } from "../db/queries/projects";
-import { InvoicePDF } from "../components/invoice/InvoicePDF";
-import { postProcessInvoicePdf } from "../lib/pdfPostProcess";
 import { pdfFileName } from "../lib/pdfFilename";
 import { orgPaths } from "../lib/orgPaths";
 import { runBulkPdfExport } from "../lib/bulkPdfExport";
+import { buildInvoicePdf } from "../lib/documentPdf";
 import { useClients } from "../db/hooks/useClients";
 import { useRecurringTemplates, useCreateRecurringTemplate, useDeleteRecurringTemplate, useUpdateRecurringTemplate } from "../db/hooks/useRecurring";
 import { runRecurringCheck } from "../hooks/useRecurringCheck";
@@ -38,7 +32,6 @@ import { ICONS, PageHeader, SearchBar, Table, TableSkeleton, Button, EmptyState,
 import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
 import { isDraftReference } from "../types/invoice";
 import type { Invoice, InvoiceStatus } from "../types/invoice";
-import type { Client } from "../types/client";
 import type { RecurringFrequency } from "../types/recurring";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
@@ -47,58 +40,6 @@ import { PILL } from "../components/ui/tokens";
 const FREQUENCIES: RecurringFrequency[] = ["monthly", "quarterly", "biannual", "annual"];
 
 type SortKey = "reference" | "client_name" | "invoice_date" | "status" | "total";
-
-/**
- * Fetch everything the InvoicePDF document needs and render it to
- * post-processed PDF bytes. Shared by download, email and bulk export.
- * Returns null when the invoice, client or business profile is missing
- * (caller surfaces t.invoice_not_found).
- */
-async function generateInvoicePdfBytes(
-  invoiceId: number,
-  clientId: string
-): Promise<{ bytes: Uint8Array<ArrayBuffer>; reference: string; client: Client } | null> {
-  const [fullInvoice, lineItems, client, profile] = await Promise.all([
-    getInvoice(invoiceId),
-    getInvoiceLineItems(invoiceId),
-    getClient(clientId),
-    getBusinessProfile(),
-  ]);
-  if (!fullInvoice || !client || !profile) return null;
-  const [contacts, addresses, project] = await Promise.all([
-    getClientContacts(clientId),
-    getClientAddresses(clientId),
-    fullInvoice.project_id ? getProject(fullInvoice.project_id) : Promise.resolve(null),
-  ]);
-  const selectedContact = fullInvoice.contact_id
-    ? contacts?.find((c) => c.id === fullInvoice.contact_id)
-    : null;
-  const contactName = selectedContact
-    ? `${selectedContact.first_name} ${selectedContact.last_name}`.trim()
-    : undefined;
-  const billingAddress = fullInvoice.billing_address_id
-    ? addresses?.find((a) => a.id === fullInvoice.billing_address_id) ?? null
-    : null;
-
-  const doc = (
-    <InvoicePDF
-      invoice={fullInvoice}
-      lineItems={lineItems}
-      client={client}
-      profile={profile}
-      contactName={contactName}
-      billingAddress={billingAddress}
-      projectName={project?.name}
-      reminderCount={fullInvoice.reminder_count}
-    />
-  );
-  const blob = await pdf(doc).toBlob();
-  const rawBytes = new Uint8Array(await blob.arrayBuffer());
-  const processed = await postProcessInvoicePdf(rawBytes, {
-    isCancelled: fullInvoice.status === "cancelled",
-  });
-  return { bytes: new Uint8Array(processed), reference: fullInvoice.reference, client };
-}
 
 export function InvoicesPage() {
   const t = useT();
@@ -280,7 +221,7 @@ export function InvoicesPage() {
     await notify.progress(
       t.generating_pdf,
       (async () => {
-        const result = await generateInvoicePdfBytes(inv.id, inv.client_id);
+        const result = await buildInvoicePdf(inv.id);
         if (!result) throw new Error(t.invoice_not_found);
         const processedBlob = new Blob([result.bytes], { type: "application/pdf" });
         const url = URL.createObjectURL(processedBlob);
@@ -309,7 +250,7 @@ export function InvoicesPage() {
     await notify.progress(
       t.generating_pdf,
       (async () => {
-        const result = await generateInvoicePdfBytes(inv.id, inv.client_id);
+        const result = await buildInvoicePdf(inv.id);
         if (!result) throw new Error(t.invoice_not_found);
         const { root } = await orgPaths();
         const tempPath = `${root}/temp_${pdfFileName(result.reference, result.client.name)}`;
@@ -333,7 +274,7 @@ export function InvoicesPage() {
       docs,
       busyIds: busyPdfIds.current,
       t,
-      generate: (d) => generateInvoicePdfBytes(d.id, d.client_id),
+      generate: (d) => buildInvoicePdf(d.id),
       notFoundMessage: t.invoice_not_found,
       logLabel: "invoice",
       onDone: bulk.clearSelection,

@@ -27,8 +27,7 @@ import { ICONS, PageHeader, QueryError, DetailSkeleton, Button, Card, EmptyState
 import { useNavigate } from "react-router-dom";
 import { useChartTheme } from "../hooks/useChartTheme";
 import { getTagColor } from "../lib/tagColors";
-import { getLineItemsForInvoices } from "../db/queries/invoices";
-import { InvoicePDF } from "../components/invoice/InvoicePDF";
+import { buildInvoicePdf } from "../lib/documentPdf";
 import { PLPDF } from "../components/finance/PLPDF";
 import { InvoicesListPDF } from "../components/finance/InvoicesListPDF";
 import { ExpensesListPDF } from "../components/finance/ExpensesListPDF";
@@ -97,21 +96,16 @@ export function FinancesPage() {
         await writeFile(`${basePath}/factures/factures_${year}.pdf`, new Uint8Array(await invListBlob.arrayBuffer()));
       }
 
-      // Individual invoice PDFs. Line items are batch-fetched in one query
-      // (was one query per invoice); rendering stays sequential on purpose —
-      // @react-pdf renders are CPU-bound and concurrent renders have wedged
-      // before (see the mark-sent-and-export soft-lock).
-      const lineItemsByInvoice = await getLineItemsForInvoices(yearInvoices.map((i) => i.id));
+      // Individual invoice PDFs, rendered like every other export (template,
+      // contact, billing address, VOID overlay). Rendering stays sequential
+      // on purpose: @react-pdf renders are CPU-bound and concurrent renders
+      // have wedged before (see the mark-sent-and-export soft-lock).
       let invoicePdfsFailed = 0;
       for (const inv of yearInvoices) {
         try {
-          const client = clients?.find((c) => c.id === inv.client_id);
-          if (client && profile) {
-            const lineItems = lineItemsByInvoice.get(inv.id) ?? [];
-            const doc = createElement(InvoicePDF, { invoice: inv, lineItems, client, profile });
-            const blob = await pdf(doc as never).toBlob();
-            await writeFile(`${basePath}/factures/justificatifs/${inv.reference}_${client.name}.pdf`, new Uint8Array(await blob.arrayBuffer()));
-          }
+          const built = await buildInvoicePdf(inv.id);
+          if (!built) throw new Error(t.invoice_not_found);
+          await writeFile(`${basePath}/factures/justificatifs/${inv.reference}_${built.client.name}.pdf`, built.bytes);
         } catch (e) {
           // One bad invoice must not abort the export, but a silent omission
           // would leave a bookkeeping folder that looks complete and is not.

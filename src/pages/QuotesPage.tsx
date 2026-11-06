@@ -1,7 +1,6 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { notify } from "../lib/notify";
-import { pdf } from "@react-pdf/renderer";
 import { invoke } from "@tauri-apps/api/core";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { undoable, deleteWithUndo } from "../lib/undo";
@@ -10,13 +9,10 @@ import { useBulkDelete } from "../hooks/useBulkDelete";
 import { pdfFileName } from "../lib/pdfFilename";
 import { orgPaths } from "../lib/orgPaths";
 import { runBulkPdfExport } from "../lib/bulkPdfExport";
+import { buildQuotePdf } from "../lib/documentPdf";
+import { getQuoteLineItems } from "../db/queries/quotes";
 import { useClients } from "../db/hooks/useClients";
 import { useQuotes, useUpdateQuote, useDeleteQuote } from "../db/hooks/useQuotes";
-import { getQuote, getQuoteLineItems } from "../db/queries/quotes";
-import { getClient, getClientAddresses } from "../db/queries/clients";
-import { getBusinessProfile } from "../db/queries/business-profile";
-import { getProject } from "../db/queries/projects";
-import { QuotePDF } from "../components/quote/QuotePDF";
 import { SortHeader, sortRows, type SortState } from "../components/ui/SortHeader";
 import { useListNavigation } from "../hooks/useListNavigation";
 import { formatDisplayDate } from "../utils/formatDate";
@@ -30,53 +26,11 @@ import { useTabStore } from "../stores/tab-store";
 import { ICONS, PageHeader, SearchBar, Table, TableSkeleton, Button, EmptyState, QueryState, NoResults, Select, IconButton } from "../components/ui";
 import { quoteStatusVariant, statusClasses } from "../lib/statusColors";
 import type { Quote, QuoteStatus, QuoteLineItem } from "../types/quote";
-import type { Client } from "../types/client";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 import { PILL } from "../components/ui/tokens";
 
 type SortKey = "reference" | "client_name" | "quote_date" | "status" | "total";
-
-/**
- * Fetch everything the QuotePDF document needs and render it to PDF bytes.
- * Shared by download, email and bulk export. Returns null when the quote,
- * client or business profile is missing (caller surfaces t.quote_not_found).
- * `reference` is the filename-safe form (drafts collapse to "DRAFT").
- */
-async function generateQuotePdfBytes(
-  quoteId: number,
-  clientId: string
-): Promise<{ bytes: Uint8Array<ArrayBuffer>; reference: string; client: Client } | null> {
-  const [fullQuote, lineItems, client, profile] = await Promise.all([
-    getQuote(quoteId),
-    getQuoteLineItems(quoteId),
-    getClient(clientId),
-    getBusinessProfile(),
-  ]);
-  if (!fullQuote || !client || !profile) return null;
-  const [addresses, project] = await Promise.all([
-    getClientAddresses(clientId),
-    fullQuote.project_id ? getProject(fullQuote.project_id) : Promise.resolve(null),
-  ]);
-  const billingAddress = fullQuote.billing_address_id
-    ? addresses?.find((a) => a.id === fullQuote.billing_address_id) ?? null
-    : null;
-
-  const doc = (
-    <QuotePDF
-      quote={fullQuote}
-      lineItems={lineItems}
-      client={client}
-      profile={profile}
-      billingAddress={billingAddress}
-      projectName={project?.name}
-    />
-  );
-  const blob = await pdf(doc).toBlob();
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  const reference = fullQuote.reference.startsWith("DRAFT") ? "DRAFT" : fullQuote.reference;
-  return { bytes, reference, client };
-}
 
 export function QuotesPage() {
   const quotesQuery = useQuotes();
@@ -141,7 +95,7 @@ export function QuotesPage() {
     await notify.progress(
       t.generating_pdf,
       (async () => {
-        const result = await generateQuotePdfBytes(q.id, q.client_id);
+        const result = await buildQuotePdf(q.id);
         if (!result) throw new Error(t.quote_not_found);
         const blob = new Blob([result.bytes], { type: "application/pdf" });
         const url = URL.createObjectURL(blob);
@@ -170,7 +124,7 @@ export function QuotesPage() {
     await notify.progress(
       t.generating_pdf,
       (async () => {
-        const result = await generateQuotePdfBytes(q.id, q.client_id);
+        const result = await buildQuotePdf(q.id);
         if (!result) throw new Error(t.quote_not_found);
         const { root } = await orgPaths();
         const tempPath = `${root}/temp_${pdfFileName(result.reference, result.client.name)}`;
@@ -257,7 +211,7 @@ export function QuotesPage() {
       docs,
       busyIds: busyPdfIds.current,
       t,
-      generate: (d) => generateQuotePdfBytes(d.id, d.client_id),
+      generate: (d) => buildQuotePdf(d.id),
       notFoundMessage: t.quote_not_found,
       logLabel: "quote",
       onDone: bulk.clearSelection,
