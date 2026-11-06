@@ -9,8 +9,8 @@ import { getDb } from "../db";
 import { setSelectHandler, clearExecutedStatements } from "../__mocks__/tauri-sql";
 
 // U3: each invoice and quote has its own language (FR/EN). It defaults to the
-// client's language, keeps the stored value on edit, and "New invoice" on a
-// project page prefills client, project and language.
+// client's language, keeps the stored value on edit, and "New invoice" or
+// "New quote" on a project page prefills client, project and language.
 
 const CLIENTS = [
   { id: "C-001", name: "Atelier Noir", language: "FR", has_discount: 0, discount_rate: 0 },
@@ -80,6 +80,13 @@ describe("per-document language", () => {
   it("editing keeps the invoice's stored language, not the client's", async () => {
     mount("/invoices/1/edit", <InvoiceFormPage />);
     await waitFor(() => expect(screen.getByLabelText(/client/i)).toHaveTextContent("Atelier Noir"));
+    expect(screen.getByLabelText(/^language/i)).toHaveTextContent("English");
+  });
+
+  it("new quote from a project prefills client, project and the client's language", async () => {
+    mount("/quotes/new?project=7", <QuoteFormPage />);
+    await waitFor(() => expect(screen.getByLabelText(/client/i)).toHaveTextContent("Gallery North"));
+    await waitFor(() => expect(screen.getByLabelText(/project/i)).toHaveTextContent("Spring show"));
     expect(screen.getByLabelText(/^language/i)).toHaveTextContent("English");
   });
 
