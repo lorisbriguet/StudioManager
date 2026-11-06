@@ -3,7 +3,7 @@ import { useT } from "../../i18n/useT";
 import { IconButton } from "./IconButton";
 
 /**
- * PeekHeader — the top bar of a side peek panel (Projects, Calendar):
+ * PeekHeader — the top bar of a side peek panel (layout/SidePeek renders it):
  * close on the left, open the full page on the right. The peeked page's own
  * title follows below it (PageHeader as="h2"). See DESIGN-SYSTEM.md.
  *

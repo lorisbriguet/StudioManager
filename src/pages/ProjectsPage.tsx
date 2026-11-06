@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { notify } from "../lib/notify";
 import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from "../db/hooks/useProjects";
@@ -16,13 +16,14 @@ import { BulkActionBar } from "../components/ui/BulkActionBar";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useListNavigation } from "../hooks/useListNavigation";
+import { SidePeek } from "../components/layout/SidePeek";
 import { formatDisplayDate } from "../utils/formatDate";
 import { ProjectDetailContent } from "../components/ProjectDetailContent";
 import type { ProjectStatus } from "../types/project";
 import { effectivePriority, type TaskPriority } from "../types/task";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { ICONS, Checkbox, Button, Badge, PageHeader, SearchBar, DatePicker, Input, FormField, FormGrid, FormModal, EmptyState, QueryState, CardGridSkeleton, Select, FilterChip, ProgressBar, PeekHeader, HEADING_2, Card, CARD_GAP, CARD_LINK, CARD_CONTROL, revealClass } from "../components/ui";
+import { ICONS, Checkbox, Button, Badge, PageHeader, SearchBar, DatePicker, Input, FormField, FormGrid, FormModal, EmptyState, QueryState, CardGridSkeleton, Select, FilterChip, ProgressBar, HEADING_2, Card, CARD_GAP, CARD_LINK, CARD_CONTROL, revealClass } from "../components/ui";
 import { undoable, deleteWithUndo } from "../lib/undo";
 import { confirmDelete } from "../lib/confirm";
 import { useBulkDelete } from "../hooks/useBulkDelete";
@@ -61,53 +62,10 @@ export function ProjectsPage() {
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
   const [filterLogic, setFilterLogic] = useState<ConditionLogic>("and");
   const [peekId, setPeekId] = useState<number | null>(null);
-  const [closingPeek, setClosingPeek] = useState(false);
-  const [peekWidth, setPeekWidth] = useState(() => {
-    const saved = localStorage.getItem("peekWidth");
-    return saved ? Math.max(20, Math.min(70, Number(saved))) : 50;
-  });
-  const peekRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const draggingRef = useRef(false);
+  // Bumped on each click / Enter, so the peek takes focus again (not on arrow moves).
+  const [peekOpenCount, setPeekOpenCount] = useState(0);
   const t = useT();
   const { enabled: agentsOn, start: startAgentOn } = useStartAgentOn();
-
-  const handleDividerPointerDown = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    draggingRef.current = true;
-    const container = containerRef.current;
-    if (!container) return;
-
-    const onPointerMove = (ev: PointerEvent) => {
-      if (!draggingRef.current || !container) return;
-      const rect = container.getBoundingClientRect();
-      const offsetFromRight = rect.right - ev.clientX;
-      const pct = Math.max(20, Math.min(70, (offsetFromRight / rect.width) * 100));
-      if (peekRef.current) {
-        peekRef.current.style.width = `${pct}%`;
-      }
-    };
-
-    const onPointerUp = (ev: PointerEvent) => {
-      draggingRef.current = false;
-      document.removeEventListener("pointermove", onPointerMove);
-      document.removeEventListener("pointerup", onPointerUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      if (container) {
-        const rect = container.getBoundingClientRect();
-        const offsetFromRight = rect.right - ev.clientX;
-        const pct = Math.max(20, Math.min(70, (offsetFromRight / rect.width) * 100));
-        setPeekWidth(pct);
-        localStorage.setItem("peekWidth", String(Math.round(pct)));
-      }
-    };
-
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    document.addEventListener("pointermove", onPointerMove);
-    document.addEventListener("pointerup", onPointerUp);
-  }, []);
 
   const clientName = useCallback((clientId: string) =>
     clients?.find((c) => c.id === clientId)?.name ?? clientId, [clients]);
@@ -222,19 +180,15 @@ export function ProjectsPage() {
 
   const handleProjectClick = useCallback((projectId: number) => {
     if (projectOpenMode === "peek") {
-      setClosingPeek(false);
       setPeekId(projectId);
+      setPeekOpenCount((n) => n + 1);
     } else {
       navigate(`/projects/${projectId}`);
     }
   }, [projectOpenMode, navigate]);
 
-  const handleClosePeek = () => {
-    setClosingPeek(true);
-  };
-
   // Keyboard card navigation (flat list, visual/card order; no Left/Right).
-  const { focusIdx } = useListNavigation({
+  const { focusIdx, setFocusIdx } = useListNavigation({
     items: filtered,
     onOpen: useCallback((p: (typeof filtered)[0]) => handleProjectClick(p.id), [handleProjectClick]),
     onMenu: useCallback(
@@ -242,8 +196,17 @@ export function ProjectsPage() {
         setCtxMenu({ ...pos, item: { id: p.id, name: p.name } }),
       []
     ),
-    enabled: peekId === null,
+    // While the peek is open, the arrows show the project they land on.
+    onMove: useCallback((p: (typeof filtered)[0]) => { if (peekId !== null) setPeekId(p.id); }, [peekId]),
   });
+
+  // Closing the peek puts focus back on its project's card, where the arrows carry on.
+  const peekCard = () => {
+    const idx = filtered.findIndex((p) => p.id === peekId);
+    if (idx < 0) return null;
+    setFocusIdx(idx);
+    return document.querySelectorAll<HTMLElement>("[data-list-row]")[idx] ?? null;
+  };
 
   const filterLabels: Record<ProjectStatus | "all", string> = {
     all: t.all,
@@ -261,7 +224,7 @@ export function ProjectsPage() {
   };
 
   return (
-    <div ref={containerRef} className="flex flex-1 min-h-0 -m-8">
+    <div className="flex flex-1 min-h-0 -m-8">
       <div className="min-w-0 overflow-y-auto flex-1 p-8">
         <PageHeader title={t.projects}>
           <Button icon={ICONS.add} onClick={() => setShowForm(true)}>{t.new_project}</Button>
@@ -412,30 +375,16 @@ export function ProjectsPage() {
         />
       )}
 
-      {/* Side Peek Panel */}
       {peekId !== null && (
-        <>
-        {/* Drag divider — separate from peek, not clipped by overflow */}
-        <div
-          onPointerDown={handleDividerPointerDown}
-          className="shrink-0 w-[5px] cursor-col-resize relative group"
+        <SidePeek
+          resizable
+          focusKey={peekOpenCount}
+          onClose={() => setPeekId(null)}
+          onOpenFull={() => navigate(`/projects/${peekId}`)}
+          returnFocus={peekCard}
         >
-          <div className="absolute inset-y-0 left-1/2 w-px bg-[var(--color-border-divider)] -translate-x-1/2" />
-          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-accent-handle transition-opacity" />
-        </div>
-        <div
-          ref={peekRef}
-          className={`shrink-0 overflow-y-auto ${closingPeek ? "peek-exit" : "peek-enter"}`}
-          style={{ width: `${peekWidth}%` }}
-          onClick={(e) => e.stopPropagation()}
-          onAnimationEnd={() => { if (closingPeek) { setPeekId(null); setClosingPeek(false); } }}
-        >
-          <PeekHeader onClose={handleClosePeek} onOpenFull={() => navigate(`/projects/${peekId}`)} />
-          <div className="p-4">
-            <ProjectDetailContent key={peekId} projectId={peekId} compact />
-          </div>
-        </div>
-        </>
+          <ProjectDetailContent key={peekId} projectId={peekId} compact />
+        </SidePeek>
       )}
 
       <BulkActionBar

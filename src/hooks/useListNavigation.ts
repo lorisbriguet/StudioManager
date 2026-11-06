@@ -6,9 +6,9 @@ export interface MenuPosition {
   y: number;
 }
 
-/** Keys on these belong to them (Enter/Space press a button, arrows move a radio group or a combobox). */
+/** Keys on these belong to them (Enter/Space press a button, arrows move a radio group or a combobox, a side peek scrolls). */
 const OWN_KEYS =
-  'input, textarea, select, [contenteditable="true"], [role="menu"], [role="dialog"], button, a, [role="combobox"], [role="radio"], [role="tab"], [role="switch"], [role="listbox"], [role="menuitem"], [role="option"]';
+  '[data-side-peek], input, textarea, select, [contenteditable="true"], [role="menu"], [role="dialog"], button, a, [role="combobox"], [role="radio"], [role="tab"], [role="switch"], [role="listbox"], [role="menuitem"], [role="option"]';
 
 /**
  * Arrow-key navigation over a visible list of rows (audit item 343).
@@ -21,16 +21,19 @@ const OWN_KEYS =
  *
  * The arrows also move DOM focus to the row (made focusable with
  * tabindex="-1"), so a screen reader reads the row it lands on.
+ * `onMove` runs with the row the arrows land on (a side peek follows it).
  */
 export function useListNavigation<T>({
   items,
   onOpen,
   onMenu,
+  onMove,
   enabled = true,
 }: {
   items: T[];
   onOpen: (item: T) => void;
   onMenu: (item: T, pos: MenuPosition) => void;
+  onMove?: (item: T) => void;
   enabled?: boolean;
 }) {
   const [focusIdx, setFocusIdx] = useState(-1);
@@ -55,6 +58,7 @@ export function useListNavigation<T>({
             ? Math.min(focusIdx + 1, items.length - 1)
             : Math.max(focusIdx - 1, 0);
         setFocusIdx(next);
+        if (items[next] !== undefined) onMove?.(items[next]);
         const row = document.querySelectorAll<HTMLElement>("[data-list-row]")[next];
         if (row) {
           if (!row.hasAttribute("tabindex")) row.setAttribute("tabindex", "-1");
@@ -76,7 +80,7 @@ export function useListNavigation<T>({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [items, focusIdx, onOpen, onMenu, enabled]);
+  }, [items, focusIdx, onOpen, onMenu, onMove, enabled]);
 
   return { focusIdx, setFocusIdx };
 }
