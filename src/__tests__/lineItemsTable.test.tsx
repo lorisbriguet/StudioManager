@@ -100,3 +100,27 @@ describe("LineItemsTable move up/down buttons", () => {
     expect(commitSpy).toHaveBeenCalledTimes(2);
   });
 });
+
+// Review finding D20: a line can't go below zero (credits aren't modelled).
+describe("LineItemsTable negative values", () => {
+  beforeEach(() => {
+    useAppStore.setState({ language: "EN" });
+  });
+
+  it("clamps a negative quantity to 0 and recomputes the amount", () => {
+    render(<Harness initial={[makeLineItem({ designation: "A", rate: 38.5, quantity: 2, amount: 77 })]} />);
+    const qty = screen.getByLabelText("Qty") as HTMLInputElement;
+    expect(qty.min).toBe("0");
+    fireEvent.change(qty, { target: { value: "-3" } });
+    expect(qty.value).toBe("0");
+    expect((screen.getByLabelText("Amount") as HTMLInputElement).value).toBe("0");
+  });
+
+  it("clamps a negative amount to 0", () => {
+    render(<Harness initial={[makeLineItem({ designation: "A", amount: 10 })]} />);
+    const amount = screen.getByLabelText("Amount") as HTMLInputElement;
+    expect(amount.min).toBe("0");
+    fireEvent.change(amount, { target: { value: "-5" } });
+    expect(amount.value).toBe("0");
+  });
+});

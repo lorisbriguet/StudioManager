@@ -55,6 +55,24 @@ describe("round2", () => {
     expect(round2(-(3 * 21.9))).toBe(-65.7);
   });
 
+  // Review finding D20: negative halves used to round toward +∞.
+  it("rounds negative halves away from zero, mirroring positives", () => {
+    expect(round2(0.01 * -38.5)).toBe(-0.39);
+    expect(round2(-1.15 * 3.5)).toBe(-4.03);
+    expect(round2(-1.005)).toBe(-1.01);
+    let wrong = 0;
+    for (let c = 0; c < 200_000; c += 7) {
+      const n = (c * 10 + 5) / 1000;
+      if (round2(-n) !== -round2(n)) wrong++;
+    }
+    expect(wrong).toBe(0);
+  });
+
+  it("never returns a negative zero", () => {
+    expect(Object.is(round2(-0.004), 0)).toBe(true);
+    expect(Object.is(round2(-0), 0)).toBe(true);
+  });
+
   // Review finding D19: half-centimes above ~CHF 2 used to round down.
   it("rounds half-centime line amounts up: 57.30 × 42.35 = 2426.655 → 2426.66", () => {
     expect(round2(57.3 * 42.35)).toBe(2426.66);

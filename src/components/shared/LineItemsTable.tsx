@@ -158,8 +158,9 @@ export function LineItemsTable({
                   <Table.Td numeric>
                     <Input
                       numeric
+                      min={0}
                       value={item.quantity}
-                      onChange={(e) => onUpdate(i, "quantity", Number(e.target.value))}
+                      onChange={(e) => onUpdate(i, "quantity", Math.max(0, Number(e.target.value)))}
                       aria-label={t.qty}
                     />
                   </Table.Td>
@@ -167,8 +168,9 @@ export function LineItemsTable({
                     <Input
                       numeric
                       step="0.01"
+                      min={0}
                       value={item.amount}
-                      onChange={(e) => onUpdate(i, "amount", Number(e.target.value))}
+                      onChange={(e) => onUpdate(i, "amount", Math.max(0, Number(e.target.value)))}
                       aria-label={t.amount}
                     />
                   </Table.Td>
