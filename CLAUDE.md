@@ -23,6 +23,7 @@ The version lives in several files that must match the tag: see [RELEASING.md, s
 
 - The whole schema is in the SQL migrations in `src-tauri/migrations/`: a new table, column or index is a new numbered migration, listed in `src-tauri/src/migrate.rs`. The app, the MCP server and `sm` all rely on it.
 - `ensureSchema` in `src/db/index.ts` only adds starter rows (once per file, through `seedOnce`) and repairs data. It never creates a table, column or index.
+- Queries live in `src/db/queries`. Pages and components call them (or the hooks in `src/db/hooks`), never `getDb()` or SQL: the lint rule `studio/no-db-in-ui` refuses it.
 
 ## Rust commands
 

@@ -5,8 +5,8 @@ import { useConfirm } from "../../lib/confirm";
 import { ICONS } from "../ui/icons";
 import { Button } from "../ui/Button";
 import { Select } from "../ui/Select";
-import { getDb } from "../../db";
-import { PERSONAS, PERSONA_IDS, seedPersona, type PersonaId } from "../../db/seeds/personas";
+import { PERSONAS, PERSONA_IDS, type PersonaId } from "../../db/seeds/personas";
+import { loadPersona } from "../../db/queries/seeds";
 import { useAppStore } from "../../stores/app-store";
 import { useOrgStore } from "../../stores/org-store";
 import { notify } from "../../lib/notify";
@@ -37,7 +37,7 @@ export function DemoDataCard() {
     if (!confirmed) return;
     setLoading(true);
     try {
-      await seedPersona(await getDb(), persona, { withConfig: true });
+      await loadPersona(persona, { withConfig: true });
       const { prefs } = PERSONAS[persona];
       useAppStore.getState().setShowIncome(prefs.showIncome);
       useAppStore.getState().setShowTasksPage(prefs.showTasksPage);

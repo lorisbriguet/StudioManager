@@ -1321,7 +1321,7 @@ const t = useT();
 <span>Save</span>         // WRONG
 ```
 
-Keys are defined in `src/i18n/ui.ts` (EN section, then FR section). Always add both.
+Keys are defined in `src/i18n/labels/<area>.ts`, one file per area of the app (`finance.ts`, `upkeep.ts`, `agents.ts`, `common.ts`...), each with an EN and an FR block; `src/i18n/ui.ts` merges them into `uiLabels`. Add a key to the file of the page that shows it, in both blocks.
 
 Counts use `plural()` from `src/i18n/plural.ts` with a `_one` / `_other` pair of keys (`task_count_one` "{count} task", `task_count_other` "{count} tasks"). It follows the UI language's plural rule (`Intl.PluralRules`): French uses the singular for 0 ("0 tâche"), so a `_one` string always writes `{count}`, never a literal 1. Never `n === 1 ? … : …` around two unrelated keys or an "(s)" suffix.
 
