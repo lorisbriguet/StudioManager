@@ -4,6 +4,7 @@ import type { invoiceLabels, InvoiceLanguage } from "../../i18n/invoice-labels";
 import type { Client, ClientAddress } from "../../types/client";
 import type { BusinessProfile } from "../../types/business-profile";
 import type { InvoiceTemplate } from "../../types/invoice-template";
+import { round2 } from "../../lib/lineItems";
 import { createDocumentStyles } from "./documentStyles";
 import { PDF } from "./pdfPalette";
 
@@ -245,7 +246,10 @@ export function PdfDocumentLayout({
                   {t.cultural_discount} ({(discountRate * 100).toFixed(0)}%)
                 </Text>
                 <Text>
-                  - {formatAmount(subtotal * discountRate)}
+                  {/* What was actually deducted, so the printed lines add up to
+                      the stored total (subtotal × rate unrounded can be a
+                      centime off). */}
+                  - {formatAmount(round2(subtotal - total))}
                 </Text>
               </View>
             )}

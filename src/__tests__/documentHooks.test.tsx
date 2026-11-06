@@ -182,6 +182,23 @@ describe.each(kinds)("$name hooks", (k) => {
     if (k.pdfOnSave) expect(pdf).toHaveBeenCalledWith(5);
   });
 
+  it("numbers sends that start at once one after another", async () => {
+    // Each saved send moves the counter, like MAX(reference) in the table
+    let saved = 0;
+    k.q.get.mockImplementation(async (id: number) => doc({ id, reference: `DRAFT-${id}` }));
+    k.q.nextRef.mockImplementation(async () => `REF-${saved + 1}`);
+    k.q.update.mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+      saved++;
+    });
+    const { result } = renderHook(() => k.h.useUpdate(), { wrapper });
+    await Promise.all(
+      [1, 2, 3].map((id) => result.current.mutateAsync({ id, data: { status: "sent" } as never }))
+    );
+    const refs = (k.q.update.mock.calls as unknown as [number, { reference: string }][]).map((c) => c[1].reference);
+    expect(refs).toEqual(["REF-1", "REF-2", "REF-3"]);
+  });
+
   it("keeps a real reference when sent again", async () => {
     k.q.get.mockResolvedValue(doc({ reference: "2025-004", status: "sent" }));
     const { result } = renderHook(() => k.h.useUpdate(), { wrapper });

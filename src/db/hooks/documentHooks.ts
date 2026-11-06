@@ -60,6 +60,14 @@ export function documentHooks<Doc extends DocumentRow, Item extends LineItemFiel
     return rest as unknown as LineItemFields;
   };
 
+  // One queue per kind: invoices and quotes number separately.
+  let sendQueue: Promise<unknown> = Promise.resolve();
+  const oneSendAtATime = <T>(work: () => Promise<T>): Promise<T> => {
+    const result = sendQueue.then(work);
+    sendQueue = result.catch(() => {});
+    return result;
+  };
+
   const invalidate = (qc: QueryClient, ...extra: QueryKey[]) => {
     qc.invalidateQueries({ queryKey: [key] });
     for (const k of extra) qc.invalidateQueries({ queryKey: k });
@@ -118,23 +126,31 @@ export function documentHooks<Doc extends DocumentRow, Item extends LineItemFiel
         data: DocFields<Doc>;
         lineItems?: LineItemFields[];
       }) => {
-        const prev = await q.get(id);
-        const prevLineItems = lineItems ? await q.lineItems(id) : undefined;
         const fields = data as DocFields<Doc> & { status?: string; reference?: string };
 
-        // Assign the real reference when a draft is sent
-        if (fields.status === "sent" && prev?.reference.startsWith("DRAFT")) {
-          const date = prev[dateField] as unknown as string | null;
-          const year = date ? parseInt(date.substring(0, 4)) : new Date().getFullYear();
-          fields.reference = await q.nextReference(year);
-        }
+        const save = async () => {
+          const prev = await q.get(id);
+          const prevLineItems = lineItems ? await q.lineItems(id) : undefined;
 
-        // Once it has left draft, it can't go back
-        if (fields.status === "draft" && prev && prev.status !== "draft") {
-          throw new AppError("error_revert_to_draft", "Cannot revert to draft status");
-        }
+          // Assign the real reference when a draft is sent
+          if (fields.status === "sent" && prev?.reference.startsWith("DRAFT")) {
+            const date = prev[dateField] as unknown as string | null;
+            const year = date ? parseInt(date.substring(0, 4)) : new Date().getFullYear();
+            fields.reference = await q.nextReference(year);
+          }
 
-        await q.updateWithLineItems(id, data, lineItems);
+          // Once it has left draft, it can't go back
+          if (fields.status === "draft" && prev && prev.status !== "draft") {
+            throw new AppError("error_revert_to_draft", "Cannot revert to draft status");
+          }
+
+          await q.updateWithLineItems(id, data, lineItems);
+          return { prev, prevLineItems };
+        };
+        // Sending picks the next free number: two sends at once would read the
+        // same one, so they take turns from reading the number to writing it.
+        const { prev, prevLineItems } = fields.status === "sent" ? await oneSendAtATime(save) : await save();
+
         await config.afterUpdate?.(id, fields.status ?? prev?.status, qc);
 
         if (prev) {
