@@ -8,8 +8,13 @@ import { getLabels, notify } from "../lib/notify";
 /** localStorage keys that used to hold what is now per-organisation. */
 const LEGACY_PREF_KEYS = ["showIncome", "showTasksPage", "showTimeOverview", "calendarSync", "calendarName", "backupPath", "exportLanguage"] as const;
 
+/** Dashboard keys, namespaced after the organisation upgrade shipped: every
+ *  launch moves any global copy left from an older build onto the open
+ *  organisation (the others start from the default dashboard). */
+const DASHBOARD_KEYS = ["dashboard-layout", "dashboard-widgets", "dashboard-pinned-notes", "dashboard-preset-id", "dashboard-preset-name"] as const;
+
 /** localStorage keys that are now written as `<key>:<organisation id>`. */
-const NAMESPACED_KEYS = ["open-tabs", "activeTimer", "tasksCollapsedProjects", "tasksProjectOrder", "lastAutoBackup"] as const;
+const NAMESPACED_KEYS = ["open-tabs", "activeTimer", "tasksCollapsedProjects", "tasksProjectOrder", "lastAutoBackup", ...DASHBOARD_KEYS] as const;
 
 /**
  * Rename the pre-organisation keys onto the upgraded organisation. Without
@@ -19,9 +24,9 @@ const NAMESPACED_KEYS = ["open-tabs", "activeTimer", "tasksCollapsedProjects", "
  * clock (which then runs a backup immediately). Copy then remove, and never
  * overwrite a namespaced value that already exists.
  */
-export function migrateLegacyKeysTo(id: string): void {
+export function migrateLegacyKeysTo(id: string, keys: readonly string[] = NAMESPACED_KEYS): void {
   if (!id) return;
-  for (const key of NAMESPACED_KEYS) {
+  for (const key of keys) {
     const value = localStorage.getItem(key);
     if (value === null) continue;
     const target = `${key}:${id}`;
@@ -108,7 +113,7 @@ export const useOrgStore = create<OrgState>((set, get) => ({
     // Null prefs mark the first launch after the layout upgrade. Rename the
     // legacy keys BEFORE applyRegistry, which reloads the tabs and the timer
     // from their namespaced keys.
-    if (active && active.prefs === null) migrateLegacyKeysTo(active.id);
+    if (active) migrateLegacyKeysTo(active.id, active.prefs === null ? NAMESPACED_KEYS : DASHBOARD_KEYS);
     get().applyRegistry(reg);
     if (active && active.prefs === null) {
       // Adopt the legacy localStorage preference values once.
