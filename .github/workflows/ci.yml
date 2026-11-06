@@ -52,9 +52,10 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
+      # Same version as rust-toolchain.toml.
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable, 2026-11
         with:
-          toolchain: stable
+          toolchain: 1.93.1
           components: clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
@@ -74,11 +75,12 @@ jobs:
       - run: npx vite build
       # From src-tauri, so cargo reads src-tauri/.cargo/config.toml (the
       # SQLite flag). CARGO_TARGET_DIR overrides its Mac-only target-dir and
-      # keeps the build where rust-cache looks.
+      # keeps the build where rust-cache looks. --locked: build from
+      # Cargo.lock as committed, fail if it would need to change.
       - name: cargo clippy and test
         working-directory: src-tauri
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
         run: |
-          cargo clippy --all-targets -- -D warnings
-          cargo test
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked
