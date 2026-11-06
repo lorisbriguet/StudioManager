@@ -38,6 +38,14 @@ export interface ClientAddress {
   postal_city: string;
 }
 
+type AddressLines = { address_line1?: string | null; address_line2?: string | null; postal_city?: string | null };
+
+/** Same street and city lines, ignoring surrounding spaces (labels and names aside). */
+export function sameAddress(a: AddressLines, b: AddressLines): boolean {
+  const same = (x?: string | null, y?: string | null) => (x ?? "").trim() === (y ?? "").trim();
+  return same(a.address_line1, b.address_line1) && same(a.address_line2, b.address_line2) && same(a.postal_city, b.postal_city);
+}
+
 export interface ClientContact {
   id: number;
   client_id: string;

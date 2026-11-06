@@ -1,6 +1,6 @@
 import type { Data } from "swissqrbill/types";
 import type { Invoice } from "../../types/invoice";
-import type { Client } from "../../types/client";
+import type { Client, ClientAddress } from "../../types/client";
 import type { BusinessProfile } from "../../types/business-profile";
 
 /** Generate a valid 27-digit QR reference from an invoice reference like "2026-001" */
@@ -38,12 +38,22 @@ export function shouldRenderQrBill(
   return (invoice.currency || "CHF") === "CHF" && !!profile.iban && showQrBill;
 }
 
-/** Build the swissqrbill Data object for an invoice */
+/**
+ * Build the swissqrbill Data object for an invoice. The debtor ("Payable by")
+ * is the address printed on the invoice: its chosen billing address, else the
+ * client's own. With no address at all it is left out, so the bill shows the
+ * empty box the payer fills in by hand.
+ */
 export function buildQRBillData(
   invoice: Invoice,
   client: Client,
-  profile: BusinessProfile
+  profile: BusinessProfile,
+  billingAddress?: ClientAddress | null
 ): Data {
+  const addr = billingAddress ?? client;
+  // Older clients keep "1000 Lausanne" in address_line2.
+  const cityLine = (addr.postal_city || addr.address_line2 || "").trim();
+  const hasAddress = !!(addr.address_line1?.trim() || cityLine);
   const qrIban = profile.qr_iban?.replace(/\s/g, "");
   const account = (qrIban || profile.iban).replace(/\s/g, "");
   const needsQRRef = isQRIBAN(account);
@@ -65,12 +75,16 @@ export function buildQRBillData(
     message: invoice.po_number
       ? `${invoice.reference} - ${client.name} - PO ${invoice.po_number}`
       : `${invoice.reference} - ${client.name}`,
-    debtor: {
-      name: client.name,
-      address: client.address_line1 || "",
-      zip: (client.postal_city || client.address_line2)?.match(/^\d+/)?.[0] || "",
-      city: (client.postal_city || client.address_line2)?.replace(/^\d+\s*/, "") || "",
-      country: "CH",
-    },
+    ...(hasAddress
+      ? {
+          debtor: {
+            name: billingAddress?.billing_name || client.billing_name || client.name,
+            address: addr.address_line1 || "",
+            zip: cityLine.match(/^\d+/)?.[0] || "",
+            city: cityLine.replace(/^\d+\s*/, ""),
+            country: "CH",
+          },
+        }
+      : {}),
   };
 }

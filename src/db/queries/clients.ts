@@ -1,5 +1,5 @@
 import { getDb, validateFields, TransactionBatch } from "../index";
-import type { Client, ClientContact, ClientAddress } from "../../types/client";
+import { sameAddress, type Client, type ClientContact, type ClientAddress } from "../../types/client";
 import { AppError } from "../../lib/errors";
 
 export async function getClients(): Promise<Client[]> {
@@ -408,12 +408,7 @@ export async function clearOwnAddressAfterDelete(
     "SELECT COUNT(*) as cnt FROM client_addresses WHERE client_id = $1",
     [clientId]
   );
-  const same = (a?: string | null, b?: string | null) => (a ?? "").trim() === (b ?? "").trim();
-  const isOwn =
-    same(own.address_line1, deleted.address_line1) &&
-    same(own.address_line2, deleted.address_line2) &&
-    same(own.postal_city, deleted.postal_city);
-  if (!isOwn && (left[0]?.cnt ?? 0) > 0) return null;
+  if (!sameAddress(own, deleted) && (left[0]?.cnt ?? 0) > 0) return null;
   await setOwnAddress(clientId, { address_line1: "", address_line2: "", postal_city: "" });
   return { address_line1: own.address_line1 ?? "", address_line2: own.address_line2 ?? "", postal_city: own.postal_city ?? "" };
 }
