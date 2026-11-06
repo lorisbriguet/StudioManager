@@ -59,7 +59,7 @@ export function useCreateExpense() {
   const qc = useQueryClient();
   return useMutation({
     meta: { errorLabel: "error_save_expense" },
-    mutationFn: async (data: Omit<Expense, "id" | "created_at" | "updated_at">) => {
+    mutationFn: async (data: q.NewExpense) => {
       const id = await q.createExpense(data);
       useUndoStore.getState().push({
         label: `${getLabels().undo_create_expense} "${data.reference}"`,

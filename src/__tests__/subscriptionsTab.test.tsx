@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
-import { render, screen, fireEvent, within, getDefaultNormalizer } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { Subscription } from "../types/upkeep";
 import type { PendingRenewal } from "../db/queries/subscriptions";
@@ -91,38 +91,48 @@ describe("SubscriptionsTab", () => {
     expect(screen.getByDisplayValue(format(new Date(2026, 9, 1), useAppStore.getState().dateFormat))).toBeInTheDocument();
   });
 
-  it("a USD renewal is prefilled in CHF at today's rate, the conversion shown under the amount and kept in the notes", async () => {
+  it("a USD renewal opens in USD at today's rate and is saved in CHF with its USD amount", async () => {
     // 1 CHF = 1.25 USD.
-    getExchangeRate.mockResolvedValueOnce(1.25);
-    const info = vi.spyOn(notify, "info").mockImplementation(() => {});
+    getExchangeRate.mockResolvedValue(1.25);
     pending = [renewal({ amount: 15, currency: "USD", name: "Figma" })];
     subs = [sub({ vendor: "Figma Inc", currency: "USD", cost: 15 })];
     renderTab();
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_renewal_add }));
-    const amount = await screen.findByDisplayValue("12");
-    // The conversion is said in the dialog, under the amount it explains, not in a toast.
-    const hint = "USD\u00a015.00 prefilled as CHF 12.00 (1 CHF = 1.2500 USD).";
-    expect(within(screen.getByRole("dialog")).getByText(hint, { normalizer: getDefaultNormalizer({ collapseWhitespace: false }) })).toBeInTheDocument();
-    expect(amount).toHaveAccessibleDescription(expect.stringContaining(hint));
-    expect(info).not.toHaveBeenCalled();
+    const amount = await screen.findByDisplayValue("15");
+    expect(await screen.findByDisplayValue("1.25")).toBeInTheDocument();
+    // The CHF value is said under the amount it explains.
+    await vi.waitFor(() => expect(amount).toHaveAccessibleDescription(expect.stringContaining("CHF\u00a012.00")));
     fireEvent.click(screen.getByRole("button", { name: t.save }));
     await vi.waitFor(() => expect(createExpense).toHaveBeenCalled());
     const saved = createExpense.mock.calls[0][0];
-    expect(saved.amount).toBe(12);
-    expect(saved.notes).toMatch(/^Converted from USD\u00a015\.00 at 1 CHF = 1\.2500 USD/);
-    info.mockRestore();
+    expect(saved).toMatchObject({ amount: 12, currency: "USD", exchange_rate: 1.25, original_amount: 15 });
+    getExchangeRate.mockReset();
+    getExchangeRate.mockResolvedValue(null);
   });
 
-  it("without an exchange rate it refuses instead of booking USD\u00a015 as CHF 15", async () => {
-    getExchangeRate.mockResolvedValueOnce(null);
-    const error = vi.spyOn(notify, "error").mockImplementation(() => {});
+  it("without an exchange rate it asks for one instead of booking USD\u00a015 as CHF 15", async () => {
+    getExchangeRate.mockResolvedValue(null);
+    const warning = vi.spyOn(notify, "warning").mockImplementation(() => {});
     pending = [renewal({ amount: 15, currency: "USD", name: "Figma" })];
     renderTab();
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_renewal_add }));
-    await vi.waitFor(() => expect(error).toHaveBeenCalledWith(t.upkeep_expense_no_rate.replace("{currency}", "USD")));
-    expect(screen.queryByDisplayValue("15")).toBeNull();
+    await screen.findByDisplayValue("15");
+    await vi.waitFor(() => expect(warning).toHaveBeenCalledWith(t.expense_rate_unavailable));
+    fireEvent.click(screen.getByRole("button", { name: t.save }));
+    expect(await screen.findByText(t.expense_rate_required)).toBeInTheDocument();
     expect(createExpense).not.toHaveBeenCalled();
     expect(decide).not.toHaveBeenCalled();
+    warning.mockRestore();
+  });
+
+  it("a currency the app can't convert is refused", async () => {
+    const error = vi.spyOn(notify, "error").mockImplementation(() => {});
+    pending = [renewal({ amount: 15, currency: "BTC", name: "Figma" })];
+    renderTab();
+    fireEvent.click(screen.getByRole("button", { name: t.upkeep_renewal_add }));
+    await vi.waitFor(() => expect(error).toHaveBeenCalledWith(t.upkeep_expense_unsupported_currency.replace("{currency}", "BTC")));
+    expect(screen.queryByDisplayValue("15")).toBeNull();
+    expect(createExpense).not.toHaveBeenCalled();
     // The question stays.
     expect(screen.getByRole("button", { name: t.upkeep_renewal_add })).toBeInTheDocument();
     error.mockRestore();

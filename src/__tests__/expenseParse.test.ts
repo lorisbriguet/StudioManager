@@ -99,6 +99,35 @@ describe("parseExpenseFromText — amount", () => {
   });
 });
 
+describe("parseExpenseFromText — currency", () => {
+  it("reads the currency written on the total's line", () => {
+    expect(parseExpenseFromText(FR_INVOICE).currency).toBe("CHF");
+    expect(parseExpenseFromText(DE_INVOICE).currency).toBe("EUR");
+    expect(parseExpenseFromText(CH_INVOICE).currency).toBe("CHF");
+  });
+
+  it("detects dollars, pounds and euro signs", () => {
+    expect(parseExpenseFromText("Adobe Inc.\nTotal $54.99").currency).toBe("USD");
+    expect(parseExpenseFromText("Amount due USD 15.00").currency).toBe("USD");
+    expect(parseExpenseFromText("Total £12.00").currency).toBe("GBP");
+    expect(parseExpenseFromText("Total 9,90 €").currency).toBe("EUR");
+    expect(parseExpenseFromText("Total C$ 20.00").currency).toBe("CAD");
+  });
+
+  it("prefers the total's currency over others on the receipt", () => {
+    const text = "Hotel Paris\nTaxe de séjour EUR 2.00\nPetit déjeuner EUR 12.00\nTotal CHF 140.00";
+    expect(parseExpenseFromText(text).currency).toBe("CHF");
+  });
+
+  it("falls back to the currency the text names most", () => {
+    expect(parseExpenseFromText("Invoice in EUR\nItem 10.00\nTotal 10.00").currency).toBe("EUR");
+  });
+
+  it("leaves the currency out when the receipt names none", () => {
+    expect(parseExpenseFromText(EN_RECEIPT).currency).toBeUndefined();
+  });
+});
+
 describe("parseExpenseFromText — dates", () => {
   it("uses labeled invoice and due dates (FR)", () => {
     const r = parseExpenseFromText(FR_INVOICE);

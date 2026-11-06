@@ -261,7 +261,8 @@ fn check_month(month: Option<u32>) -> R<Option<String>> {
     }
 }
 
-/// Expenses are stored in CHF (no currency column). Dated by `invoice_date`.
+/// Expense amounts are CHF (a foreign receipt keeps its own amount in
+/// `original_amount`, `currency`). Dated by `invoice_date`.
 pub fn list_expenses(
     conn: &Connection,
     access: &AccessConfig,
