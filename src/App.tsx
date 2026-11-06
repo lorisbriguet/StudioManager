@@ -60,6 +60,8 @@ import { useOrgStore } from "./stores/org-store";
 import { getLabels, notify } from "./lib/notify";
 import { requestNotificationPermission } from "./lib/nativeNotification";
 import { getAgentsEnabled } from "./lib/agents";
+import { purgeOldNotifications } from "./db/queries/notifications";
+import { logError } from "./lib/log";
 
 import { queryClient } from "./lib/queryClient";
 
@@ -74,6 +76,9 @@ function StartupChecks() {
 
   useEffect(() => {
     requestNotificationPermission();
+    purgeOldNotifications()
+      .then(() => queryClient.invalidateQueries({ queryKey: ["notifications"] }))
+      .catch((e) => logError("Notification purge failed:", e));
     getAgentsEnabled()
       .then((enabled) => useAppStore.getState().setAgentsEnabled(enabled === true))
       .catch(() => {});

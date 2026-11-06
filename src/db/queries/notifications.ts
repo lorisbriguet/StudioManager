@@ -1,10 +1,34 @@
 import { getDb } from "../index";
 import type { AppNotification } from "../../types/notification";
+import { uiLabels } from "../../i18n/ui";
+
+/** The panel shows the newest ones only; the unread count still covers all. */
+export const NOTIFICATIONS_LIST_LIMIT = 200;
 
 export async function getNotifications(): Promise<AppNotification[]> {
   const db = await getDb();
   return db.select<AppNotification[]>(
-    "SELECT * FROM notifications ORDER BY created_at DESC"
+    "SELECT * FROM notifications ORDER BY created_at DESC LIMIT $1",
+    [NOTIFICATIONS_LIST_LIMIT]
+  );
+}
+
+/**
+ * Run at startup so the table doesn't grow forever: read notifications go
+ * after 90 days, and routine auto-backup ones after 14 days even if unread
+ * (one is written per backup). Auto-backup rows are known by their title, in
+ * any language, since the language may have changed since they were written.
+ */
+export async function purgeOldNotifications(): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "DELETE FROM notifications WHERE read = 1 AND created_at < datetime('now', '-90 days')"
+  );
+  const backupTitles = [...new Set(Object.values(uiLabels).map((l) => l.auto_backup_title))];
+  const placeholders = backupTitles.map((_, i) => `$${i + 1}`).join(", ");
+  await db.execute(
+    `DELETE FROM notifications WHERE title IN (${placeholders}) AND created_at < datetime('now', '-14 days')`,
+    backupTitles
   );
 }
 
