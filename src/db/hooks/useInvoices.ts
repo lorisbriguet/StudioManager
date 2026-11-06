@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import * as q from "../queries/invoices";
 import { isDraftReference } from "../../types/invoice";
 import type { Invoice, InvoiceLineItem } from "../../types/invoice";
-import { generateAndStoreInvoicePdf } from "../../lib/invoicePdfStore";
 import { getLabels, notify } from "../../lib/notify";
 import { documentHooks } from "./documentHooks";
 
@@ -42,7 +41,10 @@ const hooks = documentHooks<Invoice, InvoiceLineItem>({
     const t = getLabels();
     const generated = await notify.progress(
       t.generating_pdf,
-      generateAndStoreInvoicePdf(id).then(() => true),
+      // Dynamic import keeps @react-pdf out of the main chunk.
+      import("../../lib/invoicePdfStore")
+        .then((m) => m.generateAndStoreInvoicePdf(id))
+        .then(() => true),
       { success: null, error: t.failed_to_generate_pdf }
     );
     if (generated) qc.invalidateQueries({ queryKey: ["invoices"] });

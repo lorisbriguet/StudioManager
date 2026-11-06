@@ -268,12 +268,12 @@ pub(crate) mod tests {
 
     /// A local HTTPS server presenting `cert`, answering "ok" to every
     /// request. Returns its port.
-    pub(crate) fn serve(cert: rcgen::CertifiedKey) -> u16 {
+    pub(crate) fn serve(cert: rcgen::CertifiedKey<rcgen::KeyPair>) -> u16 {
         use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
         use std::io::{Read, Write};
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
-        let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(cert.key_pair.serialize_der()));
+        let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(cert.signing_key.serialize_der()));
         let config = Arc::new(
             rustls::ServerConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
                 .with_safe_default_protocol_versions()
@@ -319,7 +319,7 @@ pub(crate) mod tests {
             .map_err(|e| super::super::synology::transport_error(&seen, super::super::describe(e)))
     }
 
-    pub(crate) fn certified(name: &str) -> rcgen::CertifiedKey {
+    pub(crate) fn certified(name: &str) -> rcgen::CertifiedKey<rcgen::KeyPair> {
         rcgen::generate_simple_self_signed(vec![name.to_string()]).unwrap()
     }
 
