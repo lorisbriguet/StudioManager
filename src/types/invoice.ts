@@ -1,3 +1,5 @@
+import type { LineItemFields } from "./document";
+
 export type InvoiceStatus = "draft" | "sent" | "paid" | "overdue" | "cancelled";
 
 /**
@@ -44,13 +46,7 @@ export interface Invoice {
   updated_at: string;
 }
 
-export interface InvoiceLineItem {
+export interface InvoiceLineItem extends LineItemFields {
   id: number;
   invoice_id: number;
-  designation: string;
-  rate: number | null;
-  unit: string | null;
-  quantity: number;
-  amount: number;
-  sort_order: number;
 }

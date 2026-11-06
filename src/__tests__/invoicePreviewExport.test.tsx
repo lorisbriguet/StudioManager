@@ -27,6 +27,8 @@ vi.mock("../lib/pdfPostProcess", () => ({
   postProcessInvoicePdf: async (bytes: Uint8Array) => bytes,
 }));
 vi.mock("../components/invoice/InvoicePDF", () => ({ InvoicePDF: () => null }));
+// invoicePdfStore renders through lib/documentPdf, which also imports QuotePDF.
+vi.mock("../components/quote/QuotePDF", () => ({ QuotePDF: () => null }));
 
 const draftRow = {
   id: 5,

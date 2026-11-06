@@ -32,12 +32,43 @@ export interface TimeMachineStatus {
   /** The destination's last result code; 0 is success. */
   lastResult: number | null;
   running: boolean;
+  /** This Mac's name: Time Machine names its bundle on a NAS after it. */
+  computerName: string | null;
 }
 
 /** Null when Time Machine was never set up on this Mac, and in test and presentation modes. */
 export async function timeMachineStatus(): Promise<TimeMachineStatus | null> {
   return invoke<TimeMachineStatus | null>("time_machine_status");
 }
+
+/** One device of the tailnet, as this Mac's Tailscale sees it. */
+export interface TailscaleDevice {
+  name: string;
+  dnsName: string | null;
+  os: string | null;
+  /** First Tailscale IPv4 address. */
+  ip: string | null;
+  online: boolean;
+  /** ISO 8601, only for an offline device that was seen before. */
+  lastSeen: string | null;
+  isSelf: boolean;
+}
+
+export interface TailscaleStatus {
+  /** Tailscale is connected on this Mac. */
+  running: boolean;
+  tailnet: string | null;
+  /** This Mac first, then online devices, then by name. */
+  devices: TailscaleDevice[];
+}
+
+/** Null when Tailscale isn't installed on this Mac, and in test and presentation modes. */
+export async function tailscaleStatus(): Promise<TailscaleStatus | null> {
+  return invoke<TailscaleStatus | null>("tailscale_status");
+}
+
+/** The machines page of the Tailscale admin console. */
+export const TAILSCALE_CONSOLE_URL = "https://login.tailscale.com/admin/machines";
 
 /** Open a machine's remote link (Screen Sharing, Jump Desktop). The URL is read from the database by id. */
 export async function openRemoteLink(fileId: number): Promise<void> {

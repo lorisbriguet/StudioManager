@@ -38,6 +38,7 @@ const COMMANDS: &[&str] = &[
     "network_check",
     "open_remote_link",
     "time_machine_status",
+    "tailscale_status",
     "connection_test",
     "connection_sync",
     "paperless_inbox",
