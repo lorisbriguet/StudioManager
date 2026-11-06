@@ -18,6 +18,7 @@ import { useTasksByProject } from "../db/hooks/useTasks";
 import { getInvoiceLineItems } from "../db/queries/invoices";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { getQuote, getQuoteLineItems, updateQuote } from "../db/queries/quotes";
+import { getProject } from "../db/queries/projects";
 import { useActivities } from "../db/hooks/useActivities";
 import type { Activity } from "../types/activity";
 import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel, round2 } from "../lib/lineItems";
@@ -27,7 +28,7 @@ import { currencies, getExchangeRate, toCHF, type Currency } from "../lib/exchan
 import { useTabStore } from "../stores/tab-store";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { confirmIfDirty } from "../lib/dirty-guard";
-import { pickableClients } from "../types/client";
+import { pickableClients, type Client } from "../types/client";
 import { qk } from "../db/queryKeys";
 
 // Phase 2 E2 — inline validation (additive; only fields with rules appear in
@@ -51,6 +52,8 @@ export function InvoiceFormPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const fromQuoteId = Number(searchParams.get("from_quote")) || null;
+  // "New invoice" from a project page: prefill client, project and language
+  const fromProjectId = (!fromQuoteId && Number(searchParams.get("project"))) || null;
 
   const t = useT();
   const updateActiveTab = useTabStore((s) => s.updateActiveTab);
@@ -90,6 +93,8 @@ export function InvoiceFormPage() {
   const [contactId, setContactId] = useState<number | null>(null);
   const [billingAddressId, setBillingAddressId] = useState<number | null>(null);
   const [projectId, setProjectId] = useState<number | null>(null);
+  // Per-invoice language: defaults to the client's, then stored as chosen
+  const [language, setLanguage] = useState<Client["language"]>("FR");
   const [invoiceDate, setInvoiceDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [activity, setActivity] = useState("");
   const [activityId, setActivityId] = useState<number | null>(null);
@@ -158,6 +163,7 @@ export function InvoiceFormPage() {
       setContactId(existingInvoice.contact_id);
       setBillingAddressId(existingInvoice.billing_address_id);
       setProjectId(existingInvoice.project_id);
+      setLanguage(existingInvoice.language === "EN" ? "EN" : "FR");
       setInvoiceDate(existingInvoice.invoice_date);
       setActivity(existingInvoice.activity);
       setActivityId(existingInvoice.activity_id ?? null);
@@ -225,10 +231,31 @@ export function InvoiceFormPage() {
 
   // Arm dirty tracking for new invoices (no existing data to load)
   useEffect(() => {
-    if (!isEdit && !fromQuoteId) {
+    if (!isEdit && !fromQuoteId && !fromProjectId) {
       setTimeout(() => { formLoadedRef.current = true; }, 0);
     }
-  }, [isEdit, fromQuoteId]);
+  }, [isEdit, fromQuoteId, fromProjectId]);
+
+  // Pre-fill from a project (once clients are loaded, for language and discount)
+  const projectPrefilledRef = useRef(false);
+  useEffect(() => {
+    if (!fromProjectId || isEdit || !clients || projectPrefilledRef.current) return;
+    projectPrefilledRef.current = true;
+    formLoadedRef.current = false;
+    getProject(fromProjectId).then((project) => {
+      if (!project) return;
+      const client = clients.find((c) => c.id === project.client_id);
+      setClientId(project.client_id);
+      setProjectId(project.id);
+      setLanguage(client?.language ?? "FR");
+      setDiscountRate(client?.has_discount ? client.discount_rate : 0);
+    }).catch((e) => {
+      notify.error(t.load_error_project, e);
+    }).finally(() => {
+      setTimeout(() => { formLoadedRef.current = true; }, 0);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-fill once per source project; t.* is only read in the error path
+  }, [fromProjectId, isEdit, clients]);
 
   // Pre-fill from quote when converting
   useEffect(() => {
@@ -239,6 +266,7 @@ export function InvoiceFormPage() {
       if (!quote) return;
       setClientId(quote.client_id);
       setProjectId(quote.project_id);
+      setLanguage(quote.language === "EN" ? "EN" : "FR");
       setBillingAddressId(quote.billing_address_id ?? null);
       setActivity(quote.activity);
       setActivityId(quote.activity_id ?? null);
@@ -265,9 +293,7 @@ export function InvoiceFormPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-fill once per source quote; adding t.* would re-run the pre-fill (and clobber edits) on locale switch. setItems is a stable setState.
   }, [fromQuoteId, isEdit]);
 
-  const selectedClient = clients?.find((c) => c.id === clientId);
-  const invoiceLang: "FR" | "EN" = selectedClient?.language ?? "FR";
-  const activityName = (a: Activity) => (invoiceLang === "FR" ? a.name_fr : a.name_en);
+  const activityName = (a: Activity) => (language === "FR" ? a.name_fr : a.name_en);
   // Newly computed money values are rounded at every boundary — these are
   // what save() persists, and invoices are legal documents.
   const subtotal = round2(items.reduce((sum, i) => sum + i.amount, 0));
@@ -398,7 +424,7 @@ export function InvoiceFormPage() {
               project_id: projectId,
               contact_id: contactId,
               billing_address_id: billingAddressId,
-              language: selectedClient?.language ?? "FR",
+              language,
               ...(() => {
                 const selected = activityId !== null ? activityList?.find((a) => a.id === activityId) : undefined;
                 return {
@@ -442,7 +468,7 @@ export function InvoiceFormPage() {
               contact_id: contactId,
               billing_address_id: billingAddressId,
               status: "draft",
-              language: selectedClient?.language ?? "FR",
+              language,
               ...(() => {
                 const selected = activityId !== null ? activityList?.find((a) => a.id === activityId) : undefined;
                 return {
@@ -523,8 +549,9 @@ export function InvoiceFormPage() {
                 setBillingAddressId(null);
                 autoSelectAddressRef.current = true;
                 setProjectId(null);
-                // User picked a (new) client: derive discount from that client
+                // User picked a (new) client: derive discount and language from that client
                 const newClient = clients?.find((c) => c.id === e.target.value);
+                setLanguage(newClient?.language ?? "FR");
                 setDiscountRate(newClient?.has_discount ? newClient.discount_rate : 0);
                 clearError("client_id");
               }}
@@ -575,6 +602,15 @@ export function InvoiceFormPage() {
               ))}
             </Select>
           </FormField>
+          <FormField label={t.language}>
+            <Select
+              value={language}
+              onChange={(e) => { markDirty(); setLanguage(e.target.value === "EN" ? "EN" : "FR"); }}
+            >
+              <option value="FR">{t.french}</option>
+              <option value="EN">{t.english}</option>
+            </Select>
+          </FormField>
           <FormField label={t.date} required error={errors.invoice_date}>
             <DatePicker
               value={invoiceDate || null}
@@ -586,7 +622,7 @@ export function InvoiceFormPage() {
             label={t.activity}
             hint={
               // The EN invoice would print the French name — nudge at the moment of harm
-              selectedClient?.language === "EN" &&
+              language === "EN" &&
               (() => {
                 const selected = activityList?.find((a) => a.id === activityId);
                 return selected && isUntranslatedActivity(selected) ? (

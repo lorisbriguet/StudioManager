@@ -240,6 +240,15 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
                 </Select>
               </div>
             )}
+            <div className="mt-2">
+              <Button
+                variant="secondary"
+                icon={ICONS.add}
+                onClick={() => navigate(`/invoices/new?project=${projectId}`)}
+              >
+                {t.new_invoice}
+              </Button>
+            </div>
           </div>
         );
       case "quotes":

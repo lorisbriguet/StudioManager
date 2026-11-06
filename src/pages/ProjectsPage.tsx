@@ -11,6 +11,7 @@ import { useAppStore } from "../stores/app-store";
 import { useTabStore } from "../stores/tab-store";
 import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu";
 import { useStartAgentOn } from "../hooks/useStartAgentOn";
+import { useNewItem } from "../hooks/useNewItem";
 import { agentMenuItems } from "../lib/agentStart";
 import { BulkActionBar } from "../components/ui/BulkActionBar";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
@@ -57,6 +58,8 @@ export function ProjectsPage() {
   const projectOpenMode = useAppStore((s) => s.projectOpenMode);
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState<{ id: number; name: string }> | null>(null);
   const [showForm, setShowForm] = useState(false);
+  // Cmd+N and the palette's New project open the form (lib/newEntity.ts).
+  useNewItem("/projects", () => setShowForm(true));
   const [filter, setFilter] = useState<ProjectStatus | "all">("active");
   const [search, setSearch] = useState("");
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);

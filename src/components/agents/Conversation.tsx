@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import { ChevronRight } from "lucide-react";
 import { conversation, type Item } from "../../lib/agents";
 import { settle, unread, useSent } from "../../lib/outbox";
+import { visibleInterval } from "../../lib/visibleInterval";
 import { useT } from "../../i18n/useT";
 import { EmptyState, IconButton, ICONS, ICON_SIZE } from "../ui";
 import { ExternalLink } from "./ExternalLink";
@@ -31,7 +32,7 @@ export function isWorkingNow(working: boolean, items: Item[], now = Date.now()):
 
 interface ConversationProps {
   sessionId: string;
-  /** Refetch every 3 s while true. */
+  /** Refetch every 3 s while true and the window is visible. */
   working: boolean;
 }
 
@@ -71,10 +72,10 @@ export function Conversation({ sessionId, working }: ConversationProps) {
         });
     };
     void load();
-    const timer = working ? setInterval(load, REFRESH_MS) : null;
+    const stop = working ? visibleInterval(load, REFRESH_MS) : null;
     return () => {
       alive = false;
-      if (timer) clearInterval(timer);
+      stop?.();
     };
   }, [sessionId, working]);
 
