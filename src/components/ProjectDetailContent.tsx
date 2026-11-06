@@ -1,3 +1,4 @@
+import { formatMoney } from "../lib/money";
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { notify } from "../lib/notify";
@@ -214,7 +215,7 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
                     className="w-full flex items-center gap-2 py-1.5 text-left hover:bg-[var(--color-hover-row)] rounded-md px-1 transition-colors"
                   >
                     <span className="text-sm truncate">{inv.reference}</span>
-                    <span className="text-xs text-muted">{inv.total.toFixed(2)} {inv.currency ?? "CHF"}</span>
+                    <span className="text-xs text-muted">{formatMoney(inv.total, inv.currency ?? "CHF")}</span>
                     <Badge variant={invoiceStatusVariant(inv.status)} className="ml-auto">{inv.status}</Badge>
                   </button>
                 ))}
@@ -233,7 +234,7 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
                   <option value="">{t.link_invoice}</option>
                   {unlinkedInvoices.map((inv) => (
                     <option key={inv.id} value={inv.id}>
-                      {inv.reference.startsWith("DRAFT") ? t.draft : inv.reference} — {inv.total.toFixed(2)} CHF
+                      {inv.reference.startsWith("DRAFT") ? t.draft : inv.reference} — {formatMoney(inv.total, inv.currency ?? "CHF")}
                     </option>
                   ))}
                 </Select>
@@ -257,7 +258,7 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
                     className="w-full flex items-center gap-2 py-1.5 text-left hover:bg-[var(--color-hover-row)] rounded-md px-1 transition-colors"
                   >
                     <span className="text-sm truncate">{qt.reference}</span>
-                    <span className="text-xs text-muted">{qt.total.toFixed(2)}</span>
+                    <span className="text-xs text-muted">{formatMoney(qt.total, "CHF")}</span>
                     <Badge variant={quoteStatusVariant(qt.status)} className="ml-auto">{qt.status}</Badge>
                   </button>
                 ))}
@@ -276,7 +277,7 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
                   <option value="">{t.link_quote}</option>
                   {unlinkedQuotes.map((qt) => (
                     <option key={qt.id} value={qt.id}>
-                      {qt.reference.startsWith("DRAFT") ? t.draft : qt.reference} — {qt.total.toFixed(2)} CHF
+                      {qt.reference.startsWith("DRAFT") ? t.draft : qt.reference} — {formatMoney(qt.total, "CHF")}
                     </option>
                   ))}
                 </Select>

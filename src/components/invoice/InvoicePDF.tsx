@@ -1,3 +1,4 @@
+import { formatMoneyPdf } from "../../lib/money";
 import { Text, View } from "@react-pdf/renderer";
 import { invoiceLabels, type InvoiceLanguage } from "../../i18n/invoice-labels";
 import type { Invoice, InvoiceLineItem } from "../../types/invoice";
@@ -23,13 +24,6 @@ interface InvoicePDFProps {
   template?: InvoiceTemplate;
 }
 
-function formatAmount(amount: number, currency = "CHF"): string {
-  return `${currency} ${amount.toLocaleString("de-CH", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
 export function InvoicePDF({
   invoice,
   lineItems,
@@ -53,7 +47,7 @@ export function InvoicePDF({
   const qrBillLang = invoice.language === "EN" ? "EN" as const : "FR" as const;
 
   const cur = invoice.currency || "CHF";
-  const fmt = (amount: number) => formatAmount(amount, cur);
+  const fmt = (amount: number) => formatMoneyPdf(amount, cur);
   const paymentDays = invoice.payment_terms_days || profile.default_payment_terms_days || 30;
   const paymentTermsText = t.net_days.replace("{days}", String(paymentDays));
 

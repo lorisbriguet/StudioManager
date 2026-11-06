@@ -1,3 +1,4 @@
+import { formatMoney } from "../lib/money";
 import { useState } from "react";
 import {
   BarChart,
@@ -235,7 +236,7 @@ export function FinancesPage() {
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: chart.tickFill }} />
             <YAxis tick={{ fontSize: 11, fill: chart.tickFill }} />
             <Tooltip
-              formatter={(value) => [`CHF ${Number(value ?? 0).toFixed(2)}`, ""]}
+              formatter={(value) => [formatMoney(Number(value ?? 0), "CHF"), ""]}
               contentStyle={chart.tooltipStyle}
               cursor={{ fill: chart.cursorFill }}
             />
@@ -268,7 +269,7 @@ export function FinancesPage() {
                 </Pie>
                 <Tooltip
                   formatter={(value, _, entry) => [
-                    `CHF ${Number(value ?? 0).toFixed(2)}`,
+                    formatMoney(Number(value ?? 0), "CHF"),
                     (entry as { payload: { label: string } }).payload.label,
                   ]}
                   contentStyle={chart.tooltipStyle}
@@ -361,10 +362,7 @@ function PLLine({
           negative && value < 0 ? "text-danger-text" : ""
         }`}
       >
-        {value < 0 ? "- " : ""}CHF {Math.abs(value).toLocaleString("de-CH", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}
+        {formatMoney(value, "CHF")}
       </span>
     </div>
   );

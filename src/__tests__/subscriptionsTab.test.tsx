@@ -101,7 +101,7 @@ describe("SubscriptionsTab", () => {
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_renewal_add }));
     const amount = await screen.findByDisplayValue("12");
     // The conversion is said in the dialog, under the amount it explains, not in a toast.
-    const hint = "USD\u00a015.00 prefilled as CHF 12.00 (1 CHF = 1.2500 USD).";
+    const hint = "USD\u00a015.00 prefilled as CHF\u00a012.00 (1 CHF = 1.2500 USD).";
     expect(within(screen.getByRole("dialog")).getByText(hint, { normalizer: getDefaultNormalizer({ collapseWhitespace: false }) })).toBeInTheDocument();
     expect(amount).toHaveAccessibleDescription(expect.stringContaining(hint));
     expect(info).not.toHaveBeenCalled();

@@ -68,6 +68,15 @@ export default tseslint.config(
           selector: 'JSXText[value=/[✓✔✕✖✗]/]',
           message: 'Use a lucide icon (ICONS.done, ICONS.close), not a text glyph.',
         },
+        // Money: formatMoney (src/lib/money.ts), see "Money as text" in DESIGN-SYSTEM.md.
+        {
+          selector: "CallExpression[callee.property.name='toFixed'][arguments.0.value=2]",
+          message: 'Write money with formatMoney(amount, currency) from src/lib/money.ts (formatMoneyPdf in PDFs).',
+        },
+        {
+          selector: "CallExpression[callee.property.name='toLocaleString'][arguments.0.value='de-CH']",
+          message: 'Write money with formatMoney(amount, currency) from src/lib/money.ts (formatMoneyPdf in PDFs).',
+        },
       ],
       // Codebase convention: intentionally-unused values are `_`-prefixed, and
       // fields are stripped via rest destructuring ({ _id, ...rest }).

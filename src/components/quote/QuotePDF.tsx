@@ -1,3 +1,4 @@
+import { formatMoneyPdf } from "../../lib/money";
 import { Text, View } from "@react-pdf/renderer";
 import { invoiceLabels, type InvoiceLanguage } from "../../i18n/invoice-labels";
 import type { Quote, QuoteLineItem } from "../../types/quote";
@@ -20,10 +21,7 @@ interface QuotePDFProps {
 }
 
 function formatCHF(amount: number): string {
-  return `CHF ${amount.toLocaleString("de-CH", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return formatMoneyPdf(amount, "CHF");
 }
 
 export function QuotePDF({

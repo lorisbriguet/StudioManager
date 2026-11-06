@@ -1,3 +1,4 @@
+import { formatMoney } from "../../lib/money";
 import {
   DndContext,
   closestCenter,
@@ -195,11 +196,11 @@ export function LineItemsTable({
               </Table.Td>
               <Table.Td numeric className="py-2 whitespace-nowrap">
                 <div className="space-y-1">
-                  <div className="font-normal">{currency} {subtotal.toFixed(2)}</div>
+                  <div className="font-normal">{formatMoney(subtotal, currency)}</div>
                   {discountRate > 0 && (
-                    <div className="text-muted font-normal">- {currency} {discountAmount.toFixed(2)}</div>
+                    <div className="text-muted font-normal">- {formatMoney(discountAmount, currency)}</div>
                   )}
-                  <div className={HEADING_2}>{currency} {total.toFixed(2)}</div>
+                  <div className={HEADING_2}>{formatMoney(total, currency)}</div>
                 </div>
               </Table.Td>
               <td />

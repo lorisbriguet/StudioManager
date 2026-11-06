@@ -1,3 +1,4 @@
+import { formatMoney } from "../lib/money";
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { ICONS, ICON_SIZE, PageHeader, SearchBar, Button, DatePicker, EmptyState, QueryState, NoResults, FormField, FormGrid, FormModal, Input, Select, Table, TableSkeleton, IconButton, Tag } from "../components/ui";
 import * as v from "../lib/validate";
@@ -283,7 +284,7 @@ export function IncomePage() {
                   colSpan={8}
                   label={year}
                   count={`${yearIncomes.length} ${yearIncomes.length !== 1 ? t.incomes_count_plural : t.incomes_count_singular}`}
-                  total={`CHF ${yearTotal.toFixed(2)}`}
+                  total={formatMoney(yearTotal, "CHF")}
                   open={isOpen}
                   onToggle={() => toggleYear(year)}
                 />
@@ -308,7 +309,7 @@ export function IncomePage() {
                       </Table.Td>
                       <Table.Td muted>{formatDisplayDate(inc.date)}</Table.Td>
                       <Table.Td numeric className="font-medium">
-                        CHF {inc.amount.toFixed(2)}
+                        {formatMoney(inc.amount, "CHF")}
                       </Table.Td>
                       <Table.Td>
                         {inc.receipt_path ? (

@@ -77,7 +77,7 @@ describe("expense breakdown widget", () => {
     const formatter = captured.tooltip!.formatter as (v: unknown, n: unknown) => unknown;
     // Returning a plain string lets recharts keep the slice name — the
     // previous [value, ""] tuple blanked it, rendering ": CHF 4686.50".
-    expect(formatter(4686.5, "Logiciels")).toBe("CHF 4686.50");
+    expect(formatter(4686.5, "Logiciels")).toBe("CHF\u00a04’686.50");
   });
 
   it("has no padding between slices, like the app's other pie chart", async () => {
