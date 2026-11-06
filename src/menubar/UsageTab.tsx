@@ -6,6 +6,7 @@ import { useT } from "../i18n/useT";
 import { useAppStore } from "../stores/app-store";
 import { useChartTheme } from "../hooks/useChartTheme";
 import { openMainWindow } from "../lib/agents";
+import { visibleInterval } from "../lib/visibleInterval";
 import {
   getUsageActivity,
   getUsageLimits,
@@ -21,7 +22,10 @@ const ACTIVITY_EVERY_MS = 60_000;
 /** The chart's palette has 8 colours; further clients wrap around. */
 const CHART_COLORS = 8;
 
-/** Calls `load` now and then every `ms`, one call in flight at a time, until unmounted. */
+/**
+ * Calls `load` now and then every `ms` while the window is visible (once more on return), one
+ * call in flight at a time, until unmounted.
+ */
 function usePoll<T>(load: () => Promise<T>, ms: number, onResult: (value: T) => void) {
   const loadRef = useRef(load);
   const resultRef = useRef(onResult);
@@ -43,10 +47,10 @@ function usePoll<T>(load: () => Promise<T>, ms: number, onResult: (value: T) => 
       }
     };
     void run();
-    const id = setInterval(() => void run(), ms);
+    const stop = visibleInterval(() => void run(), ms);
     return () => {
       alive = false;
-      clearInterval(id);
+      stop();
     };
   }, [ms]);
 }
