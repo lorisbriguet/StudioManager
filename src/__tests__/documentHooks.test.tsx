@@ -44,6 +44,12 @@ vi.mock("../db/queries/quotes", () => ({
   getNextQuoteReference: quo.nextRef,
 }));
 vi.mock("../lib/invoicePdfStore", () => ({ generateAndStoreInvoicePdf: pdf }));
+// The failed-PDF case logs through the Tauri log plugin, which tests can't reach.
+vi.mock("../lib/log", () => ({
+  logError: vi.fn(async () => {}),
+  logWarn: vi.fn(async () => {}),
+  logInfo: vi.fn(async () => {}),
+}));
 
 import * as invHooks from "../db/hooks/useInvoices";
 import * as quoHooks from "../db/hooks/useQuotes";
