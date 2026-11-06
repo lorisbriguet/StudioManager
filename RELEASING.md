@@ -10,7 +10,7 @@ Step-by-step guidelines for publishing a new release on GitHub. Follow in order;
 
 - `gh` CLI authenticated against `lorisbriguet/StudioManager`.
 - Tauri updater signing key at `~/.tauri/StudioManager.key`, protected by a password kept in the login Keychain (service `StudioManager-updater-key`). **Never commit it.** Its public key is pinned in `src-tauri/tauri.conf.json`: installed apps only accept updates signed with this key. Keep a backup of the key file and its password outside this Mac (password manager). For a new key, a lost one or a leaked one, see [Updater key: rotation, loss, leak](#updater-key-rotation-loss-leak). (The original key has no password and no Keychain entry: until the first rotation, use `TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""` in step 4.)
-- Node **20.19+ or 22.12+** (Vite 7 requirement) and stable Rust.
+- Node **20.19+ or 22.12+** (Vite 8 requirement) and Rust 1.93.1, pinned in [rust-toolchain.toml](rust-toolchain.toml) (rustup installs it on the first build).
 - Use **npm 11** for installs and lockfile changes (`npx -y npm@11 install`): npm 10.9 crashes with `Cannot read properties of null (reading 'edgesOut')` on Vitest 4's peer set.
 - Keep the repo out of synced folders (Synology Drive, iCloud): sync corrupts `node_modules` and `src-tauri/target`. Cargo builds into `src-tauri/target` unless `CARGO_TARGET_DIR` says otherwise (step 4 sets one). Run `npm ci` if node_modules acts up.
 
@@ -24,7 +24,7 @@ npm run lint            # exit 0, zero findings
 (cd src-tauri && cargo test && cargo clippy --all-targets -- -D warnings)
 ```
 
-Run `bash scripts/build-mcp.sh` and `npx vite build` once on a fresh clone before any `cargo` command in `src-tauri` (they create the git-ignored `src-tauri/binaries/studiomanager-mcp-<triple>` that Tauri's externalBin requires and the `dist/` folder the app crate embeds). CI runs the app checks on every push (the `rust` job in [.github/workflows/ci.yml](.github/workflows/ci.yml)) with the latest stable clippy: run `rustup update stable` first so your local lints match. The `studiomanager-mcp` crate (`src-tauri/mcp`) needs Rust 1.88+. Never run `cargo fmt` there: it reformats the files it shares with the app through `#[path]` includes.
+Run `bash scripts/build-mcp.sh` and `npx vite build` once on a fresh clone before any `cargo` command in `src-tauri` (they create the git-ignored `src-tauri/binaries/studiomanager-mcp-<triple>` that Tauri's externalBin requires and the `dist/` folder the app crate embeds). CI runs the app checks on every push (the `rust` job in [.github/workflows/ci.yml](.github/workflows/ci.yml)) with the Rust version pinned in [rust-toolchain.toml](rust-toolchain.toml), the same one rustup picks here, so local lints match CI. The `studiomanager-mcp` crate (`src-tauri/mcp`) needs Rust 1.88+. Never run `cargo fmt` there: it reformats the files it shares with the app through `#[path]` includes.
 
 - **Dependency audit green:** `npm audit --audit-level=moderate` and `cargo audit` (in `src-tauri` and `src-tauri/mcp`) pass, as in [.github/workflows/dependency-audit.yml](.github/workflows/dependency-audit.yml). The Release build workflow runs it on the tag first and stops on a failure; for a build on this Mac, check `gh run list --workflow dependency-audit.yml -L 1` is green. v2.2.0 to v3.3.1 shipped while it was red.
 - Working tree contains only the changes meant for this release; no debug code, `console.log` leftovers, or commented-out hacks.

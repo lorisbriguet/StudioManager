@@ -1,0 +1,8 @@
+# One Rust version for every build: CI, the Release build workflow and this Mac.
+# rustup reads this file from the repo root and any folder below it (src-tauri,
+# src-tauri/mcp, scripts/build-mcp.sh). Bump it on purpose, in its own PR, and
+# keep the `toolchain:` lines in .github/workflows/ci.yml and release.yml equal.
+[toolchain]
+channel = "1.93.1"
+components = ["clippy"]
+targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
