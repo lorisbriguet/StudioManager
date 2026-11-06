@@ -32,8 +32,8 @@ import { QuotesPage } from "../pages/QuotesPage";
 
 // Bulk "Mark as sent" used to start every update at once: each read the same
 // MAX reference before any was written, so all drafts got the same number and
-// all but one failed. Its undo then tried to set "draft" through the update
-// hook, which refuses to revert to draft.
+// all but one failed. A send that assigns a number has no undo: undoing it
+// would free the number for the next document.
 
 const YEAR = 2026;
 
@@ -111,7 +111,7 @@ describe.each([
   { name: "invoices", dateField: "invoice_date", page: <InvoicesPage />, refs: ["2026-001", "2026-002", "2026-003"] },
   { name: "quotes", dateField: "quote_date", page: <QuotesPage />, refs: ["D-2026-001", "D-2026-002", "D-2026-003"] },
 ] as const)("bulk mark as sent: $name", ({ name, dateField, page, refs }) => {
-  it("gives three drafts consecutive numbers, and one undo puts them back", async () => {
+  it("gives three drafts consecutive numbers, with no undo", async () => {
     const rows = table(name, dateField);
     renderPage(page);
     await waitFor(() => expect(screen.getAllByText("ACME")).toHaveLength(3));
@@ -121,15 +121,9 @@ describe.each([
     await waitFor(() => expect(rows().map((r) => r.status)).toEqual(["sent", "sent", "sent"]));
     expect(rows().map((r) => r.reference).sort()).toEqual(refs);
 
-    // One Undo for the whole bulk action, restoring every draft
-    await waitFor(() => expect(notify.undo).toHaveBeenCalledTimes(1));
-    const rollback = vi.mocked(notify.undo).mock.calls[0][1] as () => Promise<void>;
-    await rollback();
-    expect(rows().map((r) => [r.status, r.reference])).toEqual([
-      ["draft", "DRAFT-1"],
-      ["draft", "DRAFT-2"],
-      ["draft", "DRAFT-3"],
-    ]);
+    // Numbered documents can't be undone: undo would free their numbers
+    expect(notify.undo).not.toHaveBeenCalled();
+    expect(useUndoStore.getState().stack).toHaveLength(0);
     expect(notify.error).not.toHaveBeenCalled();
   });
 });
