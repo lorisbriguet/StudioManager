@@ -2,6 +2,23 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 
+// Query keys come from src/db/queryKeys.ts (qk), never inline arrays, so a
+// write can find every query it makes stale. A warning while hooks migrate.
+const noInlineQueryKey = {
+  meta: {
+    type: 'suggestion',
+    messages: { inline: 'Use a key from qk (src/db/queryKeys.ts), not an inline array.' },
+  },
+  create(context) {
+    return {
+      "Property[key.name='queryKey'] > ArrayExpression"(node) {
+        context.report({ node, messageId: 'inline' });
+      },
+    };
+  },
+};
+const studio = { rules: { 'no-inline-query-key': noInlineQueryKey } };
+
 export default tseslint.config(
   {
     ignores: [
@@ -21,9 +38,11 @@ export default tseslint.config(
     files: ['**/*.{ts,tsx}'],
     plugins: {
       'react-hooks': reactHooks,
+      studio,
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      'studio/no-inline-query-key': 'warn',
       // react-hooks v7 "recommended" bundles the React Compiler diagnostics.
       // This codebase is not compiled with React Compiler; these rules flag
       // long-standing (working) patterns en masse. Deferred to phase 2.
@@ -90,6 +109,11 @@ export default tseslint.config(
         },
       ],
     },
+  },
+  {
+    // Tests build their own keys
+    files: ['src/**/*.test.{ts,tsx}', 'src/__tests__/**'],
+    rules: { 'studio/no-inline-query-key': 'off' },
   },
   {
     // The only two files that may import sonner
