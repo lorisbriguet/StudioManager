@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Fake database that runs the generator's query the way SQLite would:
 // LIKE (case-insensitive for ASCII, `%` and `_` wildcards, optional ESCAPE)
@@ -30,7 +30,9 @@ const select = vi.fn(async (sql: string, params: unknown[]) => {
 
 vi.mock("../db", () => ({ getDb: async () => ({ select }) }));
 
-import { getNextReference } from "../db/queries/referenceGenerator";
+import { getNextReference, referenceYear } from "../db/queries/referenceGenerator";
+import { nextExpenseReferenceFor } from "../db/queries/expenses";
+import { nextIncomeReferenceFor } from "../db/queries/income";
 
 beforeEach(() => {
   references = [];
@@ -77,5 +79,42 @@ describe("getNextReference", () => {
   it("rejects unsafe table or column names", async () => {
     await expect(getNextReference("invoices; DROP", "reference", "2026-")).rejects.toThrow();
     expect(select).not.toHaveBeenCalled();
+  });
+});
+
+describe("expense and income numbers take the year of their own date", () => {
+  // Entered on 5 January 2027.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2027, 0, 5, 10));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("numbers a December receipt entered in January in the old year", async () => {
+    references = ["F-26-011", "F-27-002"];
+    expect(await nextExpenseReferenceFor("2026-12-28")).toBe("F-26-012");
+  });
+
+  it("numbers a January receipt in the new year", async () => {
+    references = ["F-26-011", "F-27-002"];
+    expect(await nextExpenseReferenceFor("2027-01-03")).toBe("F-27-003");
+  });
+
+  it("falls back to this year when the receipt has no date", async () => {
+    references = ["F-26-011"];
+    expect(await nextExpenseReferenceFor("")).toBe("F-27-001");
+    expect(await nextExpenseReferenceFor(null)).toBe("F-27-001");
+  });
+
+  it("numbers income the same way", async () => {
+    references = ["R-26-004"];
+    expect(await nextIncomeReferenceFor("2026-12-31")).toBe("R-26-005");
+    expect(await nextIncomeReferenceFor("2027-01-02")).toBe("R-27-001");
+  });
+
+  it("reads the year only from a YYYY-MM-DD date", () => {
+    expect(referenceYear("2025-06-30")).toBe(2025);
+    expect(referenceYear("30.06.2025")).toBe(2027);
+    expect(referenceYear(undefined)).toBe(2027);
   });
 });

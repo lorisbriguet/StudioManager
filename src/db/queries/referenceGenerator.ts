@@ -24,3 +24,12 @@ export async function getNextReference(
   const next = (rows[0]?.max_num ?? 0) + 1;
   return `${prefix}${String(next).padStart(padLength, "0")}`;
 }
+
+/**
+ * The year a reference is numbered in: the year of the record's own date
+ * (YYYY-MM-DD), or this year when it has none.
+ */
+export function referenceYear(date: string | null | undefined): number {
+  const year = /^(\d{4})-\d{2}-\d{2}/.exec(date ?? "")?.[1];
+  return year ? Number(year) : new Date().getFullYear();
+}

@@ -1,5 +1,5 @@
 import { getDb, validateFields, TransactionBatch } from "../index";
-import { getNextReference } from "./referenceGenerator";
+import { getNextReference, referenceYear } from "./referenceGenerator";
 import { AppError } from "../../lib/errors";
 import type { Expense, ExpenseCategory } from "../../types/expense";
 
@@ -17,8 +17,9 @@ export async function getExpenseCategories(): Promise<ExpenseCategory[]> {
   );
 }
 
-export async function getNextExpenseReference(year: number): Promise<string> {
-  const shortYear = String(year).slice(-2);
+/** Next expense number (F-26-001), in the year of its receipt's date. */
+export async function nextExpenseReferenceFor(date: string | null | undefined): Promise<string> {
+  const shortYear = String(referenceYear(date)).slice(-2);
   return getNextReference("expenses", "reference", `F-${shortYear}-`);
 }
 
