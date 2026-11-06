@@ -41,6 +41,7 @@ import {
   getPlannedVsActual,
 } from "../../db/queries/tasks";
 import { getInvoiceAging } from "../../db/queries/invoices";
+import { getExpenseCategories } from "../../db/queries/expenses";
 import {
   getTimeThisWeek,
   getTopTimeConsumers,
@@ -608,11 +609,7 @@ function UnpaidInvoices() {
 
 function ExpenseBreakdown() {
   const { data: expenses } = useExpenses();
-  const { data: categories } = useQuery({ queryKey: qk.dashboard.expenseCategories, queryFn: async () => {
-    const { getDb } = await import("../../db");
-    const db = await getDb();
-    return db.select<{ code: string; name_en: string; name_fr: string }[]>("SELECT code, name_en, name_fr FROM expense_categories");
-  }});
+  const { data: categories } = useQuery({ queryKey: qk.dashboard.expenseCategories, queryFn: getExpenseCategories });
   const chart = useChartTheme();
   const t = useT();
   const year = useDashboardYear();

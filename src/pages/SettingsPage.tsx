@@ -446,9 +446,8 @@ export function SettingsPage() {
                     });
                     if (!ok) return;
                     try {
-                      const db = await import("../db").then((m) => m.getDb());
-                      const { resetUserGuide } = await import("../db/seeds/user-guide");
-                      await resetUserGuide(db);
+                      const { resetUserGuideArticles } = await import("../db/queries/seeds");
+                      await resetUserGuideArticles();
                       notify.success(t.reset_user_guide_done);
                     } catch (e) {
                       notify.error(t.error_reset_user_guide, e);
