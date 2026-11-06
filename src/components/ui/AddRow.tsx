@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent, type ReactNode } from "react";
+import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { ICONS } from "./icons";
 import { Input } from "./Input";
 import { IconButton } from "./IconButton";
@@ -16,6 +16,8 @@ import { useDraftStore } from "../../stores/draft-store";
  * Enter or "+" calls `onAdd` with the trimmed text (never empty). Enter doesn't
  * submit a surrounding form. The field clears after the add: right away, or
  * once a returned promise resolves; return `false` to keep the text (a duplicate).
+ * When the promise rejects (a failed save), the text stays and is selected:
+ * Enter retries, typing replaces it.
  * `placeholder` is also the field's and the button's accessible name.
  *
  * `draftKey` keeps the typed text (in memory) when the row unmounts, so it is
@@ -56,6 +58,7 @@ export function AddRow({
   "data-testid": testId,
 }: AddRowProps) {
   const [local, setLocal] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
   const stored = useDraftStore((s) => (draftKey ? s.drafts[draftKey] ?? "" : ""));
   const text = draftKey ? stored : local;
   const setText = (value: string) => (draftKey ? useDraftStore.getState().set(draftKey, value) : setLocal(value));
@@ -71,7 +74,17 @@ export function AddRow({
     const result = onAdd(value);
     if (result === false) return;
     if (result instanceof Promise) {
-      result.then(() => clearIfUnchanged(text), () => {});
+      result.then(
+        () => clearIfUnchanged(text),
+        () => {
+          // Select the kept text unless the user has typed since.
+          const field = inputRef.current;
+          if (field && field.value === text) {
+            field.focus();
+            field.select();
+          }
+        }
+      );
     } else {
       setText("");
     }
@@ -80,6 +93,7 @@ export function AddRow({
   return (
     <div className={`flex items-center gap-2 ${className}`.trim()}>
       <Input
+        ref={inputRef}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {

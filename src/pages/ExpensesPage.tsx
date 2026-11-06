@@ -24,6 +24,7 @@ import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu
 import { MENU_ITEM } from "../components/ui/Dropdown";
 import { BulkActionBar } from "../components/ui/BulkActionBar";
 import { useReceiptDrop } from "../hooks/useReceiptDrop";
+import { useNewItem } from "../hooks/useNewItem";
 import { useListNavigation } from "../hooks/useListNavigation";
 import { useDetectedFields } from "../hooks/useDetectedFields";
 import { useBulkSelect } from "../hooks/useBulkSelect";
@@ -122,12 +123,8 @@ export function ExpensesPage() {
     useCallback((exp: (typeof filtered)[0]) => exp.invoice_date, [])
   );
 
-  // Cmd+N (GlobalShortcuts) opens the inline form on this page.
-  useEffect(() => {
-    const open = () => { setPrefill(null); setShowForm(true); };
-    window.addEventListener("sm:new-item", open);
-    return () => window.removeEventListener("sm:new-item", open);
-  }, []);
+  // Cmd+N and the palette's New expense open the form (lib/newEntity.ts).
+  useNewItem("/expenses", () => { setPrefill(null); setShowForm(true); });
 
   // Keyboard row navigation over the visible (expanded) rows. Expenses have
   // no full edit form, so Enter opens the row menu like Space.
@@ -602,7 +599,7 @@ export function NewExpenseForm({
 }) {
   const t = useT();
   const [form, setForm] = useState(() => initialForm(prefill, categories, pastSuppliers));
-  // Units of form.currency per 1 CHF: today's rate, editable. 0 while unknown.
+  // Units of form.currency per 1 CHF: the rate of the expense date, editable. 0 while unknown.
   const [rate, setRate] = useState(1);
   const [rateError, setRateError] = useState<string | null>(null);
   useEffect(() => {
@@ -613,7 +610,7 @@ export function NewExpenseForm({
     }
     let live = true;
     setRate(0);
-    void getExchangeRate(form.currency).then((r) => {
+    void getExchangeRate(form.currency, form.invoice_date).then((r) => {
       if (!live) return;
       if (r == null) {
         notify.warning(t.expense_rate_unavailable);
@@ -623,8 +620,8 @@ export function NewExpenseForm({
       setRateError(null);
     });
     return () => { live = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch on a currency change only; a locale switch must not refetch
-  }, [form.currency]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch on a currency or date change only; a locale switch must not refetch
+  }, [form.currency, form.invoice_date]);
   const foreign = form.currency !== "CHF";
   const money = expenseMoney(form.amount, form.currency, rate);
   const [errors, setErrors] = useState<Partial<Record<ExpenseFormField, string>>>({});

@@ -16,7 +16,7 @@
 - `src/lib/expenseParse.ts` must have zero Tauri imports (pure, unit-testable).
 - Everything stays local — no cloud APIs.
 - Tests live in `src/__tests__/` (project convention; supersedes the spec's `src/lib/__tests__/`).
-- Run a single test file: `npx vitest run src/__tests__/expenseParse.test.ts` (from repo root `/Users/loris.briguet/Documents/GitHub/StudioManager`).
+- Run a single test file: `npx vitest run src/__tests__/expenseParse.test.ts` (from the repo root).
 - Amount validation: `0 < x < 1_000_000`, rounded to 2 decimals. Date validity: years 2020–2030.
 
 ---

@@ -2,6 +2,23 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 
+// Query keys come from src/db/queryKeys.ts (qk), never inline arrays, so a
+// write can find every query it makes stale. A warning while hooks migrate.
+const noInlineQueryKey = {
+  meta: {
+    type: 'suggestion',
+    messages: { inline: 'Use a key from qk (src/db/queryKeys.ts), not an inline array.' },
+  },
+  create(context) {
+    return {
+      "Property[key.name='queryKey'] > ArrayExpression"(node) {
+        context.report({ node, messageId: 'inline' });
+      },
+    };
+  },
+};
+const studio = { rules: { 'no-inline-query-key': noInlineQueryKey } };
+
 export default tseslint.config(
   {
     ignores: [
@@ -21,26 +38,22 @@ export default tseslint.config(
     files: ['**/*.{ts,tsx}'],
     plugins: {
       'react-hooks': reactHooks,
+      studio,
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      'studio/no-inline-query-key': 'warn',
       // react-hooks v7 "recommended" bundles the React Compiler diagnostics.
-      // This codebase is not compiled with React Compiler; these rules flag
-      // long-standing (working) patterns en masse. Deferred to phase 2.
-      'react-hooks/set-state-in-effect': 'off',
-      'react-hooks/refs': 'off',
-      'react-hooks/purity': 'off',
-      'react-hooks/immutability': 'off',
-      'react-hooks/globals': 'off',
-      'react-hooks/preserve-manual-memoization': 'off',
-      'react-hooks/static-components': 'off',
-      'react-hooks/use-memo': 'off',
-      'react-hooks/incompatible-library': 'off',
-      'react-hooks/error-boundaries': 'off',
-      'react-hooks/set-state-in-render': 'off',
-      'react-hooks/unsupported-syntax': 'off',
-      'react-hooks/config': 'off',
-      'react-hooks/gating': 'off',
+      // This codebase is not compiled with React Compiler. The rules below
+      // still flag long-standing (working) patterns; turn each back on once
+      // its violations are fixed. Counts as of 2026-11-06:
+      'react-hooks/set-state-in-effect': 'off', // 53
+      'react-hooks/refs': 'off', // 46
+      'react-hooks/purity': 'off', // 11
+      'react-hooks/preserve-manual-memoization': 'off', // 3
+      'react-hooks/immutability': 'off', // 2
+      'react-hooks/globals': 'off', // 2
+      'react-hooks/incompatible-library': 'off', // 1
       // Toasts go through notify (src/lib/notify.ts): one API, the app's
       // durations and wording, errors never show raw text. See "Toasts" in
       // DESIGN-SYSTEM.md.
@@ -90,6 +103,11 @@ export default tseslint.config(
         },
       ],
     },
+  },
+  {
+    // Tests build their own keys
+    files: ['src/**/*.test.{ts,tsx}', 'src/__tests__/**'],
+    rules: { 'studio/no-inline-query-key': 'off' },
   },
   {
     // The only two files that may import sonner

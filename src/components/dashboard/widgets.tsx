@@ -65,6 +65,7 @@ import { EmptyState } from "../ui/EmptyState";
 import { ListSkeleton } from "../ui/Skeleton";
 import { invoiceStatusDotClass, priorityDotClass } from "../../lib/statusColors";
 import { formatMoney } from "../../lib/money";
+import { qk } from "../../db/queryKeys";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -250,7 +251,7 @@ function RecentInvoices() {
 
 function TodayTasks() {
   const { data: tasks } = useVisibleTasks();
-  const { data: subtasks } = useQuery({ queryKey: ["subtasks", "with-due-date"], queryFn: getSubtasksWithDueDate });
+  const { data: subtasks } = useQuery({ queryKey: qk.subtasks.withDueDate, queryFn: getSubtasksWithDueDate });
   const { data: projects } = useProjects();
   const t = useT();
   const today = todayLocalISO();
@@ -298,7 +299,7 @@ function TodayTasks() {
 
 function OverdueTasks() {
   const { data: tasks } = useVisibleTasks();
-  const { data: subtasks } = useQuery({ queryKey: ["subtasks", "with-due-date"], queryFn: getSubtasksWithDueDate });
+  const { data: subtasks } = useQuery({ queryKey: qk.subtasks.withDueDate, queryFn: getSubtasksWithDueDate });
   const { data: projects } = useProjects();
   const t = useT();
   const today = todayLocalISO();
@@ -607,7 +608,7 @@ function UnpaidInvoices() {
 
 function ExpenseBreakdown() {
   const { data: expenses } = useExpenses();
-  const { data: categories } = useQuery({ queryKey: ["expense-categories-all"], queryFn: async () => {
+  const { data: categories } = useQuery({ queryKey: qk.dashboard.expenseCategories, queryFn: async () => {
     const { getDb } = await import("../../db");
     const db = await getDb();
     return db.select<{ code: string; name_en: string; name_fr: string }[]>("SELECT code, name_en, name_fr FROM expense_categories");
@@ -1218,7 +1219,7 @@ function fmtHours(min: number): string {
 function TimeThisWeek() {
   const t = useT();
   const chart = useChartTheme();
-  const { data } = useQuery({ queryKey: ["time-this-week"], queryFn: getTimeThisWeek });
+  const { data } = useQuery({ queryKey: qk.dashboard.timeThisWeek, queryFn: getTimeThisWeek });
   const chartData = useMemo(() => {
     if (!data || data.length === 0) return [];
     const now = new Date();
@@ -1271,7 +1272,7 @@ function TimeWidgetState({ title, loading }: { title: string; loading: boolean }
 function PlannedVsActual() {
   const t = useT();
   const chart = useChartTheme();
-  const { data } = useQuery({ queryKey: ["planned-vs-actual"], queryFn: getPlannedVsActual });
+  const { data } = useQuery({ queryKey: qk.dashboard.plannedVsActual, queryFn: getPlannedVsActual });
 
   if (!data?.length) return <TimeWidgetState title={t.planned_vs_actual} loading={data === undefined} />;
 
@@ -1303,7 +1304,7 @@ function PlannedVsActual() {
 
 function TopTimeConsumers() {
   const t = useT();
-  const { data } = useQuery({ queryKey: ["top-time-consumers"], queryFn: () => getTopTimeConsumers(8) });
+  const { data } = useQuery({ queryKey: qk.dashboard.topTimeConsumers, queryFn: () => getTopTimeConsumers(8) });
 
   if (!data?.length) return <TimeWidgetState title={t.top_time_consumers} loading={data === undefined} />;
 
@@ -1327,7 +1328,7 @@ function TopTimeConsumers() {
 
 function BillableSummary() {
   const t = useT();
-  const { data } = useQuery({ queryKey: ["billable-summary"], queryFn: getBillableSummary });
+  const { data } = useQuery({ queryKey: qk.dashboard.billableSummary, queryFn: getBillableSummary });
   const totalHours = Math.round((data?.total_minutes ?? 0) / 60 * 10) / 10;
   const animated = useCountUp(totalHours);
 
@@ -1339,7 +1340,7 @@ function BillableSummary() {
 function WeeklyTrendWidget() {
   const t = useT();
   const chart = useChartTheme();
-  const { data } = useQuery({ queryKey: ["weekly-trend"], queryFn: getWeeklyTrend });
+  const { data } = useQuery({ queryKey: qk.dashboard.weeklyTrend, queryFn: getWeeklyTrend });
 
   if (!data?.length) return <TimeWidgetState title={t.weekly_trend} loading={data === undefined} />;
 
@@ -1374,7 +1375,7 @@ const PIE_COLORS = [
 function ProjectTimeDistribution() {
   const t = useT();
   const chart = useChartTheme();
-  const { data } = useQuery({ queryKey: ["project-time-distribution"], queryFn: getProjectTimeDistribution });
+  const { data } = useQuery({ queryKey: qk.dashboard.projectTimeDistribution, queryFn: getProjectTimeDistribution });
 
   if (!data?.length) return <TimeWidgetState title={t.project_time_distribution} loading={data === undefined} />;
 
@@ -1423,7 +1424,7 @@ const AGING_BRACKETS = ["0-30", "31-60", "61-90", "90+"];
 function InvoiceAging() {
   const t = useT();
   const chart = useChartTheme();
-  const { data } = useQuery({ queryKey: ["invoice-aging"], queryFn: getInvoiceAging });
+  const { data } = useQuery({ queryKey: qk.dashboard.invoiceAging, queryFn: getInvoiceAging });
 
   const chartData = useMemo(() => {
     return AGING_BRACKETS.map((bracket) => {

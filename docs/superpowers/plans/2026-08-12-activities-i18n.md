@@ -17,7 +17,7 @@
 - Text snapshots are always trimmed on save.
 - Chart resolution: `activity_id` if valid → else case-insensitive trimmed match against any activity's `name_fr`/`name_en` → else the raw trimmed text as its own row (never dropped); empty text stays the `N/A` bucket.
 - Empty FR name defaults to the EN value on save, and vice versa.
-- Tests live in `src/__tests__/`; run one file with `npx vitest run src/__tests__/<file>` from repo root `/Users/loris.briguet/Documents/GitHub/StudioManager`.
+- Tests live in `src/__tests__/`; run one file with `npx vitest run src/__tests__/<file>` from the repo root.
 - All user-visible strings go through `useT()` keys in `src/i18n/ui.ts` (both EN and FR blocks).
 
 ---

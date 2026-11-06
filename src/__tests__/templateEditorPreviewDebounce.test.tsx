@@ -24,6 +24,8 @@ vi.mock("../db/hooks/useInvoiceTemplates", () => {
     useSetDefaultTemplate: () => mutation,
   };
 });
+// The preview prints the owner's profile; none here, so the sample stands in.
+vi.mock("../db/hooks/useBusinessProfile", () => ({ useBusinessProfile: () => ({ data: undefined }) }));
 
 import { TemplateEditor, PREVIEW_DEBOUNCE_MS } from "../components/invoice/TemplateEditor";
 

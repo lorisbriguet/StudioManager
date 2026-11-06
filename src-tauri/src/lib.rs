@@ -330,25 +330,39 @@ async fn enter_test_mode(
 
 fn enter_test_mode_now(app: tauri::AppHandle) -> Result<String, String> {
     let org = active_org(&app)?;
-    let prod_db = org.prod_db_path();
-    let snapshot_db = org.file("studiomanager_snapshot.db");
-    let test_db = org.file("studiomanager_test.db");
-
-    // Snapshot production DB (safety net) — WAL-safe consistent image
-    dbfiles::snapshot_db_file(&prod_db, &snapshot_db)
-        .map_err(|e| format!("Failed to snapshot production DB: {e}"))?;
-
-    // Copy production DB to test DB
-    dbfiles::snapshot_db_file(&prod_db, &test_db)
-        .map_err(|e| format!("Failed to create test DB: {e}"))?;
-
-    // Start from an empty document folder (a crash may have left one behind)
-    remove_mode_files(&org, "test");
-
-    // Switch active DB to test
-    set_active_db_name(&app, "studiomanager_test.db")?;
-
+    let test_db = begin_mode_files(&org, TEST_DB, "test")?;
+    set_active_db_name(&app, TEST_DB)?;
     Ok(test_db.to_string_lossy().to_string())
+}
+
+const TEST_DB: &str = "studiomanager_test.db";
+const PRESENTATION_DB: &str = "studiomanager_presentation.db";
+/// The manual snapshot (Settings > Snapshot). Test and presentation mode never touch it.
+const SNAPSHOT_DB: &str = "studiomanager_snapshot.db";
+/// The safety copy of production taken when a mode starts, removed when it ends.
+const MODE_SNAPSHOT_DB: &str = "studiomanager_mode_snapshot.db";
+
+/// Prepare a mode's files: a safety copy of production, the mode's database
+/// (a copy of production, so the schema is intact) and an empty document
+/// folder. Returns the mode database's path.
+fn begin_mode_files(org: &ActiveOrg, mode_db: &str, folder: &str) -> Result<PathBuf, String> {
+    let prod_db = org.prod_db_path();
+    let db = org.file(mode_db);
+    // WAL-safe consistent images
+    dbfiles::snapshot_db_file(&prod_db, &org.file(MODE_SNAPSHOT_DB))
+        .map_err(|e| format!("Failed to snapshot production DB: {e}"))?;
+    dbfiles::snapshot_db_file(&prod_db, &db)
+        .map_err(|e| format!("Failed to create {folder} DB: {e}"))?;
+    // Start from an empty document folder (a crash may have left one behind)
+    remove_mode_files(org, folder);
+    Ok(db)
+}
+
+/// Remove a mode's database, its document folder and the safety copy.
+fn end_mode_files(org: &ActiveOrg, mode_db: &str, folder: &str) {
+    dbfiles::remove_db_files(&org.file(mode_db));
+    dbfiles::remove_db_files(&org.file(MODE_SNAPSHOT_DB));
+    remove_mode_files(org, folder);
 }
 
 /// Exit test mode: switch back to production DB and remove test DB.
@@ -365,15 +379,8 @@ async fn exit_test_mode(
 
 fn exit_test_mode_now(app: tauri::AppHandle) -> Result<(), String> {
     let org = active_org(&app)?;
-    let test_db = org.file("studiomanager_test.db");
-
-    // Switch back to production DB
     set_active_db_name(&app, DB_FILE)?;
-
-    // Remove test DB together with its WAL/SHM companions
-    dbfiles::remove_db_files(&test_db);
-    remove_mode_files(&org, "test");
-
+    end_mode_files(&org, TEST_DB, "test");
     Ok(())
 }
 
@@ -401,24 +408,8 @@ async fn enter_presentation_mode(
 
 fn enter_presentation_mode_now(app: tauri::AppHandle) -> Result<String, String> {
     let org = active_org(&app)?;
-    let prod_db = org.prod_db_path();
-    let snapshot_db = org.file("studiomanager_snapshot.db");
-    let pres_db = org.file("studiomanager_presentation.db");
-
-    // Snapshot production DB (safety net) — WAL-safe consistent image
-    dbfiles::snapshot_db_file(&prod_db, &snapshot_db)
-        .map_err(|e| format!("Failed to snapshot production DB: {e}"))?;
-
-    // Copy production DB to presentation DB (so schema/migrations are intact)
-    dbfiles::snapshot_db_file(&prod_db, &pres_db)
-        .map_err(|e| format!("Failed to create presentation DB: {e}"))?;
-
-    // Start from an empty document folder (a crash may have left one behind)
-    remove_mode_files(&org, "presentation");
-
-    // Switch active DB to presentation
-    set_active_db_name(&app, "studiomanager_presentation.db")?;
-
+    let pres_db = begin_mode_files(&org, PRESENTATION_DB, "presentation")?;
+    set_active_db_name(&app, PRESENTATION_DB)?;
     Ok(pres_db.to_string_lossy().to_string())
 }
 
@@ -436,15 +427,8 @@ async fn exit_presentation_mode(
 
 fn exit_presentation_mode_now(app: tauri::AppHandle) -> Result<(), String> {
     let org = active_org(&app)?;
-    let pres_db = org.file("studiomanager_presentation.db");
-
-    // Switch back to production DB
     set_active_db_name(&app, DB_FILE)?;
-
-    // Remove presentation DB together with its WAL/SHM companions
-    dbfiles::remove_db_files(&pres_db);
-    remove_mode_files(&org, "presentation");
-
+    end_mode_files(&org, PRESENTATION_DB, "presentation");
     Ok(())
 }
 
@@ -463,7 +447,7 @@ async fn snapshot_db(
 fn snapshot_db_now(app: tauri::AppHandle) -> Result<String, String> {
     let org = active_org(&app)?;
     let prod_db = org.prod_db_path();
-    let snapshot_db = org.file("studiomanager_snapshot.db");
+    let snapshot_db = org.file(SNAPSHOT_DB);
 
     dbfiles::snapshot_db_file(&prod_db, &snapshot_db)
         .map_err(|e| format!("Failed to snapshot DB: {e}"))?;
@@ -539,7 +523,7 @@ async fn restore_snapshot(
 fn restore_snapshot_now(app: tauri::AppHandle) -> Result<(), String> {
     let org = active_org(&app)?;
     let prod_db = org.prod_db_path();
-    let snapshot_db = org.file("studiomanager_snapshot.db");
+    let snapshot_db = org.file(SNAPSHOT_DB);
 
     if !snapshot_db.exists() {
         return Err("No snapshot found".to_string());
@@ -556,7 +540,7 @@ fn restore_snapshot_now(app: tauri::AppHandle) -> Result<(), String> {
 /// Check if a snapshot file exists.
 #[tauri::command]
 fn has_snapshot(app: tauri::AppHandle) -> Result<bool, String> {
-    Ok(active_org(&app)?.file("studiomanager_snapshot.db").exists())
+    Ok(active_org(&app)?.file(SNAPSHOT_DB).exists())
 }
 
 /// Get the currently active DB name.
@@ -1459,6 +1443,35 @@ mod tests {
         let n: i64 = other.query_row("SELECT COUNT(*) FROM t", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 1);
         drop((setup, batch, other));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Test and presentation mode keep their safety copy apart from the manual
+    /// snapshot, and leave nothing behind once they end (UI test D2).
+    #[test]
+    fn modes_leave_the_manual_snapshot_alone_and_clean_up_after_themselves() {
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("sm-modes-{nanos}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        let org = ActiveOrg { id: "abc123".into(), dir: dir.clone(), db_name: DB_FILE.into() };
+        let prod = rusqlite::Connection::open(org.prod_db_path()).unwrap();
+        prod.execute_batch("CREATE TABLE t (v TEXT); INSERT INTO t VALUES ('prod');").unwrap();
+        dbfiles::snapshot_db_file(&org.prod_db_path(), &org.file(SNAPSHOT_DB)).unwrap();
+        let manual_before = std::fs::read(org.file(SNAPSHOT_DB)).unwrap();
+        prod.execute("INSERT INTO t VALUES ('after the manual snapshot')", []).unwrap();
+
+        for (mode_db, folder) in [(TEST_DB, "test"), (PRESENTATION_DB, "presentation")] {
+            let db = begin_mode_files(&org, mode_db, folder).unwrap();
+            assert!(db.exists());
+            assert!(org.file(MODE_SNAPSHOT_DB).exists());
+            std::fs::create_dir_all(org.file(folder)).unwrap();
+            end_mode_files(&org, mode_db, folder);
+            assert!(!db.exists(), "{mode_db} removed");
+            assert!(!org.file(MODE_SNAPSHOT_DB).exists(), "safety copy removed after {folder}");
+            assert!(!org.file(folder).exists(), "{folder} folder removed");
+            assert_eq!(std::fs::read(org.file(SNAPSHOT_DB)).unwrap(), manual_before, "manual snapshot untouched by {folder}");
+        }
+        drop(prod);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

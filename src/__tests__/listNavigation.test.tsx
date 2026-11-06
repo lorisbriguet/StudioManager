@@ -121,16 +121,16 @@ describe("GlobalShortcuts Cmd+N", () => {
     const spy = vi.fn();
     window.addEventListener("sm:new-item", spy);
     render(
-      <MemoryRouter initialEntries={["/clients"]}>
+      <MemoryRouter initialEntries={["/upkeep"]}>
         <GlobalShortcuts />
         <Routes>
-          <Route path="/clients" element={<div data-testid="clients" />} />
+          <Route path="/upkeep" element={<div data-testid="upkeep" />} />
         </Routes>
       </MemoryRouter>
     );
     fireEvent.keyDown(window, { key: "n", metaKey: true });
     expect(spy).not.toHaveBeenCalled();
-    expect(screen.getByTestId("clients")).toBeInTheDocument();
+    expect(screen.getByTestId("upkeep")).toBeInTheDocument();
     window.removeEventListener("sm:new-item", spy);
   });
 });

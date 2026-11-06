@@ -12,12 +12,12 @@ import { getQuoteLineItems } from "../db/queries/quotes";
 import { useT } from "../i18n/useT";
 import { useActivities } from "../db/hooks/useActivities";
 import type { Activity } from "../types/activity";
-import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel, round2 } from "../lib/lineItems";
+import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel, round2, computeTotals } from "../lib/lineItems";
 import { LineItemsTable } from "../components/shared/LineItemsTable";
 import { GlobalRateControl, TemplateField } from "../components/shared/DocumentFields";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { confirmIfDirty } from "../lib/dirty-guard";
-import { pickableClients } from "../types/client";
+import { pickableClients, type Client } from "../types/client";
 
 // Phase 2 E2 — inline validation (additive; only fields with rules appear in
 // the schema, the rest are unvalidated). "line_items" has no schema rules —
@@ -70,6 +70,8 @@ export function QuoteFormPage() {
   const [clientId, setClientId] = useState("");
   const [billingAddressId, setBillingAddressId] = useState<number | null>(null);
   const [projectId, setProjectId] = useState<number | null>(null);
+  // Per-quote language: defaults to the client's, then stored as chosen
+  const [language, setLanguage] = useState<Client["language"]>("FR");
   const [quoteDate, setQuoteDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [activity, setActivity] = useState("");
   const [activityId, setActivityId] = useState<number | null>(null);
@@ -115,6 +117,7 @@ export function QuoteFormPage() {
       setClientId(existingQuote.client_id);
       setBillingAddressId(existingQuote.billing_address_id);
       setProjectId(existingQuote.project_id);
+      setLanguage(existingQuote.language === "EN" ? "EN" : "FR");
       setQuoteDate(existingQuote.quote_date);
       setActivity(existingQuote.activity);
       setActivityId(existingQuote.activity_id ?? null);
@@ -171,14 +174,10 @@ export function QuoteFormPage() {
     }
   }, [isEdit]);
 
-  const selectedClient = clients?.find((c) => c.id === clientId);
-  const quoteLang: "FR" | "EN" = selectedClient?.language ?? "FR";
-  const activityName = (a: Activity) => (quoteLang === "FR" ? a.name_fr : a.name_en);
+  const activityName = (a: Activity) => (language === "FR" ? a.name_fr : a.name_en);
   // Newly computed money values are rounded at every boundary — these are
   // what save() persists.
-  const subtotal = round2(items.reduce((sum, i) => sum + i.amount, 0));
-  const discountAmount = round2(subtotal * discountRate);
-  const total = round2(subtotal - discountAmount);
+  const { subtotal, discountAmount, total } = computeTotals(items, discountRate);
 
   const { data: clientAddresses } = useClientAddresses(clientId);
   const clientProjects = projects?.filter((p) => p.client_id === clientId);
@@ -226,7 +225,7 @@ export function QuoteFormPage() {
               client_id: clientId,
               project_id: projectId,
               billing_address_id: billingAddressId,
-              language: selectedClient?.language ?? "FR",
+              language,
               ...(() => {
                 const selected = activityId !== null ? activityList?.find((a) => a.id === activityId) : undefined;
                 return {
@@ -264,7 +263,7 @@ export function QuoteFormPage() {
               project_id: projectId,
               billing_address_id: billingAddressId,
               status: "draft",
-              language: selectedClient?.language ?? "FR",
+              language,
               ...(() => {
                 const selected = activityId !== null ? activityList?.find((a) => a.id === activityId) : undefined;
                 return {
@@ -331,8 +330,9 @@ export function QuoteFormPage() {
                 setBillingAddressId(null);
                 autoSelectAddressRef.current = true;
                 setProjectId(null);
-                // User picked a (new) client: derive discount from that client
+                // User picked a (new) client: derive discount and language from that client
                 const newClient = clients?.find((c) => c.id === e.target.value);
+                setLanguage(newClient?.language ?? "FR");
                 setDiscountRate(newClient?.has_discount ? newClient.discount_rate : 0);
                 clearError("client_id");
               }}
@@ -368,6 +368,15 @@ export function QuoteFormPage() {
               {clientProjects?.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
+            </Select>
+          </FormField>
+          <FormField label={t.language}>
+            <Select
+              value={language}
+              onChange={(e) => { markDirty(); setLanguage(e.target.value === "EN" ? "EN" : "FR"); }}
+            >
+              <option value="FR">{t.french}</option>
+              <option value="EN">{t.english}</option>
             </Select>
           </FormField>
           <FormField label={t.date} required error={errors.quote_date}>

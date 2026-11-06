@@ -932,6 +932,10 @@ async function ensureSchema(db: Database) {
      WHERE receipt_path LIKE '%/ch.lorisbriguet.studiomanager/%'`
   ).catch((e) => logError("[DB] receipt path migration failed:", e));
   await db.execute(
+    `UPDATE income SET receipt_path = REPLACE(receipt_path, '/ch.lorisbriguet.studiomanager/', '/ch.studiomanager.app/')
+     WHERE receipt_path LIKE '%/ch.lorisbriguet.studiomanager/%'`
+  ).catch((e) => logError("[DB] income receipt path migration failed:", e));
+  await db.execute(
     `UPDATE invoices SET pdf_path = REPLACE(pdf_path, '/ch.lorisbriguet.studiomanager/', '/ch.studiomanager.app/')
      WHERE pdf_path LIKE '%/ch.lorisbriguet.studiomanager/%'`
   ).catch((e) => logError("[DB] invoice pdf path migration failed:", e));
