@@ -217,6 +217,10 @@ function MainApp() {
   const activeId = useOrgStore((s) => s.activeId);
   return (
     <QueryClientProvider client={queryClient}>
+      {/* Outer boundary: catches what the page boundary below can't reach
+          (OrgGate, StartupChecks, GlobalShortcuts), so a startup error shows
+          the error screen instead of a blank window. */}
+      <ErrorBoundary FallbackComponent={ErrorFallback}>
       <OrgGate>
         <StartupChecks key={activeId} />
         <BrowserRouter>
@@ -258,6 +262,7 @@ function MainApp() {
           </ErrorBoundary>
         </BrowserRouter>
       </OrgGate>
+      </ErrorBoundary>
       <ConfirmHost />
       <Toaster />
       <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />

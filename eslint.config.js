@@ -25,22 +25,16 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       // react-hooks v7 "recommended" bundles the React Compiler diagnostics.
-      // This codebase is not compiled with React Compiler; these rules flag
-      // long-standing (working) patterns en masse. Deferred to phase 2.
-      'react-hooks/set-state-in-effect': 'off',
-      'react-hooks/refs': 'off',
-      'react-hooks/purity': 'off',
-      'react-hooks/immutability': 'off',
-      'react-hooks/globals': 'off',
-      'react-hooks/preserve-manual-memoization': 'off',
-      'react-hooks/static-components': 'off',
-      'react-hooks/use-memo': 'off',
-      'react-hooks/incompatible-library': 'off',
-      'react-hooks/error-boundaries': 'off',
-      'react-hooks/set-state-in-render': 'off',
-      'react-hooks/unsupported-syntax': 'off',
-      'react-hooks/config': 'off',
-      'react-hooks/gating': 'off',
+      // This codebase is not compiled with React Compiler. The rules below
+      // still flag long-standing (working) patterns; turn each back on once
+      // its violations are fixed. Counts as of 2026-11-06:
+      'react-hooks/set-state-in-effect': 'off', // 53
+      'react-hooks/refs': 'off', // 46
+      'react-hooks/purity': 'off', // 11
+      'react-hooks/preserve-manual-memoization': 'off', // 3
+      'react-hooks/immutability': 'off', // 2
+      'react-hooks/globals': 'off', // 2
+      'react-hooks/incompatible-library': 'off', // 1
       // Toasts go through notify (src/lib/notify.ts): one API, the app's
       // durations and wording, errors never show raw text. See "Toasts" in
       // DESIGN-SYSTEM.md.
