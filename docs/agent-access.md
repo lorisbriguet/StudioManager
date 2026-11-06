@@ -39,7 +39,7 @@ Projects: `list_projects`, `get_project`, `create_project`, `update_project`.
 
 Tasks: `list_tasks`, `create_task`, `update_task`, `create_subtask`, `update_subtask`, `whats_due`.
 
-Clients: `list_clients`, `get_client`, `create_client`.
+Clients: `list_clients`, `get_client`, `create_client`. Like the app's pickers, agents do not see archived clients by default: `list_clients` leaves them out unless `include_archived` is true, and a client name given to `create_project` or any other tool matches active clients only. An id still reaches an archived client, and `get_client` reports its `archived_at`. Projects and other records of an archived client still show it.
 
 Upkeep, reading: `list_machines` (machines and equipment with their next upkeep), `get_machine` (one machine with its upkeep items, service log, consumables and links), `list_consumables`, `list_subscriptions`. No serial numbers, readings or connection details; prices and costs only when money reading is allowed.
 

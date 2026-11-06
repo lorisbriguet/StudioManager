@@ -222,6 +222,8 @@ pub struct ListClientsInput {
     pub org: Option<String>,
     /// Text contained in the client name or email.
     pub text: Option<String>,
+    /// Include archived clients, which are left out by default.
+    pub include_archived: Option<bool>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -940,11 +942,11 @@ impl Server {
         .await
     }
 
-    #[tool(description = "List clients, optionally by text.")]
+    #[tool(description = "List clients, optionally by text. Archived clients are left out unless include_archived is true.")]
     async fn list_clients(&self, Parameters(p): Parameters<ListClientsInput>) -> CallToolResult {
         self.run(move |d| {
             read_in(d, p.org.as_deref(), |c| {
-                read::list_clients(c, p.text.as_deref())
+                read::list_clients(c, p.text.as_deref(), p.include_archived.unwrap_or(false))
             })
         })
         .await
@@ -1215,7 +1217,7 @@ impl Server {
         .await
     }
 
-    #[tool(description = "Get a client with contacts and projects.")]
+    #[tool(description = "Get a client with contacts and projects. Works by id for an archived client too and reports archived_at.")]
     async fn get_client(&self, Parameters(p): Parameters<ClientInput>) -> CallToolResult {
         self.run(move |d| read_in(d, p.org.as_deref(), |c| read::get_client(c, &p.client)))
             .await
