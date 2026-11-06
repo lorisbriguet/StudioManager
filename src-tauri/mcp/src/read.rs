@@ -82,6 +82,9 @@ pub struct ClientRef {
     pub id: String,
     pub name: String,
     pub email: String,
+    /// Set only when the client is archived (and so only with include_archived).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<String>,
 }
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
@@ -103,6 +106,9 @@ pub struct ClientDetail {
     pub address_line2: String,
     pub language: String,
     pub notes: String,
+    /// Set only when the client is archived: hidden from lists and name matching.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<String>,
     pub contacts: Vec<Contact>,
     pub projects: Vec<ProjectRef>,
 }
@@ -251,14 +257,32 @@ pub(crate) fn resolve_client(conn: &Connection, key: &str) -> R<String> {
             .map_err(|_| format!("No client matches \"{key}\"."))?;
         return by_id(&format!("C-{n:03}"))?.ok_or_else(|| format!("No client matches \"{key}\"."));
     }
-    let mut stmt = db(conn.prepare("SELECT id, name FROM clients ORDER BY id"))?;
+    // Names match active clients only (an id, above, still reaches an archived
+    // one), like the app's pickers.
+    let mut stmt = db(conn.prepare(
+        "SELECT id, name FROM clients WHERE archived_at IS NULL ORDER BY id",
+    ))?;
     let items: Vec<(String, String, String)> = db(stmt
         .query_map([], |r| {
             let id: String = r.get(0)?;
             Ok((id.clone(), id, r.get::<_, String>(1)?))
         })
         .and_then(|rows| rows.collect()))?;
-    pick("client", key, &items)
+    pick("client", key, &items).map_err(|e| {
+        let k = fold(key.trim());
+        let archived = conn
+            .prepare("SELECT name FROM clients WHERE archived_at IS NOT NULL")
+            .and_then(|mut st| {
+                st.query_map([], |r| r.get::<_, String>(0))
+                    .map(|rows| rows.flatten().filter(|n| !k.is_empty() && fold(n).contains(&k)).count())
+            })
+            .unwrap_or(0);
+        if archived > 0 && e.starts_with("No client matches") {
+            format!("{e} An archived client matches the name; use its id to reach it.")
+        } else {
+            e
+        }
+    })
 }
 
 fn sort_by_name<T>(v: &mut [T], name: impl Fn(&T) -> &str) {
@@ -472,15 +496,22 @@ pub fn list_tasks(
 
 // ── Clients ──────────────────────────────────────────────────
 
-pub fn list_clients(conn: &Connection, text: Option<&str>) -> R<Vec<ClientRef>> {
-    let mut stmt =
-        db(conn.prepare("SELECT id, name, COALESCE(email, '') FROM clients ORDER BY id"))?;
+pub fn list_clients(
+    conn: &Connection,
+    text: Option<&str>,
+    include_archived: bool,
+) -> R<Vec<ClientRef>> {
+    let mut stmt = db(conn.prepare(
+        "SELECT id, name, COALESCE(email, ''), archived_at FROM clients \
+         WHERE (?1 OR archived_at IS NULL) ORDER BY id",
+    ))?;
     let mut rows = db(stmt
-        .query_map([], |r| {
+        .query_map([include_archived], |r| {
             Ok(ClientRef {
                 id: r.get(0)?,
                 name: r.get(1)?,
                 email: r.get(2)?,
+                archived_at: r.get(3)?,
             })
         })
         .and_then(|rows| rows.collect::<rusqlite::Result<Vec<_>>>()))?;
@@ -494,9 +525,10 @@ pub fn list_clients(conn: &Connection, text: Option<&str>) -> R<Vec<ClientRef>> 
 
 pub fn get_client(conn: &Connection, client: &str) -> R<ClientDetail> {
     let id = resolve_client(conn, client)?;
-    let (name, email, phone, a1, a2, lang, notes) = db(conn.query_row(
+    let (name, email, phone, a1, a2, lang, notes, archived_at) = db(conn.query_row(
         "SELECT name, COALESCE(email,''), COALESCE(phone,''), COALESCE(address_line1,''), \
-                COALESCE(address_line2,''), language, COALESCE(notes,'') FROM clients WHERE id = ?1",
+                COALESCE(address_line2,''), language, COALESCE(notes,''), archived_at \
+         FROM clients WHERE id = ?1",
         [&id],
         |r| {
             Ok((
@@ -507,6 +539,7 @@ pub fn get_client(conn: &Connection, client: &str) -> R<ClientDetail> {
                 r.get::<_, String>(4)?,
                 r.get::<_, String>(5)?,
                 r.get::<_, String>(6)?,
+                r.get::<_, Option<String>>(7)?,
             ))
         },
     ))?;
@@ -539,6 +572,7 @@ pub fn get_client(conn: &Connection, client: &str) -> R<ClientDetail> {
         address_line2: a2,
         language: lang,
         notes,
+        archived_at,
         contacts,
         projects,
     })
@@ -1149,16 +1183,61 @@ mod tests {
     #[test]
     fn clients() {
         let c = fixture();
-        let all = list_clients(&c, None).unwrap();
+        let all = list_clients(&c, None, false).unwrap();
         assert_eq!(
             all.iter().map(|x| x.id.as_str()).collect::<Vec<_>>(),
             ["C-001", "C-002"]
         );
-        assert_eq!(list_clients(&c, Some("BOREALE")).unwrap().len(), 1);
+        assert_eq!(list_clients(&c, Some("BOREALE"), false).unwrap().len(), 1);
         let det = get_client(&c, "C-001").unwrap();
         assert_eq!(det.projects.len(), 2);
         assert_eq!(det.contacts[0].last_name, "Moreau");
         assert_eq!(det.language, "FR");
+    }
+
+    #[test]
+    fn archived_clients_are_hidden_but_reachable_by_id() {
+        let c = fixture();
+        c.execute(
+            "UPDATE clients SET archived_at = '2026-11-06 10:00:00' WHERE id = 'C-002'",
+            [],
+        )
+        .unwrap();
+        let ids = |v: Vec<ClientRef>| v.into_iter().map(|x| x.id).collect::<Vec<_>>();
+        assert_eq!(ids(list_clients(&c, None, false).unwrap()), ["C-001"]);
+        assert!(list_clients(&c, Some("boreale"), false).unwrap().is_empty());
+        let all = list_clients(&c, None, true).unwrap();
+        assert_eq!(ids(all.clone()), ["C-001", "C-002"]);
+        assert_eq!(all[0].archived_at, None);
+        assert_eq!(all[1].archived_at.as_deref(), Some("2026-11-06 10:00:00"));
+        // Name matching skips it; the error points at the id.
+        let e = resolve_client(&c, "editions boreale").unwrap_err();
+        assert!(e.starts_with("No client matches"), "{e}");
+        assert!(e.contains("archived"), "{e}");
+        // Ids still resolve, and get_client says it is archived.
+        assert_eq!(resolve_client(&c, "C-002").unwrap(), "C-002");
+        let det = get_client(&c, "C-002").unwrap();
+        assert_eq!(det.archived_at.as_deref(), Some("2026-11-06 10:00:00"));
+        assert_eq!(get_client(&c, "C-001").unwrap().archived_at, None);
+        // A project of the archived client still shows it.
+        c.execute(
+            "UPDATE clients SET archived_at = NULL WHERE id = 'C-001'",
+            [],
+        )
+        .unwrap();
+        let p = all_projects(&c).unwrap();
+        assert!(p.iter().any(|p| p.client_id == "C-002"));
+    }
+
+    #[test]
+    fn name_matching_ignores_archived_duplicate() {
+        let c = fixture();
+        c.execute(
+            "INSERT INTO clients (id, name, archived_at) VALUES ('C-003', 'atelier lumen', '2026-11-06')",
+            [],
+        )
+        .unwrap();
+        assert_eq!(get_client(&c, "Atelier Lumen").unwrap().id, "C-001");
     }
 
     #[test]
