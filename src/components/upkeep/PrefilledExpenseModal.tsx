@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef } from "react";
 import { useT } from "../../i18n/useT";
 import { notify } from "../../lib/notify";
 import { useCreateExpense, useDistinctSuppliers, useExpenseCategories } from "../../db/hooks/useExpenses";
-import { getNextExpenseReference } from "../../db/queries/expenses";
+import { nextExpenseReferenceFor } from "../../db/queries/expenses";
 import { todayLocalISO } from "../../utils/localDate";
 import { asCurrency } from "../../lib/expenseCurrency";
 
@@ -48,9 +48,7 @@ export function PrefilledExpenseModal({ title, supplier, amount, currency, date,
         prefill={{ supplier, amount, currency: supported, invoice_date: date ?? todayLocalISO() }}
         onCancel={onCancel}
         onSave={async (data) => {
-          const reference = await getNextExpenseReference(
-            Number((data.invoice_date || todayLocalISO()).slice(0, 4))
-          );
+          const reference = await nextExpenseReferenceFor(data.invoice_date);
           const id = await createExpense.mutateAsync({ ...data, reference });
           try {
             await onSaved(id);

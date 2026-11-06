@@ -57,6 +57,17 @@ jobs:
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "not a version: $VERSION"; exit 1; }
           [ "$GITHUB_REF" = "refs/tags/v$VERSION" ] || { echo "start it on the tag v$VERSION (got $GITHUB_REF)"; exit 1; }
 
+      # Fails fast on a re-run for a release that is already out. This token can't
+      # see drafts, so an existing draft passes; the sign job checks again at upload.
+      - name: Check v${{ inputs.version }} is not published yet
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [ "$(gh release view "v$VERSION" --json isDraft --jq .isDraft 2>/dev/null)" = "false" ]; then
+            echo "v$VERSION is already published: the workflow never replaces its assets (RELEASING.md)"; exit 1
+          fi
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -215,7 +226,11 @@ jobs:
           assets=("bundle/StudioManager_${VERSION}_aarch64.dmg" bundle/StudioManager.app.tar.gz latest.json)
           # A version with a suffix (3.4.1-rc.1) is a prerelease: never "latest", so the updater skips it.
           pre=(); [[ "$VERSION" == *-* ]] && pre=(--prerelease)
-          if gh release view "v$VERSION" >/dev/null 2>&1; then
+          # Only a draft gets its assets replaced: a published release keeps what users downloaded.
+          draft=$(gh release view "v$VERSION" --json isDraft --jq .isDraft 2>/dev/null || echo missing)
+          if [ "$draft" = "false" ]; then
+            echo "v$VERSION is already published: assets not replaced (RELEASING.md)"; exit 1
+          elif [ "$draft" = "true" ]; then
             gh release upload "v$VERSION" "${assets[@]}" --clobber
           else
             gh release create "v$VERSION" --draft "${pre[@]}" --verify-tag --title "StudioManager v$VERSION" \

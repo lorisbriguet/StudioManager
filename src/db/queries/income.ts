@@ -1,5 +1,5 @@
 import { getDb, validateFields } from "../index";
-import { getNextReference } from "./referenceGenerator";
+import { getNextReference, referenceYear } from "./referenceGenerator";
 import type { Income } from "../../types/income";
 
 export async function getIncomes(): Promise<Income[]> {
@@ -9,8 +9,9 @@ export async function getIncomes(): Promise<Income[]> {
   );
 }
 
-export async function getNextIncomeReference(year: number): Promise<string> {
-  const shortYear = String(year).slice(-2);
+/** Next income number (R-26-001), in the year of its date. */
+export async function nextIncomeReferenceFor(date: string | null | undefined): Promise<string> {
+  const shortYear = String(referenceYear(date)).slice(-2);
   return getNextReference("income", "reference", `R-${shortYear}-`);
 }
 

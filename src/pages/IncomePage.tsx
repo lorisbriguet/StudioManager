@@ -16,7 +16,7 @@ import {
   useUpdateIncome,
   useDeleteIncome,
 } from "../db/hooks/useIncome";
-import { getNextIncomeReference } from "../db/queries/income";
+import { nextIncomeReferenceFor } from "../db/queries/income";
 import { SortHeader, sortRows, type SortState } from "../components/ui/SortHeader";
 import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu";
 import { BulkActionBar } from "../components/ui/BulkActionBar";
@@ -221,7 +221,7 @@ export function IncomePage() {
             }
             setSaving(true);
             try {
-              const reference = await getNextIncomeReference(new Date().getFullYear());
+              const reference = await nextIncomeReferenceFor(data.date);
 
               let receiptPath = data.receipt_path;
               if (droppedReceiptPath && !receiptPath) {
