@@ -58,6 +58,9 @@ describe("AddRow", () => {
       fireEvent.keyDown(field, { key: "Enter" });
     });
     expect(field.value).toBe("Ink");
+    // Selected, so typing the title again replaces it instead of appending.
+    expect(document.activeElement).toBe(field);
+    expect([field.selectionStart, field.selectionEnd]).toEqual([0, 3]);
   });
 
   it("puts extra controls before the + and passes other keys on", () => {

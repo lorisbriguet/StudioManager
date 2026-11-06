@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { IconButton } from "../components/ui/IconButton";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { notify } from "../lib/notify";
-import { ICONS, Checkbox, Button, Input, PageHeader, EmptyState, QueryError, DetailSkeleton, ListSkeleton, Card, Select, SectionLabel, Textarea, FormField, FormGrid, FormActions, FormLayout, CARD_GAP, CARD_STACK } from "../components/ui";
+import { ICONS, Checkbox, Button, Input, PageHeader, EmptyState, QueryError, DetailSkeleton, ListSkeleton, Card, Select, SectionLabel, Badge, Textarea, FormField, FormGrid, FormActions, FormLayout, CARD_GAP, CARD_STACK } from "../components/ui";
 import { useTabStore } from "../stores/tab-store";
 import {
   useClient,
@@ -573,11 +573,14 @@ interface AddressRow {
 
 function AddressCard({
   address: a,
+  isMain,
   onUpdate,
   onDelete,
   t,
 }: {
   address: ClientAddress;
+  /** The client's main address: tagged, since the separate Main card is hidden then. */
+  isMain: boolean;
   onUpdate: (field: keyof Omit<ClientAddress, "id" | "client_id">, value: string) => void;
   onDelete: () => void;
   t: Record<string, string>;
@@ -640,7 +643,12 @@ function AddressCard({
     >
       <div className="flex items-start justify-between">
         <div>
-          {a.label && <SectionLabel as="span">{a.label}</SectionLabel>}
+          {(a.label || isMain) && (
+            <div className="flex items-center gap-2">
+              {a.label && <SectionLabel as="span">{a.label}</SectionLabel>}
+              {isMain && <Badge variant="neutral" size="xs">{t.main_address}</Badge>}
+            </div>
+          )}
           <div className="mt-1 text-sm">
             {a.billing_name && <div className="font-medium">{a.billing_name}</div>}
             {a.address_line1 && <div className="text-muted">{a.address_line1}</div>}
@@ -757,6 +765,7 @@ function AddressesSection({
           <AddressCard
             key={a.id}
             address={a}
+            isMain={sameAddress(a, client)}
             onUpdate={(field, value) => updateField(a, field, value)}
             onDelete={() => removeAddress(a)}
             t={t}

@@ -610,7 +610,7 @@ One size: `CONTROL_BOX` (`px-2.5 py-1 text-xs leading-4 border`) and `rounded-md
 `src/components/ui/AddRow.tsx`, the field and "+" under a list that add an item (tasks, subtasks, list items, options, presets).
 
 - Enter or "+" calls `onAdd(text)` with the trimmed text, never empty. Enter doesn't submit a surrounding form.
-- The field clears after the add, or once a returned promise resolves. Return `false` to keep the text (a duplicate).
+- The field clears after the add, or once a returned promise resolves. Return `false` to keep the text (a duplicate). If the promise rejects (a failed save), the text stays selected: Enter retries, typing replaces it.
 - `placeholder` names the field and the button. `size` is the button's: `sm` beside form fields, `xs` in dense lists. Extra controls (a colour select) go in `children`, before the "+". `onKeyDown` runs after Enter (Esc to close).
 
 #### TagInput

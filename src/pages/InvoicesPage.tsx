@@ -16,7 +16,7 @@ import { runBulkPdfExport } from "../lib/bulkPdfExport";
 import { useClients } from "../db/hooks/useClients";
 import { useRecurringTemplates, useCreateRecurringTemplate, useDeleteRecurringTemplate, useUpdateRecurringTemplate } from "../db/hooks/useRecurring";
 import { runRecurringCheck } from "../hooks/useRecurringCheck";
-import { SortHeader, sortRows, type SortState } from "../components/ui/SortHeader";
+import { SortHeader, type SortState } from "../components/ui/SortHeader";
 import { formatDisplayDate } from "../utils/formatDate";
 import { todayLocalISO, parseLocalDate } from "../utils/localDate";
 import { advanceDate } from "../utils/recurringDates";
@@ -31,6 +31,7 @@ import { useListNavigation } from "../hooks/useListNavigation";
 import { ICONS, PageHeader, SearchBar, Table, TableSkeleton, Button, EmptyState, QueryState, NoResults, ListSkeleton, Card, FormModal, FormField, FormGrid, DatePicker, Select, IconButton, CountBadge, Toggle } from "../components/ui";
 import { invoiceStatusVariant, statusClasses } from "../lib/statusColors";
 import { isDraftReference } from "../types/invoice";
+import { sortDocuments } from "../lib/documentSort";
 import type { Invoice, InvoiceStatus } from "../types/invoice";
 import type { RecurringFrequency } from "../types/recurring";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
@@ -120,7 +121,7 @@ export function InvoicesPage() {
         )
       : enriched;
     rows = applyFilterConditions(rows, filterConditions, filterLogic);
-    return sortRows(rows, sort.key, sort.dir);
+    return sortDocuments(rows, sort.key, sort.dir);
   }, [enriched, search, sort, filterConditions, filterLogic]);
 
   const bulk = useBulkSelect(filtered);
