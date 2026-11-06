@@ -4,7 +4,7 @@ import type { Client, ClientAddress } from "../../types/client";
 import type { BusinessProfile } from "../../types/business-profile";
 
 /** Generate a valid 27-digit QR reference from an invoice reference like "2026-001" */
-function toQRReference(ref: string): string {
+export function toQRReference(ref: string): string {
   const digits = ref.replace(/\D/g, "");
   const padded = digits.padStart(26, "0");
   // Mod 10 recursive check digit (Swiss standard)
