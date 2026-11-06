@@ -94,8 +94,14 @@ export function showFatalDbError(err: unknown): void {
     const raw = err instanceof Error ? err.message : String(err);
     // Rust's require_org_data: the data is on a disk that is not connected.
     const missing = raw.match(/^data folder missing: ([^\n]+)/);
+    // Rust's migrate_db: an older app must not write to a newer schema.
+    const newer = raw.startsWith("database newer than this app: ");
     const message = document.createElement("p");
-    message.textContent = missing ? t.db_data_missing.replace("{path}", missing[1]) : t.db_init_failed;
+    message.textContent = missing
+      ? t.db_data_missing.replace("{path}", missing[1])
+      : newer
+        ? t.db_newer_than_app
+        : t.db_init_failed;
     message.setAttribute("style", "font-size:13px;max-width:480px;margin:0;");
     const detail = document.createElement("p");
     detail.textContent = missing ? raw.slice(missing[0].length).trim() : raw;
