@@ -4,10 +4,11 @@ import * as q from "../queries/recurring";
 import type { RecurringInvoiceTemplate } from "../../types/recurring";
 import { getLabels } from "../../lib/notify";
 import { snapshotRows, pushRestore } from "../undoRestore";
+import { qk } from "../queryKeys";
 
 export function useRecurringTemplates() {
   return useQuery({
-    queryKey: ["recurring_templates"],
+    queryKey: qk.recurring.all,
     queryFn: q.getRecurringTemplates,
   });
 }
@@ -20,18 +21,18 @@ export function useCreateRecurringTemplate() {
     mutationFn: (data: Omit<RecurringInvoiceTemplate, "id" | "created_at" | "updated_at">) =>
       q.createRecurringTemplate(data),
     onSuccess: (id, data) => {
-      qc.invalidateQueries({ queryKey: ["recurring_templates"] });
+      qc.invalidateQueries({ queryKey: qk.recurring.all });
       // Redo recreates with a fresh id; keep the current id so a later undo
       // of the redo deletes the right row.
       let currentId = id;
       push({
         label: getLabels().undo_create_recurring,
         execute: () => q.deleteRecurringTemplate(currentId).then(() => {
-          qc.invalidateQueries({ queryKey: ["recurring_templates"] });
+          qc.invalidateQueries({ queryKey: qk.recurring.all });
         }),
         redo: async () => {
           currentId = await q.createRecurringTemplate(data);
-          qc.invalidateQueries({ queryKey: ["recurring_templates"] });
+          qc.invalidateQueries({ queryKey: qk.recurring.all });
         },
       });
     },
@@ -60,24 +61,24 @@ export function useUpdateRecurringTemplate() {
           label: getLabels().undo_update_recurring,
           execute: async () => {
             await q.updateRecurringTemplate(id, prevData as Partial<Omit<RecurringInvoiceTemplate, "id" | "created_at" | "updated_at">>);
-            qc.invalidateQueries({ queryKey: ["recurring_templates"] });
+            qc.invalidateQueries({ queryKey: qk.recurring.all });
           },
           redo: async () => {
             await q.updateRecurringTemplate(id, data);
-            qc.invalidateQueries({ queryKey: ["recurring_templates"] });
+            qc.invalidateQueries({ queryKey: qk.recurring.all });
           },
         });
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["recurring_templates"] });
+      qc.invalidateQueries({ queryKey: qk.recurring.all });
     },
   });
 }
 
 export function useDeleteRecurringTemplate() {
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["recurring_templates"] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: qk.recurring.all });
   return useMutation({
     meta: { errorLabel: "error_delete_recurring" },
     // Undo puts the very same row back (same id and dates); redo deletes that id.

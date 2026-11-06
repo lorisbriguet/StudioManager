@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { createNotification } from "../db/queries/notifications";
 import { useQueryClient } from "@tanstack/react-query";
+import { qk } from "../db/queryKeys";
 
 /**
  * Intercepts console.error calls and saves them as "error" notifications.
@@ -42,7 +43,7 @@ export function useErrorNotifications() {
         read: 0,
         link: null,
       }).then(() => {
-        qc.invalidateQueries({ queryKey: ["notifications"] });
+        qc.invalidateQueries({ queryKey: qk.notifications.all });
       }).catch(() => {
         // Don't recurse if notification creation itself fails
       });

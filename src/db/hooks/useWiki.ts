@@ -16,12 +16,13 @@ import {
 } from "../queries/wiki";
 import { snapshotRows, pushRestore } from "../undoRestore";
 import { getLabels } from "../../lib/notify";
+import { qk } from "../queryKeys";
 
 // ── Folders ──────────────────────────────────────────────────
 
 export function useWikiFolders() {
   return useQuery({
-    queryKey: ["wiki-folders"],
+    queryKey: qk.wiki.folders,
     queryFn: getWikiFolders,
   });
 }
@@ -31,7 +32,7 @@ export function useCreateWikiFolder() {
   return useMutation({
     meta: { errorLabel: "error_save_folder" },
     mutationFn: (name: string) => createWikiFolder(name),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["wiki-folders"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.wiki.folders }),
   });
 }
 
@@ -41,7 +42,7 @@ export function useUpdateWikiFolder() {
     meta: { errorLabel: "error_save_folder" },
     mutationFn: ({ id, data }: { id: number; data: { name?: string; sort_order?: number } }) =>
       updateWikiFolder(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["wiki-folders"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.wiki.folders }),
   });
 }
 
@@ -51,8 +52,8 @@ export function useDeleteWikiFolder() {
     meta: { errorLabel: "error_delete_folder" },
     mutationFn: (id: number) => deleteWikiFolder(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["wiki-folders"] });
-      qc.invalidateQueries({ queryKey: ["wiki-articles"] });
+      qc.invalidateQueries({ queryKey: qk.wiki.folders });
+      qc.invalidateQueries({ queryKey: qk.wiki.allArticles });
     },
   });
 }
@@ -61,14 +62,14 @@ export function useDeleteWikiFolder() {
 
 export function useWikiArticles(folderId?: number) {
   return useQuery({
-    queryKey: ["wiki-articles", folderId ?? "all"],
+    queryKey: qk.wiki.articles(folderId ?? "all"),
     queryFn: () => getWikiArticles(folderId),
   });
 }
 
 export function useWikiArticle(id: number | null) {
   return useQuery({
-    queryKey: ["wiki-article", id],
+    queryKey: qk.wiki.article(id),
     queryFn: () => (id != null ? getWikiArticle(id) : null),
     enabled: id != null,
   });
@@ -81,7 +82,7 @@ export function useCreateWikiArticle() {
     mutationFn: (data: { folder_id?: number | null; project_id?: number | null; title?: string }) =>
       createWikiArticle(data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["wiki-articles"] });
+      qc.invalidateQueries({ queryKey: qk.wiki.allArticles });
     },
   });
 }
@@ -104,9 +105,9 @@ export function useUpdateWikiArticle() {
       };
     }) => updateWikiArticle(id, data),
     onSuccess: (_result, variables) => {
-      qc.invalidateQueries({ queryKey: ["wiki-articles"] });
-      qc.invalidateQueries({ queryKey: ["wiki-article", variables.id] });
-      qc.invalidateQueries({ queryKey: ["wiki-articles-by-project"] });
+      qc.invalidateQueries({ queryKey: qk.wiki.allArticles });
+      qc.invalidateQueries({ queryKey: qk.wiki.article(variables.id) });
+      qc.invalidateQueries({ queryKey: qk.wiki.allByProject });
     },
   });
 }
@@ -114,11 +115,11 @@ export function useUpdateWikiArticle() {
 export function useDeleteWikiArticle() {
   const qc = useQueryClient();
   const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ["wiki-articles"] });
-    qc.invalidateQueries({ queryKey: ["wiki-articles-by-project"] });
-    qc.invalidateQueries({ queryKey: ["wiki-tags"] });
-    qc.invalidateQueries({ queryKey: ["wiki-article"] });
-    qc.invalidateQueries({ queryKey: ["wiki-article-tags"] });
+    qc.invalidateQueries({ queryKey: qk.wiki.allArticles });
+    qc.invalidateQueries({ queryKey: qk.wiki.allByProject });
+    qc.invalidateQueries({ queryKey: qk.wiki.tags });
+    qc.invalidateQueries({ queryKey: qk.wiki.anyArticle });
+    qc.invalidateQueries({ queryKey: qk.wiki.allArticleTags });
   };
   return useMutation({
     meta: { errorLabel: "error_delete_article" },
@@ -141,7 +142,7 @@ export function useDeleteWikiArticle() {
 
 export function useWikiArticleTags(articleId: number | null) {
   return useQuery({
-    queryKey: ["wiki-article-tags", articleId],
+    queryKey: qk.wiki.articleTags(articleId),
     queryFn: () => (articleId != null ? getWikiArticleTags(articleId) : []),
     enabled: articleId != null,
   });
@@ -154,16 +155,16 @@ export function useSetWikiArticleTags() {
     mutationFn: ({ articleId, tags }: { articleId: number; tags: string[] }) =>
       setWikiArticleTags(articleId, tags),
     onSuccess: (_result, variables) => {
-      qc.invalidateQueries({ queryKey: ["wiki-article-tags", variables.articleId] });
-      qc.invalidateQueries({ queryKey: ["wiki-articles"] });
-      qc.invalidateQueries({ queryKey: ["wiki-tags"] });
+      qc.invalidateQueries({ queryKey: qk.wiki.articleTags(variables.articleId) });
+      qc.invalidateQueries({ queryKey: qk.wiki.allArticles });
+      qc.invalidateQueries({ queryKey: qk.wiki.tags });
     },
   });
 }
 
 export function useAllWikiTags() {
   return useQuery({
-    queryKey: ["wiki-tags"],
+    queryKey: qk.wiki.tags,
     queryFn: getAllWikiTags,
   });
 }
@@ -172,7 +173,7 @@ export function useAllWikiTags() {
 
 export function useWikiArticlesByProject(projectId: number | null) {
   return useQuery({
-    queryKey: ["wiki-articles-by-project", projectId],
+    queryKey: qk.wiki.byProject(projectId),
     queryFn: () => (projectId != null ? getWikiArticlesByProject(projectId) : []),
     enabled: projectId != null,
   });

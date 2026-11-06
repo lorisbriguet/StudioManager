@@ -6,6 +6,7 @@ import { isUserGuideOutdated, USER_GUIDE_VERSION } from "../db/seeds/user-guide"
 import { getLabels } from "../lib/notify";
 import { logError } from "../lib/log";
 import { useOrgStore } from "../stores/org-store";
+import { qk } from "../db/queryKeys";
 
 /**
  * The built-in user guide is seeded into an organisation's wiki when the
@@ -44,7 +45,7 @@ export function useGuideUpdateCheck() {
           read: 0,
           link: "/settings?category=general",
         });
-        qc.invalidateQueries({ queryKey: ["notifications"] });
+        qc.invalidateQueries({ queryKey: qk.notifications.all });
       }
       localStorage.setItem(key, String(USER_GUIDE_VERSION));
     })().catch((e) => {

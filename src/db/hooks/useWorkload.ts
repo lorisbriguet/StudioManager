@@ -4,12 +4,13 @@ import type { WorkloadColumn } from "../../types/workload";
 import { useUndoStore } from "../../stores/undo-store";
 import { getLabels } from "../../lib/notify";
 import { snapshotRows, snapshotLinks, pushRestore, reinsertAt } from "../undoRestore";
+import { qk } from "../queryKeys";
 
 // ── Templates ──────────────────────────────────────────────
 
 export function useWorkloadTemplates() {
   return useQuery({
-    queryKey: ["workload-templates"],
+    queryKey: qk.workload.templates,
     queryFn: q.getWorkloadTemplates,
   });
 }
@@ -20,7 +21,7 @@ export function useCreateWorkloadTemplate() {
     meta: { errorLabel: "error_save_template" },
     mutationFn: (data: { name: string; columns: WorkloadColumn[] }) =>
       q.createWorkloadTemplate(data.name, data.columns),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["workload-templates"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.workload.templates }),
   });
 }
 
@@ -33,13 +34,13 @@ export function useUpdateWorkloadTemplate() {
       name?: string;
       columns?: WorkloadColumn[];
     }) => q.updateWorkloadTemplate(data.id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["workload-templates"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.workload.templates }),
   });
 }
 
 export function useDeleteWorkloadTemplate() {
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["workload-templates"] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: qk.workload.templates });
   return useMutation({
     meta: { errorLabel: "error_delete_template" },
     // Undo puts the very same row back: projects.workload_template_id (no
@@ -66,7 +67,7 @@ export function useDeleteWorkloadTemplate() {
  */
 export function useDeleteWorkloadTemplateColumn() {
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["workload-templates"] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: qk.workload.templates });
   const setColumns = async (templateId: number, change: (cols: WorkloadColumn[]) => WorkloadColumn[]) => {
     const tpl = await q.getWorkloadTemplate(templateId);
     if (!tpl) return;
@@ -96,7 +97,7 @@ export function useDeleteWorkloadTemplateColumn() {
 
 export function useWorkloadRows(projectId: number) {
   return useQuery({
-    queryKey: ["workload-rows", projectId],
+    queryKey: qk.workload.byProject(projectId),
     queryFn: () => q.getWorkloadRows(projectId),
   });
 }
@@ -116,15 +117,15 @@ export function useCreateWorkloadRow() {
         label: getLabels().undo_create_workload_row,
         execute: async () => {
           await q.deleteWorkloadRow(id);
-          qc.invalidateQueries({ queryKey: ["workload-rows", data.project_id] });
-          qc.invalidateQueries({ queryKey: ["tasks"] });
+          qc.invalidateQueries({ queryKey: qk.workload.byProject(data.project_id) });
+          qc.invalidateQueries({ queryKey: qk.tasks.all });
         },
       });
       return id;
     },
     onSuccess: (_id, vars) => {
-      qc.invalidateQueries({ queryKey: ["workload-rows", vars.project_id] });
-      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: qk.workload.byProject(vars.project_id) });
+      qc.invalidateQueries({ queryKey: qk.tasks.all });
     },
   });
 }
@@ -160,15 +161,15 @@ export function useUpdateWorkloadRow(projectId: number) {
               tracked_minutes?: number;
               planned_minutes?: number | null;
             });
-            qc.invalidateQueries({ queryKey: ["workload-rows", projectId] });
-            qc.invalidateQueries({ queryKey: ["tasks"] });
+            qc.invalidateQueries({ queryKey: qk.workload.byProject(projectId) });
+            qc.invalidateQueries({ queryKey: qk.tasks.all });
           },
         });
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["workload-rows", projectId] });
-      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: qk.workload.byProject(projectId) });
+      qc.invalidateQueries({ queryKey: qk.tasks.all });
     },
   });
 }
@@ -179,7 +180,7 @@ export function useReorderWorkloadRows(projectId: number) {
     meta: { errorLabel: "error_save_row" },
     mutationFn: (orderedIds: number[]) => q.reorderWorkloadRows(orderedIds),
     onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["workload-rows", projectId] }),
+      qc.invalidateQueries({ queryKey: qk.workload.byProject(projectId) }),
   });
 }
 
@@ -200,15 +201,15 @@ export function useDeleteWorkloadRow(projectId: number) {
               cells: prev.cells,
               sort_order: prev.sort_order,
             });
-            qc.invalidateQueries({ queryKey: ["workload-rows", projectId] });
-            qc.invalidateQueries({ queryKey: ["tasks"] });
+            qc.invalidateQueries({ queryKey: qk.workload.byProject(projectId) });
+            qc.invalidateQueries({ queryKey: qk.tasks.all });
           },
         });
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["workload-rows", projectId] });
-      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: qk.workload.byProject(projectId) });
+      qc.invalidateQueries({ queryKey: qk.tasks.all });
     },
   });
 }
@@ -217,7 +218,7 @@ export function useDeleteWorkloadRow(projectId: number) {
 
 export function useProjectWorkloadConfig(projectId: number) {
   return useQuery({
-    queryKey: ["workload-config", projectId],
+    queryKey: qk.workload.config(projectId),
     queryFn: () => q.getProjectWorkloadConfig(projectId),
   });
 }
@@ -240,12 +241,12 @@ export function useSetProjectWorkloadConfig(projectId: number) {
             prev.template_id,
             prev.columns ?? []
           );
-          qc.invalidateQueries({ queryKey: ["workload-config", projectId] });
+          qc.invalidateQueries({ queryKey: qk.workload.config(projectId) });
         },
       });
     },
     onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["workload-config", projectId] }),
+      qc.invalidateQueries({ queryKey: qk.workload.config(projectId) }),
   });
 }
 
@@ -253,7 +254,7 @@ export function useSetProjectWorkloadConfig(projectId: number) {
 
 export function useAllProjectWorkloadConfigs() {
   return useQuery({
-    queryKey: ["workload-configs-all"],
+    queryKey: qk.workload.configsAll,
     queryFn: q.getAllProjectWorkloadConfigs,
   });
 }

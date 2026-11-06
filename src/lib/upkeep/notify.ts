@@ -17,6 +17,7 @@ import { syncSubscriptionCalendar } from "./calendar";
 import type {
   Connection, Consumable, DiskHealth, Machine, MachineDisk, Subscription, UpkeepItem,
 } from "../../types/upkeep";
+import { qk } from "../../db/queryKeys";
 
 export type NoticeCause =
   | "overdue" | "low_stock" | "disk" | "warranty" | "renewal_coming" | "renewal_happened" | "connection";
@@ -294,11 +295,11 @@ export async function runUpkeepCheck(qc: QueryClient, todayISO: string): Promise
   }
 
   if (rolled || written.length > 0) {
-    qc.invalidateQueries({ queryKey: ["notifications"] });
-    qc.invalidateQueries({ queryKey: ["upkeep-items"] });
-    qc.invalidateQueries({ queryKey: ["subscriptions"] });
-    qc.invalidateQueries({ queryKey: ["machines"] });
-    qc.invalidateQueries({ queryKey: ["consumables"] });
+    qc.invalidateQueries({ queryKey: qk.notifications.all });
+    qc.invalidateQueries({ queryKey: qk.upkeep.all });
+    qc.invalidateQueries({ queryKey: qk.subscriptions.all });
+    qc.invalidateQueries({ queryKey: qk.machines.all });
+    qc.invalidateQueries({ queryKey: qk.consumables.all });
   }
   if (written.length > MAX_NATIVE_NOTICES) {
     const t = getLabels();

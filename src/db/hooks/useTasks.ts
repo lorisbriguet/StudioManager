@@ -12,7 +12,7 @@ import { snapshotRows, restoreRows } from "../undoRestore";
 import { getLabels, notify } from "../../lib/notify";
 import { todayLocalISO } from "../../utils/localDate";
 import { modeActive } from "../../lib/activeMode";
-import { invalidateTasks } from "../queryKeys";
+import { qk, invalidateTasks } from "../queryKeys";
 
 // Guards against concurrent calendar syncs for the same item
 // In-flight syncs per item. A sync requested meanwhile is chained after it (so
@@ -73,7 +73,7 @@ export function syncTaskCalendar(id: number): Promise<void> {
     } catch (e) {
       notifyCalendarSyncFailure(e);
     } finally {
-      _qc?.invalidateQueries({ queryKey: ["tasks"] });
+      _qc?.invalidateQueries({ queryKey: qk.tasks.all });
     }
   });
 }
@@ -113,21 +113,21 @@ export function syncSubtaskCalendar(id: number): Promise<void> {
     } catch (e) {
       notifyCalendarSyncFailure(e);
     } finally {
-      _qc?.invalidateQueries({ queryKey: ["subtasks"] });
+      _qc?.invalidateQueries({ queryKey: qk.subtasks.all });
     }
   });
 }
 
 export function useTasksByProject(projectId: number) {
   return useQuery({
-    queryKey: ["tasks", "project", projectId],
+    queryKey: qk.tasks.byProject(projectId),
     queryFn: () => q.getTasksByProject(projectId),
     enabled: !!projectId,
   });
 }
 
 export function useAllTasks() {
-  return useQuery({ queryKey: ["tasks"], queryFn: q.getAllTasks });
+  return useQuery({ queryKey: qk.tasks.all, queryFn: q.getAllTasks });
 }
 
 /** Tasks excluding those of cancelled/completed projects (V1.11 C1) — for
@@ -135,12 +135,12 @@ export function useAllTasks() {
  *  views keep useTasksByProject / useAllTasks. Invalidations on the ["tasks"]
  *  prefix cover this key too. */
 export function useVisibleTasks() {
-  return useQuery({ queryKey: ["tasks", "visible"], queryFn: q.getVisibleTasks });
+  return useQuery({ queryKey: qk.tasks.visible, queryFn: q.getVisibleTasks });
 }
 
 export function useTasksWithDueDate() {
   return useQuery({
-    queryKey: ["tasks", "with-due-date"],
+    queryKey: qk.tasks.withDueDate,
     queryFn: q.getTasksWithDueDate,
   });
 }
@@ -270,7 +270,7 @@ export function useDeleteTask() {
             }
             syncTaskCalendar(newId);
             invalidateTasks(qc);
-            qc.invalidateQueries({ queryKey: ["subtasks"] });
+            qc.invalidateQueries({ queryKey: qk.subtasks.all });
           },
         });
       }
@@ -283,7 +283,7 @@ export function useDeleteTask() {
 
 export function useSubtasksByProject(projectId: number) {
   return useQuery({
-    queryKey: ["subtasks", "project", projectId],
+    queryKey: qk.subtasks.byProject(projectId),
     queryFn: () => q.getSubtasksByProject(projectId),
     enabled: !!projectId,
   });
@@ -310,19 +310,19 @@ export function useCreateSubtask() {
           await q.deleteSubtask(id);
           if (calId) deleteCalendarEvent(calId).catch(notifyCalendarSyncFailure);
           for (const t of snap) for (const r of t.rows) if ("calendar_event_id" in r) r.calendar_event_id = null;
-          qc.invalidateQueries({ queryKey: ["subtasks"] });
-          qc.invalidateQueries({ queryKey: ["workload-rows"] });
+          qc.invalidateQueries({ queryKey: qk.subtasks.all });
+          qc.invalidateQueries({ queryKey: qk.workload.all });
         },
         redo: async () => {
           await restoreRows(snap);
           syncSubtaskCalendar(id);
-          qc.invalidateQueries({ queryKey: ["subtasks"] });
-          qc.invalidateQueries({ queryKey: ["workload-rows"] });
+          qc.invalidateQueries({ queryKey: qk.subtasks.all });
+          qc.invalidateQueries({ queryKey: qk.workload.all });
         },
       });
       return id;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["subtasks"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.subtasks.all }),
   });
 }
 
@@ -358,19 +358,19 @@ export function useUpdateSubtask() {
             await pendingSubtaskSyncs.get(id);
             await q.updateSubtask(id, prevData as Partial<Omit<Subtask, "id" | "created_at" | "updated_at">>);
             syncSubtaskCalendar(id);
-            qc.invalidateQueries({ queryKey: ["subtasks"] });
+            qc.invalidateQueries({ queryKey: qk.subtasks.all });
           },
           redo: async () => {
             await q.updateSubtask(id, nextData);
             syncSubtaskCalendar(id);
-            qc.invalidateQueries({ queryKey: ["subtasks"] });
+            qc.invalidateQueries({ queryKey: qk.subtasks.all });
           },
         });
       }
       await q.updateSubtask(id, data);
       syncSubtaskCalendar(id);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["subtasks"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.subtasks.all }),
   });
 }
 
@@ -392,12 +392,12 @@ export function useDeleteSubtask() {
             const { id: _id, created_at, updated_at, calendar_event_id, ...data } = prev;
             const newId = await q.createSubtask(data);
             syncSubtaskCalendar(newId);
-            qc.invalidateQueries({ queryKey: ["subtasks"] });
+            qc.invalidateQueries({ queryKey: qk.subtasks.all });
           },
         });
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["subtasks"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.subtasks.all }),
   });
 }
 
@@ -406,6 +406,6 @@ export function useReorderSubtasks() {
   return useMutation({
     meta: { errorLabel: "error_save_subtask" },
     mutationFn: (ids: number[]) => q.reorderSubtasks(ids),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["subtasks"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.subtasks.all }),
   });
 }

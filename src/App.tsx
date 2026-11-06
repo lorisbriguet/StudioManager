@@ -70,6 +70,7 @@ import { purgeOldNotifications } from "./db/queries/notifications";
 import { logError } from "./lib/log";
 
 import { queryClient } from "./lib/queryClient";
+import { qk } from "./db/queryKeys";
 
 function StartupChecks() {
   useOverdueCheck();
@@ -83,7 +84,7 @@ function StartupChecks() {
   useEffect(() => {
     requestNotificationPermission();
     purgeOldNotifications()
-      .then(() => queryClient.invalidateQueries({ queryKey: ["notifications"] }))
+      .then(() => queryClient.invalidateQueries({ queryKey: qk.notifications.all }))
       .catch((e) => logError("Notification purge failed:", e));
     getAgentsEnabled()
       .then((enabled) => useAppStore.getState().setAgentsEnabled(enabled === true))

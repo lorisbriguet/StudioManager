@@ -41,7 +41,7 @@ export function useOverdueCheck() {
           link: "/invoices",
         });
 
-        qc.invalidateQueries({ queryKey: ["notifications"] });
+        qc.invalidateQueries({ queryKey: qk.notifications.all });
 
         sendNativeNotification(title, refs);
       }

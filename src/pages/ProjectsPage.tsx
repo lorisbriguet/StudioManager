@@ -33,6 +33,7 @@ import { applyFilterConditions, type ConditionLogic } from "../types/saved-filte
 
 import { projectStatusVariant } from "../lib/statusColors";
 import { pickableClients } from "../types/client";
+import { qk } from "../db/queryKeys";
 
 const statusKeys: Record<ProjectStatus, UIKey> = {
   active: "active",
@@ -48,7 +49,7 @@ export function ProjectsPage() {
   const { data: projects } = projectsQuery;
   const { data: clients } = useClients();
   const { data: allTasks } = useAllTasks();
-  const { data: allSubtasks } = useQuery({ queryKey: ["subtasks"], queryFn: getAllSubtasks });
+  const { data: allSubtasks } = useQuery({ queryKey: qk.subtasks.all, queryFn: getAllSubtasks });
   const createProject = useCreateProject();
   const updateProject = useUpdateProject();
   const deleteProject = useDeleteProject();

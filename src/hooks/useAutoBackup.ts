@@ -7,6 +7,7 @@ import { logError } from "../lib/log";
 import { getLabels, notify } from "../lib/notify";
 import { sendNativeNotification } from "../lib/nativeNotification";
 import { modeActive } from "../lib/activeMode";
+import { qk } from "../db/queryKeys";
 
 /** Distinguish fs-scope denials (stored backup dir no longer accessible)
  *  from ordinary backup failures for a clearer user message. */
@@ -76,7 +77,7 @@ export function useAutoBackup() {
               read: 0,
               link: backupPath,
             });
-            queryClient.invalidateQueries({ queryKey: ["notifications"] });
+            queryClient.invalidateQueries({ queryKey: qk.notifications.all });
             sendNativeNotification(getLabels().auto_backup_title, fileName);
           })
           .catch((e) => {

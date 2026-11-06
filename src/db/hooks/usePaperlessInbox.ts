@@ -5,6 +5,7 @@ import { getPaperlessLinks } from "../queries/paperlessLinks";
 import { connectionConfig } from "../../lib/upkeep/connections";
 import { OFFLINE_PREFIX, type InboxDoc, type InboxItem } from "../../lib/paperless/inbox";
 import { useOrgStore } from "../../stores/org-store";
+import { qk } from "../queryKeys";
 
 /** Query key of the inbox; invalidate it after linking or dismissing a document. */
 export const paperlessInboxKey = (connectionId: number | null) => ["paperless-inbox", connectionId] as const;
@@ -21,7 +22,7 @@ const errorMessage = (e: unknown) => (e instanceof Error ? e.message : String(e)
 
 export function usePaperlessInbox(): PaperlessInbox {
   const org = useOrgStore((s) => s.activeId);
-  const conns = useQuery({ queryKey: ["connections"], queryFn: getConnections });
+  const conns = useQuery({ queryKey: qk.connections.all, queryFn: getConnections });
   const c = (conns.data ?? []).filter((x) => x.kind === "paperless").sort((a, b) => a.id - b.id)[0] ?? null;
   const connection = c ? { id: c.id, host: c.host ?? "", port: c.port ?? 0 } : null;
 

@@ -4,10 +4,11 @@ import { useUndoStore } from "../../stores/undo-store";
 import type { TableColumnDef, ProjectTableRow } from "../../types/project-table";
 import { getLabels } from "../../lib/notify";
 import { snapshotRows, pushRestore, reinsertAt } from "../undoRestore";
+import { qk } from "../queryKeys";
 
 export function useProjectTables(projectId: number) {
   return useQuery({
-    queryKey: ["project-tables", projectId],
+    queryKey: qk.projectTables.byProject(projectId),
     queryFn: () => q.getProjectTables(projectId),
     enabled: projectId > 0,
   });
@@ -19,7 +20,7 @@ export function useCreateProjectTable(projectId: number) {
     meta: { errorLabel: "error_save_table" },
     mutationFn: ({ name, columns }: { name: string; columns?: TableColumnDef[] }) =>
       q.createProjectTable(projectId, name, columns),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["project-tables", projectId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.projectTables.byProject(projectId) }),
   });
 }
 
@@ -29,15 +30,15 @@ export function useUpdateProjectTable(projectId: number) {
     meta: { errorLabel: "error_save_table" },
     mutationFn: ({ id, data }: { id: number; data: { name?: string; column_config?: TableColumnDef[] } }) =>
       q.updateProjectTable(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["project-tables", projectId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.projectTables.byProject(projectId) }),
   });
 }
 
 export function useDeleteProjectTable(projectId: number) {
   const qc = useQueryClient();
   const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ["project-tables", projectId] });
-    qc.invalidateQueries({ queryKey: ["project-table-rows"] });
+    qc.invalidateQueries({ queryKey: qk.projectTables.byProject(projectId) });
+    qc.invalidateQueries({ queryKey: qk.projectTables.allRows });
   };
   return useMutation({
     meta: { errorLabel: "error_delete_table" },
@@ -61,7 +62,7 @@ export function useDeleteProjectTable(projectId: number) {
  */
 export function useDeleteProjectTableColumn(projectId: number) {
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["project-tables", projectId] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: qk.projectTables.byProject(projectId) });
   const setColumns = async (tableId: number, change: (cols: TableColumnDef[]) => TableColumnDef[]) => {
     const table = await q.getProjectTable(tableId);
     if (!table) return;
@@ -91,7 +92,7 @@ export function useDeleteProjectTableColumn(projectId: number) {
 
 export function useProjectTableRows(tableId: number) {
   return useQuery({
-    queryKey: ["project-table-rows", tableId],
+    queryKey: qk.projectTables.rows(tableId),
     queryFn: () => q.getProjectTableRows(tableId),
     enabled: tableId > 0,
   });
@@ -102,7 +103,7 @@ export function useCreateProjectTableRow(tableId: number) {
   return useMutation({
     meta: { errorLabel: "error_save_row" },
     mutationFn: (data?: Record<string, unknown>) => q.createProjectTableRow(tableId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["project-table-rows", tableId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.projectTables.rows(tableId) }),
   });
 }
 
@@ -112,13 +113,13 @@ export function useUpdateProjectTableRow(tableId: number) {
     meta: { errorLabel: "error_save_row" },
     mutationFn: ({ id, data }: { id: number; data: Record<string, unknown> }) =>
       q.updateProjectTableRow(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["project-table-rows", tableId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.projectTables.rows(tableId) }),
   });
 }
 
 export function useDeleteProjectTableRow(tableId: number) {
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["project-table-rows", tableId] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: qk.projectTables.rows(tableId) });
   return useMutation({
     meta: { errorLabel: "error_delete_row" },
     mutationFn: async (id: number) => {

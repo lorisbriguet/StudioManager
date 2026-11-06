@@ -7,10 +7,11 @@ import {
 } from "../queries/dashboardPresets";
 import { snapshotRows, pushRestore } from "../undoRestore";
 import { getLabels } from "../../lib/notify";
+import { qk } from "../queryKeys";
 
 export function useDashboardPresets() {
   return useQuery({
-    queryKey: ["dashboard-presets"],
+    queryKey: qk.dashboardPresets.all,
     queryFn: getDashboardPresets,
   });
 }
@@ -21,7 +22,7 @@ export function useCreateDashboardPreset() {
     meta: { errorLabel: "error_save_preset" },
     mutationFn: ({ name, layoutJson }: { name: string; layoutJson: string }) =>
       createDashboardPreset(name, layoutJson),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["dashboard-presets"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.dashboardPresets.all }),
   });
 }
 
@@ -31,13 +32,13 @@ export function useUpdateDashboardPreset() {
     meta: { errorLabel: "error_save_preset" },
     mutationFn: ({ id, data }: { id: number; data: { name?: string; layout_json?: string } }) =>
       updateDashboardPreset(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["dashboard-presets"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.dashboardPresets.all }),
   });
 }
 
 export function useDeleteDashboardPreset() {
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["dashboard-presets"] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: qk.dashboardPresets.all });
   return useMutation({
     meta: { errorLabel: "error_delete_preset" },
     mutationFn: async (id: number) => {

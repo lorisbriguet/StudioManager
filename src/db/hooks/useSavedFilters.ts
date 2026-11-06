@@ -9,10 +9,11 @@ import {
 import { snapshotRows, pushRestore } from "../undoRestore";
 import { getLabels } from "../../lib/notify";
 import type { SavedFilterData } from "../../types/saved-filter";
+import { qk } from "../queryKeys";
 
 export function useSavedFilters(page: string) {
   return useQuery({
-    queryKey: ["saved-filters", page],
+    queryKey: qk.savedFilters.byPage(page),
     queryFn: () => getSavedFilters(page),
   });
 }
@@ -23,7 +24,7 @@ export function useCreateSavedFilter(page: string) {
     meta: { errorLabel: "error_save_filter" },
     mutationFn: ({ name, filters }: { name: string; filters: SavedFilterData }) =>
       createSavedFilter(page, name, filters as Record<string, unknown>),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["saved-filters", page] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.savedFilters.byPage(page) }),
   });
 }
 
@@ -32,7 +33,7 @@ export function useRenameSavedFilter(page: string) {
   return useMutation({
     meta: { errorLabel: "error_save_filter" },
     mutationFn: ({ id, name }: { id: number; name: string }) => renameSavedFilter(id, name),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["saved-filters", page] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.savedFilters.byPage(page) }),
   });
 }
 
@@ -42,13 +43,13 @@ export function useUpdateSavedFilter(page: string) {
     meta: { errorLabel: "error_save_filter" },
     mutationFn: ({ id, filters }: { id: number; filters: SavedFilterData }) =>
       updateSavedFilterData(id, filters as Record<string, unknown>),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["saved-filters", page] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.savedFilters.byPage(page) }),
   });
 }
 
 export function useDeleteSavedFilter(page: string) {
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["saved-filters", page] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: qk.savedFilters.byPage(page) });
   return useMutation({
     meta: { errorLabel: "error_delete_filter" },
     mutationFn: async (id: number) => {
