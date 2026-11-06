@@ -32,7 +32,7 @@ pub const MIGRATIONS: &[SqlMigration] = &[
 #[allow(dead_code)]
 pub const LATEST_VERSION: i64 = 13;
 
-fn table_exists(conn: &rusqlite::Connection, name: &str) -> Result<bool, String> {
+pub(crate) fn table_exists(conn: &rusqlite::Connection, name: &str) -> Result<bool, String> {
     conn.query_row(
         "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
         [name],

@@ -65,6 +65,17 @@ struct Counts {
     receipt_files: usize,
 }
 
+/// Every (table, column, folder) whose stored absolute paths point into the
+/// app's document folders. `income` is created by the frontend schema, not
+/// the Rust migrations, so a legacy database may not have it yet.
+fn path_columns(conn: &rusqlite::Connection) -> Result<Vec<(&'static str, &'static str, &'static str)>, String> {
+    let mut cols = vec![("expenses", "receipt_path", "receipts"), ("invoices", "pdf_path", "invoices")];
+    if crate::migrate::table_exists(conn, "income")? {
+        cols.push(("income", "receipt_path", "receipts"));
+    }
+    Ok(cols)
+}
+
 fn count_files(dir: &Path) -> usize {
     std::fs::read_dir(dir).map(|it| it.filter_map(Result::ok).count()).unwrap_or(0)
 }
@@ -80,7 +91,7 @@ fn counts(db: &Path, docs_root: &Path) -> Result<Counts, String> {
     })
 }
 
-/// Counts invoice/expense rows whose stored path sits under `root` (the same
+/// Counts invoice/expense/income rows whose stored path sits under `root` (the same
 /// per-table prefix `rewrite_paths`/`rewrite_back` use) AND whose file
 /// actually exists on disk. `counts()` alone can't help but agree before and
 /// after a plain directory rename (it's the same files, just relocated) —
@@ -90,7 +101,7 @@ fn counts(db: &Path, docs_root: &Path) -> Result<Counts, String> {
 fn linked_existing_count(db: &Path, root: &Path) -> Result<i64, String> {
     let conn = rusqlite::Connection::open(db).map_err(|e| format!("open db for link check: {e}"))?;
     let mut total = 0i64;
-    for (table, column, dir) in [("expenses", "receipt_path", "receipts"), ("invoices", "pdf_path", "invoices")] {
+    for (table, column, dir) in path_columns(&conn)? {
         let prefix = format!("{}/{dir}/", root.display());
         let sql = format!(
             "SELECT {column} FROM {table} WHERE {column} IS NOT NULL AND substr({column}, 1, length(?1)) = ?1"
@@ -120,7 +131,7 @@ fn rewrite_paths(db: &Path, app_dir: &Path, org: &Path) -> Result<(), String> {
     let conn = rusqlite::Connection::open(db).map_err(|e| format!("open db for path rewrite: {e}"))?;
     let tx_res = (|| -> Result<(), String> {
         conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-        for (table, column, dir) in [("expenses", "receipt_path", "receipts"), ("invoices", "pdf_path", "invoices")] {
+        for (table, column, dir) in path_columns(&conn)? {
             let old_prefix = format!("{}/{dir}/", app_dir.display());
             let new_prefix = format!("{}/{dir}/", org.display());
             conn.execute(
@@ -146,7 +157,7 @@ fn rewrite_back(db: &Path, app_dir: &Path, org: &Path) -> Result<(), String> {
     }
     // Same statement with prefixes swapped.
     let conn = rusqlite::Connection::open(db).map_err(|e| e.to_string())?;
-    for (table, column, dir) in [("expenses", "receipt_path", "receipts"), ("invoices", "pdf_path", "invoices")] {
+    for (table, column, dir) in path_columns(&conn)? {
         let new_prefix = format!("{}/{dir}/", app_dir.display());
         let old_prefix = format!("{}/{dir}/", org.display());
         conn.execute(
@@ -456,6 +467,12 @@ mod tests {
             "INSERT INTO expenses (reference, supplier, category_code, invoice_date, amount, receipt_path) VALUES ('F-26-002','Y','FA','2026-01-02',1,'/Volumes/External/keep.pdf')",
             [],
         ).unwrap();
+        // `income` comes from the frontend schema (ensureSchema), not the Rust
+        // migrations; create the columns the upgrade reads.
+        c.execute_batch("CREATE TABLE income (id INTEGER PRIMARY KEY AUTOINCREMENT, reference TEXT NOT NULL, receipt_path TEXT)").unwrap();
+        let inc = app.join("receipts/R-26-001_HEAD.pdf");
+        std::fs::write(&inc, b"pdf").unwrap();
+        c.execute("INSERT INTO income (reference, receipt_path) VALUES ('R-26-001', ?1)", [inc.to_string_lossy().as_ref()]).unwrap();
         // disposable companions that must be deleted, not moved
         std::fs::write(app.join("studiomanager_test.db"), b"x").unwrap();
         std::fs::write(app.join("studiomanager_presentation.db-wal"), b"x").unwrap();
@@ -496,7 +513,20 @@ mod tests {
         assert_eq!(rec, dir.join("receipts/F-26-001.pdf").to_string_lossy());
         let ext: String = c.query_row("SELECT receipt_path FROM expenses WHERE reference='F-26-002'", [], |r| r.get(0)).unwrap();
         assert_eq!(ext, "/Volumes/External/keep.pdf");
+        let income: String = c.query_row("SELECT receipt_path FROM income WHERE reference='R-26-001'", [], |r| r.get(0)).unwrap();
+        assert_eq!(income, dir.join("receipts/R-26-001_HEAD.pdf").to_string_lossy());
         assert!(app.join(UPGRADE_SNAPSHOT).exists(), "snapshot kept until next launch");
+    }
+
+    #[test]
+    fn upgrades_a_legacy_db_that_has_no_income_table() {
+        let app = legacy_fixture("no-income");
+        Connection::open(app.join(DB_FILE)).unwrap().execute_batch("DROP TABLE income").unwrap();
+        let reg = run(&app).unwrap();
+        let dir = org_dir(&app, &reg.active().unwrap().id);
+        let c = Connection::open(dir.join(DB_FILE)).unwrap();
+        let rec: String = c.query_row("SELECT receipt_path FROM expenses WHERE reference='F-26-001'", [], |r| r.get(0)).unwrap();
+        assert_eq!(rec, dir.join("receipts/F-26-001.pdf").to_string_lossy());
     }
 
     #[test]
@@ -533,6 +563,8 @@ mod tests {
         assert_eq!(receipt, rec.to_string_lossy());
         let ext: String = c.query_row("SELECT receipt_path FROM expenses WHERE reference='F-26-002'", [], |r| r.get(0)).unwrap();
         assert_eq!(ext, "/Volumes/External/keep.pdf", "path outside the app dir must stay untouched");
+        let income: String = c.query_row("SELECT receipt_path FROM income WHERE reference='R-26-001'", [], |r| r.get(0)).unwrap();
+        assert_eq!(income, app.join("receipts/R-26-001_HEAD.pdf").to_string_lossy());
     }
 
     #[test]
@@ -597,6 +629,8 @@ mod tests {
         assert_eq!(rec, dir.join("receipts/F-26-001.pdf").to_string_lossy());
         let ext: String = c.query_row("SELECT receipt_path FROM expenses WHERE reference='F-26-002'", [], |r| r.get(0)).unwrap();
         assert_eq!(ext, "/Volumes/External/keep.pdf");
+        let income: String = c.query_row("SELECT receipt_path FROM income WHERE reference='R-26-001'", [], |r| r.get(0)).unwrap();
+        assert_eq!(income, dir.join("receipts/R-26-001_HEAD.pdf").to_string_lossy());
         // Only one organisation folder: a resume reuses the journal's id.
         assert_eq!(std::fs::read_dir(app.join(ORGS_DIR)).unwrap().count(), 1);
     }
