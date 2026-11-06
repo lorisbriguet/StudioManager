@@ -58,7 +58,7 @@ keyring = { version = "3", features = ["apple-native"] }
 # certificate the user confirmed (SHA-256 pin), never "accept anything".
 # Same versions as already in the tree (reqwest, tauri).
 rustls-platform-verifier = "0.7"
-sha2 = "0.10"
+sha2 = "0.11"
 
 [dev-dependencies]
 # Mock runtime: the per-window command check is tested against the real capabilities.
