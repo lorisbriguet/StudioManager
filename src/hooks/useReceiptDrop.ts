@@ -5,6 +5,7 @@ import { extractPdfText, extractImageText } from "../lib/pdfExtract";
 import { parseExpenseFromText, type ExtractedExpenseData } from "../lib/expenseParse";
 import { logError } from "../lib/log";
 import { useT } from "../i18n/useT";
+import { useKeepCurrent } from "./useKeepCurrent";
 
 const IMAGE_EXTS = ["png", "jpg", "jpeg", "heic"];
 
@@ -27,9 +28,9 @@ export function useReceiptDrop({
   const [parsing, setParsing] = useState(false);
   // Keep the latest callbacks without re-registering the webview listener
   const onResultRef = useRef(onResult);
-  onResultRef.current = onResult;
+  useKeepCurrent(onResultRef, onResult);
   const suppliersRef = useRef(getKnownSuppliers);
-  suppliersRef.current = getKnownSuppliers;
+  useKeepCurrent(suppliersRef, getKnownSuppliers);
 
   const handleDroppedFile = useCallback(async (filePath: string) => {
     const ext = filePath.split(".").pop()?.toLowerCase() ?? "";

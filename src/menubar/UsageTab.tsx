@@ -16,6 +16,7 @@ import {
   type Meter,
   type UsageLimits,
 } from "../lib/usage";
+import { useKeepCurrent } from "../hooks/useKeepCurrent";
 
 const LIMITS_EVERY_MS = 30_000;
 const ACTIVITY_EVERY_MS = 60_000;
@@ -29,8 +30,8 @@ const CHART_COLORS = 8;
 function usePoll<T>(load: () => Promise<T>, ms: number, onResult: (value: T) => void) {
   const loadRef = useRef(load);
   const resultRef = useRef(onResult);
-  loadRef.current = load;
-  resultRef.current = onResult;
+  useKeepCurrent(loadRef, load);
+  useKeepCurrent(resultRef, onResult);
   useEffect(() => {
     let alive = true;
     let busy = false;

@@ -26,6 +26,7 @@ import { ContextMenu } from "../components/ui/ContextMenu";
 import { undoableFromStore, undoTop } from "../lib/undo";
 import { useClientRemoval } from "../hooks/useClientRemoval";
 import { sameAddress, type Client, type ClientContact, type ClientAddress } from "../types/client";
+import { useKeepCurrent } from "../hooks/useKeepCurrent";
 
 export function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -51,7 +52,7 @@ export function ClientDetailPage() {
   // A refetch while editing (Archive, Restore) only brings archived_at in,
   // so unsaved edits survive
   const dirtyRef = useRef(dirty);
-  dirtyRef.current = dirty;
+  useKeepCurrent(dirtyRef, dirty);
   useEffect(() => {
     if (!client) return;
     setForm((prev) => (dirtyRef.current ? { ...prev, archived_at: client.archived_at } : client));

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { NEW_ITEM_EVENT, takeNewItemRequest } from "../lib/newEntity";
+import { useKeepCurrent } from "./useKeepCurrent";
 
 /**
  * Opens the page's new-item form when Cmd+N or the palette asks for it
@@ -8,7 +9,7 @@ import { NEW_ITEM_EVENT, takeNewItemRequest } from "../lib/newEntity";
 export function useNewItem(path: string, open: () => void) {
   // Keep the latest callback without re-registering the listener
   const openRef = useRef(open);
-  openRef.current = open;
+  useKeepCurrent(openRef, open);
   useEffect(() => {
     const handle = () => {
       if (takeNewItemRequest(path)) openRef.current();

@@ -75,7 +75,9 @@ export function SidePeek({
   const dividerRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   const returnFocusRef = useRef(returnFocus);
-  returnFocusRef.current = returnFocus;
+  useLayoutEffect(() => {
+    returnFocusRef.current = returnFocus;
+  });
 
   const close = useCallback(() => setClosing(true), []);
 

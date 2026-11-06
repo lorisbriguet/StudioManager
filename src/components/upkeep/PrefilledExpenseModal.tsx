@@ -5,6 +5,7 @@ import { useCreateExpense, useDistinctSuppliers, useExpenseCategories } from "..
 import { nextExpenseReferenceFor } from "../../db/queries/expenses";
 import { todayLocalISO } from "../../utils/localDate";
 import { asCurrency } from "../../lib/expenseCurrency";
+import { useKeepCurrent } from "../../hooks/useKeepCurrent";
 
 // The expense form is the Expenses page's own (a FormModal); load it only when asked for.
 const NewExpenseForm = lazy(() =>
@@ -67,7 +68,7 @@ export function PrefilledExpenseModal({ title, supplier, amount, currency, date,
 function useRefusal(unsupported: string | null, onCancel: () => void) {
   const t = useT();
   const latest = useRef({ t, onCancel });
-  latest.current = { t, onCancel };
+  useKeepCurrent(latest, { t, onCancel });
   useEffect(() => {
     if (!unsupported) return;
     const { t, onCancel } = latest.current;

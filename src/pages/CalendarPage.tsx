@@ -35,6 +35,7 @@ import { useStartAgentOn } from "../hooks/useStartAgentOn";
 import { agentMenuItems, calendarAgentTarget, type AgentTarget } from "../lib/agentStart";
 import type { EventMountArg } from "@fullcalendar/core";
 import { qk } from "../db/queryKeys";
+import { useKeepCurrent } from "../hooks/useKeepCurrent";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 function toDateStr(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
@@ -366,7 +367,7 @@ export function CalendarPage() {
     ContextMenuState<{ target: AgentTarget; props: Record<string, unknown> }> | null
   >(null);
   const agentsOnRef = useRef(agentsOn);
-  agentsOnRef.current = agentsOn;
+  useKeepCurrent(agentsOnRef, agentsOn);
   const menuListeners = useRef(new WeakMap<HTMLElement, (e: MouseEvent) => void>());
   const handleEventDidMount = useCallback((arg: EventMountArg) => {
     const props = arg.event.extendedProps;

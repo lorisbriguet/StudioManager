@@ -39,6 +39,7 @@ import { COLUMN_ICONS } from "./columnIcons";
 import { evaluateFormula } from "../../lib/formulaEval";
 import { useT } from "../../i18n/useT";
 import { useTimerActions } from "../../hooks/useTimerActions";
+import { useKeepCurrent } from "../../hooks/useKeepCurrent";
 
 /** Header cells open the column menu on click. */
 const HEADER_BUTTON = `cursor-pointer ${MUTED_INTERACTIVE}`;
@@ -108,9 +109,9 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
   const templateId = config?.template_id ?? null;
 
   const columnsRef = useRef(columns);
-  columnsRef.current = columns;
+  useKeepCurrent(columnsRef, columns);
   const templateIdRef = useRef(templateId);
-  templateIdRef.current = templateId;
+  useKeepCurrent(templateIdRef, templateId);
 
   const handleTemplateChange = useCallback(
     (newTemplateId: number | null) => {
@@ -252,7 +253,7 @@ export function WorkloadTable({ projectId, onEditColumn }: Props) {
     try { return Number(localStorage.getItem(`workload_taskw_${projectId}`)) || 180; } catch { return 180; }
   });
   const taskColWidthRef = useRef(taskColWidth);
-  taskColWidthRef.current = taskColWidth;
+  useKeepCurrent(taskColWidthRef, taskColWidth);
   const [colWidths, setColWidths] = useState<Record<string, number>>({});
   const resizingRef = useRef<{
     colIndex: number;
