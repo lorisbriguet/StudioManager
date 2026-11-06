@@ -188,8 +188,9 @@ export function QuotesPage() {
     const ids = [...bulk.selected] as number[];
     bulk.clearSelection();
     // One at a time, each numbered after the previous one is saved. A send
-    // that assigns a number adds no undo step (undo would free the number),
-    // so there is usually no Undo toast; any other undo steps fold into one.
+    // that assigns a number adds no undo step and clears the history (undo
+    // would free the number), so there is usually no Undo toast; any other
+    // undo steps fold into one.
     const action = await batchUndo(t.bulk_updated, async () => {
       for (const id of ids) {
         try {

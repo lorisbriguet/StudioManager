@@ -731,6 +731,7 @@ const ui = {
     toast_category_default: "A default category can't be deleted",
     error_template_default: "The default template can't be deleted",
     error_revert_to_draft: "A sent document can't go back to draft",
+    error_undo_numbered_document: "This document has been sent and numbered: cancel it instead",
 
     // Time Tracking
     project: "Project",
@@ -2559,6 +2560,7 @@ const ui = {
     toast_category_default: "Une catégorie par défaut ne peut pas être supprimée",
     error_template_default: "Le modèle par défaut ne peut pas être supprimé",
     error_revert_to_draft: "Un document envoyé ne peut pas redevenir un brouillon",
+    error_undo_numbered_document: "Ce document a été envoyé et numéroté : annulez-le plutôt",
 
     // Time Tracking
     project: "Projet",

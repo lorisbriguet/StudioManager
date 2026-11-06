@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
-import { useUndoStore } from "../../stores/undo-store";
+import { useUndoStore, clearUndoHistory } from "../../stores/undo-store";
 import { getLabels } from "../../lib/notify";
 import type { UIKey } from "../../i18n/ui";
 import { AppError } from "../../lib/errors";
@@ -124,6 +124,12 @@ export function documentHooks<Doc extends DocumentRow, Item extends LineItemFiel
         useUndoStore.getState().push({
           label: `${getLabels()[labels.undoCreate]} "${(data as { reference: string }).reference}"`,
           execute: async () => {
+            // Sending clears the history, but never delete a numbered one:
+            // its number would be freed for the next document.
+            const current = await q.get(id);
+            if (current && !current.reference.startsWith("DRAFT")) {
+              throw new AppError("error_undo_numbered_document", `Won't delete numbered ${key} ${current.reference}`);
+            }
             await q.delete(id);
             invalidate(qc);
           },
@@ -174,6 +180,11 @@ export function documentHooks<Doc extends DocumentRow, Item extends LineItemFiel
         // same one, so they take turns from reading the number to writing it.
         const { prev, prevLineItems, numbered } =
           fields.status === "sent" ? await oneSendAtATime(save) : await save();
+
+        // Once numbered, no undo step may delete or revert it, and Cmd+Z must
+        // not reach past the send to another document: start a fresh history.
+        // To take a sent document back, the user cancels it.
+        if (numbered) clearUndoHistory();
 
         await config.afterUpdate?.(id, fields.status ?? prev?.status, qc);
 

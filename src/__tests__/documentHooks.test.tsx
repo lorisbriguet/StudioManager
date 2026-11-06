@@ -55,6 +55,7 @@ import * as invHooks from "../db/hooks/useInvoices";
 import * as quoHooks from "../db/hooks/useQuotes";
 import { useQuoteLineItems } from "../db/hooks/useQuoteLineItems";
 import { useUndoStore } from "../stores/undo-store";
+import { batchUndo } from "../lib/undo";
 import { useAppStore } from "../stores/app-store";
 
 let qc: QueryClient;
@@ -204,6 +205,61 @@ describe.each(kinds)("$name hooks", (k) => {
     const { result } = renderHook(() => k.h.useUpdate(), { wrapper });
     await result.current.mutateAsync({ id: 5, data: { status: "sent" } as never });
     expect(useUndoStore.getState().stack).toHaveLength(0);
+  });
+
+  // D5 follow-up: the create step stayed on the stack, so Cmd+Z right after
+  // a send deleted the numbered document (or another, unrelated one).
+  it("a send that numbers the document clears the undo history", async () => {
+    const create = renderHook(() => k.h.useCreate(), { wrapper }).result;
+    await create.current.mutateAsync({ data: { reference: "DRAFT-41" } as never, lineItems: [] });
+    await create.current.mutateAsync({ data: { reference: "DRAFT-42" } as never, lineItems: [] });
+    useUndoStore.setState({ redoStack: [{ label: "older redo", execute: vi.fn() }] });
+    expect(useUndoStore.getState().stack).toHaveLength(2);
+
+    k.q.get.mockResolvedValue(doc({ id: 41, reference: "DRAFT-41" }));
+    const update = renderHook(() => k.h.useUpdate(), { wrapper }).result;
+    await update.current.mutateAsync({ id: 41, data: { status: "sent" } as never });
+
+    expect(useUndoStore.getState().stack).toHaveLength(0);
+    expect(useUndoStore.getState().redoStack).toHaveLength(0);
+    expect(k.q.remove).not.toHaveBeenCalled();
+  });
+
+  it("a bulk send that numbers documents leaves nothing to undo", async () => {
+    const create = renderHook(() => k.h.useCreate(), { wrapper }).result;
+    await create.current.mutateAsync({ data: { reference: "DRAFT-41" } as never, lineItems: [] });
+    k.q.get.mockImplementation(async (id: number) =>
+      id === 7 ? doc({ id, reference: "2025-001", status: "sent" }) : doc({ id, reference: `DRAFT-${id}` })
+    );
+    const update = renderHook(() => k.h.useUpdate(), { wrapper }).result;
+    // An already numbered one first: its re-send adds a step, then the draft's send clears it
+    const action = await batchUndo("bulk", async () => {
+      for (const id of [7, 41, 42]) {
+        await update.current.mutateAsync({ id, data: { status: "sent" } as never });
+      }
+    });
+    expect(action).toBeUndefined();
+    expect(useUndoStore.getState().stack).toHaveLength(0);
+  });
+
+  it("the undo of a create never deletes a document that has been numbered since", async () => {
+    const create = renderHook(() => k.h.useCreate(), { wrapper }).result;
+    await create.current.mutateAsync({ data: { reference: "DRAFT-41" } as never, lineItems: [] });
+    const action = useUndoStore.getState().stack[0];
+    k.q.get.mockResolvedValue(doc({ id: 41, reference: "2025-006", status: "sent" }));
+    await expect(action.execute()).rejects.toMatchObject({ labelKey: "error_undo_numbered_document" });
+    expect(k.q.remove).not.toHaveBeenCalled();
+  });
+
+  it("the undo of an edit puts the billing address back", async () => {
+    k.q.get.mockResolvedValue(doc({ billing_address_id: 3, po_number: null }));
+    const { result } = renderHook(() => k.h.useUpdate(), { wrapper });
+    await result.current.mutateAsync({
+      id: 5,
+      data: { po_number: "PO-1", billing_address_id: 3 } as never,
+    });
+    await useUndoStore.getState().stack[0].execute();
+    expect(k.q.update).toHaveBeenLastCalledWith(5, { po_number: null, billing_address_id: 3 }, undefined);
   });
 
   it("an older edit's undo keeps the status and number once sent", async () => {
