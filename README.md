@@ -138,7 +138,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend), it d
 - Revenue, operating expenses, social charges breakdown
 - Charts and yearly comparison
 - Follows Swiss independent worker tax format
-- Year-end export: P&L PDF, invoice list, expense list with receipts — ready for your trustee
+- Year-end export: P&L PDF, invoice list with the invoices as sent, expense and other-income lists with receipts — ready for your trustee
 
 ### Dashboard
 - Customizable drag-and-drop grid layout (react-grid-layout)

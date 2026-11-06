@@ -32,6 +32,9 @@ import { buildInvoicePdf } from "../lib/documentPdf";
 import { PLPDF } from "../components/finance/PLPDF";
 import { InvoicesListPDF } from "../components/finance/InvoicesListPDF";
 import { ExpensesListPDF } from "../components/finance/ExpensesListPDF";
+import { IncomeListPDF } from "../components/finance/IncomeListPDF";
+import { useIncomes } from "../db/hooks/useIncome";
+import { safeFileName, uniqueFileName } from "../lib/pdfFilename";
 import { getMonthlyData } from "../db/queries/finance";
 import { missingChfEquivalent } from "../lib/chfEquivalent";
 import { logError } from "../lib/log";
@@ -51,6 +54,7 @@ export function FinancesPage() {
   const { data: monthly } = useMonthlyData(year);
   const { data: invoices } = useInvoices();
   const { data: expenses } = useExpenses();
+  const { data: incomes } = useIncomes();
   const { data: clients } = useClients();
   const { data: profile } = useBusinessProfile();
   const chart = useChartTheme();
@@ -72,6 +76,8 @@ export function FinancesPage() {
       await mkdir(`${basePath}/factures/justificatifs`, { recursive: true });
       await mkdir(`${basePath}/depenses`, { recursive: true });
       await mkdir(`${basePath}/depenses/justificatifs`, { recursive: true });
+      await mkdir(`${basePath}/revenus`, { recursive: true });
+      await mkdir(`${basePath}/revenus/justificatifs`, { recursive: true });
 
       // Export P&L as PDF
       if (pl && profile) {
@@ -79,7 +85,7 @@ export function FinancesPage() {
         const plDoc = createElement(PLPDF, { year, pl, monthly: monthlyData, profile, lang: exportLang });
         const plBlob = await pdf(plDoc as never).toBlob();
         const plBytes = new Uint8Array(await plBlob.arrayBuffer());
-        await writeFile(`${basePath}/${profile.owner_name.toUpperCase()} - ${year} - Comptabilite.pdf`, plBytes);
+        await writeFile(`${basePath}/${safeFileName(`${profile.owner_name.toUpperCase()} - ${year} - Comptabilite`)}.pdf`, plBytes);
       }
 
       // Export invoices list PDF + individual invoice PDFs. Drafts are not
@@ -97,16 +103,34 @@ export function FinancesPage() {
         await writeFile(`${basePath}/factures/factures_${year}.pdf`, new Uint8Array(await invListBlob.arrayBuffer()));
       }
 
-      // Individual invoice PDFs, rendered like every other export (template,
-      // contact, billing address, VOID overlay). Rendering stays sequential
-      // on purpose: @react-pdf renders are CPU-bound and concurrent renders
-      // have wedged before (see the mark-sent-and-export soft-lock).
+      // Individual invoice PDFs. The PDF stored when the invoice left draft
+      // is copied as is, so the trustee gets the document the client got
+      // (not one redrawn with today's profile and client data). Only an
+      // invoice without a readable stored PDF is rendered, like every other
+      // export (template, contact, billing address, VOID overlay). Rendering
+      // stays sequential on purpose: @react-pdf renders are CPU-bound and
+      // concurrent renders have wedged before (the mark-sent soft-lock).
       let invoicePdfsFailed = 0;
+      const invoiceNames = new Set<string>();
       for (const inv of yearInvoices) {
         try {
+          if (inv.pdf_path) {
+            const clientName = clientNames[inv.client_id];
+            const stem = clientName ? `${inv.reference}_${clientName}` : inv.reference;
+            const name = uniqueFileName(stem, "pdf", invoiceNames);
+            try {
+              await copyFile(inv.pdf_path, `${basePath}/factures/justificatifs/${name}`);
+              continue;
+            } catch (e) {
+              // Stored file moved or deleted: render it instead, under the same name.
+              logError("Trustee export: stored invoice PDF unreadable, rendering", inv.reference, e);
+              invoiceNames.delete(name.toLowerCase());
+            }
+          }
           const built = await buildInvoicePdf(inv.id);
           if (!built) throw new Error(t.invoice_not_found);
-          await writeFile(`${basePath}/factures/justificatifs/${inv.reference}_${built.client.name}.pdf`, built.bytes);
+          const name = uniqueFileName(`${inv.reference}_${built.client.name}`, "pdf", invoiceNames);
+          await writeFile(`${basePath}/factures/justificatifs/${name}`, built.bytes);
         } catch (e) {
           // One bad invoice must not abort the export, but a silent omission
           // would leave a bookkeeping folder that looks complete and is not.
@@ -128,15 +152,37 @@ export function FinancesPage() {
       }
 
       let receiptsSkipped = 0;
+      const copyReceipt = async (from: string, dir: string, stem: string, used: Set<string>) => {
+        try {
+          const base = from.split(/[/\\]/).pop() ?? "";
+          const ext = base.includes(".") ? base.split(".").pop()! : "pdf";
+          await copyFile(from, `${basePath}/${dir}/justificatifs/${uniqueFileName(stem, ext, used)}`);
+        } catch {
+          // Receipt file missing, or its stored path is outside the fs scope
+          receiptsSkipped++;
+        }
+      };
+
+      const expenseNames = new Set<string>();
       for (const exp of yearExpenses) {
         if (exp.receipt_path) {
-          try {
-            const ext = exp.receipt_path.split(".").pop() ?? "pdf";
-            await copyFile(exp.receipt_path, `${basePath}/depenses/justificatifs/${exp.reference}_${exp.supplier}.${ext}`);
-          } catch {
-            // Receipt file missing, or its stored path is outside the fs scope
-            receiptsSkipped++;
-          }
+          await copyReceipt(exp.receipt_path, "depenses", `${exp.reference}_${exp.supplier}`, expenseNames);
+        }
+      }
+
+      // Other income (the P&L counts it as revenue): list PDF + receipts.
+      const yearIncomes = incomes?.filter((inc) => inc.date.startsWith(String(year))) ?? [];
+
+      if (profile) {
+        const incListDoc = createElement(IncomeListPDF, { year, incomes: yearIncomes, profile, lang: exportLang });
+        const incListBlob = await pdf(incListDoc as never).toBlob();
+        await writeFile(`${basePath}/revenus/revenus_${year}.pdf`, new Uint8Array(await incListBlob.arrayBuffer()));
+      }
+
+      const incomeNames = new Set<string>();
+      for (const inc of yearIncomes) {
+        if (inc.receipt_path) {
+          await copyReceipt(inc.receipt_path, "revenus", `${inc.reference}_${inc.source}`, incomeNames);
         }
       }
       if (receiptsSkipped > 0) {

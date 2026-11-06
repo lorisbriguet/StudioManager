@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pdfFileName, uniquePdfFileName } from "../lib/pdfFilename";
+import { pdfFileName, uniquePdfFileName, safeFileName, uniqueFileName } from "../lib/pdfFilename";
 
 describe("pdfFileName", () => {
   it("joins reference and client name with an underscore", () => {
@@ -50,5 +50,32 @@ describe("uniquePdfFileName", () => {
     uniquePdfFileName("DRAFT", "Client_2", used); // reserves "DRAFT_Client_2.pdf"
     uniquePdfFileName("DRAFT", "Client", used); // reserves "DRAFT_Client.pdf"
     expect(uniquePdfFileName("DRAFT", "Client", used)).toBe("DRAFT_Client_3.pdf");
+  });
+});
+
+describe("safeFileName", () => {
+  it("replaces path separators", () => {
+    expect(safeFileName("A/B\\C")).toBe("A_B_C");
+  });
+
+  it("drops control characters and leading dots", () => {
+    expect(safeFileName("..hidden\x00name\n")).toBe("hiddenname");
+  });
+});
+
+describe("uniqueFileName", () => {
+  it("keeps the given extension and suffixes before it", () => {
+    const used = new Set<string>();
+    expect(uniqueFileName("D-26-001_Swisscom", "jpg", used)).toBe("D-26-001_Swisscom.jpg");
+    expect(uniqueFileName("D-26-001_Swisscom", "jpg", used)).toBe("D-26-001_Swisscom_2.jpg");
+  });
+
+  it("sanitises the stem and the extension", () => {
+    const used = new Set<string>();
+    expect(uniqueFileName("D-26-002_Migros/Coop", "p/df", used)).toBe("D-26-002_Migros_Coop.p_df");
+  });
+
+  it("writes no trailing dot when there is no extension", () => {
+    expect(uniqueFileName("README", "", new Set())).toBe("README");
   });
 });

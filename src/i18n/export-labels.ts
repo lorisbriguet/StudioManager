@@ -42,6 +42,19 @@ const exportLabels = {
     expense: "expense",
     expenses_plural: "expenses",
     category_breakdown: "Category Breakdown",
+
+    // Other income list
+    income_title: "Other income",
+    description: "Description",
+    source: "Source",
+    category: "Category",
+    income_entry: "entry",
+    income_entries: "entries",
+    income_cat_side_income: "Side income",
+    income_cat_grant: "Grant",
+    income_cat_refund: "Refund",
+    income_cat_interest: "Interest",
+    income_cat_other: "Other",
   },
   FR: {
     // P&L
@@ -84,6 +97,19 @@ const exportLabels = {
     expense: "depense",
     expenses_plural: "depenses",
     category_breakdown: "Repartition par categorie",
+
+    // Other income list
+    income_title: "Autres revenus",
+    description: "Description",
+    source: "Source",
+    category: "Categorie",
+    income_entry: "entree",
+    income_entries: "entrees",
+    income_cat_side_income: "Revenu accessoire",
+    income_cat_grant: "Subvention",
+    income_cat_refund: "Remboursement",
+    income_cat_interest: "Interets",
+    income_cat_other: "Autre",
   },
 } as const;
 
