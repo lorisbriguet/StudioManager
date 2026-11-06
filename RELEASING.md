@@ -2,7 +2,7 @@
 
 Step-by-step guidelines for publishing a new release on GitHub. Follow in order; every gate must pass before moving on. (Claude Code users: the `GitPublisher` skill automates this process — these are the same rules in human-readable form.)
 
-**Building on GitHub instead of this Mac:** after the version bump, the changelog and the tag (steps 3, 5, 7 up to `git push origin main --tags`), start the **Release build** workflow on the tag (`gh workflow run release.yml --ref vX.Y.Z -f version=X.Y.Z`, or Actions › Release build › Run workflow with "Use workflow from" set to the tag) and approve it when it asks (the `release` environment). It runs the gates of steps 1 and 2, builds without the key, then signs on a separate runner (step 4), writes `latest.json` (step 6) and creates a **draft** release with the three assets. A version with a suffix (`3.4.1-rc.1`) becomes a prerelease draft: once published it is never "latest", so installed apps don't update to it. Download the `.dmg` from the draft, smoke-test it, then publish the draft and do step 8. One-time setup: the updater key and its password as secrets of the `release` environment (`gh secret set TAURI_SIGNING_PRIVATE_KEY --env release < ~/.tauri/StudioManager.key`, then `gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD --env release`, which asks for the password). The workflow refuses a key without a password: until the first [rotation](#rotate-the-key), build and sign on this Mac. The workflow is [.github/workflows/release.yml](.github/workflows/release.yml).
+**Building on GitHub instead of this Mac:** after the version bump, the [CHANGELOG.md](CHANGELOG.md) section and the tag (steps 3, 5, 7 up to `git push origin main --tags`), start the **Release build** workflow on the tag (`gh workflow run release.yml --ref vX.Y.Z -f version=X.Y.Z`, or Actions › Release build › Run workflow with "Use workflow from" set to the tag) and approve it when it asks (the `release` environment). It runs the gates of steps 1 and 2, builds without the key, then signs on a separate runner (step 4), writes `latest.json` (step 6) with the changelog summary line as its notes, and creates a **draft** release with the three assets and the changelog section as its description. It stops before building when CHANGELOG.md has no section for the version. A version with a suffix (`3.4.1-rc.1`) becomes a prerelease draft: once published it is never "latest", so installed apps don't update to it. Download the `.dmg` from the draft, smoke-test it, then publish the draft and do step 8. One-time setup: the updater key and its password as secrets of the `release` environment (`gh secret set TAURI_SIGNING_PRIVATE_KEY --env release < ~/.tauri/StudioManager.key`, then `gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD --env release`, which asks for the password). The workflow refuses a key without a password: until the first [rotation](#rotate-the-key), build and sign on this Mac. The workflow is [.github/workflows/release.yml](.github/workflows/release.yml).
 
 ---
 
@@ -80,7 +80,8 @@ Smoke-test the built .dmg app (launch, open a few pages, create+delete a draft i
 
 ## 5. Changelog + docs
 
-- Write the changelog from real commits/changes, grouped: Features / Fixes / Refactors / Breaking. Concise, user-facing wording; no noise.
+- Add a section for the version at the top of [CHANGELOG.md](CHANGELOG.md), written from the real commits and merged PRs: `## X.Y.Z (YYYY-MM-DD)`, then **one summary line** (what the in-app updater shows under "Release notes"), then `### Features` / `### Fixes` / `### Under the hood` (and `### Data` or `### Breaking` when they apply). Concise, user-facing wording; no noise. Relative links to repo files are fine: they are pointed at the tag on the release page.
+- Check it: `node scripts/changelog-notes.mjs X.Y.Z summary` prints the summary line, `... body` the release description. Both fail when the section or its summary line is missing.
 - Update [README.md](README.md): feature list if features shipped, remove anything now inaccurate.
 - Keep [IDEAS.md](IDEAS.md) in sync (move shipped items to the Done section).
 
@@ -91,7 +92,7 @@ The in-app updater fetches `releases/latest/download/latest.json`. **If it's mis
 ```json
 {
   "version": "X.Y.Z",
-  "notes": "Release description",
+  "notes": "<node scripts/changelog-notes.mjs X.Y.Z summary>",
   "pub_date": "YYYY-MM-DDTHH:MM:SSZ",
   "platforms": {
     "darwin-aarch64": {
@@ -102,19 +103,20 @@ The in-app updater fetches `releases/latest/download/latest.json`. **If it's mis
 }
 ```
 
-The build is Apple silicon only, so there is no `darwin-x86_64` entry: an Intel Mac would download a bundle it cannot run. The signature is the literal contents of the `.sig` file from step 4. The `url` must reference the tag you are about to create (`vX.Y.Z`).
+`notes` is the changelog summary line: one line, no Markdown. The build is Apple silicon only, so there is no `darwin-x86_64` entry: an Intel Mac would download a bundle it cannot run. The signature is the literal contents of the `.sig` file from step 4. The `url` must reference the tag you are about to create (`vX.Y.Z`).
 
 ## 7. Commit, tag, release
 
 ```bash
-git add <release files>            # only what belongs in the release
+node scripts/changelog-notes.mjs X.Y.Z body > $TMPDIR/notes.md
+git add <release files>            # only what belongs in the release, CHANGELOG.md included
 git commit -m "release: vX.Y.Z"
 git tag vX.Y.Z                     # tag == version, always v-prefixed
 git push origin main --tags
 
 gh release create vX.Y.Z \
   --title "StudioManager vX.Y.Z" \
-  --notes-file <changelog file> \
+  --notes-file $TMPDIR/notes.md \
   StudioManager_X.Y.Z_aarch64.dmg \
   StudioManager.app.tar.gz \
   latest.json
@@ -147,7 +149,7 @@ Run these with Agents and **Show in menu bar** on (see [the menu bar guide](docs
 
 ## Demo build (never published)
 
-`npm run build:demo` builds **StudioManager Demo** from `src-tauri/tauri.demo.conf.json`: identifier `ch.studiomanager.demo`, own data folder at `~/Library/Application Support/ch.studiomanager.demo/`, updater pointed at a manifest that does not exist, no updater artefacts, so no signing key is needed. It installs next to the real app and bundles its own copy of the MCP server, which resolves the demo data folder (`--print-data-dir` ends in `ch.studiomanager.demo`) and registers as `studiomanager-demo`. Use it for presentations only; the release procedure above always uses the plain `npm run tauri build`. The demo build sets `VITE_DEMO_BUILD=1`, which enables the Settings › Data › Demo data card and disables the startup update check.
+`npm run build:demo` builds **StudioManager Demo** from `src-tauri/tauri.demo.conf.json`: identifier `ch.studiomanager.demo`, own data folder at `~/Library/Application Support/ch.studiomanager.demo/`, no updater endpoint (`"endpoints": []`, so it doesn't inherit the real app's) and no updater artefacts, so no signing key is needed and no demo manifest is ever published. It installs next to the real app and bundles its own copy of the MCP server, which resolves the demo data folder (`--print-data-dir` ends in `ch.studiomanager.demo`) and registers as `studiomanager-demo`. Use it for presentations only; the release procedure above always uses the plain `npm run tauri build`. The demo build sets `VITE_DEMO_BUILD=1`, which enables the Settings › Data › Demo data card and disables the startup update check.
 
 ## Common failure modes
 
@@ -157,6 +159,7 @@ Run these with Agents and **Show in menu bar** on (see [the menu bar guide](docs
 | Update downloads to 100% then fails | Signature missing, or made with a key the installed app doesn't know (`verify-update-signature.mjs` says which key signed it) |
 | Sign step: "incorrect updater private key password" | The `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secret (or the Keychain entry) doesn't match the key |
 | "Check installed apps accept the signature" fails | The `release` environment holds a different key than the latest published release's pubkey |
+| Release build stops at "CHANGELOG.md has a section" | No `## X.Y.Z (YYYY-MM-DD)` section in [CHANGELOG.md](CHANGELOG.md) at the tag, or it doesn't start with a summary line (step 5) |
 | Updater never sees the release | Tag/URL mismatch (`latest.json` url vs actual tag), or release marked draft/pre-release |
 | Build flakiness | `target`/`node_modules` inside a synced folder — move the repo out of sync or set a local `CARGO_TARGET_DIR`, re-run `npm ci` |
 

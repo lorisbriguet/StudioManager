@@ -296,7 +296,7 @@ The production build outputs a `.dmg` file in `src-tauri/target/release/bundle/d
 
 **Adding a Rust command:** register it in `generate_handler!` (`src-tauri/src/lib.rs`), list it in `COMMANDS` in `src-tauri/build.rs`, and allow it in `src-tauri/permissions/windows.toml`: in `main-window`, and in `menubar-window` only if the menu bar panel calls it. Each window may call only the commands its set allows; tests fail when the three lists disagree. See [the menu bar guide](docs/menu-bar.md#what-the-panel-can-do).
 
-Docs: [RELEASING.md](RELEASING.md) · [CLAUDE.md](CLAUDE.md) (rules for agents) · [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md) · [IDEAS.md](IDEAS.md) · [Tester Guide](docs/GUIDE.md) · [Agent access](docs/agent-access.md) · [Agents](docs/agents.md) · [Menu bar](docs/menu-bar.md)
+Docs: [CHANGELOG.md](CHANGELOG.md) · [RELEASING.md](RELEASING.md) · [CLAUDE.md](CLAUDE.md) (rules for agents) · [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md) · [IDEAS.md](IDEAS.md) · [Tester Guide](docs/GUIDE.md) · [Agent access](docs/agent-access.md) · [Agents](docs/agents.md) · [Menu bar](docs/menu-bar.md)
 
 ---
 
