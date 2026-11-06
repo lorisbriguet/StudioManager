@@ -193,7 +193,70 @@ describe("PromptAnswer", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /No/ })).toBeDisabled());
     expect(screen.getByRole("button", { name: /Yes/ })).toBeDisabled();
     release();
-    await waitFor(() => expect(screen.getByRole("button", { name: /No/ })).not.toBeDisabled());
+    // Answered: the screen still shows the question until the agent redraws, so it stays off.
+    await waitFor(() => expect(invokedCommands.filter((c) => c.cmd === "agents_prompt").length).toBeGreaterThan(1));
+    expect(screen.getByRole("button", { name: /No/ })).toBeDisabled();
+  });
+
+  it("buttons come back after a failed answer", async () => {
+    setInvokeHandler((cmd) => {
+      if (cmd === "agents_prompt") return prompt;
+      if (cmd === "agents_answer") throw "The prompt changed";
+      return null;
+    });
+    render(<PromptAnswer shortId="abcd1234" onOpenTerminal={() => {}} />);
+    await screen.findByText("Run this command?");
+    fireEvent.click(screen.getByRole("button", { name: /Yes/ }));
+    await screen.findByRole("alert");
+    expect(screen.getByRole("button", { name: /No/ })).not.toBeDisabled();
+  });
+});
+
+describe("one click answers (subtask 323)", () => {
+  beforeEach(() => {
+    clearInvokedCommands();
+    vi.useFakeTimers();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const answers = () => invokedCommands.filter((c) => c.cmd === "agents_answer").length;
+  const wait = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+
+  it("does not offer the question again while the screen still shows the one just answered", async () => {
+    // The agent takes a moment to redraw after the Enter: the read right after the answer
+    // still sees the same question. It came back clickable, so it took a second click.
+    let onScreen: Prompt | null = prompt;
+    setInvokeHandler((cmd) => (cmd === "agents_prompt" ? onScreen : null));
+    render(<PromptAnswer shortId="abcd1234" onOpenTerminal={() => {}} />);
+    await wait(10);
+    fireEvent.click(screen.getByRole("button", { name: /Yes/ }));
+    await wait(10);
+    expect(answers()).toBe(1);
+    expect(screen.getByRole("button", { name: /Yes/ })).toBeDisabled();
+    await wait(2100); // a poll that still reads the old screen
+    expect(screen.getByRole("button", { name: /Yes/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /Yes/ }));
+    await wait(10);
+    expect(answers()).toBe(1);
+
+    // The agent moved on and asks the next question: it can be answered at once.
+    onScreen = { ...prompt, question: "Next one?", fingerprint: "fp-2" };
+    await wait(2100);
+    expect(screen.getByText("Next one?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /No/ }));
+    await wait(10);
+    expect(answers()).toBe(2);
+  });
+
+  it("offers the question again if the screen still shows it after a while", async () => {
+    setInvokeHandler((cmd) => (cmd === "agents_prompt" ? prompt : null));
+    render(<PromptAnswer shortId="abcd1234" onOpenTerminal={() => {}} />);
+    await wait(10);
+    fireEvent.click(screen.getByRole("button", { name: /Yes/ }));
+    await wait(10);
+    expect(screen.getByRole("button", { name: /Yes/ })).toBeDisabled();
+    await wait(8100);
+    expect(screen.getByRole("button", { name: /Yes/ })).not.toBeDisabled();
   });
 });
 

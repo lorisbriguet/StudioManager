@@ -5,6 +5,12 @@ import { Button, Callout, Card } from "../ui";
 import { logError } from "../../lib/log";
 
 const POLL_MS = 2000;
+/**
+ * After an answer, the screen shows the same question until the agent redraws, and the read
+ * right after the Enter still sees it. Its buttons stay off that long, at most this long: if
+ * the question is still there by then, the answer did not land and it can be answered again.
+ */
+const ANSWERED_HOLD_MS = 8000;
 // Free-text and chat entries of a question: only the terminal can answer these.
 const TERMINAL_ONLY = new Set(["type something.", "type something", "chat about this"]);
 
@@ -19,7 +25,10 @@ export function PromptAnswer({ shortId, onOpenTerminal }: PromptAnswerProps) {
   const [loaded, setLoaded] = useState(false);
   const [answering, setAnswering] = useState(false);
   const [failed, setFailed] = useState(false);
+  /** Fingerprint of the prompt just answered, while the screen may still show it. */
+  const [answered, setAnswered] = useState<string | null>(null);
   const answeringRef = useRef(false);
+  const holdTimer = useRef<number | undefined>(undefined);
   // gen: bumped when the agent changes. answers: bumped per answer, so a poll that
   // started before an answer cannot overwrite what follows it.
   const gen = useRef(0);
@@ -34,6 +43,7 @@ export function PromptAnswer({ shortId, onOpenTerminal }: PromptAnswerProps) {
     setPrompt(null);
     setLoaded(false);
     setFailed(false);
+    setAnswered(null);
     const poll = () => {
       if (inflight || answeringRef.current) return;
       inflight = true;
@@ -44,6 +54,8 @@ export function PromptAnswer({ shortId, onOpenTerminal }: PromptAnswerProps) {
           if (current() && answers.current === startAnswers && !answeringRef.current) {
             setPrompt(p);
             setLoaded(true);
+            // Another prompt, or none: the one answered is gone.
+            setAnswered((a) => (a !== null && a === p?.fingerprint ? a : null));
           }
         })
         .finally(() => {
@@ -57,11 +69,12 @@ export function PromptAnswer({ shortId, onOpenTerminal }: PromptAnswerProps) {
     return () => {
       genCounter.current++;
       clearInterval(timer);
+      window.clearTimeout(holdTimer.current);
     };
   }, [shortId]);
 
   const answer = async (number: number, label: string) => {
-    if (!prompt || answeringRef.current) return;
+    if (!prompt || answeringRef.current || answered === prompt.fingerprint) return;
     answeringRef.current = true;
     const mine = gen.current;
     answers.current++;
@@ -69,6 +82,13 @@ export function PromptAnswer({ shortId, onOpenTerminal }: PromptAnswerProps) {
     setFailed(false);
     try {
       await answerPrompt(shortId, number, label, prompt.fingerprint);
+      if (gen.current === mine) {
+        setAnswered(prompt.fingerprint);
+        window.clearTimeout(holdTimer.current);
+        holdTimer.current = window.setTimeout(() => {
+          if (gen.current === mine) setAnswered(null);
+        }, ANSWERED_HOLD_MS);
+      }
     } catch (e) {
       void logError(`Agent ${shortId}: answer failed:`, e);
       if (gen.current === mine) setFailed(true);
@@ -115,7 +135,7 @@ export function PromptAnswer({ shortId, onOpenTerminal }: PromptAnswerProps) {
                 variant={o.selected ? "primary" : "outline"}
                 // The terminal's highlighted default: these buttons submit, they are not toggles.
                 aria-current={o.selected ? "true" : undefined}
-                disabled={answering}
+                disabled={answering || answered === prompt.fingerprint}
                 onClick={() => void answer(o.number, o.label)}
               >
                 {o.number}. {o.label}

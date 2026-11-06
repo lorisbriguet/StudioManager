@@ -106,6 +106,9 @@ export function Conversation({ sessionId, working }: ConversationProps) {
     };
   }, [sessionId, working]);
 
+  /** Where the scroller was at the last scroll event or jump of ours, to tell which way it moved. */
+  const lastTopRef = useRef(Number.POSITIVE_INFINITY);
+
   // The transcript is the last 300 items: a new message pushes the oldest off the top and
   // everything below moves up. WebKit has no scroll anchoring, so a reader scrolled up would
   // be carried along by the height of what was dropped. Remember the first message in view
@@ -118,11 +121,18 @@ export function Conversation({ sessionId, working }: ConversationProps) {
 
   // The panel's scroller is the parent. New replies pull the view down only while the reader
   // is already at the bottom; once they scroll up they stay where they are.
+  // Only a move up lets go of the bottom. The scroll event of our own jump arrives a frame
+  // later, and if the content grew meanwhile (code blocks, images, the question card above)
+  // it reads as far from the bottom although nobody scrolled: that unpinned the chat and
+  // left it near the top.
   useEffect(() => {
     const scroller = rootRef.current?.parentElement;
     if (!scroller) return;
     const onScroll = () => {
-      stickRef.current = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= STICK_PX;
+      const top = scroller.scrollTop;
+      if (scroller.scrollHeight - top - scroller.clientHeight <= STICK_PX) stickRef.current = true;
+      else if (top < lastTopRef.current) stickRef.current = false;
+      lastTopRef.current = top;
       setAtBottom(stickRef.current);
       captureAnchor();
     };
@@ -138,7 +148,9 @@ export function Conversation({ sessionId, working }: ConversationProps) {
     const scroller = root?.parentElement;
     if (!root || !scroller || typeof ResizeObserver === "undefined") return;
     const pin = () => {
-      if (stickRef.current) scroller.scrollTop = scroller.scrollHeight;
+      if (!stickRef.current) return;
+      scroller.scrollTop = scroller.scrollHeight;
+      lastTopRef.current = scroller.scrollTop;
     };
     const observer = new ResizeObserver(pin);
     observer.observe(root);
@@ -179,7 +191,10 @@ export function Conversation({ sessionId, working }: ConversationProps) {
   const busyNow = isWorkingNow(working, items);
 
   useEffect(() => {
-    if (stickRef.current) endRef.current?.scrollIntoView?.({ block: "end" });
+    if (!stickRef.current) return;
+    endRef.current?.scrollIntoView?.({ block: "end" });
+    const scroller = rootRef.current?.parentElement;
+    if (scroller) lastTopRef.current = scroller.scrollTop;
   }, [items, busyNow, waiting.length]);
 
   // A live region: replies that arrive (or grow, while the agent works) are read out
