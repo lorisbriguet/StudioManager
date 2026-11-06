@@ -15,7 +15,6 @@ import {
 import { createElement } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile, mkdir, copyFile } from "@tauri-apps/plugin-fs";
-import { pdf } from "@react-pdf/renderer";
 import { notify } from "../lib/notify";
 import { usePLData, useMonthlyData } from "../db/hooks/useFinance";
 import { useInvoices } from "../db/hooks/useInvoices";
@@ -28,16 +27,28 @@ import { ICONS, PageHeader, QueryError, DetailSkeleton, Button, Card, EmptyState
 import { useNavigate } from "react-router-dom";
 import { useChartTheme } from "../hooks/useChartTheme";
 import { getTagColor } from "../lib/tagColors";
-import { buildInvoicePdf } from "../lib/documentPdf";
-import { PLPDF } from "../components/finance/PLPDF";
-import { InvoicesListPDF } from "../components/finance/InvoicesListPDF";
-import { ExpensesListPDF } from "../components/finance/ExpensesListPDF";
-import { IncomeListPDF } from "../components/finance/IncomeListPDF";
 import { useIncomes } from "../db/hooks/useIncome";
 import { safeFileName, uniqueFileName } from "../lib/pdfFilename";
 import { getMonthlyData } from "../db/queries/finance";
 import { missingChfEquivalent } from "../lib/chfEquivalent";
 import { logError } from "../lib/log";
+
+/** The export's PDF code, loaded on first use so @react-pdf stays out of the main chunk. */
+async function loadExportPdfs() {
+  const [{ pdf }, { buildInvoicePdf }, { PLPDF }, { InvoicesListPDF }, { ExpensesListPDF }, { IncomeListPDF }] =
+    await Promise.all([
+      import("@react-pdf/renderer"),
+      import("../lib/documentPdf"),
+      import("../components/finance/PLPDF"),
+      import("../components/finance/InvoicesListPDF"),
+      import("../components/finance/ExpensesListPDF"),
+      import("../components/finance/IncomeListPDF"),
+    ]);
+  return { pdf, buildInvoicePdf, PLPDF, InvoicesListPDF, ExpensesListPDF, IncomeListPDF };
+}
+
+/** Let the window repaint (progress toast, spinner) between CPU-bound renders. */
+const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 /** Pie-chart fill for a category: its tag colour, a CSS variable (Recharts passes it to SVG fill). */
@@ -70,6 +81,7 @@ export function FinancesPage() {
         defaultPath: `Comptabilite_${year}`,
       });
       if (!basePath) return;
+      const { pdf, buildInvoicePdf, PLPDF, InvoicesListPDF, ExpensesListPDF, IncomeListPDF } = await loadExportPdfs();
 
       await mkdir(basePath, { recursive: true });
       await mkdir(`${basePath}/factures`, { recursive: true });
@@ -110,34 +122,44 @@ export function FinancesPage() {
       // export (template, contact, billing address, VOID overlay). Rendering
       // stays sequential on purpose: @react-pdf renders are CPU-bound and
       // concurrent renders have wedged before (the mark-sent soft-lock).
+      // A toast counts the invoices, and each one yields to the UI so the
+      // window keeps repainting during a long year.
       let invoicePdfsFailed = 0;
       const invoiceNames = new Set<string>();
-      for (const inv of yearInvoices) {
-        try {
-          if (inv.pdf_path) {
-            const clientName = clientNames[inv.client_id];
-            const stem = clientName ? `${inv.reference}_${clientName}` : inv.reference;
-            const name = uniqueFileName(stem, "pdf", invoiceNames);
-            try {
-              await copyFile(inv.pdf_path, `${basePath}/factures/justificatifs/${name}`);
-              continue;
-            } catch (e) {
-              // Stored file moved or deleted: render it instead, under the same name.
-              logError("Trustee export: stored invoice PDF unreadable, rendering", inv.reference, e);
-              invoiceNames.delete(name.toLowerCase());
+      const invoiceProgress = (done: number) =>
+        t.export_invoice_progress
+          .replace("{done}", String(done))
+          .replace("{total}", String(yearInvoices.length));
+      await notify.progress(invoiceProgress(0), async (update) => {
+        for (const [i, inv] of yearInvoices.entries()) {
+          update(invoiceProgress(i + 1));
+          await yieldToUi();
+          try {
+            if (inv.pdf_path) {
+              const clientName = clientNames[inv.client_id];
+              const stem = clientName ? `${inv.reference}_${clientName}` : inv.reference;
+              const name = uniqueFileName(stem, "pdf", invoiceNames);
+              try {
+                await copyFile(inv.pdf_path, `${basePath}/factures/justificatifs/${name}`);
+                continue;
+              } catch (e) {
+                // Stored file moved or deleted: render it instead, under the same name.
+                logError("Trustee export: stored invoice PDF unreadable, rendering", inv.reference, e);
+                invoiceNames.delete(name.toLowerCase());
+              }
             }
+            const built = await buildInvoicePdf(inv.id);
+            if (!built) throw new Error(t.invoice_not_found);
+            const name = uniqueFileName(`${inv.reference}_${built.client.name}`, "pdf", invoiceNames);
+            await writeFile(`${basePath}/factures/justificatifs/${name}`, built.bytes);
+          } catch (e) {
+            // One bad invoice must not abort the export, but a silent omission
+            // would leave a bookkeeping folder that looks complete and is not.
+            invoicePdfsFailed++;
+            logError("Trustee export: invoice PDF failed", inv.reference, e);
           }
-          const built = await buildInvoicePdf(inv.id);
-          if (!built) throw new Error(t.invoice_not_found);
-          const name = uniqueFileName(`${inv.reference}_${built.client.name}`, "pdf", invoiceNames);
-          await writeFile(`${basePath}/factures/justificatifs/${name}`, built.bytes);
-        } catch (e) {
-          // One bad invoice must not abort the export, but a silent omission
-          // would leave a bookkeeping folder that looks complete and is not.
-          invoicePdfsFailed++;
-          logError("Trustee export: invoice PDF failed", inv.reference, e);
         }
-      }
+      }, { success: null, error: t.export_failed });
       if (invoicePdfsFailed > 0) {
         notify.warning(t.export_invoices_failed.replace("{count}", String(invoicePdfsFailed)));
       }
