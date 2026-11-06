@@ -84,7 +84,7 @@ jobs:
           node-version: 22
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable, 2026-11
         with:
-          toolchain: stable
+          toolchain: 1.93.1
           components: clippy
 
       # npm 10.9 (bundled with Node 22) crashes on Vitest 4's peer set (RELEASING.md, prerequisites).
