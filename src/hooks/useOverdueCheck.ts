@@ -3,6 +3,7 @@ import { getLabels, notify } from "../lib/notify";
 import { plural } from "../i18n/plural";
 import { useQueryClient } from "@tanstack/react-query";
 import { markOverdueInvoices } from "../db/queries/invoices";
+import { qk, invalidateMoney } from "../db/queryKeys";
 import { createNotification } from "../db/queries/notifications";
 import { logError } from "../lib/log";
 import { sendNativeNotification } from "../lib/nativeNotification";
@@ -23,8 +24,8 @@ export function useOverdueCheck() {
       // invoices belonging to the one we left.
       if (useOrgStore.getState().activeId !== org) return;
       if (overdue.length > 0) {
-        qc.invalidateQueries({ queryKey: ["invoices"] });
-        qc.invalidateQueries({ queryKey: ["finance"] });
+        qc.invalidateQueries({ queryKey: qk.invoices.all });
+        invalidateMoney(qc);
 
         const t = getLabels();
         const title = plural(overdue.length, t.overdue_marked_one, t.overdue_marked_other);

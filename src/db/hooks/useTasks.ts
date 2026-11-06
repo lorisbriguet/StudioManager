@@ -12,6 +12,7 @@ import { snapshotRows, restoreRows } from "../undoRestore";
 import { getLabels, notify } from "../../lib/notify";
 import { todayLocalISO } from "../../utils/localDate";
 import { modeActive } from "../../lib/activeMode";
+import { invalidateTasks } from "../queryKeys";
 
 // Guards against concurrent calendar syncs for the same item
 // In-flight syncs per item. A sync requested meanwhile is chained after it (so
@@ -166,21 +167,18 @@ export function useCreateTask() {
           await q.deleteTask(id);
           if (calId) deleteCalendarEvent(calId).catch(notifyCalendarSyncFailure);
           for (const t of snap) for (const r of t.rows) if ("calendar_event_id" in r) r.calendar_event_id = null;
-          qc.invalidateQueries({ queryKey: ["tasks"] });
-          qc.invalidateQueries({ queryKey: ["workload-rows"] });
+          invalidateTasks(qc);
         },
         redo: async () => {
           await restoreRows(snap);
           syncTaskCalendar(id);
-          qc.invalidateQueries({ queryKey: ["tasks"] });
-          qc.invalidateQueries({ queryKey: ["workload-rows"] });
+          invalidateTasks(qc);
         },
       });
       return id;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-      qc.invalidateQueries({ queryKey: ["workload-rows"] });
+      invalidateTasks(qc);
     },
   });
 }
@@ -217,14 +215,12 @@ export function useUpdateTask() {
             await pendingTaskSyncs.get(id);
             await q.updateTask(id, prevData as Partial<Omit<Task, "id" | "created_at" | "updated_at">>);
             syncTaskCalendar(id);
-            qc.invalidateQueries({ queryKey: ["tasks"] });
-            qc.invalidateQueries({ queryKey: ["workload-rows"] });
+            invalidateTasks(qc);
           },
           redo: async () => {
             await q.updateTask(id, nextData);
             syncTaskCalendar(id);
-            qc.invalidateQueries({ queryKey: ["tasks"] });
-            qc.invalidateQueries({ queryKey: ["workload-rows"] });
+            invalidateTasks(qc);
           },
         });
       }
@@ -232,8 +228,7 @@ export function useUpdateTask() {
       syncTaskCalendar(id);
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-      qc.invalidateQueries({ queryKey: ["workload-rows"] });
+      invalidateTasks(qc);
     },
   });
 }
@@ -274,16 +269,14 @@ export function useDeleteTask() {
               await q.createSubtask({ ...subData, task_id: newId });
             }
             syncTaskCalendar(newId);
-            qc.invalidateQueries({ queryKey: ["tasks"] });
+            invalidateTasks(qc);
             qc.invalidateQueries({ queryKey: ["subtasks"] });
-            qc.invalidateQueries({ queryKey: ["workload-rows"] });
           },
         });
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-      qc.invalidateQueries({ queryKey: ["workload-rows"] });
+      invalidateTasks(qc);
     },
   });
 }

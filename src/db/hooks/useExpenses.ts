@@ -1,23 +1,34 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import * as q from "../queries/expenses";
 import type { Expense, ExpenseCategory } from "../../types/expense";
 import { useUndoStore } from "../../stores/undo-store";
 import { getLabels } from "../../lib/notify";
+import { qk, invalidateMoney } from "../queryKeys";
+
+function invalidateExpenses(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: qk.expenses.all });
+  invalidateMoney(qc);
+}
+
+function invalidateCategories(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: qk.expenseCategories.all });
+  invalidateMoney(qc);
+}
 
 export function useExpenses() {
-  return useQuery({ queryKey: ["expenses"], queryFn: q.getExpenses });
+  return useQuery({ queryKey: qk.expenses.all, queryFn: q.getExpenses });
 }
 
 export function useDistinctSuppliers() {
   return useQuery({
-    queryKey: ["expenses", "distinct-suppliers"],
+    queryKey: qk.expenses.distinctSuppliers,
     queryFn: q.getDistinctSuppliers,
   });
 }
 
 export function useSupplierCounts() {
   return useQuery({
-    queryKey: ["expenses", "supplier-counts"],
+    queryKey: qk.expenses.supplierCounts,
     queryFn: q.getSupplierCounts,
   });
 }
@@ -33,24 +44,24 @@ export function useMergeSuppliers() {
         execute: async () => {
           // Single transaction — a crash cannot leave a partial revert
           await q.restoreSupplierNames(prev);
-          qc.invalidateQueries({ queryKey: ["expenses"] });
+          qc.invalidateQueries({ queryKey: qk.expenses.all });
         },
         redo: async () => {
           await q.mergeSuppliers(canonical, variants);
-          qc.invalidateQueries({ queryKey: ["expenses"] });
+          qc.invalidateQueries({ queryKey: qk.expenses.all });
         },
       });
       return prev.length;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: qk.expenses.all });
     },
   });
 }
 
 export function useExpenseCategories() {
   return useQuery({
-    queryKey: ["expense-categories"],
+    queryKey: qk.expenseCategories.all,
     queryFn: q.getExpenseCategories,
   });
 }
@@ -65,15 +76,13 @@ export function useCreateExpense() {
         label: `${getLabels().undo_create_expense} "${data.reference}"`,
         execute: async () => {
           await q.deleteExpense(id);
-          qc.invalidateQueries({ queryKey: ["expenses"] });
-          qc.invalidateQueries({ queryKey: ["finance"] });
+          invalidateExpenses(qc);
         },
       });
       return id;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
-      qc.invalidateQueries({ queryKey: ["finance"] });
+      invalidateExpenses(qc);
     },
   });
 }
@@ -100,15 +109,13 @@ export function useUpdateExpense() {
           label: `${getLabels().undo_update_expense} "${prev.reference}"`,
           execute: async () => {
             await q.updateExpense(id, prevData as Partial<Omit<Expense, "id" | "created_at" | "updated_at">>);
-            qc.invalidateQueries({ queryKey: ["expenses"] });
-            qc.invalidateQueries({ queryKey: ["finance"] });
+            invalidateExpenses(qc);
           },
         });
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
-      qc.invalidateQueries({ queryKey: ["finance"] });
+      invalidateExpenses(qc);
     },
   });
 }
@@ -126,15 +133,13 @@ export function useDeleteExpense() {
           execute: async () => {
             const { id: _id, created_at, updated_at, ...data } = prev;
             await q.createExpense(data);
-            qc.invalidateQueries({ queryKey: ["expenses"] });
-            qc.invalidateQueries({ queryKey: ["finance"] });
+            invalidateExpenses(qc);
           },
         });
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
-      qc.invalidateQueries({ queryKey: ["finance"] });
+      invalidateExpenses(qc);
     },
   });
 }
@@ -161,15 +166,15 @@ export function useCreateExpenseCategory() {
         label: `${getLabels().undo_create_category} "${data.code}"`,
         execute: async () => {
           await q.deleteExpenseCategory(data.code);
-          qc.invalidateQueries({ queryKey: ["expense-categories"] });
+          invalidateCategories(qc);
         },
         redo: async () => {
           await q.createExpenseCategory(data);
-          qc.invalidateQueries({ queryKey: ["expense-categories"] });
+          invalidateCategories(qc);
         },
       });
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["expense-categories"] }),
+    onSuccess: () => invalidateCategories(qc),
   });
 }
 
@@ -192,20 +197,17 @@ export function useUpdateExpenseCategory() {
           label: `${getLabels().undo_update_category} "${vars.code}"`,
           execute: async () => {
             await q.updateExpenseCategory(vars.code, prevData as Partial<Omit<ExpenseCategory, "code">>);
-            qc.invalidateQueries({ queryKey: ["expense-categories"] });
-            qc.invalidateQueries({ queryKey: ["finance"] });
+            invalidateCategories(qc);
           },
           redo: async () => {
             await q.updateExpenseCategory(vars.code, vars.data);
-            qc.invalidateQueries({ queryKey: ["expense-categories"] });
-            qc.invalidateQueries({ queryKey: ["finance"] });
+            invalidateCategories(qc);
           },
         });
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["expense-categories"] });
-      qc.invalidateQueries({ queryKey: ["finance"] });
+      invalidateCategories(qc);
     },
   });
 }
@@ -222,20 +224,17 @@ export function useDeleteExpenseCategory() {
           label: `${getLabels().undo_delete_category} "${code}"`,
           execute: async () => {
             await q.createExpenseCategory(prev);
-            qc.invalidateQueries({ queryKey: ["expense-categories"] });
-            qc.invalidateQueries({ queryKey: ["finance"] });
+            invalidateCategories(qc);
           },
           redo: async () => {
             await q.deleteExpenseCategory(code);
-            qc.invalidateQueries({ queryKey: ["expense-categories"] });
-            qc.invalidateQueries({ queryKey: ["finance"] });
+            invalidateCategories(qc);
           },
         });
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["expense-categories"] });
-      qc.invalidateQueries({ queryKey: ["finance"] });
+      invalidateCategories(qc);
     },
   });
 }

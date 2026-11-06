@@ -1,11 +1,17 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import * as q from "../queries/income";
 import type { Income } from "../../types/income";
 import { useUndoStore } from "../../stores/undo-store";
 import { getLabels } from "../../lib/notify";
+import { qk, invalidateMoney } from "../queryKeys";
+
+function invalidateIncome(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: qk.incomes.all });
+  invalidateMoney(qc);
+}
 
 export function useIncomes() {
-  return useQuery({ queryKey: ["incomes"], queryFn: q.getIncomes });
+  return useQuery({ queryKey: qk.incomes.all, queryFn: q.getIncomes });
 }
 
 export function useCreateIncome() {
@@ -18,20 +24,17 @@ export function useCreateIncome() {
         label: `${getLabels().undo_create_income} "${data.reference}"`,
         execute: async () => {
           await q.deleteIncome(id);
-          qc.invalidateQueries({ queryKey: ["incomes"] });
-          qc.invalidateQueries({ queryKey: ["finance"] });
+          invalidateIncome(qc);
         },
         redo: async () => {
           await q.createIncome(data);
-          qc.invalidateQueries({ queryKey: ["incomes"] });
-          qc.invalidateQueries({ queryKey: ["finance"] });
+          invalidateIncome(qc);
         },
       });
       return id;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["incomes"] });
-      qc.invalidateQueries({ queryKey: ["finance"] });
+      invalidateIncome(qc);
     },
   });
 }
@@ -58,20 +61,17 @@ export function useUpdateIncome() {
           label: `${getLabels().undo_update_income} "${prev.reference}"`,
           execute: async () => {
             await q.updateIncome(id, prevData as Partial<Omit<Income, "id" | "created_at" | "updated_at">>);
-            qc.invalidateQueries({ queryKey: ["incomes"] });
-            qc.invalidateQueries({ queryKey: ["finance"] });
+            invalidateIncome(qc);
           },
           redo: async () => {
             await q.updateIncome(id, data);
-            qc.invalidateQueries({ queryKey: ["incomes"] });
-            qc.invalidateQueries({ queryKey: ["finance"] });
+            invalidateIncome(qc);
           },
         });
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["incomes"] });
-      qc.invalidateQueries({ queryKey: ["finance"] });
+      invalidateIncome(qc);
     },
   });
 }
@@ -92,22 +92,19 @@ export function useDeleteIncome() {
           label: `${getLabels().undo_delete_income} "${prev.reference}"`,
           execute: async () => {
             restoredId = await q.createIncome(data);
-            qc.invalidateQueries({ queryKey: ["incomes"] });
-            qc.invalidateQueries({ queryKey: ["finance"] });
+            invalidateIncome(qc);
           },
           redo: async () => {
             if (restoredId !== null) {
               await q.deleteIncome(restoredId);
-              qc.invalidateQueries({ queryKey: ["incomes"] });
-              qc.invalidateQueries({ queryKey: ["finance"] });
+              invalidateIncome(qc);
             }
           },
         });
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["incomes"] });
-      qc.invalidateQueries({ queryKey: ["finance"] });
+      invalidateIncome(qc);
     },
   });
 }
