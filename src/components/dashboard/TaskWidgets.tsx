@@ -22,6 +22,7 @@ import { ListSkeleton } from "../ui/Skeleton";
 import { qk } from "../../db/queryKeys";
 import { useNow } from "../../hooks/useNow";
 import { KPI_TILE, PriorityDot } from "./widgetParts";
+import { formatDisplayDate } from "../../utils/formatDate";
 
 // ── Today tasks ──
 
@@ -100,7 +101,7 @@ export function OverdueTasks() {
             <PriorityDot priority="high" />
             <span className="text-muted text-xs shrink-0">{projectName(task.project_id)}</span>
             <span className="truncate">{task.title}</span>
-            <span className="text-xs text-danger-text ml-auto shrink-0">{task.due_date}</span>
+            <span className="text-xs text-danger-text ml-auto shrink-0">{task.due_date && formatDisplayDate(task.due_date)}</span>
           </Link>
         ))}
         {overdueSubtasks.map((s) => (
@@ -108,7 +109,7 @@ export function OverdueTasks() {
             <PriorityDot priority="high" />
             <span className="text-muted text-xs shrink-0">{projectName(s.project_id)}</span>
             <span className="truncate opacity-70">↳ {s.title}</span>
-            <span className="text-xs text-danger-text ml-auto shrink-0">{s.due_date}</span>
+            <span className="text-xs text-danger-text ml-auto shrink-0">{s.due_date && formatDisplayDate(s.due_date)}</span>
           </Link>
         ))}
         {tasks === undefined ? <ListSkeleton size="sm" rows={3} /> : overdueTasks.length === 0 && overdueSubtasks.length === 0 && (

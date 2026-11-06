@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useQuery } from "@tanstack/react-query";
-import { ICONS } from "../ui/icons";
+import { ICONS, ICON_SIZE } from "../ui/icons";
 import { useInvoices } from "../../db/hooks/useInvoices";
 import { useClients } from "../../db/hooks/useClients";
 import { todayLocalISO } from "../../utils/localDate";
@@ -13,12 +13,28 @@ import { useT } from "../../i18n/useT";
 import { WidgetShell, WidgetTitle } from "./WidgetShell";
 import { EmptyState } from "../ui/EmptyState";
 import { ListSkeleton } from "../ui/Skeleton";
-import { invoiceStatusDotClass } from "../../lib/statusColors";
+import { invoiceStatusTextClass } from "../../lib/statusColors";
 import { formatMoney } from "../../lib/money";
 import { qk } from "../../db/queryKeys";
 
-function StatusDot({ status }: { status: string }) {
-  return <span className={`dot-sm ml-2 ${invoiceStatusDotClass(status)}`} />;
+const STATUS_ICON = {
+  draft: ICONS.invoiceDraft,
+  sent: ICONS.invoiceSent,
+  paid: ICONS.invoicePaid,
+  overdue: ICONS.invoiceOverdue,
+} as const;
+
+/** Invoice status as an icon plus its name (tooltip, screen readers): not colour alone. */
+export function InvoiceStatusIcon({ status }: { status: string }) {
+  const t = useT();
+  const Icon = STATUS_ICON[status as keyof typeof STATUS_ICON];
+  const label = (t as Record<string, string>)[status] ?? status;
+  if (!Icon) return null;
+  return (
+    <span role="img" aria-label={label} title={label} className={`inline-flex align-[-1px] ml-2 ${invoiceStatusTextClass(status)}`}>
+      <Icon size={ICON_SIZE.control} aria-hidden />
+    </span>
+  );
 }
 
 // ── Recent invoices ──
@@ -56,7 +72,7 @@ export function RecentInvoices() {
           >
             <div className="min-w-0 flex-1">
               <span className="font-medium">{inv.reference.startsWith("DRAFT") ? t.draft : inv.reference}</span>
-              <StatusDot status={inv.status} />
+              <InvoiceStatusIcon status={inv.status} />
               {clientName(inv.client_id) && (
                 <span className="text-xs text-muted ml-2 truncate">{clientName(inv.client_id)}</span>
               )}
@@ -102,7 +118,7 @@ export function UnpaidInvoices() {
           <Link key={inv.id} to={`/invoices/${inv.id}/edit`} className="flex justify-between items-center text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1.5 -mx-2">
             <div className="min-w-0 flex-1">
               <span className="font-medium">{inv.reference}</span>
-              <StatusDot status={inv.status} />
+              <InvoiceStatusIcon status={inv.status} />
               {clientName(inv.client_id) && <span className="text-xs text-muted ml-2">{clientName(inv.client_id)}</span>}
             </div>
             <div className="text-right shrink-0 ml-2">

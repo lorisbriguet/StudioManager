@@ -11,6 +11,7 @@ import type { BusinessProfile } from "../../types/business-profile";
 import type { AppLanguage } from "../../i18n/ui";
 import { getExportLabels } from "../../i18n/export-labels";
 import { PDF } from "../pdf/pdfPalette";
+import { formatDisplayDate } from "../../utils/formatDate";
 
 export interface Props {
   year: number;
@@ -174,8 +175,8 @@ export function ExpensesListPDF({ year, expenses, profile, lang = "FR" }: Props)
             <Text style={[s.cell, s.colRef]}>{exp.reference}</Text>
             <Text style={[s.cell, s.colSupplier]}>{exp.supplier}</Text>
             <Text style={[s.cell, s.colCategory]}>{exp.category_code}</Text>
-            <Text style={[s.cell, s.colDate]}>{exp.invoice_date}</Text>
-            <Text style={[s.cell, s.colPaid]}>{exp.paid_date ?? ""}</Text>
+            <Text style={[s.cell, s.colDate]}>{formatDisplayDate(exp.invoice_date)}</Text>
+            <Text style={[s.cell, s.colPaid]}>{exp.paid_date ? formatDisplayDate(exp.paid_date) : ""}</Text>
             <Text style={[s.cell, s.colAmount]}>{formatCHF(exp.amount)}</Text>
           </View>
         ))}

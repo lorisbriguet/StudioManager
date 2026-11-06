@@ -16,6 +16,7 @@ import { ProgressBar } from "../ui/Feedback";
 import { EmptyState } from "../ui/EmptyState";
 import { ListSkeleton } from "../ui/Skeleton";
 import { PriorityDot } from "./widgetParts";
+import { formatDisplayDate } from "../../utils/formatDate";
 
 // ── Project progress ──
 
@@ -90,7 +91,7 @@ export function UpcomingDeadlines() {
             <PriorityDot priority={effectivePriority(task.priority, task.due_date, task.end_date)} />
             <span className="text-muted text-xs shrink-0">{projectName(task.project_id)}</span>
             <span className="truncate">{task.title}</span>
-            <span className="text-xs text-muted ml-auto shrink-0">{task.due_date}</span>
+            <span className="text-xs text-muted ml-auto shrink-0">{task.due_date && formatDisplayDate(task.due_date)}</span>
           </Link>
         ))}
         {tasks === undefined ? <ListSkeleton size="sm" rows={3} /> : upcoming.length === 0 && (
