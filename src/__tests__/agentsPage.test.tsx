@@ -1,6 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
+
+function LocationProbe() {
+  const { search } = useLocation();
+  const navigate = useNavigate();
+  return (
+    <>
+      <div data-testid="location">{search}</div>
+      <button data-testid="go-started" onClick={() => navigate("/agents?started=beef0001")} />
+    </>
+  );
+}
 import { AgentsPage } from "../pages/AgentsPage";
 import { StartAgentForm, slugifyName, typedName } from "../components/agents/StartAgentForm";
 import { ConfirmHost } from "../components/ui/ConfirmDialog";
@@ -82,6 +93,30 @@ describe("AgentsPage", () => {
       </MemoryRouter>,
     );
     expect(await screen.findByLabelText("Task")).toBeInTheDocument();
+  });
+
+  it("selects an agent started from a task (?started=) once it is listed", async () => {
+    setInvokeHandler((cmd) => (cmd === "agents_list" ? [agent("working", { shortId: "beef0001" })] : []));
+    render(
+      <MemoryRouter initialEntries={["/agents?started=beef0001"]}>
+        <AgentsPage />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("?agent=sess-working"));
+  });
+
+  it("selects it too when ?started= arrives while the page is open", async () => {
+    setInvokeHandler((cmd) => (cmd === "agents_list" ? [agent("working", { shortId: "beef0001" })] : []));
+    render(
+      <MemoryRouter initialEntries={["/agents"]}>
+        <AgentsPage />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+    await screen.findByText("agent-working");
+    fireEvent.click(screen.getByTestId("go-started"));
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("?agent=sess-working"));
   });
 
   it("says agents are off when the switch is off", () => {

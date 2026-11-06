@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useChanged } from "../../hooks/useChanged";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ChevronRight } from "lucide-react";
@@ -74,9 +75,11 @@ export function Conversation({ sessionId, working }: ConversationProps) {
   /** Shown state of `stickRef`: off while the reader is scrolled up (the jump button shows). */
   const [atBottom, setAtBottom] = useState(true);
 
-  useEffect(() => {
+  // Opening another agent starts from an empty list, at its latest message.
+  if (useChanged(sessionId)) {
     setItems([]);
-  }, [sessionId]);
+    setAtBottom(true);
+  }
 
   useEffect(() => {
     // Per-effect token: a response for a previous session is ignored.
@@ -174,10 +177,8 @@ export function Conversation({ sessionId, working }: ConversationProps) {
     captureAnchor();
   }, [groups]);
 
-  // Opening another agent starts at its latest message.
   useEffect(() => {
     stickRef.current = true;
-    setAtBottom(true);
   }, [sessionId]);
 
   // Messages sent from here that the transcript does not show yet.

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useChangedOrMount } from "../hooks/useChanged";
 import { useSearchParams } from "react-router-dom";
 import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
@@ -22,32 +23,34 @@ export function AgentsPage() {
   const [terminalFor, setTerminalFor] = useState<string | null>(null);
   const selected = agents.find((a) => a.sessionId === selectedId) ?? null;
 
+  // Select it once it shows up; the wait ends when the address shows it selected.
+  const found = pendingShortId ? agents.find((a) => a.shortId === pendingShortId) : undefined;
+  if (found && found.sessionId === selectedId) setPendingShortId(null);
+  const foundId = found?.sessionId ?? null;
+  // Wait for the `?started=` flag below to be dropped, or dropping it would undo this.
+  const startedParam = params.get("started");
   useEffect(() => {
-    if (!pendingShortId) return;
-    const found = agents.find((a) => a.shortId === pendingShortId);
-    if (found) {
-      setPendingShortId(null);
-      setParams({ agent: found.sessionId });
-    }
-  }, [agents, pendingShortId, setParams]);
+    if (foundId && !startedParam) setParams({ agent: foundId });
+  }, [foundId, startedParam, setParams]);
 
   // `?new=1` (the menu bar panel's "New agent"): open the start form, then drop the flag.
   const wantsNew = params.get("new") === "1";
-  useEffect(() => {
-    if (!wantsNew) return;
+  if (useChangedOrMount(wantsNew) && wantsNew) {
     setStarting(true);
     setTerminalFor(null);
-    setParams({}, { replace: true });
+  }
+  useEffect(() => {
+    if (wantsNew) setParams({}, { replace: true });
   }, [wantsNew, setParams]);
 
   // `?started=<shortId>` ("Start work with agent" on a task): select it once listed.
-  const startedParam = params.get("started");
-  useEffect(() => {
-    if (!startedParam) return;
+  if (useChangedOrMount(startedParam) && startedParam) {
     setStarting(false);
     setTerminalFor(null);
     setPendingShortId(startedParam);
-    setParams({}, { replace: true });
+  }
+  useEffect(() => {
+    if (startedParam) setParams({}, { replace: true });
   }, [startedParam, setParams]);
 
   const select = (id: string) => {
