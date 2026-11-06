@@ -1183,7 +1183,7 @@ mod tests {
 
         let mut panel = quoted_after(sets, "identifier = \"menubar-window\"");
         panel.retain(|p| p.starts_with("allow-"));
-        assert_eq!(panel.len(), 15, "{panel:?}");
+        assert_eq!(panel.len(), 16, "{panel:?}");
         for p in &panel {
             assert!(every.contains(p), "{p} is not a command");
         }
