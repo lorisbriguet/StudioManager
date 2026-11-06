@@ -20,7 +20,7 @@ import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
 import { getQuote, getQuoteLineItems, updateQuote } from "../db/queries/quotes";
 import { useActivities } from "../db/hooks/useActivities";
 import type { Activity } from "../types/activity";
-import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel, round2 } from "../lib/lineItems";
+import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel, round2, computeTotals } from "../lib/lineItems";
 import { LineItemsTable } from "../components/shared/LineItemsTable";
 import { GlobalRateControl, TemplateField } from "../components/shared/DocumentFields";
 import { currencies, getExchangeRate, toCHF, type Currency } from "../lib/exchangeRate";
@@ -269,9 +269,7 @@ export function InvoiceFormPage() {
   const activityName = (a: Activity) => (invoiceLang === "FR" ? a.name_fr : a.name_en);
   // Newly computed money values are rounded at every boundary — these are
   // what save() persists, and invoices are legal documents.
-  const subtotal = round2(items.reduce((sum, i) => sum + i.amount, 0));
-  const discountAmount = round2(subtotal * discountRate);
-  const total = round2(subtotal - discountAmount);
+  const { subtotal, discountAmount, total } = computeTotals(items, discountRate);
 
   // Auto-fetch exchange rate when currency changes
   useEffect(() => {

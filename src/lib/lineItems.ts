@@ -40,6 +40,21 @@ export function round2(n: number): number {
   return n < 0 && rounded !== 0 ? -rounded : rounded;
 }
 
+/**
+ * Subtotal, discount and total of a quote or invoice, each rounded to the
+ * centime. discountRate is a fraction (0.1 for 10 %). The discount is rounded
+ * before it is taken off, so subtotal - discountAmount equals total exactly,
+ * as printed on the PDF.
+ */
+export function computeTotals(
+  items: readonly Pick<LineItem, "amount">[],
+  discountRate: number,
+): { subtotal: number; discountAmount: number; total: number } {
+  const subtotal = round2(items.reduce((sum, i) => sum + i.amount, 0));
+  const discountAmount = round2(subtotal * discountRate);
+  return { subtotal, discountAmount, total: round2(subtotal - discountAmount) };
+}
+
 let nextLineItemId = 1;
 
 export function makeLineItem(partial?: Partial<Omit<LineItem, "_id">>): LineItem {

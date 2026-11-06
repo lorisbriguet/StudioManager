@@ -12,7 +12,7 @@ import { getQuoteLineItems } from "../db/queries/quotes";
 import { useT } from "../i18n/useT";
 import { useActivities } from "../db/hooks/useActivities";
 import type { Activity } from "../types/activity";
-import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel, round2 } from "../lib/lineItems";
+import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel, round2, computeTotals } from "../lib/lineItems";
 import { LineItemsTable } from "../components/shared/LineItemsTable";
 import { GlobalRateControl, TemplateField } from "../components/shared/DocumentFields";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
@@ -176,9 +176,7 @@ export function QuoteFormPage() {
   const activityName = (a: Activity) => (quoteLang === "FR" ? a.name_fr : a.name_en);
   // Newly computed money values are rounded at every boundary — these are
   // what save() persists.
-  const subtotal = round2(items.reduce((sum, i) => sum + i.amount, 0));
-  const discountAmount = round2(subtotal * discountRate);
-  const total = round2(subtotal - discountAmount);
+  const { subtotal, discountAmount, total } = computeTotals(items, discountRate);
 
   const { data: clientAddresses } = useClientAddresses(clientId);
   const clientProjects = projects?.filter((p) => p.client_id === clientId);
