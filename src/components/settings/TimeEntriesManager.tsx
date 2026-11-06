@@ -5,6 +5,7 @@ import { useProjects } from "../../db/hooks/useProjects";
 import { deleteWithUndo } from "../../lib/undo";
 import { Button, DatePicker, ICONS, Select, IconButton, Input, Table, TableSkeleton, FormField, FORM_GAP, EmptyState, NoResults, QueryError } from "../ui";
 import { SectionHeader } from "../ui/Settings";
+import { formatDisplayDate } from "../../utils/formatDate";
 
 function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -180,7 +181,7 @@ export function TimeEntriesManager() {
                     </>
                   ) : (
                     <>
-                      <Table.Td className="tabular-nums">{entry.date}</Table.Td>
+                      <Table.Td className="tabular-nums">{formatDisplayDate(entry.date)}</Table.Td>
                       <Table.Td>{entry.project_name}</Table.Td>
                       <Table.Td muted>{entry.task_title ?? "—"}</Table.Td>
                       <Table.Td numeric>{formatDuration(entry.duration_minutes)}</Table.Td>

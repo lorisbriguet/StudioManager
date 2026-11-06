@@ -11,6 +11,7 @@ import type { BusinessProfile } from "../../types/business-profile";
 import type { AppLanguage } from "../../i18n/ui";
 import { getExportLabels } from "../../i18n/export-labels";
 import { PDF } from "../pdf/pdfPalette";
+import { formatDisplayDate } from "../../utils/formatDate";
 
 export interface Props {
   year: number;
@@ -155,8 +156,8 @@ export function InvoicesListPDF({ year, invoices, clientNames, profile, lang = "
           <View key={inv.id} style={[s.row, i % 2 === 1 ? s.rowAlt : {}]}>
             <Text style={[s.cell, s.colRef]}>{inv.reference}</Text>
             <Text style={[s.cell, s.colClient]}>{clientNames[inv.client_id] ?? inv.client_id}</Text>
-            <Text style={[s.cell, s.colDate]}>{inv.invoice_date}</Text>
-            <Text style={[s.cell, s.colDue]}>{inv.due_date ?? ""}</Text>
+            <Text style={[s.cell, s.colDate]}>{formatDisplayDate(inv.invoice_date)}</Text>
+            <Text style={[s.cell, s.colDue]}>{inv.due_date ? formatDisplayDate(inv.due_date) : ""}</Text>
             <Text style={[s.cell, s.colStatus, statusStyle[inv.status]] as never}>{inv.status}</Text>
             <Text style={[s.cell, s.colTotal]}>{formatCHF(inv.total)}</Text>
           </View>

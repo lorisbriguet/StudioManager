@@ -187,7 +187,22 @@ jobs:
             scripts/verify-update-signature.mjs
             scripts/changelog-notes.mjs
             CHANGELOG.md
+            src-tauri/tauri.conf.json
           sparse-checkout-cone-mode: false
+
+      # The pubkey installed apps know: the one in the latest published release.
+      # It differs from this tag's only in a key rotation release (RELEASING.md).
+      - name: Pubkey of the latest published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          prev=$(gh release view --json tagName --jq .tagName)
+          gh api "repos/$GH_REPO/contents/src-tauri/tauri.conf.json?ref=$prev" --jq .content | base64 -d \
+            | node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(0, "utf8")).plugins.updater.pubkey)' > installed.pub
+          node -e 'process.stdout.write(require("./repo/src-tauri/tauri.conf.json").plugins.updater.pubkey)' > tag.pub
+          echo "latest published release: $prev"
+          if cmp -s installed.pub tag.pub; then echo "same pubkey as this tag"; else echo "key rotation release: this tag ships a new pubkey"; fi
 
       # RELEASING.md step 5: the summary for latest.json, the section for the draft.
       - name: Release notes from CHANGELOG.md
@@ -202,29 +217,28 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/signer" --no-save --no-audit --no-fund --ignore-scripts "@tauri-apps/cli@$TAURI_CLI_VERSION"
           "$RUNNER_TEMP/signer/node_modules/.bin/tauri" --version
 
-      # The only step that sees the key. Without the password the signer fails.
+      # The only step that sees the key and its password. An empty password is
+      # refused, except in a key rotation release: that one is signed one last
+      # time with the original key, which has none (RELEASING.md, "Rotate the key").
       - name: Sign the update
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] || { echo "TAURI_SIGNING_PRIVATE_KEY is not set in the release environment"; exit 1; }
-          [ -n "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" ] || { echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is not set in the release environment"; exit 1; }
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" ]; then
+            if cmp -s installed.pub tag.pub; then
+              echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is not set in the release environment (only a key rotation release may sign without one)"; exit 1
+            fi
+            echo "::warning::Key rotation release: signing with the old key, which has no password. Switch the release secrets to the new key once it is published (RELEASING.md)."
+          fi
           "$RUNNER_TEMP/signer/node_modules/.bin/tauri" signer sign --app-version "$VERSION" bundle/StudioManager.app.tar.gz
           test -s bundle/StudioManager.app.tar.gz.sig
 
       # Installed apps accept an update only if it is signed with the key whose
-      # pubkey they shipped with: the one in the latest published release, which
-      # differs from this tag's during a key rotation (RELEASING.md).
+      # pubkey they shipped with (installed.pub, from the latest published release).
       - name: Check installed apps accept the signature
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
         run: |
-          prev=$(gh release view --json tagName --jq .tagName)
-          gh api "repos/$GH_REPO/contents/src-tauri/tauri.conf.json?ref=$prev" --jq .content | base64 -d \
-            | node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(0, "utf8")).plugins.updater.pubkey)' > installed.pub
-          echo "checking against the pubkey of $prev"
           out=$(node repo/scripts/verify-update-signature.mjs bundle/StudioManager.app.tar.gz bundle/StudioManager.app.tar.gz.sig @installed.pub)
           echo "$out"
           case "$out" in *"version:$VERSION)") ;; *) echo "the signature is not bound to $VERSION"; exit 1;; esac

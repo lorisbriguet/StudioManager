@@ -141,21 +141,21 @@ export function clientStatusVariant(s: string): BadgeVariant {
 }
 
 /**
- * Background class for the small status dot next to an invoice (`dot-sm`).
- * Same colours as `invoiceStatusVariant`; unknown statuses get a neutral dot.
+ * Text colour for the small status icon next to an invoice.
+ * Same colours as `invoiceStatusVariant`; unknown statuses are muted.
  */
-export function invoiceStatusDotClass(s: string): string {
+export function invoiceStatusTextClass(s: string): string {
   switch (s) {
     case "paid":
-      return "bg-success";
+      return "text-success-text";
     case "overdue":
-      return "bg-danger";
+      return "text-danger-text";
     case "sent":
-      return "bg-warning";
+      return "text-warning-text";
     case "draft":
-      return "bg-[var(--color-indigo-text)]";
+      return "text-[var(--color-indigo-text)]";
     default:
-      return "bg-[var(--color-input-bg)]";
+      return "text-muted";
   }
 }
 

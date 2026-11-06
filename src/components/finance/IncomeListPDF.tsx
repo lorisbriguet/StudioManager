@@ -11,6 +11,7 @@ import type { AppLanguage } from "../../i18n/ui";
 import { getExportLabels, type ExportLabels } from "../../i18n/export-labels";
 import { PDF } from "../pdf/pdfPalette";
 import { formatMoneyPdf } from "../../lib/money";
+import { formatDisplayDate } from "../../utils/formatDate";
 
 /** The trustee export's list of other income (the `income` table), laid out
  *  like ExpensesListPDF so the three lists of the folder read alike. */
@@ -181,7 +182,7 @@ export function IncomeListPDF({ year, incomes, profile, lang = "FR" }: Props) {
             <Text style={[s.cell, s.colDesc]}>{inc.description}</Text>
             <Text style={[s.cell, s.colSource]}>{inc.source}</Text>
             <Text style={[s.cell, s.colCategory]}>{categoryLabel(t, inc.category)}</Text>
-            <Text style={[s.cell, s.colDate]}>{inc.date}</Text>
+            <Text style={[s.cell, s.colDate]}>{formatDisplayDate(inc.date)}</Text>
             <Text style={[s.cell, s.colAmount]}>{formatCHF(inc.amount)}</Text>
           </View>
         ))}
