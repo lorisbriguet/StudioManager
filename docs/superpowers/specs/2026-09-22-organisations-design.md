@@ -117,6 +117,19 @@ Runs once, in Rust, at startup, before the frontend opens any database, when
    prefs on its first load (section 4) and the null marks that it still has
    to. The snapshot is deleted on the next successful launch.
 
+Crash recovery: a crash or power loss can stop the upgrade where no rollback
+runs. So between steps 2 and 3 the upgrade writes `upgrade.journal` (the
+registry it will save, the moves, the step-2 counts), and removes it after
+step 7. Every step is safe to repeat: a move whose source is gone is done,
+and the path rewrite only touches paths still under the old prefix. When the
+journal is there and `organisations.json` is not, the next start finishes the
+upgrade forward with the journal's organisation id. If that fails (for
+example both a moved and a new `studiomanager.db` exist), nothing is touched
+or deleted, and the fatal overlay says the upgrade was interrupted and names
+the journal and snapshot paths. A journal left next to a saved registry only
+means the crash came after step 7: the next start removes it and the
+disposable databases.
+
 Backups in external folders are not touched. Release notes recommend a
 manual Backup Now before updating.
 
