@@ -68,6 +68,27 @@ export function documentHooks<Doc extends DocumentRow, Item extends LineItemFiel
     return result;
   };
 
+  // Undo and redo write straight to the table, past the save checks. An older
+  // edit's undo can still hold status "draft" and a DRAFT reference: once the
+  // document has left draft, restore its other fields but keep its status and
+  // number, so the number is never freed.
+  const keepNumber = async (id: number, target: Record<string, unknown>) => {
+    const toDraft =
+      target.status === "draft" ||
+      (typeof target.reference === "string" && target.reference.startsWith("DRAFT"));
+    if (!toDraft) return target;
+    const current = await q.get(id);
+    if (!current || current.status === "draft") return target;
+    const { status: _s, reference: _r, ...rest } = target;
+    return rest;
+  };
+
+  const restore = async (id: number, target: Record<string, unknown>, items?: LineItemFields[]) => {
+    const fields = await keepNumber(id, target);
+    if (Object.keys(fields).length === 0 && !items) return;
+    await q.updateWithLineItems(id, fields as DocFields<Doc>, items);
+  };
+
   const invalidate = (qc: QueryClient, ...extra: QueryKey[]) => {
     qc.invalidateQueries({ queryKey: [key] });
     for (const k of extra) qc.invalidateQueries({ queryKey: k });
@@ -131,12 +152,14 @@ export function documentHooks<Doc extends DocumentRow, Item extends LineItemFiel
         const save = async () => {
           const prev = await q.get(id);
           const prevLineItems = lineItems ? await q.lineItems(id) : undefined;
+          let numbered = false;
 
           // Assign the real reference when a draft is sent
           if (fields.status === "sent" && prev?.reference.startsWith("DRAFT")) {
             const date = prev[dateField] as unknown as string | null;
             const year = date ? parseInt(date.substring(0, 4)) : new Date().getFullYear();
             fields.reference = await q.nextReference(year);
+            numbered = true;
           }
 
           // Once it has left draft, it can't go back
@@ -145,15 +168,18 @@ export function documentHooks<Doc extends DocumentRow, Item extends LineItemFiel
           }
 
           await q.updateWithLineItems(id, data, lineItems);
-          return { prev, prevLineItems };
+          return { prev, prevLineItems, numbered };
         };
         // Sending picks the next free number: two sends at once would read the
         // same one, so they take turns from reading the number to writing it.
-        const { prev, prevLineItems } = fields.status === "sent" ? await oneSendAtATime(save) : await save();
+        const { prev, prevLineItems, numbered } =
+          fields.status === "sent" ? await oneSendAtATime(save) : await save();
 
         await config.afterUpdate?.(id, fields.status ?? prev?.status, qc);
 
-        if (prev) {
+        // A send that gave the document its number can't be undone: undoing it
+        // would free the number for the next document. Cancel it instead.
+        if (prev && !numbered) {
           const prevData: Record<string, unknown> = {};
           for (const field of Object.keys(data)) {
             prevData[field] = (prev as unknown as Record<string, unknown>)[field];
@@ -162,11 +188,11 @@ export function documentHooks<Doc extends DocumentRow, Item extends LineItemFiel
           useUndoStore.getState().push({
             label: `${getLabels()[labels.undoUpdate]} "${prev.reference}"`,
             execute: async () => {
-              await q.updateWithLineItems(id, prevData as DocFields<Doc>, prevItems);
+              await restore(id, prevData, prevItems);
               invalidate(qc, lineItemsKey(id));
             },
             redo: async () => {
-              await q.updateWithLineItems(id, data, lineItems);
+              await restore(id, data as Record<string, unknown>, lineItems);
               invalidate(qc, lineItemsKey(id));
             },
           });

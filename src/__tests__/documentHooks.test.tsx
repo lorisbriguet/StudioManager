@@ -199,6 +199,30 @@ describe.each(kinds)("$name hooks", (k) => {
     expect(refs).toEqual(["REF-1", "REF-2", "REF-3"]);
   });
 
+  it("adds no undo step for a send that assigns the number", async () => {
+    k.q.get.mockResolvedValue(doc());
+    const { result } = renderHook(() => k.h.useUpdate(), { wrapper });
+    await result.current.mutateAsync({ id: 5, data: { status: "sent" } as never });
+    expect(useUndoStore.getState().stack).toHaveLength(0);
+  });
+
+  it("an older edit's undo keeps the status and number once sent", async () => {
+    k.q.get.mockResolvedValue(doc());
+    const { result } = renderHook(() => k.h.useUpdate(), { wrapper });
+    // A form save while still a draft sends every field, status and reference too
+    await result.current.mutateAsync({
+      id: 5,
+      data: { status: "draft", reference: "DRAFT-1", notes: "new" } as never,
+    });
+    const action = useUndoStore.getState().stack[0];
+
+    k.q.get.mockResolvedValue(doc({ status: "sent", reference: "2025-004", notes: "new" }));
+    await action.execute();
+    expect(k.q.update).toHaveBeenLastCalledWith(5, { notes: "old" }, undefined);
+    await action.redo!();
+    expect(k.q.update).toHaveBeenLastCalledWith(5, { notes: "new" }, undefined);
+  });
+
   it("keeps a real reference when sent again", async () => {
     k.q.get.mockResolvedValue(doc({ reference: "2025-004", status: "sent" }));
     const { result } = renderHook(() => k.h.useUpdate(), { wrapper });

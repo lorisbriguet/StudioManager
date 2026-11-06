@@ -142,9 +142,9 @@ export function InvoicesPage() {
   const bulkMarkSent = useCallback(async () => {
     const ids = [...bulk.selected] as number[];
     bulk.clearSelection();
-    // One at a time, each numbered after the previous one is saved. Each
-    // update's own undo (which restores the draft and its DRAFT reference)
-    // is folded into a single Undo for the whole action.
+    // One at a time, each numbered after the previous one is saved. A send
+    // that assigns a number adds no undo step (undo would free the number),
+    // so there is usually no Undo toast; any other undo steps fold into one.
     const action = await batchUndo(t.bulk_updated, async () => {
       for (const id of ids) {
         try {
