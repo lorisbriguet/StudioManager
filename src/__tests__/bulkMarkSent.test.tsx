@@ -21,8 +21,9 @@ vi.mock("../lib/log", () => ({
   logWarn: vi.fn(async () => {}),
   logInfo: vi.fn(async () => {}),
 }));
-vi.mock("../lib/invoicePdfStore", async (orig) => ({
-  ...(await orig<typeof import("../lib/invoicePdfStore")>()),
+// No original module: loading it pulls in @react-pdf, which the first send
+// would wait for inside waitFor's 1 s (the cause of a flaky failure).
+vi.mock("../lib/invoicePdfStore", () => ({
   generateAndStoreInvoicePdf: vi.fn(async () => {}),
 }));
 

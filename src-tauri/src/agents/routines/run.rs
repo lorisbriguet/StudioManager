@@ -595,8 +595,14 @@ mod tests {
         assert!(!o.timed_out);
         assert_eq!(command_result(&o).message.as_deref(), Some("Stopped by a signal"));
         assert!(!is_tracked(group));
+        // The killed grandchild is orphaned and reaped by launchd/init a moment later; until
+        // then it still counts as a group member, so wait (bounded) for the group to go.
         // SAFETY: signal 0 only checks whether the group still exists.
-        assert_ne!(unsafe { libc::kill(-group, 0) }, 0, "the grandchild outlived the stop");
+        let gone_by = std::time::Instant::now() + Duration::from_secs(2);
+        while unsafe { libc::kill(-group, 0) } == 0 {
+            assert!(std::time::Instant::now() < gone_by, "the grandchild outlived the stop");
+            std::thread::sleep(Duration::from_millis(10));
+        }
         std::fs::remove_dir_all(&dir).ok();
     }
 

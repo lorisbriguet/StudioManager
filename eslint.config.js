@@ -17,7 +17,38 @@ const noInlineQueryKey = {
     };
   },
 };
-const studio = { rules: { 'no-inline-query-key': noInlineQueryKey } };
+// Pages and components reach the database through src/db/queries and
+// src/db/hooks, never getDb() or SQL of their own: queries stay testable and
+// in one place.
+const DB_INDEX = /(^|\/)db(\/index)?$/;
+const noDbInUi = {
+  meta: {
+    type: 'problem',
+    messages: {
+      getDb: 'Put the query in src/db/queries and call it from here, not getDb().',
+      sql: 'Put the query in src/db/queries; components never import the SQL plugin.',
+    },
+  },
+  create(context) {
+    return {
+      ImportDeclaration(node) {
+        const src = node.source.value;
+        if (src === '@tauri-apps/plugin-sql' && node.importKind !== 'type') {
+          context.report({ node, messageId: 'sql' });
+        }
+        if (DB_INDEX.test(src) && node.specifiers.some((s) => s.imported?.name === 'getDb')) {
+          context.report({ node, messageId: 'getDb' });
+        }
+      },
+      ImportExpression(node) {
+        if (node.source.type === 'Literal' && DB_INDEX.test(node.source.value)) {
+          context.report({ node, messageId: 'getDb' });
+        }
+      },
+    };
+  },
+};
+const studio = { rules: { 'no-inline-query-key': noInlineQueryKey, 'no-db-in-ui': noDbInUi } };
 
 export default tseslint.config(
   {
@@ -103,6 +134,11 @@ export default tseslint.config(
         },
       ],
     },
+  },
+  {
+    files: ['src/pages/**/*.{ts,tsx}', 'src/components/**/*.{ts,tsx}'],
+    ignores: ['src/**/*.test.{ts,tsx}'],
+    rules: { 'studio/no-db-in-ui': 'error' },
   },
   {
     // Tests build their own keys
