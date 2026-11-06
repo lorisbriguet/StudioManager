@@ -49,7 +49,10 @@ describe("PaperlessForm", () => {
     testConnection.mockResolvedValue([]);
     const onDone = vi.fn();
     const { container } = render(<PaperlessForm onDone={onDone} onCancel={vi.fn()} />);
-    expect(screen.getByLabelText(/^Paperless address/)).toHaveValue("dsm-lorisb.tail47efa3.ts.net");
+    const address = screen.getByLabelText(/^Paperless address/);
+    expect(address).toHaveValue("");
+    expect(address).toHaveAttribute("placeholder", "paperless.example.ts.net");
+    fireEvent.change(address, { target: { value: "nas.example.ts.net" } });
     expect(screen.getByLabelText(/^HTTPS port/)).toHaveValue(8443);
     const token = screen.getByLabelText(/^API token/) as HTMLInputElement;
     expect(token.type).toBe("password");
@@ -58,7 +61,7 @@ describe("PaperlessForm", () => {
     await waitFor(() => expect(onDone).toHaveBeenCalled());
     expect(notify.success).toHaveBeenCalledWith(t.upkeep_connection_test_ok_paperless);
     const { data, secret } = create.mock.calls[0][0];
-    expect(data).toMatchObject({ kind: "paperless", host: "dsm-lorisb.tail47efa3.ts.net", port: 8443 });
+    expect(data).toMatchObject({ kind: "paperless", host: "nas.example.ts.net", port: 8443 });
     expect(JSON.stringify(data)).not.toContain("s3cret-token");
     expect(secret).toBe("s3cret-token");
     // The token only lives in the password input the user typed it into, never as text.
@@ -75,6 +78,7 @@ describe("PaperlessForm", () => {
   it("shows the Rust error text", async () => {
     testConnection.mockRejectedValue("Paperless refused the token (401). Reconnect it in Settings.");
     render(<PaperlessForm onDone={vi.fn()} onCancel={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText(/^Paperless address/), { target: { value: "nas.example.ts.net" } });
     fireEvent.change(screen.getByLabelText(/^API token/), { target: { value: "x" } });
     fireEvent.click(screen.getByRole("button", { name: t.upkeep_paperless_connect }));
     expect(await screen.findByText(/Paperless refused the token/)).toBeInTheDocument();

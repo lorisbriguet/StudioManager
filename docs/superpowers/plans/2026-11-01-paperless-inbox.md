@@ -102,7 +102,7 @@ fn migrates_to_009_adds_paperless() {
   - `getPaperlessLinks(connectionId: number): Promise<Map<number, { state: "linked" | "dismissed"; expense_id: number | null }>>`
   - `linkPaperlessDoc(connectionId: number, docId: number, expenseId: number): Promise<void>` (upsert → `state='linked'`)
   - `dismissPaperlessDoc(connectionId: number, docId: number): Promise<void>` / `undismissPaperlessDoc(...)`
-  - `PaperlessForm` (props `ConnectionFormProps`): fields host (default `dsm-lorisb.tail47efa3.ts.net`), port (default `8443`), token (password input); "Connect" creates the connection via `useConnectionSetup`, saves the token with `saveConnectionSecret`, runs `connection_test`.
+  - `PaperlessForm` (props `ConnectionFormProps`): fields host (default `<nas>.<tailnet>.ts.net`), port (default `8443`), token (password input); "Connect" creates the connection via `useConnectionSetup`, saves the token with `saveConnectionSecret`, runs `connection_test`.
 
 - [ ] **Step 1: Write failing tests**: `linking twice keeps one row` (second call updates; `getPaperlessLinks` size 1, state `linked`); `dismiss then link ends linked`; form test `shows host, port and token and never renders the token back after save` (mirror `bambuForm.test.tsx` mocks).
 - [ ] **Step 2: Run** `npx vitest run paperless` — Expected: FAIL.

@@ -6,7 +6,8 @@ import { normalizeHost, parsePort } from "../../lib/upkeep/synology";
 import type { ConnectionFormProps } from "./connectionForms";
 import { useConnectionSetup } from "./useConnectionSetup";
 
-const DEFAULT_HOST = "dsm-lorisb.tail47efa3.ts.net";
+/** Example shown in the empty address field; nothing is prefilled. */
+const HOST_PLACEHOLDER = "paperless.example.ts.net";
 const DEFAULT_PORT = 8443;
 
 /**
@@ -19,7 +20,7 @@ export function PaperlessForm({ onDone, onCancel, connection }: ConnectionFormPr
   const { existing, busy, busyWhile, save, test } = useConnectionSetup(connection, onDone);
   const [initial] = useState(() => ({
     label: connection?.label ?? t.upkeep_connection_kind_paperless,
-    host: connection?.host ?? DEFAULT_HOST,
+    host: connection?.host ?? "",
     port: String(connection?.port ?? DEFAULT_PORT),
     token: "",
   }));
@@ -67,7 +68,7 @@ export function PaperlessForm({ onDone, onCancel, connection }: ConnectionFormPr
       </FormField>
       <FormGrid>
         <FormField label={t.upkeep_paperless_host} required span={2}>
-          <Input value={f.host} autoComplete="off" onChange={(e) => set("host", e.target.value)} />
+          <Input value={f.host} autoComplete="off" placeholder={HOST_PLACEHOLDER} onChange={(e) => set("host", e.target.value)} />
         </FormField>
         <FormField label={t.upkeep_syno_port} error={portBad ? t.upkeep_syno_port_invalid : undefined}>
           <Input type="number" min={1} max={65535} value={f.port} onChange={(e) => set("port", e.target.value)} />
