@@ -1,201 +1,66 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import * as q from "../queries/invoices";
-import { getNextInvoiceReference } from "../queries/invoices";
 import { isDraftReference } from "../../types/invoice";
 import type { Invoice, InvoiceLineItem } from "../../types/invoice";
-import { useUndoStore } from "../../stores/undo-store";
 import { generateAndStoreInvoicePdf } from "../../lib/invoicePdfStore";
 import { getLabels, notify } from "../../lib/notify";
-import { AppError } from "../../lib/errors";
+import { documentHooks } from "./documentHooks";
 
-export function useInvoices() {
-  return useQuery({ queryKey: ["invoices"], queryFn: q.getInvoices });
-}
+const hooks = documentHooks<Invoice, InvoiceLineItem>({
+  key: "invoices",
+  lineItemsKey: (id) => ["invoice-line-items", id],
+  dateField: "invoice_date",
+  lineItemForeignKey: "invoice_id",
+  labels: {
+    saveError: "error_save_invoice",
+    deleteError: "error_delete_invoice",
+    undoCreate: "undo_create_invoice",
+    undoUpdate: "undo_update_invoice",
+    undoDelete: "undo_delete_invoice",
+  },
+  queries: {
+    list: q.getInvoices,
+    get: q.getInvoice,
+    listByProject: q.getInvoicesByProject,
+    lineItems: q.getInvoiceLineItems,
+    create: q.createInvoiceWithLineItems,
+    updateWithLineItems: q.updateInvoiceWithLineItems,
+    delete: q.deleteInvoice,
+    nextReference: q.getNextInvoiceReference,
+  },
+  // Only drafts are deletable — an invoice that ever had a real
+  // reference must be cancelled instead (no reference reuse)
+  beforeDelete: (prev) => {
+    if (!isDraftReference(prev.reference)) {
+      throw new Error("Only draft invoices can be deleted");
+    }
+  },
+  // Store the PDF once the invoice is no longer a draft. A failed PDF
+  // doesn't fail the save: it is reported on its own.
+  afterUpdate: async (id, status, qc) => {
+    if (!status || status === "draft") return;
+    const t = getLabels();
+    const generated = await notify.progress(
+      t.generating_pdf,
+      generateAndStoreInvoicePdf(id).then(() => true),
+      { success: null, error: t.failed_to_generate_pdf }
+    );
+    if (generated) qc.invalidateQueries({ queryKey: ["invoices"] });
+  },
+});
 
-export function useInvoice(id: number) {
-  return useQuery({
-    queryKey: ["invoices", id],
-    queryFn: () => q.getInvoice(id),
-    enabled: !!id,
-  });
-}
+export const useInvoices = hooks.useList;
+export const useInvoice = hooks.useOne;
+export const useInvoicesByProject = hooks.useByProject;
+export const useInvoiceLineItems = hooks.useLineItems;
+export const useCreateInvoice = hooks.useCreate;
+export const useUpdateInvoice = hooks.useUpdate;
+export const useDeleteInvoice = hooks.useDelete;
 
 export function useInvoicesByClient(clientId: string) {
   return useQuery({
     queryKey: ["invoices", "client", clientId],
     queryFn: () => q.getInvoicesByClient(clientId),
     enabled: !!clientId,
-  });
-}
-
-export function useInvoicesByProject(projectId: number) {
-  return useQuery({
-    queryKey: ["invoices", "project", projectId],
-    queryFn: () => q.getInvoicesByProject(projectId),
-    enabled: !!projectId,
-  });
-}
-
-export function useInvoiceLineItems(invoiceId: number) {
-  return useQuery({
-    queryKey: ["invoice-line-items", invoiceId],
-    queryFn: () => q.getInvoiceLineItems(invoiceId),
-    enabled: !!invoiceId,
-  });
-}
-
-export function useCreateInvoice() {
-  const qc = useQueryClient();
-  return useMutation({
-    meta: { errorLabel: "error_save_invoice" },
-    mutationFn: async ({ data, lineItems }: {
-      data: Omit<Invoice, "id" | "created_at" | "updated_at">;
-      lineItems: Omit<InvoiceLineItem, "id" | "invoice_id">[];
-    }) => {
-      const id = await q.createInvoiceWithLineItems(data, lineItems);
-      useUndoStore.getState().push({
-        label: `${getLabels().undo_create_invoice} "${data.reference}"`,
-        execute: async () => {
-          await q.deleteInvoice(id);
-          qc.invalidateQueries({ queryKey: ["invoices"] });
-          qc.invalidateQueries({ queryKey: ["finance"] });
-        },
-        redo: async () => {
-          await q.createInvoiceWithLineItems(data, lineItems);
-          qc.invalidateQueries({ queryKey: ["invoices"] });
-          qc.invalidateQueries({ queryKey: ["finance"] });
-        },
-      });
-      return id;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["invoices"] });
-      qc.invalidateQueries({ queryKey: ["finance"] });
-    },
-  });
-}
-
-export function useUpdateInvoice() {
-  const qc = useQueryClient();
-  return useMutation({
-    meta: { errorLabel: "error_save_invoice" },
-    mutationFn: async ({
-      id,
-      data,
-      lineItems,
-    }: {
-      id: number;
-      data: Partial<Omit<Invoice, "id" | "created_at" | "updated_at">>;
-      lineItems?: Omit<InvoiceLineItem, "id" | "invoice_id">[];
-    }) => {
-      const prev = await q.getInvoice(id);
-      const prevLineItems = lineItems ? await q.getInvoiceLineItems(id) : undefined;
-
-      // Auto-assign reference when status changes to "sent" and ref is still DRAFT
-      if (data.status === "sent" && prev?.reference.startsWith("DRAFT")) {
-        const year = prev.invoice_date
-          ? parseInt(prev.invoice_date.substring(0, 4))
-          : new Date().getFullYear();
-        data.reference = await getNextInvoiceReference(year);
-      }
-
-      // Prevent changing back to draft once it's been set to another status
-      if (data.status === "draft" && prev && prev.status !== "draft") {
-        throw new AppError("error_revert_to_draft", "Cannot revert to draft status");
-      }
-
-      await q.updateInvoiceWithLineItems(id, data, lineItems);
-
-      // Auto-generate PDF when invoice is not a draft
-      const finalStatus = data.status ?? prev?.status;
-      if (finalStatus && finalStatus !== "draft") {
-        // A failed PDF doesn't fail the save: it is reported on its own.
-        const t = getLabels();
-        const generated = await notify.progress(
-          t.generating_pdf,
-          generateAndStoreInvoicePdf(id).then(() => true),
-          { success: null, error: t.failed_to_generate_pdf }
-        );
-        if (generated) qc.invalidateQueries({ queryKey: ["invoices"] });
-      }
-
-      if (prev) {
-        const prevData: Record<string, unknown> = {};
-        for (const key of Object.keys(data)) {
-          prevData[key] = (prev as unknown as Record<string, unknown>)[key];
-        }
-        const prevItems = prevLineItems?.map(({ id: _iid, invoice_id, ...rest }) => rest);
-        useUndoStore.getState().push({
-          label: `${getLabels().undo_update_invoice} "${prev.reference}"`,
-          execute: async () => {
-            await q.updateInvoiceWithLineItems(
-              id,
-              prevData as Partial<Omit<Invoice, "id" | "created_at" | "updated_at">>,
-              prevItems
-            );
-            qc.invalidateQueries({ queryKey: ["invoices"] });
-            qc.invalidateQueries({ queryKey: ["invoice-line-items", id] });
-            qc.invalidateQueries({ queryKey: ["finance"] });
-          },
-          redo: async () => {
-            await q.updateInvoiceWithLineItems(id, data, lineItems);
-            qc.invalidateQueries({ queryKey: ["invoices"] });
-            qc.invalidateQueries({ queryKey: ["invoice-line-items", id] });
-            qc.invalidateQueries({ queryKey: ["finance"] });
-          },
-        });
-      }
-    },
-    onSuccess: (_data, { id }) => {
-      qc.invalidateQueries({ queryKey: ["invoices"] });
-      qc.invalidateQueries({ queryKey: ["invoice-line-items", id] });
-      qc.invalidateQueries({ queryKey: ["finance"] });
-    },
-  });
-}
-
-export function useDeleteInvoice() {
-  const qc = useQueryClient();
-  return useMutation({
-    meta: { errorLabel: "error_delete_invoice" },
-    mutationFn: async (id: number) => {
-      const prev = await q.getInvoice(id);
-      // Only drafts are deletable — an invoice that ever had a real
-      // reference must be cancelled instead (no reference reuse)
-      if (prev && !isDraftReference(prev.reference)) {
-        throw new Error("Only draft invoices can be deleted");
-      }
-      const prevItems = await q.getInvoiceLineItems(id);
-      await q.deleteInvoice(id);
-      if (prev) {
-        const { id: _id, created_at, updated_at, ...data } = prev;
-        const items = prevItems.map(({ id: _iid, invoice_id, ...rest }) => rest);
-        // The restore assigns a fresh rowid; redo targets exactly that id —
-        // a reference lookup could hit a different row with the same reference.
-        let restoredId: number | null = null;
-        useUndoStore.getState().push({
-          label: `${getLabels().undo_delete_invoice} "${prev.reference}"`,
-          execute: async () => {
-            restoredId = await q.createInvoiceWithLineItems(
-              data as Omit<Invoice, "id" | "created_at" | "updated_at">,
-              items
-            );
-            qc.invalidateQueries({ queryKey: ["invoices"] });
-            qc.invalidateQueries({ queryKey: ["finance"] });
-          },
-          redo: async () => {
-            if (restoredId !== null) {
-              await q.deleteInvoice(restoredId);
-              qc.invalidateQueries({ queryKey: ["invoices"] });
-              qc.invalidateQueries({ queryKey: ["finance"] });
-            }
-          },
-        });
-      }
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["invoices"] });
-      qc.invalidateQueries({ queryKey: ["finance"] });
-    },
   });
 }
