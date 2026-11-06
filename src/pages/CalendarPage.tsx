@@ -1,11 +1,14 @@
-import { useMemo, useCallback, useState, useRef, useEffect } from "react";
+import { useMemo, useCallback, useState, useRef, useEffect, type MouseEvent as ReactMouseEvent } from "react";
 import { IconButton } from "../components/ui/IconButton";
 import { useNavigate } from "react-router-dom";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
-import type { EventInput, EventContentArg, EventDropArg } from "@fullcalendar/core";
+import type { EventInput, EventContentArg, EventDropArg, DateSelectArg } from "@fullcalendar/core";
+import { calendarLocale, CALENDAR_TIME_FORMAT } from "../lib/calendarLocale";
+import { formatDisplayDate } from "../utils/formatDate";
+import { nowMs } from "../lib/clock";
 import type { DateClickArg, EventResizeDoneArg } from "@fullcalendar/interaction";
 import { ICONS, ICON_SIZE } from "../components/ui/icons";
 import { Button, Select, Popover, Input, FormActions, PageHeader, Callout, FilterChip } from "../components/ui";
@@ -74,6 +77,8 @@ function readFlag(base: string): boolean {
 
 interface QuickCreateState {
   date: string;
+  /** Last day of a multi-day selection, or null for one day. */
+  endDate: string | null;
   startTime: string | null;
   endTime: string | null;
   allDay: boolean;
@@ -130,6 +135,7 @@ export function CalendarPage() {
   const createTask = useCreateTask();
   const navigate = useNavigate();
   const projectOpenMode = useAppStore((s) => s.projectOpenMode);
+  const language = useAppStore((s) => s.language);
   const { data: wlConfigs } = useAllProjectWorkloadConfigs();
   const { data: upkeepItems } = useActiveUpkeepItems();
   const { data: upkeepMachines } = useMachines();
@@ -408,6 +414,7 @@ export function CalendarPage() {
 
       setQuickCreate({
         date: dateStr,
+        endDate: null,
         startTime,
         endTime,
         allDay: info.allDay,
@@ -417,6 +424,41 @@ export function CalendarPage() {
       lastClickRef.current = { time: now, date: dateStr };
     }
   }, []);
+
+  // Drag over days (month) or a time range (week) to create a task for it.
+  const handleSelect = useCallback((info: DateSelectArg) => {
+    const { due_date, end_date, start_time, end_time } = extractEventData({
+      start: info.start, end: info.end, allDay: info.allDay,
+    } as EventDropArg["event"]);
+    info.view.calendar.unselect();
+    if (!due_date) return;
+    const x = info.jsEvent?.clientX ?? window.innerWidth / 2;
+    const y = info.jsEvent?.clientY ?? window.innerHeight / 3;
+    setQuickCreate({
+      date: due_date,
+      endDate: end_date,
+      startTime: start_time,
+      endTime: end_time,
+      allDay: info.allDay,
+      pos: { top: y, left: Math.min(Math.max(x, 160), window.innerWidth - 160) },
+    });
+  }, []);
+
+  // The New task button: today when it is on screen, else the first visible day.
+  const openNewTask = (e: ReactMouseEvent<HTMLElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const view = calRef.current?.getApi()?.view;
+    const today = new Date(nowMs());
+    const inView = !view || (today >= view.activeStart && today < view.activeEnd);
+    setQuickCreate({
+      date: toDateStr(inView || !view ? today : view.activeStart),
+      endDate: null,
+      startTime: null,
+      endTime: null,
+      allDay: true,
+      pos: { top: rect.bottom, left: Math.max(rect.right - 130, 160) },
+    });
+  };
 
   const createSubtask = useCreateSubtask();
 
@@ -428,7 +470,7 @@ export function CalendarPage() {
         title,
         status: "todo",
         due_date: quickCreate.date,
-        end_date: null,
+        end_date: quickCreate.endDate,
         start_time: quickCreate.startTime,
         end_time: quickCreate.endTime,
         reminder: null,
@@ -442,7 +484,7 @@ export function CalendarPage() {
         status: "todo",
         priority: "low",
         due_date: quickCreate.date,
-        end_date: null,
+        end_date: quickCreate.endDate,
         start_time: quickCreate.startTime,
         end_time: quickCreate.endTime,
         reminder: null,
@@ -505,6 +547,9 @@ export function CalendarPage() {
                 { value: "timeGridWeek", label: t.week },
               ]}
             />
+            <Button icon={ICONS.add} onClick={openNewTask}>
+              {t.new_task_action}
+            </Button>
           </>}
         />
         {/* First-run hint: the calendar feeds off dated tasks/subtasks */}
@@ -519,7 +564,10 @@ export function CalendarPage() {
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
             initialView={storedView}
             headerToolbar={false}
+            locale={calendarLocale(language)}
             dayHeaderFormat={{ weekday: "short", day: "numeric" }}
+            slotLabelFormat={CALENDAR_TIME_FORMAT}
+            eventTimeFormat={CALENDAR_TIME_FORMAT}
             events={events}
             editable
             droppable
@@ -530,6 +578,9 @@ export function CalendarPage() {
             eventWillUnmount={handleEventWillUnmount}
             eventContent={renderEventContent}
             dateClick={handleDateClick}
+            selectable
+            selectMinDistance={5}
+            select={handleSelect}
             firstDay={1}
             height="calc(100vh - 140px)"
             slotMinTime="06:00:00"
@@ -545,7 +596,9 @@ export function CalendarPage() {
           <QuickCreatePopup
             pos={quickCreate.pos}
             date={quickCreate.date}
+            endDate={quickCreate.endDate}
             startTime={quickCreate.startTime}
+            endTime={quickCreate.endTime}
             projects={activeProjects}
             onSubmit={handleQuickCreate}
             onClose={() => setQuickCreate(null)}
@@ -582,14 +635,18 @@ export function CalendarPage() {
 export function QuickCreatePopup({
   pos,
   date,
+  endDate = null,
   startTime,
+  endTime = null,
   projects,
   onSubmit,
   onClose,
 }: {
   pos: { top: number; left: number };
   date: string;
+  endDate?: string | null;
   startTime: string | null;
+  endTime?: string | null;
   projects: { id: number; name: string }[];
   onSubmit: (projectId: number, title: string, parentTaskId?: number) => void;
   onClose: () => void;
@@ -638,7 +695,8 @@ export function QuickCreatePopup({
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
-  const timeLabel = startTime ?? t.all_day;
+  const dateLabel = endDate ? `${formatDisplayDate(date)} – ${formatDisplayDate(endDate)}` : formatDisplayDate(date);
+  const timeLabel = startTime ? (endTime ? `${startTime} – ${endTime}` : startTime) : t.all_day;
   const canSubmit = selectedTask ? !!subtaskTitle.trim() && !!projectId : !!title.trim() && !!projectId;
 
   return (
@@ -651,7 +709,7 @@ export function QuickCreatePopup({
       aria-label={t.quick_create}
     >
       <div className="text-xs text-muted mb-2">
-        {date} · {timeLabel}
+        {dateLabel} · {timeLabel}
       </div>
       <Select
         value={projectId}
