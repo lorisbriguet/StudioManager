@@ -43,7 +43,7 @@ grep -rn 'dark:' src --include='*.tsx' | grep -v '// ' | grep -vE 'dark: boolean
 grep -rnE '>[✕←→✓▸↑↓]<' src --include='*.tsx' | wc -l
 ```
 
-Plus the checklist: badges/tags `rounded-full`, inputs/selects `rounded-lg`, small buttons `rounded-md`, lucide icons at standard sizes, all user-visible strings through `useT()`/`getLabels()`, status colors from `statusColors.ts`. EN/FR key parity in `src/i18n/ui.ts` must be exact (equal counts, FR accent-free).
+Plus the checklist: badges/tags `rounded-full`, inputs/selects `rounded-lg`, small buttons `rounded-md`, lucide icons at standard sizes, all user-visible strings through `useT()`/`getLabels()`, status colors from `statusColors.ts`. EN/FR key parity in `src/i18n/labels/` must be exact (equal counts, FR accent-free).
 
 ## 3. Version bump (SemVer)
 
