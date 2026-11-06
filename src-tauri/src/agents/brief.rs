@@ -5,12 +5,19 @@
 //!   GET    /brief/<date>/comments
 //!   POST   /brief/<date>/comments        {quote, note, section}  -> stored, then sent to the agent
 //!   DELETE /brief/<date>/comments/<id>
-//!   POST   /review/agent                 {id, title, folder, prompt} -> {agent}
+//!   POST   /review/agent                 {id, title, folder, prompt, report?} -> {agent}
+//!   GET    /review/status/<report>       -> {findings: {<id>: {status, at, agent?, agent_state?}}}
+//!   POST   /review/status/<report>       {id, status}  -> {finding}
 //!
 //! `/review/agent` is the review report's "Start work with agent" (right-click on a finding): the
 //! same start as on a task (Opus, in a folder Claude Code trusts; the agent reads first and asks
 //! before changing anything), then the main window opens on the new agent. The report is a local
 //! page too; the script that renders it writes the token and each finding's folder into it.
+//!
+//! `/review/status` keeps where each finding stands (open, in_progress, fixed, accepted) per report
+//! in `<app dir>/review-status/<report>.json`, so the page can recount what is left and its scores.
+//! Starting an agent with `report` marks an open finding in_progress and remembers the agent; a
+//! GET adds that agent's state from the Agents list (working, needs_you, idle, done, or gone).
 //!
 //! Only once the Agents switch is on (then until StudioManager quits); loopback only. Every request needs the token from `<app dir>/brief-token`, which the page
 //! renderer (agent-bar/brief/personal_brief.py) writes into the page. Comments are kept per
@@ -38,6 +45,10 @@ const REVIEW_ID_MAX: usize = 16;
 const REVIEW_TITLE_MAX: usize = 200;
 const REVIEW_PROMPT_MAX: usize = 6000;
 const REVIEW_FOLDER_MAX: usize = 1024;
+const REVIEW_DIR: &str = "review-status";
+const REVIEW_REPORT_MAX: usize = 80;
+/// What a finding can be set to from the page; `in_progress` is also set by starting an agent.
+const REVIEW_STATUSES: [&str; 4] = ["open", "in_progress", "fixed", "accepted"];
 
 static STORE_LOCK: Mutex<()> = Mutex::new(());
 /// Findings an agent is being started on: a second click while one starts is turned away.
@@ -182,6 +193,12 @@ pub trait Backend {
     /// Starts an Opus background agent in `folder` (which Claude Code must trust) and opens it in
     /// the main window; Ok is its short id, Err the reason shown on the page.
     fn start_agent(&self, folder: &str, task: &str, name: &str) -> Result<String, String>;
+    /// Where finding statuses are kept, one JSON file per report.
+    fn review_dir(&self) -> PathBuf;
+    /// The agents listed now: (short id, group: working, needs_you, idle or done).
+    fn agent_groups(&self) -> Vec<(String, String)>;
+    /// Local date and time, `2026-11-06 09:40`.
+    fn now_stamp(&self) -> String;
 }
 
 /// What the agent receives: where the passage is, the passage quoted, then the note.
@@ -234,6 +251,16 @@ pub fn route(b: &dyn Backend, r: &Request) -> Response {
     let parts: Vec<&str> = r.path.split('?').next().unwrap_or("").split('/').filter(|p| !p.is_empty()).collect();
     if parts == ["review", "agent"] {
         return if r.method == "POST" { review_agent(b, &r.body) } else { error(404, "Not found") };
+    }
+    if parts.len() == 3 && parts[0] == "review" && parts[1] == "status" {
+        if !valid_report(parts[2]) {
+            return error(404, "Not found");
+        }
+        return match r.method.as_str() {
+            "GET" => review_status_get(b, parts[2]),
+            "POST" => review_status_set(b, parts[2], &r.body),
+            _ => error(404, "Not found"),
+        };
     }
     if parts.len() < 3 || parts[0] != "brief" || parts[2] != "comments" || !valid_date(parts[1]) {
         return error(404, "Not found");
@@ -325,7 +352,7 @@ fn review_agent(b: &dyn Backend, body: &[u8]) -> Response {
         return error(400, REQUIRED);
     };
     let s = |k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").trim().to_string();
-    let (id, title, folder, prompt) = (s("id"), s("title"), s("folder"), s("prompt"));
+    let (id, title, folder, prompt, report) = (s("id"), s("title"), s("folder"), s("prompt"), s("report"));
     if !valid_review_id(&id) {
         return error(400, "Invalid finding id");
     }
@@ -334,6 +361,9 @@ fn review_agent(b: &dyn Backend, body: &[u8]) -> Response {
     }
     if !valid_review_folder(&folder) {
         return error(400, "Invalid folder");
+    }
+    if !report.is_empty() && !valid_report(&report) {
+        return error(400, "Invalid report name");
     }
     let title = clip(&title.replace(['\n', '\r'], " "), REVIEW_TITLE_MAX);
     let prompt = clip(&prompt, REVIEW_PROMPT_MAX);
@@ -347,8 +377,94 @@ fn review_agent(b: &dyn Backend, body: &[u8]) -> Response {
     let result = b.start_agent(&folder, &review_task(&id, &title, &prompt), &review_name(&id, &title));
     REVIEW_IN_FLIGHT.lock().unwrap_or_else(|e| e.into_inner()).retain(|x| x != &id);
     match result {
-        Ok(agent) => ok(json!({ "agent": agent })),
+        Ok(agent) => {
+            if !report.is_empty() {
+                let dir = b.review_dir();
+                let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+                let mut all = review_load(&dir, &report);
+                let mut entry = all.get(&id).cloned().unwrap_or_else(|| json!({ "status": "open" }));
+                if matches!(entry["status"].as_str(), Some("open") | None) {
+                    entry["status"] = json!("in_progress");
+                    entry["at"] = json!(b.now_stamp());
+                }
+                entry["agent"] = json!(agent);
+                entry["agent_at"] = json!(b.now_stamp());
+                all.insert(id, entry);
+                if let Err(e) = review_save(&dir, &report, &all) {
+                    log::warn!("[review] could not save the status: {e}");
+                }
+            }
+            ok(json!({ "agent": agent }))
+        }
         Err(reason) => error(502, &reason),
+    }
+}
+
+/// A report's file name without `.json`: letters, digits, `.`, `_` and `-`, not starting with `.`.
+fn valid_report(r: &str) -> bool {
+    !r.is_empty()
+        && r.len() <= REVIEW_REPORT_MAX
+        && !r.starts_with('.')
+        && r.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+}
+
+fn review_file(dir: &Path, report: &str) -> PathBuf {
+    dir.join(format!("{report}.json"))
+}
+
+fn review_load(dir: &Path, report: &str) -> serde_json::Map<String, Value> {
+    std::fs::read(review_file(dir, report))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<serde_json::Map<String, Value>>(&b).ok())
+        .unwrap_or_default()
+}
+
+fn review_save(dir: &Path, report: &str, all: &serde_json::Map<String, Value>) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let tmp = dir.join(format!(".{report}.json.tmp"));
+    std::fs::write(&tmp, serde_json::to_vec_pretty(all).unwrap_or_default()).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, review_file(dir, report)).map_err(|e| e.to_string())
+}
+
+fn review_status_get(b: &dyn Backend, report: &str) -> Response {
+    let mut all = {
+        let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        review_load(&b.review_dir(), report)
+    };
+    if all.values().any(|e| e.get("agent").is_some()) {
+        let groups = b.agent_groups();
+        for e in all.values_mut() {
+            if let Some(a) = e.get("agent").and_then(Value::as_str).map(str::to_string) {
+                let g = groups.iter().find(|(id, _)| *id == a).map(|(_, g)| g.as_str()).unwrap_or("gone");
+                e["agent_state"] = json!(g);
+            }
+        }
+    }
+    ok(json!({ "findings": all }))
+}
+
+fn review_status_set(b: &dyn Backend, report: &str, body: &[u8]) -> Response {
+    let Ok(v) = serde_json::from_slice::<Value>(body) else {
+        return error(400, "id and status are required");
+    };
+    let s = |k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").trim().to_string();
+    let (id, status) = (s("id"), s("status"));
+    if !valid_review_id(&id) {
+        return error(400, "Invalid finding id");
+    }
+    if !REVIEW_STATUSES.contains(&status.as_str()) {
+        return error(400, "Status must be open, in_progress, fixed or accepted");
+    }
+    let dir = b.review_dir();
+    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut all = review_load(&dir, report);
+    let mut entry = all.get(&id).cloned().unwrap_or_else(|| json!({}));
+    entry["status"] = json!(status);
+    entry["at"] = json!(b.now_stamp());
+    all.insert(id, entry.clone());
+    match review_save(&dir, report, &all) {
+        Ok(()) => ok(json!({ "finding": entry })),
+        Err(e) => error(500, &e),
     }
 }
 
@@ -412,6 +528,29 @@ impl Backend for AppBackend {
             let _ = app.emit_to("main", crate::menubar::NAVIGATE_EVENT, json!({ "path": path }));
         });
         Ok(short_id)
+    }
+    fn review_dir(&self) -> PathBuf {
+        self.dir.join(REVIEW_DIR)
+    }
+    fn agent_groups(&self) -> Vec<(String, String)> {
+        use super::model::Group;
+        let Some(state) = self.app.try_state::<super::AgentsState>() else { return vec![] };
+        state
+            .cached()
+            .into_iter()
+            .filter_map(|a| {
+                let g = match a.group {
+                    Group::Working => "working",
+                    Group::NeedsYou => "needs_you",
+                    Group::Idle => "idle",
+                    Group::Done => "done",
+                };
+                Some((a.short_id?, g.to_string()))
+            })
+            .collect()
+    }
+    fn now_stamp(&self) -> String {
+        chrono::Local::now().format("%Y-%m-%d %H:%M").to_string()
     }
 }
 
@@ -498,6 +637,15 @@ mod tests {
         fn start_agent(&self, folder: &str, task: &str, name: &str) -> Result<String, String> {
             self.sent.borrow_mut().push((format!("{folder} {name}"), task.into()));
             self.result.clone().map(|_| "abcd1234".to_string())
+        }
+        fn review_dir(&self) -> PathBuf {
+            self.dir.join("review")
+        }
+        fn agent_groups(&self) -> Vec<(String, String)> {
+            vec![("abcd1234".into(), "needs_you".into())]
+        }
+        fn now_stamp(&self) -> String {
+            "2026-11-06 09:40".into()
         }
     }
 
@@ -613,6 +761,53 @@ mod tests {
             assert_eq!(route(&b, &req("POST", "/review/agent", T, body)).status, 400, "{body}");
         }
         assert!(b.sent.borrow().is_empty());
+    }
+
+    #[test]
+    fn review_status_is_kept_per_report_and_shows_the_agent_state() {
+        let b = fake("status", Ok(()));
+        let path = "/review/status/2026-11-05-studio-review";
+        assert_eq!(route(&b, &req("GET", path, T, "")).body, json!({ "findings": {} }));
+
+        let start = r#"{"id":"D7","title":"t","folder":"/a/b","prompt":"p","report":"2026-11-05-studio-review"}"#;
+        assert_eq!(route(&b, &req("POST", "/review/agent", T, start)).status, 200);
+        let got = route(&b, &req("GET", path, T, "")).body;
+        assert_eq!(got["findings"]["D7"]["status"], "in_progress");
+        assert_eq!(got["findings"]["D7"]["agent"], "abcd1234");
+        assert_eq!(got["findings"]["D7"]["agent_state"], "needs_you");
+
+        let r = route(&b, &req("POST", path, T, r#"{"id":"D7","status":"fixed"}"#));
+        assert_eq!(r.status, 200);
+        assert_eq!(r.body["finding"]["status"], "fixed");
+        assert_eq!(r.body["finding"]["agent"], "abcd1234", "the agent is kept");
+        // another agent on a fixed finding leaves it fixed
+        assert_eq!(route(&b, &req("POST", "/review/agent", T, start)).status, 200);
+        assert_eq!(route(&b, &req("GET", path, T, "")).body["findings"]["D7"]["status"], "fixed");
+        assert_eq!(route(&b, &req("POST", path, T, r#"{"id":"N-S2","status":"accepted"}"#)).status, 200);
+        let got = route(&b, &req("GET", path, T, "")).body;
+        assert_eq!(got["findings"]["N-S2"]["status"], "accepted");
+        assert!(got["findings"]["N-S2"].get("agent_state").is_none());
+        // other reports are separate
+        let other = route(&b, &req("GET", "/review/status/other-report", T, "")).body;
+        assert_eq!(other, json!({ "findings": {} }));
+        let _ = std::fs::remove_dir_all(&b.dir);
+    }
+
+    #[test]
+    fn review_status_refuses_bad_input() {
+        let b = fake("status-bad", Ok(()));
+        let path = "/review/status/r1";
+        assert_eq!(route(&b, &req("GET", path, None, "")).status, 401);
+        for bad in ["/review/status/..", "/review/status/.hidden", "/review/status/a%2Fb", "/review/status/a b"] {
+            assert_eq!(route(&b, &req("GET", bad, T, "")).status, 404, "{bad}");
+        }
+        assert_eq!(route(&b, &req("POST", path, T, r#"{"id":"D1","status":"done"}"#)).status, 400);
+        assert_eq!(route(&b, &req("POST", path, T, r#"{"id":"../x","status":"fixed"}"#)).status, 400);
+        assert_eq!(route(&b, &req("POST", path, T, "nope")).status, 400);
+        assert_eq!(route(&b, &req("DELETE", path, T, "")).status, 404);
+        let bad_report = r#"{"id":"D1","title":"t","folder":"/a/b","prompt":"p","report":"../x"}"#;
+        assert_eq!(route(&b, &req("POST", "/review/agent", T, bad_report)).status, 400);
+        assert!(!b.dir.join("review").exists());
     }
 
     #[test]

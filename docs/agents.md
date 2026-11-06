@@ -99,4 +99,6 @@ A studio review report (a local HTML page of findings) can start agents the same
 - tells the agent which finding to work on (its id, title and text), to check that it still holds, then to say what it found and ask what to do before changing anything;
 - brings its window forward on the Agents page, on the new agent.
 
-A second click while an agent is starting on the same finding is turned away. The report's renderer writes the token and each finding's folder into the page, so only a copy made on this Mac can start agents; copies elsewhere (a phone, the NAS) can still copy the finding's prompt.
+A second click while an agent is starting on the same finding is turned away.
+
+The report also keeps where each finding stands, so its list and scores follow your fixes. StudioManager stores one status per finding (`open`, `in_progress`, `fixed`, `accepted`) in `review-status/<report>.json` in the app data folder (`GET` and `POST /review/status/<report>`). Starting an agent from the report marks an open finding `in_progress` and remembers the agent; reading the statuses adds that agent's state from the Agents list (working, needs you, idle, done, or gone once it is deleted). Marking a finding fixed or accepted is yours to do from the report. The report's renderer writes the token and each finding's folder into the page, so only a copy made on this Mac can start agents; copies elsewhere (a phone, the NAS) can still copy the finding's prompt.
