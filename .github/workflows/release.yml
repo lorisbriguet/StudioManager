@@ -22,6 +22,10 @@ name: Release build
 # a weekly grouped PR to bump the pins (.github/dependabot.yml). If the key is
 # lost or leaks, see RELEASING.md, "Updater key: rotation, loss, leak".
 #
+# The release notes come from CHANGELOG.md (scripts/changelog-notes.mjs): its
+# summary line goes into latest.json, the section into the draft. The build job
+# refuses a version without a section.
+#
 # Stays by hand (RELEASING.md): version bump, changelog, tag (before); smoke test
 # of the .dmg, menu bar checks, publishing the draft, /mcp reconnect (after).
 
@@ -102,6 +106,12 @@ jobs:
           [ "$pkg" = "$VERSION" ] && [ "$conf" = "$VERSION" ] && [ "$cargo" = "$VERSION" ]
           [ "$cli" = "$TAURI_CLI_VERSION" ] || { echo "update TAURI_CLI_VERSION in release.yml to $cli"; exit 1; }
 
+      # RELEASING.md step 5: fails before the build when the section is missing.
+      - name: CHANGELOG.md has a section for v${{ inputs.version }}
+        run: |
+          node scripts/changelog-notes.mjs "$VERSION" summary
+          node scripts/changelog-notes.mjs "$VERSION" body > /dev/null
+
       # RELEASING.md step 1 (EN/FR parity is part of vitest: src/__tests__/i18nParity.test.ts)
       - run: npx tsc --noEmit
       - run: npx vitest run
@@ -168,13 +178,23 @@ jobs:
           name: bundle
           path: bundle
 
-      # Only scripts/verify-update-signature.mjs is needed from the repo.
+      # Only the signature check and the release notes are needed from the repo.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: repo
           persist-credentials: false
-          sparse-checkout: scripts/verify-update-signature.mjs
+          sparse-checkout: |
+            scripts/verify-update-signature.mjs
+            scripts/changelog-notes.mjs
+            CHANGELOG.md
           sparse-checkout-cone-mode: false
+
+      # RELEASING.md step 5: the summary for latest.json, the section for the draft.
+      - name: Release notes from CHANGELOG.md
+        run: |
+          node repo/scripts/changelog-notes.mjs "$VERSION" summary > summary.txt
+          node repo/scripts/changelog-notes.mjs "$VERSION" body > notes.md
+          cat summary.txt
 
       # One exact version from npm (published versions can't change), no install scripts.
       - name: Install the Tauri signer
@@ -218,7 +238,8 @@ jobs:
             const sig = fs.readFileSync(process.argv[1], "utf8").trim();
             const url = `https://github.com/lorisbriguet/StudioManager/releases/download/v${v}/StudioManager.app.tar.gz`;
             const p = { signature: sig, url };
-            const out = { version: v, notes: `StudioManager v${v}`, pub_date: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
+            const notes = fs.readFileSync("summary.txt", "utf8").trim();
+            const out = { version: v, notes, pub_date: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
                           platforms: { "darwin-aarch64": p } };
             fs.writeFileSync("latest.json", JSON.stringify(out, null, 2) + "\n");
           ' bundle/StudioManager.app.tar.gz.sig
@@ -234,6 +255,7 @@ jobs:
           # A version with a suffix (3.4.1-rc.1) is a prerelease: never "latest", so the updater skips it.
           pre=(); [[ "$VERSION" == *-* ]] && pre=(--prerelease)
           # Only a draft gets its assets replaced: a published release keeps what users downloaded.
+          # An existing draft keeps its description (it may have been edited by hand).
           draft=$(gh release view "v$VERSION" --json isDraft --jq .isDraft 2>/dev/null || echo missing)
           if [ "$draft" = "false" ]; then
             echo "v$VERSION is already published: assets not replaced (RELEASING.md)"; exit 1
@@ -241,6 +263,6 @@ jobs:
             gh release upload "v$VERSION" "${assets[@]}" --clobber
           else
             gh release create "v$VERSION" --draft "${pre[@]}" --verify-tag --title "StudioManager v$VERSION" \
-              --notes "Built by the Release build workflow. Replace with the changelog before publishing." "${assets[@]}"
+              --notes-file notes.md "${assets[@]}"
           fi
           echo "Draft ready: smoke-test the .dmg, then publish (RELEASING.md steps 4 and 8)."
