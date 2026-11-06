@@ -105,7 +105,7 @@ pub fn list_docs(folder: &Path) -> Vec<DocEntry> {
         }
     }
     // Top-level files first (README, DESIGN-SYSTEM…), then by path.
-    out.sort_by(|a, b| (a.rel.contains('/'), a.rel.to_lowercase()).cmp(&(b.rel.contains('/'), b.rel.to_lowercase())));
+    out.sort_by_key(|a| (a.rel.contains('/'), a.rel.to_lowercase()));
     out
 }
 

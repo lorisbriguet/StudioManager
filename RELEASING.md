@@ -21,9 +21,10 @@ npx tsc --noEmit        # zero errors
 npx vitest run          # all tests green
 npm run lint            # exit 0, zero findings
 (cd src-tauri/mcp && CARGO_TARGET_DIR=~/cargo-target-studiomanager-mcp cargo test && CARGO_TARGET_DIR=~/cargo-target-studiomanager-mcp cargo clippy --all-targets -- -D warnings)
+(cd src-tauri && cargo test && cargo clippy --all-targets -- -D warnings)
 ```
 
-Run `bash scripts/build-mcp.sh` once on a fresh clone before any `cargo` command in `src-tauri` (it creates the git-ignored `src-tauri/binaries/studiomanager-mcp-<triple>` that Tauri's externalBin requires). The `studiomanager-mcp` crate (`src-tauri/mcp`) needs Rust 1.88+. Never run `cargo fmt` there: it reformats the files it shares with the app through `#[path]` includes.
+Run `bash scripts/build-mcp.sh` and `npx vite build` once on a fresh clone before any `cargo` command in `src-tauri` (they create the git-ignored `src-tauri/binaries/studiomanager-mcp-<triple>` that Tauri's externalBin requires and the `dist/` folder the app crate embeds). CI runs the app checks on every push (the `rust` job in [.github/workflows/ci.yml](.github/workflows/ci.yml)) with the latest stable clippy: run `rustup update stable` first so your local lints match. The `studiomanager-mcp` crate (`src-tauri/mcp`) needs Rust 1.88+. Never run `cargo fmt` there: it reformats the files it shares with the app through `#[path]` includes.
 
 - Working tree contains only the changes meant for this release; no debug code, `console.log` leftovers, or commented-out hacks.
 - No secrets/PII in the diff (keys, IBANs, personal paths). `scripts/migrate-data.mjs` was deleted in the 2026-08 audit for exactly this reason — anything similar must read personal values from env, never hardcode them. Note the repo is PUBLIC.

@@ -33,8 +33,49 @@ jobs:
       - run: npm run lint
       - run: npx vitest run
 
-      # No Rust build here on purpose: a full Tauri build takes over ten
-      # minutes, too long for every push. Releases are built either on Loris's
-      # Mac or by the Release build workflow (release.yml, started by hand on
-      # a tag), both per RELEASING.md. Rust dependencies are still covered
-      # separately by the weekly `cargo audit` job in dependency-audit.yml.
+  rust:
+    name: app crate clippy, test
+    # Lints and tests the app's Rust code on every push. No bundle: a full
+    # Tauri build takes over ten minutes, too long for every push. Releases
+    # are built either on Loris's Mac or by the Release build workflow
+    # (release.yml, started by hand on a tag), both per RELEASING.md. The MCP
+    # crate is checked there; Rust dependencies by the weekly `cargo audit`
+    # job in dependency-audit.yml.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable, 2026-11
+        with:
+          toolchain: stable
+          components: clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri
+
+      # npm 10.9 (bundled with Node 22) crashes on Vitest 4's peer set (RELEASING.md, prerequisites).
+      # No dependency needs an install script, so none run.
+      - run: npm install -g npm@11.21.1 --ignore-scripts
+      - run: npm ci --ignore-scripts
+
+      # The app crate only compiles with the MCP sidecar binary (Tauri's
+      # externalBin) and the built frontend (frontendDist, ../dist) in place.
+      # The MCP build goes inside src-tauri/target so rust-cache keeps it.
+      - run: bash scripts/build-mcp.sh
+        env:
+          MCP_CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target/mcp
+      - run: npx vite build
+      # From src-tauri, so cargo reads src-tauri/.cargo/config.toml (the
+      # SQLite flag). CARGO_TARGET_DIR overrides its Mac-only target-dir and
+      # keeps the build where rust-cache looks.
+      - name: cargo clippy and test
+        working-directory: src-tauri
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
+        run: |
+          cargo clippy --all-targets -- -D warnings
+          cargo test
