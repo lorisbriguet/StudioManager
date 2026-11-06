@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "menubar",
-  "description": "Menu bar panel. Plugins: core:default only, so no file, SQL, dialog, shell or notification plugin calls. App commands: the menubar-window set (permissions/windows.toml), the 14 the panel uses; everything else, such as execute_batch, routines_save or agents_term_write, is refused.",
+  "description": "Menu bar panel. Plugins: core:default only, so no file, SQL, dialog, shell or notification plugin calls. App commands: the menubar-window set (permissions/windows.toml), the ones the panel uses; everything else, such as execute_batch, routines_save or agents_term_write, is refused.",
   "windows": [
     "menubar"
   ],

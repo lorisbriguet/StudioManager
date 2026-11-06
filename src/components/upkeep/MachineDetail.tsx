@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { readFile } from "@tauri-apps/plugin-fs";
 import {
-  Badge, Button, Card, DatePicker, EmptyState, FIELD_LABEL, FormField, FormGrid, FormModal, ICONS, IconButton,
-  Input, PageHeader, PanelTitle, Select, Table, Tag,
+  Badge, Button, Card, DatePicker, DetailSkeleton, EmptyState, FIELD_LABEL, FormField, FormGrid, FormModal, ICONS, IconButton,
+  Input, PageHeader, PanelTitle, QueryError, Select, Table, Tag,
 } from "../ui";
 import { MachineForm } from "./MachineForm";
 import { MachineExpenseRow } from "./MachineExpenseRow";
@@ -137,7 +137,8 @@ export function MachineDetail({ machineId, compact = false, onDeleted, onBack }:
   const navigate = useNavigate();
   const confirm = useConfirm();
   const h = compact ? "h3" : "h2";
-  const { data: machine } = useMachine(machineId);
+  const machineQuery = useMachine(machineId);
+  const machine = machineQuery.data;
   const { data: items = [] } = useUpkeepItems(machineId);
   const updateMachine = useUpdateMachine();
   const deleteMachine = useDeleteMachine();
@@ -154,7 +155,10 @@ export function MachineDetail({ machineId, compact = false, onDeleted, onBack }:
 
   useEffect(() => { if (machine) setStatus(machine.status); }, [machine?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!machine) return null;
+  if (!machine) {
+    if (machineQuery.isError) return <QueryError message={t.load_error_upkeep} onRetry={machineQuery.refetch} retrying={machineQuery.isFetching} />;
+    return machineQuery.isPending ? <DetailSkeleton /> : null;
+  }
   const today = todayLocalISO();
   const active = items.filter((i) => !i.archived);
   const boughtYear = machine.purchase_date ? Number(machine.purchase_date.slice(0, 4)) : null;

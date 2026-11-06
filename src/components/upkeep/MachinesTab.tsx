@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Badge, Button, EmptyState, ICONS, PanelTitle, Table } from "../ui";
+import { Badge, Button, EmptyState, ICONS, PanelTitle, QueryState, Table, TableSkeleton } from "../ui";
 import { SidePeek } from "../layout/SidePeek";
 import { MachineDetail } from "./MachineDetail";
 import { MachineForm } from "./MachineForm";
@@ -14,7 +14,8 @@ import { formatDisplayDate } from "../../utils/formatDate";
 export function MachinesTab() {
   const t = useT();
   const navigate = useNavigate();
-  const { data: machines = [] } = useMachines();
+  const machinesQuery = useMachines();
+  const machines = machinesQuery.data ?? [];
   const { data: items = [] } = useActiveUpkeepItems();
   const [peekId, setPeekId] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
@@ -36,6 +37,8 @@ export function MachinesTab() {
     <div className="flex">
       <div className="flex-1 min-w-0">
         <PanelTitle title={t.upkeep_tab_machines} count={machines.length} action={addButton} className="mb-2" />
+        <QueryState query={machinesQuery} skeleton={<TableSkeleton columns={5} />} errorMessage={t.load_error_upkeep}>
+        {() => (
         <Table>
           <Table.Head>
             <Table.Th>{t.name}</Table.Th>
@@ -73,6 +76,8 @@ export function MachinesTab() {
             )}
           </Table.Body>
         </Table>
+        )}
+        </QueryState>
       </div>
 
       {peekId !== null && (

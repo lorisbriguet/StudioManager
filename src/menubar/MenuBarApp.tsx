@@ -1,11 +1,11 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { BottomBar, Button, PANEL_TOP_BAR, TabItem } from "../components/ui";
 import { TabList, tabIds } from "../components/ui/TabItem";
 import { AgentsTab } from "./AgentsTab";
 import { UsageTab } from "./UsageTab";
 import { DayTab } from "./DayTab";
 import { useT } from "../i18n/useT";
-import { openMainWindow } from "../lib/agents";
+import { hideMenuBarPanel, openMainWindow } from "../lib/agents";
 
 /** The menu bar panel's last tab, kept across openings (per webview origin). */
 export const MENUBAR_TAB_KEY = "menubarTab";
@@ -40,6 +40,15 @@ export function MenuBarApp() {
   const labels: Record<Tab, string> = { agents: t.agents, usage: t.menubar_usage, day: t.menubar_day };
   const idBase = useId();
   const panel = tabIds(idBase, tab);
+
+  // Escape hides the panel, unless something inside (a menu, a field) used it first
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !e.defaultPrevented) void hideMenuBarPanel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const openApp = (
     <Button variant="outline" onClick={() => void openMainWindow()}>
