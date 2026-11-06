@@ -256,40 +256,83 @@ export async function resetDb(): Promise<void> {
 }
 
 /**
+ * Bump when ensureSchema adds or changes a table, column or index. A file
+ * that recorded this version (with the same Rust migration version) skips
+ * every schema statement at startup: each one is an IPC round trip.
+ */
+export const SCHEMA_FIXUPS_VERSION = 1;
+const SCHEMA_FIXUPS_KEY = "schema_fixups";
+/** Not a meta key: the Rust migration version, read in the same call as meta. */
+const MIGRATIONS_ROW = "#schema_migrations";
+
+/**
  * Safety-net schema fixups that run after Rust-side migrations.
  * These handle ALTER TABLE ADD COLUMN (SQLite lacks IF NOT EXISTS for ALTER)
  * and one-time data migrations. New tables, indexes, and seeds should go in
  * numbered .sql migration files under src-tauri/migrations/ instead. A seed
  * or data move that has to live here goes through seedOnce / markDone, so it
  * runs once per database file instead of at every start.
+ *
+ * The schema statements (CREATE TABLE / INDEX, added columns) only run when
+ * the file's `schema_fixups` entry in `meta` is not this build's. They are
+ * idempotent, so a run cut short simply runs again. The data repairs between
+ * them still run at every start.
  */
 async function ensureSchema(db: Database) {
-  // Clean up orphan indices (indices referencing dropped tables)
-  try {
-    const orphans = await db.select<{ name: string; tbl_name: string }[]>(
-      `SELECT i.name, i.tbl_name FROM sqlite_master i
-       WHERE i.type = 'index' AND i.tbl_name NOT IN (SELECT name FROM sqlite_master WHERE type = 'table')`
-    );
-    for (const o of orphans) {
-      await db.execute(`DROP INDEX IF EXISTS "${o.name.replace(/"/g, '""')}"`).catch(() => {});
-    }
-  } catch { /* ignore if schema query fails */ }
-
-  // ── One-time steps ─────────────────────────────────────────
-  // Seed data and data moves run once per database file, recorded in `meta`
-  // (migration 011). Before that they re-ran whenever their table was empty,
-  // so a deleted address or emptied resource list came back at every start.
   const tablesAtStart = new Set(
     (await db.select<{ name: string }[]>(
       "SELECT name FROM sqlite_master WHERE type = 'table'"
     )).map((r) => r.name)
   );
+  // A new Rust migration (one that rebuilds a table, say) makes the schema run again.
+  const metaRows = await db.select<{ key: string; value: string }[]>(
+    tablesAtStart.has("schema_migrations")
+      ? `SELECT key, value FROM meta UNION ALL
+         SELECT '${MIGRATIONS_ROW}', CAST(COALESCE(MAX(version), 0) AS TEXT) FROM schema_migrations`
+      : "SELECT key, value FROM meta"
+  );
+  const migrations = metaRows.find((r) => r.key === MIGRATIONS_ROW)?.value ?? "0";
+  const schemaStamp = `${SCHEMA_FIXUPS_VERSION}/${migrations}`;
+  const schemaCurrent = metaRows.some((r) => r.key === SCHEMA_FIXUPS_KEY && r.value === schemaStamp);
+
+  /** Run a schema statement (CREATE ... IF NOT EXISTS), unless the file is current. */
+  const ddl = async (sql: string) => {
+    if (!schemaCurrent) await db.execute(sql);
+  };
+
+  // Columns of every table, read in one call instead of one pragma per column.
+  const columns = new Map<string, Set<string>>();
+  if (!schemaCurrent) {
+    // Clean up orphan indices (indices referencing dropped tables)
+    try {
+      const orphans = await db.select<{ name: string; tbl_name: string }[]>(
+        `SELECT i.name, i.tbl_name FROM sqlite_master i
+         WHERE i.type = 'index' AND i.tbl_name NOT IN (SELECT name FROM sqlite_master WHERE type = 'table')`
+      );
+      for (const o of orphans) {
+        await db.execute(`DROP INDEX IF EXISTS "${o.name.replace(/"/g, '""')}"`).catch(() => {});
+      }
+    } catch { /* ignore if schema query fails */ }
+
+    const rows = await db.select<{ tbl: string; col: string }[]>(
+      `SELECT m.name AS tbl, p.name AS col
+       FROM sqlite_master m JOIN pragma_table_info(m.name) p
+       WHERE m.type = 'table'`
+    );
+    for (const r of rows) {
+      if (!columns.has(r.tbl)) columns.set(r.tbl, new Set());
+      columns.get(r.tbl)!.add(r.col);
+    }
+  }
+
+  // ── One-time steps ─────────────────────────────────────────
+  // Seed data and data moves run once per database file, recorded in `meta`
+  // (migration 011). Before that they re-ran whenever their table was empty,
+  // so a deleted address or emptied resource list came back at every start.
   // client_addresses is created further down, so a file without it has never
   // been opened by the app: its seeds are still due.
   const firstOpen = !tablesAtStart.has("client_addresses");
-  const doneSteps = new Set(
-    (await db.select<{ key: string }[]>("SELECT key FROM meta")).map((r) => r.key)
-  );
+  const doneSteps = new Set(metaRows.map((r) => r.key));
   const markDone = (key: string) =>
     db.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ($1, '1')", [key]);
   /** Fill `table` with its starter rows, once. On a file the app opened
@@ -304,13 +347,25 @@ async function ensureSchema(db: Database) {
     await markDone(key);
   }
 
+  /** Columns of `table`: from the batch read above, or read now for a table
+   *  that did not exist then. */
+  async function columnsOf(table: string): Promise<Set<string>> {
+    let cols = columns.get(table);
+    if (!cols) {
+      const rows = await db.select<{ name: string }[]>(`SELECT name FROM pragma_table_info('${table}')`);
+      cols = new Set(rows.map((r) => r.name));
+      columns.set(table, cols);
+    }
+    return cols;
+  }
+
   // Helper: add a column only if it doesn't already exist
   async function addColumnIfMissing(table: string, column: string, definition: string) {
-    const cols = await db.select<{ name: string }[]>(
-      `SELECT name FROM pragma_table_info('${table}')`
-    );
-    if (!cols.some((c) => c.name === column)) {
+    if (schemaCurrent) return;
+    const cols = await columnsOf(table);
+    if (!cols.has(column)) {
       await db.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+      cols.add(column);
     }
   }
 
@@ -335,10 +390,7 @@ async function ensureSchema(db: Database) {
   await addColumnIfMissing("projects", "workload_template_id", "INTEGER DEFAULT NULL");
 
   // ── Clients: postal_city + data migration ──────────────────
-  const clientCols = await db.select<{ name: string }[]>(
-    "SELECT name FROM pragma_table_info('clients')"
-  );
-  if (!clientCols.some((c) => c.name === "postal_city")) {
+  if (!schemaCurrent && !(await columnsOf("clients")).has("postal_city")) {
     await db.execute("ALTER TABLE clients ADD COLUMN postal_city TEXT NOT NULL DEFAULT ''");
     await db.execute("UPDATE clients SET postal_city = address_line2, address_line2 = '' WHERE address_line2 IS NOT NULL AND address_line2 != ''");
   }
@@ -368,7 +420,7 @@ async function ensureSchema(db: Database) {
   }
 
   // ── Client addresses table + migration ───────────────────
-  await db.execute(`CREATE TABLE IF NOT EXISTS client_addresses (
+  await ddl(`CREATE TABLE IF NOT EXISTS client_addresses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
     label TEXT NOT NULL DEFAULT '',
@@ -408,7 +460,7 @@ async function ensureSchema(db: Database) {
   );
 
   // ── Income table ────────────────────────────────────────────
-  await db.execute(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS income (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       reference TEXT NOT NULL,
@@ -425,7 +477,7 @@ async function ensureSchema(db: Database) {
   `);
 
   // ── Resources tables ──────────────────────────────────────
-  await db.execute(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS resources (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL DEFAULT '',
@@ -435,14 +487,14 @@ async function ensureSchema(db: Database) {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
-  await db.execute(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS resource_tags (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
       tag TEXT NOT NULL
     )
   `);
-  await db.execute(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS resource_projects (
       resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
       project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -512,7 +564,7 @@ async function ensureSchema(db: Database) {
   await addColumnIfMissing("invoices", "last_reminder_date", "TEXT DEFAULT NULL");
 
   // ── Recurring invoice templates ────────────────────────────
-  await db.execute(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS recurring_invoice_templates (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       base_invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
@@ -526,7 +578,7 @@ async function ensureSchema(db: Database) {
   `);
 
   // ── Saved filters ────────────────────────────────────────
-  await db.execute(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS saved_filters (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       page TEXT NOT NULL,
@@ -538,7 +590,7 @@ async function ensureSchema(db: Database) {
   `);
 
   // ── Named Tables (custom project tables) ─────────────────
-  await db.execute(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS project_tables (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -548,7 +600,7 @@ async function ensureSchema(db: Database) {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
-  await db.execute(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS project_table_rows (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       table_id INTEGER NOT NULL REFERENCES project_tables(id) ON DELETE CASCADE,
@@ -603,7 +655,7 @@ async function ensureSchema(db: Database) {
   );
 
   // ── Dashboard presets ─────────────────────────────────────
-  await db.execute(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS dashboard_presets (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -703,7 +755,7 @@ async function ensureSchema(db: Database) {
   });
 
   // ── Wiki tables ─────────────────────────────────────────────
-  await db.execute(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS wiki_folders (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -711,7 +763,7 @@ async function ensureSchema(db: Database) {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
-  await db.execute(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS wiki_articles (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       folder_id INTEGER REFERENCES wiki_folders(id) ON DELETE SET NULL,
@@ -723,7 +775,7 @@ async function ensureSchema(db: Database) {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
-  await db.execute(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS wiki_article_tags (
       article_id INTEGER NOT NULL REFERENCES wiki_articles(id) ON DELETE CASCADE,
       tag TEXT NOT NULL,
@@ -736,7 +788,7 @@ async function ensureSchema(db: Database) {
 
   // ── Time entries table (created by TimeTrackingPage migration) ──
   // Ensure it exists for fresh installs
-  await db.execute(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS time_entries (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -768,7 +820,7 @@ async function ensureSchema(db: Database) {
   }
 
   // ── Custom Lists ─────────────────────────────────────────
-  await db.execute(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS custom_lists (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -776,7 +828,7 @@ async function ensureSchema(db: Database) {
       updated_at TEXT DEFAULT (datetime('now'))
     )
   `);
-  await db.execute(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS custom_list_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       list_id INTEGER NOT NULL REFERENCES custom_lists(id) ON DELETE CASCADE,
@@ -787,7 +839,7 @@ async function ensureSchema(db: Database) {
   `);
 
   // ── Invoice templates ─────────────────────────────────────
-  await db.execute(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS invoice_templates (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -898,7 +950,14 @@ async function ensureSchema(db: Database) {
     "CREATE INDEX IF NOT EXISTS idx_time_entries_date ON time_entries(date)",
     "CREATE INDEX IF NOT EXISTS idx_quotes_client ON quotes(client_id)",
   ];
+  if (schemaCurrent) return;
   for (const stmt of indexes) {
     await db.execute(stmt).catch((e) => logError("[DB] index creation failed:", e));
   }
+
+  // Recorded last: a run that stopped partway runs the schema again next time.
+  await db.execute(
+    "INSERT OR REPLACE INTO meta (key, value, updated_at) VALUES ($1, $2, datetime('now'))",
+    [SCHEMA_FIXUPS_KEY, schemaStamp]
+  );
 }
