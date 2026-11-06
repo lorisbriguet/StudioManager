@@ -3,17 +3,18 @@ import * as q from "../queries/invoiceTemplates";
 import { snapshotRows, snapshotLinks, pushRestore } from "../undoRestore";
 import { getLabels } from "../../lib/notify";
 import type { InvoiceTemplate } from "../../types/invoice-template";
+import { qk } from "../queryKeys";
 
 export function useInvoiceTemplates() {
   return useQuery({
-    queryKey: ["invoice-templates"],
+    queryKey: qk.invoiceTemplates.all,
     queryFn: q.getInvoiceTemplates,
   });
 }
 
 export function useInvoiceTemplate(id: number | null | undefined) {
   return useQuery({
-    queryKey: ["invoice-templates", id],
+    queryKey: qk.invoiceTemplates.detail(id),
     queryFn: () => q.getInvoiceTemplate(id!),
     enabled: !!id,
   });
@@ -21,7 +22,7 @@ export function useInvoiceTemplate(id: number | null | undefined) {
 
 export function useDefaultTemplate() {
   return useQuery({
-    queryKey: ["invoice-templates", "default"],
+    queryKey: qk.invoiceTemplates.default,
     queryFn: q.getDefaultTemplate,
   });
 }
@@ -32,7 +33,7 @@ export function useCreateInvoiceTemplate() {
     meta: { errorLabel: "error_save_template" },
     mutationFn: (data: Omit<InvoiceTemplate, "id" | "created_at" | "updated_at">) =>
       q.createInvoiceTemplate(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["invoice-templates"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.invoiceTemplates.all }),
   });
 }
 
@@ -47,16 +48,16 @@ export function useUpdateInvoiceTemplate() {
       id: number;
       data: Partial<Omit<InvoiceTemplate, "id" | "created_at" | "updated_at">>;
     }) => q.updateInvoiceTemplate(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["invoice-templates"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.invoiceTemplates.all }),
   });
 }
 
 export function useDeleteInvoiceTemplate() {
   const qc = useQueryClient();
   const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ["invoice-templates"] });
-    qc.invalidateQueries({ queryKey: ["invoices"] });
-    qc.invalidateQueries({ queryKey: ["quotes"] });
+    qc.invalidateQueries({ queryKey: qk.invoiceTemplates.all });
+    qc.invalidateQueries({ queryKey: qk.invoices.all });
+    qc.invalidateQueries({ queryKey: qk.quotes.all });
   };
   return useMutation({
     meta: { errorLabel: "error_delete_template" },
@@ -85,6 +86,6 @@ export function useSetDefaultTemplate() {
   return useMutation({
     meta: { errorLabel: "error_save_template" },
     mutationFn: (id: number) => q.setDefaultTemplate(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["invoice-templates"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.invoiceTemplates.all }),
   });
 }

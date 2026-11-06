@@ -311,7 +311,7 @@ src/                    # React frontend
     quote/              # Quote PDF renderer
     layout/             # MainLayout, Sidebar, TabBar
     workload/           # Workload tracker components
-  db/                   # Database layer (queries + React Query hooks)
+  db/                   # Database layer (queries + React Query hooks; every query key in queryKeys.ts)
   hooks/                # Custom React hooks
   i18n/                 # Internationalization (EN/FR)
   lib/                  # Utilities (backup, PDF, calendar, OCR, exchange rates)

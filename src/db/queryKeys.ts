@@ -10,6 +10,15 @@ import type { QueryClient } from "@tanstack/react-query";
  * `invalidateTimeTracking` below, which also refresh the dashboard widgets.
  */
 
+type Id = string | number;
+type MaybeId = Id | null | undefined;
+
+/**
+ * A key prefix by its name, for code that holds key names as strings
+ * (agentChangeKeys maps each agent tool to the prefixes it changes).
+ */
+export const keyPrefix = (name: string) => [name] as const;
+
 /** Keys for a document kind (invoices or quotes). */
 function documentKeys<P extends string>(prefix: P) {
   return {
@@ -53,16 +62,131 @@ export const qk = {
     details: (startDate?: string, endDate?: string, projectId?: number) =>
       ["time-entries", "details", startDate, endDate, projectId] as const,
   },
+  invoiceTemplates: {
+    all: ["invoice-templates"] as const,
+    detail: (id: MaybeId) => ["invoice-templates", id] as const,
+    default: ["invoice-templates", "default"] as const,
+  },
+  recurring: {
+    all: ["recurring_templates"] as const,
+  },
+  businessProfile: {
+    all: ["business-profile"] as const,
+  },
+  activities: {
+    all: ["activities"] as const,
+  },
+  clients: {
+    all: ["clients"] as const,
+    detail: (id: MaybeId) => ["clients", id] as const,
+    activity: (clientId: MaybeId) => ["client-activity", clientId] as const,
+    addresses: (clientId: MaybeId) => ["client-addresses", clientId] as const,
+    contacts: (clientId: MaybeId) => ["client-contacts", clientId] as const,
+  },
+  projects: {
+    all: ["projects"] as const,
+    detail: (id: MaybeId) => ["projects", id] as const,
+    byClient: (clientId: MaybeId) => ["projects", "client", clientId] as const,
+    materialCost: (projectId: MaybeId) => ["project-material-cost", projectId] as const,
+  },
+  projectTables: {
+    byProject: (projectId: MaybeId) => ["project-tables", projectId] as const,
+    allRows: ["project-table-rows"] as const,
+    rows: (tableId: MaybeId) => ["project-table-rows", tableId] as const,
+  },
+  projectDocs: {
+    list: (projectId: MaybeId, folder: MaybeId) => ["project-docs", projectId, folder] as const,
+    doc: (folder: MaybeId, rel: MaybeId) => ["project-doc", folder, rel] as const,
+  },
   tasks: {
     all: ["tasks"] as const,
+    byProject: (projectId: MaybeId) => ["tasks", "project", projectId] as const,
+    visible: ["tasks", "visible"] as const,
+    withDueDate: ["tasks", "with-due-date"] as const,
   },
   subtasks: {
     all: ["subtasks"] as const,
+    byProject: (projectId: MaybeId) => ["subtasks", "project", projectId] as const,
     withDueDate: ["subtasks", "with-due-date"] as const,
   },
   workload: {
     all: ["workload-rows"] as const,
-    byProject: (projectId: number) => ["workload-rows", projectId] as const,
+    byProject: (projectId: MaybeId) => ["workload-rows", projectId] as const,
+    allConfig: ["workload-config"] as const,
+    config: (projectId: MaybeId) => ["workload-config", projectId] as const,
+    configsAll: ["workload-configs-all"] as const,
+    templates: ["workload-templates"] as const,
+  },
+  wiki: {
+    folders: ["wiki-folders"] as const,
+    allArticles: ["wiki-articles"] as const,
+    articles: (folderId: MaybeId) => ["wiki-articles", folderId] as const,
+    anyArticle: ["wiki-article"] as const,
+    article: (id: MaybeId) => ["wiki-article", id] as const,
+    allByProject: ["wiki-articles-by-project"] as const,
+    byProject: (projectId: MaybeId) => ["wiki-articles-by-project", projectId] as const,
+    tags: ["wiki-tags"] as const,
+    allArticleTags: ["wiki-article-tags"] as const,
+    articleTags: (articleId: MaybeId) => ["wiki-article-tags", articleId] as const,
+  },
+  resources: {
+    all: ["resources"] as const,
+    byProject: (projectId: MaybeId) => ["resources", "project", projectId] as const,
+    tags: ["resource-tags"] as const,
+  },
+  customLists: {
+    all: ["custom-lists"] as const,
+    allItems: ["custom-list-items"] as const,
+    items: (listId: MaybeId) => ["custom-list-items", listId] as const,
+  },
+  savedFilters: {
+    byPage: (page: MaybeId) => ["saved-filters", page] as const,
+  },
+  dashboardPresets: {
+    all: ["dashboard-presets"] as const,
+  },
+  notifications: {
+    all: ["notifications"] as const,
+    unreadCount: ["notifications", "unread-count"] as const,
+  },
+  machines: {
+    all: ["machines"] as const,
+    detail: (id: MaybeId) => ["machines", id] as const,
+    files: (machineId: MaybeId) => ["machines", machineId, "files"] as const,
+    projects: (machineId: MaybeId) => ["machines", machineId, "projects"] as const,
+    allByProject: ["machines", "project"] as const,
+    byProject: (projectId: MaybeId) => ["machines", "project", projectId] as const,
+    links: ["machine-links"] as const,
+    allDisks: ["machine-disks"] as const,
+    disks: (machineId: MaybeId) => ["machine-disks", machineId] as const,
+    allReadings: ["machine-readings"] as const,
+    readings: (machineId: MaybeId, metric: MaybeId) => ["machine-readings", machineId, metric] as const,
+    latestReading: (machineId: MaybeId, prefix: MaybeId) => ["machine-readings", machineId, "latest", prefix] as const,
+    serviceLog: (machineId: MaybeId) => ["service-log", machineId] as const,
+  },
+  upkeep: {
+    all: ["upkeep-items"] as const,
+    active: ["upkeep-items", "active"] as const,
+    /** Pass "all" for every machine. */
+    byMachine: (machineId: MaybeId) => ["upkeep-items", machineId] as const,
+  },
+  consumables: {
+    all: ["consumables"] as const,
+  },
+  subscriptions: {
+    all: ["subscriptions"] as const,
+    renewals: ["subscription-renewals"] as const,
+  },
+  connections: {
+    all: ["connections"] as const,
+    equipment: ["equipment-connections"] as const,
+  },
+  paperless: {
+    thumb: (connectionId: MaybeId, docId: MaybeId) => ["paperless-thumb", connectionId, docId] as const,
+  },
+  system: {
+    tailscale: ["tailscale"] as const,
+    timeMachine: ["time-machine"] as const,
   },
   /** Dashboard widgets that read their own query (src/components/dashboard/widgets.tsx). */
   dashboard: {
@@ -112,4 +236,17 @@ export function invalidateTimeTracking(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: qk.dashboard.projectTimeDistribution });
   qc.invalidateQueries({ queryKey: qk.dashboard.plannedVsActual });
   qc.invalidateQueries({ queryKey: qk.dashboard.billableSummary });
+}
+
+/**
+ * After a connection sync or edit: refreshes connections and everything they
+ * feed (machines, upkeep, readings, disks, equipment links).
+ */
+export function invalidateEquipment(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: qk.connections.all });
+  qc.invalidateQueries({ queryKey: qk.machines.all });
+  qc.invalidateQueries({ queryKey: qk.upkeep.all });
+  qc.invalidateQueries({ queryKey: qk.machines.allReadings });
+  qc.invalidateQueries({ queryKey: qk.machines.allDisks });
+  qc.invalidateQueries({ queryKey: qk.connections.equipment });
 }

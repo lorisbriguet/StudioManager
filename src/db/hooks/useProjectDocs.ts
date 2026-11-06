@@ -1,5 +1,6 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
+import { qk } from "../queryKeys";
 
 /** A Markdown file in a project's folder, shown read-only in the wiki. */
 export interface ProjectDoc {
@@ -34,7 +35,7 @@ export function useProjectDocs(projects: { id: number; name: string; folder_path
   const withFolder = projects.filter((p) => p.folder_path);
   return useQueries({
     queries: withFolder.map((p) => ({
-      queryKey: ["project-docs", p.id, p.folder_path],
+      queryKey: qk.projectDocs.list(p.id, p.folder_path),
       queryFn: async (): Promise<ProjectDoc[]> => {
         const list = (await invoke<{ rel: string; title: string; modified: number; links?: string[] }[]>("list_project_docs", {
           folder: p.folder_path,
@@ -69,7 +70,7 @@ function combineDocs(results: { data?: ProjectDoc[]; isPending: boolean }[]) {
 
 export function useProjectDoc(doc: ProjectDoc | undefined) {
   return useQuery({
-    queryKey: ["project-doc", doc?.folder, doc?.rel],
+    queryKey: qk.projectDocs.doc(doc?.folder, doc?.rel),
     queryFn: () =>
       invoke<DocContent>("read_project_doc", { folder: doc!.folder, rel: doc!.rel, projectId: doc!.projectId }),
     enabled: !!doc,

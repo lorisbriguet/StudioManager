@@ -34,6 +34,7 @@ import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu
 import { useStartAgentOn } from "../hooks/useStartAgentOn";
 import { agentMenuItems, calendarAgentTarget, type AgentTarget } from "../lib/agentStart";
 import type { EventMountArg } from "@fullcalendar/core";
+import { qk } from "../db/queryKeys";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 function toDateStr(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
@@ -118,7 +119,7 @@ export function CalendarPage() {
   const t = useT();
   const { enabled: agentsOn, start: startAgentOn } = useStartAgentOn();
   const { data: tasks } = useTasksWithDueDate();
-  const { data: subtasks } = useQuery({ queryKey: ["subtasks", "with-due-date"], queryFn: getSubtasksWithDueDate });
+  const { data: subtasks } = useQuery({ queryKey: qk.subtasks.withDueDate, queryFn: getSubtasksWithDueDate });
   const { data: projects } = useProjects();
   const { data: invoices } = useInvoices();
   const { data: quotes } = useQuotes();

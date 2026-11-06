@@ -11,6 +11,7 @@ import type { InboxItem } from "../../lib/paperless/inbox";
 import { paperlessInboxKey, type PaperlessInbox as Inbox } from "../../db/hooks/usePaperlessInbox";
 import { dismissPaperlessDoc, undismissPaperlessDoc } from "../../db/queries/paperlessLinks";
 import { useUpdateExpense } from "../../db/hooks/useExpenses";
+import { qk } from "../../db/queryKeys";
 
 /** An expense saved from the inbox whose original file could not be downloaded (this session only). */
 export interface MissingReceipt {
@@ -168,7 +169,7 @@ export function PaperlessInbox({
 /** The document's first page, fetched once per document; nothing when it fails. */
 function Thumbnail({ connectionId, docId }: { connectionId: number; docId: number }) {
   const { data } = useQuery({
-    queryKey: ["paperless-thumb", connectionId, docId],
+    queryKey: qk.paperless.thumb(connectionId, docId),
     queryFn: () => paperlessThumbnail(connectionId, docId),
     staleTime: Infinity,
     retry: false,

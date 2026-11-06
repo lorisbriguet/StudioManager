@@ -2,18 +2,19 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as q from "../queries/resources";
 import { useUndoStore } from "../../stores/undo-store";
 import { getLabels } from "../../lib/notify";
+import { qk } from "../queryKeys";
 
 export function useResources() {
-  return useQuery({ queryKey: ["resources"], queryFn: q.getResources });
+  return useQuery({ queryKey: qk.resources.all, queryFn: q.getResources });
 }
 
 export function useAllTags() {
-  return useQuery({ queryKey: ["resource-tags"], queryFn: q.getAllTags });
+  return useQuery({ queryKey: qk.resources.tags, queryFn: q.getAllTags });
 }
 
 export function useResourcesByProject(projectId: number) {
   return useQuery({
-    queryKey: ["resources", "project", projectId],
+    queryKey: qk.resources.byProject(projectId),
     queryFn: () => q.getResourcesByProject(projectId),
   });
 }
@@ -21,8 +22,8 @@ export function useResourcesByProject(projectId: number) {
 export function useCreateResource() {
   const qc = useQueryClient();
   const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ["resources"] });
-    qc.invalidateQueries({ queryKey: ["resource-tags"] });
+    qc.invalidateQueries({ queryKey: qk.resources.all });
+    qc.invalidateQueries({ queryKey: qk.resources.tags });
   };
   return useMutation({
     meta: { errorLabel: "error_save_resource" },
@@ -48,8 +49,8 @@ export function useCreateResource() {
 export function useUpdateResource() {
   const qc = useQueryClient();
   const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ["resources"] });
-    qc.invalidateQueries({ queryKey: ["resource-tags"] });
+    qc.invalidateQueries({ queryKey: qk.resources.all });
+    qc.invalidateQueries({ queryKey: qk.resources.tags });
   };
   return useMutation({
     meta: { errorLabel: "error_save_resource" },
@@ -99,8 +100,8 @@ export function useUpdateResource() {
 export function useDeleteResource() {
   const qc = useQueryClient();
   const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ["resources"] });
-    qc.invalidateQueries({ queryKey: ["resource-tags"] });
+    qc.invalidateQueries({ queryKey: qk.resources.all });
+    qc.invalidateQueries({ queryKey: qk.resources.tags });
   };
   return useMutation({
     meta: { errorLabel: "error_delete_resource" },
@@ -144,7 +145,7 @@ export function useLinkResourceToProject() {
       await q.linkResourceToProject(resourceId, projectId);
     },
     onSuccess: (_, { projectId }) => {
-      qc.invalidateQueries({ queryKey: ["resources", "project", projectId] });
+      qc.invalidateQueries({ queryKey: qk.resources.byProject(projectId) });
     },
   });
 }
@@ -159,16 +160,16 @@ export function useUnlinkResourceFromProject() {
         label: getLabels().undo_unlink_resource,
         execute: async () => {
           await q.linkResourceToProject(resourceId, projectId);
-          qc.invalidateQueries({ queryKey: ["resources", "project", projectId] });
+          qc.invalidateQueries({ queryKey: qk.resources.byProject(projectId) });
         },
         redo: async () => {
           await q.unlinkResourceFromProject(resourceId, projectId);
-          qc.invalidateQueries({ queryKey: ["resources", "project", projectId] });
+          qc.invalidateQueries({ queryKey: qk.resources.byProject(projectId) });
         },
       });
     },
     onSuccess: (_, { projectId }) => {
-      qc.invalidateQueries({ queryKey: ["resources", "project", projectId] });
+      qc.invalidateQueries({ queryKey: qk.resources.byProject(projectId) });
     },
   });
 }

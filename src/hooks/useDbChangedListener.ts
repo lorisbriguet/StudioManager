@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { syncAllUpkeepEvents } from "../lib/upkeep/calendar";
 import { keysForTools, touchesCalendar } from "../lib/agentChangeKeys";
 import { logError } from "../lib/log";
+import { keyPrefix } from "../db/queryKeys";
 
 /**
  * An agent (the MCP server) wrote to a database; the Rust side emits
@@ -30,7 +31,7 @@ export function useDbChangedListener(delayMs = 400) {
         pending = [];
         const keys = keysForTools(burst);
         if (keys === null) void queryClient.invalidateQueries();
-        else for (const key of keys) void queryClient.invalidateQueries({ queryKey: [key] });
+        else for (const key of keys) void queryClient.invalidateQueries({ queryKey: keyPrefix(key) });
         if (touchesCalendar(burst)) {
           syncAllUpkeepEvents().catch((e) => logError("Upkeep calendar sync after agent change failed:", e));
         }

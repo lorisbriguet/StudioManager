@@ -5,14 +5,15 @@ import * as wq from "../queries/workload";
 import type { Project } from "../../types/project";
 import { useUndoStore } from "../../stores/undo-store";
 import { getLabels } from "../../lib/notify";
+import { qk } from "../queryKeys";
 
 export function useProjects() {
-  return useQuery({ queryKey: ["projects"], queryFn: q.getProjects });
+  return useQuery({ queryKey: qk.projects.all, queryFn: q.getProjects });
 }
 
 export function useProjectsByClient(clientId: string) {
   return useQuery({
-    queryKey: ["projects", "client", clientId],
+    queryKey: qk.projects.byClient(clientId),
     queryFn: () => q.getProjectsByClient(clientId),
     enabled: !!clientId,
   });
@@ -20,7 +21,7 @@ export function useProjectsByClient(clientId: string) {
 
 export function useProject(id: number) {
   return useQuery({
-    queryKey: ["projects", id],
+    queryKey: qk.projects.detail(id),
     queryFn: () => q.getProject(id),
     enabled: !!id,
   });
@@ -36,16 +37,16 @@ export function useCreateProject() {
         label: `${getLabels().undo_create_project} "${data.name}"`,
         execute: async () => {
           await q.deleteProject(id);
-          qc.invalidateQueries({ queryKey: ["projects"] });
+          qc.invalidateQueries({ queryKey: qk.projects.all });
         },
         redo: async () => {
           await q.createProject(data);
-          qc.invalidateQueries({ queryKey: ["projects"] });
+          qc.invalidateQueries({ queryKey: qk.projects.all });
         },
       });
       return id;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.projects.all }),
   });
 }
 
@@ -71,24 +72,24 @@ export function useUpdateProject() {
           label: `${getLabels().undo_update_project} "${prev.name}"`,
           execute: async () => {
             await q.updateProject(id, prevData as Partial<Omit<Project, "id" | "created_at" | "updated_at">>);
-            qc.invalidateQueries({ queryKey: ["projects"] });
+            qc.invalidateQueries({ queryKey: qk.projects.all });
             if ("status" in data) {
-              qc.invalidateQueries({ queryKey: ["tasks"] });
-              qc.invalidateQueries({ queryKey: ["subtasks"] });
+              qc.invalidateQueries({ queryKey: qk.tasks.all });
+              qc.invalidateQueries({ queryKey: qk.subtasks.all });
             }
           },
         });
       }
     },
     onSuccess: (_result, { data }) => {
-      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: qk.projects.all });
       // V1.11 C1: project status drives task/subtask visibility queries
       // (cancelled/completed projects' tasks are hidden), so status changes
       // must refresh task lists too — but only status changes; unconditional
       // invalidation would refetch every task list on each notes autosave.
       if ("status" in data) {
-        qc.invalidateQueries({ queryKey: ["tasks"] });
-        qc.invalidateQueries({ queryKey: ["subtasks"] });
+        qc.invalidateQueries({ queryKey: qk.tasks.all });
+        qc.invalidateQueries({ queryKey: qk.subtasks.all });
       }
     },
   });
@@ -141,21 +142,21 @@ export function useDeleteProject() {
                 planned_minutes: row.planned_minutes,
               });
             }
-            qc.invalidateQueries({ queryKey: ["projects"] });
-            qc.invalidateQueries({ queryKey: ["tasks"] });
-            qc.invalidateQueries({ queryKey: ["subtasks"] });
-            qc.invalidateQueries({ queryKey: ["workload-rows"] });
-            qc.invalidateQueries({ queryKey: ["workload-config"] });
+            qc.invalidateQueries({ queryKey: qk.projects.all });
+            qc.invalidateQueries({ queryKey: qk.tasks.all });
+            qc.invalidateQueries({ queryKey: qk.subtasks.all });
+            qc.invalidateQueries({ queryKey: qk.workload.all });
+            qc.invalidateQueries({ queryKey: qk.workload.allConfig });
           },
         });
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-      qc.invalidateQueries({ queryKey: ["subtasks"] });
-      qc.invalidateQueries({ queryKey: ["workload-rows"] });
-      qc.invalidateQueries({ queryKey: ["workload-config"] });
+      qc.invalidateQueries({ queryKey: qk.projects.all });
+      qc.invalidateQueries({ queryKey: qk.tasks.all });
+      qc.invalidateQueries({ queryKey: qk.subtasks.all });
+      qc.invalidateQueries({ queryKey: qk.workload.all });
+      qc.invalidateQueries({ queryKey: qk.workload.allConfig });
     },
   });
 }
@@ -170,20 +171,20 @@ export function useCreateProjectFromQuote() {
         label: `${getLabels().undo_generate_project} "${data.name}"`,
         execute: async () => {
           await q.deleteProject(projectId);
-          qc.invalidateQueries({ queryKey: ["projects"] });
-          qc.invalidateQueries({ queryKey: ["tasks"] });
-          qc.invalidateQueries({ queryKey: ["workload-rows"] });
-          qc.invalidateQueries({ queryKey: ["quotes"] });
+          qc.invalidateQueries({ queryKey: qk.projects.all });
+          qc.invalidateQueries({ queryKey: qk.tasks.all });
+          qc.invalidateQueries({ queryKey: qk.workload.all });
+          qc.invalidateQueries({ queryKey: qk.quotes.all });
         },
         redirectTo: "/quotes",
       });
       return projectId;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-      qc.invalidateQueries({ queryKey: ["workload-rows"] });
-      qc.invalidateQueries({ queryKey: ["quotes"] });
+      qc.invalidateQueries({ queryKey: qk.projects.all });
+      qc.invalidateQueries({ queryKey: qk.tasks.all });
+      qc.invalidateQueries({ queryKey: qk.workload.all });
+      qc.invalidateQueries({ queryKey: qk.quotes.all });
     },
   });
 }

@@ -2,17 +2,18 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as q from "../queries/customLists";
 import { snapshotRows, pushRestore } from "../undoRestore";
 import { getLabels } from "../../lib/notify";
+import { qk } from "../queryKeys";
 
 export function useCustomLists() {
   return useQuery({
-    queryKey: ["custom-lists"],
+    queryKey: qk.customLists.all,
     queryFn: q.getCustomLists,
   });
 }
 
 export function useCustomListItems(listId: number | null) {
   return useQuery({
-    queryKey: ["custom-list-items", listId],
+    queryKey: qk.customLists.items(listId),
     queryFn: () => q.getCustomListItems(listId!),
     enabled: listId !== null,
   });
@@ -23,7 +24,7 @@ export function useCreateCustomList() {
   return useMutation({
     meta: { errorLabel: "error_save_list" },
     mutationFn: (name: string) => q.createCustomList(name),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["custom-lists"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.customLists.all }),
   });
 }
 
@@ -33,15 +34,15 @@ export function useUpdateCustomList() {
     meta: { errorLabel: "error_save_list" },
     mutationFn: ({ id, name }: { id: number; name: string }) =>
       q.updateCustomList(id, name),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["custom-lists"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.customLists.all }),
   });
 }
 
 export function useDeleteCustomList() {
   const qc = useQueryClient();
   const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ["custom-lists"] });
-    qc.invalidateQueries({ queryKey: ["custom-list-items"] });
+    qc.invalidateQueries({ queryKey: qk.customLists.all });
+    qc.invalidateQueries({ queryKey: qk.customLists.allItems });
   };
   return useMutation({
     meta: { errorLabel: "error_delete_list" },
@@ -70,8 +71,8 @@ export function useSetCustomListItems() {
       items: { value: string; color?: string }[];
     }) => q.setCustomListItems(listId, items),
     onSuccess: (_data, variables) => {
-      qc.invalidateQueries({ queryKey: ["custom-list-items", variables.listId] });
-      qc.invalidateQueries({ queryKey: ["custom-lists"] });
+      qc.invalidateQueries({ queryKey: qk.customLists.items(variables.listId) });
+      qc.invalidateQueries({ queryKey: qk.customLists.all });
     },
   });
 }

@@ -3,7 +3,7 @@ import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 
 // Query keys come from src/db/queryKeys.ts (qk), never inline arrays, so a
-// write can find every query it makes stale. A warning while hooks migrate.
+// write can find every query it makes stale.
 const noInlineQueryKey = {
   meta: {
     type: 'suggestion',
@@ -42,7 +42,7 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      'studio/no-inline-query-key': 'warn',
+      'studio/no-inline-query-key': 'error',
       // react-hooks v7 "recommended" bundles the React Compiler diagnostics.
       // This codebase is not compiled with React Compiler; these rules flag
       // long-standing (working) patterns en masse. Deferred to phase 2.

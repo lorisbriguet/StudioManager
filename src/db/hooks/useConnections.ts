@@ -3,29 +3,30 @@ import * as q from "../queries/connections";
 import { updateMachine } from "../queries/machines";
 import { recordManualReading, runConnectionSyncs, saveConnectionSecret } from "../../lib/upkeep/connections";
 import type { Machine } from "../../types/upkeep";
+import { qk, invalidateEquipment } from "../queryKeys";
 
 export function useConnections() {
-  return useQuery({ queryKey: ["connections"], queryFn: q.getConnections });
+  return useQuery({ queryKey: qk.connections.all, queryFn: q.getConnections });
 }
 
 export function useMachineDisks(machineId: number) {
-  return useQuery({ queryKey: ["machine-disks", machineId], queryFn: () => q.getMachineDisks(machineId) });
+  return useQuery({ queryKey: qk.machines.disks(machineId), queryFn: () => q.getMachineDisks(machineId) });
 }
 
 export function useCurrentReading(machineId: number, metric = "print_hours") {
   return useQuery({
-    queryKey: ["machine-readings", machineId, metric],
+    queryKey: qk.machines.readings(machineId, metric),
     queryFn: () => q.currentReading(machineId, metric),
   });
 }
 
 export function useEquipmentConnections() {
-  return useQuery({ queryKey: ["equipment-connections"], queryFn: q.getEquipmentConnections });
+  return useQuery({ queryKey: qk.connections.equipment, queryFn: q.getEquipmentConnections });
 }
 
 export function useLatestMetrics(machineId: number, prefix: string) {
   return useQuery({
-    queryKey: ["machine-readings", machineId, "latest", prefix],
+    queryKey: qk.machines.latestReading(machineId, prefix),
     queryFn: () => q.getLatestMetrics(machineId, prefix),
   });
 }
@@ -34,7 +35,7 @@ export function useLatestMetrics(machineId: number, prefix: string) {
 export function useLatestMetricsFor(machineIds: number[], prefix: string) {
   return useQueries({
     queries: machineIds.map((machineId) => ({
-      queryKey: ["machine-readings", machineId, "latest", prefix],
+      queryKey: qk.machines.latestReading(machineId, prefix),
       queryFn: () => q.getLatestMetrics(machineId, prefix),
     })),
   });
@@ -42,11 +43,7 @@ export function useLatestMetricsFor(machineIds: number[], prefix: string) {
 
 function useInvalidateAll() {
   const qc = useQueryClient();
-  return () => {
-    for (const key of ["connections", "machines", "upkeep-items", "machine-readings", "machine-disks", "equipment-connections"]) {
-      qc.invalidateQueries({ queryKey: [key] });
-    }
-  };
+  return () => invalidateEquipment(qc);
 }
 
 /** Create a connection, then put its secret in the Keychain. */

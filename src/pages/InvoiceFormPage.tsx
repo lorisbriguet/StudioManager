@@ -28,6 +28,7 @@ import { useTabStore } from "../stores/tab-store";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { confirmIfDirty } from "../lib/dirty-guard";
 import { pickableClients } from "../types/client";
+import { qk } from "../db/queryKeys";
 
 // Phase 2 E2 — inline validation (additive; only fields with rules appear in
 // the schema, the rest are unvalidated). "line_items" has no schema rules —
@@ -476,7 +477,7 @@ export function InvoiceFormPage() {
             onSuccess: async (invoiceId) => {
               if (fromQuoteId) {
                 await updateQuote(fromQuoteId, { converted_to_invoice_id: invoiceId });
-                queryClient.invalidateQueries({ queryKey: ["quotes"] });
+                queryClient.invalidateQueries({ queryKey: qk.quotes.all });
               }
               setFormDirty(false);
               notify.success(fromQuoteId ? t.quote_converted : t.invoice_created);

@@ -3,6 +3,7 @@ import * as q from "../queries/clients";
 import type { Client, ClientContact, ClientAddress } from "../../types/client";
 import { useUndoStore } from "../../stores/undo-store";
 import { getLabels } from "../../lib/notify";
+import { qk, keyPrefix, invalidateMoney } from "../queryKeys";
 
 // Every query family the deleteClient cascade touches — invalidated after
 // delete, undo (restore) and redo so no stale rows linger anywhere.
@@ -27,12 +28,12 @@ const CLIENT_GRAPH_QUERY_KEYS = [
 ] as const;
 
 export function useClients() {
-  return useQuery({ queryKey: ["clients"], queryFn: q.getClients });
+  return useQuery({ queryKey: qk.clients.all, queryFn: q.getClients });
 }
 
 export function useClient(id: string) {
   return useQuery({
-    queryKey: ["clients", id],
+    queryKey: qk.clients.detail(id),
     queryFn: () => q.getClient(id),
     enabled: !!id,
   });
@@ -40,7 +41,7 @@ export function useClient(id: string) {
 
 export function useClientContacts(clientId: string) {
   return useQuery({
-    queryKey: ["client-contacts", clientId],
+    queryKey: qk.clients.contacts(clientId),
     queryFn: () => q.getClientContacts(clientId),
     enabled: !!clientId,
   });
@@ -56,15 +57,15 @@ export function useCreateClient() {
         label: `${getLabels().undo_create_client} "${data.name}"`,
         execute: async () => {
           await q.deleteClient(data.id);
-          qc.invalidateQueries({ queryKey: ["clients"] });
+          qc.invalidateQueries({ queryKey: qk.clients.all });
         },
         redo: async () => {
           await q.createClient(data);
-          qc.invalidateQueries({ queryKey: ["clients"] });
+          qc.invalidateQueries({ queryKey: qk.clients.all });
         },
       });
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["clients"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.clients.all }),
   });
 }
 
@@ -90,16 +91,16 @@ export function useUpdateClient() {
           label: `${getLabels().undo_update_client} "${prev.name}"`,
           execute: async () => {
             await q.updateClient(id, prevData as Partial<Omit<Client, "id" | "created_at" | "updated_at">>);
-            qc.invalidateQueries({ queryKey: ["clients"] });
+            qc.invalidateQueries({ queryKey: qk.clients.all });
           },
           redo: async () => {
             await q.updateClient(id, data);
-            qc.invalidateQueries({ queryKey: ["clients"] });
+            qc.invalidateQueries({ queryKey: qk.clients.all });
           },
         });
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["clients"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.clients.all }),
   });
 }
 
@@ -119,16 +120,16 @@ export function useSetClientArchived() {
           // client keeps its original date)
           execute: async () => {
             await q.updateClient(id, { archived_at: prev.archived_at ?? null });
-            qc.invalidateQueries({ queryKey: ["clients"] });
+            qc.invalidateQueries({ queryKey: qk.clients.all });
           },
           redo: async () => {
             await q.setClientArchived(id, archived);
-            qc.invalidateQueries({ queryKey: ["clients"] });
+            qc.invalidateQueries({ queryKey: qk.clients.all });
           },
         });
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["clients"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.clients.all }),
   });
 }
 
@@ -136,8 +137,10 @@ export function useDeleteClient() {
   const qc = useQueryClient();
   const invalidateGraph = () => {
     for (const key of CLIENT_GRAPH_QUERY_KEYS) {
-      qc.invalidateQueries({ queryKey: [key] });
+      qc.invalidateQueries({ queryKey: keyPrefix(key) });
     }
+    // The client's invoices and expenses leave the dashboard figures too.
+    invalidateMoney(qc);
   };
   return useMutation({
     // A refused delete (issued invoices) is an AppError: the toast says why.
@@ -185,17 +188,17 @@ export function useCreateClientContact() {
           label: `${getLabels().undo_create_contact} "${data.first_name} ${data.last_name}"`,
           execute: async () => {
             await q.deleteClientContact(created.id);
-            qc.invalidateQueries({ queryKey: ["client-contacts", data.client_id] });
+            qc.invalidateQueries({ queryKey: qk.clients.contacts(data.client_id) });
           },
           redo: async () => {
             await q.createClientContact(data);
-            qc.invalidateQueries({ queryKey: ["client-contacts", data.client_id] });
+            qc.invalidateQueries({ queryKey: qk.clients.contacts(data.client_id) });
           },
         });
       }
     },
     onSuccess: (_d, vars) =>
-      qc.invalidateQueries({ queryKey: ["client-contacts", vars.client_id] }),
+      qc.invalidateQueries({ queryKey: qk.clients.contacts(vars.client_id) }),
   });
 }
 
@@ -219,17 +222,17 @@ export function useUpdateClientContact() {
           label: `${getLabels().undo_update_contact} "${prev.first_name} ${prev.last_name}"`,
           execute: async () => {
             await q.updateClientContact(vars.id, prevData as Partial<Omit<ClientContact, "id" | "client_id">>);
-            qc.invalidateQueries({ queryKey: ["client-contacts", vars.clientId] });
+            qc.invalidateQueries({ queryKey: qk.clients.contacts(vars.clientId) });
           },
           redo: async () => {
             await q.updateClientContact(vars.id, vars.data);
-            qc.invalidateQueries({ queryKey: ["client-contacts", vars.clientId] });
+            qc.invalidateQueries({ queryKey: qk.clients.contacts(vars.clientId) });
           },
         });
       }
     },
     onSuccess: (_d, vars) =>
-      qc.invalidateQueries({ queryKey: ["client-contacts", vars.clientId] }),
+      qc.invalidateQueries({ queryKey: qk.clients.contacts(vars.clientId) }),
   });
 }
 
@@ -249,19 +252,19 @@ export function useDeleteClientContact() {
           label: `${getLabels().undo_delete_contact} "${prev.first_name} ${prev.last_name}"`,
           execute: async () => {
             restoredId = await q.createClientContact(data as Omit<ClientContact, "id">);
-            qc.invalidateQueries({ queryKey: ["client-contacts", vars.clientId] });
+            qc.invalidateQueries({ queryKey: qk.clients.contacts(vars.clientId) });
           },
           redo: async () => {
             if (restoredId !== null) {
               await q.deleteClientContact(restoredId);
-              qc.invalidateQueries({ queryKey: ["client-contacts", vars.clientId] });
+              qc.invalidateQueries({ queryKey: qk.clients.contacts(vars.clientId) });
             }
           },
         });
       }
     },
     onSuccess: (_d, vars) =>
-      qc.invalidateQueries({ queryKey: ["client-contacts", vars.clientId] }),
+      qc.invalidateQueries({ queryKey: qk.clients.contacts(vars.clientId) }),
   });
 }
 
@@ -269,7 +272,7 @@ export function useDeleteClientContact() {
 
 export function useClientAddresses(clientId: string) {
   return useQuery({
-    queryKey: ["client-addresses", clientId],
+    queryKey: qk.clients.addresses(clientId),
     queryFn: () => q.getClientAddresses(clientId),
     enabled: !!clientId,
   });
@@ -285,16 +288,16 @@ export function useCreateClientAddress() {
         label: `${getLabels().undo_create_address} "${data.label}"`,
         execute: async () => {
           await q.deleteClientAddress(newId);
-          qc.invalidateQueries({ queryKey: ["client-addresses", data.client_id] });
+          qc.invalidateQueries({ queryKey: qk.clients.addresses(data.client_id) });
         },
         redo: async () => {
           await q.createClientAddress(data);
-          qc.invalidateQueries({ queryKey: ["client-addresses", data.client_id] });
+          qc.invalidateQueries({ queryKey: qk.clients.addresses(data.client_id) });
         },
       });
     },
     onSuccess: (_d, vars) =>
-      qc.invalidateQueries({ queryKey: ["client-addresses", vars.client_id] }),
+      qc.invalidateQueries({ queryKey: qk.clients.addresses(vars.client_id) }),
   });
 }
 
@@ -318,17 +321,17 @@ export function useUpdateClientAddress() {
           label: `${getLabels().undo_update_address} "${prev.label}"`,
           execute: async () => {
             await q.updateClientAddress(vars.id, prevData as Partial<Omit<ClientAddress, "id" | "client_id">>);
-            qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] });
+            qc.invalidateQueries({ queryKey: qk.clients.addresses(vars.clientId) });
           },
           redo: async () => {
             await q.updateClientAddress(vars.id, vars.data);
-            qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] });
+            qc.invalidateQueries({ queryKey: qk.clients.addresses(vars.clientId) });
           },
         });
       }
     },
     onSuccess: (_d, vars) =>
-      qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] }),
+      qc.invalidateQueries({ queryKey: qk.clients.addresses(vars.clientId) }),
   });
 }
 
@@ -344,8 +347,8 @@ export function useDeleteClientAddress() {
         // Deleting the client's own address also clears it on the client row.
         const clearedOwn = await q.clearOwnAddressAfterDelete(vars.clientId, prev);
         const refresh = () => {
-          qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] });
-          if (clearedOwn) qc.invalidateQueries({ queryKey: ["clients"] });
+          qc.invalidateQueries({ queryKey: qk.clients.addresses(vars.clientId) });
+          if (clearedOwn) qc.invalidateQueries({ queryKey: qk.clients.all });
         };
         // Redo targets exactly the id the restore produced — a field-match
         // lookup could hit a duplicate address with the same label.
@@ -370,8 +373,8 @@ export function useDeleteClientAddress() {
       }
     },
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] });
-      qc.invalidateQueries({ queryKey: ["clients"] });
+      qc.invalidateQueries({ queryKey: qk.clients.addresses(vars.clientId) });
+      qc.invalidateQueries({ queryKey: qk.clients.all });
     },
   });
 }
@@ -380,7 +383,7 @@ export function useDeleteClientAddress() {
 
 export function useClientActivity(clientId: string) {
   return useQuery({
-    queryKey: ["client-activity", clientId],
+    queryKey: qk.clients.activity(clientId),
     queryFn: () => q.getClientActivity(clientId),
     enabled: !!clientId,
   });

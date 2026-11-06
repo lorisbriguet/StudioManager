@@ -151,7 +151,7 @@ export async function runRecurringCheck(qc: QueryClient): Promise<number> {
             read: 0,
             link: "/invoices",
           });
-          qc.invalidateQueries({ queryKey: ["notifications"] });
+          qc.invalidateQueries({ queryKey: qk.notifications.all });
         }
       } catch (e) {
         notify.error(getLabels().recurring_generation_failed, e);
@@ -161,7 +161,7 @@ export async function runRecurringCheck(qc: QueryClient): Promise<number> {
     if (generated > 0 && sameOrg()) {
       qc.invalidateQueries({ queryKey: qk.invoices.all });
       invalidateMoney(qc);
-      qc.invalidateQueries({ queryKey: ["recurring_templates"] });
+      qc.invalidateQueries({ queryKey: qk.recurring.all });
 
       const labels = getLabels();
       const msg = labels.recurring_drafts_generated.replace("{count}", String(generated));
@@ -174,7 +174,7 @@ export async function runRecurringCheck(qc: QueryClient): Promise<number> {
         read: 0,
         link: "/invoices",
       });
-      qc.invalidateQueries({ queryKey: ["notifications"] });
+      qc.invalidateQueries({ queryKey: qk.notifications.all });
 
       sendNativeNotification(labels.recurring_invoices, msg);
     }

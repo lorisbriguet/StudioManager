@@ -2,17 +2,18 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as q from "../queries/notifications";
 import { snapshotRows, pushRestore } from "../undoRestore";
 import { getLabels } from "../../lib/notify";
+import { qk } from "../queryKeys";
 
 export function useNotifications() {
   return useQuery({
-    queryKey: ["notifications"],
+    queryKey: qk.notifications.all,
     queryFn: q.getNotifications,
   });
 }
 
 export function useUnreadNotificationCount() {
   return useQuery({
-    queryKey: ["notifications", "unread-count"],
+    queryKey: qk.notifications.unreadCount,
     queryFn: q.getUnreadCount,
   });
 }
@@ -22,7 +23,7 @@ export function useMarkNotificationRead() {
   return useMutation({
     meta: { errorLabel: "error_update_notifications" },
     mutationFn: q.markNotificationRead,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.notifications.all }),
   });
 }
 
@@ -31,13 +32,13 @@ export function useMarkAllNotificationsRead() {
   return useMutation({
     meta: { errorLabel: "error_update_notifications" },
     mutationFn: q.markAllNotificationsRead,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.notifications.all }),
   });
 }
 
 export function useDeleteNotification() {
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["notifications"] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: qk.notifications.all });
   return useMutation({
     meta: { errorLabel: "error_delete_notification" },
     mutationFn: async (id: number) => {
@@ -51,7 +52,7 @@ export function useDeleteNotification() {
 
 export function useClearAllNotifications() {
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["notifications"] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: qk.notifications.all });
   return useMutation({
     meta: { errorLabel: "error_delete_notification" },
     mutationFn: async () => {

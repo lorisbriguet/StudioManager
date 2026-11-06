@@ -45,6 +45,7 @@ import { applyFilterConditions, type ConditionLogic } from "../types/saved-filte
 import { PILL } from "../components/ui/tokens";
 import { useStartAgentOn } from "../hooks/useStartAgentOn";
 import { agentMenuItems } from "../lib/agentStart";
+import { qk } from "../db/queryKeys";
 
 export function TasksPage() {
   const t = useT();
@@ -63,7 +64,7 @@ export function TasksPage() {
   const [startProjectId, setStartProjectId] = useState<number | null>(null);
   const { data: projects } = useProjects();
   const { data: clients } = useClients();
-  const { data: subtasks } = useQuery({ queryKey: ["subtasks"], queryFn: getAllSubtasks });
+  const { data: subtasks } = useQuery({ queryKey: qk.subtasks.all, queryFn: getAllSubtasks });
   const updateTask = useUpdateTask();
   const createTask = useCreateTask();
   const deleteTask = useDeleteTask();

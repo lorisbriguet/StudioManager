@@ -27,12 +27,13 @@ import type {
   UpkeepItem,
   UpkeepItemInput,
 } from "../../types/upkeep";
+import { qk } from "../queryKeys";
 
 function useInvalidate() {
   const qc = useQueryClient();
   return () => {
-    qc.invalidateQueries({ queryKey: ["upkeep-items"] });
-    qc.invalidateQueries({ queryKey: ["machines"] });
+    qc.invalidateQueries({ queryKey: qk.upkeep.all });
+    qc.invalidateQueries({ queryKey: qk.machines.all });
   };
 }
 
@@ -101,12 +102,12 @@ function pickItemInput(row: UpkeepItem): MachineTemplateItemInput {
 // ── Queries ─────────────────────────────────────────────────
 
 export function useMachines() {
-  return useQuery({ queryKey: ["machines"], queryFn: m.getMachines });
+  return useQuery({ queryKey: qk.machines.all, queryFn: m.getMachines });
 }
 
 export function useMachine(id: number | null) {
   return useQuery({
-    queryKey: ["machines", id],
+    queryKey: qk.machines.detail(id),
     queryFn: () => m.getMachine(id as number),
     enabled: id !== null,
   });
@@ -114,45 +115,45 @@ export function useMachine(id: number | null) {
 
 export function useMachinesByProject(projectId: number) {
   return useQuery({
-    queryKey: ["machines", "project", projectId],
+    queryKey: qk.machines.byProject(projectId),
     queryFn: () => m.getMachinesByProject(projectId),
   });
 }
 
 export function useMachineProjectIds(machineId: number) {
   return useQuery({
-    queryKey: ["machines", machineId, "projects"],
+    queryKey: qk.machines.projects(machineId),
     queryFn: () => m.getMachineProjectIds(machineId),
   });
 }
 
 export function useMachineFiles(machineId: number) {
   return useQuery({
-    queryKey: ["machines", machineId, "files"],
+    queryKey: qk.machines.files(machineId),
     queryFn: () => m.getMachineFiles(machineId),
   });
 }
 
 export function useMachineLinks() {
-  return useQuery({ queryKey: ["machine-links"], queryFn: m.getMachineLinks });
+  return useQuery({ queryKey: qk.machines.links, queryFn: m.getMachineLinks });
 }
 
 export function useServiceLog(machineId: number) {
   return useQuery({
-    queryKey: ["service-log", machineId],
+    queryKey: qk.machines.serviceLog(machineId),
     queryFn: () => m.getServiceLog(machineId),
   });
 }
 
 export function useUpkeepItems(machineId?: number) {
   return useQuery({
-    queryKey: ["upkeep-items", machineId ?? "all"],
+    queryKey: qk.upkeep.byMachine(machineId ?? "all"),
     queryFn: () => u.getUpkeepItems(machineId),
   });
 }
 
 export function useActiveUpkeepItems() {
-  return useQuery({ queryKey: ["upkeep-items", "active"], queryFn: u.getActiveUpkeepItems });
+  return useQuery({ queryKey: qk.upkeep.active, queryFn: u.getActiveUpkeepItems });
 }
 
 // ── Machine mutations ───────────────────────────────────────
@@ -252,7 +253,7 @@ export function useSetMachineProjects() {
       m.setMachineProjects(id, projectIds),
     onSuccess: () => {
       invalidate();
-      qc.invalidateQueries({ queryKey: ["machines", "project"] });
+      qc.invalidateQueries({ queryKey: qk.machines.allByProject });
     },
   });
 }
@@ -263,8 +264,8 @@ export function useAddMachineFile() {
     mutationFn: ({ machineId, file }: { machineId: number; file: Pick<MachineFile, "label" | "kind" | "path_or_url"> }) =>
       m.addMachineFile(machineId, file),
     onSuccess: (_, { machineId }) => {
-      qc.invalidateQueries({ queryKey: ["machines", machineId, "files"] });
-      qc.invalidateQueries({ queryKey: ["machine-links"] });
+      qc.invalidateQueries({ queryKey: qk.machines.files(machineId) });
+      qc.invalidateQueries({ queryKey: qk.machines.links });
     },
   });
 }
@@ -274,8 +275,8 @@ export function useRemoveMachineFile() {
   return useMutation({
     mutationFn: ({ fileId }: { fileId: number; machineId: number }) => m.removeMachineFile(fileId),
     onSuccess: (_, { machineId }) => {
-      qc.invalidateQueries({ queryKey: ["machines", machineId, "files"] });
-      qc.invalidateQueries({ queryKey: ["machine-links"] });
+      qc.invalidateQueries({ queryKey: qk.machines.files(machineId) });
+      qc.invalidateQueries({ queryKey: qk.machines.links });
     },
   });
 }
@@ -285,7 +286,7 @@ export function useAddServiceLog() {
   return useMutation({
     mutationFn: (entry: Omit<ServiceLogEntry, "id" | "created_at">) => m.addServiceLog(entry),
     onSuccess: (_, entry) => {
-      qc.invalidateQueries({ queryKey: ["service-log", entry.machine_id] });
+      qc.invalidateQueries({ queryKey: qk.machines.serviceLog(entry.machine_id) });
     },
   });
 }
@@ -400,7 +401,7 @@ export function useMarkUpkeepDone() {
     },
     onSuccess: (item) => {
       invalidate();
-      qc.invalidateQueries({ queryKey: ["service-log", item.machine_id] });
+      qc.invalidateQueries({ queryKey: qk.machines.serviceLog(item.machine_id) });
     },
   });
 }
@@ -408,12 +409,12 @@ export function useMarkUpkeepDone() {
 // ── Consumables ─────────────────────────────────────────────
 
 export function useConsumables() {
-  return useQuery({ queryKey: ["consumables"], queryFn: c.getConsumables });
+  return useQuery({ queryKey: qk.consumables.all, queryFn: c.getConsumables });
 }
 
 export function useProjectMaterialCost(projectId: number) {
   return useQuery({
-    queryKey: ["project-material-cost", projectId],
+    queryKey: qk.projects.materialCost(projectId),
     queryFn: () => c.getProjectMaterialCost(projectId),
   });
 }
@@ -421,7 +422,7 @@ export function useProjectMaterialCost(projectId: number) {
 function useInvalidateConsumables() {
   const qc = useQueryClient();
   return () => {
-    qc.invalidateQueries({ queryKey: ["consumables"] });
+    qc.invalidateQueries({ queryKey: qk.consumables.all });
   };
 }
 
@@ -518,8 +519,8 @@ export function useLogConsumableUsage() {
     mutationFn: ({ id, amount, projectId, usedOn }: { id: number; amount: number; projectId: number | null; usedOn: string }) =>
       c.logConsumableUsage(id, amount, projectId, usedOn),
     onSuccess: (_, { projectId }) => {
-      qc.invalidateQueries({ queryKey: ["consumables"] });
-      qc.invalidateQueries({ queryKey: ["project-material-cost", projectId] });
+      qc.invalidateQueries({ queryKey: qk.consumables.all });
+      qc.invalidateQueries({ queryKey: qk.projects.materialCost(projectId) });
     },
   });
 }
@@ -535,18 +536,18 @@ export function useRestockConsumable() {
 // ── Subscriptions ───────────────────────────────────────────
 
 export function useSubscriptions() {
-  return useQuery({ queryKey: ["subscriptions"], queryFn: s.getSubscriptions });
+  return useQuery({ queryKey: qk.subscriptions.all, queryFn: s.getSubscriptions });
 }
 
 export function usePendingRenewals() {
-  return useQuery({ queryKey: ["subscription-renewals"], queryFn: s.getPendingRenewals });
+  return useQuery({ queryKey: qk.subscriptions.renewals, queryFn: s.getPendingRenewals });
 }
 
 function useInvalidateSubscriptions() {
   const qc = useQueryClient();
   return () => {
-    qc.invalidateQueries({ queryKey: ["subscriptions"] });
-    qc.invalidateQueries({ queryKey: ["subscription-renewals"] });
+    qc.invalidateQueries({ queryKey: qk.subscriptions.all });
+    qc.invalidateQueries({ queryKey: qk.subscriptions.renewals });
   };
 }
 

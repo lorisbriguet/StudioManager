@@ -24,6 +24,7 @@ import { dailyUse, forecastUsageDue, usageLeft } from "./schedule";
 import { parseBambuError } from "./bambu";
 import { parseSynologyError } from "./synology";
 import type { Connection, Machine, UpkeepItem } from "../../types/upkeep";
+import { invalidateEquipment } from "../../db/queryKeys";
 
 /** Sync on start, then every 6 hours while the app is open (spec §8). */
 export const SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -391,9 +392,5 @@ async function syncPass(qc: QueryClient, opts: SyncOptions): Promise<void> {
     if (!(await recomputeMachine(id, todayISO, org, same))) return;
   }
 
-  if (wrote && same()) {
-    for (const key of ["connections", "machines", "upkeep-items", "machine-readings", "machine-disks", "equipment-connections"]) {
-      qc.invalidateQueries({ queryKey: [key] });
-    }
-  }
+  if (wrote && same()) invalidateEquipment(qc);
 }
