@@ -16,10 +16,20 @@ vi.mock("../lib/log", () => ({ logError: vi.fn(), logWarn: vi.fn(), logInfo: vi.
 vi.mock("@tauri-apps/plugin-sql", async () => ({ default: (await import("./fixtures/realSqlite")).RealDatabase }));
 vi.mock("../db/seeds/user-guide", () => ({ seedUserGuide: async () => {} }));
 // plugin-fs, api/core and api/path all alias to one mock module (vitest.config.ts),
-// so this one factory supplies `invoke` (the Rust batch) and the filesystem.
-vi.mock("@tauri-apps/plugin-fs", async (orig) => ({
+// so this one factory supplies `invoke` (the Rust batch and backup) and the filesystem.
+vi.mock("@tauri-apps/plugin-fs", async (orig) => {
+  const { realInvoke, rawDb } = await import("./fixtures/realSqlite");
+  return {
   ...(await orig<object>()),
-  invoke: (await import("./fixtures/realSqlite")).realInvoke,
+  invoke: async (cmd: string, args: Record<string, unknown>) => {
+    if (cmd !== "create_backups") return realInvoke(cmd, args);
+    // Imported on first use: the fixture imports backup.ts, which imports this mocked module.
+    const { fakeCreateBackups } = await import("./fixtures/fakeBackupCommand");
+    const createBackups = fakeCreateBackups(memfs, {
+      rows: (table) => rawDb().prepare(`SELECT * FROM ${table}`).all() as Record<string, unknown>[],
+    });
+    return createBackups(args as Parameters<typeof createBackups>[0]);
+  },
   mkdir: async (p: string) => {
     memfs.dirs.add(p);
   },
@@ -54,7 +64,8 @@ vi.mock("@tauri-apps/plugin-fs", async (orig) => ({
     for (const k of [...memfs.files.keys()]) if (k === p || k.startsWith(`${p}/`)) memfs.files.delete(k);
   },
   appDataDir: async () => "/appdata",
-}));
+  };
+});
 
 import { freshRealDb, rawDb } from "./fixtures/realSqlite";
 import { TABLES, NOT_BACKED_UP, createBackup, restoreFromBackup } from "../lib/backup";
@@ -64,7 +75,7 @@ const count = (table: string) => (rawDb().prepare(`SELECT COUNT(*) AS n FROM ${t
 
 beforeEach(async () => {
   memfs.reset();
-  useOrgStore.setState({ activeId: "" });
+  useOrgStore.setState({ activeId: "k3f9a2", organisations: [] });
   await freshRealDb();
 });
 
@@ -101,7 +112,7 @@ describe("backup round trip", () => {
 
   it("keeps activities and paperless links when restoring over the live database", async () => {
     seed();
-    const path = await createBackup("/bk", 5);
+    const path = await createBackup("/bk");
     const { warnings } = await restoreFromBackup(path);
 
     expect(warnings).toEqual([]);
@@ -114,7 +125,7 @@ describe("backup round trip", () => {
 
   it("brings activities and paperless links back into an empty database", async () => {
     seed();
-    const path = await createBackup("/bk", 5);
+    const path = await createBackup("/bk");
     const backup = new Map(memfs.files);
 
     await freshRealDb();

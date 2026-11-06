@@ -14,11 +14,16 @@ function backupErrorLabel(e: unknown): string {
   return isScopeDenied(e) ? getLabels().backup_path_not_allowed : getLabels().auto_backup_failed;
 }
 
+const RETRY_AFTER_FAILURE_MS = 60 * 60 * 1000;
+
 export function useAutoBackup() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Latch: toast only the first failure until a backup run fully succeeds,
   // so a persistently failing interval doesn't toast every run.
   const failureNotifiedRef = useRef(false);
+  // A failed run is not recorded as the last backup, so without a pause the
+  // one-minute check would retry (and snapshot every organisation) each minute.
+  const retryAfterRef = useRef(0);
 
   useEffect(() => {
     const check = () => {
@@ -29,7 +34,6 @@ export function useAutoBackup() {
         autoBackupInterval,
         backupPath,
         backupPath2,
-        maxBackups,
         lastAutoBackup,
         setLastAutoBackup,
       } = useAppStore.getState();
@@ -40,14 +44,17 @@ export function useAutoBackup() {
       const elapsed = now - lastAutoBackup;
       const intervalMs = autoBackupInterval * 60 * 1000;
 
-      if (elapsed >= intervalMs) {
+      if (elapsed >= intervalMs && now >= retryAfterRef.current) {
         setBackupRunning(true);
-        createBackup(backupPath, maxBackups)
+        // Every organisation; each into its own backup folder when it has one.
+        createBackup(backupPath, { ownFolders: true })
           .then(async (path) => {
+            retryAfterRef.current = 0;
             let secondaryFailed = false;
             if (backupPath2) {
               try {
-                await createBackup(backupPath2, maxBackups);
+                // The second copy keeps every organisation in one folder.
+                await createBackup(backupPath2);
               } catch (e) {
                 secondaryFailed = true;
                 logError("Auto-backup (secondary) failed:", e);
@@ -74,6 +81,7 @@ export function useAutoBackup() {
           })
           .catch((e) => {
             logError("Auto-backup failed:", e);
+            retryAfterRef.current = Date.now() + RETRY_AFTER_FAILURE_MS;
             if (!failureNotifiedRef.current) {
               failureNotifiedRef.current = true;
               notify.error(backupErrorLabel(e), e);

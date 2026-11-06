@@ -13,6 +13,7 @@ permissions = [
   "allow-enter-presentation-mode",
   "allow-exit-presentation-mode",
   "allow-snapshot-db",
+  "allow-create-backups",
   "allow-restore-snapshot",
   "allow-has-snapshot",
   "allow-get-active-db",

@@ -154,7 +154,6 @@ export interface AppState {
   renewalWindowDays: number;
   backupPath: string;
   backupPath2: string;
-  maxBackups: number;
   autoBackupInterval: number; // minutes, 0 = disabled
   lastAutoBackup: number; // timestamp
   projectOpenMode: ProjectOpenMode;
@@ -203,7 +202,6 @@ export interface AppState {
   setRenewalWindowDays: (days: number) => void;
   setBackupPath: (path: string) => void;
   setBackupPath2: (path: string) => void;
-  setMaxBackups: (count: number) => void;
   setAutoBackupInterval: (minutes: number) => void;
   setLastAutoBackup: (ts: number) => void;
   setProjectOpenMode: (mode: ProjectOpenMode) => void;
@@ -262,6 +260,15 @@ function storedLanguage(): AppLanguage {
   return (localStorage.getItem("appLanguage") as AppLanguage) ?? "EN";
 }
 
+/** Daily unless the user picked an interval. Choosing "Disabled" stores "0",
+ *  which stays off; only a never-set value gets the daily default. */
+export function autoBackupIntervalFromStorage(): number {
+  const stored = localStorage.getItem("autoBackupInterval");
+  if (stored === null) return 1440;
+  const minutes = Number(stored);
+  return Number.isFinite(minutes) && minutes >= 0 ? minutes : 1440;
+}
+
 applyDocumentLang(storedLanguage());
 
 const initialAppearance = applyStoredAppearance();
@@ -311,8 +318,7 @@ export const useAppStore = create<AppState>((set) => ({
   renewalWindowDays: 14,
   backupPath: localStorage.getItem("backupPath") ?? "",
   backupPath2: localStorage.getItem("backupPath2") ?? "",
-  maxBackups: Number(localStorage.getItem("maxBackups")) || 5,
-  autoBackupInterval: Number(localStorage.getItem("autoBackupInterval")) || 0,
+  autoBackupInterval: autoBackupIntervalFromStorage(),
   // Namespaced per organisation; the org store loads the active org's value
   // on applyRegistry (org-store.ts), so no plain "lastAutoBackup" key here.
   lastAutoBackup: 0,
@@ -411,10 +417,6 @@ export const useAppStore = create<AppState>((set) => ({
   setBackupPath2: (path) => {
     localStorage.setItem("backupPath2", path);
     set({ backupPath2: path });
-  },
-  setMaxBackups: (count) => {
-    localStorage.setItem("maxBackups", String(count));
-    set({ maxBackups: count });
   },
   setAutoBackupInterval: (minutes) => {
     localStorage.setItem("autoBackupInterval", String(minutes));

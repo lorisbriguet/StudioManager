@@ -1,6 +1,7 @@
 mod agent_access;
 mod agents;
 mod apple;
+mod backup;
 mod connectors;
 mod dbfiles;
 mod finder;
@@ -470,6 +471,59 @@ fn snapshot_db_now(app: tauri::AppHandle) -> Result<String, String> {
     Ok(snapshot_db.to_string_lossy().to_string())
 }
 
+/// Back up organisations: each target names an organisation and the folder
+/// its backup goes to (see backup.rs). Runs every target even when one fails
+/// and reports each outcome, so the caller rotates only the ones that worked.
+#[tauri::command]
+async fn create_backups(
+    app: tauri::AppHandle,
+    targets: Vec<backup::BackupTarget>,
+    tables: Vec<String>,
+) -> Result<Vec<backup::BackupOutcome>, String> {
+    run_blocking(move || {
+        // Shared: batches keep running, but no organisation is switched,
+        // removed or swapped into a mode while its files are read.
+        let _guard = org_shared();
+        create_backups_now(app, targets, tables)
+    })
+    .await
+}
+
+fn create_backups_now(
+    app: tauri::AppHandle,
+    targets: Vec<backup::BackupTarget>,
+    tables: Vec<String>,
+) -> Result<Vec<backup::BackupOutcome>, String> {
+    let app_dir = app_data_dir(&app)?;
+    let reg = load_registry(&app)?;
+    let stamp = chrono::Local::now().format("%Y-%m-%d-%H-%M-%S").to_string();
+    Ok(targets
+        .into_iter()
+        .map(|t| {
+            let result = match reg.find(&t.org_id) {
+                Some(org) if orgs::is_plain_id(&org.id) => backup::backup_org(
+                    &orgs::org_dir(&app_dir, &org.id),
+                    &org.id,
+                    &org.name,
+                    Path::new(&t.dir),
+                    &stamp,
+                    &tables,
+                ),
+                _ => Err(format!("unknown organisation: {}", t.org_id)),
+            };
+            if let Err(e) = &result {
+                log::warn!("backup of organisation {} failed: {e}", t.org_id);
+            }
+            backup::BackupOutcome {
+                org_id: t.org_id,
+                dir: t.dir,
+                path: result.as_ref().ok().map(|p| p.to_string_lossy().to_string()),
+                error: result.err(),
+            }
+        })
+        .collect())
+}
+
 /// Restore production DB from snapshot.
 #[tauri::command]
 async fn restore_snapshot(
@@ -884,6 +938,7 @@ pub fn run() {
             enter_presentation_mode,
             exit_presentation_mode,
             snapshot_db,
+            create_backups,
             restore_snapshot,
             has_snapshot,
             get_active_db,
