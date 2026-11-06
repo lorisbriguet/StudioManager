@@ -204,10 +204,12 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           assets=("bundle/StudioManager_${VERSION}_aarch64.dmg" bundle/StudioManager.app.tar.gz latest.json)
+          # A version with a suffix (3.4.1-rc.1) is a prerelease: never "latest", so the updater skips it.
+          pre=(); [[ "$VERSION" == *-* ]] && pre=(--prerelease)
           if gh release view "v$VERSION" >/dev/null 2>&1; then
             gh release upload "v$VERSION" "${assets[@]}" --clobber
           else
-            gh release create "v$VERSION" --draft --verify-tag --title "StudioManager v$VERSION" \
+            gh release create "v$VERSION" --draft "${pre[@]}" --verify-tag --title "StudioManager v$VERSION" \
               --notes "Built by the Release build workflow. Replace with the changelog before publishing." "${assets[@]}"
           fi
           echo "Draft ready: smoke-test the .dmg, then publish (RELEASING.md steps 4 and 8)."

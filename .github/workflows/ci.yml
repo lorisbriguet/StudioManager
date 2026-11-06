@@ -33,8 +33,8 @@ jobs:
       - run: npm run lint
       - run: npx vitest run
 
-      # No Rust job here on purpose: the Tauri build needs macOS and system
-      # libraries it doesn't make sense to provision in CI, and releases are
-      # built and smoke-tested locally per RELEASING.md. Rust dependencies
-      # are still covered separately by the weekly `cargo audit` job in
-      # dependency-audit.yml.
+      # No Rust build here on purpose: a full Tauri build takes over ten
+      # minutes, too long for every push. Releases are built either on Loris's
+      # Mac or by the Release build workflow (release.yml, started by hand on
+      # a tag), both per RELEASING.md. Rust dependencies are still covered
+      # separately by the weekly `cargo audit` job in dependency-audit.yml.
