@@ -10,6 +10,7 @@ import type { BusinessProfile } from "../../types/business-profile";
 import type { AppLanguage } from "../../i18n/ui";
 import { getExportLabels, type ExportLabels } from "../../i18n/export-labels";
 import { PDF } from "../pdf/pdfPalette";
+import { formatMoneyPdf } from "../../lib/money";
 
 /** The trustee export's list of other income (the `income` table), laid out
  *  like ExpensesListPDF so the three lists of the folder read alike. */
@@ -21,11 +22,7 @@ export interface Props {
 }
 
 function formatCHF(amount: number): string {
-  const formatted = Math.abs(amount).toLocaleString("de-CH", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  return `CHF ${amount < 0 ? "-" : ""}${formatted}`;
+  return formatMoneyPdf(amount, "CHF");
 }
 
 /** Category codes are stored raw; unknown ones fall back to the code itself. */
