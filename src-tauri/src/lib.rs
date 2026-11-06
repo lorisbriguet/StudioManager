@@ -938,9 +938,32 @@ fn navigation_guard<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
         .build()
 }
 
+/// Largest size of the log file before it rotates (one older file is kept).
+const LOG_MAX_BYTES: u128 = 2 * 1024 * 1024;
+
+/// The app log, in every build: `~/Library/Logs/<identifier>/StudioManager.log`
+/// (Console.app reads it). Release keeps warnings and errors, debug also
+/// keeps info and prints to the terminal. Front-end `logError`/`logWarn`
+/// (`src/lib/log.ts`) and Rust `log::warn!` both end up here.
+fn log_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    use tauri_plugin_log::{RotationStrategy, Target, TargetKind};
+    let file = Target::new(TargetKind::LogDir { file_name: Some("StudioManager".into()) });
+    let builder = tauri_plugin_log::Builder::new()
+        .max_file_size(LOG_MAX_BYTES)
+        .rotation_strategy(RotationStrategy::KeepSome(1))
+        .clear_targets()
+        .target(file);
+    if cfg!(debug_assertions) {
+        builder.level(log::LevelFilter::Info).target(Target::new(TargetKind::Stdout)).build()
+    } else {
+        builder.level(log::LevelFilter::Warn).build()
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default();
+    // First plugin, so warnings logged while the others start are kept.
+    let builder = tauri::Builder::default().plugin(log_plugin());
     // The menu bar panel is a non-activating NSPanel (see `menubar`).
     #[cfg(target_os = "macos")]
     let builder = builder.plugin(tauri_nspanel::init());
@@ -1076,13 +1099,6 @@ pub fn run() {
             }
             // On the main thread, before any command can run: the lock is free.
             menubar::sync_tray(handle, keep_running, &agents::cli::lock_settings());
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
             Ok(())
         })
         .on_window_event(|window, event| {

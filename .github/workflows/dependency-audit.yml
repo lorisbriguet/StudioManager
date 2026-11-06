@@ -13,6 +13,9 @@ on:
       - src-tauri/mcp/Cargo.lock
       - .github/workflows/dependency-audit.yml
 
+permissions:
+  contents: read
+
 jobs:
   npm-audit:
     name: npm audit

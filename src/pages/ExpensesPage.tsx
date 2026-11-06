@@ -29,7 +29,7 @@ import { useDetectedFields } from "../hooks/useDetectedFields";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useBulkDelete } from "../hooks/useBulkDelete";
 import type { Expense } from "../types/expense";
-import { getNextExpenseReference, type PastSupplier } from "../db/queries/expenses";
+import { nextExpenseReferenceFor, type PastSupplier } from "../db/queries/expenses";
 import { currencies, getExchangeRate, type Currency } from "../lib/exchangeRate";
 import { asCurrency, expenseMoney, type ExpenseMoney } from "../lib/expenseCurrency";
 import { formatMoney } from "../lib/money";
@@ -289,7 +289,7 @@ export function ExpensesPage() {
           onSave={async (data) => {
             setSaving(true);
             try {
-              const reference = await getNextExpenseReference(new Date().getFullYear());
+              const reference = await nextExpenseReferenceFor(data.invoice_date);
 
               let receiptPath = data.receipt_path;
               if (prefill?.receiptPath && !receiptPath) {

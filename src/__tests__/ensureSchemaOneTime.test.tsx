@@ -74,6 +74,7 @@ describe("seed data", () => {
     const keys = (rawDb().prepare("SELECT key FROM meta ORDER BY key").all() as { key: string }[]).map((r) => r.key);
     expect(keys).toEqual([
       "moved:client_addresses",
+      "schema_fixups",
       "seeded:dashboard_presets",
       "seeded:invoice_templates",
       "seeded:resources",

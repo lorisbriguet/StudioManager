@@ -13,7 +13,6 @@ import { useInvoices, useUpdateInvoice, useDeleteInvoice } from "../db/hooks/use
 import { pdfFileName } from "../lib/pdfFilename";
 import { orgPaths } from "../lib/orgPaths";
 import { runBulkPdfExport } from "../lib/bulkPdfExport";
-import { buildInvoicePdf } from "../lib/documentPdf";
 import { useClients } from "../db/hooks/useClients";
 import { useRecurringTemplates, useCreateRecurringTemplate, useDeleteRecurringTemplate, useUpdateRecurringTemplate } from "../db/hooks/useRecurring";
 import { runRecurringCheck } from "../hooks/useRecurringCheck";
@@ -38,6 +37,10 @@ import type { RecurringFrequency } from "../types/recurring";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
 import { PILL } from "../components/ui/tokens";
+
+// Dynamic import keeps @react-pdf out of the main chunk until a PDF is needed.
+const buildInvoicePdf = async (id: number) =>
+  (await import("../lib/documentPdf")).buildInvoicePdf(id);
 
 const FREQUENCIES: RecurringFrequency[] = ["monthly", "quarterly", "biannual", "annual"];
 
