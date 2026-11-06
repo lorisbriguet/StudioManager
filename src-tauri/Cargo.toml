@@ -64,7 +64,7 @@ sha2 = "0.11"
 # Mock runtime: the per-window command check is tested against the real capabilities.
 tauri = { version = "2", features = ["test"] }
 # Self-signed certificates for the pinning verifier's tests (no network).
-rcgen = "0.13"
+rcgen = "0.14"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # Menu bar panel as a non-activating NSPanel: opening it doesn't activate the app
