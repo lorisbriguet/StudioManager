@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, lazy, Suspense } from "react";
 import { IconButton } from "../components/ui/IconButton";
 import { useForm } from "react-hook-form";
 import { Landmark, type LucideIcon } from "lucide-react";
@@ -15,9 +15,12 @@ import { useActivities, useCreateActivity, useUpdateActivity, useDeleteActivity 
 import type { Activity } from "../types/activity";
 import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
-import { Button, FormField, FormLayout, FormSection, FormGrid, FormGroup, FormActions, Input, DetailSkeleton, EmptyState, QueryError, SectionLabel, SidebarTitle, FORM_GAP, FORM_WIDTH, FIELD_LABEL } from "../components/ui";
+import { Button, FormField, FormLayout, FormSection, FormGrid, FormGroup, FormActions, Input, DetailSkeleton, PageSpinner, EmptyState, QueryError, SectionLabel, SidebarTitle, FORM_GAP, FORM_WIDTH, FIELD_LABEL } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
-import { TemplateEditor } from "../components/invoice/TemplateEditor";
+// Lazy: the template editor's live preview carries @react-pdf.
+const TemplateEditor = lazy(() =>
+  import("../components/invoice/TemplateEditor").then((m) => ({ default: m.TemplateEditor }))
+);
 import {
   useInvoiceTemplates,
   useDeleteInvoiceTemplate,
@@ -170,10 +173,12 @@ export function ProfilePage() {
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
           {editingTemplate !== null ? (
             <div className="flex-1 min-h-0 overflow-hidden">
-              <TemplateEditor
-                template={editingTemplate === "new" ? null : editingTemplate}
-                onSaved={() => setEditingTemplate(null)}
-              />
+              <Suspense fallback={<PageSpinner />}>
+                <TemplateEditor
+                  template={editingTemplate === "new" ? null : editingTemplate}
+                  onSaved={() => setEditingTemplate(null)}
+                />
+              </Suspense>
             </div>
           ) : (
             <div className="p-8">
