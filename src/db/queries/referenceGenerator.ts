@@ -1,4 +1,5 @@
 import { getDb } from "../index";
+import { escapeLike } from "./escapeLike";
 
 const SAFE_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -17,8 +18,8 @@ export async function getNextReference(
   }
   const db = await getDb();
   const rows = await db.select<{ max_num: number | null }[]>(
-    `SELECT MAX(CAST(SUBSTR(${column}, $1) AS INTEGER)) as max_num FROM ${table} WHERE ${column} LIKE $2`,
-    [prefix.length + 1, `${prefix}%`]
+    `SELECT MAX(CAST(SUBSTR(${column}, $1) AS INTEGER)) as max_num FROM ${table} WHERE ${column} LIKE $2 ESCAPE '\\'`,
+    [prefix.length + 1, `${escapeLike(prefix)}%`]
   );
   const next = (rows[0]?.max_num ?? 0) + 1;
   return `${prefix}${String(next).padStart(padLength, "0")}`;
