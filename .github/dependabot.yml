@@ -14,6 +14,16 @@ updates:
     groups:
       npm-minor-patch:
         update-types: [minor, patch]
+    # Majors that can't land as a plain bump, so their PRs stay red:
+    # - FullCalendar 7 merges the plugins into core and renames the CSS
+    #   classes; it comes with the calendar restyle, as its own task.
+    # - TypeScript 7 isn't supported by typescript-eslint yet. Remove this
+    #   rule once it is.
+    ignore:
+      - dependency-name: "@fullcalendar/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: typescript
+        versions: [">=7"]
   - package-ecosystem: cargo
     directories: ["/src-tauri", "/src-tauri/mcp"]
     schedule:
