@@ -1,10 +1,11 @@
 import { formatMoney } from "../lib/money";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Command } from "cmdk";
 import type { LucideIcon } from "lucide-react";
 import { useAppStore } from "../stores/app-store";
 import { confirmIfDirty } from "../lib/dirty-guard";
+import { newEntityFor, requestNewItem } from "../lib/newEntity";
 import { useT } from "../i18n/useT";
 import { Modal, Kbd, ICONS, ICON_SIZE, ICON_STROKE, MENU_GROUP_LABEL } from "./ui";
 import { useClients } from "../db/hooks/useClients";
@@ -17,6 +18,7 @@ export function CommandPalette() {
   const close = useAppStore((s) => s.closeCommandPalette);
   const toggle = useAppStore((s) => s.toggleCommandPalette);
   const navigate = useNavigate();
+  const location = useLocation();
   const t = useT();
   const [search, setSearch] = useState("");
 
@@ -41,6 +43,28 @@ export function CommandPalette() {
     close();
     setSearch("");
     if (await confirmIfDirty(path)) navigate(path);
+  };
+
+  // The same "new item" as Cmd+N on that page (lib/newEntity.ts).
+  const goNew = async (page: string) => {
+    const entity = newEntityFor(page);
+    if (!entity) return;
+    if (entity.kind === "task") {
+      // The New task form opens over the current page, nothing to leave;
+      // on a project page it preselects that project, like Cmd+N there.
+      const here = newEntityFor(location.pathname);
+      close();
+      setSearch("");
+      useAppStore.getState().openNewTask(here?.kind === "task" ? here.projectId : entity.projectId);
+    } else if (entity.kind === "route") {
+      await go(entity.to);
+    } else {
+      close();
+      setSearch("");
+      if (!(await confirmIfDirty(page))) return;
+      requestNewItem(page);
+      navigate(page);
+    }
   };
 
   return (
@@ -68,10 +92,14 @@ export function CommandPalette() {
 
           {/* Quick actions */}
           <Command.Group heading={<GroupHeading>{t.quick_actions}</GroupHeading>}>
-            <PaletteItem icon={ICONS.add} label={t.new_client} onSelect={() => go("/clients")} />
-            <PaletteItem icon={ICONS.add} label={t.new_project} onSelect={() => go("/projects")} />
-            <PaletteItem icon={ICONS.add} label={t.new_invoice} onSelect={() => go("/invoices/new")} />
-            <PaletteItem icon={ICONS.add} label={t.new_expense} onSelect={() => go("/expenses")} />
+            <PaletteItem icon={ICONS.add} label={t.new_task_action} onSelect={() => goNew("/tasks")} />
+            <PaletteItem icon={ICONS.add} label={t.new_client} onSelect={() => goNew("/clients")} />
+            <PaletteItem icon={ICONS.add} label={t.new_project} onSelect={() => goNew("/projects")} />
+            <PaletteItem icon={ICONS.add} label={t.new_invoice} onSelect={() => goNew("/invoices")} />
+            <PaletteItem icon={ICONS.add} label={t.new_quote} onSelect={() => goNew("/quotes")} />
+            <PaletteItem icon={ICONS.add} label={t.new_expense} onSelect={() => goNew("/expenses")} />
+            <PaletteItem icon={ICONS.add} label={t.new_income} onSelect={() => goNew("/income")} />
+            <PaletteItem icon={ICONS.add} label={t.new_article} onSelect={() => goNew("/wiki")} />
           </Command.Group>
 
           {/* Navigation */}

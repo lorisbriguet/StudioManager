@@ -132,6 +132,8 @@ function loadActiveTimer(): ActiveTimer | null {
 export interface AppState {
   commandPaletteOpen: boolean;
   quickTimerOpen: boolean;
+  /** The New task form: closed (null) or open with its preselected project. */
+  newTask: { projectId: number | null } | null;
   sidebarCollapsed: boolean;
   darkMode: boolean;
   themeId: string;
@@ -190,6 +192,8 @@ export interface AppState {
   toggleCommandPalette: () => void;
   toggleQuickTimer: () => void;
   closeQuickTimer: () => void;
+  openNewTask: (projectId: number | null) => void;
+  closeNewTask: () => void;
   toggleSidebar: () => void;
   toggleDarkMode: () => void;
   setDateFormat: (fmt: DateFormatOption) => void;
@@ -300,6 +304,7 @@ export function syncAppearanceFromStorage() {
 export const useAppStore = create<AppState>((set) => ({
   commandPaletteOpen: false,
   quickTimerOpen: false,
+  newTask: null,
   sidebarCollapsed: localStorage.getItem("sidebarCollapsed") === "true",
   darkMode: initialDark,
   themeId: localStorage.getItem("themeId") ?? "default-light",
@@ -375,6 +380,8 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
   toggleQuickTimer: () => set((s) => ({ quickTimerOpen: !s.quickTimerOpen })),
   closeQuickTimer: () => set({ quickTimerOpen: false }),
+  openNewTask: (projectId) => set({ newTask: { projectId } }),
+  closeNewTask: () => set({ newTask: null }),
   toggleSidebar: () =>
     set((s) => {
       const next = !s.sidebarCollapsed;

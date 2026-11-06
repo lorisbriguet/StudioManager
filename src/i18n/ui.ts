@@ -149,6 +149,9 @@ const ui = {
 
     // Tasks
     new_task: "New task...",
+    new_task_action: "New Task",
+    task_title: "Title",
+    task_title_required: "Title is required",
     new_subtask: "New subtask...",
     no_tasks_yet: "No tasks yet",
     no_matching_tasks: "No matching tasks",
@@ -1981,6 +1984,9 @@ const ui = {
 
     // Tasks
     new_task: "Nouvelle tâche...",
+    new_task_action: "Nouvelle tâche",
+    task_title: "Titre",
+    task_title_required: "Le titre est requis",
     new_subtask: "Nouvelle sous-tâche...",
     no_tasks_yet: "Aucune tâche",
     no_matching_tasks: "Aucune tâche correspondante",

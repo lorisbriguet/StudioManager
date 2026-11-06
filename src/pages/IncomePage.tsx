@@ -21,6 +21,7 @@ import { SortHeader, sortRows, type SortState } from "../components/ui/SortHeade
 import { ContextMenu, type ContextMenuState } from "../components/ui/ContextMenu";
 import { BulkActionBar } from "../components/ui/BulkActionBar";
 import { useReceiptDrop } from "../hooks/useReceiptDrop";
+import { useNewItem } from "../hooks/useNewItem";
 import { useDetectedFields } from "../hooks/useDetectedFields";
 import { useBulkSelect } from "../hooks/useBulkSelect";
 import { useBulkDelete } from "../hooks/useBulkDelete";
@@ -113,12 +114,8 @@ export function IncomePage() {
     useCallback((inc: (typeof filtered)[0]) => inc.date, [])
   );
 
-  // Cmd+N (GlobalShortcuts) opens the inline form on this page.
-  useEffect(() => {
-    const open = () => { setDroppedReceiptPath(null); setEditing(null); setShowForm(true); };
-    window.addEventListener("sm:new-item", open);
-    return () => window.removeEventListener("sm:new-item", open);
-  }, []);
+  // Cmd+N and the palette's New income open the form (lib/newEntity.ts).
+  useNewItem("/income", () => { setDroppedReceiptPath(null); setEditing(null); setShowForm(true); });
 
   // Keyboard row navigation over the visible (expanded) rows.
   const visibleRows = useMemo(
