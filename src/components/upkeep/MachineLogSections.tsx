@@ -1,3 +1,4 @@
+import { formatMoney } from "../../lib/money";
 import { useState } from "react";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { openMachineAttachment } from "../../lib/upkeep/openAttachment";
@@ -158,7 +159,7 @@ export function ServiceLogSection({ machineId, headingAs = "h2" }: { machineId: 
               <Table.Row key={e.id}>
                 <Table.Td className="tabular-nums whitespace-nowrap">{formatDisplayDate(e.done_on)}</Table.Td>
                 <Table.Td>{e.description}</Table.Td>
-                <Table.Td numeric muted>{e.cost != null ? e.cost.toFixed(2) : ""}</Table.Td>
+                <Table.Td numeric muted>{e.cost != null ? formatMoney(e.cost, null) : ""}</Table.Td>
                 <Table.Td numeric muted>{e.reading ?? ""}</Table.Td>
               </Table.Row>
             ))}

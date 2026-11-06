@@ -50,7 +50,7 @@ function fill(tpl: string, vars: Record<string, string>): string {
 /** Shown under the converted amount in the expense form. */
 export function conversionHint(c: Conversion, amount: number, t: Labels): string {
   return fill(t.upkeep_expense_converted, {
-    original: c.original, amount: amount.toFixed(2), rate: c.rate.toFixed(4), currency: c.currency,
+    original: c.original, amount: formatMoney(amount, "CHF"), rate: c.rate.toFixed(4), currency: c.currency,
   });
 }
 

@@ -1,3 +1,4 @@
+import { formatMoneyPdf } from "../../lib/money";
 import {
   Document,
   Page,
@@ -21,12 +22,7 @@ export interface PLPDFProps {
 }
 
 function formatCHF(amount: number): string {
-  const abs = Math.abs(amount);
-  const formatted = abs.toLocaleString("de-CH", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  return `${amount < 0 ? "- " : ""}CHF ${formatted}`;
+  return formatMoneyPdf(amount, "CHF");
 }
 
 const s = StyleSheet.create({

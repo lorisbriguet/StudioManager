@@ -1,3 +1,4 @@
+import { formatMoney } from "../lib/money";
 import React, { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { CalendarCheck } from "lucide-react";
 import { ICONS, ICON_SIZE, Button, DatePicker, Input, Select, FormField, FormGrid, FormModal, PageHeader, SearchBar, Table, TableSkeleton, EmptyState, QueryState, NoResults, Spinner, Popover, IconButton, Tag, Callout, Tooltip, SegmentedControl, CountBadge } from "../components/ui";
@@ -358,7 +359,7 @@ export function ExpensesPage() {
                   colSpan={9}
                   label={year}
                   count={`${yearExpenses.length} ${yearExpenses.length !== 1 ? t.expenses_count_plural : t.expenses_count_singular}`}
-                  total={`CHF ${yearTotal.toFixed(2)}`}
+                  total={formatMoney(yearTotal, "CHF")}
                   open={isOpen}
                   onToggle={() => toggleYear(year)}
                 />
@@ -410,7 +411,7 @@ export function ExpensesPage() {
                         )}
                       </Table.Td>
                       <Table.Td numeric className="font-medium">
-                        CHF {exp.amount.toFixed(2)}
+                        {formatMoney(exp.amount, "CHF")}
                       </Table.Td>
                       <Table.Actions>
                         <IconButton size="xs"
@@ -768,7 +769,7 @@ export function NewExpenseForm({
                 >
                   <span>{s.supplier}</span>
                   <span className="text-xs text-muted">
-                    {s.category_code} / CHF {s.amount.toFixed(2)}
+                    {s.category_code} / {formatMoney(s.amount, "CHF")}
                   </span>
                 </button>
               ))}
@@ -834,7 +835,7 @@ export function NewExpenseForm({
       {duplicateWarning && (
         <Callout tone="warning">
           <span className="font-medium">{t.possible_duplicate}:</span>{" "}
-          {duplicateWarning.supplier} — {duplicateWarning.amount.toFixed(2)} CHF ({formatDisplayDate(duplicateWarning.date)})
+          {duplicateWarning.supplier} — {formatMoney(duplicateWarning.amount, "CHF")} ({formatDisplayDate(duplicateWarning.date)})
         </Callout>
       )}
     </FormModal>

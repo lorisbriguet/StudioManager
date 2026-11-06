@@ -33,7 +33,7 @@ describe("toBaseAmount: an upkeep amount as a CHF expense", () => {
 
   it("says what was converted, under the amount and in the expense notes", () => {
     const c = { original: "USD\u00a015.00", currency: "USD" as const, rate: 1.25 };
-    expect(conversionHint(c, 12, t)).toBe("USD\u00a015.00 prefilled as CHF 12.00 (1 CHF = 1.2500 USD).");
+    expect(conversionHint(c, 12, t)).toBe("USD\u00a015.00 prefilled as CHF\u00a012.00 (1 CHF = 1.2500 USD).");
     expect(conversionNote(c, "2026-10-29", t)).toBe("Converted from USD\u00a015.00 at 1 CHF = 1.2500 USD (2026-10-29).");
     expect(conversionNote(c, "2026-10-29", uiLabels.FR)).toContain("USD\u00a015.00");
   });

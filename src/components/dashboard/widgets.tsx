@@ -89,7 +89,7 @@ export function KPIWidget({ label, value, numericValue, accent, delta }: { label
   const t = useT();
   const animated = useCountUp(numericValue ?? 0);
   const displayValue = numericValue != null
-    ? `CHF ${animated.toLocaleString("de-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    ? formatMoney(animated, "CHF")
     : value;
   return (
     <StatTile
@@ -182,7 +182,7 @@ function ChartRevenue() {
             <XAxis dataKey="name" tick={{ fontSize: 10, fill: chart.tickFill }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fontSize: 10, fill: chart.tickFill }} axisLine={false} tickLine={false} />
             <Tooltip
-              formatter={(value) => [`CHF ${Number(value ?? 0).toFixed(2)}`, ""]}
+              formatter={(value) => [formatMoney(Number(value ?? 0), "CHF"), ""]}
               contentStyle={chart.tooltipStyle}
               cursor={{ fill: chart.cursorFill }}
             />
@@ -235,7 +235,7 @@ function RecentInvoices() {
                 <span className="text-xs text-muted ml-2 truncate">{clientName(inv.client_id)}</span>
               )}
             </div>
-            <span className="text-muted shrink-0 ml-2">CHF {inv.total.toFixed(2)}</span>
+            <span className="text-muted shrink-0 ml-2">{formatMoney(inv.total, "CHF")}</span>
           </Link>
         ))}
         {invoices === undefined ? <ListSkeleton size="sm" rows={3} /> : recentInvoices.length === 0 && (
@@ -593,7 +593,7 @@ function UnpaidInvoices() {
             </div>
             <div className="text-right shrink-0 ml-2">
               <div className="text-muted text-xs">{inv.daysOut} {t.days_outstanding}</div>
-              <div className="text-sm">CHF {inv.total.toFixed(2)}</div>
+              <div className="text-sm">{formatMoney(inv.total, "CHF")}</div>
             </div>
           </Link>
         ))}
@@ -643,7 +643,7 @@ function ExpenseBreakdown() {
                 {/* Hash the category code so slices keep their color across ranking changes */}
                 {data.map((d) => <Cell key={d.code} fill={COLORS[tagHash(d.code) % COLORS.length]} />)}
               </Pie>
-              <Tooltip formatter={(value) => `CHF ${Number(value).toFixed(2)}`} contentStyle={chart.tooltipStyle} itemStyle={chart.pieItemStyle} labelStyle={{ color: "var(--color-text)" }} />
+              <Tooltip formatter={(value) => formatMoney(Number(value), "CHF")} contentStyle={chart.tooltipStyle} itemStyle={chart.pieItemStyle} labelStyle={{ color: "var(--color-text)" }} />
             </PieChart>
           </ResponsiveContainer>
         ) : expenses === undefined || categories === undefined ? (
@@ -1457,7 +1457,7 @@ function InvoiceAging() {
               cursor={{ fill: chart.cursorFill }}
               formatter={(value, name) => {
                 if (name === "count") return [String(value), t.invoices_count_plural];
-                return [`CHF ${Number(value ?? 0).toFixed(2)}`, t.total];
+                return [formatMoney(Number(value ?? 0), "CHF"), t.total];
               }}
             />
             <Bar dataKey="count" fill="var(--color-chart-4)" radius={[4, 4, 0, 0]} name="count" />
@@ -1468,7 +1468,7 @@ function InvoiceAging() {
         {chartData.filter((d) => d.count > 0).map((d) => (
           <div key={d.bracket} className="flex items-center justify-between text-xs">
             <span className="text-muted">{d.bracket}d</span>
-            <span className="font-medium text-danger-text">{d.count} — CHF {d.total.toFixed(2)}</span>
+            <span className="font-medium text-danger-text">{d.count} — {formatMoney(d.total, "CHF")}</span>
           </div>
         ))}
       </div>
