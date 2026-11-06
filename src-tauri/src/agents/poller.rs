@@ -10,16 +10,78 @@ use super::usage::limits::{check_alerts, now_ms as limits_now_ms, LIMITS_FILE};
 use super::transcript::{last_change_ms, last_model, locate, model_alias, model_label};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{Emitter, Listener, Manager};
 use tauri_plugin_notification::NotificationExt;
 
 pub const CHANGED_EVENT: &str = "agents:changed";
+/// While a view shows the list (the Agents page, the menu bar panel).
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
+/// While none does, also with no agents: the menu bar icon and the "needs you" banner follow
+/// a little later, and an agent started elsewhere still shows up.
+const IDLE_INTERVAL: Duration = Duration::from_secs(30);
+/// How long one `agents_watch` call keeps the fast pace; a view on screen renews it every 3 s.
+const WATCH_LEASE: Duration = Duration::from_secs(8);
 const INDEX_RELOAD: Duration = Duration::from_secs(30);
 /// Plan-limit alerts (80%, pace) don't need the 2-s tick, and each check reads the history.
 const ALERTS_INTERVAL: Duration = Duration::from_secs(60);
+
+/// The poller's pace: fast while some view showed the list in the last `WATCH_LEASE`.
+pub struct Pace {
+    watched_until: Mutex<Option<Instant>>,
+    wake: Condvar,
+}
+
+static PACE: Pace = Pace::new();
+
+fn interval_at(watched_until: Option<Instant>, now: Instant) -> Duration {
+    match watched_until {
+        Some(until) if now < until => POLL_INTERVAL,
+        _ => IDLE_INTERVAL,
+    }
+}
+
+impl Pace {
+    pub const fn new() -> Self {
+        Self { watched_until: Mutex::new(None), wake: Condvar::new() }
+    }
+
+    /// A view shows the list: poll fast from now on, and right away when the last pass is
+    /// older than the fast interval.
+    pub fn watch(&self, now: Instant) {
+        if let Ok(mut until) = self.watched_until.lock() {
+            *until = Some(now + WATCH_LEASE);
+        }
+        self.wake.notify_all();
+    }
+
+    /// The wait between two passes at `now`.
+    #[cfg(test)]
+    fn interval(&self, now: Instant) -> Duration {
+        interval_at(self.watched_until.lock().ok().and_then(|u| *u), now)
+    }
+
+    /// Blocks until the pass after the one at `last` is due; a `watch` call can bring it forward.
+    /// `hurry` (a banner is due shortly) keeps the fast pace even when no view is open.
+    fn wait_after(&self, last: Instant, hurry: bool) {
+        let Ok(mut guard) = self.watched_until.lock() else {
+            std::thread::sleep(POLL_INTERVAL);
+            return;
+        };
+        loop {
+            let now = Instant::now();
+            let due = last + if hurry { POLL_INTERVAL } else { interval_at(*guard, now) };
+            if now >= due {
+                return;
+            }
+            guard = match self.wake.wait_timeout(guard, due - now) {
+                Ok((g, _)) => g,
+                Err(_) => return,
+            };
+        }
+    }
+}
 
 /// What the poller remembers between passes.
 #[derive(Default)]
@@ -76,6 +138,12 @@ pub struct NotifyGate {
 }
 
 impl NotifyGate {
+    /// A wait is held only for `NOTIFY_DELAY_MS` (not for a cooldown): the next pass should
+    /// come soon, or the banner would be one slow interval late.
+    pub fn due_soon(&self) -> bool {
+        self.pending.keys().any(|id| !self.last_sent.contains_key(id))
+    }
+
     /// `fresh` is what `poll_once` wants to announce, `list` the full list of this pass.
     pub fn admit(&mut self, fresh: Vec<Agent>, list: &[Agent], now_ms: i64) -> Vec<Agent> {
         for a in &fresh {
@@ -227,8 +295,10 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
     let mut alerts_at: Option<Instant> = None;
     let mut gate = NotifyGate::default();
     let mut login_at: Option<Instant> = None;
+    let mut last_pass = Instant::now();
     loop {
-        std::thread::sleep(POLL_INTERVAL);
+        PACE.wait_after(last_pass, gate.due_soon());
+        last_pass = Instant::now();
         let Some(state) = app.try_state::<super::AgentsState>() else {
             continue;
         };
@@ -320,6 +390,12 @@ pub async fn agents_list(
     Ok(state.cached())
 }
 
+/// A view shows the list (each visible one sends this every 3 s): poll every 2 s instead of 30 s.
+#[tauri::command]
+pub fn agents_watch() {
+    PACE.watch(Instant::now());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -332,6 +408,32 @@ mod tests {
             kind: Kind::Background, status: "busy".into(), state: None, waiting_for: None,
             started_at: 0, group: g, quiet: None, project: None, model: None, model_label: None,
         }
+    }
+
+    #[test]
+    fn pace_is_fast_only_while_watched() {
+        let pace = Pace::new();
+        let t0 = Instant::now();
+        assert_eq!(pace.interval(t0), IDLE_INTERVAL);
+        pace.watch(t0);
+        assert_eq!(pace.interval(t0), POLL_INTERVAL);
+        assert_eq!(pace.interval(t0 + WATCH_LEASE - Duration::from_millis(1)), POLL_INTERVAL);
+        // No view renewed it: back to the slow pace.
+        assert_eq!(pace.interval(t0 + WATCH_LEASE), IDLE_INTERVAL);
+    }
+
+    #[test]
+    fn a_watch_brings_a_slow_wait_forward() {
+        let pace = Arc::new(Pace::new());
+        // The last pass was 5 s ago: at the slow pace the next one is 25 s away.
+        let last = Instant::now() - Duration::from_secs(5);
+        let waiter = pace.clone();
+        let started = Instant::now();
+        let t = std::thread::spawn(move || waiter.wait_after(last, false));
+        std::thread::sleep(Duration::from_millis(100));
+        pace.watch(Instant::now());
+        t.join().unwrap();
+        assert!(started.elapsed() < Duration::from_secs(5), "{:?}", started.elapsed());
     }
 
     #[test]
@@ -505,6 +607,21 @@ mod tests {
         assert!(g.admit(vec![], &waiting, 5_000).is_empty());
         assert_eq!(g.admit(vec![], &waiting, 6_000).len(), 1);
         assert!(g.admit(vec![], &waiting, 7_000).is_empty());
+    }
+
+    #[test]
+    fn a_banner_held_for_the_delay_is_due_soon_one_held_for_the_cooldown_is_not() {
+        let mut g = NotifyGate::default();
+        assert!(!g.due_soon());
+        let waiting = vec![ag("a", Group::NeedsYou)];
+        g.admit(waiting.clone(), &waiting, 0);
+        assert!(g.due_soon());
+        g.admit(vec![], &waiting, 6_000);
+        assert!(!g.due_soon());
+        // Waiting again inside the cooldown: held for minutes, no hurry.
+        g.admit(vec![], &[ag("a", Group::Working)], 10_000);
+        g.admit(waiting.clone(), &waiting, 20_000);
+        assert!(!g.due_soon());
     }
 
     #[test]

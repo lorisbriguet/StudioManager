@@ -946,6 +946,7 @@ pub fn run() {
             agents::prompt::agents_prompt,
             agents::prompt::agents_answer,
             agents::poller::agents_list,
+            agents::poller::agents_watch,
             agents::login::agents_login_status,
             agents::login::agents_login_check,
             agents::uploads::agents_save_image,
@@ -1070,7 +1071,7 @@ mod tests {
 
         let mut panel = quoted_after(sets, "identifier = \"menubar-window\"");
         panel.retain(|p| p.starts_with("allow-"));
-        assert_eq!(panel.len(), 14, "{panel:?}");
+        assert_eq!(panel.len(), 15, "{panel:?}");
         for p in &panel {
             assert!(every.contains(p), "{p} is not a command");
         }
@@ -1110,7 +1111,7 @@ mod tests {
             assert!(refused(&call("menubar", cmd)), "panel {cmd}: {}", call("menubar", cmd));
             assert!(!refused(&call("main", cmd)), "main {cmd}: {}", call("main", cmd));
         }
-        for cmd in ["agents_list", "routines_run", "menubar_open_main"] {
+        for cmd in ["agents_list", "agents_watch", "routines_run", "menubar_open_main"] {
             assert!(!refused(&call("menubar", cmd)), "panel {cmd}: {}", call("menubar", cmd));
         }
     }

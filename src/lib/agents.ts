@@ -259,6 +259,11 @@ export function listAgents(): Promise<Agent[]> {
   return invoke<Agent[]>("agents_list");
 }
 
+/** The list is on screen: the poller checks every 2 s for the next few seconds instead of every 30 s. */
+export function watchAgents(): Promise<void> {
+  return invoke<void>("agents_watch");
+}
+
 export function startFolders(): Promise<StartFolder[]> {
   return invoke<StartFolder[]>("agents_start_folders");
 }
