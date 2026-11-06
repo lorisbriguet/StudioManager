@@ -40,6 +40,22 @@ fn table_exists(conn: &rusqlite::Connection, name: &str) -> Result<bool, String>
     .map_err(|e| format!("sqlite_master lookup failed: {e}"))
 }
 
+/// Put the file in WAL mode. The mode is stored in the file, so every later
+/// connection (app, MCP server, `sm`) uses it too. Nothing sets it otherwise:
+/// tauri-plugin-sql only asks for WAL when it creates the file, and
+/// `migrate_db` always creates it first.
+///
+/// Best-effort: switching needs an exclusive lock that the busy timeout does
+/// not wait for, so if another process has the file open right now the switch
+/// is skipped and retried on the next open.
+fn ensure_wal(conn: &rusqlite::Connection) {
+    match conn.query_row("PRAGMA journal_mode=WAL", [], |r| r.get::<_, String>(0)) {
+        Ok(mode) if mode.eq_ignore_ascii_case("wal") => {}
+        Ok(mode) => eprintln!("[migrate] journal_mode is still {mode}; WAL will be retried on next open"),
+        Err(e) => eprintln!("[migrate] could not switch to WAL: {e}"),
+    }
+}
+
 /// Apply every migration newer than the file's recorded version.
 /// Returns how many were applied.
 pub fn migrate_db(path: &Path) -> Result<u32, String> {
@@ -49,6 +65,7 @@ pub fn migrate_db(path: &Path) -> Result<u32, String> {
     let mut conn = rusqlite::Connection::open(path).map_err(|e| format!("open {}: {e}", path.display()))?;
     conn.busy_timeout(std::time::Duration::from_millis(5000))
         .map_err(|e| format!("busy_timeout: {e}"))?;
+    ensure_wal(&conn);
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)",
     )
@@ -107,6 +124,48 @@ mod tests {
         )
         .unwrap()
             == 1
+    }
+
+    fn journal_mode(path: &std::path::Path) -> String {
+        Connection::open(path)
+            .unwrap()
+            .query_row("PRAGMA journal_mode", [], |r| r.get(0))
+            .unwrap()
+    }
+
+    #[test]
+    fn fresh_file_is_in_wal_mode() {
+        let db = temp_db("wal-fresh");
+        migrate_db(&db).unwrap();
+        assert_eq!(journal_mode(&db), "wal");
+        crate::dbfiles::remove_db_files(&db);
+    }
+
+    #[test]
+    fn rollback_journal_file_is_switched_to_wal() {
+        let db = temp_db("wal-existing");
+        let conn = Connection::open(&db).unwrap();
+        conn.execute_batch("PRAGMA journal_mode=DELETE; CREATE TABLE t (x)").unwrap();
+        drop(conn);
+        assert_eq!(journal_mode(&db), "delete");
+        migrate_db(&db).unwrap();
+        assert_eq!(journal_mode(&db), "wal");
+        crate::dbfiles::remove_db_files(&db);
+    }
+
+    /// The bundled SQLite is built with SQLITE_DEFAULT_WAL_SYNCHRONOUS=1
+    /// (src-tauri/.cargo/config.toml), so every WAL connection, including the
+    /// tauri-plugin-sql pool, starts at synchronous=NORMAL.
+    #[test]
+    fn wal_connections_default_to_synchronous_normal() {
+        let db = temp_db("wal-sync");
+        migrate_db(&db).unwrap();
+        let sync: i64 = Connection::open(&db)
+            .unwrap()
+            .query_row("PRAGMA synchronous", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(sync, 1, "LIBSQLITE3_FLAGS did not reach the bundled SQLite build");
+        crate::dbfiles::remove_db_files(&db);
     }
 
     #[test]

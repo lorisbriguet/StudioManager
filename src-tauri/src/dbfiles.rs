@@ -1,6 +1,6 @@
 //! SQLite-aware database file operations.
 //!
-//! The DB runs in WAL mode (sqlx default), so a plain `fs::copy` of the main
+//! The DB runs in WAL mode (set by `migrate::migrate_db` on every open), so a plain `fs::copy` of the main
 //! file can miss recently committed transactions still sitting in `-wal`,
 //! and copying OVER a file that other connections hold open corrupts state.
 //! Snapshots therefore go through `VACUUM INTO` (a consistent single-file

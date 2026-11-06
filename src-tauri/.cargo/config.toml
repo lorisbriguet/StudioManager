@@ -4,3 +4,12 @@
 # default target/ layout.
 [build]
 target-dir = "/Users/loris.briguet/.cargo-targets/studiomanager"
+
+# WAL connections default to synchronous=NORMAL instead of FULL: one fsync per
+# checkpoint instead of per commit, still crash-safe (a power cut can lose the
+# last commits, never corrupt the file). A build flag because tauri-plugin-sql
+# opens its pool from a URL and cannot run a PRAGMA on each pooled connection.
+# Checked by migrate::tests::wal_connections_default_to_synchronous_normal.
+# scripts/build-mcp.sh sets the same flag for the MCP server.
+[env]
+LIBSQLITE3_FLAGS = "-DSQLITE_DEFAULT_WAL_SYNCHRONOUS=1"
