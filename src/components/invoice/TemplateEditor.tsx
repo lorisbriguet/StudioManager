@@ -101,6 +101,9 @@ type ColumnKey = "designation" | "rate" | "unit" | "qty" | "amount";
 
 const DEFAULT_COLUMN_ORDER: ColumnKey[] = ["designation", "rate", "unit", "qty", "amount"];
 
+/** How long the live PDF preview waits after the last form change. */
+export const PREVIEW_DEBOUNCE_MS = 300;
+
 type ColumnLabels = Record<ColumnKey, string>;
 
 function makeColumnLabels(t: { designation: string; rate: string; unit: string; qty: string; amount: string }): ColumnLabels {
@@ -241,6 +244,16 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
     show_footer: showFooter ? 1 : 0,
     columns: JSON.stringify(columnOrder),
   };
+
+  // The live preview re-renders the whole PDF, so it follows the form 300 ms
+  // after the last change instead of on every keystroke. Keyed on the JSON so
+  // a re-render with the same values doesn't restart the timer.
+  const templateKey = JSON.stringify(currentTemplateState);
+  const [previewTemplate, setPreviewTemplate] = useState(currentTemplateState);
+  useEffect(() => {
+    const id = setTimeout(() => setPreviewTemplate(JSON.parse(templateKey)), PREVIEW_DEBOUNCE_MS);
+    return () => clearTimeout(id);
+  }, [templateKey]);
 
   const moveColumn = useCallback((index: number, direction: -1 | 1) => {
     setColumnOrder((prev) => {
@@ -427,9 +440,9 @@ export function TemplateEditor({ template, onSaved }: TemplateEditorProps) {
               lineItems={sampleLineItems}
               client={sampleClient as never}
               profile={sampleProfile as never}
-              projectName={showProjectName ? "Brand Identity Project" : undefined}
+              projectName={previewTemplate.show_project_name ? "Brand Identity Project" : undefined}
               reminderCount={0}
-              template={currentTemplateState as never}
+              template={previewTemplate as never}
             />
           </PDFViewer>
         )}
