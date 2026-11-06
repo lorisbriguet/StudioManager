@@ -28,6 +28,7 @@ vi.mock("../db/hooks/useProjects", () => ({ useUpdateProject: () => ({ mutateAsy
 
 import { useStartAgentOn } from "../hooks/useStartAgentOn";
 import { notify } from "../lib/notify";
+import { AgentsPage } from "../pages/AgentsPage";
 
 let where = "";
 function Probe() {
@@ -183,7 +184,6 @@ describe("useStartAgentOn", () => {
 
 describe("AgentsPage ?started=", () => {
   it("selects the started agent once it is listed", async () => {
-    const { AgentsPage } = await import("../pages/AgentsPage");
     setInvokeHandler((cmd) =>
       cmd === "agents_list"
         ? [
