@@ -19,11 +19,21 @@ updates:
     #   classes; it comes with the calendar restyle, as its own task.
     # - TypeScript 7 isn't supported by typescript-eslint yet. Remove this
     #   rule once it is.
+    # - xterm 6 drives the Agents page terminal, which no test exercises; it
+    #   needs a bump of the addons with it and a manual check in the app, as
+    #   its own task.
+    # - @types/node follows the Node major CI runs (node-version: 22 in
+    #   .github/workflows/ci.yml, release.yml, dependency-audit.yml). Raise
+    #   this rule together with node-version there.
     ignore:
       - dependency-name: "@fullcalendar/*"
         update-types: ["version-update:semver-major"]
       - dependency-name: typescript
         versions: [">=7"]
+      - dependency-name: "@xterm/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
+        versions: [">=23"]
   - package-ecosystem: cargo
     directories: ["/src-tauri", "/src-tauri/mcp"]
     schedule:
@@ -35,6 +45,13 @@ updates:
     groups:
       cargo-minor-patch:
         update-types: [minor, patch]
+    # rusqlite stays on 0.32 in both crates: they open the same database, so
+    # they bundle the same SQLite. The app crate can't move past 0.32 until
+    # tauri-plugin-sql's sqlx-sqlite accepts libsqlite3-sys >0.30 (see the
+    # note in src-tauri/Cargo.toml). Remove this rule then, for both crates.
+    ignore:
+      - dependency-name: rusqlite
+        versions: [">=0.33"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
