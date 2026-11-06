@@ -209,6 +209,10 @@ export function DashboardPage() {
     });
   }, [widgets, layout]);
 
+  // Below full width the dashboard is view-only: the grid shows a squeezed
+  // copy of the saved layout, so there is nothing the user could arrange.
+  const editable = isFullWidthLayout(width);
+
   // Save only what the user arranged, after a drag or resize at full width.
   // onLayoutChange also fires when the grid fits the layout to a narrower
   // window, so it must not save.
@@ -312,13 +316,14 @@ export function DashboardPage() {
           onDragStop={handleInteractionStop}
           onResizeStart={lockSelection}
           onResizeStop={handleInteractionStop}
-          resizeConfig={{ enabled: true, handles: ["s", "w", "e", "n", "sw", "nw", "se", "ne"] }}
+          dragConfig={{ enabled: editable }}
+          resizeConfig={{ enabled: editable, handles: ["s", "w", "e", "n", "sw", "nw", "se", "ne"] }}
           compactor={verticalCompactor}
           margin={[16, 16] as [number, number]}
           autoSize
         >
           {sortedWidgets.map((widget, idx) => (
-            <Card key={widget.id} padding="none" className="stagger-in overflow-hidden relative group cursor-grab active:cursor-grabbing" style={{ animationDelay: `${idx * 50}ms` }}>
+            <Card key={widget.id} padding="none" className={`stagger-in overflow-hidden relative group${editable ? " cursor-grab active:cursor-grabbing" : ""}`} style={{ animationDelay: `${idx * 50}ms` }}>
               {/* Remove button */}
               <IconButton
                 icon={ICONS.close}

@@ -73,6 +73,17 @@ describe("dashboard layout saving", () => {
     expect(useDashboardStore.getState().layout).toEqual(wide);
   });
 
+  it("is view-only below full width and editable at full width", () => {
+    type Config = { enabled: boolean };
+    const narrow = renderPage(1000) as unknown as { dragConfig: Config; resizeConfig: Config };
+    expect(narrow.dragConfig.enabled).toBe(false);
+    expect(narrow.resizeConfig.enabled).toBe(false);
+    cleanup();
+    const full = renderPage(1400) as unknown as { dragConfig: Config; resizeConfig: Config };
+    expect(full.dragConfig.enabled).toBe(true);
+    expect(full.resizeConfig.enabled).toBe(true);
+  });
+
   it("saves a drag or resize at full width", () => {
     const props = renderPage(1400);
     const moved = [{ ...wide[0], x: 6 }, wide[1]];
