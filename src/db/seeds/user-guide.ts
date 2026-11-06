@@ -517,8 +517,9 @@ const articles: ArticleSeed[] = [
 <p>For your annual tax declaration, you can export:</p>
 <ul>
   <li>P&amp;L summary PDF</li>
-  <li>Full invoice list</li>
+  <li>Full invoice list, with each invoice's PDF as it was stored when you sent it</li>
   <li>Full expense list with receipt attachments</li>
+  <li>Other income list with receipt attachments</li>
 </ul>
 <p>These documents are formatted for submission to your trustee or tax advisor.</p>`,
   },
