@@ -69,20 +69,20 @@ DELETE FROM sqlite_sequence WHERE name IN (
 -- CLIENTS
 -- ═══════════════════════════════════════════════════
 INSERT INTO clients (id, name, billing_name, address_line1, address_line2, postal_city, email, phone, language, has_discount, discount_rate, notes) VALUES
-  ('C-001', 'La Fonderie', 'Association La Fonderie', 'Avenue de la Gare 14', '', '1003 Lausanne', 'booking@lafonderie.ch', '+41 21 555 21 01', 'FR', 0, 0.00, 'Salle de concert, 250 places. Contact principal : Nadia Roux.'),
-  ('C-002', 'Festival Sonar Valais', 'Festival Sonar Valais', 'Route des Îles 3', '', '1950 Sion', 'programmation@sonarvalais.ch', '+41 27 555 22 02', 'FR', 0, 0.00, 'Festival d''ete, scène B. Programmation confirmée chaque année en janvier.'),
-  ('C-003', 'Centre culturel Le Phare', 'Fondation Le Phare', 'Rue de Lausanne 45', '', '1700 Fribourg', 'administration@lephare-fr.ch', '+41 26 555 23 03', 'FR', 1, 0.10, 'Institution culturelle. Rabais partenaire 10% sur les cachets.'),
-  ('C-004', 'Northlight Records', 'Northlight Records GmbH', 'Hardstrasse 219', '', '8004 Zürich', 'contracts@northlightrecords.com', '+41 44 555 24 04', 'EN', 0, 0.00, 'Label. Album advance and distribution deal for Aurore.'),
-  ('C-005', 'École de musique Riviera', 'École de musique Riviera', 'Rue du Lac 9', '', '1800 Vevey', 'direction@emriviera.ch', '+41 21 555 25 05', 'FR', 0, 0.00, 'Ateliers d''écriture mensuels pour les élèves avancés.'),
-  ('C-006', 'Radio Onde', 'Radio Onde SA', 'Rue des Vollandes 8', '', '1204 Genève', 'production@radioonde.ch', '+41 22 555 26 06', 'FR', 0, 0.00, 'Session live + interview pour l''émission du samedi.');
+  ('C-001', 'La Fonderie', 'Association La Fonderie', 'Avenue de la Gare 14', '', '1003 Lausanne', 'booking@lafonderie.example', '+41 21 555 21 01', 'FR', 0, 0.00, 'Salle de concert, 250 places. Contact principal : Nadia Roux.'),
+  ('C-002', 'Festival Sonar Valais', 'Festival Sonar Valais', 'Route des Îles 3', '', '1950 Sion', 'programmation@sonarvalais.example', '+41 27 555 22 02', 'FR', 0, 0.00, 'Festival d''ete, scène B. Programmation confirmée chaque année en janvier.'),
+  ('C-003', 'Centre culturel Le Phare', 'Fondation Le Phare', 'Rue de Lausanne 45', '', '1700 Fribourg', 'administration@lephare-fr.example', '+41 26 555 23 03', 'FR', 1, 0.10, 'Institution culturelle. Rabais partenaire 10% sur les cachets.'),
+  ('C-004', 'Northlight Records', 'Northlight Records GmbH', 'Hardstrasse 219', '', '8004 Zürich', 'contracts@northlightrecords.example', '+41 44 555 24 04', 'EN', 0, 0.00, 'Label. Album advance and distribution deal for Aurore.'),
+  ('C-005', 'École de musique Riviera', 'École de musique Riviera', 'Rue du Lac 9', '', '1800 Vevey', 'direction@emriviera.example', '+41 21 555 25 05', 'FR', 0, 0.00, 'Ateliers d''écriture mensuels pour les élèves avancés.'),
+  ('C-006', 'Radio Onde', 'Radio Onde SA', 'Rue des Vollandes 8', '', '1204 Genève', 'production@radioonde.example', '+41 22 555 26 06', 'FR', 0, 0.00, 'Session live + interview pour l''émission du samedi.');
 
 INSERT INTO client_contacts (client_id, first_name, last_name, email, phone, role) VALUES
-  ('C-001', 'Nadia', 'Roux', 'nadia@lafonderie.ch', '+41 79 611 21 01', 'Booking manager'),
-  ('C-002', 'Julien', 'Fasel', 'julien@sonarvalais.ch', '+41 79 611 22 02', 'Programmateur'),
-  ('C-003', 'Isabelle', 'Currat', 'isabelle@lephare-fr.ch', '+41 79 611 23 03', 'Directrice'),
-  ('C-004', 'James', 'Carter', 'james.carter@northlightrecords.com', '+41 79 611 24 04', 'A&R Manager'),
-  ('C-005', 'Marc', 'Bovay', 'marc@emriviera.ch', '+41 79 611 25 05', 'Directeur'),
-  ('C-006', 'Sarah', 'Dupraz', 'sarah@radioonde.ch', '+41 79 611 26 06', 'Journaliste musique');
+  ('C-001', 'Nadia', 'Roux', 'nadia@lafonderie.example', '+41 79 611 21 01', 'Booking manager'),
+  ('C-002', 'Julien', 'Fasel', 'julien@sonarvalais.example', '+41 79 611 22 02', 'Programmateur'),
+  ('C-003', 'Isabelle', 'Currat', 'isabelle@lephare-fr.example', '+41 79 611 23 03', 'Directrice'),
+  ('C-004', 'James', 'Carter', 'james.carter@northlightrecords.example', '+41 79 611 24 04', 'A&R Manager'),
+  ('C-005', 'Marc', 'Bovay', 'marc@emriviera.example', '+41 79 611 25 05', 'Directeur'),
+  ('C-006', 'Sarah', 'Dupraz', 'sarah@radioonde.example', '+41 79 611 26 06', 'Journaliste musique');
 
 INSERT INTO client_addresses (client_id, label, billing_name, address_line1, address_line2, postal_city) VALUES
   ('C-001', 'Salle', 'Association La Fonderie', 'Avenue de la Gare 14', '', '1003 Lausanne'),
@@ -368,9 +368,9 @@ INSERT INTO income (reference, date, description, amount, category, source, note
 -- RESOURCES
 -- ═══════════════════════════════════════════════════
 INSERT INTO resources (id, name, url, price) VALUES
-  (1, 'GigBooker', 'https://gigbooker.ch', ''),
-  (2, 'Studio Nord — mastering', 'https://studionord-mastering.ch', ''),
-  (3, 'Fonds cantonal de la culture — portail', 'https://fondsculture-vd.ch', 'free'),
+  (1, 'GigBooker', 'https://gigbooker.example', ''),
+  (2, 'Studio Nord — mastering', 'https://studionord-mastering.example', ''),
+  (3, 'Fonds cantonal de la culture — portail', 'https://fondsculture-vd.example', 'free'),
   (4, 'Ville de Lausanne — subventions culture', 'https://lausanne.ch/subventions-culture', 'free');
 
 INSERT INTO resource_tags (resource_id, tag) VALUES
@@ -412,7 +412,7 @@ INSERT INTO wiki_folders (id, name, sort_order) VALUES
 
 INSERT INTO wiki_articles (id, folder_id, project_id, title, content, sort_order) VALUES
   (1, 1, 2, 'Fiche technique', '<h2>Backline demande</h2><p>Batterie complète, deux amplis guitare, DI x6, retours x4. Liste complète envoyée à chaque salle une semaine avant la date.</p><h3>Plan de scène</h3><p>Voir schéma partagé avec l''ingénieur son. Durée de balance : 45 minutes minimum.</p>', 0),
-  (2, 2, 1, 'Dossier de presse', '<h2>Biographie</h2><p>Aurore, projet solo, premier album à paraître. Textes en français, univers pop-folk.</p><h2>Photos</h2><p>Pack haute résolution disponible sur demande. Crédit photo obligatoire.</p><h2>Contact presse</h2><p>hello@aurore-musique.ch</p>', 1),
+  (2, 2, 1, 'Dossier de presse', '<h2>Biographie</h2><p>Aurore, projet solo, premier album à paraître. Textes en français, univers pop-folk.</p><h2>Photos</h2><p>Pack haute résolution disponible sur demande. Crédit photo obligatoire.</p><h2>Contact presse</h2><p>hello@aurore-musique.example</p>', 1),
   (3, 2, NULL, 'Checklist demande de subvention', '<h2>Avant dépôt</h2><ul><li>Budget prévisionnel détaillé</li><li>Calendrier du projet</li><li>Lettres de soutien (salle, label)</li></ul><h2>Après acceptation</h2><ul><li>Accuser réception par écrit</li><li>Noter la date du rapport final</li><li>Conserver toutes les factures justificatives</li></ul>', 2),
   (4, 2, 3, 'Programme des ateliers d''écriture', '<h2>Déroulé type</h2><p>3h par session : 45 minutes d''échauffement d''écriture, 90 minutes de travail en petits groupes, 45 minutes de restitution.</p><h2>Groupe</h2><p>8 élèves avancés, niveau fin de cycle. Contact : Marc Bovay.</p>', 3);
 

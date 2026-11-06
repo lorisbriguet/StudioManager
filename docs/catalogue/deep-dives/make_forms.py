@@ -62,7 +62,7 @@ today = "".join([
         f'<div class="g g2">{fld("Client","Art Basel",cls="tall",req=True,chev=True)}{fld("Date","28.10.2026",req=True)}</div>'
         '<div class="acts"><span class="b">Cancel</span><span class="b p">Create</span></div>'),
     var("New client card", "Save before Cancel",
-        f'<div class="g g2">{fld("Name","Fondation Artvis")}{fld("Email","hello@artvis.ch")}</div>'
+        f'<div class="g g2">{fld("Name","Fondation Artvis")}{fld("Email","hello@artvis.example")}</div>'
         '<div class="acts"><span class="b p">Save</span><span class="b">Cancel</span></div>'),
     var("New project card", "no labels · toast errors",
         f'<div class="g g2"><div class="f ph">Project name *</div><div class="f ph">Client ▾</div><div class="f ph">dd.mm.yyyy</div><div class="f ph">dd.mm.yyyy</div></div>'

@@ -47,7 +47,7 @@ export function Toggle({ checked, onChange, disabled, ariaLabel, label, descript
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex ${sz.track} shrink-0 cursor-pointer rounded-full transition-colors duration-200 focus-accent disabled:opacity-50 disabled:cursor-not-allowed ${
-        checked ? "bg-accent" : "bg-[var(--color-input-border)]"
+        checked ? "bg-accent" : "bg-[var(--color-toggle-track)]"
       } ${label ? "" : className}`}
     >
       <span

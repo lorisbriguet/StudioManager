@@ -24,6 +24,18 @@ export interface InboxDoc {
 /** Transport failures start with this (Rust contract): the inbox goes offline instead of erroring. */
 export const OFFLINE_PREFIX = "Paperless unreachable: ";
 
+/**
+ * The i18n key for an inbox error (the Rust strings in connectors/paperless.rs are English
+ * and technical): a refused token, a bad address, a 404, another HTTP status, or anything else.
+ */
+export function paperlessErrorKey(message: string) {
+  if (message.startsWith("Paperless refused the token")) return "paperless_error_token" as const;
+  if (message.startsWith("invalid Paperless address")) return "paperless_error_address" as const;
+  if (message.startsWith("Paperless error 404")) return "paperless_error_not_found" as const;
+  if (message.startsWith("Paperless error")) return "paperless_error_server" as const;
+  return "paperless_error_generic" as const;
+}
+
 const norm = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
 
 /** An existing supplier matching the name (case/space-insensitive), else the trimmed name; null when empty. */

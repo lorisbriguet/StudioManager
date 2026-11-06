@@ -595,7 +595,7 @@ export function InvoicesPage() {
                         </Table.Td>
                         <Table.Td numeric className="font-medium">
                           {inv.status === "cancelled" ? (
-                            <span className="text-muted">CHF 0.00</span>
+                            <span className="text-muted line-through">{formatMoney(inv.total, inv.currency || "CHF")}</span>
                           ) : inv.currency && inv.currency !== "CHF" ? (
                             <span>
                               <span className="text-muted text-xs">{formatMoney(inv.total, inv.currency)}</span>

@@ -51,9 +51,13 @@
   --color-input-border: #d4d4d4;
   --color-input-bg: #f5f5f5;
   --color-hover-row: #f8f8f8;
-  /* Checkbox edge: 3:1 against surface and input-bg (a control boundary,
-     unlike field borders, which the field's own fill already outlines) */
-  --color-checkbox-border: #949494;
+  /* Checkbox edge: 3:1 against bg, surface and the box's own input-bg fill
+     (a control boundary, unlike field borders, which the field's own fill
+     already outlines) */
+  --color-checkbox-border: #8a8a8a;
+  /* The Toggle's off track: the same control-boundary grey, 3:1 on bg and
+     surface. A var, so .dark and themes follow it. */
+  --color-toggle-track: var(--color-checkbox-border);
   /* A control raised over its track (segmented-control thumb) */
   --color-raised: var(--color-surface);
   /* Text on a coloured fill: white or near-black, whichever contrasts more

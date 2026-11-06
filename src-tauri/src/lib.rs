@@ -1076,6 +1076,7 @@ pub fn run() {
             agents::routines::routines_open_link,
             agents::routines::routines_open_folder,
             menubar::menubar_open_main,
+            menubar::menubar_hide,
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -1182,7 +1183,7 @@ mod tests {
 
         let mut panel = quoted_after(sets, "identifier = \"menubar-window\"");
         panel.retain(|p| p.starts_with("allow-"));
-        assert_eq!(panel.len(), 15, "{panel:?}");
+        assert_eq!(panel.len(), 16, "{panel:?}");
         for p in &panel {
             assert!(every.contains(p), "{p} is not a command");
         }
@@ -1222,7 +1223,7 @@ mod tests {
             assert!(refused(&call("menubar", cmd)), "panel {cmd}: {}", call("menubar", cmd));
             assert!(!refused(&call("main", cmd)), "main {cmd}: {}", call("main", cmd));
         }
-        for cmd in ["agents_list", "agents_watch", "routines_run", "menubar_open_main"] {
+        for cmd in ["agents_list", "agents_watch", "routines_run", "menubar_open_main", "menubar_hide"] {
             assert!(!refused(&call("menubar", cmd)), "panel {cmd}: {}", call("menubar", cmd));
         }
     }

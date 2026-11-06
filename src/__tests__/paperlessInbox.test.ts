@@ -10,8 +10,9 @@ vi.mock("../db/queries/connections", () => ({ getConnections: () => getConnectio
 const getPaperlessLinks = vi.fn();
 vi.mock("../db/queries/paperlessLinks", () => ({ getPaperlessLinks: (...a: unknown[]) => getPaperlessLinks(...a) }));
 
-import { matchSupplier } from "../lib/paperless/inbox";
+import { matchSupplier, paperlessErrorKey } from "../lib/paperless/inbox";
 import { usePaperlessInbox } from "../db/hooks/usePaperlessInbox";
+import { uiLabels } from "../i18n/ui";
 
 const conn = { id: 3, kind: "paperless", host: "nas.local", port: 8000, label: "P" };
 const docs = [
@@ -29,6 +30,19 @@ beforeEach(() => {
   invoke.mockReset();
   getConnections.mockReset().mockResolvedValue([conn]);
   getPaperlessLinks.mockReset().mockResolvedValue(new Map());
+});
+
+describe("paperlessErrorKey", () => {
+  it("maps the Rust error strings to translated messages", () => {
+    expect(paperlessErrorKey("Paperless refused the token (401). Reconnect it in Settings.")).toBe("paperless_error_token");
+    expect(paperlessErrorKey("invalid Paperless address: type a host name or IP address only")).toBe("paperless_error_address");
+    expect(paperlessErrorKey("Paperless error 404")).toBe("paperless_error_not_found");
+    expect(paperlessErrorKey("Paperless error 500")).toBe("paperless_error_server");
+    expect(paperlessErrorKey("HTTP setup failed: x")).toBe("paperless_error_generic");
+    for (const lang of ["EN", "FR"] as const) {
+      for (const m of ["Paperless error 500", "other"]) expect(uiLabels[lang][paperlessErrorKey(m)]).toBeTruthy();
+    }
+  });
 });
 
 describe("matchSupplier", () => {

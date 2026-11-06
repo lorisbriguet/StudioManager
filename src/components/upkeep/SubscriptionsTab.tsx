@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Badge, Button, Callout, EmptyState, ICONS, IconButton, PanelTitle, Table } from "../ui";
+import { Badge, Button, Callout, EmptyState, ICONS, IconButton, PanelTitle, QueryState, Table, TableSkeleton } from "../ui";
 import { useConfirm } from "../../lib/confirm";
 import { PrefilledExpenseModal } from "./PrefilledExpenseModal";
 import { SubscriptionForm } from "./SubscriptionForm";
@@ -20,7 +20,8 @@ import type { Subscription } from "../../types/upkeep";
 export function SubscriptionsTab() {
   const t = useT();
   const confirm = useConfirm();
-  const { data: subs = [] } = useSubscriptions();
+  const subsQuery = useSubscriptions();
+  const subs = useMemo(() => subsQuery.data ?? [], [subsQuery.data]);
   const { data: pending = [] } = usePendingRenewals();
   const decide = useDecideRenewal();
   const cancel = useCancelSubscription();
@@ -79,6 +80,8 @@ export function SubscriptionsTab() {
         className="mb-2"
       />
 
+      <QueryState query={subsQuery} skeleton={<TableSkeleton columns={7} />} errorMessage={t.load_error_upkeep}>
+      {() => (
       <Table>
         <Table.Head>
           <Table.Th>{t.name}</Table.Th>
@@ -128,6 +131,8 @@ export function SubscriptionsTab() {
           )}
         </Table.Body>
       </Table>
+      )}
+      </QueryState>
       </div>
 
       {editing && (

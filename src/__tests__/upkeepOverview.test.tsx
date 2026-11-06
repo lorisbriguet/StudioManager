@@ -8,11 +8,15 @@ import type { UpkeepOverview } from "../lib/upkeep/overview";
 const markDone = vi.fn();
 const snooze = vi.fn();
 let overview: UpkeepOverview;
-let machinesData: Machine[] = [];
+let machinesData: Machine[] | undefined = [];
+const loaded = { data: [], isError: false, refetch: vi.fn() };
 
 vi.mock("../db/hooks/useUpkeep", () => ({
   useUpkeepOverview: () => overview,
-  useMachines: () => ({ data: machinesData }),
+  useMachines: () => ({ data: machinesData, isError: false, refetch: vi.fn() }),
+  useActiveUpkeepItems: () => loaded,
+  useConsumables: () => loaded,
+  useSubscriptions: () => loaded,
   useMarkUpkeepDone: () => ({ mutate: markDone }),
   useSnoozeUpkeep: () => ({ mutate: snooze }),
 }));
@@ -151,5 +155,12 @@ describe("OverviewTab", () => {
     expect(screen.getByText("Nothing running low.")).toBeInTheDocument();
     expect(screen.getByText("No warranty or renewal ending soon.")).toBeInTheDocument();
     expect(screen.getByText("No machine near the end of its life.")).toBeInTheDocument();
+  });
+
+  it("shows a skeleton, not the empty lines, while the data loads", () => {
+    overview = { due: [], lowStock: [], endingSoon: [], replacements: [], overdueCount: 0 };
+    machinesData = undefined;
+    render(<MemoryRouter><OverviewTab /></MemoryRouter>);
+    expect(screen.queryByText("Nothing due. All up to date.")).not.toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Callout, EmptyState, ICONS, IconButton, Modal, PanelTitle, ProgressBar, Table } from "../ui";
+import { Button, Callout, EmptyState, ICONS, IconButton, Modal, PanelTitle, ProgressBar, QueryState, Table, TableSkeleton } from "../ui";
 import { ConsumableAmountModal } from "./ConsumableAmountModal";
 import { ConsumableForm } from "./ConsumableForm";
 import { PrefilledExpenseModal } from "./PrefilledExpenseModal";
@@ -31,7 +31,8 @@ function StockBar({ c }: { c: Consumable }) {
 export function ConsumablesTab() {
   const t = useT();
   const confirm = useConfirm();
-  const { data: consumables = [] } = useConsumables();
+  const consumablesQuery = useConsumables();
+  const consumables = consumablesQuery.data ?? [];
   const { data: machines = [] } = useMachines();
   const del = useDeleteConsumable();
   const [editing, setEditing] = useState<Consumable | "new" | null>(null);
@@ -64,6 +65,8 @@ export function ConsumablesTab() {
         action={<Button icon={ICONS.add} onClick={() => setEditing("new")}>{t.upkeep_add_consumable}</Button>}
         className="mb-2"
       />
+      <QueryState query={consumablesQuery} skeleton={<TableSkeleton columns={8} />} errorMessage={t.load_error_upkeep}>
+      {() => (
       <Table>
         <Table.Head>
           <Table.Th>{t.upkeep_col_item}</Table.Th>
@@ -118,6 +121,8 @@ export function ConsumablesTab() {
           )}
         </Table.Body>
       </Table>
+      )}
+      </QueryState>
       </div>
 
       {editing && (

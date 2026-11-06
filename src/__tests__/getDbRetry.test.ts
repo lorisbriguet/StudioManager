@@ -42,22 +42,23 @@ describe("getDb after a failure", () => {
     expect(load).toHaveBeenCalledTimes(2);
   });
 
-  it("runs the schema again after it stopped halfway, without doubling the seed data", async () => {
+  it("runs the startup again after it stopped halfway, without doubling the seed data", async () => {
     const before = counts();
-    // A file whose schema is current skips the schema: make this one due.
-    rawDb().exec("DELETE FROM meta WHERE key = 'schema_fixups'");
+    // Make the seeds due again, as on a new file.
+    rawDb().exec("DELETE FROM meta WHERE key LIKE 'seeded:%'");
+    for (const t of SEEDED) rawDb().exec(`DELETE FROM ${t}`);
     const execute = RealDatabase.prototype.execute;
     vi.spyOn(RealDatabase.prototype, "execute").mockImplementation(function (this: RealDatabase, sql, params) {
-      if (sql.includes("CREATE TABLE IF NOT EXISTS custom_lists")) throw new Error("disk I/O error");
+      if (sql.includes("INSERT INTO dashboard_presets")) throw new Error("disk I/O error");
       return execute.call(this, sql, params);
     });
     await expect(getDb()).rejects.toThrow("disk I/O error");
-    expect(rawDb().prepare("SELECT 1 FROM meta WHERE key = 'schema_fixups'").get()).toBeUndefined();
+    expect(rawDb().prepare("SELECT 1 FROM meta WHERE key = 'seeded:resources'").get()).toBeDefined();
+    expect(rawDb().prepare("SELECT 1 FROM meta WHERE key = 'seeded:dashboard_presets'").get()).toBeUndefined();
 
     vi.mocked(RealDatabase.prototype.execute).mockRestore();
     await expect(getDb()).resolves.toBeInstanceOf(RealDatabase);
     expect(counts()).toEqual(before);
-    expect(rawDb().prepare("SELECT 1 FROM meta WHERE key = 'schema_fixups'").get()).toBeDefined();
   });
 
   it("keeps the new connection cached after a switch waited on a failed attempt", async () => {

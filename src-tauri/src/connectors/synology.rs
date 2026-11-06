@@ -1034,7 +1034,7 @@ mod tests {
 
     #[test]
     fn build_checks_config_and_secret() {
-        let cfg = serde_json::json!({ "host": "192.168.1.20", "port": 5001, "account": "studio" });
+        let cfg = serde_json::json!({ "host": "192.0.2.20", "port": 5001, "account": "studio" });
         assert!(build(&cfg, Some(r#"{"password":"x"}"#.into())).is_ok());
         // A plain string secret is the password.
         assert!(build(&cfg, Some("plain".into())).is_ok());

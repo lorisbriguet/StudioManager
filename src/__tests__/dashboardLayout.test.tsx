@@ -17,6 +17,7 @@ vi.mock("react-grid-layout", () => ({
 vi.mock("react-grid-layout/css/styles.css", () => ({}));
 vi.mock("../db/hooks/useClients", () => ({ useClients: () => ({ data: [{ id: 1 }] }) }));
 vi.mock("../components/dashboard/widgets", () => ({ renderWidget: () => null }));
+vi.mock("../components/dashboard/VatThresholdCallout", () => ({ VatThresholdCallout: () => null }));
 vi.mock("../db/hooks/useDashboardPresets", () => {
   const mut = () => ({ mutate: () => {}, mutateAsync: async () => 0, isPending: false });
   return { useDashboardPresets: () => ({ data: [] }), useCreateDashboardPreset: mut, useUpdateDashboardPreset: mut, useDeleteDashboardPreset: mut };

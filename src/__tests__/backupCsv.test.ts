@@ -154,7 +154,7 @@ describe("TABLES", () => {
   });
 
   it("orders every FK parent before its child", () => {
-    // Every REFERENCES edge in the schema (migrations + ensureSchema),
+    // Every REFERENCES edge in the schema (the migrations),
     // except the circular invoices.from_quote_id <-> quotes.converted_to_invoice_id
     // pair, which no linear order can satisfy (handled by deferred FK checks).
     const edges: [parent: string, child: string][] = [
