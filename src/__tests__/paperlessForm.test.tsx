@@ -63,7 +63,7 @@ describe("PaperlessForm", () => {
     const { data, secret } = create.mock.calls[0][0];
     expect(data).toMatchObject({ kind: "paperless", host: "nas.example.ts.net", port: 8443 });
     expect(JSON.stringify(data)).not.toContain("s3cret-token");
-    expect(secret).toBe("s3cret-token");
+    expect(JSON.parse(secret)).toMatchObject({ token: "s3cret-token" });
     // The token only lives in the password input the user typed it into, never as text.
     expect(container.textContent).not.toContain("s3cret-token");
   });

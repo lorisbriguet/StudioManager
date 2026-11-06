@@ -12,7 +12,7 @@ const DEFAULT_PORT = 8443;
 
 /**
  * Add a Paperless-ngx server: address, port and API token. The token goes to
- * the Keychain as-is and is never shown again. With `connection` (Reconnect)
+ * the Keychain with the address it is for and is never shown again. With `connection` (Reconnect)
  * the token may stay empty to keep the stored one, unless the address moved.
  */
 export function PaperlessForm({ onDone, onCancel, connection }: ConnectionFormProps) {
@@ -55,7 +55,9 @@ export function PaperlessForm({ onDone, onCancel, connection }: ConnectionFormPr
       port,
     };
     busyWhile(async () => {
-      await test(await save(data, token || undefined), (e) => {
+      // Bound to its address: Rust sends it nowhere else.
+      const secret = token ? JSON.stringify({ token, host, port }) : undefined;
+      await test(await save(data, secret), (e) => {
         setError(e instanceof Error ? e.message : String(e));
       });
     });
