@@ -19,7 +19,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Same pin as the app crate (see src-tauri/Cargo.toml).
-rusqlite = { version = "0.32", features = ["bundled", "backup"] }
+rusqlite = { version = "0.41", features = ["bundled", "backup"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
