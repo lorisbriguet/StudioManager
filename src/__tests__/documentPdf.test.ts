@@ -52,7 +52,7 @@ const quote = {
 
 const getInvoice = vi.fn();
 const getQuote = vi.fn();
-const getInvoiceTemplate = vi.fn(async () => template);
+const getInvoiceTemplate = vi.fn(async (_id: number) => template);
 
 vi.mock("../db/queries/invoices", () => ({
   getInvoice: (id: number) => getInvoice(id),
