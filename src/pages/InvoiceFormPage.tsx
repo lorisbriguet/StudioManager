@@ -273,7 +273,7 @@ export function InvoiceFormPage() {
   const discountAmount = round2(subtotal * discountRate);
   const total = round2(subtotal - discountAmount);
 
-  // Auto-fetch exchange rate when currency changes
+  // Auto-fetch the exchange rate of the invoice date when the currency or the date changes
   useEffect(() => {
     const loaded = loadedInvoiceRef.current;
     if (loaded && currency === loaded.currency) {
@@ -297,7 +297,7 @@ export function InvoiceFormPage() {
       return;
     }
     let cancelled = false;
-    getExchangeRate(currency).then((rate) => {
+    getExchangeRate(currency, invoiceDate).then((rate) => {
       if (cancelled) return;
       if (rate === null) {
         // No trustworthy live rate (offline / API down). Never book the
@@ -318,8 +318,8 @@ export function InvoiceFormPage() {
       setChfManualOverride(false);
     });
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately runs on currency change only (see comments above); adding t.* would refetch today's rate on locale switch
-  }, [currency]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately runs on a currency or date change only (see comments above); adding t.* would refetch the rate on locale switch
+  }, [currency, invoiceDate]);
 
   // Auto-calc CHF equivalent when total or exchange rate changes (unless manually overridden)
   useEffect(() => {

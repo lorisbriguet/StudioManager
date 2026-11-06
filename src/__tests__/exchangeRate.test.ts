@@ -128,3 +128,53 @@ describe("getExchangeRate", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("getExchangeRate on a document date", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  const url = (mock: ReturnType<typeof vi.fn>, call: number) => String(mock.mock.calls[call][0]);
+
+  it("asks for a past day's rate, not the latest", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 6, 12));
+    const fetchMock = vi.fn().mockResolvedValue(okResponse(GOOD_RATES));
+    vi.stubGlobal("fetch", fetchMock);
+    const getExchangeRate = await freshGetExchangeRate();
+
+    await expect(getExchangeRate("EUR", "2026-03-14")).resolves.toBe(0.94);
+    expect(url(fetchMock, 0)).toMatch(/^https:\/\/api\.frankfurter\.app\/2026-03-14\?from=CHF&to=/);
+  });
+
+  it("uses the latest rate for today, a later day, no date or a malformed one", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 6, 12));
+    const fetchMock = vi.fn().mockResolvedValue(okResponse(GOOD_RATES));
+    vi.stubGlobal("fetch", fetchMock);
+    const getExchangeRate = await freshGetExchangeRate();
+
+    for (const date of ["2026-11-06", "2026-12-01", undefined, null, "", "06.11.2026"]) {
+      await getExchangeRate("EUR", date);
+    }
+    // All of them share the one "latest" entry.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(url(fetchMock, 0)).toMatch(/\/latest\?/);
+  });
+
+  it("caches each day apart", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 6, 12));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(okResponse({ rates: { EUR: 0.95 } }))
+      .mockResolvedValueOnce(okResponse({ rates: { EUR: 0.93 } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const getExchangeRate = await freshGetExchangeRate();
+
+    await expect(getExchangeRate("EUR", "2026-01-15")).resolves.toBe(0.95);
+    await expect(getExchangeRate("EUR", "2026-06-15")).resolves.toBe(0.93);
+    await expect(getExchangeRate("EUR", "2026-01-15")).resolves.toBe(0.95);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});

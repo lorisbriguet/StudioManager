@@ -201,6 +201,13 @@ Follow-ups:
 - [ ] Follow-up: the Tasks "+" button and subtask creation share the double-submit pattern that was fixed elsewhere
 - [ ] Follow-up: `NamedTable` has no optimistic cell update - a cell only reflects an edit once the row query refetches (surfaced by the characterisation tests, pre-existing)
 
+## VAT and rounding (studio review D16, 2026-11-06)
+
+Exchange rates now follow the invoice or expense date, and the dashboard warns a VAT-exempt profile from 80% of the CHF 100,000 threshold (calendar-year invoiced turnover). Left for when the studio registers for VAT:
+
+- [ ] **VAT path:** a VAT rate on the business profile (and per line if rates ever differ), a VAT line on invoices, quotes and their PDFs (new golden snapshots), the VAT number on the documents, and VAT in the trustee export and P&L. Needs a schema change (bump `SCHEMA_FIXUPS_VERSION`) and a migration that keeps old invoices exempt.
+- [ ] **Round totals to 0.05:** a `round_to_0_05` business setting applied to CHF invoice totals, with a rounding line on the PDF. Only matters for cash payments: QR bills and bank transfers take cents, so low priority.
+
 ## Full check (2026-10-29)
 
 Eight reading passes by separate agents over everything merged since 2026-10-28 (agents page, menu bar, studio upkeep, UI component library, wiki vault, MCP wiki links): three on the interface, five on security and the backend. Full report: [docs/audits/2026-10-29-full-check.md](docs/audits/2026-10-29-full-check.md). Two high findings (an invalid date still submits a form; a link in an agent reply can navigate the webview away), no critical. The 43 interface findings are being fixed on `worktree-ui-fixes`; D.1/D.2 are fixed in PR #7.

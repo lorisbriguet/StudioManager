@@ -602,7 +602,7 @@ export function NewExpenseForm({
 }) {
   const t = useT();
   const [form, setForm] = useState(() => initialForm(prefill, categories, pastSuppliers));
-  // Units of form.currency per 1 CHF: today's rate, editable. 0 while unknown.
+  // Units of form.currency per 1 CHF: the rate of the expense date, editable. 0 while unknown.
   const [rate, setRate] = useState(1);
   const [rateError, setRateError] = useState<string | null>(null);
   useEffect(() => {
@@ -613,7 +613,7 @@ export function NewExpenseForm({
     }
     let live = true;
     setRate(0);
-    void getExchangeRate(form.currency).then((r) => {
+    void getExchangeRate(form.currency, form.invoice_date).then((r) => {
       if (!live) return;
       if (r == null) {
         notify.warning(t.expense_rate_unavailable);
@@ -623,8 +623,8 @@ export function NewExpenseForm({
       setRateError(null);
     });
     return () => { live = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch on a currency change only; a locale switch must not refetch
-  }, [form.currency]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch on a currency or date change only; a locale switch must not refetch
+  }, [form.currency, form.invoice_date]);
   const foreign = form.currency !== "CHF";
   const money = expenseMoney(form.amount, form.currency, rate);
   const [errors, setErrors] = useState<Partial<Record<ExpenseFormField, string>>>({});
