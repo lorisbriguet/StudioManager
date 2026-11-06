@@ -341,6 +341,12 @@ export function useDeleteClientAddress() {
       await q.deleteClientAddress(vars.id);
       if (prev) {
         const { id: _id, ...data } = prev;
+        // Deleting the client's own address also clears it on the client row.
+        const clearedOwn = await q.clearOwnAddressAfterDelete(vars.clientId, prev);
+        const refresh = () => {
+          qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] });
+          if (clearedOwn) qc.invalidateQueries({ queryKey: ["clients"] });
+        };
         // Redo targets exactly the id the restore produced — a field-match
         // lookup could hit a duplicate address with the same label.
         let restoredId: number | null = null;
@@ -348,19 +354,25 @@ export function useDeleteClientAddress() {
           label: `${getLabels().undo_delete_address} "${prev.label}"`,
           execute: async () => {
             restoredId = await q.createClientAddress(data as Omit<ClientAddress, "id">);
-            qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] });
+            if (clearedOwn) await q.setOwnAddress(vars.clientId, clearedOwn);
+            refresh();
           },
           redo: async () => {
             if (restoredId !== null) {
               await q.deleteClientAddress(restoredId);
-              qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] });
+              if (clearedOwn) {
+                await q.setOwnAddress(vars.clientId, { address_line1: "", address_line2: "", postal_city: "" });
+              }
+              refresh();
             }
           },
         });
       }
     },
-    onSuccess: (_d, vars) =>
-      qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["client-addresses", vars.clientId] });
+      qc.invalidateQueries({ queryKey: ["clients"] });
+    },
   });
 }
 

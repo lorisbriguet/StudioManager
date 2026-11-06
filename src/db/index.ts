@@ -227,7 +227,9 @@ export async function resetDb(): Promise<void> {
  * Safety-net schema fixups that run after Rust-side migrations.
  * These handle ALTER TABLE ADD COLUMN (SQLite lacks IF NOT EXISTS for ALTER)
  * and one-time data migrations. New tables, indexes, and seeds should go in
- * numbered .sql migration files under src-tauri/migrations/ instead.
+ * numbered .sql migration files under src-tauri/migrations/ instead. A seed
+ * or data move that has to live here goes through seedOnce / markDone, so it
+ * runs once per database file instead of at every start.
  */
 async function ensureSchema(db: Database) {
   // Clean up orphan indices (indices referencing dropped tables)
@@ -240,6 +242,35 @@ async function ensureSchema(db: Database) {
       await db.execute(`DROP INDEX IF EXISTS "${o.name.replace(/"/g, '""')}"`).catch(() => {});
     }
   } catch { /* ignore if schema query fails */ }
+
+  // ── One-time steps ─────────────────────────────────────────
+  // Seed data and data moves run once per database file, recorded in `meta`
+  // (migration 011). Before that they re-ran whenever their table was empty,
+  // so a deleted address or emptied resource list came back at every start.
+  const tablesAtStart = new Set(
+    (await db.select<{ name: string }[]>(
+      "SELECT name FROM sqlite_master WHERE type = 'table'"
+    )).map((r) => r.name)
+  );
+  // client_addresses is created further down, so a file without it has never
+  // been opened by the app: its seeds are still due.
+  const firstOpen = !tablesAtStart.has("client_addresses");
+  const doneSteps = new Set(
+    (await db.select<{ key: string }[]>("SELECT key FROM meta")).map((r) => r.key)
+  );
+  const markDone = (key: string) =>
+    db.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ($1, '1')", [key]);
+  /** Fill `table` with its starter rows, once. On a file the app opened
+   *  before, a table that already existed was seeded back then (the old
+   *  code seeded it whenever it was empty), so it's only marked as done. */
+  async function seedOnce(key: string, table: string, seed: () => Promise<void>) {
+    if (doneSteps.has(key)) return;
+    if (firstOpen || !tablesAtStart.has(table)) {
+      const rows = await db.select<{ cnt: number }[]>(`SELECT COUNT(*) as cnt FROM ${table}`);
+      if (rows[0]?.cnt === 0) await seed();
+    }
+    await markDone(key);
+  }
 
   // Helper: add a column only if it doesn't already exist
   async function addColumnIfMissing(table: string, column: string, definition: string) {
@@ -314,15 +345,20 @@ async function ensureSchema(db: Database) {
     address_line2 TEXT NOT NULL DEFAULT '',
     postal_city TEXT NOT NULL DEFAULT ''
   )`);
-  // Migrate existing client addresses into client_addresses (one-time)
-  const clientsWithAddr = await db.select<{ id: string; billing_name: string; address_line1: string; address_line2: string; postal_city: string }[]>(
-    "SELECT id, billing_name, address_line1, address_line2, postal_city FROM clients WHERE (address_line1 != '' OR postal_city != '') AND id NOT IN (SELECT client_id FROM client_addresses)"
-  );
-  for (const c of clientsWithAddr) {
-    await db.execute(
-      "INSERT INTO client_addresses (client_id, label, billing_name, address_line1, address_line2, postal_city) VALUES ($1, $2, $3, $4, $5, $6)",
-      [c.id, "Main", c.billing_name || "", c.address_line1 || "", c.address_line2 || "", c.postal_city || ""]
+  // Copy each client's own address into client_addresses as "Main" (one-time).
+  // New clients get their row from createClient; deleting that row clears the
+  // client's own address (deleteClientAddress), so it can't come back.
+  if (!doneSteps.has("moved:client_addresses")) {
+    const clientsWithAddr = await db.select<{ id: string; billing_name: string; address_line1: string; address_line2: string; postal_city: string }[]>(
+      "SELECT id, billing_name, address_line1, address_line2, postal_city FROM clients WHERE (address_line1 != '' OR postal_city != '') AND id NOT IN (SELECT client_id FROM client_addresses)"
     );
+    for (const c of clientsWithAddr) {
+      await db.execute(
+        "INSERT INTO client_addresses (client_id, label, billing_name, address_line1, address_line2, postal_city) VALUES ($1, $2, $3, $4, $5, $6)",
+        [c.id, "Main", c.billing_name || "", c.address_line1 || "", c.address_line2 || "", c.postal_city || ""]
+      );
+    }
+    await markDone("moved:client_addresses");
   }
 
   // ── Invoices/Quotes: billing_address_id ────────────────────
@@ -383,10 +419,7 @@ async function ensureSchema(db: Database) {
   `);
 
   // ── Seed resources from Notion export (one-time) ─────────
-  const resourceCount = await db.select<{ cnt: number }[]>(
-    "SELECT COUNT(*) as cnt FROM resources"
-  );
-  if (resourceCount[0]?.cnt === 0) {
+  await seedOnce("seeded:resources", "resources", async () => {
     const seedResources: { name: string; url: string; price: string; tags: string[] }[] = [
       { name: "miniEngine", url: "http://www.minie.airiclenz.com/tag/bezier/", price: "", tags: ["motor"] },
       { name: "SimpleFoc", url: "https://simplefoc.com/", price: "", tags: ["motor"] },
@@ -437,7 +470,7 @@ async function ensureSchema(db: Database) {
         }
       }
     }
-  }
+  });
 
   // ── Expense category color ─────────────────────────────────
   await addColumnIfMissing("expense_categories", "color", "TEXT DEFAULT NULL");
@@ -505,11 +538,8 @@ async function ensureSchema(db: Database) {
   await addColumnIfMissing("tasks", "workload_sort_order", "INTEGER NOT NULL DEFAULT 0");
   await addColumnIfMissing("workload_templates", "is_system", "INTEGER NOT NULL DEFAULT 0");
 
-  // ── Seed default workload template if none exist ───────────
-  const templateCount = await db.select<{ cnt: number }[]>(
-    "SELECT COUNT(*) as cnt FROM workload_templates"
-  );
-  if (templateCount[0]?.cnt === 0) {
+  // ── Seed default workload template (one-time) ─────────────
+  await seedOnce("seeded:workload_templates", "workload_templates", async () => {
     // Keep in sync with DEFAULT_WORKLOAD_COLUMNS (src/types/workload.ts); differs only in asset type "text" vs "link".
     const defaultCols = JSON.stringify([
       { key: "asset", name: "Asset", type: "text", width: 160 },
@@ -533,7 +563,7 @@ async function ensureSchema(db: Database) {
       "INSERT INTO workload_templates (name, columns) VALUES ($1, $2)",
       ["Workload Tracker", defaultCols]
     );
-  }
+  });
 
   // Mark first template as system (protected, non-deletable)
   await db.execute(
@@ -551,10 +581,7 @@ async function ensureSchema(db: Database) {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
-  const presetCount = await db.select<{ cnt: number }[]>(
-    "SELECT COUNT(*) as cnt FROM dashboard_presets"
-  );
-  if (presetCount[0]?.cnt === 0) {
+  await seedOnce("seeded:dashboard_presets", "dashboard_presets", async () => {
     const builtinPresets = [
       {
         name: "Financial",
@@ -641,7 +668,7 @@ async function ensureSchema(db: Database) {
         [p.name, p.layout_json, p.sort_order]
       );
     }
-  }
+  });
 
   // ── Wiki tables ─────────────────────────────────────────────
   await db.execute(`
@@ -673,12 +700,7 @@ async function ensureSchema(db: Database) {
   `);
 
   // ── Seed wiki user guide (one-time) ──────────────────────
-  const wikiFolderCount = await db.select<{ cnt: number }[]>(
-    "SELECT COUNT(*) as cnt FROM wiki_folders"
-  );
-  if (wikiFolderCount[0]?.cnt === 0) {
-    await seedUserGuide(db);
-  }
+  await seedOnce("seeded:wiki_guide", "wiki_folders", () => seedUserGuide(db));
 
   // ── Time entries table (created by TimeTrackingPage migration) ──
   // Ensure it exists for fresh installs
@@ -757,24 +779,26 @@ async function ensureSchema(db: Database) {
     )
   `);
   // Seed default template (one-time) — values must match InvoicePDF hardcoded defaults
-  await db.execute(
-    `INSERT INTO invoice_templates (
-       name, is_default,
-       accent_color, font_family, logo_position,
-       margins_top, margins_right, margins_bottom, margins_left,
-       show_notes, show_project_name, show_po_number,
-       show_bank_details, show_qr_bill, show_footer,
-       columns
-     )
-     SELECT
-       'Default', 1,
-       '#1a1a1a', 'Helvetica', 'left',
-       35, 50, 35, 50,
-       1, 1, 1,
-       1, 1, 1,
-       '["designation","rate","unit","qty","amount"]'
-     WHERE NOT EXISTS (SELECT 1 FROM invoice_templates)`
-  );
+  await seedOnce("seeded:invoice_templates", "invoice_templates", async () => {
+    await db.execute(
+      `INSERT INTO invoice_templates (
+         name, is_default,
+         accent_color, font_family, logo_position,
+         margins_top, margins_right, margins_bottom, margins_left,
+         show_notes, show_project_name, show_po_number,
+         show_bank_details, show_qr_bill, show_footer,
+         columns
+       )
+       SELECT
+         'Default', 1,
+         '#1a1a1a', 'Helvetica', 'left',
+         35, 50, 35, 50,
+         1, 1, 1,
+         1, 1, 1,
+         '["designation","rate","unit","qty","amount"]'
+       WHERE NOT EXISTS (SELECT 1 FROM invoice_templates)`
+    );
+  });
   // Add template_id to invoices and quotes
   await addColumnIfMissing("invoices", "template_id", "INTEGER REFERENCES invoice_templates(id) ON DELETE SET NULL");
   await addColumnIfMissing("quotes", "template_id", "INTEGER REFERENCES invoice_templates(id) ON DELETE SET NULL");

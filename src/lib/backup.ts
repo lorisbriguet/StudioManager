@@ -115,6 +115,11 @@ export const TABLES = [
   "paperless_links",
 ];
 
+/** Tables kept out of backups on purpose. `meta` records which one-time
+ *  seeds already ran in this file: a restore leaves it alone, so restoring a
+ *  backup never brings back starter rows the user removed. */
+export const NOT_BACKED_UP = ["meta"];
+
 /** Backup folder name prefix for the active organisation. No active
  *  organisation (empty id, e.g. before the org registry loads) falls back to
  *  the legacy unprefixed "backup-" naming — same convention as orgPaths.ts,

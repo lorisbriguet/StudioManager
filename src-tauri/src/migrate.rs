@@ -22,13 +22,14 @@ pub const MIGRATIONS: &[SqlMigration] = &[
     SqlMigration { version: 9, sql: include_str!("../migrations/009_paperless.sql") },
     SqlMigration { version: 10, sql: include_str!("../migrations/010_upkeep_backup.sql") },
     SqlMigration { version: 11, sql: include_str!("../migrations/011_client_archived.sql") },
+    SqlMigration { version: 12, sql: include_str!("../migrations/012_meta.sql") },
 ];
 
 // Only referenced from this module's own tests (as the expected "fully
 // migrated" version); nothing in the production path needs it, since
 // `migrate_db` derives what to apply from `MIGRATIONS` itself.
 #[allow(dead_code)]
-pub const LATEST_VERSION: i64 = 11;
+pub const LATEST_VERSION: i64 = 12;
 
 fn table_exists(conn: &rusqlite::Connection, name: &str) -> Result<bool, String> {
     conn.query_row(
@@ -191,6 +192,43 @@ mod tests {
     }
 
     #[test]
+    fn migrates_to_012_adds_meta() {
+        let path = temp_db("m012");
+        migrate_db(&path).unwrap();
+        assert!(table_exists(&path, "meta"));
+        let conn = Connection::open(&path).unwrap();
+        conn.execute("INSERT INTO meta (key, value) VALUES ('seeded:resources', '1')", []).unwrap();
+        assert!(conn.execute("INSERT INTO meta (key, value) VALUES ('seeded:resources', '1')", []).is_err());
+    }
+
+    #[test]
+    fn file_at_010_applies_011_then_012() {
+        let db = temp_db("m010to012");
+        let conn = Connection::open(&db).unwrap();
+        conn.execute_batch("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);").unwrap();
+        for m in MIGRATIONS.iter().filter(|m| m.version <= 10) {
+            conn.execute_batch(m.sql).unwrap();
+            conn.execute("INSERT INTO schema_migrations (version, applied_at) VALUES (?1, datetime('now'))", [m.version]).unwrap();
+        }
+        drop(conn);
+        assert_eq!(migrate_db(&db).unwrap(), 2);
+        let conn = Connection::open(&db).unwrap();
+        let versions: Vec<i64> = conn
+            .prepare("SELECT version FROM schema_migrations WHERE version > 10 ORDER BY rowid")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(versions, vec![11, 12]);
+        let archived: i64 = conn
+            .query_row("SELECT COUNT(*) FROM pragma_table_info('clients') WHERE name='archived_at'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(archived, 1);
+        assert!(table_exists(&db, "meta"));
+    }
+
+    #[test]
     fn migration_009_keeps_machine_connection_links() {
         let db = temp_db("m009keep");
         let conn = Connection::open(&db).unwrap();
@@ -224,7 +262,7 @@ mod tests {
         conn.execute_batch(
             "DROP TABLE schema_migrations;
              CREATE TABLE _sqlx_migrations (version BIGINT PRIMARY KEY, description TEXT NOT NULL, installed_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, success BOOLEAN NOT NULL, checksum BLOB NOT NULL, execution_time BIGINT NOT NULL);
-             INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) VALUES (1,'a',1,x'00',0),(2,'b',1,x'00',0),(3,'c',1,x'00',0),(4,'d',1,x'00',0),(5,'e',1,x'00',0),(6,'f',1,x'00',0),(7,'g',1,x'00',0),(8,'h',1,x'00',0),(9,'i',1,x'00',0),(10,'j',1,x'00',0),(11,'k',1,x'00',0);",
+             INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) VALUES (1,'a',1,x'00',0),(2,'b',1,x'00',0),(3,'c',1,x'00',0),(4,'d',1,x'00',0),(5,'e',1,x'00',0),(6,'f',1,x'00',0),(7,'g',1,x'00',0),(8,'h',1,x'00',0),(9,'i',1,x'00',0),(10,'j',1,x'00',0),(11,'k',1,x'00',0),(12,'l',1,x'00',0);",
         )
         .unwrap();
         drop(conn);
