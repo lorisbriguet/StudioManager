@@ -8,29 +8,34 @@ use std::path::Path;
 pub struct SqlMigration {
     pub version: i64,
     pub sql: &'static str,
+    /// Run statement by statement, skipping each `ALTER TABLE t ADD COLUMN c`
+    /// whose column the file already has (SQLite has no ADD COLUMN IF NOT
+    /// EXISTS). For 014, which takes over columns the app used to add itself.
+    pub columns_if_missing: bool,
 }
 
 pub const MIGRATIONS: &[SqlMigration] = &[
-    SqlMigration { version: 1, sql: include_str!("../migrations/001_initial_schema.sql") },
-    SqlMigration { version: 2, sql: include_str!("../migrations/002_billing_name_task_status.sql") },
-    SqlMigration { version: 3, sql: include_str!("../migrations/003_invoice_po_number.sql") },
-    SqlMigration { version: 4, sql: include_str!("../migrations/004_subtasks.sql") },
-    SqlMigration { version: 5, sql: include_str!("../migrations/005_consolidate_schema.sql") },
-    SqlMigration { version: 6, sql: include_str!("../migrations/006_activities.sql") },
-    SqlMigration { version: 7, sql: include_str!("../migrations/007_upkeep.sql") },
-    SqlMigration { version: 8, sql: include_str!("../migrations/008_machine_linked_at.sql") },
-    SqlMigration { version: 9, sql: include_str!("../migrations/009_paperless.sql") },
-    SqlMigration { version: 10, sql: include_str!("../migrations/010_upkeep_backup.sql") },
-    SqlMigration { version: 11, sql: include_str!("../migrations/011_client_archived.sql") },
-    SqlMigration { version: 12, sql: include_str!("../migrations/012_meta.sql") },
-    SqlMigration { version: 13, sql: include_str!("../migrations/013_expense_currency.sql") },
+    SqlMigration { version: 1, sql: include_str!("../migrations/001_initial_schema.sql"), columns_if_missing: false },
+    SqlMigration { version: 2, sql: include_str!("../migrations/002_billing_name_task_status.sql"), columns_if_missing: false },
+    SqlMigration { version: 3, sql: include_str!("../migrations/003_invoice_po_number.sql"), columns_if_missing: false },
+    SqlMigration { version: 4, sql: include_str!("../migrations/004_subtasks.sql"), columns_if_missing: false },
+    SqlMigration { version: 5, sql: include_str!("../migrations/005_consolidate_schema.sql"), columns_if_missing: false },
+    SqlMigration { version: 6, sql: include_str!("../migrations/006_activities.sql"), columns_if_missing: false },
+    SqlMigration { version: 7, sql: include_str!("../migrations/007_upkeep.sql"), columns_if_missing: false },
+    SqlMigration { version: 8, sql: include_str!("../migrations/008_machine_linked_at.sql"), columns_if_missing: false },
+    SqlMigration { version: 9, sql: include_str!("../migrations/009_paperless.sql"), columns_if_missing: false },
+    SqlMigration { version: 10, sql: include_str!("../migrations/010_upkeep_backup.sql"), columns_if_missing: false },
+    SqlMigration { version: 11, sql: include_str!("../migrations/011_client_archived.sql"), columns_if_missing: false },
+    SqlMigration { version: 12, sql: include_str!("../migrations/012_meta.sql"), columns_if_missing: false },
+    SqlMigration { version: 13, sql: include_str!("../migrations/013_expense_currency.sql"), columns_if_missing: false },
+    SqlMigration { version: 14, sql: include_str!("../migrations/014_app_schema.sql"), columns_if_missing: true },
 ];
 
 // Only referenced from this module's own tests (as the expected "fully
 // migrated" version); nothing in the production path needs it, since
 // `migrate_db` derives what to apply from `MIGRATIONS` itself.
 #[allow(dead_code)]
-pub const LATEST_VERSION: i64 = 13;
+pub const LATEST_VERSION: i64 = 14;
 
 pub(crate) fn table_exists(conn: &rusqlite::Connection, name: &str) -> Result<bool, String> {
     conn.query_row(
@@ -122,6 +127,75 @@ fn record_versions(conn: &rusqlite::Connection, schema: i64) -> Result<(), Strin
     Ok(())
 }
 
+/// Split a migration into statements at each `;` outside quotes and `--`
+/// comments. Enough for plain DDL; not for triggers (`BEGIN ... END;`).
+fn split_statements(sql: &str) -> Vec<&str> {
+    let bytes = sql.as_bytes();
+    let mut out = Vec::new();
+    let (mut start, mut i) = (0, 0);
+    let mut quote: Option<u8> = None;
+    while i < bytes.len() {
+        let c = bytes[i];
+        match quote {
+            Some(q) if c == q => quote = None,
+            Some(_) => {}
+            None if c == b'\'' || c == b'"' => quote = Some(c),
+            None if c == b'-' && bytes.get(i + 1) == Some(&b'-') => {
+                while i < bytes.len() && bytes[i] != b'\n' {
+                    i += 1;
+                }
+                continue;
+            }
+            None if c == b';' => {
+                out.push(&sql[start..i]);
+                start = i + 1;
+            }
+            None => {}
+        }
+        i += 1;
+    }
+    out.push(&sql[start..]);
+    out.into_iter().filter(|s| !strip_comments(s).trim().is_empty()).collect()
+}
+
+fn strip_comments(stmt: &str) -> String {
+    stmt.lines()
+        .map(|l| l.split("--").next().unwrap_or(""))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// `ALTER TABLE <table> ADD COLUMN <column> ...` → (table, column).
+fn added_column(stmt: &str) -> Option<(String, String)> {
+    let code = strip_comments(stmt);
+    let words: Vec<&str> = code.split_whitespace().take(6).collect();
+    let is = |i: usize, w: &str| words.get(i).is_some_and(|x| x.eq_ignore_ascii_case(w));
+    if words.len() == 6 && is(0, "ALTER") && is(1, "TABLE") && is(3, "ADD") && is(4, "COLUMN") {
+        Some((words[2].to_string(), words[5].to_string()))
+    } else {
+        None
+    }
+}
+
+fn run_skipping_existing_columns(conn: &rusqlite::Connection, sql: &str) -> Result<(), String> {
+    for stmt in split_statements(sql) {
+        if let Some((table, column)) = added_column(stmt) {
+            let has: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = ?2",
+                    [&table, &column],
+                    |r| r.get(0),
+                )
+                .map_err(|e| format!("columns of {table}: {e}"))?;
+            if has > 0 {
+                continue;
+            }
+        }
+        conn.execute_batch(stmt).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// Apply every migration newer than the file's recorded version.
 /// Returns how many were applied.
 ///
@@ -164,7 +238,12 @@ pub fn migrate_db(path: &Path) -> Result<u32, String> {
     let mut applied = 0u32;
     for m in pending {
         let tx = conn.transaction().map_err(|e| format!("begin migration {}: {e}", m.version))?;
-        tx.execute_batch(m.sql).map_err(|e| format!("migration {} failed: {e}", m.version))?;
+        if m.columns_if_missing {
+            run_skipping_existing_columns(&tx, m.sql)
+        } else {
+            tx.execute_batch(m.sql).map_err(|e| e.to_string())
+        }
+        .map_err(|e| format!("migration {} failed: {e}", m.version))?;
         tx.execute(
             "INSERT INTO schema_migrations (version, applied_at) VALUES (?1, datetime('now'))",
             [m.version],
@@ -425,7 +504,8 @@ mod tests {
         )
         .unwrap();
         drop(conn);
-        assert_eq!(migrate_db(&db).unwrap(), 0);
+        // The plugin knew up to 013: only 014 runs, on a file that has its schema.
+        assert_eq!(migrate_db(&db).unwrap() as i64, LATEST_VERSION - 13);
         let conn = Connection::open(&db).unwrap();
         let max: i64 = conn.query_row("SELECT MAX(version) FROM schema_migrations", [], |r| r.get(0)).unwrap();
         assert_eq!(max, LATEST_VERSION);
@@ -548,5 +628,102 @@ mod tests {
         let expected = (env!("CARGO_PKG_NAME") == "studiomanager").then(|| env!("CARGO_PKG_VERSION").to_string());
         assert_eq!(meta(&db, "app_version"), expected);
         cleanup(&db);
+    }
+
+    /// Every column (type, NOT NULL, default) and index of the file, sorted.
+    fn shape(db: &std::path::Path) -> Vec<String> {
+        let conn = Connection::open(db).unwrap();
+        let mut out: Vec<String> = conn
+            .prepare(
+                "SELECT m.name || '.' || p.name || ' ' || p.type || ' ' || p.\"notnull\" || ' ' || COALESCE(p.dflt_value, 'NULL')
+                 FROM sqlite_master m JOIN pragma_table_info(m.name) p
+                 WHERE m.type = 'table' AND m.name NOT IN ('schema_migrations', 'sqlite_sequence')
+                 UNION ALL
+                 SELECT 'index ' || name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL",
+            )
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        out.sort();
+        out
+    }
+
+    /// A file as v3.4.0 left it: migrations up to 013 plus what its
+    /// ensureSchema() created.
+    fn v3_4_app_file(name: &str) -> std::path::PathBuf {
+        let db = temp_db(name);
+        let conn = Connection::open(&db).unwrap();
+        conn.execute_batch(include_str!("../tests/fixtures/app_schema_v3_4.sql")).unwrap();
+        conn.execute_batch("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);").unwrap();
+        for v in 1..=13 {
+            conn.execute("INSERT INTO schema_migrations (version, applied_at) VALUES (?1, 'x')", [v]).unwrap();
+        }
+        conn.execute("INSERT INTO meta (key, value) VALUES ('schema_fixups', '1/13')", []).unwrap();
+        db
+    }
+
+    #[test]
+    fn new_file_has_the_schema_the_app_used_to_add() {
+        let fresh = temp_db("m014-fresh");
+        migrate_db(&fresh).unwrap();
+        let old = v3_4_app_file("m014-shape");
+        assert_eq!(shape(&fresh), shape(&old));
+        cleanup(&fresh);
+        cleanup(&old);
+    }
+
+    #[test]
+    fn file_the_app_already_shaped_migrates_to_014() {
+        let db = v3_4_app_file("m014-old");
+        let before = shape(&db);
+        assert_eq!(migrate_db(&db).unwrap(), 1);
+        assert_eq!(shape(&db), before, "nothing to add to a file the app shaped");
+        // It had the seeded tables: their starter rows were dealt with already.
+        for t in ["client_addresses", "resources", "dashboard_presets", "wiki_folders", "invoice_templates"] {
+            assert_eq!(meta(&db, &format!("before_014:{t}")), Some("1".into()), "{t}");
+        }
+        assert_eq!(meta(&db, "schema_fixups"), None);
+        cleanup(&db);
+    }
+
+    #[test]
+    fn file_missing_some_app_columns_gets_them() {
+        let db = v3_4_app_file("m014-partial");
+        let expected = shape(&db);
+        let conn = Connection::open(&db).unwrap();
+        conn.execute_batch(
+            "ALTER TABLE invoices DROP COLUMN last_reminder_date;
+             ALTER TABLE tasks DROP COLUMN workload_sort_order;
+             DROP INDEX idx_tasks_due;
+             DROP TABLE custom_list_items;",
+        )
+        .unwrap();
+        drop(conn);
+        migrate_db(&db).unwrap();
+        assert_eq!(shape(&db), expected);
+        cleanup(&db);
+    }
+
+    #[test]
+    fn new_file_records_no_seeded_table_from_before() {
+        let db = temp_db("m014-new-meta");
+        migrate_db(&db).unwrap();
+        let n: i64 = Connection::open(&db)
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM meta WHERE key LIKE 'before_014:%'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 0);
+        cleanup(&db);
+    }
+
+    #[test]
+    fn statements_split_outside_quotes_and_comments() {
+        let sql = "-- a; comment\nCREATE TABLE a (x TEXT DEFAULT ';');\n\nALTER TABLE a ADD COLUMN y TEXT; -- trailing;\n";
+        let parts: Vec<String> = split_statements(sql).iter().map(|s| strip_comments(s).trim().to_string()).collect();
+        assert_eq!(parts, vec!["CREATE TABLE a (x TEXT DEFAULT ';')", "ALTER TABLE a ADD COLUMN y TEXT"]);
+        assert_eq!(added_column(split_statements(sql)[1]), Some(("a".into(), "y".into())));
+        assert_eq!(added_column("ALTER TABLE a RENAME COLUMN y TO z"), None);
     }
 }

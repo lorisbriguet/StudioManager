@@ -52,7 +52,7 @@ export async function validateBackupPath(dir: string): Promise<boolean> {
 /** Every user-data table, ordered parents-before-children (FK-safe insert
  *  order). Single source of truth for both backup export and restore: inserts
  *  iterate this list as-is, deletes iterate it reversed (children first).
- *  Sources: src-tauri/migrations + ensureSchema in src/db/index.ts
+ *  Source: src-tauri/migrations
  *  (backupSchema.test.ts fails when a table is missing here).
  *  workload_rows is a legacy staging table drained by ensureSchema on every
  *  startup, but is included for completeness (empty in practice).

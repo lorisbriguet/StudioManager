@@ -26,22 +26,6 @@ pub fn org_off(name: &str) -> String {
     format!("Agent access is off for the organisation \"{name}\".")
 }
 
-/// Tables and columns the tools rely on that only the app's `ensureSchema()`
-/// creates (not the numbered migrations).
-const APP_TABLES: [&str; 6] = [
-    "income",
-    "resources",
-    "resource_projects",
-    "wiki_folders",
-    "wiki_articles",
-    "wiki_article_tags",
-];
-const APP_COLUMNS: [(&str, &str); 3] = [
-    ("projects", "folder_path"),
-    ("invoices", "currency"),
-    ("invoices", "chf_equivalent"),
-];
-
 #[derive(Deserialize, Default, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AccessConfig {
@@ -214,8 +198,9 @@ fn count(conn: &Connection, sql: &str, args: &[&str]) -> Result<i64, String> {
         .map_err(|e| format!("schema check: {e}"))
 }
 
-/// The database must be at exactly the app's latest migration and carry the
-/// tables/columns `ensureSchema()` adds when the app opens it.
+/// The database must be at exactly the app's latest migration: the
+/// migrations create every table and column the tools use (014 took over
+/// what the app's `ensureSchema()` used to add).
 fn check_schema(conn: &Connection) -> Result<(), String> {
     let latest = crate::migrate::MIGRATIONS
         .last()
@@ -239,26 +224,6 @@ fn check_schema(conn: &Connection) -> Result<(), String> {
     }
     if version < latest {
         return Err(NOT_OPENED.to_string());
-    }
-    for table in APP_TABLES {
-        if count(
-            conn,
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
-            &[table],
-        )? != 1
-        {
-            return Err(NOT_OPENED.to_string());
-        }
-    }
-    for (table, column) in APP_COLUMNS {
-        if count(
-            conn,
-            "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name=?2",
-            &[table, column],
-        )? != 1
-        {
-            return Err(NOT_OPENED.to_string());
-        }
     }
     Ok(())
 }
@@ -444,10 +409,14 @@ mod tests {
     }
 
     #[test]
-    fn unmigrated_db_refused() {
+    fn db_behind_the_latest_migration_refused() {
         let dir = temp_data_dir();
         write_registry(&dir, &[("org001", "Studio")]);
-        seed_migrated_only(&dir, "org001");
+        let db = seed_migrated_only(&dir, "org001");
+        rusqlite::Connection::open(&db)
+            .unwrap()
+            .execute("DELETE FROM schema_migrations WHERE version = (SELECT MAX(version) FROM schema_migrations)", [])
+            .unwrap();
         write_access(
             &dir,
             r#"{"enabled": true, "allowMoney": false, "orgs": {}}"#,

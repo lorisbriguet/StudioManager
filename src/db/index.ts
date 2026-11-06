@@ -262,83 +262,28 @@ export async function resetDb(): Promise<void> {
 }
 
 /**
- * Bump when ensureSchema adds or changes a table, column or index. A file
- * that recorded this version (with the same Rust migration version) skips
- * every schema statement at startup: each one is an IPC round trip.
- */
-export const SCHEMA_FIXUPS_VERSION = 1;
-const SCHEMA_FIXUPS_KEY = "schema_fixups";
-/** Not a meta key: the Rust migration version, read in the same call as meta. */
-const MIGRATIONS_ROW = "#schema_migrations";
-
-/**
- * Safety-net schema fixups that run after Rust-side migrations.
- * These handle ALTER TABLE ADD COLUMN (SQLite lacks IF NOT EXISTS for ALTER)
- * and one-time data migrations. New tables, indexes, and seeds should go in
- * numbered .sql migration files under src-tauri/migrations/ instead. A seed
- * or data move that has to live here goes through seedOnce / markDone, so it
- * runs once per database file instead of at every start.
+ * Starter rows and data repairs that run after the Rust migrations. The schema
+ * itself (tables, columns, indexes) lives in the numbered migrations under
+ * src-tauri/migrations/ only: 014 took over what this function used to create.
  *
- * The schema statements (CREATE TABLE / INDEX, added columns) only run when
- * the file's `schema_fixups` entry in `meta` is not this build's. They are
- * idempotent, so a run cut short simply runs again. The data repairs between
- * them still run at every start.
+ * Seed data and the address copy run once per database file, recorded in
+ * `meta` (seedOnce / markDone), so what the user deletes stays deleted. The
+ * other repairs are cheap and run at every start: new clients still arrive
+ * with an email on the client row (app and MCP), and a CSV restore brings
+ * back rows without `meta`.
  */
 async function ensureSchema(db: Database) {
-  const tablesAtStart = new Set(
-    (await db.select<{ name: string }[]>(
-      "SELECT name FROM sqlite_master WHERE type = 'table'"
-    )).map((r) => r.name)
-  );
-  // A new Rust migration (one that rebuilds a table, say) makes the schema run again.
-  const metaRows = await db.select<{ key: string; value: string }[]>(
-    tablesAtStart.has("schema_migrations")
-      ? `SELECT key, value FROM meta UNION ALL
-         SELECT '${MIGRATIONS_ROW}', CAST(COALESCE(MAX(version), 0) AS TEXT) FROM schema_migrations`
-      : "SELECT key, value FROM meta"
-  );
-  const migrations = metaRows.find((r) => r.key === MIGRATIONS_ROW)?.value ?? "0";
-  const schemaStamp = `${SCHEMA_FIXUPS_VERSION}/${migrations}`;
-  const schemaCurrent = metaRows.some((r) => r.key === SCHEMA_FIXUPS_KEY && r.value === schemaStamp);
-
-  /** Run a schema statement (CREATE ... IF NOT EXISTS), unless the file is current. */
-  const ddl = async (sql: string) => {
-    if (!schemaCurrent) await db.execute(sql);
-  };
-
-  // Columns of every table, read in one call instead of one pragma per column.
-  const columns = new Map<string, Set<string>>();
-  if (!schemaCurrent) {
-    // Clean up orphan indices (indices referencing dropped tables)
-    try {
-      const orphans = await db.select<{ name: string; tbl_name: string }[]>(
-        `SELECT i.name, i.tbl_name FROM sqlite_master i
-         WHERE i.type = 'index' AND i.tbl_name NOT IN (SELECT name FROM sqlite_master WHERE type = 'table')`
-      );
-      for (const o of orphans) {
-        await db.execute(`DROP INDEX IF EXISTS "${o.name.replace(/"/g, '""')}"`).catch(() => {});
-      }
-    } catch { /* ignore if schema query fails */ }
-
-    const rows = await db.select<{ tbl: string; col: string }[]>(
-      `SELECT m.name AS tbl, p.name AS col
-       FROM sqlite_master m JOIN pragma_table_info(m.name) p
-       WHERE m.type = 'table'`
-    );
-    for (const r of rows) {
-      if (!columns.has(r.tbl)) columns.set(r.tbl, new Set());
-      columns.get(r.tbl)!.add(r.col);
-    }
-  }
+  const metaRows = await db.select<{ key: string; value: string }[]>("SELECT key, value FROM meta");
 
   // ── One-time steps ─────────────────────────────────────────
-  // Seed data and data moves run once per database file, recorded in `meta`
-  // (migration 011). Before that they re-ran whenever their table was empty,
-  // so a deleted address or emptied resource list came back at every start.
-  // client_addresses is created further down, so a file without it has never
-  // been opened by the app: its seeds are still due.
-  const firstOpen = !tablesAtStart.has("client_addresses");
+  // Migration 014 noted which seeded tables the file had before it ran
+  // (`before_014:<table>`). None: the app never opened this file, so its
+  // seeds are due.
   const doneSteps = new Set(metaRows.map((r) => r.key));
+  const hadBefore014 = (table: string) => doneSteps.has(`before_014:${table}`);
+  const firstOpen = !hadBefore014("client_addresses");
+  /** Tables created by the app before migration 014 (the others come from older migrations). */
+  const APP_SEEDED = new Set(["resources", "dashboard_presets", "wiki_folders", "invoice_templates"]);
   const markDone = (key: string) =>
     db.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ($1, '1')", [key]);
   /** Fill `table` with its starter rows, once. On a file the app opened
@@ -346,68 +291,14 @@ async function ensureSchema(db: Database) {
    *  code seeded it whenever it was empty), so it's only marked as done. */
   async function seedOnce(key: string, table: string, seed: () => Promise<void>) {
     if (doneSteps.has(key)) return;
-    if (firstOpen || !tablesAtStart.has(table)) {
+    if (firstOpen || (APP_SEEDED.has(table) && !hadBefore014(table))) {
       const rows = await db.select<{ cnt: number }[]>(`SELECT COUNT(*) as cnt FROM ${table}`);
       if (rows[0]?.cnt === 0) await seed();
     }
     await markDone(key);
   }
 
-  /** Columns of `table`: from the batch read above, or read now for a table
-   *  that did not exist then. */
-  async function columnsOf(table: string): Promise<Set<string>> {
-    let cols = columns.get(table);
-    if (!cols) {
-      const rows = await db.select<{ name: string }[]>(`SELECT name FROM pragma_table_info('${table}')`);
-      cols = new Set(rows.map((r) => r.name));
-      columns.set(table, cols);
-    }
-    return cols;
-  }
-
-  // Helper: add a column only if it doesn't already exist
-  async function addColumnIfMissing(table: string, column: string, definition: string) {
-    if (schemaCurrent) return;
-    const cols = await columnsOf(table);
-    if (!cols.has(column)) {
-      await db.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
-      cols.add(column);
-    }
-  }
-
-  // ── Tasks columns ──────────────────────────────────────────
-  await addColumnIfMissing("tasks", "start_time", "TEXT DEFAULT NULL");
-  await addColumnIfMissing("tasks", "end_time", "TEXT DEFAULT NULL");
-  await addColumnIfMissing("tasks", "reminder", "TEXT DEFAULT NULL");
-  await addColumnIfMissing("tasks", "end_date", "TEXT DEFAULT NULL");
-  await addColumnIfMissing("tasks", "calendar_event_id", "TEXT DEFAULT NULL");
-
-  // ── Subtasks columns ───────────────────────────────────────
-  await addColumnIfMissing("subtasks", "due_date", "TEXT DEFAULT NULL");
-  await addColumnIfMissing("subtasks", "end_date", "TEXT DEFAULT NULL");
-  await addColumnIfMissing("subtasks", "start_time", "TEXT DEFAULT NULL");
-  await addColumnIfMissing("subtasks", "end_time", "TEXT DEFAULT NULL");
-  await addColumnIfMissing("subtasks", "reminder", "TEXT DEFAULT NULL");
-  await addColumnIfMissing("subtasks", "calendar_event_id", "TEXT DEFAULT NULL");
-
-  // ── Projects columns ───────────────────────────────────────
-  await addColumnIfMissing("projects", "calendar_deadline_id", "TEXT DEFAULT NULL");
-  await addColumnIfMissing("projects", "workload_columns", "TEXT DEFAULT NULL");
-  await addColumnIfMissing("projects", "workload_template_id", "INTEGER DEFAULT NULL");
-
-  // ── Clients: postal_city + data migration ──────────────────
-  if (!schemaCurrent && !(await columnsOf("clients")).has("postal_city")) {
-    await db.execute("ALTER TABLE clients ADD COLUMN postal_city TEXT NOT NULL DEFAULT ''");
-    await db.execute("UPDATE clients SET postal_city = address_line2, address_line2 = '' WHERE address_line2 IS NOT NULL AND address_line2 != ''");
-  }
-
-  // ── Business profile: QR-IBAN ────────────────────────────────
-  await addColumnIfMissing("business_profile", "qr_iban", "TEXT DEFAULT ''");
-
-  // ── Invoices: contact_id ───────────────────────────────────
-  await addColumnIfMissing("invoices", "contact_id", "INTEGER REFERENCES client_contacts(id) ON DELETE SET NULL");
-
-  // ── One-time data migration: client email/phone → contacts ─
+  // ── Client email/phone → contacts (new clients still arrive with them) ─
   const clientsWithEmail = await db.select<{ id: string; email: string; phone: string }[]>(
     "SELECT id, email, phone FROM clients WHERE (email IS NOT NULL AND email != '') OR (phone IS NOT NULL AND phone != '')"
   );
@@ -425,16 +316,7 @@ async function ensureSchema(db: Database) {
     await db.execute("UPDATE clients SET email = '', phone = '' WHERE id = $1", [c.id]);
   }
 
-  // ── Client addresses table + migration ───────────────────
-  await ddl(`CREATE TABLE IF NOT EXISTS client_addresses (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-    label TEXT NOT NULL DEFAULT '',
-    billing_name TEXT NOT NULL DEFAULT '',
-    address_line1 TEXT NOT NULL DEFAULT '',
-    address_line2 TEXT NOT NULL DEFAULT '',
-    postal_city TEXT NOT NULL DEFAULT ''
-  )`);
+  // ── Client addresses (one-time copy) ───────────────────────
   // Copy each client's own address into client_addresses as "Main" (one-time).
   // New clients get their row from createClient; deleting that row clears the
   // client's own address (deleteClientAddress), so it can't come back.
@@ -451,62 +333,11 @@ async function ensureSchema(db: Database) {
     await markDone("moved:client_addresses");
   }
 
-  // ── Invoices/Quotes: billing_address_id ────────────────────
-  await addColumnIfMissing("invoices", "billing_address_id", "INTEGER DEFAULT NULL");
-  await addColumnIfMissing("quotes", "billing_address_id", "INTEGER DEFAULT NULL");
-  await addColumnIfMissing("quotes", "converted_to_project_id", "INTEGER DEFAULT NULL");
-
-  // ── Invoices: multi-currency columns ──────────────────────
-  await addColumnIfMissing("invoices", "currency", "TEXT NOT NULL DEFAULT 'CHF'");
-  await addColumnIfMissing("invoices", "exchange_rate", "REAL NOT NULL DEFAULT 1.0");
-  await addColumnIfMissing("invoices", "chf_equivalent", "REAL NOT NULL DEFAULT 0");
+  // ── Invoices: chf_equivalent for CHF invoices that have none ──
   // Backfill chf_equivalent for existing invoices where it's 0
   await db.execute(
     "UPDATE invoices SET chf_equivalent = total WHERE chf_equivalent = 0 AND currency = 'CHF'"
   );
-
-  // ── Income table ────────────────────────────────────────────
-  await ddl(`
-    CREATE TABLE IF NOT EXISTS income (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      reference TEXT NOT NULL,
-      date TEXT NOT NULL,
-      description TEXT NOT NULL DEFAULT '',
-      amount REAL NOT NULL DEFAULT 0,
-      category TEXT NOT NULL DEFAULT 'side_income',
-      source TEXT NOT NULL DEFAULT '',
-      receipt_path TEXT,
-      notes TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-
-  // ── Resources tables ──────────────────────────────────────
-  await ddl(`
-    CREATE TABLE IF NOT EXISTS resources (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL DEFAULT '',
-      url TEXT NOT NULL DEFAULT '',
-      price TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-  await ddl(`
-    CREATE TABLE IF NOT EXISTS resource_tags (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
-      tag TEXT NOT NULL
-    )
-  `);
-  await ddl(`
-    CREATE TABLE IF NOT EXISTS resource_projects (
-      resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
-      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      PRIMARY KEY (resource_id, project_id)
-    )
-  `);
 
   // ── Seed resources from Notion export (one-time) ─────────
   await seedOnce("seeded:resources", "resources", async () => {
@@ -562,72 +393,6 @@ async function ensureSchema(db: Database) {
     }
   });
 
-  // ── Expense category color ─────────────────────────────────
-  await addColumnIfMissing("expense_categories", "color", "TEXT DEFAULT NULL");
-
-  // ── Invoice reminder tracking ──────────────────────────────
-  await addColumnIfMissing("invoices", "reminder_count", "INTEGER NOT NULL DEFAULT 0");
-  await addColumnIfMissing("invoices", "last_reminder_date", "TEXT DEFAULT NULL");
-
-  // ── Recurring invoice templates ────────────────────────────
-  await ddl(`
-    CREATE TABLE IF NOT EXISTS recurring_invoice_templates (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      base_invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
-      client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-      frequency TEXT NOT NULL DEFAULT 'monthly',
-      next_due TEXT NOT NULL,
-      active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-
-  // ── Saved filters ────────────────────────────────────────
-  await ddl(`
-    CREATE TABLE IF NOT EXISTS saved_filters (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      page TEXT NOT NULL,
-      name TEXT NOT NULL,
-      filters TEXT NOT NULL DEFAULT '{}',
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-
-  // ── Named Tables (custom project tables) ─────────────────
-  await ddl(`
-    CREATE TABLE IF NOT EXISTS project_tables (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      name TEXT NOT NULL DEFAULT 'Untitled',
-      column_config TEXT NOT NULL DEFAULT '[]',
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-  await ddl(`
-    CREATE TABLE IF NOT EXISTS project_table_rows (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      table_id INTEGER NOT NULL REFERENCES project_tables(id) ON DELETE CASCADE,
-      data TEXT NOT NULL DEFAULT '{}',
-      sort_order INTEGER NOT NULL DEFAULT 0
-    )
-  `);
-
-  // ── Modular project pages (layout_config) ────────────────
-  await addColumnIfMissing("projects", "layout_config", "TEXT DEFAULT NULL");
-  await addColumnIfMissing("projects", "folder_path", "TEXT DEFAULT NULL");
-
-  // ── Planned time on tasks (for quote→project comparison) ──
-  await addColumnIfMissing("tasks", "planned_minutes", "INTEGER DEFAULT NULL");
-
-  // ── Boosted workload: time tracking + workload data on tasks ──
-  await addColumnIfMissing("tasks", "tracked_minutes", "INTEGER NOT NULL DEFAULT 0");
-  await addColumnIfMissing("tasks", "workload_cells", "TEXT NOT NULL DEFAULT '{}'");
-  await addColumnIfMissing("tasks", "workload_sort_order", "INTEGER NOT NULL DEFAULT 0");
-  await addColumnIfMissing("workload_templates", "is_system", "INTEGER NOT NULL DEFAULT 0");
-
   // ── Seed default workload template (one-time) ─────────────
   await seedOnce("seeded:workload_templates", "workload_templates", async () => {
     // Keep in sync with DEFAULT_WORKLOAD_COLUMNS (src/types/workload.ts); differs only in asset type "text" vs "link".
@@ -661,16 +426,6 @@ async function ensureSchema(db: Database) {
   );
 
   // ── Dashboard presets ─────────────────────────────────────
-  await ddl(`
-    CREATE TABLE IF NOT EXISTS dashboard_presets (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      layout_json TEXT NOT NULL,
-      is_builtin INTEGER NOT NULL DEFAULT 0,
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
   await seedOnce("seeded:dashboard_presets", "dashboard_presets", async () => {
     const builtinPresets = [
       {
@@ -760,54 +515,10 @@ async function ensureSchema(db: Database) {
     }
   });
 
-  // ── Wiki tables ─────────────────────────────────────────────
-  await ddl(`
-    CREATE TABLE IF NOT EXISTS wiki_folders (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-  await ddl(`
-    CREATE TABLE IF NOT EXISTS wiki_articles (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      folder_id INTEGER REFERENCES wiki_folders(id) ON DELETE SET NULL,
-      project_id INTEGER DEFAULT NULL,
-      title TEXT NOT NULL DEFAULT 'Untitled',
-      content TEXT NOT NULL DEFAULT '',
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-  await ddl(`
-    CREATE TABLE IF NOT EXISTS wiki_article_tags (
-      article_id INTEGER NOT NULL REFERENCES wiki_articles(id) ON DELETE CASCADE,
-      tag TEXT NOT NULL,
-      PRIMARY KEY (article_id, tag)
-    )
-  `);
-
   // ── Seed wiki user guide (one-time) ──────────────────────
   await seedOnce("seeded:wiki_guide", "wiki_folders", () => seedUserGuide(db));
 
-  // ── Time entries table (created by TimeTrackingPage migration) ──
-  // Ensure it exists for fresh installs
-  await ddl(`
-    CREATE TABLE IF NOT EXISTS time_entries (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
-      description TEXT NOT NULL DEFAULT '',
-      duration_minutes INTEGER NOT NULL DEFAULT 0,
-      date TEXT NOT NULL,
-      hourly_rate REAL DEFAULT NULL,
-      invoiced INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
+  // ── Time entries from tasks.tracked_minutes ────────────────
 
   // One-time migration: backfill time_entries from tasks.tracked_minutes
   // for tasks that have tracked time but no corresponding time_entries yet
@@ -825,49 +536,6 @@ async function ensureSchema(db: Database) {
     );
   }
 
-  // ── Custom Lists ─────────────────────────────────────────
-  await ddl(`
-    CREATE TABLE IF NOT EXISTS custom_lists (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
-    )
-  `);
-  await ddl(`
-    CREATE TABLE IF NOT EXISTS custom_list_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      list_id INTEGER NOT NULL REFERENCES custom_lists(id) ON DELETE CASCADE,
-      value TEXT NOT NULL,
-      color TEXT,
-      sort_order INTEGER NOT NULL DEFAULT 0
-    )
-  `);
-
-  // ── Invoice templates ─────────────────────────────────────
-  await ddl(`
-    CREATE TABLE IF NOT EXISTS invoice_templates (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      is_default INTEGER NOT NULL DEFAULT 0,
-      accent_color TEXT NOT NULL DEFAULT '#1a1a1a',
-      font_family TEXT NOT NULL DEFAULT 'Helvetica',
-      logo_position TEXT NOT NULL DEFAULT 'left',
-      margins_top REAL NOT NULL DEFAULT 35,
-      margins_right REAL NOT NULL DEFAULT 50,
-      margins_bottom REAL NOT NULL DEFAULT 35,
-      margins_left REAL NOT NULL DEFAULT 50,
-      show_notes INTEGER NOT NULL DEFAULT 1,
-      show_project_name INTEGER NOT NULL DEFAULT 1,
-      show_po_number INTEGER NOT NULL DEFAULT 1,
-      show_bank_details INTEGER NOT NULL DEFAULT 1,
-      show_qr_bill INTEGER NOT NULL DEFAULT 1,
-      show_footer INTEGER NOT NULL DEFAULT 1,
-      columns TEXT NOT NULL DEFAULT '["designation","rate","unit","qty","amount"]',
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
-    )
-  `);
   // Seed default template (one-time) — values must match InvoicePDF hardcoded defaults
   await seedOnce("seeded:invoice_templates", "invoice_templates", async () => {
     await db.execute(
@@ -890,8 +558,6 @@ async function ensureSchema(db: Database) {
     );
   });
   // Add template_id to invoices and quotes
-  await addColumnIfMissing("invoices", "template_id", "INTEGER REFERENCES invoice_templates(id) ON DELETE SET NULL");
-  await addColumnIfMissing("quotes", "template_id", "INTEGER REFERENCES invoice_templates(id) ON DELETE SET NULL");
 
   // ── Migrate workload_rows → tasks (one-time) ─────────────
   const hasWorkloadRows = await db.select<{ cnt: number }[]>(
@@ -939,35 +605,4 @@ async function ensureSchema(db: Database) {
     `UPDATE invoices SET pdf_path = REPLACE(pdf_path, '/ch.lorisbriguet.studiomanager/', '/ch.studiomanager.app/')
      WHERE pdf_path LIKE '%/ch.lorisbriguet.studiomanager/%'`
   ).catch((e) => logError("[DB] invoice pdf path migration failed:", e));
-
-  // ── Hot-path indexes (idempotent) ──────────────────────────
-  // Frequent WHERE/JOIN columns; negligible cost at this DB size, cheap
-  // insurance as the data grows.
-  const indexes = [
-    "CREATE INDEX IF NOT EXISTS idx_invoices_client ON invoices(client_id)",
-    "CREATE INDEX IF NOT EXISTS idx_invoices_date ON invoices(invoice_date)",
-    "CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status)",
-    "CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(invoice_date)",
-    "CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category_code)",
-    "CREATE INDEX IF NOT EXISTS idx_expenses_supplier ON expenses(supplier)",
-    "CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id)",
-    "CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_date)",
-    "CREATE INDEX IF NOT EXISTS idx_subtasks_task ON subtasks(task_id)",
-    "CREATE INDEX IF NOT EXISTS idx_time_entries_task ON time_entries(task_id)",
-    "CREATE INDEX IF NOT EXISTS idx_invoice_line_items_invoice ON invoice_line_items(invoice_id)",
-    "CREATE INDEX IF NOT EXISTS idx_quote_line_items_quote ON quote_line_items(quote_id)",
-    "CREATE INDEX IF NOT EXISTS idx_time_entries_project ON time_entries(project_id)",
-    "CREATE INDEX IF NOT EXISTS idx_time_entries_date ON time_entries(date)",
-    "CREATE INDEX IF NOT EXISTS idx_quotes_client ON quotes(client_id)",
-  ];
-  if (schemaCurrent) return;
-  for (const stmt of indexes) {
-    await db.execute(stmt).catch((e) => logError("[DB] index creation failed:", e));
-  }
-
-  // Recorded last: a run that stopped partway runs the schema again next time.
-  await db.execute(
-    "INSERT OR REPLACE INTO meta (key, value, updated_at) VALUES ($1, $2, datetime('now'))",
-    [SCHEMA_FIXUPS_KEY, schemaStamp]
-  );
 }
