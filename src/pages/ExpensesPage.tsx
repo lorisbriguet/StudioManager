@@ -646,9 +646,13 @@ export function NewExpenseForm({
 
   const clearError = (field: ExpenseFormField) => setFieldError(field, null);
 
-  // Sync prefill into form when it changes (e.g. new file dropped while form is open)
+  // Sync prefill into form when it changes (e.g. new file dropped while form is open).
+  // Not on open: the form already starts from this prefill, and a late reset
+  // there would wipe what was typed before it ran.
+  const appliedPrefill = useRef(prefill);
   useEffect(() => {
-    if (!prefill) return;
+    if (!prefill || prefill === appliedPrefill.current) return;
+    appliedPrefill.current = prefill;
     setForm(initialForm(prefill, categories, pastSuppliers));
     // OCR prefill overwrites the whole form programmatically — any stale
     // inline errors no longer describe what is on screen, so clear them all.
