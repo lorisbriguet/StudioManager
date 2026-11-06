@@ -292,6 +292,15 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
                 </Select>
               </div>
             )}
+            <div className="mt-2">
+              <Button
+                variant="secondary"
+                icon={ICONS.add}
+                onClick={() => navigate(`/quotes/new?project=${projectId}`)}
+              >
+                {t.new_quote}
+              </Button>
+            </div>
           </div>
         );
       case "wiki":
