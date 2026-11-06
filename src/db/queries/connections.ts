@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getDb, getEquipmentDb, equipmentOrgId, validateFields, TransactionBatch } from "../index";
 import { useOrgStore } from "../../stores/org-store";
+import { escapeLike } from "./escapeLike";
 import { todayLocalISO } from "../../utils/localDate";
 import type {
   Connection,
@@ -261,7 +262,7 @@ export async function getLatestMetrics(
   prefix: string
 ): Promise<{ metric: string; value: number; read_at: string }[]> {
   const db = await getEquipmentDb();
-  const escaped = prefix.replace(/[\\%_]/g, (c) => "\\" + c);
+  const escaped = escapeLike(prefix);
   const rows = await db.select<{ metric: string; value: number; read_at: string }[]>(
     `SELECT metric, value, read_at FROM machine_readings
      WHERE machine_id = $1 AND metric LIKE $2 ESCAPE '\\'
