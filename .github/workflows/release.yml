@@ -96,6 +96,14 @@ jobs:
         run: |
           cargo test
           cargo clippy --all-targets -- -D warnings
+      # The app crate needs the built frontend (frontendDist) to compile.
+      # From src-tauri, so cargo reads its .cargo/config.toml (job CARGO_TARGET_DIR wins).
+      - run: npx vite build
+      - name: App tests and clippy
+        working-directory: src-tauri
+        run: |
+          cargo test
+          cargo clippy --all-targets -- -D warnings
 
       # RELEASING.md step 2: every count must be 0
       - name: Design-system grep gates
