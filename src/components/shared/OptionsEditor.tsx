@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { AddRow, Badge, Button, Dropdown, FormGroup, ICONS, ICON_SIZE, IconButton, Input, Select, Tag, FORM_GAP } from "../ui";
 import { normalizeTagColorName, TAG_COLOR_NAMES } from "../../lib/tagColors";
 import { useT } from "../../i18n/useT";
@@ -77,10 +77,12 @@ export function OptionsEditor({
   // keys: they change on every keystroke. Kept in step with our own removes
   // and adds; a change from outside (import from list) that alters the count
   // gives fresh keys.
-  const nextKey = useRef(0);
-  const keys = useRef<number[]>([]);
-  if (keys.current.length !== options.length) {
-    keys.current = options.map(() => nextKey.current++);
+  const [rowKeys, setRowKeys] = useState(() => ({ keys: options.map((_, i) => i), next: options.length }));
+  let keys = rowKeys.keys;
+  if (keys.length !== options.length) {
+    const fresh = { keys: options.map((_, i) => rowKeys.next + i), next: rowKeys.next + options.length };
+    setRowKeys(fresh);
+    keys = fresh.keys;
   }
 
   const update = (i: number, patch: Partial<EditableOption>) => {
@@ -91,14 +93,14 @@ export function OptionsEditor({
   };
 
   const remove = (i: number) => {
-    keys.current = keys.current.filter((_, j) => j !== i);
+    setRowKeys((r) => ({ ...r, keys: r.keys.filter((_, j) => j !== i) }));
     onChange(options.filter((_, j) => j !== i));
   };
 
   /** A duplicate name is ignored and stays in the field. */
   const add = (value: string) => {
     if (options.some((o) => o.value === value)) return false;
-    keys.current = [...keys.current, nextKey.current++];
+    setRowKeys((r) => ({ keys: [...r.keys, r.next], next: r.next + 1 }));
     onChange([...options, colors ? { value, color: newColor } : { value }]);
   };
 
@@ -139,7 +141,7 @@ export function OptionsEditor({
       {options.length > 0 && (
         <div className="flex flex-col gap-1.5">
           {options.map((opt, i) => (
-            <div key={keys.current[i]} className="flex items-center gap-2">
+            <div key={keys[i]} className="flex items-center gap-2">
               {colors ? (
                 <>
                   <div className="flex-1 min-w-0">

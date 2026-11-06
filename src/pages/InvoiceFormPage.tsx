@@ -30,6 +30,7 @@ import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { confirmIfDirty } from "../lib/dirty-guard";
 import { pickableClients, type Client } from "../types/client";
 import { qk } from "../db/queryKeys";
+import { useKeepCurrent } from "../hooks/useKeepCurrent";
 
 // Phase 2 E2 — inline validation (additive; only fields with rules appear in
 // the schema, the rest are unvalidated). "line_items" has no schema rules —
@@ -126,11 +127,11 @@ export function InvoiceFormPage() {
   const [globalRate, setGlobalRate] = useState<number>(0);
   const [globalUnit, setGlobalUnit] = useState<string>("hours");
   const globalRateRef = useRef<number>(0);
-  globalRateRef.current = globalRate;
+  useKeepCurrent(globalRateRef, globalRate);
   const useGlobalRateRef = useRef(false);
-  useGlobalRateRef.current = useGlobalRate;
+  useKeepCurrent(useGlobalRateRef, useGlobalRate);
   const globalUnitRef = useRef<string>("hours");
-  globalUnitRef.current = globalUnit;
+  useKeepCurrent(globalUnitRef, globalUnit);
 
   const addItem = useCallback(() => {
     const rate = useGlobalRateRef.current ? globalRateRef.current : null;

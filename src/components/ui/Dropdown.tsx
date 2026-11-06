@@ -21,6 +21,7 @@ import { nowMs } from "../../lib/clock";
 import { SECTION_LABEL } from "./SectionLabel";
 import { CONTROL_BOX } from "./tokens";
 import { ICON_SIZE, ICON_STROKE, renderIcon, type IconProp } from "./icons";
+import { useKeepCurrent } from "../../hooks/useKeepCurrent";
 
 /**
  * Dropdown — the app's one menu component (see DESIGN-SYSTEM.md, "Dropdown").
@@ -112,7 +113,7 @@ function MenuPanel({
   const listRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useKeepCurrent(onCloseRef, onClose);
 
   const enabled = rows.flatMap((r, i) => (r.kind === "item" && !r.disabled ? [i] : []));
   const [active, setActive] = useState(() =>
@@ -401,9 +402,9 @@ export function DropdownSelect(props: DropdownSelectProps) {
   const [open, setOpen] = useState(Boolean(defaultOpen && !disabled));
   const [query, setQuery] = useState("");
   const onBlurRef = useRef(onBlur);
-  onBlurRef.current = onBlur;
+  useKeepCurrent(onBlurRef, onBlur);
   const onOpenRef = useRef(onOpen);
-  onOpenRef.current = onOpen;
+  useKeepCurrent(onOpenRef, onOpen);
   useEffect(() => {
     if (open) onOpenRef.current?.();
   }, [open]);

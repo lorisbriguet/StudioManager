@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { notify } from "../../lib/notify";
 import { useT } from "../../i18n/useT";
 import { useCreateConnection, useDeleteConnection, useUpdateConnection } from "../../db/hooks/useConnections";
@@ -36,7 +36,9 @@ export function useConnectionSetup(connection: Connection | undefined, onDone: (
   const [busy, setBusy] = useState(false);
 
   const removeRef = useRef(remove.mutate);
-  removeRef.current = remove.mutate;
+  useLayoutEffect(() => {
+    removeRef.current = remove.mutate;
+  });
   /** False once the form is closed: a first save still running then removes what it made. */
   const openRef = useRef(true);
   useEffect(() => {

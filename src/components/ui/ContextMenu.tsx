@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { MENU_DIVIDER, MENU_ITEM, MENU_TONE } from "./Dropdown";
 import { Popover } from "./Popover";
+import { focusedElement } from "./focusedElement";
 import { useT } from "../../i18n/useT";
 import { ICON_SIZE, renderIcon, type IconProp } from "./icons";
 
@@ -41,18 +42,12 @@ function getEnabledItems(menu: HTMLElement) {
 export function ContextMenu({ x, y, items, onClose, "aria-label": label }: ContextMenuProps) {
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
-  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
-  const capturedRef = useRef(false);
-  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
-
   // Capture the pre-open focused element at first render, before focus moves
   // into the menu. The component mounts fresh on each open, so first render is
-  // the open transition. Idempotent under StrictMode's double render.
-  if (!capturedRef.current) {
-    capturedRef.current = true;
-    const active = document.activeElement;
-    previouslyFocusedRef.current = active instanceof HTMLElement ? active : null;
-  }
+  // the open transition.
+  const [opener] = useState(focusedElement);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(opener);
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
 
   // Move focus into the menu on open; restore it on close/unmount.
   useEffect(() => {

@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState, useEffect, useCallback } from "react";
+import { useMemo, useRef, useState, useEffect, useCallback, type RefObject } from "react";
 import { ZoomIn, ZoomOut } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { createSim, layoutGraph, placeLabels, type Point, type Sim, type SimNode } from "../../lib/wikiGraph";
 import { colorFor } from "./wikiColors";
 import { IconButton, ICONS } from "../ui";
+import { useKeepCurrent } from "../../hooks/useKeepCurrent";
 
 export interface GraphNodeInput {
   id: number;
@@ -48,6 +49,12 @@ function bounds(positions: Map<number, Point>, margin: number): Box {
   return { x: x0 - margin, y: y0 - margin, w: Math.max(...xs) - x0 + 2 * margin, h: Math.max(...ys) - y0 + 2 * margin };
 }
 
+/** A fresh settled layout for a changed graph, started from where the dots are. */
+function relayout(key: string, nodes: SimNode[], edges: [number, number][], from: Map<number, Point>) {
+  const p = layoutGraph(nodes, edges, from);
+  return { key, laid: p, positions: p };
+}
+
 /**
  * Articles as dots, links as lines. Drag a dot and its neighbours follow
  * while the rest makes way; drag the background to pan, scroll to zoom
@@ -63,7 +70,7 @@ export function GraphView({
   alwaysLabels = false,
   onOpen,
   label,
-  initialView = null,
+  savedView,
   onViewChange,
   reserveRight = 0,
 }: {
@@ -75,8 +82,8 @@ export function GraphView({
   alwaysLabels?: boolean;
   onOpen: (id: number, newTab: boolean) => void;
   label: string;
-  /** Zoom and pan to start from (null: fit everything). */
-  initialView?: GraphBox | null;
+  /** Zoom and pan to start from, read once when the graph mounts (empty: fit everything). */
+  savedView?: RefObject<GraphBox | null>;
   /** Called when the zoom or pan changes, to restore it later. */
   onViewChange?: (view: GraphBox | null) => void;
   /** Pixels on the right covered by an overlay: fitting keeps dots out of them. */
@@ -85,9 +92,9 @@ export function GraphView({
   const t = useT();
   const svgRef = useRef<SVGSVGElement>(null);
   const [hot, setHot] = useState<number | null>(null);
-  const [view, setView] = useState<Box | null>(initialView);
+  const [view, setView] = useState<Box | null>(() => savedView?.current ?? null);
   const onViewChangeRef = useRef(onViewChange);
-  onViewChangeRef.current = onViewChange;
+  useKeepCurrent(onViewChangeRef, onViewChange);
   useEffect(() => {
     onViewChangeRef.current?.(view);
   }, [view]);
@@ -95,7 +102,6 @@ export function GraphView({
   const [keyId, setKeyId] = useState<number | null>(null);
   const nodeEls = useRef(new Map<number, SVGGElement>());
   const [px, setPx] = useState<{ w: number; h: number } | null>(null);
-  const [, setFrame] = useState(0);
 
   const degree = useMemo(() => {
     const d = new Map<number, number>();
@@ -116,20 +122,22 @@ export function GraphView({
     [nodes, degree]
   );
 
-  // Settled layout. A change of graph starts from the last positions, so
-  // the dots that stay keep their place.
-  const positionsRef = useRef<Map<number, Point>>(new Map());
+  // Settled layout (`laid`) and where the dots are now (`positions`: the layout,
+  // or the live simulation while a dot is dragged). A change of graph lays out
+  // again from the last positions, so the dots that stay keep their place.
+  // layoutKey captures exactly the inputs that change the layout.
   const layoutKey = useMemo(
     () => simNodes.map((n) => `${n.id}:${n.cluster}`).join(",") + "|" + edges.map((e) => e.join("-")).join(","),
     [simNodes, edges]
   );
-  const laid = useMemo(() => {
-    const p = layoutGraph(simNodes, edges, positionsRef.current);
-    positionsRef.current = p;
-    return p;
-    // layoutKey captures exactly the inputs that change the layout.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layoutKey]);
+  const [graph, setGraph] = useState(() => {
+    const p = layoutGraph(simNodes, edges, new Map());
+    return { key: layoutKey, laid: p, positions: p };
+  });
+  const stale = graph.key !== layoutKey;
+  const current = stale ? relayout(layoutKey, simNodes, edges, graph.positions) : graph;
+  if (stale) setGraph(current);
+  const { laid, positions } = current;
   // Fit the dots into the part of the view that `reserveRight` leaves free
   // (the graph settings panel floats over the right edge).
   const fit = useMemo(() => {
@@ -144,7 +152,7 @@ export function GraphView({
 
   // A new graph: drop the live simulation and refit.
   const live = useRef<{ sim: Sim; alpha: number; raf: number } | null>(null);
-  // The first layout keeps `initialView`; a later change of graph refits.
+  // The first layout keeps the saved view; a later change of graph refits.
   // (Compared by identity, so StrictMode's second effect run keeps it too.)
   const firstLaid = useRef(laid);
   useEffect(() => {
@@ -206,15 +214,15 @@ export function GraphView({
   /** Holds a dot at the pointer and wakes the graph, a frame at a time,
    *  until it is released and everything has settled again. */
   const hold = (id: number, p: Point) => {
-    if (!live.current) live.current = { sim: createSim(simNodes, edges, positionsRef.current), alpha: 0, raf: 0 };
+    if (!live.current) live.current = { sim: createSim(simNodes, edges, positions), alpha: 0, raf: 0 };
     const l = live.current;
     l.sim.fix(id, p);
     const calm =
       typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (calm || typeof requestAnimationFrame !== "function") {
       l.sim.tick(0);
-      positionsRef.current = l.sim.positions();
-      setFrame((f) => f + 1);
+      const now = l.sim.positions();
+      setGraph((g) => ({ ...g, positions: now }));
       return;
     }
     if (l.alpha > ALPHA_REST) return; // already running: the loop sees the new position
@@ -225,8 +233,8 @@ export function GraphView({
       cur.sim.tick(cur.alpha);
       const holding = drag.current?.id !== undefined && drag.current.moved;
       cur.alpha = holding ? cur.alpha + (ALPHA_HELD - cur.alpha) * ALPHA_WAKE : cur.alpha * ALPHA_COOL;
-      positionsRef.current = cur.sim.positions();
-      setFrame((f) => f + 1);
+      const now = cur.sim.positions();
+      setGraph((g) => ({ ...g, positions: now }));
       if (cur.alpha > ALPHA_REST) cur.raf = requestAnimationFrame(frame);
       else cur.alpha = 0;
     };
@@ -261,7 +269,6 @@ export function GraphView({
     }, 0);
   };
 
-  const positions = positionsRef.current;
   const neighbours = useMemo(() => {
     if (hot == null) return null;
     const set = new Set([hot]);

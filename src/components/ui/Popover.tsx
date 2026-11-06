@@ -11,6 +11,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { SURFACE } from "./tokens";
+import { useKeepCurrent } from "../../hooks/useKeepCurrent";
 
 /**
  * Popover — the one floating panel of the app (see DESIGN-SYSTEM.md, "Popover").
@@ -117,7 +118,7 @@ export function Popover({
   }, [unnamed]);
   const [seq] = useState(() => ++openSeq);
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useKeepCurrent(onCloseRef, onClose);
   // Placed straight on the element, not through state: a state update means a second render,
   // and WebKit can paint the first one (where the panel was mounted) before it.
   const placedRef = useRef(false);

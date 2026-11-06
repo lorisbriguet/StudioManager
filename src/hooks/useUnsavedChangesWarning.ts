@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { confirmIfDirty, isConfirming, registerDirtyGuard } from "../lib/dirty-guard";
+import { useKeepCurrent } from "./useKeepCurrent";
 
 /**
  * Warns the user when navigating away from a form with unsaved changes.
@@ -23,7 +24,7 @@ import { confirmIfDirty, isConfirming, registerDirtyGuard } from "../lib/dirty-g
  */
 export function useUnsavedChangesWarning(isDirty: boolean) {
   const dirtyRef = useRef(isDirty);
-  dirtyRef.current = isDirty;
+  useKeepCurrent(dirtyRef, isDirty);
   const navigate = useNavigate();
 
   // Register with the central registry so programmatic navigation sites

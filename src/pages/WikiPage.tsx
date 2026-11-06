@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef, useEffect, useId } from "react";
+import { useState, useLayoutEffect, useMemo, useCallback, useRef, useEffect, useId } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -54,6 +54,7 @@ import { closeView, EMPTY_TABS, leaveGraph, openInView, pruneTabs, singleView, t
 import { useProjectDocs, type ProjectDoc } from "../db/hooks/useProjectDocs";
 import { DocView } from "../components/wiki/DocView";
 import { useNewItem } from "../hooks/useNewItem";
+import { useKeepCurrent } from "../hooks/useKeepCurrent";
 
 // ─── Slash Command Menu ───────────────────────────────────────────
 interface SlashMenuItem {
@@ -437,9 +438,9 @@ export function ArticleEditor({
   const t = useT();
   // The editor's callbacks are created once per article: read these live.
   const onContentChangeRef = useRef(onContentChange);
-  onContentChangeRef.current = onContentChange;
+  useKeepCurrent(onContentChangeRef, onContentChange);
   const onSaveStateRef = useRef(onSaveStateChange);
-  onSaveStateRef.current = onSaveStateChange;
+  useKeepCurrent(onSaveStateRef, onSaveStateChange);
   const { data: article } = useWikiArticle(articleId);
   const { data: articleTags = [] } = useWikiArticleTags(articleId);
   const { data: allTags = [] } = useAllWikiTags();
@@ -610,7 +611,9 @@ export function ArticleEditor({
   // Keep a ref for unmount cleanup to avoid a stale closure over `editor`
   // (articleIdRef is declared above, next to the debounce it also guards)
   const editorRef = useRef(editor);
-  editorRef.current = editor;
+  useLayoutEffect(() => {
+    editorRef.current = editor;
+  });
 
   // Flush pending debounced save on unmount
   useEffect(() => {
@@ -1244,7 +1247,7 @@ export function WikiPage() {
               docs={docs}
               activeRef={lastRef}
               onOpen={openRef}
-              savedView={graphViewRef.current}
+              savedView={graphViewRef}
               onViewChange={(v) => {
                 graphViewRef.current = v;
               }}

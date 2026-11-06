@@ -1,6 +1,7 @@
-import { useEffect, useRef, useId, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useRef, useId, useState, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { ICONS } from "./icons";
+import { focusedElement } from "./focusedElement";
 import { useT } from "../../i18n/useT";
 import { IconButton } from "./IconButton";
 import { PanelTitle } from "./PanelTitle";
@@ -68,21 +69,19 @@ export function Modal({ open, onClose, title, children, footer, size = "sm", pos
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
-  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
-  const wasOpenRef = useRef(false);
   // Where the press began: a drag from a field (selecting text) that ends on
   // the backdrop is not a backdrop click.
   const pressedBackdropRef = useRef(false);
 
   // Capture the trigger element at render time, on the closed->open transition:
   // children with autoFocus grab focus during commit (before effects run), so an
-  // effect would capture the wrong element. Idempotent under StrictMode's
-  // double render (wasOpenRef is already true on the second pass).
-  if (open && !wasOpenRef.current) {
-    const active = document.activeElement;
-    previouslyFocusedRef.current = active instanceof HTMLElement ? active : null;
-  }
-  wasOpenRef.current = open;
+  // effect would capture the wrong element. Kept in state (adjusted during
+  // render, React's pattern for it), so React re-renders before committing.
+  const [opener, setOpener] = useState<{ open: boolean; el: HTMLElement | null }>(() => ({
+    open,
+    el: open ? focusedElement() : null,
+  }));
+  if (open !== opener.open) setOpener({ open, el: open ? focusedElement() : null });
 
   useEffect(() => {
     if (!open) return;
@@ -104,29 +103,23 @@ export function Modal({ open, onClose, title, children, footer, size = "sm", pos
   useEffect(() => {
     if (!open) return;
     const dialog = ref.current;
+    let prev = opener.el;
     if (dialog) {
       const active = document.activeElement;
-      // StrictMode's simulated unmount runs the cleanup below (restoring focus
-      // and clearing the saved element) without re-rendering; re-capture here so
-      // the real close can still restore.
-      if (
-        previouslyFocusedRef.current === null &&
-        active instanceof HTMLElement &&
-        !dialog.contains(active)
-      ) {
-        previouslyFocusedRef.current = active;
+      // Nothing captured (it had no focusable trigger): take what holds focus now
+      // when it is outside the dialog.
+      if (prev === null && active instanceof HTMLElement && !dialog.contains(active)) {
+        prev = active;
       }
       if (!dialog.contains(document.activeElement)) {
         dialog.focus();
       }
     }
     return () => {
-      const prev = previouslyFocusedRef.current;
-      previouslyFocusedRef.current = null;
       // The trigger may have been removed while the modal was open.
       if (prev && prev.isConnected) prev.focus();
     };
-  }, [open]);
+  }, [open, opener.el]);
 
   // Trap Tab / Shift+Tab inside the dialog. Focusables are queried per keydown
   // because modal content can change while open; it is cheap at modal scale.

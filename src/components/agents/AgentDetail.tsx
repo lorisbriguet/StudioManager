@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { dismissAgent, deleteAgent, saveImage, sendMessage, stopAgent, switchModel, type Agent } from "../../lib/agents";
@@ -12,6 +12,7 @@ import { logError } from "../../lib/log";
 import { Conversation } from "./Conversation";
 import { PromptAnswer } from "./PromptAnswer";
 import { MODELS, ModelMenu } from "./ModelMenu";
+import { useKeepCurrent } from "../../hooks/useKeepCurrent";
 
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
@@ -66,7 +67,9 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
   const background = agent.kind === "background";
   const canSend = background && agent.status !== "waiting";
   const imagesRef = useRef(images);
-  imagesRef.current = images;
+  useLayoutEffect(() => {
+    imagesRef.current = images;
+  });
 
   // Attachments belong to one agent's draft; free their previews when it changes or unmounts.
   useEffect(() => {
@@ -93,8 +96,7 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
   // Files dropped on the window arrive as paths (Tauri's native drop). Images are attached;
   // any other file is pasted into the draft as its path.
   const [dragging, setDragging] = useState(false);
-  const dropRef = useRef<(paths: string[]) => void>(() => {});
-  dropRef.current = async (paths) => {
+  const drop = async (paths: string[]) => {
     const others: string[] = [];
     const files: File[] = [];
     for (const path of paths) {
@@ -114,6 +116,8 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
     if (files.length) addImages(files);
     if (others.length) setText((cur) => appendToDraft(cur, others.join(" ")));
   };
+  const dropRef = useRef<(paths: string[]) => void>(drop);
+  useKeepCurrent(dropRef, drop);
   useEffect(() => {
     if (!canSend) return;
     let cancelled = false;

@@ -77,11 +77,13 @@ export default tseslint.config(
       // react-hooks v7 "recommended" bundles the React Compiler diagnostics.
       // This codebase is not compiled with React Compiler. Render stays pure:
       // "now" in render comes from useNow (src/hooks/useNow.ts), a handler's
-      // time or id from src/lib/clock.ts. The two rules still off flag
-      // long-standing (working) patterns; turn each on once its violations
-      // are fixed. Counts as of 2026-11-06:
+      // time or id from src/lib/clock.ts. Render never writes a ref: a ref
+      // that follows a prop or callback is kept current by useKeepCurrent
+      // (src/hooks/useKeepCurrent.ts). The rule still off flags long-standing
+      // (working) patterns; turn it on once its violations are fixed. Count
+      // as of 2026-11-06:
       'react-hooks/set-state-in-effect': 'off', // 53
-      'react-hooks/refs': 'off', // 47
+      'react-hooks/refs': 'error',
       'react-hooks/purity': 'error',
       'react-hooks/preserve-manual-memoization': 'error',
       'react-hooks/immutability': 'error',

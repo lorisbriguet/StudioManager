@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type RefObject } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { Button, Card, EmptyState, IconButton, SearchBar, SectionLabel, POPOVER_SURFACE, ICONS } from "../ui";
 import { Toggle } from "../ui/Toggle";
@@ -53,7 +53,7 @@ export function WikiGraph({
   colors,
   activeRef,
   onOpen,
-  savedView = null,
+  savedView,
   onViewChange,
 }: {
   articles: WikiArticleWithTags[];
@@ -66,7 +66,7 @@ export function WikiGraph({
   activeRef: WikiRef | null;
   onOpen: (ref: WikiRef, newTab: boolean) => void;
   /** Zoom and pan to come back to, kept by the page while it is open. */
-  savedView?: GraphBox | null;
+  savedView?: RefObject<GraphBox | null>;
   onViewChange?: (view: GraphBox | null) => void;
 }) {
   const t = useT();
@@ -178,7 +178,7 @@ export function WikiGraph({
           alwaysLabels={alwaysLabels}
           onOpen={openNode}
           label={stats}
-          initialView={savedView}
+          savedView={savedView}
           onViewChange={onViewChange}
           reserveRight={settingsOpen ? SETTINGS_SPACE : 0}
         />
