@@ -54,6 +54,44 @@ describe("round2", () => {
     expect(round2(0)).toBe(0);
     expect(round2(-(3 * 21.9))).toBe(-65.7);
   });
+
+  // Review finding D19: half-centimes above ~CHF 2 used to round down.
+  it("rounds half-centime line amounts up: 57.30 × 42.35 = 2426.655 → 2426.66", () => {
+    expect(round2(57.3 * 42.35)).toBe(2426.66);
+  });
+
+  it("rounds half-centime line amounts up: 1.15 × 3.5 = 4.025 → 4.03", () => {
+    expect(round2(1.15 * 3.5)).toBe(4.03);
+  });
+
+  it("rounds a half-centime discount up: 10 % of 40.15 = 4.015 → 4.02", () => {
+    expect(round2(40.15 * 0.1)).toBe(4.02);
+  });
+
+  it("does not double-round: 1.138 × 0.25 = 0.2845 → 0.28", () => {
+    expect(round2(1.138 * 0.25)).toBe(0.28);
+  });
+
+  it("rounds half-centimes from 0.005 to 20'000 up (every 7th)", () => {
+    let wrong = 0;
+    for (let c = 0; c < 2_000_000; c += 7) {
+      if (round2((c * 10 + 5) / 1000) !== (c + 1) / 100) wrong++;
+    }
+    expect(wrong).toBe(0);
+  });
+
+  it("rounds products of 2-decimal rates and quarter-hour quantities like integer centimes", () => {
+    let wrong = 0;
+    for (let rate = 1; rate <= 50_000; rate += 7) {
+      for (let q = 1; q <= 40; q++) {
+        // exact result in 1/10'000 CHF, rounded half up to centimes
+        const tenThousandths = rate * q * 25;
+        const expected = Math.floor((tenThousandths + 50) / 100) / 100;
+        if (round2((rate / 100) * (q / 4)) !== expected) wrong++;
+      }
+    }
+    expect(wrong).toBe(0);
+  });
 });
 
 describe("useLineItemForm amount computation", () => {
