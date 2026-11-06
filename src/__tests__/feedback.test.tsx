@@ -95,7 +95,7 @@ describe("Tooltip", () => {
     btn.getBoundingClientRect = () => ({ top: 200, bottom: 220, left: 300, right: 340, width: 40, height: 20, x: 300, y: 200, toJSON: () => ({}) });
     // keyboard focus shows it at once
     const matches = btn.matches.bind(btn);
-    btn.matches = (s: string) => (s === ":focus-visible" ? true : matches(s));
+    btn.matches = ((s: string) => (s === ":focus-visible" ? true : matches(s))) as typeof btn.matches;
     fireEvent.focus(btn);
     const tip = screen.getByRole("tooltip");
     // React never writes a 0,0 position: the bubble starts parked off screen, then is placed.

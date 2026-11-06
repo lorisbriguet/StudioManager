@@ -7,7 +7,7 @@ UPDATE business_profile SET
   postal_code = '1003',
   city = 'Lausanne',
   country = 'CH',
-  email = 'hello@aurore-musique.ch',
+  email = 'hello@aurore-musique.example',
   phone = '+41 21 555 12 34',
   ide_number = 'CHE-987.654.321',
   affiliate_number = '111.2222.3333.44',

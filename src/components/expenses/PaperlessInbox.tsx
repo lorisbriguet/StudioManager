@@ -7,7 +7,7 @@ import { notify } from "../../lib/notify";
 import { logError } from "../../lib/log";
 import { formatDisplayDate } from "../../utils/formatDate";
 import { paperlessDocUrl, paperlessDownload, paperlessThumbnail, receiptFromDownload } from "../../lib/paperless/commands";
-import type { InboxItem } from "../../lib/paperless/inbox";
+import { paperlessErrorKey, type InboxItem } from "../../lib/paperless/inbox";
 import { paperlessInboxKey, type PaperlessInbox as Inbox } from "../../db/hooks/usePaperlessInbox";
 import { dismissPaperlessDoc, undismissPaperlessDoc } from "../../db/queries/paperlessLinks";
 import { useUpdateExpense } from "../../db/hooks/useExpenses";
@@ -100,7 +100,7 @@ export function PaperlessInbox({
       {inbox.offline && <Callout tone="warning">{t.paperless_offline}</Callout>}
       {inbox.error && (
         <Callout tone="danger">
-          {inbox.error} {t.paperless_error_hint}
+          <span title={inbox.error}>{t[paperlessErrorKey(inbox.error)]}</span> {t.paperless_error_hint}
         </Callout>
       )}
 

@@ -61,8 +61,8 @@ describe("Synology setup helpers", () => {
 
   it("keeps only the host of a pasted address", () => {
     expect(normalizeHost(" https://nas.local:5001/ ")).toBe("nas.local");
-    expect(normalizeHost("192.168.1.20")).toBe("192.168.1.20");
-    expect(normalizeHost("http://192.168.1.20/webman/index.cgi")).toBe("192.168.1.20");
+    expect(normalizeHost("192.0.2.20")).toBe("192.0.2.20");
+    expect(normalizeHost("http://192.0.2.20/webman/index.cgi")).toBe("192.0.2.20");
     expect(normalizeHost("[fe80::1]:5001")).toBe("[fe80::1]");
     expect(normalizeHost("fe80::1")).toBe("fe80::1");
   });

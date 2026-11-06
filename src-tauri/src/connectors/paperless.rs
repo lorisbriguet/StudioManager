@@ -2,20 +2,27 @@
 //! tagged `À saisir`, downloads their original file and thumbnail, and writes
 //! the title and tags back once a document became an expense.
 //!
-//! Secret (Keychain): the API token as a plain string. Every request sends
+//! Secret (Keychain): JSON `{token, host, port, cert_fingerprint?}`. `host`,
+//! `port` and `cert_fingerprint` bind the token to the server it was typed
+//! for (see [`super::binding`]): when the connection row names another one,
+//! nothing is sent. A bare token (saved before the binding existed) is
+//! accepted once and bound to the row's current values. Every request sends
 //! `Authorization: Token <token>` and `Accept: application/json` (no
 //! `; version=N`: the server's default API version is used).
 //!
 //! Error strings the frontend matches on:
 //! - `Paperless refused the token (401). Reconnect it in Settings.` (HTTP 401/403);
 //! - `Paperless unreachable: <reason>` (no HTTP answer: DNS, connect, TLS, timeout);
-//! - `Paperless error <status>` for any other HTTP status.
+//! - `Paperless error <status>` for any other HTTP status;
+//! - `The saved Paperless token is for another address. Reconnect it in Settings.`
+//!   (the row and the token's binding differ; nothing was sent).
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as JsonValue};
 use tauri::Manager;
 
+use super::binding::{self, Binding, Bound};
 use super::{describe, read_limited, Connector, DeviceInfo, DeviceList, SyncResult, MAX_RESPONSE_BYTES};
 
 const INBOX_TAG: &str = "À saisir";
@@ -23,6 +30,8 @@ const LINKED_TAG: &str = "StudioManager";
 const MAX_FILE_BYTES: usize = 50 * 1024 * 1024;
 const MAX_THUMB_BYTES: usize = 5 * 1024 * 1024;
 const REFUSED: &str = "Paperless refused the token (401). Reconnect it in Settings.";
+const REENTER_TOKEN: &str = "The saved Paperless token is for another address. Reconnect it in Settings.";
+const DEFAULT_PORT: u16 = 443;
 
 const INBOX_PATH: &str = "/api/documents/?tags__name__iexact=%C3%80%20saisir&ordering=-created&page_size=100";
 const TAGS_PATH: &str = "/api/tags/?page_size=1000";
@@ -116,6 +125,33 @@ pub(crate) struct Paperless {
     host: String,
     token: String,
     transport: Box<dyn Transport>,
+    /// A legacy bare token, now bound to the row: written back after the call.
+    adopted: Option<String>,
+}
+
+/// The Keychain secret. `host: None`: a bare token. No `Debug`: it would
+/// print the token.
+#[derive(Serialize, Deserialize)]
+struct Secret {
+    token: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    host: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    port: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cert_fingerprint: Option<String>,
+}
+
+impl Secret {
+    /// The JSON blob, or a bare token. `None` when there is no token.
+    fn parse(s: &str) -> Option<Self> {
+        let secret = match serde_json::from_str::<JsonValue>(s) {
+            Ok(v @ JsonValue::Object(_)) => serde_json::from_value(v).ok()?,
+            _ => Secret { token: s.to_string(), host: None, port: None, cert_fingerprint: None },
+        };
+        let token = secret.token.trim().to_string();
+        (!token.is_empty()).then_some(Secret { token, ..secret })
+    }
 }
 
 fn name_eq(a: &str, b: &str) -> bool {
@@ -325,6 +361,10 @@ impl Connector for Paperless {
         self.json(Method::Get, "/api/documents/?page_size=1", None)?;
         Ok(SyncResult { devices: vec![] })
     }
+
+    fn updated_secret(&self) -> Option<String> {
+        self.adopted.clone()
+    }
 }
 
 #[derive(Deserialize)]
@@ -362,10 +402,19 @@ fn build_paperless(config: &JsonValue, secret: Option<String>) -> Result<Paperle
         return Err("invalid Paperless address: type a host name or IP address only".into());
     }
     let port = match cfg.port {
-        None => 443,
+        None => DEFAULT_PORT,
         Some(p) => u16::try_from(p).ok().filter(|p| *p > 0).ok_or("invalid Paperless port: use a number from 1 to 65535")?,
     };
-    let token = secret.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).ok_or(REFUSED)?;
+    let secret = secret.as_deref().and_then(Secret::parse).ok_or(REFUSED)?;
+    let bound = Bound { host: secret.host.as_deref(), port: secret.port, pin: secret.cert_fingerprint.as_deref() };
+    let adopted = match binding::check(&bound, DEFAULT_PORT, host, port, cfg.cert_fingerprint.as_deref()) {
+        Binding::Matches => None,
+        Binding::Adopt { host, port, pin } => {
+            let blob = Secret { token: secret.token.clone(), host: Some(host), port: Some(port), cert_fingerprint: pin };
+            Some(serde_json::to_string(&blob).map_err(|_| "the Paperless token could not be saved".to_string())?)
+        }
+        Binding::Refused => return Err(REENTER_TOKEN.into()),
+    };
     let (builder, _seen) = super::tls::pinned_http_client(cfg.cert_fingerprint.as_deref())?;
     let client = builder
         .timeout(std::time::Duration::from_secs(60))
@@ -374,7 +423,12 @@ fn build_paperless(config: &JsonValue, secret: Option<String>) -> Result<Paperle
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|e| format!("HTTP setup failed: {}", describe(e)))?;
-    Ok(Paperless { host: host.to_string(), token, transport: Box::new(Https { client, base: base_url(host, port) }) })
+    Ok(Paperless {
+        host: host.to_string(),
+        token: secret.token,
+        transport: Box::new(Https { client, base: base_url(host, port) }),
+        adopted,
+    })
 }
 
 /// Read the token from the Keychain, build the connector and run `f`, with
@@ -389,6 +443,12 @@ fn with_paperless<T>(
     let account = super::keychain::account(org, id)?;
     let secret = store.get(&account)?;
     let p = build_paperless(config, secret.clone()).map_err(|e| super::redact(&e, secret.as_deref()))?;
+    if let Some(new) = p.adopted.as_deref() {
+        // Only while the stored secret is still the one read above.
+        if let Err(e) = super::replace_secret_if_unchanged(store, &account, secret.as_deref(), new) {
+            log::warn!("connection {id}: the bound Paperless token could not be saved: {}", super::redact(&e, secret.as_deref()));
+        }
+    }
     f(&p).map_err(|e| super::redact(&e, secret.as_deref()))
 }
 
@@ -524,6 +584,7 @@ mod tests {
             host: "paperless.local".into(),
             token: "t0k".into(),
             transport: Box::new(Fake { seen: seen.clone(), handler: Box::new(handler) }),
+            adopted: None,
         };
         (p, seen)
     }
@@ -686,6 +747,59 @@ mod tests {
         // No stored token at all reads as a refused token.
         let err = with_paperless(&MemoryStore::default(), "6kun0b", 3, &json!({ "host": "paperless.local" }), |p| p.inbox()).unwrap_err();
         assert_eq!(err, REFUSED);
+    }
+
+    const FP: &str = "aa11bb22cc33dd44ee55ff6600778899aa11bb22cc33dd44ee55ff6600778899";
+
+    fn stored(c: &Paperless) -> JsonValue {
+        serde_json::from_str(c.adopted.as_deref().expect("an adopted secret")).unwrap()
+    }
+
+    #[test]
+    fn a_bare_token_is_bound_to_the_row_once() {
+        let config = json!({ "host": " paperless.local ", "port": 8443, "cert_fingerprint": FP });
+        let p = build_paperless(&config, Some(" t0k ".into())).unwrap();
+        assert_eq!(stored(&p), json!({ "token": "t0k", "host": "paperless.local", "port": 8443, "cert_fingerprint": FP }));
+        assert_eq!(p.updated_secret(), p.adopted);
+        // The bound secret matches the same row and is not rewritten.
+        let again = build_paperless(&config, p.adopted.clone()).unwrap();
+        assert_eq!(again.token, "t0k");
+        assert_eq!(again.adopted, None);
+    }
+
+    #[test]
+    fn a_bound_token_goes_only_to_its_address() {
+        let secret = json!({ "token": "t0k", "host": "paperless.local", "port": 8443 }).to_string();
+        let ok = |config: JsonValue| build_paperless(&config, Some(secret.clone())).map(|p| p.adopted.is_none());
+        assert_eq!(ok(json!({ "host": "PAPERLESS.local", "port": 8443 })), Ok(true));
+        let refused = |config: JsonValue| build_paperless(&config, Some(secret.clone())).err().unwrap();
+        assert_eq!(refused(json!({ "host": "evil.example", "port": 8443 })), REENTER_TOKEN);
+        assert_eq!(refused(json!({ "host": "paperless.local", "port": 443 })), REENTER_TOKEN);
+        // A pin the token wasn't saved with.
+        assert_eq!(refused(json!({ "host": "paperless.local", "port": 8443, "cert_fingerprint": FP })), REENTER_TOKEN);
+    }
+
+    #[test]
+    fn a_json_secret_without_a_token_is_refused() {
+        let config = json!({ "host": "paperless.local" });
+        assert_eq!(build_paperless(&config, Some("{}".into())).err().unwrap(), REFUSED);
+        assert_eq!(build_paperless(&config, Some(r#"{"token":"  "}"#.into())).err().unwrap(), REFUSED);
+    }
+
+    #[test]
+    fn the_command_path_binds_a_bare_token_and_refuses_a_moved_row() {
+        let store = MemoryStore::default();
+        store.set("6kun0b:3", "t0k-secret").unwrap();
+        // A port nobody listens on: the call fails, the binding is kept anyway.
+        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let config = json!({ "host": "127.0.0.1", "port": port });
+        assert!(with_paperless(&store, "6kun0b", 3, &config, |p| p.inbox()).is_err());
+        let saved: JsonValue = serde_json::from_str(&store.get("6kun0b:3").unwrap().unwrap()).unwrap();
+        assert_eq!(saved, json!({ "token": "t0k-secret", "host": "127.0.0.1", "port": port }));
+        // The row now names another server: refused before any request.
+        let moved = json!({ "host": "evil.example", "port": port });
+        let err = with_paperless(&store, "6kun0b", 3, &moved, |_| -> Result<(), String> { panic!("must not run") }).unwrap_err();
+        assert_eq!(err, REENTER_TOKEN);
     }
 
     #[test]

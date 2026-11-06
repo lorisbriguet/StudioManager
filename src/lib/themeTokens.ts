@@ -66,7 +66,7 @@ export function isDefaultTheme(theme: ThemeDefinition): boolean {
  *   hover-row        text 4% over bg
  *   border-divider   border 50% over bg    (fainter than the surface edge)
  *   input-border     border 80% over text  (stronger than the surface edge)
- *   checkbox-border  muted 75% over surface (3:1, a control boundary)
+ *   checkbox-border  muted 85% over surface (3:1, a control boundary)
  *   status bg        the status colour 15% over bg
  *   status text      the status colour 55% over text (dark) or 50% (light)
  *   accent-text      accent 60% over white (dark) or over text (light)
@@ -123,8 +123,8 @@ export function themeTokens(theme: ThemeDefinition): Record<string, string> {
     "--color-border": c.border,
     "--color-input-border": c.inputBorder ?? mix(c.border, 80, c.text),
     "--color-checkbox-border": isDefault
-      ? (dark ? "#6b6b6b" : "#949494")
-      : mix(c.textMuted, 75, c.surface),
+      ? (dark ? "#6b6b6b" : "#8a8a8a")
+      : mix(c.textMuted, 85, c.surface),
     "--color-accent": c.accent,
     "--color-accent-light": c.accentLight,
     "--color-accent-hover": c.accentHover,

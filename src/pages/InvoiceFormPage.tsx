@@ -21,7 +21,7 @@ import { getQuote, getQuoteLineItems, updateQuote } from "../db/queries/quotes";
 import { getProject } from "../db/queries/projects";
 import { useActivities } from "../db/hooks/useActivities";
 import type { Activity } from "../types/activity";
-import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel, round2 } from "../lib/lineItems";
+import { makeLineItem, useLineItemForm, toPersistedLineItems, unitShortLabel, round2, computeTotals } from "../lib/lineItems";
 import { LineItemsTable } from "../components/shared/LineItemsTable";
 import { GlobalRateControl, TemplateField } from "../components/shared/DocumentFields";
 import { currencies, getExchangeRate, toCHF, type Currency } from "../lib/exchangeRate";
@@ -296,11 +296,9 @@ export function InvoiceFormPage() {
   const activityName = (a: Activity) => (language === "FR" ? a.name_fr : a.name_en);
   // Newly computed money values are rounded at every boundary — these are
   // what save() persists, and invoices are legal documents.
-  const subtotal = round2(items.reduce((sum, i) => sum + i.amount, 0));
-  const discountAmount = round2(subtotal * discountRate);
-  const total = round2(subtotal - discountAmount);
+  const { subtotal, discountAmount, total } = computeTotals(items, discountRate);
 
-  // Auto-fetch exchange rate when currency changes
+  // Auto-fetch the exchange rate of the invoice date when the currency or the date changes
   useEffect(() => {
     const loaded = loadedInvoiceRef.current;
     if (loaded && currency === loaded.currency) {
@@ -324,7 +322,7 @@ export function InvoiceFormPage() {
       return;
     }
     let cancelled = false;
-    getExchangeRate(currency).then((rate) => {
+    getExchangeRate(currency, invoiceDate).then((rate) => {
       if (cancelled) return;
       if (rate === null) {
         // No trustworthy live rate (offline / API down). Never book the
@@ -345,8 +343,8 @@ export function InvoiceFormPage() {
       setChfManualOverride(false);
     });
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately runs on currency change only (see comments above); adding t.* would refetch today's rate on locale switch
-  }, [currency]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately runs on a currency or date change only (see comments above); adding t.* would refetch the rate on locale switch
+  }, [currency, invoiceDate]);
 
   // Auto-calc CHF equivalent when total or exchange rate changes (unless manually overridden)
   useEffect(() => {
@@ -381,6 +379,12 @@ export function InvoiceFormPage() {
   const { data: projectTasks } = useTasksByProject(projectId ?? 0);
 
   const availableTasks = projectTasks ?? [];
+
+  /** The preview takes the form's place in history, so its back arrow skips the form. */
+  const goAfterSave = (dest: "list" | "preview", invoiceId: number) => {
+    if (dest === "preview") navigate(`/invoices/${invoiceId}/preview`, { replace: true });
+    else navigate("/invoices");
+  };
 
   const save = async (dest: "list" | "preview" = "list") => {
     // Phase 2 E2 — field-level validation replaces the old toast branches
@@ -453,7 +457,7 @@ export function InvoiceFormPage() {
             onSuccess: () => {
               setFormDirty(false);
               notify.success(t.invoice_updated);
-              navigate(dest === "preview" ? `/invoices/${invoiceId}/preview` : "/invoices");
+              goAfterSave(dest, invoiceId);
             },
           }
         );
@@ -507,7 +511,7 @@ export function InvoiceFormPage() {
               }
               setFormDirty(false);
               notify.success(fromQuoteId ? t.quote_converted : t.invoice_created);
-              navigate(dest === "preview" ? `/invoices/${invoiceId}/preview` : "/invoices");
+              goAfterSave(dest, invoiceId);
             },
           }
         );

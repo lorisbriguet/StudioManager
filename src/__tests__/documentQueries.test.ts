@@ -68,9 +68,9 @@ const kinds = [
 ] as const;
 
 describe.each(kinds)("$name queries", ({ table, lineTable, fk, date, q }) => {
-  it("lists newest first", async () => {
+  it("lists newest first, same-day ones by creation", async () => {
     await q.list();
-    expect(selects).toEqual([{ sql: `SELECT * FROM ${table} ORDER BY ${date} DESC`, params: [] }]);
+    expect(selects).toEqual([{ sql: `SELECT * FROM ${table} ORDER BY ${date} DESC, id DESC`, params: [] }]);
   });
 
   it("gets one by id, or null", async () => {
@@ -83,7 +83,7 @@ describe.each(kinds)("$name queries", ({ table, lineTable, fk, date, q }) => {
   it("lists by project, newest first", async () => {
     await q.byProject(3);
     expect(selects).toEqual([
-      { sql: `SELECT * FROM ${table} WHERE project_id = $1 ORDER BY ${date} DESC`, params: [3] },
+      { sql: `SELECT * FROM ${table} WHERE project_id = $1 ORDER BY ${date} DESC, id DESC`, params: [3] },
     ]);
   });
 

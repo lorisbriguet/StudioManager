@@ -219,6 +219,8 @@ interface DashboardState {
   setLayout: (layout: LayoutItem[]) => void;
   addWidget: (type: WidgetType) => void;
   removeWidget: (id: string) => void;
+  /** Puts a removed widget back where it was (the undo of removeWidget). */
+  restoreWidget: (widget: DashboardWidget, item: LayoutItem | undefined) => void;
   resetDashboard: () => void;
   setPinnedNotes: (text: string) => void;
   setActivePreset: (id: number | null, name: string, widgets: DashboardWidget[], layout: LayoutItem[]) => void;
@@ -263,6 +265,15 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     localStorage.setItem(STORAGE_KEY(), JSON.stringify(layout));
     clearPresetTracking();
     set({ widgets, layout, activePresetId: null, activePresetName: "" });
+  },
+
+  restoreWidget: (widget, item) => {
+    if (get().widgets.some((w) => w.id === widget.id)) return;
+    const widgets = [...get().widgets, widget];
+    const layout = item ? [...get().layout, item] : get().layout;
+    localStorage.setItem(WIDGETS_KEY(), JSON.stringify(widgets));
+    localStorage.setItem(STORAGE_KEY(), JSON.stringify(layout));
+    set({ widgets, layout });
   },
 
   resetDashboard: () => {

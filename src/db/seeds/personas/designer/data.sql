@@ -69,19 +69,19 @@ DELETE FROM sqlite_sequence WHERE name IN (
 -- CLIENTS
 -- ═══════════════════════════════════════════════════
 INSERT INTO clients (id, name, billing_name, address_line1, address_line2, postal_city, email, phone, language, has_discount, discount_rate, notes) VALUES
-  ('C-001', 'Atelier Noir', 'Atelier Noir Sàrl', 'Rue du Marché 12', '', '1003 Lausanne', 'hello@ateliernoir.ch', '+41 21 555 01 01', 'FR', 0, 0.00, 'Agence de design. Contact principal : Sophie Duval. Client retainer depuis 2024.'),
-  ('C-002', 'Fondation Artvis', 'Fondation Artvis', 'Quai du Mont-Blanc 7', '', '1201 Genève', 'contact@artvis.ch', '+41 22 555 02 02', 'FR', 1, 0.10, 'Fondation culturelle. Rapport annuel + matériel d''exposition. Rabais culturel 10%.'),
-  ('C-003', 'PixelFlow', 'PixelFlow GmbH', 'Limmatstrasse 55', '3rd Floor', '8005 Zürich', 'team@pixelflow.io', '+41 44 555 03 03', 'EN', 0, 0.00, 'Tech startup. Fast-paced, iterative. Prefers Slack.'),
-  ('C-004', 'Marie Laurent Photography', 'Marie Laurent', 'Chemin des Alpes 3', '', '1820 Montreux', 'marie@laurentphoto.ch', '+41 79 555 04 04', 'FR', 0, 0.00, 'Photographe indépendante. Identité visuelle + site portfolio.'),
-  ('C-005', 'Helvetica Studio AG', 'Helvetica Studio AG', 'Bundesplatz 1', '', '3011 Bern', 'projects@helveticastudio.ch', '+41 31 555 05 05', 'EN', 0, 0.00, 'Corporate. Formal process, PO numbers required on every invoice.');
+  ('C-001', 'Atelier Noir', 'Atelier Noir Sàrl', 'Rue du Marché 12', '', '1003 Lausanne', 'hello@ateliernoir.example', '+41 21 555 01 01', 'FR', 0, 0.00, 'Agence de design. Contact principal : Sophie Duval. Client retainer depuis 2024.'),
+  ('C-002', 'Fondation Artvis', 'Fondation Artvis', 'Quai du Mont-Blanc 7', '', '1201 Genève', 'contact@artvis.example', '+41 22 555 02 02', 'FR', 1, 0.10, 'Fondation culturelle. Rapport annuel + matériel d''exposition. Rabais culturel 10%.'),
+  ('C-003', 'PixelFlow', 'PixelFlow GmbH', 'Limmatstrasse 55', '3rd Floor', '8005 Zürich', 'team@pixelflow.example', '+41 44 555 03 03', 'EN', 0, 0.00, 'Tech startup. Fast-paced, iterative. Prefers Slack.'),
+  ('C-004', 'Marie Laurent Photography', 'Marie Laurent', 'Chemin des Alpes 3', '', '1820 Montreux', 'marie@laurentphoto.example', '+41 79 555 04 04', 'FR', 0, 0.00, 'Photographe indépendante. Identité visuelle + site portfolio.'),
+  ('C-005', 'Helvetica Studio AG', 'Helvetica Studio AG', 'Bundesplatz 1', '', '3011 Bern', 'projects@helveticastudio.example', '+41 31 555 05 05', 'EN', 0, 0.00, 'Corporate. Formal process, PO numbers required on every invoice.');
 INSERT INTO client_contacts (client_id, first_name, last_name, email, phone, role) VALUES
-  ('C-001', 'Sophie', 'Duval', 'sophie@ateliernoir.ch', '+41 79 111 22 33', 'Creative Director'),
-  ('C-001', 'Marc', 'Renaud', 'marc@ateliernoir.ch', '+41 79 111 22 34', 'Project Manager'),
-  ('C-002', 'Claire', 'Bonvin', 'claire@artvis.ch', '+41 79 222 33 44', 'Directrice'),
-  ('C-003', 'Alex', 'Kim', 'alex@pixelflow.io', '+41 79 333 44 55', 'CEO'),
-  ('C-003', 'Lea', 'Weber', 'lea@pixelflow.io', '+41 79 333 44 56', 'Product Manager'),
-  ('C-004', 'Marie', 'Laurent', 'marie@laurentphoto.ch', '+41 79 555 04 04', 'Owner'),
-  ('C-005', 'Thomas', 'Müller', 'thomas@helveticastudio.ch', '+41 79 555 66 77', 'Head of Marketing');
+  ('C-001', 'Sophie', 'Duval', 'sophie@ateliernoir.example', '+41 79 111 22 33', 'Creative Director'),
+  ('C-001', 'Marc', 'Renaud', 'marc@ateliernoir.example', '+41 79 111 22 34', 'Project Manager'),
+  ('C-002', 'Claire', 'Bonvin', 'claire@artvis.example', '+41 79 222 33 44', 'Directrice'),
+  ('C-003', 'Alex', 'Kim', 'alex@pixelflow.example', '+41 79 333 44 55', 'CEO'),
+  ('C-003', 'Lea', 'Weber', 'lea@pixelflow.example', '+41 79 333 44 56', 'Product Manager'),
+  ('C-004', 'Marie', 'Laurent', 'marie@laurentphoto.example', '+41 79 555 04 04', 'Owner'),
+  ('C-005', 'Thomas', 'Müller', 'thomas@helveticastudio.example', '+41 79 555 66 77', 'Head of Marketing');
 INSERT INTO client_addresses (client_id, label, billing_name, address_line1, address_line2, postal_city) VALUES
   ('C-001', 'Main', 'Atelier Noir Sàrl', 'Rue du Marché 12', '', '1003 Lausanne'),
   ('C-002', 'Foundation', 'Fondation Artvis', 'Quai du Mont-Blanc 7', '', '1201 Genève'),
@@ -462,6 +462,13 @@ INSERT INTO machine_disks (machine_id, slot, model, serial, size_bytes, power_on
 -- ═══════════════════════════════════════════════════
 -- REFERENCE RENUMBERING (per calendar year, from each row's own date)
 -- ═══════════════════════════════════════════════════
+-- Park every reference on a placeholder first: SQLite checks UNIQUE row by
+-- row, so renumbering in place fails when a new number is still held by a
+-- row not renumbered yet (rows inserted out of date order).
+UPDATE invoices SET reference = '#' || id WHERE reference NOT LIKE 'DRAFT-%';
+UPDATE quotes SET reference = '#' || id;
+UPDATE expenses SET reference = '#' || id;
+UPDATE income SET reference = '#' || id;
 UPDATE invoices SET reference = '' || strftime('%Y', invoice_date) || '-' || printf('%03d', (
   SELECT COUNT(*) FROM invoices i2
   WHERE strftime('%Y', i2.invoice_date) = strftime('%Y', invoices.invoice_date)

@@ -38,7 +38,7 @@ export function documentQueries<Doc, Item extends LineItemFields>(kind: Document
   return {
     async list(): Promise<Doc[]> {
       const db = await getDb();
-      return db.select<Doc[]>(`SELECT * FROM ${table} ORDER BY ${dateColumn} DESC`);
+      return db.select<Doc[]>(`SELECT * FROM ${table} ORDER BY ${dateColumn} DESC, id DESC`);
     },
 
     async get(id: number): Promise<Doc | null> {
@@ -50,7 +50,7 @@ export function documentQueries<Doc, Item extends LineItemFields>(kind: Document
     async listByProject(projectId: number): Promise<Doc[]> {
       const db = await getDb();
       return db.select<Doc[]>(
-        `SELECT * FROM ${table} WHERE project_id = $1 ORDER BY ${dateColumn} DESC`,
+        `SELECT * FROM ${table} WHERE project_id = $1 ORDER BY ${dateColumn} DESC, id DESC`,
         [projectId]
       );
     },

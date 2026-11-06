@@ -8,7 +8,7 @@ UPDATE business_profile SET
   postal_code = '1003',
   city = 'Lausanne',
   country = 'CH',
-  email = 'lea@ateliermorel.ch',
+  email = 'lea@ateliermorel.example',
   phone = '+41 21 555 12 34',
   ide_number = 'CHE-123.456.789',
   affiliate_number = '111.2222.3333.44',

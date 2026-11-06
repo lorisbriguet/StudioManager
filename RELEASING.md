@@ -12,7 +12,7 @@ Step-by-step guidelines for publishing a new release on GitHub. Follow in order;
 - Tauri updater signing key at `~/.tauri/StudioManager.key`, protected by a password kept in the login Keychain (service `StudioManager-updater-key`). **Never commit it.** Its public key is pinned in `src-tauri/tauri.conf.json`: installed apps only accept updates signed with this key. Keep a backup of the key file and its password outside this Mac (password manager). For a new key, a lost one or a leaked one, see [Updater key: rotation, loss, leak](#updater-key-rotation-loss-leak). (The original key has no password and no Keychain entry: until the first rotation, use `TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""` in step 4.)
 - Node **20.19+ or 22.12+** (Vite 7 requirement) and stable Rust.
 - Use **npm 11** for installs and lockfile changes (`npx -y npm@11 install`): npm 10.9 crashes with `Cannot read properties of null (reading 'edgesOut')` on Vitest 4's peer set.
-- On this machine: the repo lives on Synology Drive, which corrupts `node_modules` and `src-tauri/target`. Build with a **local** cargo target dir (see step 4) and run `npm ci` if node_modules acts up. Ideally exclude both folders from sync.
+- Keep the repo out of synced folders (Synology Drive, iCloud): sync corrupts `node_modules` and `src-tauri/target`. Cargo builds into `src-tauri/target` unless `CARGO_TARGET_DIR` says otherwise (step 4 sets one). Run `npm ci` if node_modules acts up.
 
 ## 1. Pre-release validation (all must pass)
 
@@ -26,6 +26,7 @@ npm run lint            # exit 0, zero findings
 
 Run `bash scripts/build-mcp.sh` and `npx vite build` once on a fresh clone before any `cargo` command in `src-tauri` (they create the git-ignored `src-tauri/binaries/studiomanager-mcp-<triple>` that Tauri's externalBin requires and the `dist/` folder the app crate embeds). CI runs the app checks on every push (the `rust` job in [.github/workflows/ci.yml](.github/workflows/ci.yml)) with the latest stable clippy: run `rustup update stable` first so your local lints match. The `studiomanager-mcp` crate (`src-tauri/mcp`) needs Rust 1.88+. Never run `cargo fmt` there: it reformats the files it shares with the app through `#[path]` includes.
 
+- **Dependency audit green:** `npm audit --audit-level=moderate` and `cargo audit` (in `src-tauri` and `src-tauri/mcp`) pass, as in [.github/workflows/dependency-audit.yml](.github/workflows/dependency-audit.yml). The Release build workflow runs it on the tag first and stops on a failure; for a build on this Mac, check `gh run list --workflow dependency-audit.yml -L 1` is green. v2.2.0 to v3.3.1 shipped while it was red.
 - Working tree contains only the changes meant for this release; no debug code, `console.log` leftovers, or commented-out hacks.
 - No secrets/PII in the diff (keys, IBANs, personal paths). `scripts/migrate-data.mjs` was deleted in the 2026-08 audit for exactly this reason — anything similar must read personal values from env, never hardcode them. Note the repo is PUBLIC.
 - If the release changes the data layout, run `scripts/rehearse-org-upgrade.sh` against the real folder first and recommend Backup Now in the release notes.
@@ -157,7 +158,7 @@ Run these with Agents and **Show in menu bar** on (see [the menu bar guide](docs
 | Sign step: "incorrect updater private key password" | The `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secret (or the Keychain entry) doesn't match the key |
 | "Check installed apps accept the signature" fails | The `release` environment holds a different key than the latest published release's pubkey |
 | Updater never sees the release | Tag/URL mismatch (`latest.json` url vs actual tag), or release marked draft/pre-release |
-| Build flakiness on this machine | Synology-synced `target`/`node_modules` — use local `CARGO_TARGET_DIR`, re-run `npm ci` |
+| Build flakiness | `target`/`node_modules` inside a synced folder — move the repo out of sync or set a local `CARGO_TARGET_DIR`, re-run `npm ci` |
 
 ## Updater key: rotation, loss, leak
 

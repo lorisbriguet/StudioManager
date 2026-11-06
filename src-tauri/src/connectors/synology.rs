@@ -34,7 +34,8 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
-use super::tls::{normalize_fingerprint, SeenCert};
+use super::binding::{self, Binding, Bound};
+use super::tls::SeenCert;
 use super::{describe, percent_encode, read_limited, Connector, MAX_RESPONSE_BYTES, DeviceInfo, DeviceList, DeviceReading, DiskReading, SyncResult};
 
 /// One HTTP round trip to `https://<nas>/webapi/<path>`: form body in, JSON out.
@@ -317,37 +318,21 @@ pub(crate) const REENTER_PASSWORD: &str = "reenter_password";
 
 const DEFAULT_PORT: u16 = 5001;
 
-fn same_host(a: &str, b: &str) -> bool {
-    let norm = |h: &str| h.trim().trim_start_matches('[').trim_end_matches(']').to_ascii_lowercase();
-    norm(a) == norm(b)
-}
-
 /// May the password of `secret` go to `host:port` with certificate `pin`?
 /// `Ok(None)`: yes. `Ok(Some(adopted))`: a legacy secret (no `host`), bound
 /// now to the row's values and to be written back. `Err(reenter_password)`:
-/// no, nothing may be sent.
-///
-/// Legacy secrets: a secret saved before the binding existed holds no host.
-/// It adopts the row's current host, port and pin once, so existing
-/// connections keep syncing without asking every user for the password again.
-/// The trade-off: a row tampered with *before* this first adoption is trusted.
-/// Any change after it needs the password.
+/// no, nothing may be sent. The rules are [`super::binding::check`]'s.
 pub(crate) fn check_binding(secret: &Secret, host: &str, port: u16, pin: Option<&str>) -> Result<Option<Secret>, String> {
-    let pin = pin.and_then(normalize_fingerprint);
-    let Some(bound_host) = secret.host.as_deref() else {
-        return Ok(Some(Secret {
-            host: Some(host.trim().to_string()),
+    let bound = Bound { host: secret.host.as_deref(), port: secret.port, pin: secret.cert_fingerprint.as_deref() };
+    match binding::check(&bound, DEFAULT_PORT, host, port, pin) {
+        Binding::Matches => Ok(None),
+        Binding::Adopt { host, port, pin } => Ok(Some(Secret {
+            host: Some(host),
             port: Some(port),
             cert_fingerprint: pin,
             ..secret.clone()
-        }));
-    };
-    let bound_pin = secret.cert_fingerprint.as_deref().and_then(normalize_fingerprint);
-    let pin_ok = pin.is_none() || pin == bound_pin;
-    if same_host(bound_host, host) && secret.port.unwrap_or(DEFAULT_PORT) == port && pin_ok {
-        Ok(None)
-    } else {
-        Err(REENTER_PASSWORD.into())
+        })),
+        Binding::Refused => Err(REENTER_PASSWORD.into()),
     }
 }
 
@@ -1049,7 +1034,7 @@ mod tests {
 
     #[test]
     fn build_checks_config_and_secret() {
-        let cfg = serde_json::json!({ "host": "192.168.1.20", "port": 5001, "account": "studio" });
+        let cfg = serde_json::json!({ "host": "192.0.2.20", "port": 5001, "account": "studio" });
         assert!(build(&cfg, Some(r#"{"password":"x"}"#.into())).is_ok());
         // A plain string secret is the password.
         assert!(build(&cfg, Some("plain".into())).is_ok());

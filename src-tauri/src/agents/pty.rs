@@ -3,12 +3,18 @@
 use super::cli::{spawn_env, LoginEnv};
 use super::model::{Agent, Kind};
 use super::validate::{clamp_size, normalise_message, valid_short_id};
+use std::num::NonZeroU16;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::collections::HashSet;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
+
+/// vt100 takes sizes as NonZeroU16. clamp_size already keeps them above 0; 1 is the floor.
+fn nonzero(n: u16) -> NonZeroU16 {
+    NonZeroU16::new(n).unwrap_or(NonZeroU16::MIN)
+}
 
 pub const MAX_TERMINALS: usize = 8;
 /// Pause between the text and the Enter, as a person would type.
@@ -334,7 +340,7 @@ impl TerminalHub {
         let term = Arc::new(Term {
             short_id: short_id.to_string(),
             process: Mutex::new(Some(process)),
-            parser: Mutex::new(vt100::Parser::new(rows, cols, 0)),
+            parser: Mutex::new(vt100::Parser::new(nonzero(rows), nonzero(cols), 0)),
             last_output: AtomicI64::new(0),
             temporary,
         });
@@ -381,7 +387,7 @@ impl TerminalHub {
     pub fn resize(&self, term_id: u32, cols: u16, rows: u16) -> Result<(), String> {
         let (cols, rows) = clamp_size(cols, rows);
         let term = self.get(term_id).ok_or("Terminal closed")?;
-        lock(&term.parser).screen_mut().set_size(rows, cols);
+        lock(&term.parser).screen_mut().set_size(nonzero(rows), nonzero(cols));
         let mut process = lock(&term.process);
         process.as_mut().ok_or("Terminal closed")?.resize(cols, rows)
     }

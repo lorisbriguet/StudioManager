@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
-import { Badge, CARD_GAP, CARD_LINK, CARD_STACK, Card, EmptyState, HEADING_2, ICONS, ICON_SIZE, ProgressBar } from "../ui";
+import { Badge, CARD_GAP, CARD_LINK, CARD_STACK, Card, CardGridSkeleton, EmptyState, HEADING_2, ICONS, ICON_SIZE, ProgressBar, QueryError } from "../ui";
 import { DueList } from "./DueList";
-import { useMachines, useUpkeepOverview } from "../../db/hooks/useUpkeep";
+import { useActiveUpkeepItems, useConsumables, useMachines, useSubscriptions, useUpkeepOverview } from "../../db/hooks/useUpkeep";
 import { useT } from "../../i18n/useT";
 import { machineStatusVariant } from "../../lib/statusColors";
 import { formatDisplayDate } from "../../utils/formatDate";
@@ -36,7 +36,16 @@ function MachineCard({ machine, nextTitle }: { machine: Machine; nextTitle: stri
 export function OverviewTab() {
   const t = useT();
   const { due, lowStock, endingSoon, replacements } = useUpkeepOverview();
-  const { data: machines = [] } = useMachines();
+  const machinesQuery = useMachines();
+  const machines = machinesQuery.data ?? [];
+  // The overview reads these four; until they all load, a skeleton, not the empty texts
+  const queries = [useActiveUpkeepItems(), machinesQuery, useConsumables(), useSubscriptions()];
+  if (queries.some((q) => q.data === undefined)) {
+    if (queries.some((q) => q.isError)) {
+      return <QueryError message={t.load_error_upkeep} onRetry={() => queries.forEach((q) => void q.refetch())} />;
+    }
+    return <CardGridSkeleton cards={4} />;
+  }
 
   const nextByMachine = new Map<number, string>();
   for (const r of due) if (!nextByMachine.has(r.machine.id)) nextByMachine.set(r.machine.id, r.item.title);

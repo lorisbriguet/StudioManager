@@ -8,11 +8,11 @@ import { pickOption } from "./fixtures/dropdown";
 const t = uiLabels.EN;
 
 const { getExchangeRate } = vi.hoisted(() => ({
-  getExchangeRate: vi.fn(async (_c: string): Promise<number | null> => 1.25),
+  getExchangeRate: vi.fn(async (_c: string, _d?: string | null): Promise<number | null> => 1.25),
 }));
 vi.mock("../lib/exchangeRate", async (orig) => ({
   ...(await orig<typeof import("../lib/exchangeRate")>()),
-  getExchangeRate: (c: string) => getExchangeRate(c),
+  getExchangeRate: (c: string, d?: string | null) => getExchangeRate(c, d),
 }));
 
 let NewExpenseForm: typeof import("../pages/ExpensesPage").NewExpenseForm;
@@ -51,12 +51,12 @@ describe("expense form currency", () => {
     expect(getExchangeRate).not.toHaveBeenCalled();
   });
 
-  it("a scanned EUR receipt opens in EUR at today's rate, editable, and saves CHF", async () => {
+  it("a scanned EUR receipt opens in EUR at the rate of its date, editable, and saves CHF", async () => {
     const onSave = renderForm({ prefill: { supplier: "Hotel", amount: 125, currency: "EUR", invoice_date: "2026-11-01" } });
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByRole("combobox", { name: t.currency })).toHaveTextContent("EUR");
     const rate = await within(dialog).findByDisplayValue("1.25");
-    expect(getExchangeRate).toHaveBeenCalledWith("EUR");
+    expect(getExchangeRate).toHaveBeenCalledWith("EUR", "2026-11-01");
     // Typed by hand: 1 CHF = 1.0 EUR.
     fireEvent.change(rate, { target: { value: "1" } });
     fireEvent.click(within(dialog).getByRole("button", { name: t.save }));

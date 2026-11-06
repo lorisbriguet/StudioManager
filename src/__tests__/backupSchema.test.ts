@@ -80,7 +80,7 @@ beforeEach(async () => {
 });
 
 describe("backup TABLES against the real schema", () => {
-  it("lists every table the migrations and ensureSchema create", () => {
+  it("lists every table the migrations create", () => {
     const tables = (
       rawDb()
         .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")

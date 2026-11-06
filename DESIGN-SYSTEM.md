@@ -54,8 +54,9 @@ Three roles, three distinct values, each step stronger:
 |-------|-------|------|------|
 | `--color-border-divider` | `#f3f3f3` | `#1e1e1e` | **Divider**: table rows, section separators, faint lines inside a surface |
 | `--color-border` | `#e8e8e8` | `#2a2a2a` | **Surface edge**: cards, menus, dialogs, popovers (`SURFACE`), the table header and footer, panel bars |
-| `--color-input-border` | `#d4d4d4` | `#3a3a3a` | **Control edge**: inputs, selects, outline buttons, filter chips, the Toggle's off track. Under 3:1 by choice: a field's own fill already outlines it |
-| `--color-checkbox-border` | `#949494` | `#6b6b6b` | **Checkbox edge** (`border-checkbox-border`): 3:1 against bg and surface, since the box is the whole control. Also the checkbox squares in Dropdown multi-select rows |
+| `--color-input-border` | `#d4d4d4` | `#3a3a3a` | **Control edge**: inputs, selects, outline buttons, filter chips. Under 3:1 by choice: a field's own fill already outlines it |
+| `--color-checkbox-border` | `#8a8a8a` | `#6b6b6b` | **Checkbox edge** (`border-checkbox-border`): 3:1 against bg, surface and its own input-bg fill, since the box is the whole control. Also the checkbox squares in Dropdown multi-select rows |
+| `--color-toggle-track` | = checkbox-border | = checkbox-border | **Toggle off track**: 3:1 against bg and surface. An alias of `--color-checkbox-border`, so themes follow it |
 | `--color-sidebar-border` | `#e5e5e5` | `#333333` | Sidebar right edge |
 
 (`--color-border-header` is gone: it was merged into `--color-border`.)
@@ -136,7 +137,7 @@ style={{ color: dark ? "#888" : "#999" }}
 `.dark` on `<html>` redefines the tokens; components never branch on dark mode for a colour. There is no `dark:` variant (the custom variant was removed): if a colour differs between light and dark, it is a token. Tag colours, status colours, chart colours and FullCalendar colours are all variables, so none of them reads `darkMode` from the store.
 
 ### Themes
-A theme (`src/lib/themes.ts`) gives its base colours: bg, surface, text, muted, border, sidebar, accent, status solids and charts. `applyThemeColors` (`stores/app-store.ts`) sets the full token set inline on `<html>` from `themeTokens()` (`src/lib/themeTokens.ts`), deriving what the theme leaves out with `color-mix`: text-secondary, input-bg (text 8% over surface, so fields show on cards), hover-row (text 4% over bg), border-divider (fainter than border), input-border (stronger than border), checkbox-border (muted 75% over surface), the status bg/text pairs (text: the status colour 55% over text in dark, 50% in light), accent-text, and on-accent / on-danger from `onColorFor`. Dark custom themes also re-derive the tag palette from their surface (tag colour 15% over surface, text 50% over the theme text), so tags don't read as dark holes on a lighter surface. A theme's muted must reach 4.5:1 on its bg and surface (the test checks it). It sets `--color-bg` / `--color-text`, never `body.style`.
+A theme (`src/lib/themes.ts`) gives its base colours: bg, surface, text, muted, border, sidebar, accent, status solids and charts. `applyThemeColors` (`stores/app-store.ts`) sets the full token set inline on `<html>` from `themeTokens()` (`src/lib/themeTokens.ts`), deriving what the theme leaves out with `color-mix`: text-secondary, input-bg (text 8% over surface, so fields show on cards), hover-row (text 4% over bg), border-divider (fainter than border), input-border (stronger than border), checkbox-border (muted 85% over surface), the status bg/text pairs (text: the status colour 55% over text in dark, 50% in light), accent-text, and on-accent / on-danger from `onColorFor`. Dark custom themes also re-derive the tag palette from their surface (tag colour 15% over surface, text 50% over the theme text), so tags don't read as dark holes on a lighter surface. A theme's muted must reach 4.5:1 on its bg and surface (the test checks it). It sets `--color-bg` / `--color-text`, never `body.style`.
 
 The two default themes mirror `src/index.css` value for value, except their accent (the `colourTokens` test checks both). Choosing one clears the inline overrides so the stylesheet applies and the dark-mode toggle keeps working; `applyAccentColor` (`stores/app-store.ts`) then sets only the theme's accent inline. Default Light's is the stylesheet blue `#2563eb`. Default Dark's is its own slate, `#64748b` (accent-light `#0f172a`, hover `#475569`), not the stylesheet's blue: `.dark` sets no accent, so the slate always comes from the theme. The test covers the slate like any accent (on-accent on the fill, accent-text 4.5:1 on bg, surface and accent-light). An accent preset picked afterwards replaces it the same way.
 
@@ -610,7 +611,7 @@ One size: `CONTROL_BOX` (`px-2.5 py-1 text-xs leading-4 border`) and `rounded-md
 `src/components/ui/AddRow.tsx`, the field and "+" under a list that add an item (tasks, subtasks, list items, options, presets).
 
 - Enter or "+" calls `onAdd(text)` with the trimmed text, never empty. Enter doesn't submit a surrounding form.
-- The field clears after the add, or once a returned promise resolves. Return `false` to keep the text (a duplicate).
+- The field clears after the add, or once a returned promise resolves. Return `false` to keep the text (a duplicate). If the promise rejects (a failed save), the text stays selected: Enter retries, typing replaces it.
 - `placeholder` names the field and the button. `size` is the button's: `sm` beside form fields, `xs` in dense lists. Extra controls (a colour select) go in `children`, before the "+". `onKeyDown` runs after Enter (Esc to close).
 
 #### TagInput

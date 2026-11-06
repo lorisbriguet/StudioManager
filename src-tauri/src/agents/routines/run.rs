@@ -511,7 +511,7 @@ mod tests {
         assert_eq!(calls.len(), 1);
         assert_eq!(
             calls[0].0,
-            ["--bg", "--model", "opus", "--name", "brief", "Read and follow the instructions in /work/proj/brief.md."]
+            ["--bg", "--model", "opus", "--name", "brief", "--", "Read and follow the instructions in /work/proj/brief.md."]
         );
         assert_eq!(calls[0].1, PathBuf::from("/work/proj"));
 

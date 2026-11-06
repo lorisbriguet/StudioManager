@@ -5,6 +5,7 @@
 //! from the Keychain, and every error returned to the frontend is scrubbed of it.
 
 pub mod bambu;
+mod binding;
 pub mod keychain;
 pub mod paperless;
 pub mod synology;

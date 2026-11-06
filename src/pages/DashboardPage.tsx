@@ -10,10 +10,12 @@ import { renderWidget } from "../components/dashboard/widgets";
 import { ErrorBoundary } from "react-error-boundary";
 import { WidgetErrorFallback } from "../components/ErrorFallback";
 import { DashboardYearContext } from "../components/dashboard/DashboardYearContext";
+import { VatThresholdCallout } from "../components/dashboard/VatThresholdCallout";
 import { ICONS, ICON_SIZE, MenuItem, PageHeader, Button, EmptyState, Select, Popover, IconButton, SectionLabel, AddRow, Card } from "../components/ui";
 import { MENU_ITEM, MENU_DIVIDER } from "../components/ui/Dropdown";
 import { useT } from "../i18n/useT";
 import { deleteWithUndo } from "../lib/undo";
+import { notify } from "../lib/notify";
 import { useDashboardPresets, useCreateDashboardPreset, useUpdateDashboardPreset, useDeleteDashboardPreset } from "../db/hooks/useDashboardPresets";
 import "react-grid-layout/css/styles.css";
 
@@ -187,7 +189,7 @@ function PresetDropdown() {
 }
 
 export function DashboardPage() {
-  const { widgets, layout, setLayout, addWidget, removeWidget } = useDashboardStore();
+  const { widgets, layout, setLayout, addWidget, removeWidget, restoreWidget } = useDashboardStore();
   const [showWidgetPanel, setShowWidgetPanel] = useState(false);
   const [year, setYear] = useState(new Date().getFullYear());
   const { width, containerRef, mounted } = useContainerWidth();
@@ -254,6 +256,8 @@ export function DashboardPage() {
           {t.add}
         </Button>
       </PageHeader>
+
+      <VatThresholdCallout />
 
       {/* Widget store panel */}
       {showWidgetPanel && (() => {
@@ -331,7 +335,11 @@ export function DashboardPage() {
                 size="xs"
                 tone="danger"
                 reveal
-                onClick={() => removeWidget(widget.id)}
+                onClick={() => {
+                  const item = layout.find((l) => l.i === widget.id);
+                  removeWidget(widget.id);
+                  notify.undo(t.widget_removed, () => restoreWidget(widget, item));
+                }}
                 className="absolute top-1 right-1 z-10"
               />
               <ErrorBoundary FallbackComponent={WidgetErrorFallback}>{renderWidget(widget.type)}</ErrorBoundary>
