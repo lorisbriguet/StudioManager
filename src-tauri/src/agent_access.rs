@@ -4,7 +4,8 @@
 //! agent wrote: the server appends a log line for every write it commits, so
 //! the log's size and modification time move with agent writes and never
 //! with the app's own (`PRAGMA data_version` moved on both, and every edit
-//! in the app refetched every query).
+//! in the app refetched every query). The event carries the tool names of
+//! the new log lines, so the app refetches only what they touched.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -422,9 +423,11 @@ fn recent_agent_changes_now(app: tauri::AppHandle, limit: u32) -> Result<Vec<Log
 
 const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 
-/// The change log's size and modification time; `None` while there is no
-/// log yet (the first agent write creates it, which counts as a change).
-type LogStamp = Option<(u64, std::time::SystemTime)>;
+/// The change log's size, modification time and inode; `None` while there
+/// is no log yet (the first agent write creates it, which counts as a
+/// change). A trim renames a new file over the log, so the inode tells an
+/// append (new lines past the old size) from a rewrite.
+type LogStamp = Option<(u64, std::time::SystemTime, u64)>;
 
 #[derive(Default)]
 struct PollState {
@@ -479,7 +482,7 @@ pub fn check_for_changes(app: &tauri::AppHandle, trigger: Trigger) {
     let path = dir.join(LOG_FILE);
 
     // Phase 1, under the state lock: read the value and decide.
-    let now = {
+    let (now, since) = {
         let state = if focus {
             poller.0.try_lock().ok()
         } else {
@@ -493,7 +496,8 @@ pub fn check_for_changes(app: &tauri::AppHandle, trigger: Trigger) {
             state.prev = Some(now);
             return;
         }
-        now
+        // After a read error the lines in between are unknown.
+        (now, if state.resync { None } else { state.prev })
     };
 
     // Phase 2, no lock held: visibility (timer only) and emit.
@@ -506,7 +510,10 @@ pub fn check_for_changes(app: &tauri::AppHandle, trigger: Trigger) {
             return; // stays pending: prev/resync untouched
         }
     }
-    if let Err(e) = app.emit(CHANGED_EVENT, ()) {
+    // Which tools wrote, so the app refreshes only what they touch; `None`
+    // (refresh everything) when the new lines can't be told apart.
+    let tools = since.and_then(|prev| new_tools(&path, prev, now));
+    if let Err(e) = app.emit(CHANGED_EVENT, tools) {
         log::warn!("[agent-access] emit {CHANGED_EVENT}: {e}");
     }
 
@@ -524,6 +531,34 @@ pub fn check_for_changes(app: &tauri::AppHandle, trigger: Trigger) {
     }
 }
 
+/// The tools of the log lines added between two stamps, in order. `None`
+/// when that can't be told: the log was rewritten (trimmed or replaced),
+/// shrank, or a new line doesn't parse.
+fn new_tools(path: &Path, prev: LogStamp, now: LogStamp) -> Option<Vec<String>> {
+    use std::io::{Read, Seek, SeekFrom};
+    use std::os::unix::fs::MetadataExt;
+    let (len, _, ino) = now?;
+    let from = match prev {
+        None => 0,
+        Some((plen, _, pino)) if pino == ino && plen < len => plen,
+        Some(_) => return None,
+    };
+    let mut file = std::fs::File::open(path).ok()?;
+    if file.metadata().ok()?.ino() != ino {
+        return None;
+    }
+    file.seek(SeekFrom::Start(from)).ok()?;
+    let mut buf = vec![0; usize::try_from(len - from).ok()?];
+    file.read_exact(&mut buf).ok()?;
+    let text = String::from_utf8(buf).ok()?;
+    let tools = text
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str::<LogEntry>(l.trim()).ok().map(|e| e.tool))
+        .collect::<Option<Vec<_>>>()?;
+    (!tools.is_empty()).then_some(tools)
+}
+
 /// Stat the change log. `None` on error (logged once per distinct message;
 /// the next good read resyncs).
 fn read_stamp(state: &mut PollState, path: &Path) -> Option<LogStamp> {
@@ -538,7 +573,7 @@ fn read_stamp(state: &mut PollState, path: &Path) -> Option<LogStamp> {
     let read = match std::fs::metadata(path) {
         Ok(meta) => meta
             .modified()
-            .map(|at| Some((meta.len(), at)))
+            .map(|at| Some((meta.len(), at, std::os::unix::fs::MetadataExt::ino(&meta))))
             .map_err(|e| format!("{}: {e}", path.display())),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(format!("{}: {e}", path.display())),
@@ -747,6 +782,52 @@ mod tests {
         let next = read_stamp(&mut state, &log).unwrap();
         assert!(should_emit(Some(created), next, state.resync));
         assert!(!should_emit(Some(next), read_stamp(&mut state, &log).unwrap(), state.resync));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn new_tools_names_the_appended_lines() {
+        use std::io::Write;
+        let dir = tmp_dir("poll-tools");
+        let log = dir.join(LOG_FILE);
+        let line = |tool: &str| {
+            format!(r#"{{"at":"2026-11-06T10:00:00Z","org":"aaa111","tool":"{tool}","summary":"x"}}"#)
+        };
+        let append = |tool: &str| {
+            let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&log).unwrap();
+            writeln!(f, "{}", line(tool)).unwrap();
+        };
+        let mut state = PollState::default();
+        let none = read_stamp(&mut state, &log).unwrap();
+        append("create_task");
+        let first = read_stamp(&mut state, &log).unwrap();
+        assert_eq!(new_tools(&log, none, first), Some(vec!["create_task".to_string()]), "the log was created");
+        append("update_task");
+        append("mark_upkeep_done");
+        let next = read_stamp(&mut state, &log).unwrap();
+        assert_eq!(
+            new_tools(&log, first, next),
+            Some(vec!["update_task".to_string(), "mark_upkeep_done".to_string()])
+        );
+        assert_eq!(new_tools(&log, next, next), None, "no new line");
+
+        // A trim renames a shorter file over the log: can't tell what's new.
+        let tmp = dir.join("trimmed.tmp");
+        std::fs::write(&tmp, format!("{}\n", line("create_task"))).unwrap();
+        std::fs::rename(&tmp, &log).unwrap();
+        let trimmed = read_stamp(&mut state, &log).unwrap();
+        assert_eq!(new_tools(&log, next, trimmed), None);
+        // Same after a rewrite that ends up longer than before.
+        let tmp = dir.join("longer.tmp");
+        std::fs::write(&tmp, (0..5).map(|_| line("create_task") + "\n").collect::<String>()).unwrap();
+        std::fs::rename(&tmp, &log).unwrap();
+        let longer = read_stamp(&mut state, &log).unwrap();
+        assert_eq!(new_tools(&log, trimmed, longer), None);
+
+        // A line that doesn't parse: unknown, refresh everything.
+        std::fs::OpenOptions::new().append(true).open(&log).unwrap().write_all(b"not json\n").unwrap();
+        let bad = read_stamp(&mut state, &log).unwrap();
+        assert_eq!(new_tools(&log, longer, bad), None);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
