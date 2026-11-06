@@ -1,5 +1,5 @@
 import { formatMoney } from "../lib/money";
-import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import { useState, useCallback, useMemo, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { notify } from "../lib/notify";
 import { useProject, useUpdateProject } from "../db/hooks/useProjects";
@@ -32,6 +32,7 @@ import { ProjectWikiBlock } from "./project/ProjectWikiBlock";
 import { ProjectTasksSection } from "./project/ProjectTasksSection";
 import { ProjectNamedTables } from "./project/ProjectNamedTables";
 import { EquipmentBlock } from "./upkeep/EquipmentBlock";
+import { useChanged } from "../hooks/useChanged";
 
 interface Props {
   projectId: number;
@@ -51,7 +52,7 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
   const updateProject = useUpdateProject();
   const { data: allSubtasks } = useSubtasksByProject(projectId);
 
-  const [status, setStatus] = useState<ProjectStatus>("active");
+  const [status, setStatus] = useState<ProjectStatus>(project?.status ?? "active");
   const [sectionCtxMenu, setSectionCtxMenu] = useState<ContextMenuState<string> | null>(null);
   const openTab = useTabStore((s) => s.openTab);
   const [editingColumn, setEditingColumn] = useState<{
@@ -115,9 +116,7 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
     );
   }, [wlColumns, wlTemplateId, editingColumn, setWlConfig, t]);
 
-  useEffect(() => {
-    if (project) setStatus(project.status);
-  }, [project]);
+  if (useChanged(project) && project) setStatus(project.status);
 
   // A bad id never runs the query: straight to "not found".
   if (project === undefined && projectId) {

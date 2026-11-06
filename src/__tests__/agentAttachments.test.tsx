@@ -81,6 +81,18 @@ describe("attachments", () => {
     await waitFor(() => expect(screen.queryByAltText("shot.png")).toBeNull());
   });
 
+  it("switching agents drops the attachments and frees their previews", async () => {
+    URL.createObjectURL = vi.fn(() => "blob:preview-1");
+    const { rerender, unmount } = render(<AgentDetail agent={agent()} onOpenTerminal={() => {}} />);
+    const file = new File([new Uint8Array([1])], "shot.png", { type: "image/png" });
+    fireEvent.paste(screen.getByPlaceholderText("Message to the agent"), { clipboardData: { files: [file] } });
+    expect(await screen.findByAltText("shot.png")).toBeInTheDocument();
+    rerender(<AgentDetail agent={agent({ sessionId: "sess-2", shortId: "efgh5678" })} onOpenTerminal={() => {}} />);
+    expect(screen.queryByAltText("shot.png")).toBeNull();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:preview-1");
+    unmount();
+  });
+
   it("an image alone can be sent, and a removed one is not", async () => {
     render(<AgentDetail agent={agent()} onOpenTerminal={() => {}} />);
     const box = screen.getByPlaceholderText("Message to the agent");

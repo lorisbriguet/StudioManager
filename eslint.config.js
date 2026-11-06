@@ -79,10 +79,10 @@ export default tseslint.config(
       // "now" in render comes from useNow (src/hooks/useNow.ts), a handler's
       // time or id from src/lib/clock.ts. Render never writes a ref: a ref
       // that follows a prop or callback is kept current by useKeepCurrent
-      // (src/hooks/useKeepCurrent.ts). The rule still off flags long-standing
-      // (working) patterns; turn it on once its violations are fixed. Count
-      // as of 2026-11-06:
-      'react-hooks/set-state-in-effect': 'off', // 53
+      // (src/hooks/useKeepCurrent.ts). State that follows a prop or query is
+      // adjusted during render with useChanged / useChangedOrMount
+      // (src/hooks/useChanged.ts), not copied in an effect.
+      'react-hooks/set-state-in-effect': 'error',
       'react-hooks/refs': 'error',
       'react-hooks/purity': 'error',
       'react-hooks/preserve-manual-memoization': 'error',

@@ -20,6 +20,7 @@ import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { confirmIfDirty } from "../lib/dirty-guard";
 import { pickableClients, type Client } from "../types/client";
 import { useKeepCurrent } from "../hooks/useKeepCurrent";
+import { useChangedOrMount } from "../hooks/useChanged";
 
 // Phase 2 E2 — inline validation (additive; only fields with rules appear in
 // the schema, the rest are unvalidated). "line_items" has no schema rules —
@@ -116,19 +117,27 @@ export function QuoteFormPage() {
     })));
   }, [setItems]);
 
+  // Hydrate the form during render, once per loaded quote (the effect below
+  // fetches the line items).
+  if (useChangedOrMount(existingQuote, quoteId) && existingQuote) {
+    setClientId(existingQuote.client_id);
+    setBillingAddressId(existingQuote.billing_address_id);
+    setProjectId(existingQuote.project_id);
+    setLanguage(existingQuote.language === "EN" ? "EN" : "FR");
+    setQuoteDate(existingQuote.quote_date);
+    setActivity(existingQuote.activity);
+    setActivityId(existingQuote.activity_id ?? null);
+    setAssignment(existingQuote.assignment);
+    setNotes(existingQuote.notes);
+    setDiscountRate(existingQuote.discount_rate ?? 0);
+    if ("template_id" in existingQuote) {
+      setTemplateId((existingQuote as { template_id?: number | null }).template_id ?? null);
+    }
+  }
+
   useEffect(() => {
     if (existingQuote) {
       formLoadedRef.current = false;
-      setClientId(existingQuote.client_id);
-      setBillingAddressId(existingQuote.billing_address_id);
-      setProjectId(existingQuote.project_id);
-      setLanguage(existingQuote.language === "EN" ? "EN" : "FR");
-      setQuoteDate(existingQuote.quote_date);
-      setActivity(existingQuote.activity);
-      setActivityId(existingQuote.activity_id ?? null);
-      setAssignment(existingQuote.assignment);
-      setNotes(existingQuote.notes);
-      setDiscountRate(existingQuote.discount_rate ?? 0);
       getQuoteLineItems(quoteId).then((lineItems) => {
         if (lineItems.length > 0) {
           setItems(
@@ -151,26 +160,16 @@ export function QuoteFormPage() {
   }, [existingQuote, quoteId]);
 
   // Default activity for new quotes
-  useEffect(() => {
-    if (!isEdit && !activity && activityId === null && activityList && activityList.length > 0) {
-      setActivityId(activityList[0].id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- default-fill only when activities load; adding `activity`/`activityId` would re-fill after the user clears the field
-  }, [activityList, isEdit]);
+  // Only when activities load, so clearing the field does not re-fill it.
+  if (useChangedOrMount(activityList, isEdit)
+    && !isEdit && !activity && activityId === null && activityList && activityList.length > 0) {
+    setActivityId(activityList[0].id);
+  }
 
   // Pre-select default template for new quotes
-  useEffect(() => {
-    if (!isEdit && !templateId && defaultTemplate) {
-      setTemplateId(defaultTemplate.id);
-    }
-  }, [defaultTemplate, isEdit, templateId]);
-
-  // Load template_id from existing quote
-  useEffect(() => {
-    if (existingQuote && "template_id" in existingQuote) {
-      setTemplateId((existingQuote as { template_id?: number | null }).template_id ?? null);
-    }
-  }, [existingQuote]);
+  if (!isEdit && !templateId && defaultTemplate) {
+    setTemplateId(defaultTemplate.id);
+  }
 
   // Pre-fill from a project (once clients are loaded, for language and discount)
   const projectPrefilledRef = useRef(false);
@@ -211,13 +210,12 @@ export function QuoteFormPage() {
   // Fill in the client's only address on a new document, or once the client
   // is picked by hand. An existing document keeps what it is stored with, so
   // the form never shows an address the database doesn't hold.
-  const autoSelectAddressRef = useRef(!isEdit);
-  useEffect(() => {
-    if (autoSelectAddressRef.current && clientAddresses && clientAddresses.length === 1 && !billingAddressId) {
-      setBillingAddressId(clientAddresses[0].id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot auto-select when the address list loads; adding billingAddressId would re-select right after the user deselects
-  }, [clientAddresses]);
+  // Only when the address list loads, so deselecting does not re-select.
+  const [autoSelectAddress, setAutoSelectAddress] = useState(!isEdit);
+  if (useChangedOrMount(clientAddresses)
+    && autoSelectAddress && clientAddresses && clientAddresses.length === 1 && !billingAddressId) {
+    setBillingAddressId(clientAddresses[0].id);
+  }
 
   const save = async () => {
     // Phase 2 E2 — field-level validation replaces the old toast branches
@@ -354,7 +352,7 @@ export function QuoteFormPage() {
               onChange={(e) => { markDirty();
                 setClientId(e.target.value);
                 setBillingAddressId(null);
-                autoSelectAddressRef.current = true;
+                setAutoSelectAddress(true);
                 setProjectId(null);
                 // User picked a (new) client: derive discount and language from that client
                 const newClient = clients?.find((c) => c.id === e.target.value);

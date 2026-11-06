@@ -1,9 +1,10 @@
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ICONS, ICON_SIZE } from "../ui/icons";
 import { StatTile } from "../ui/StatTile";
 import { Textarea } from "../ui/Input";
 import { useProjects } from "../../db/hooks/useProjects";
+import { useChanged } from "../../hooks/useChanged";
 // V1.11 C1: task-list widgets (today, overdue, deadlines, this-week, stale,
 // free-days, recently-completed) use useVisibleTasks so tasks of cancelled/
 // completed projects are hidden. Widgets that scope tasks through an
@@ -141,7 +142,7 @@ export function PinnedNotes() {
   const [local, setLocal] = useState(pinnedNotes);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  useEffect(() => { setLocal(pinnedNotes); }, [pinnedNotes]);
+  if (useChanged(pinnedNotes)) setLocal(pinnedNotes);
 
   const handleChange = (value: string) => {
     setLocal(value);

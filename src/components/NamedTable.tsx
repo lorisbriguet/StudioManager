@@ -38,6 +38,7 @@ import { newId } from "../lib/clock";
 import type { ProjectTable, TableColumnDef, ProjectTableRow } from "../types/project-table";
 import { IconButton } from "./ui/IconButton";
 import { Table } from "./ui/Table";
+import { useChanged } from "../hooks/useChanged";
 
 const COLUMN_TYPES = ["text", "number", "checkbox", "select", "tags", "date"] as const satisfies readonly TableColumnDef["type"][];
 
@@ -114,12 +115,11 @@ export function NamedTable({ table, projectId }: Props) {
   };
 
   // When import list items arrive, apply them
-  useEffect(() => {
-    if (!importListItems || importListId === null) return;
+  if (useChanged(importListItems, importListId) && importListItems && importListId !== null) {
     setColOptions(importListItems.map((i) => i.value));
     setColLinkedListId(importListId);
     setImportListId(null);
-  }, [importListItems, importListId]);
+  }
 
   const handleImportFromList = (listId: number) => {
     setImportListId(listId);

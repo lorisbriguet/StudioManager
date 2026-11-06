@@ -8,24 +8,33 @@ import { Button } from "./ui/Button";
 
 export function UpdateChecker() {
   const t = useT();
-  const [status, setStatus] = useState<"idle" | "checking" | "available" | "downloading" | "ready" | "none" | "error">("idle");
+  // Checks on mount (never in the demo build: it has no updater endpoint).
+  const [status, setStatus] = useState<"idle" | "checking" | "available" | "downloading" | "ready" | "none" | "error">(
+    () => (isDemoBuild() ? "idle" : "checking")
+  );
   const [version, setVersion] = useState("");
   const [progress, setProgress] = useState(0);
 
-  const checkForUpdate = async () => {
-    setStatus("checking");
-    try {
-      const update = await check();
-      if (update) {
-        setVersion(update.version);
-        setStatus("available");
-      } else {
-        setStatus("none");
+  /** Shows what the updater answers (status is already "checking"). */
+  const showCheck = (answer: ReturnType<typeof check>) =>
+    answer.then(
+      (update) => {
+        if (update) {
+          setVersion(update.version);
+          setStatus("available");
+        } else {
+          setStatus("none");
+        }
+      },
+      (e: unknown) => {
+        logError("Update check failed:", e);
+        setStatus("error");
       }
-    } catch (e) {
-      logError("Update check failed:", e);
-      setStatus("error");
-    }
+    );
+
+  const checkForUpdate = () => {
+    setStatus("checking");
+    void showCheck(check());
   };
 
   const downloadAndInstall = async () => {
@@ -63,7 +72,7 @@ export function UpdateChecker() {
 
   // Check on mount (never in the demo build: it has no updater endpoint)
   useEffect(() => {
-    if (!isDemoBuild()) checkForUpdate();
+    if (!isDemoBuild()) void showCheck(check());
   }, []);
 
   if (isDemoBuild()) {

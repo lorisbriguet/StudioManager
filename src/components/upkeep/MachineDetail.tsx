@@ -32,6 +32,7 @@ import { formatDisplayDate } from "../../utils/formatDate";
 import { todayLocalISO } from "../../utils/localDate";
 import { useConfirm } from "../../lib/confirm";
 import type { Machine, MachineStatus, UpkeepItem } from "../../types/upkeep";
+import { useChanged } from "../../hooks/useChanged";
 
 const STATUSES: MachineStatus[] = ["working", "attention", "broken", "lent", "retired"];
 
@@ -153,7 +154,7 @@ export function MachineDetail({ machineId, compact = false, onDeleted, onBack }:
   const [itemForm, setItemForm] = useState<{ item?: UpkeepItem } | null>(null);
   const [yearDraft, setYearDraft] = useState<string | null>(null);
 
-  useEffect(() => { if (machine) setStatus(machine.status); }, [machine?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (useChanged(machine?.status) && machine) setStatus(machine.status);
 
   if (!machine) {
     if (machineQuery.isError) return <QueryError message={t.load_error_upkeep} onRetry={machineQuery.refetch} retrying={machineQuery.isFetching} />;

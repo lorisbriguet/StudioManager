@@ -9,6 +9,7 @@ import type { ProjectDoc } from "../../db/hooks/useProjectDocs";
 import type { WikiRef } from "../../lib/wikiTabs";
 import { colorFor } from "./wikiColors";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
+import { useChanged } from "../../hooks/useChanged";
 
 /** A 36px tree row with the row hairline, like a Table row. */
 const ROW =
@@ -71,6 +72,22 @@ function readOpenKeys(key: string): Set<string> | null {
   }
 }
 
+/** The group holding an article (by id) or a project file (by key). */
+function groupOf(ref: WikiRef, groups: Group[]): Group | undefined {
+  return groups.find((x) =>
+    typeof ref === "number" ? x.articles.some((a) => a.id === ref) : x.docs.some((d) => d.key === ref)
+  );
+}
+
+/** `open` with the group of the open article or file unfolded (the same set when it already is). */
+function reveal(open: Set<string>, activeRef: WikiRef | null, groups: Group[]): Set<string> {
+  if (activeRef == null) return open;
+  const g = groupOf(activeRef, groups);
+  if (!g) return open;
+  const keys = typeof activeRef === "string" ? [g.key, `${g.key}:files`] : [g.key];
+  return keys.every((k) => open.has(k)) ? open : new Set([...open, ...keys]);
+}
+
 export function WikiExplorer({
   articles,
   docs = [],
@@ -106,7 +123,7 @@ export function WikiExplorer({
   );
 
   // Open groups, remembered per organisation. Everything starts folded.
-  const [open, setOpen] = useState<Set<string>>(() => readOpenKeys(storageKey) ?? new Set());
+  const [open, setOpen] = useState<Set<string>>(() => reveal(readOpenKeys(storageKey) ?? new Set(), activeRef, groups));
   useEffect(() => {
     try {
       localStorage.setItem(storageKey, JSON.stringify([...open]));
@@ -115,16 +132,9 @@ export function WikiExplorer({
     }
   }, [open, storageKey]);
 
-  // Reveal the open article or file.
-  useEffect(() => {
-    if (activeRef == null) return;
-    const g = groups.find((x) =>
-      typeof activeRef === "number" ? x.articles.some((a) => a.id === activeRef) : x.docs.some((d) => d.key === activeRef)
-    );
-    if (!g) return;
-    const keys = typeof activeRef === "string" ? [g.key, `${g.key}:files`] : [g.key];
-    setOpen((prev) => (keys.every((k) => prev.has(k)) ? prev : new Set([...prev, ...keys])));
-  }, [activeRef, groups]);
+  // Reveal the open article or file: when it changes, or moves to another group.
+  const activeGroup = activeRef == null ? null : (groupOf(activeRef, groups)?.key ?? null);
+  if (useChanged(activeRef, activeGroup)) setOpen((prev) => reveal(prev, activeRef, groups));
 
   const toggle = useCallback((key: string) => {
     setOpen((prev) => {

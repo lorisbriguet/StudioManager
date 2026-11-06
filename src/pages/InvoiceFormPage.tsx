@@ -31,6 +31,7 @@ import { confirmIfDirty } from "../lib/dirty-guard";
 import { pickableClients, type Client } from "../types/client";
 import { qk } from "../db/queryKeys";
 import { useKeepCurrent } from "../hooks/useKeepCurrent";
+import { useChangedOrMount } from "../hooks/useChanged";
 
 // Phase 2 E2 — inline validation (additive; only fields with rules appear in
 // the schema, the rest are unvalidated). "line_items" has no schema rules —
@@ -45,6 +46,15 @@ const invoiceSchema: v.FormSchema<InvoiceField> = {
   invoice_date: [v.required, v.dateValid],
   chf_equivalent: [v.numberPositive],
 };
+
+/** The stored money facts of a loaded invoice: editing it must never rewrite them. */
+function moneySnapshot(inv: { currency?: string | null; exchange_rate?: number | null; chf_equivalent?: number | null; total: number }) {
+  return {
+    currency: (inv.currency ?? "CHF") as Currency,
+    exchange_rate: inv.exchange_rate ?? 1,
+    chf_equivalent: inv.chf_equivalent ?? inv.total,
+  };
+}
 
 export function InvoiceFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -111,11 +121,8 @@ export function InvoiceFormPage() {
   // matches this snapshot, the [currency] effect re-asserts the stored
   // exchange_rate/chf_equivalent instead of fetching today's rate — editing
   // an old invoice must never rewrite its historical financials.
-  const loadedInvoiceRef = useRef<{
-    currency: Currency;
-    exchange_rate: number;
-    chf_equivalent: number;
-  } | null>(null);
+  // Set when an invoice loads, never cleared.
+  const [loadedInvoice, setLoadedInvoice] = useState<ReturnType<typeof moneySnapshot> | null>(null);
 
   const {
     items, setItems, sensors, lineItemIds, handleDragEnd,
@@ -149,35 +156,38 @@ export function InvoiceFormPage() {
     })));
   }, [setItems]);
 
+  // Hydrate the form during render, once per loaded invoice (the effect below
+  // fetches the line items). One snapshot feeds both the setters and
+  // loadedInvoice, so the currency and CHF checks agree with the form.
+  if (useChangedOrMount(existingInvoice, invoiceId) && existingInvoice) {
+    const snapshot = moneySnapshot(existingInvoice);
+    setLoadedInvoice(snapshot);
+    setClientId(existingInvoice.client_id);
+    setContactId(existingInvoice.contact_id);
+    setBillingAddressId(existingInvoice.billing_address_id);
+    setProjectId(existingInvoice.project_id);
+    setLanguage(existingInvoice.language === "EN" ? "EN" : "FR");
+    setInvoiceDate(existingInvoice.invoice_date);
+    setActivity(existingInvoice.activity);
+    setActivityId(existingInvoice.activity_id ?? null);
+    setAssignment(existingInvoice.assignment);
+    setPoNumber(existingInvoice.po_number ?? "");
+    setNotes(existingInvoice.notes);
+    setCurrency(snapshot.currency);
+    setExchangeRate(snapshot.exchange_rate);
+    setChfEquivalent(snapshot.chf_equivalent);
+    setDiscountRate(existingInvoice.discount_rate ?? 0);
+    if (existingInvoice.currency && existingInvoice.currency !== "CHF") {
+      setChfManualOverride(true); // preserve user's manually set CHF equivalent
+    }
+    if ("template_id" in existingInvoice) {
+      setTemplateId((existingInvoice as { template_id?: number | null }).template_id ?? null);
+    }
+  }
+
   useEffect(() => {
     if (existingInvoice) {
       formLoadedRef.current = false;
-      // Single source for the stored money facts: the ref (used by the
-      // currency/auto-calc effects) and the hydration setters below must agree.
-      const snapshot = {
-        currency: (existingInvoice.currency ?? "CHF") as Currency,
-        exchange_rate: existingInvoice.exchange_rate ?? 1,
-        chf_equivalent: existingInvoice.chf_equivalent ?? existingInvoice.total,
-      };
-      loadedInvoiceRef.current = snapshot;
-      setClientId(existingInvoice.client_id);
-      setContactId(existingInvoice.contact_id);
-      setBillingAddressId(existingInvoice.billing_address_id);
-      setProjectId(existingInvoice.project_id);
-      setLanguage(existingInvoice.language === "EN" ? "EN" : "FR");
-      setInvoiceDate(existingInvoice.invoice_date);
-      setActivity(existingInvoice.activity);
-      setActivityId(existingInvoice.activity_id ?? null);
-      setAssignment(existingInvoice.assignment);
-      setPoNumber(existingInvoice.po_number ?? "");
-      setNotes(existingInvoice.notes);
-      setCurrency(snapshot.currency);
-      setExchangeRate(snapshot.exchange_rate);
-      setChfEquivalent(snapshot.chf_equivalent);
-      setDiscountRate(existingInvoice.discount_rate ?? 0);
-      if (existingInvoice.currency && existingInvoice.currency !== "CHF") {
-        setChfManualOverride(true); // preserve user's manually set CHF equivalent
-      }
       getInvoiceLineItems(invoiceId).then((lineItems) => {
         if (lineItems.length > 0) {
           setItems(
@@ -209,26 +219,16 @@ export function InvoiceFormPage() {
   }, [existingInvoice?.reference, isEdit, invoiceId, t.draft, updateActiveTab]);
 
   // Default activity for new invoices
-  useEffect(() => {
-    if (!isEdit && !activity && activityId === null && !fromQuoteId && activityList && activityList.length > 0) {
-      setActivityId(activityList[0].id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- default-fill only when activities load; adding `activity`/`activityId` would re-fill after the user clears the field
-  }, [activityList, isEdit, fromQuoteId]);
+  // Only when activities load, so clearing the field does not re-fill it.
+  if (useChangedOrMount(activityList, isEdit, fromQuoteId)
+    && !isEdit && !activity && activityId === null && !fromQuoteId && activityList && activityList.length > 0) {
+    setActivityId(activityList[0].id);
+  }
 
   // Pre-select default template for new invoices
-  useEffect(() => {
-    if (!isEdit && !templateId && defaultTemplate) {
-      setTemplateId(defaultTemplate.id);
-    }
-  }, [defaultTemplate, isEdit, templateId]);
-
-  // Load template_id from existing invoice
-  useEffect(() => {
-    if (existingInvoice && "template_id" in existingInvoice) {
-      setTemplateId((existingInvoice as { template_id?: number | null }).template_id ?? null);
-    }
-  }, [existingInvoice]);
+  if (!isEdit && !templateId && defaultTemplate) {
+    setTemplateId(defaultTemplate.id);
+  }
 
   // Arm dirty tracking for new invoices (no existing data to load)
   useEffect(() => {
@@ -299,29 +299,27 @@ export function InvoiceFormPage() {
   // what save() persists, and invoices are legal documents.
   const { subtotal, discountAmount, total } = computeTotals(items, discountRate);
 
-  // Auto-fetch the exchange rate of the invoice date when the currency or the date changes
-  useEffect(() => {
-    const loaded = loadedInvoiceRef.current;
-    if (loaded && currency === loaded.currency) {
-      // Editing an invoice in its stored currency: exchange_rate and
-      // chf_equivalent are historical facts captured at invoice time —
-      // re-assert them instead of fetching today's rate. (Re-asserting, not
-      // just returning, also repairs the mount ordering where this effect
-      // ran with the pre-hydration currency and clobbered the stored rate.)
-      setExchangeRate(loaded.exchange_rate);
-      if (loaded.currency !== "CHF") {
-        setChfEquivalent(loaded.chf_equivalent);
+  // When the currency or the date changes: an invoice in its stored currency
+  // re-asserts its stored exchange_rate/chf_equivalent (historical facts
+  // captured at invoice time, never today's rate); CHF needs no rate; any
+  // other currency fetches the rate of the invoice date (effect below).
+  const keepsStoredRate = !!loadedInvoice && currency === loadedInvoice.currency;
+  if (useChangedOrMount(currency, invoiceDate)) {
+    if (loadedInvoice && keepsStoredRate) {
+      setExchangeRate(loadedInvoice.exchange_rate);
+      if (loadedInvoice.currency !== "CHF") {
+        setChfEquivalent(loadedInvoice.chf_equivalent);
         setChfManualOverride(true);
       } else {
         setChfManualOverride(false);
       }
-      return;
-    }
-    if (currency === "CHF") {
+    } else if (currency === "CHF") {
       setExchangeRate(1);
       setChfManualOverride(false);
-      return;
     }
+  }
+  useEffect(() => {
+    if (keepsStoredRate || currency === "CHF") return;
     let cancelled = false;
     getExchangeRate(currency, invoiceDate).then((rate) => {
       if (cancelled) return;
@@ -347,21 +345,14 @@ export function InvoiceFormPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately runs on a currency or date change only (see comments above); adding t.* would refetch the rate on locale switch
   }, [currency, invoiceDate]);
 
-  // Auto-calc CHF equivalent when total or exchange rate changes (unless manually overridden)
-  useEffect(() => {
-    const loaded = loadedInvoiceRef.current;
-    if (loaded && currency === loaded.currency && currency !== "CHF") {
-      // Loaded invoice in its stored foreign currency: chf_equivalent is a
-      // historical fact re-asserted by the currency effect that re-asserts
-      // stored values — never recompute it here (this effect can re-run in
-      // the same flush as that repair with a stale chfManualOverride closure
-      // and clobber it).
-      return;
-    }
-    if (!chfManualOverride) {
-      setChfEquivalent(currency === "CHF" ? total : toCHF(total, exchangeRate));
-    }
-  }, [total, exchangeRate, currency, chfManualOverride]);
+  // Auto-calc CHF equivalent when total or exchange rate changes (unless manually overridden).
+  // A loaded invoice in its stored foreign currency keeps its chf_equivalent: it is a
+  // historical fact, re-asserted by the currency effect, never recomputed here.
+  if (useChangedOrMount(total, exchangeRate, currency, chfManualOverride)
+    && !(loadedInvoice && currency === loadedInvoice.currency && currency !== "CHF")
+    && !chfManualOverride) {
+    setChfEquivalent(currency === "CHF" ? total : toCHF(total, exchangeRate));
+  }
 
   const { data: clientContacts } = useClientContacts(clientId);
   const { data: clientAddresses } = useClientAddresses(clientId);
@@ -370,13 +361,12 @@ export function InvoiceFormPage() {
   // Fill in the client's only address on a new document, or once the client
   // is picked by hand. An existing document keeps what it is stored with, so
   // the form never shows an address the database doesn't hold.
-  const autoSelectAddressRef = useRef(!isEdit);
-  useEffect(() => {
-    if (autoSelectAddressRef.current && clientAddresses && clientAddresses.length === 1 && !billingAddressId) {
-      setBillingAddressId(clientAddresses[0].id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot auto-select when the address list loads; adding billingAddressId would re-select right after the user deselects
-  }, [clientAddresses]);
+  // Only when the address list loads, so deselecting does not re-select.
+  const [autoSelectAddress, setAutoSelectAddress] = useState(!isEdit);
+  if (useChangedOrMount(clientAddresses)
+    && autoSelectAddress && clientAddresses && clientAddresses.length === 1 && !billingAddressId) {
+    setBillingAddressId(clientAddresses[0].id);
+  }
   const { data: projectTasks } = useTasksByProject(projectId ?? 0);
 
   const availableTasks = projectTasks ?? [];
@@ -552,7 +542,7 @@ export function InvoiceFormPage() {
                 setClientId(e.target.value);
                 setContactId(null);
                 setBillingAddressId(null);
-                autoSelectAddressRef.current = true;
+                setAutoSelectAddress(true);
                 setProjectId(null);
                 // User picked a (new) client: derive discount and language from that client
                 const newClient = clients?.find((c) => c.id === e.target.value);

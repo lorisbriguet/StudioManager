@@ -9,6 +9,7 @@ import { Input } from "./Input";
 import { Button } from "./Button";
 import { FieldError } from "./FormField";
 import { FormModalContext } from "./Form";
+import { useChanged } from "../../hooks/useChanged";
 
 /**
  * Calendar and DatePicker. See DESIGN-SYSTEM.md, "Dates".
@@ -282,16 +283,13 @@ export function DatePicker({
   );
 
   // Follow outside changes (a pick, a reset) unless the text already means that date.
-  useEffect(() => {
-    setText((cur) => {
-      const d = parseTypedDate(cur, fmt);
-      const same = (d ? toDateString(d) : null) === (value ?? null);
-      return same ? cur : shown;
-    });
+  if (useChanged(value, fmt)) {
+    const d = parseTypedDate(text, fmt);
+    const same = (d ? toDateString(d) : null) === (value ?? null);
+    if (!same) setText(shown);
     if (value) setMonth(parseLocalDate(value));
     setInvalid(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, fmt]);
+  }
 
   const type = (next: string) => {
     setText(next);

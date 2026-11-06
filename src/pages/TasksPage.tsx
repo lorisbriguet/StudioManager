@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { IconButton } from "../components/ui/IconButton";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
@@ -173,9 +173,7 @@ export function TasksPage() {
   }, [tasks, projectName, clientForProject, filter, search, projectOrder, filterConditions, filterLogic, startProjectId]);
 
   // The first task is in: the placeholder group has done its job.
-  useEffect(() => {
-    if (startProjectId != null && tasks && tasks.length > 0) setStartProjectId(null);
-  }, [tasks, startProjectId]);
+  if (startProjectId != null && tasks && tasks.length > 0) setStartProjectId(null);
 
   const flatTasks = useMemo(() => grouped.flatMap((g) => g.tasks), [grouped]);
   const bulk = useBulkSelect(flatTasks);

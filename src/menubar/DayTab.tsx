@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Button, Callout, Dropdown, EmptyState, ICONS, IconButton, SectionLabel, type DropdownItem } from "../components/ui";
 import { useAgents } from "../components/agents/useAgents";
@@ -29,18 +29,19 @@ const AGENTS_OFF = "Agents are switched off";
 function useRoutines() {
   const [data, setData] = useState<{ routines: Routines; runs: Run[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const load = useCallback(async () => {
-    const [routines, runs] = await Promise.allSettled([getRoutines(), getRoutineRuns()]);
-    const failed = [routines, runs].find((r): r is PromiseRejectedResult => r.status === "rejected");
-    setError(failed ? errorText(failed.reason) : null);
-    setData((d) => ({
-      routines: routines.status === "fulfilled" ? routines.value : (d?.routines ?? { sections: [], routines: [] }),
-      runs: runs.status === "fulfilled" ? runs.value : (d?.runs ?? []),
-    }));
-  }, []);
   useEffect(() => {
     let alive = true;
     let unlisten: (() => void) | null = null;
+    const load = () =>
+      Promise.allSettled([getRoutines(), getRoutineRuns()]).then(([routines, runs]) => {
+        if (!alive) return;
+        const failed = [routines, runs].find((r): r is PromiseRejectedResult => r.status === "rejected");
+        setError(failed ? errorText(failed.reason) : null);
+        setData((d) => ({
+          routines: routines.status === "fulfilled" ? routines.value : (d?.routines ?? { sections: [], routines: [] }),
+          runs: runs.status === "fulfilled" ? runs.value : (d?.runs ?? []),
+        }));
+      });
     void load();
     listen(ROUTINES_CHANGED, () => {
       if (alive) void load();
@@ -52,7 +53,7 @@ function useRoutines() {
       alive = false;
       unlisten?.();
     };
-  }, [load]);
+  }, []);
   return { data, error };
 }
 

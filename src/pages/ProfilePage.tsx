@@ -17,6 +17,7 @@ import { useT } from "../i18n/useT";
 import type { UIKey } from "../i18n/ui";
 import { Button, FormField, FormLayout, FormSection, FormGrid, FormGroup, FormActions, Input, DetailSkeleton, PageSpinner, EmptyState, QueryError, SectionLabel, SidebarTitle, FORM_GAP, FORM_WIDTH, FIELD_LABEL } from "../components/ui";
 import { Toggle } from "../components/ui/Toggle";
+import { useChanged } from "../hooks/useChanged";
 // Lazy: the template editor's live preview carries @react-pdf.
 const TemplateEditor = lazy(() =>
   import("../components/invoice/TemplateEditor").then((m) => ({ default: m.TemplateEditor }))
@@ -358,10 +359,10 @@ export function ActivityRow({
   const t = useT();
   const [fr, setFr] = useState(activity.name_fr);
   const [en, setEn] = useState(activity.name_en);
-  useEffect(() => {
+  if (useChanged(activity.name_fr, activity.name_en)) {
     setFr(activity.name_fr);
     setEn(activity.name_en);
-  }, [activity.name_fr, activity.name_en]);
+  }
 
   const commit = () => {
     if (fr.trim() === activity.name_fr && en.trim() === activity.name_en) return;

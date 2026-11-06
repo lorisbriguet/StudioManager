@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { format } from "date-fns";
 import { ArrowRight, type LucideIcon } from "lucide-react";
 import { formatDisplayDate } from "../utils/formatDate";
@@ -8,6 +8,7 @@ import { Popover, usePopover } from "./ui/Popover";
 import { useT } from "../i18n/useT";
 
 import type { ReminderOption } from "../types/task";
+import { useChanged } from "../hooks/useChanged";
 
 interface TaskDatePickerProps {
   dueDate: string | null;
@@ -56,9 +57,7 @@ export function TaskDatePicker({
   const selectedEndDate = endDate ? parseLocalDate(endDate) : undefined;
 
   // Sync month when date changes externally
-  useEffect(() => {
-    if (dueDate) setMonth(parseLocalDate(dueDate));
-  }, [dueDate]);
+  if (useChanged(dueDate) && dueDate) setMonth(parseLocalDate(dueDate));
 
   const handleDayClick = (day: Date) => {
     const dateStr = format(day, "yyyy-MM-dd");
@@ -240,7 +239,7 @@ function ToggleRow({
 // Time input with local state — only commits on blur to avoid mid-typing resets
 function TimeInput({ label, value, onCommit }: { label: string; value: string; onCommit: (v: string) => void }) {
   const [local, setLocal] = useState(value);
-  useEffect(() => { setLocal(value); }, [value]);
+  if (useChanged(value)) setLocal(value);
   return (
     <Input
       width="sm"

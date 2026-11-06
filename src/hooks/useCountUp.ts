@@ -12,8 +12,9 @@ export function useCountUp(target: number, duration = 600): number {
     const style = getComputedStyle(document.documentElement);
     const durationFast = style.getPropertyValue("--duration-fast").trim();
     if (durationFast === "0ms") {
-      setValue(target);
-      return;
+      // Reduced motion: jump straight to the target, on the next frame.
+      const raf = requestAnimationFrame(() => setValue(target));
+      return () => cancelAnimationFrame(raf);
     }
 
     const start = prevTarget.current;

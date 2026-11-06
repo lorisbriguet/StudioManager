@@ -5,6 +5,7 @@ import { evaluateFormula } from "../../lib/formulaEval";
 import { Tag } from "../ui/Tag";
 
 import { Checkbox, Input } from "../ui";
+import { useChanged } from "../../hooks/useChanged";
 interface Props {
   column: WorkloadColumn;
   value: unknown;
@@ -78,9 +79,10 @@ function TextCell({
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Start from the saved value when editing begins, or when it changes meanwhile.
+  if (useChanged(editing, value) && editing) setDraft(value);
   useEffect(() => {
     if (editing) {
-      setDraft(value);
       inputRef.current?.focus();
       inputRef.current?.select();
     }
@@ -132,9 +134,10 @@ function NumberCell({
   const [draft, setDraft] = useState(String(value ?? ""));
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Start from the saved value when editing begins, or when it changes meanwhile.
+  if (useChanged(editing, value) && editing) setDraft(String(value ?? ""));
   useEffect(() => {
     if (editing) {
-      setDraft(String(value ?? ""));
       inputRef.current?.focus();
       inputRef.current?.select();
     }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CARD_STACK, Input, Select, SettingRow, SettingsCard } from "../ui";
 import { ConnectionsCard } from "../upkeep/ConnectionsCard";
@@ -9,6 +9,7 @@ import { closeEquipmentDb } from "../../db";
 import { useT } from "../../i18n/useT";
 import { syncAllUpkeepEvents } from "../../lib/upkeep/calendar";
 import type { UpkeepAlert } from "../../types/upkeep";
+import { useChanged } from "../../hooks/useChanged";
 
 type ConcreteAlert = Exclude<UpkeepAlert, "default">;
 const ALERTS: ConcreteAlert[] = ["none", "day_9am", "day_before", "week_before"];
@@ -16,7 +17,7 @@ const ALERTS: ConcreteAlert[] = ["none", "day_9am", "day_before", "week_before"]
 function DaysInput({ label, value, onCommit }: { label: string; value: number; onCommit: (n: number) => void }) {
   // Local draft so the field can be cleared and retyped; the store only sees valid values.
   const [draft, setDraft] = useState(String(value));
-  useEffect(() => { setDraft(String(value)); }, [value]);
+  if (useChanged(value)) setDraft(String(value));
 
   const valid = (text: string): number | null => {
     const n = Math.round(Number(text));

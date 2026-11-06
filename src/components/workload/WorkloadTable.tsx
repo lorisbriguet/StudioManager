@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef, useEffect, type RefObject } from "react";
+import { useState, useCallback, useMemo, useRef, type RefObject } from "react";
 import { Sigma } from "lucide-react";
 import {
   Button, DragHandle, Select, Popover, Input, FormModal, FormField, MenuItem, ICONS, ICON_SIZE, MENU_DIVIDER,
@@ -40,6 +40,7 @@ import { evaluateFormula } from "../../lib/formulaEval";
 import { useT } from "../../i18n/useT";
 import { useTimerActions } from "../../hooks/useTimerActions";
 import { useKeepCurrent } from "../../hooks/useKeepCurrent";
+import { useNow } from "../../hooks/useNow";
 
 /** Header cells open the column menu on click. */
 const HEADER_BUTTON = `cursor-pointer ${MUTED_INTERACTIVE}`;
@@ -937,19 +938,11 @@ function InlineDuration({
   const [editing, setEditing] = useState(false);
   const t = useT();
   const [draft, setDraft] = useState("");
-  const [liveElapsed, setLiveElapsed] = useState(0);
-
-  // Live ticking when timer is active
-  useEffect(() => {
-    if (!isTimerActive || !timerStartedAt) {
-      setLiveElapsed(0);
-      return;
-    }
-    const tick = () => setLiveElapsed(Math.floor((Date.now() - timerStartedAt) / 60000));
-    tick();
-    const iv = setInterval(tick, 10000); // Update every 10s
-    return () => clearInterval(iv);
-  }, [isTimerActive, timerStartedAt]);
+  // Live ticking when timer is active (every 10 s). Just after a start the clock can be
+  // older than the start: that is under a minute, so 0.
+  const running = !!isTimerActive && !!timerStartedAt;
+  const now = useNow(10_000, running);
+  const liveElapsed = running ? Math.max(0, Math.floor((now - timerStartedAt!) / 60000)) : 0;
 
   const displayMins = isTimerActive ? value + liveElapsed : value;
 

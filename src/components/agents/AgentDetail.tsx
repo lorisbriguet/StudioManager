@@ -1,4 +1,5 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { useChanged } from "../../hooks/useChanged";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { dismissAgent, deleteAgent, saveImage, sendMessage, stopAgent, switchModel, type Agent } from "../../lib/agents";
@@ -66,16 +67,16 @@ export function AgentDetail({ agent, onOpenTerminal, onDeleted, onSwitched }: Ag
   const reasonId = useId();
   const background = agent.kind === "background";
   const canSend = background && agent.status !== "waiting";
+  // Kept in a passive effect, not a layout one: React runs every passive cleanup before
+  // any passive setup, so when the agent changes the cleanup below still sees the old list.
   const imagesRef = useRef(images);
-  useLayoutEffect(() => {
+  useEffect(() => {
     imagesRef.current = images;
   });
 
   // Attachments belong to one agent's draft; free their previews when it changes or unmounts.
-  useEffect(() => {
-    setImages([]);
-    return () => imagesRef.current.forEach((a) => URL.revokeObjectURL(a.url));
-  }, [agent.sessionId]);
+  if (useChanged(agent.sessionId)) setImages([]);
+  useEffect(() => () => imagesRef.current.forEach((a) => URL.revokeObjectURL(a.url)), [agent.sessionId]);
 
   const addImages = (files: Iterable<File>) => {
     const next: Attachment[] = [];

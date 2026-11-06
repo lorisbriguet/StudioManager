@@ -22,6 +22,7 @@ import {
 import { deleteWithUndo } from "../lib/undo";
 import { useT } from "../i18n/useT";
 import { notify } from "../lib/notify";
+import { useChanged, useChangedOrMount } from "../hooks/useChanged";
 import { scrollBehavior } from "../lib/motion";
 import { ICONS, ICON_SIZE, Badge, Button, Dropdown, EmptyState, FORM_WIDTH, PageHeader, Popover, IconButton, SectionLabel, Input, HEADING_1 } from "../components/ui";
 import { WIKI_HEADER_ROW } from "../components/wiki/wikiLayout";
@@ -180,9 +181,7 @@ function LinkInsertPopup({
     !articles.some((a) => !a.file && a.title.toLowerCase() === q && a.project_id === currentProjectId);
   const optionCount = matchedArticles.length + (canCreate ? 1 : 0);
 
-  useEffect(() => {
-    setSelectedIdx(0);
-  }, [query]);
+  if (useChanged(query)) setSelectedIdx(0);
 
   const choose = (i: number) => {
     if (i < matchedArticles.length) {
@@ -334,9 +333,7 @@ function SlashCommandMenu({
     return allCommands.filter((cmd) => cmd.label.toLowerCase().includes(q));
   }, [filter, allCommands]);
 
-  useEffect(() => {
-    setSelectedIdx(0);
-  }, [filter]);
+  if (useChanged(filter)) setSelectedIdx(0);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -476,12 +473,10 @@ export function ArticleEditor({
   useEffect(() => { articleIdRef.current = articleId; }, [articleId]);
 
   // Sync state when article loads
-  useEffect(() => {
-    if (article) {
-      setTitle(article.title);
-      setProjectId(article.project_id);
-    }
-  }, [article]);
+  if (useChangedOrMount(article) && article) {
+    setTitle(article.title);
+    setProjectId(article.project_id);
+  }
 
   const debouncedSave = useCallback(
     (content: string) => {
@@ -977,10 +972,10 @@ export function WikiPage() {
   );
   const folderNames = useMemo(() => new Map(folders.map((f: WikiFolder) => [f.id, f.name])), [folders]);
 
-  useEffect(() => {
-    if (!articlesLoaded) return;
+  // allArticles is a fresh [] on each render until loaded: compare it only once loaded.
+  if (useChangedOrMount(articlesLoaded ? allArticles : null) && articlesLoaded) {
     setTabsState((s) => pruneTabs(s, new Set(allArticles.map((a) => a.id))));
-  }, [articlesLoaded, allArticles]);
+  }
 
   const activeTab = tabsState.tabs.find((tab) => tab.key === tabsState.active);
   const activeId = tabArticleId(activeTab);
@@ -991,10 +986,8 @@ export function WikiPage() {
   const activeHtml = activeId != null && live?.id === activeId ? live.html : activeArticle?.content ?? "";
   // The graph's "current only" view centres on what you had open last.
   const [lastRef, setLastRef] = useState<WikiRef | null>(null);
-  useEffect(() => {
-    if (activeRef != null) setLastRef(activeRef);
-  }, [activeRef]);
-  useEffect(() => setSaveState("idle"), [activeId]);
+  if (useChangedOrMount(activeRef) && activeRef != null) setLastRef(activeRef);
+  if (useChanged(activeId)) setSaveState("idle");
 
   const handleContentChange = useCallback(
     (html: string) => {
@@ -1068,10 +1061,14 @@ export function WikiPage() {
   // in-page state, and the same link can be followed again later.
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedArticle = searchParams.get("article");
+  const requestedId =
+    requestedArticle !== null && articlesLoaded ? parseWikiArticleId(`/wiki?article=${requestedArticle}`) : null;
+  if (useChangedOrMount(requestedArticle, articlesLoaded) && requestedId !== null && byId.has(requestedId)) {
+    setTabsState((s) => openInView(s, requestedId));
+  }
   useEffect(() => {
     if (requestedArticle === null || !articlesLoaded) return;
-    const id = parseWikiArticleId(`/wiki?article=${requestedArticle}`);
-    if (id !== null) openArticle(id);
+    if (requestedId !== null && !byId.has(requestedId)) notify.error(t.wiki_article_not_found);
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
@@ -1080,7 +1077,7 @@ export function WikiPage() {
       },
       { replace: true }
     );
-  }, [requestedArticle, articlesLoaded, openArticle, setSearchParams]);
+  }, [requestedArticle, articlesLoaded, requestedId, byId, t.wiki_article_not_found, setSearchParams]);
 
   const handleNewArticle = useCallback(
     (projectId: number | null) => {

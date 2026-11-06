@@ -46,6 +46,7 @@ import { matchSupplier } from "../lib/paperless/inbox";
 import { receiptFromDownload, recordInboxLink, type PaperlessSource } from "../lib/paperless/commands";
 import type { SavedFilterData, FilterCondition, FilterableField } from "../types/saved-filter";
 import { applyFilterConditions, type ConditionLogic } from "../types/saved-filter";
+import { useChanged } from "../hooks/useChanged";
 
 type SortKey = "reference" | "supplier" | "category_code" | "invoice_date" | "amount" | "paid_date";
 
@@ -600,16 +601,16 @@ export function NewExpenseForm({
   const t = useT();
   const [form, setForm] = useState(() => initialForm(prefill, categories, pastSuppliers));
   // Units of form.currency per 1 CHF: the rate of the expense date, editable. 0 while unknown.
-  const [rate, setRate] = useState(1);
+  const [rate, setRate] = useState(() => (form.currency === "CHF" ? 1 : 0));
   const [rateError, setRateError] = useState<string | null>(null);
+  // A currency or date change starts over: 1 for CHF, else 0 until the rate is known.
+  if (useChanged(form.currency, form.invoice_date)) {
+    setRate(form.currency === "CHF" ? 1 : 0);
+    if (form.currency === "CHF") setRateError(null);
+  }
   useEffect(() => {
-    if (form.currency === "CHF") {
-      setRate(1);
-      setRateError(null);
-      return;
-    }
+    if (form.currency === "CHF") return;
     let live = true;
-    setRate(0);
     void getExchangeRate(form.currency, form.invoice_date).then((r) => {
       if (!live) return;
       if (r == null) {

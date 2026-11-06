@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useChanged } from "../../hooks/useChanged";
 import { answerPrompt, getPrompt, type Prompt } from "../../lib/agents";
 import { useT } from "../../i18n/useT";
 import { Button, Callout, Card } from "../ui";
@@ -35,15 +36,19 @@ export function PromptAnswer({ shortId, onOpenTerminal }: PromptAnswerProps) {
   const answers = useRef(0);
   const pollRef = useRef<() => void>(() => {});
 
+  // A new agent starts from a blank prompt (set during render, so the old one never shows).
+  if (useChanged(shortId)) {
+    setPrompt(null);
+    setLoaded(false);
+    setFailed(false);
+    setAnswered(null);
+  }
+
   useEffect(() => {
     const genCounter = gen; // the ref object itself never changes
     const myGen = ++genCounter.current;
     let inflight = false;
     const current = () => gen.current === myGen;
-    setPrompt(null);
-    setLoaded(false);
-    setFailed(false);
-    setAnswered(null);
     const poll = () => {
       if (inflight || answeringRef.current) return;
       inflight = true;

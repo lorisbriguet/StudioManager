@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useChanged } from "../hooks/useChanged";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { notify } from "../lib/notify";
@@ -113,9 +114,7 @@ export function SettingsPage() {
   // ?category= is not only an initial value: "Manage organisations…" in the
   // switcher navigates here while Settings may already be mounted, and the
   // initial state alone would leave the page on whatever category was open.
-  useEffect(() => {
-    if (validCategory) setActiveCategory(validCategory);
-  }, [validCategory]);
+  if (useChanged(validCategory) && validCategory) setActiveCategory(validCategory);
 
   useEffect(() => {
     getVersion().then(setAppVersion).catch((e) => logError("Failed to read app version:", e));
