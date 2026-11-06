@@ -135,6 +135,8 @@ fn execute_batch(
         .map_err(|e| format!("Failed to enable foreign_keys: {e}"))?;
     conn.busy_timeout(std::time::Duration::from_millis(5000))
         .map_err(|e| format!("Failed to set busy_timeout: {e}"))?;
+    conn.pragma_update(None, "synchronous", "NORMAL")
+        .map_err(|e| format!("Failed to set synchronous: {e}"))?;
 
     begin_batch(&conn)?;
 

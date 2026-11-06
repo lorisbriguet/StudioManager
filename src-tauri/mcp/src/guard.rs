@@ -202,6 +202,9 @@ fn open_checked(org: &Org) -> Result<Connection, String> {
         .map_err(|e| format!("busy_timeout: {e}"))?;
     conn.pragma_update(None, "foreign_keys", true)
         .map_err(|e| format!("foreign_keys: {e}"))?;
+    // The app puts the file in WAL mode; match its commit durability.
+    conn.pragma_update(None, "synchronous", "NORMAL")
+        .map_err(|e| format!("synchronous: {e}"))?;
     check_schema(&conn)?;
     Ok(conn)
 }
