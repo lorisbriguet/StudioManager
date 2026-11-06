@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { notify } from "../lib/notify";
 import { invoke } from "@tauri-apps/api/core";
 import { writeFile } from "@tauri-apps/plugin-fs";
-import { undoable, deleteWithUndo } from "../lib/undo";
+import { undoableAction, batchUndo, deleteWithUndo } from "../lib/undo";
 import { settleDraftBeforeExport } from "../lib/confirmDraftExport";
 import { useBulkDelete } from "../hooks/useBulkDelete";
 import { pdfFileName } from "../lib/pdfFilename";
@@ -183,22 +183,23 @@ export function QuotesPage() {
 
   const bulk = useBulkSelect(filtered);
 
-  const bulkMarkSent = useCallback(() => {
+  const bulkMarkSent = useCallback(async () => {
     const ids = [...bulk.selected] as number[];
-    const prevStates = ids.map((id) => {
-      const q = filtered.find((quote) => quote.id === id);
-      return { id, status: q?.status };
-    });
-    ids.forEach((id) => updateQuote.mutate({ id, data: { status: "sent" as QuoteStatus } }));
-    undoable(t.bulk_updated, async () => {
-      await Promise.all(
-        prevStates.map((prev) =>
-          updateQuote.mutateAsync({ id: prev.id, data: { status: prev.status as QuoteStatus } })
-        )
-      );
-    });
     bulk.clearSelection();
-  }, [bulk, updateQuote, filtered, t]);
+    // One at a time, each numbered after the previous one is saved. Each
+    // update's own undo (which restores the draft and its DRAFT reference)
+    // is folded into a single Undo for the whole action.
+    const action = await batchUndo(t.bulk_updated, async () => {
+      for (const id of ids) {
+        try {
+          await updateQuote.mutateAsync({ id, data: { status: "sent" as QuoteStatus } });
+        } catch {
+          // the mutation's error toast already told the user
+        }
+      }
+    });
+    if (action) undoableAction(t.bulk_updated, action);
+  }, [bulk, updateQuote, t]);
 
   const deleteSelection = useBulkDelete("quotes", (id: number) => deleteQuote.mutateAsync(id));
   const bulkDelete = () => void deleteSelection([...bulk.selected] as number[], bulk.clearSelection);

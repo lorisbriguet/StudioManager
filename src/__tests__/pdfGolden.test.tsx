@@ -208,3 +208,29 @@ describe("quote PDF golden", () => {
     expect(canonical(container.innerHTML)).toMatchSnapshot();
   });
 });
+
+// D6: the discount line printed the unrounded product (512.55 × 10 % =
+// 51.254999…, shown as 51.25) while the stored total subtracts the rounded
+// discount (51.26). The printed lines must add up to the stored total.
+describe("discount line adds up to the total", () => {
+  const subtotal = 512.55;
+  const total = 461.29; // what the forms store: round2(512.55 - round2(51.255))
+
+  it("on an invoice", () => {
+    const { container } = render(
+      <InvoicePDF invoice={{ ...invoiceFixture, subtotal, total }} lineItems={lineItemsFixture} client={clientFixture} profile={profileFixture} template={templateFixture} />
+    );
+    expect(container.textContent).toContain("- CHF 51.26");
+    expect(container.textContent).not.toContain("51.25");
+    expect(container.textContent).toContain("CHF 461.29");
+  });
+
+  it("on a quote", () => {
+    const { container } = render(
+      <QuotePDF quote={{ ...quoteFixture, subtotal, total }} lineItems={lineItemsFixture} client={clientFixture} profile={profileFixture} template={templateFixture} />
+    );
+    expect(container.textContent).toContain("- CHF 51.26");
+    expect(container.textContent).not.toContain("51.25");
+    expect(container.textContent).toContain("CHF 461.29");
+  });
+});

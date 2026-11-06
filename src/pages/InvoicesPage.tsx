@@ -4,7 +4,7 @@ import { notify } from "../lib/notify";
 import { useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { writeFile } from "@tauri-apps/plugin-fs";
-import { undoable, deleteWithUndo } from "../lib/undo";
+import { undoable, undoableAction, batchUndo, deleteWithUndo } from "../lib/undo";
 import { useConfirm } from "../lib/confirm";
 import { settleDraftBeforeExport } from "../lib/confirmDraftExport";
 import { useBulkDelete } from "../hooks/useBulkDelete";
@@ -139,22 +139,23 @@ export function InvoicesPage() {
     bulk.clearSelection();
   }, [bulk, updateInvoice, enriched, t]);
 
-  const bulkMarkSent = useCallback(() => {
+  const bulkMarkSent = useCallback(async () => {
     const ids = [...bulk.selected] as number[];
-    const prevStates = ids.map((id) => {
-      const inv = enriched.find((i) => i.id === id);
-      return { id, status: inv?.status };
-    });
-    ids.forEach((id) => updateInvoice.mutate({ id, data: { status: "sent" as InvoiceStatus } }));
-    undoable(t.bulk_updated, async () => {
-      await Promise.all(
-        prevStates.map((prev) =>
-          updateInvoice.mutateAsync({ id: prev.id, data: { status: prev.status as InvoiceStatus } })
-        )
-      );
-    });
     bulk.clearSelection();
-  }, [bulk, updateInvoice, enriched, t]);
+    // One at a time, each numbered after the previous one is saved. Each
+    // update's own undo (which restores the draft and its DRAFT reference)
+    // is folded into a single Undo for the whole action.
+    const action = await batchUndo(t.bulk_updated, async () => {
+      for (const id of ids) {
+        try {
+          await updateInvoice.mutateAsync({ id, data: { status: "sent" as InvoiceStatus } });
+        } catch {
+          // the mutation's error toast already told the user
+        }
+      }
+    });
+    if (action) undoableAction(t.bulk_updated, action);
+  }, [bulk, updateInvoice, t]);
 
   // Only drafts (DRAFT- reference) are deletable — invoices that ever had
   // a real reference must be cancelled instead
