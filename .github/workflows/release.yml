@@ -15,7 +15,8 @@ name: Release build
 #   and only the signing step sees the key and its password. Then it checks
 #   that installed apps will accept the signature, writes latest.json and
 #   drafts the release.
-# Actions are pinned by commit; the comment gives the version. If the key is
+# Actions are pinned by commit; the comment gives the version. Dependabot opens
+# a weekly grouped PR to bump the pins (.github/dependabot.yml). If the key is
 # lost or leaks, see RELEASING.md, "Updater key: rotation, loss, leak".
 #
 # Stays by hand (RELEASING.md): version bump, changelog, tag (before); smoke test
