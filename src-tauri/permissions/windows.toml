@@ -18,6 +18,7 @@ permissions = [
   "allow-has-snapshot",
   "allow-get-active-db",
   "allow-get-init-error",
+  "allow-retry-init",
   "allow-list-organisations",
   "allow-create-organisation",
   "allow-rename-organisation",

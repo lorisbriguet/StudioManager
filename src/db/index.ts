@@ -1,5 +1,6 @@
 import Database from "@tauri-apps/plugin-sql";
 import { invoke } from "@tauri-apps/api/core";
+import { exit } from "@tauri-apps/plugin-process";
 import { logError } from "../lib/log";
 import { getLabels } from "../lib/notify";
 import { todayLocalISO } from "../utils/localDate";
@@ -90,22 +91,38 @@ export function showFatalDbError(err: unknown): void {
     const title = document.createElement("h1");
     title.textContent = t.page_error_title;
     title.setAttribute("style", "font-size:16px;font-weight:600;margin:0;");
+    const raw = err instanceof Error ? err.message : String(err);
+    // Rust's require_org_data: the data is on a disk that is not connected.
+    const missing = raw.match(/^data folder missing: ([^\n]+)/);
     const message = document.createElement("p");
-    message.textContent = t.db_init_failed;
+    message.textContent = missing ? t.db_data_missing.replace("{path}", missing[1]) : t.db_init_failed;
     message.setAttribute("style", "font-size:13px;max-width:480px;margin:0;");
     const detail = document.createElement("p");
-    detail.textContent = err instanceof Error ? err.message : String(err);
+    detail.textContent = missing ? raw.slice(missing[0].length).trim() : raw;
     detail.className = "db-fatal-detail";
     detail.setAttribute("style", "font-size:12px;max-width:480px;margin:0;word-break:break-word;");
     const retry = document.createElement("button");
     retry.type = "button";
     retry.textContent = t.retry;
     retry.setAttribute("style", "margin-top:8px;padding:6px 14px;font:inherit;font-size:13px;border-radius:6px;border:1px solid currentColor;background:transparent;color:inherit;cursor:pointer;");
-    // Reload rather than retry in place: the screens' queries have already
-    // failed, and a reload runs the whole startup again. ensureSchema is safe
-    // to re-run after it stopped partway.
-    retry.addEventListener("click", () => window.location.reload());
-    overlay.append(title, message, detail, retry);
+    // Rust saved the startup error at launch: have it run the startup again
+    // first, then reload, since the screens' queries have already failed.
+    // ensureSchema is safe to re-run after it stopped partway.
+    retry.addEventListener("click", () => {
+      retry.disabled = true;
+      void invoke("retry_init")
+        .catch((e) => logError("[DB] retry_init failed:", e))
+        .finally(() => window.location.reload());
+    });
+    const quit = document.createElement("button");
+    quit.type = "button";
+    quit.textContent = t.quit_app;
+    quit.setAttribute("style", retry.getAttribute("style")!);
+    quit.addEventListener("click", () => void exit(0));
+    const actions = document.createElement("div");
+    actions.setAttribute("style", "display:flex;gap:8px;");
+    actions.append(retry, quit);
+    overlay.append(title, message, detail, actions);
     overlay.setAttribute("role", "alert");
     overlay.tabIndex = -1;
     document.body.appendChild(overlay);
