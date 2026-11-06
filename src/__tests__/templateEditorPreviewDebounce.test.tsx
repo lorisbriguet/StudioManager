@@ -38,18 +38,18 @@ describe("TemplateEditor live preview", () => {
     vi.useFakeTimers();
     render(<TemplateEditor template={null} onSaved={() => {}} />);
     const input = screen.getAllByRole("textbox")[0] as HTMLInputElement;
-    const before = previewNames.at(-1);
+    const before = previewNames[previewNames.length - 1];
 
     for (const value of ["A", "Ac", "Acm", "Acme"]) {
       fireEvent.change(input, { target: { value } });
       act(() => vi.advanceTimersByTime(PREVIEW_DEBOUNCE_MS - 50));
     }
     // Still typing: the preview hasn't picked up any of it.
-    expect(previewNames.at(-1)).toBe(before);
+    expect(previewNames[previewNames.length - 1]).toBe(before);
     expect(previewNames).not.toContain("A");
 
     act(() => vi.advanceTimersByTime(50));
-    expect(previewNames.at(-1)).toBe("Acme");
+    expect(previewNames[previewNames.length - 1]).toBe("Acme");
     expect(previewNames.filter((n) => n.startsWith("A") && n !== "Acme")).toEqual([]);
   });
 
@@ -57,7 +57,7 @@ describe("TemplateEditor live preview", () => {
     render(<TemplateEditor template={null} onSaved={() => {}} />);
     const input = screen.getAllByRole("textbox")[0] as HTMLInputElement;
     fireEvent.change(input, { target: { value: "Studio" } });
-    await waitFor(() => expect(previewNames.at(-1)).toBe("Studio"));
+    await waitFor(() => expect(previewNames[previewNames.length - 1]).toBe("Studio"));
     const count = previewNames.length;
     await new Promise((r) => setTimeout(r, PREVIEW_DEBOUNCE_MS * 2));
     expect(previewNames.length).toBe(count);
