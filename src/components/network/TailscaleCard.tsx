@@ -37,7 +37,7 @@ function Row({ device, now }: { device: TailscaleDevice; now: number }) {
  * Every device of the tailnet with its online state, from this Mac's Tailscale, and a button to the
  * admin console. Hidden when Tailscale isn't installed here (and in test and presentation mode).
  */
-export function TailscaleCard({ now = Date.now() }: { now?: number }) {
+export function TailscaleCard({ now }: { now: number }) {
   const t = useT();
   const ts = useTailscale();
   if (!ts.isPending && !ts.data) return null;

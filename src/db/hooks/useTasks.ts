@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient, QueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as q from "../queries/tasks";
 import type { Task, Subtask } from "../../types/task";
 import { useAppStore } from "../../stores/app-store";
@@ -13,6 +13,7 @@ import { getLabels, notify } from "../../lib/notify";
 import { todayLocalISO } from "../../utils/localDate";
 import { modeActive } from "../../lib/activeMode";
 import { qk, invalidateTasks } from "../queryKeys";
+import { queryClient } from "../../lib/queryClient";
 
 // Guards against concurrent calendar syncs for the same item
 // In-flight syncs per item. A sync requested meanwhile is chained after it (so
@@ -35,8 +36,6 @@ function chainSync(
 // notify.error logs AND toasts (deduped); no separate logError needed
 const notifyCalendarSyncFailure = (e: unknown) =>
   notify.error(getLabels().calendar_sync_failed, e);
-
-let _qc: QueryClient | null = null;
 
 /** Fire-and-forget calendar sync — never blocks the UI */
 export function syncTaskCalendar(id: number): Promise<void> {
@@ -73,7 +72,7 @@ export function syncTaskCalendar(id: number): Promise<void> {
     } catch (e) {
       notifyCalendarSyncFailure(e);
     } finally {
-      _qc?.invalidateQueries({ queryKey: qk.tasks.all });
+      queryClient.invalidateQueries({ queryKey: qk.tasks.all });
     }
   });
 }
@@ -113,7 +112,7 @@ export function syncSubtaskCalendar(id: number): Promise<void> {
     } catch (e) {
       notifyCalendarSyncFailure(e);
     } finally {
-      _qc?.invalidateQueries({ queryKey: qk.subtasks.all });
+      queryClient.invalidateQueries({ queryKey: qk.subtasks.all });
     }
   });
 }
@@ -147,7 +146,6 @@ export function useTasksWithDueDate() {
 
 export function useCreateTask() {
   const qc = useQueryClient();
-  _qc = qc;
   return useMutation({
     meta: { errorLabel: "error_save_task" },
     mutationFn: async (data: Omit<Task, "id" | "created_at" | "updated_at" | "calendar_event_id" | "planned_minutes" | "tracked_minutes" | "workload_cells" | "workload_sort_order">) => {

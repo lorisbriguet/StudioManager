@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { notify } from "../lib/notify";
@@ -337,9 +337,10 @@ export function SettingsPage() {
 
   const categories = categorySections.flatMap((s) => s.items);
 
-  // Keyboard navigation for settings sidebar
-  const handleSettingsKeyDown = useCallback(
-    (e: KeyboardEvent) => {
+  // Keyboard navigation for settings sidebar. categories is rebuilt each render, so this
+  // listener is too.
+  useEffect(() => {
+    const handleSettingsKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if ((e.target as HTMLElement).isContentEditable) return;
@@ -355,14 +356,10 @@ export function SettingsPage() {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("sidebar-focus"));
       }
-    },
-    [activeCategory, categories]
-  );
-
-  useEffect(() => {
+    };
     window.addEventListener("keydown", handleSettingsKeyDown);
     return () => window.removeEventListener("keydown", handleSettingsKeyDown);
-  }, [handleSettingsKeyDown]);
+  }, [activeCategory, categories]);
 
   return (
     <div className="flex gap-0 flex-1 min-h-0 -m-8">

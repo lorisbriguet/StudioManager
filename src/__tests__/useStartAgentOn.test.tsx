@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, renderHook, act, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { ConfirmHost } from "../components/ui/ConfirmDialog";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 import { useAppStore } from "../stores/app-store";
@@ -33,7 +33,9 @@ import { AgentsPage } from "../pages/AgentsPage";
 let where = "";
 function Probe() {
   const loc = useLocation();
-  where = loc.pathname + loc.search;
+  useEffect(() => {
+    where = loc.pathname + loc.search;
+  }, [loc]);
   return null;
 }
 

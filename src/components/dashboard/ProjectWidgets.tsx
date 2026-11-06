@@ -8,6 +8,7 @@ import { useProjects } from "../../db/hooks/useProjects";
 // historical aggregates (weekly-streak, busiest-day) keep useAllTasks.
 import { useAllTasks, useVisibleTasks } from "../../db/hooks/useTasks";
 import { todayLocalISO } from "../../utils/localDate";
+import { useNow } from "../../hooks/useNow";
 import { effectivePriority } from "../../types/task";
 import { useT } from "../../i18n/useT";
 import { WidgetShell, WidgetTitle } from "./WidgetShell";
@@ -139,9 +140,9 @@ export function StaleProjects() {
   const { data: tasks } = useAllTasks();
   const t = useT();
 
+  const now = useNow();
   const stale = useMemo(() => {
     if (!projects || !tasks) return [];
-    const now = Date.now();
     return projects
       .filter((p) => p.status === "active")
       .map((p) => {
@@ -152,7 +153,7 @@ export function StaleProjects() {
       })
       .filter((p) => p.daysInactive >= 14)
       .sort((a, b) => b.daysInactive - a.daysInactive);
-  }, [projects, tasks]);
+  }, [projects, tasks, now]);
 
   return (
     <WidgetShell>

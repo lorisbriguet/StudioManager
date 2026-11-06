@@ -34,6 +34,7 @@ import { useCustomLists, useCustomListItems, useCreateCustomList, useSetCustomLi
 import { useT } from "../i18n/useT";
 import { notify } from "../lib/notify";
 import { deleteWithUndo } from "../lib/undo";
+import { newId } from "../lib/clock";
 import type { ProjectTable, TableColumnDef, ProjectTableRow } from "../types/project-table";
 import { IconButton } from "./ui/IconButton";
 import { Table } from "./ui/Table";
@@ -174,7 +175,7 @@ export function NamedTable({ table, projectId }: Props) {
   };
 
   const addColumn = (type: TableColumnDef["type"]) => {
-    const id = `col_${Date.now()}`;
+    const id = newId("col_");
     const newCol: TableColumnDef = { id, name: t[COLUMN_TYPE_LABEL[type]], type };
     if (type === "select" || type === "tags") newCol.options = [t.default_option_1, t.default_option_2];
     updateTable.mutate({ id: table.id, data: { column_config: [...table.column_config, newCol] } });

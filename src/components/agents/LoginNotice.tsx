@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Button, Callout } from "../ui";
 import { useT } from "../../i18n/useT";
 import { plural } from "../../i18n/plural";
 import { useAppStore } from "../../stores/app-store";
 import { logError } from "../../lib/log";
+import { useNow } from "../../hooks/useNow";
 import { AGENTS_LOGIN, checkLogin, getLoginStatus, type LoginStatus } from "../../lib/agents";
 
 const DAY_MS = 86_400_000;
@@ -30,9 +31,13 @@ export function loginState(status: LoginStatus | null, now: number): LoginState 
   return daysLeft <= WARN_DAYS ? { kind: "soon", expiresAt, daysLeft } : { kind: "ok", expiresAt };
 }
 
-/** The last sign-in check, then every `agents:login` event. */
-export function useLoginStatus(): [LoginStatus | null, (s: LoginStatus | null) => void] {
-  const [status, setStatus] = useState<LoginStatus | null>(null);
+/**
+ * The last sign-in check, then every `agents:login` event, with the time it came in (so the
+ * days left are counted from then, not from a clock tick that may be a minute old).
+ */
+export function useLoginStatus(): [LoginStatus | null, (s: LoginStatus | null) => void, number] {
+  const [{ status, at }, setEntry] = useState<{ status: LoginStatus | null; at: number }>({ status: null, at: 0 });
+  const setStatus = useCallback((s: LoginStatus | null) => setEntry({ status: s, at: Date.now() }), []);
   useEffect(() => {
     let alive = true;
     let unlisten: (() => void) | null = null;
@@ -49,8 +54,8 @@ export function useLoginStatus(): [LoginStatus | null, (s: LoginStatus | null) =
       alive = false;
       unlisten?.();
     };
-  }, []);
-  return [status, setStatus];
+  }, [setStatus]);
+  return [status, setStatus, at];
 }
 
 /** "8 Nov", with the year when it isn't this year. */
@@ -72,9 +77,9 @@ function dateText(epochMs: number, locale: string, now: number): string {
 export function LoginNotice({ quiet = false, className = "" }: { quiet?: boolean; className?: string }) {
   const t = useT();
   const locale = useAppStore((s) => (s.language === "FR" ? "fr" : "en"));
-  const [status, setStatus] = useLoginStatus();
+  const [status, setStatus, statusAt] = useLoginStatus();
   const [checking, setChecking] = useState(false);
-  const now = Date.now();
+  const now = Math.max(useNow(), statusAt);
   const state = loginState(status, now);
 
   if (state.kind === "none") return null;

@@ -20,6 +20,7 @@ import { WidgetShell, WidgetTitle } from "./WidgetShell";
 import { EmptyState } from "../ui/EmptyState";
 import { ListSkeleton } from "../ui/Skeleton";
 import { qk } from "../../db/queryKeys";
+import { useNow } from "../../hooks/useNow";
 import { KPI_TILE, PriorityDot } from "./widgetParts";
 
 // ── Today tasks ──
@@ -127,9 +128,9 @@ export function StaleTasks() {
 
   const projectName = (projectId: number) => projects?.find((p) => p.id === projectId)?.name ?? "";
 
+  const now = useNow();
   const stale = useMemo(() => {
     if (!tasks) return [];
-    const now = Date.now();
     return tasks
       .filter((task) => task.status !== "done")
       .map((task) => {
@@ -140,7 +141,7 @@ export function StaleTasks() {
       .filter((t) => t.daysInactive >= 7)
       .sort((a, b) => b.daysInactive - a.daysInactive)
       .slice(0, 10);
-  }, [tasks]);
+  }, [tasks, now]);
 
   return (
     <WidgetShell>
