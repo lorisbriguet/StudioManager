@@ -6,14 +6,16 @@ import type { ThemeDefinition } from "../types/theme";
 import type { UpkeepAlert } from "../types/upkeep";
 import { useOrgStore } from "./org-store";
 
-function getInitialDarkMode(): boolean {
-  const stored = localStorage.getItem("darkMode");
-  if (stored !== null) return stored === "true";
-  return window.matchMedia("(prefers-color-scheme: dark)").matches;
-}
-
-function applyDarkClass(dark: boolean) {
-  document.documentElement.classList.toggle("dark", dark);
+/**
+ * The theme on screen: the stored one or, before one is chosen, the default
+ * that matches the Mac's appearance. The script in index.html makes the same
+ * choice before React loads (indexHtmlTheme.test.ts keeps them in step).
+ */
+export function storedThemeId(): string {
+  const stored = localStorage.getItem("themeId");
+  if (stored && getThemeById(stored)) return stored;
+  const osDark = typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  return osDark ? "default-dark" : "default-light";
 }
 
 export type DateFormatOption = "dd.MM.yyyy" | "dd/MM/yyyy" | "MM/dd/yyyy" | "yyyy-MM-dd";
@@ -63,8 +65,8 @@ export function applyAccentColor(color: string, light: string, darkLight: string
 /**
  * Applies a theme: the dark class and the full colour token set as inline
  * custom properties on <html> (lib/themeTokens.ts). The two default themes
- * clear the overrides instead, so src/index.css applies and the dark-mode
- * toggle keeps working; only their accent is set.
+ * clear the overrides instead, so src/index.css (@theme or .dark) applies;
+ * only their accent is set.
  */
 export function applyThemeColors(theme: ThemeDefinition) {
   const el = document.documentElement;
@@ -135,6 +137,7 @@ export interface AppState {
   /** The New task form: closed (null) or open with its preselected project. */
   newTask: { projectId: number | null } | null;
   sidebarCollapsed: boolean;
+  /** The theme's mode (set with the theme), not a setting of its own. */
   darkMode: boolean;
   themeId: string;
   testMode: boolean;
@@ -195,7 +198,6 @@ export interface AppState {
   openNewTask: (projectId: number | null) => void;
   closeNewTask: () => void;
   toggleSidebar: () => void;
-  toggleDarkMode: () => void;
   setDateFormat: (fmt: DateFormatOption) => void;
   setAccentColor: (preset: AccentPreset) => void;
   setCalendarSync: (enabled: boolean) => void;
@@ -238,20 +240,21 @@ function accentForTheme(theme: ThemeDefinition | undefined, themeId: string, acc
   return accent;
 }
 
-/** Dark mode, reduced motion, theme and accent as stored, applied to the document. */
+/** The stored theme (and with it dark or light), reduced motion and accent, applied to the document. */
 function applyStoredAppearance() {
-  const darkMode = getInitialDarkMode();
-  applyDarkClass(darkMode);
+  // The theme decides dark or light: the old separate dark-mode key is dropped.
+  localStorage.removeItem("darkMode");
+  // index.html paints a dark background before the stylesheet loads; the theme's tokens take over now.
+  document.documentElement.style.removeProperty("background-color");
   const reduceMotion = localStorage.getItem("reduceMotion") === "true";
   document.documentElement.classList.toggle("reduce-motion", reduceMotion);
   const accent = getInitialAccent();
-  const themeId = localStorage.getItem("themeId") ?? "default-light";
+  const themeId = storedThemeId();
   const theme = getThemeById(themeId);
-  if (theme && themeId !== "default-light") {
-    applyThemeColors(theme);
-  } else {
-    applyAccentColor(accent.color, darkMode ? accent.darkLight : accent.light, accent.darkLight);
-  }
+  if (theme) applyThemeColors(theme);
+  // Default Light keeps the accent picked in Settings; the other themes bring their own.
+  if (themeId === "default-light") applyAccentColor(accent.color, accent.light, accent.darkLight);
+  const darkMode = theme?.mode === "dark";
   return { darkMode, reduceMotion, themeId, accentColor: accentForTheme(theme, themeId, accent) };
 }
 
@@ -280,7 +283,7 @@ const initialDark = initialAppearance.darkMode;
 const effectiveInitialAccent = initialAppearance.accentColor;
 
 /** The localStorage keys `syncAppearanceFromStorage` follows. */
-export const APPEARANCE_KEYS = ["darkMode", "themeId", "accentColor", "reduceMotion", "appLanguage", "dateFormat"];
+export const APPEARANCE_KEYS = ["themeId", "accentColor", "reduceMotion", "appLanguage", "dateFormat"];
 
 /** For a second window (the menu bar panel): pick up theme, dark mode, accent, reduced motion,
  *  language and date format changed in the main window, as a reload would. */
@@ -290,8 +293,6 @@ export function syncAppearanceFromStorage() {
   for (const name of Array.from(el.style)) {
     if (name.startsWith("--color-")) el.style.removeProperty(name);
   }
-  document.body.style.background = "";
-  document.body.style.color = "";
   const language = storedLanguage();
   applyDocumentLang(language);
   useAppStore.setState({
@@ -307,7 +308,7 @@ export const useAppStore = create<AppState>((set) => ({
   newTask: null,
   sidebarCollapsed: localStorage.getItem("sidebarCollapsed") === "true",
   darkMode: initialDark,
-  themeId: localStorage.getItem("themeId") ?? "default-light",
+  themeId: initialAppearance.themeId,
   testMode: localStorage.getItem("testMode") === "true",
   presentationMode: localStorage.getItem("presentationMode") === "true",
 
@@ -387,18 +388,6 @@ export const useAppStore = create<AppState>((set) => ({
       const next = !s.sidebarCollapsed;
       localStorage.setItem("sidebarCollapsed", String(next));
       return { sidebarCollapsed: next };
-    }),
-  toggleDarkMode: () =>
-    set((s) => {
-      const next = !s.darkMode;
-      localStorage.setItem("darkMode", String(next));
-      applyDarkClass(next);
-      applyAccentColor(
-        s.accentColor.color,
-        next ? s.accentColor.darkLight : s.accentColor.light,
-        s.accentColor.darkLight
-      );
-      return { darkMode: next };
     }),
   setDateFormat: (fmt) => {
     localStorage.setItem("dateFormat", fmt);

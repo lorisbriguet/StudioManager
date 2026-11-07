@@ -9,8 +9,8 @@ export const THEMES: ThemeDefinition[] = [
     // The two default themes mirror src/index.css (@theme and .dark), except
     // Default Dark's accent: its own slate (#64748b), not the stylesheet's
     // blue. The colourTokens test keeps them in step. Applying one clears the
-    // inline overrides so the stylesheet's values (and dark-mode toggling)
-    // apply; applyAccentColor then sets only the theme's accent.
+    // inline overrides so the stylesheet's values apply; applyAccentColor
+    // then sets only the theme's accent.
     colors: {
       sidebar: "#f8f8f8",
       sidebarBorder: "#e5e5e5",
