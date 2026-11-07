@@ -153,14 +153,22 @@ export async function addMachineFile(
   return result.lastInsertId ?? 0;
 }
 
+/**
+ * Remove an attachment. The copied file is deleted only when it sits inside
+ * the active data folder (orgPaths().root). In test or presentation mode that
+ * folder is the mode's own, so the real files a copied row points to are never
+ * touched.
+ */
 export async function removeMachineFile(fileId: number): Promise<void> {
   const db = await getEquipmentDb();
   const rows = await db.select<MachineFile[]>("SELECT * FROM machine_files WHERE id = $1", [fileId]);
   await db.execute("DELETE FROM machine_files WHERE id = $1", [fileId]);
   const row = rows[0];
-  if (row?.kind === "file") {
-    await remove(row.path_or_url).catch(() => {});
-  }
+  if (row?.kind !== "file") return;
+  const { root } = await orgPaths();
+  const path = row.path_or_url;
+  if (!path.startsWith(`${root}/`) || path.split("/").includes("..")) return;
+  await remove(path).catch(() => {});
 }
 
 export async function getServiceLog(machineId: number): Promise<ServiceLogEntry[]> {
