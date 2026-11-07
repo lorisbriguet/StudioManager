@@ -123,10 +123,7 @@ fn text_of(result: &Value) -> String {
 
 fn seeded(allow_money: bool) -> std::path::PathBuf {
     let dir = test_support::ready_dir("org-a", "Studio A");
-    test_support::write_access(
-        &dir,
-        &format!(r#"{{"enabled": true, "allowMoney": {allow_money}, "orgs": {{}}}}"#),
-    );
+    test_support::allow_listed(&dir, allow_money, &[]);
     let conn = rusqlite::Connection::open(test_support::db_path(&dir, "org-a")).unwrap();
     conn.execute_batch(
         "INSERT INTO clients (id, name) VALUES ('C-001', 'Atelier Lumen');
@@ -211,10 +208,7 @@ fn stdio_round_trip() {
 
     // Money is off now: the tools are still listed (startup decides), but
     // each call checks again.
-    test_support::write_access(
-        &dir,
-        r#"{"enabled": true, "allowMoney": false, "orgs": {}}"#,
-    );
+    test_support::allow_listed(&dir, false, &[]);
     let refused = server.call("list_invoices", json!({}));
     assert_eq!(refused["isError"], json!(true), "{refused}");
     assert_eq!(text_of(&refused), studiomanager_mcp::money::MONEY_OFF);
@@ -260,10 +254,7 @@ fn errors_are_tool_errors_with_exact_text() {
             ("org-c", "Hidden Studio"),
         ],
     );
-    test_support::write_access(
-        &dir,
-        r#"{"enabled": true, "allowMoney": false, "orgs": {"org-c": false}}"#,
-    );
+    test_support::allow_listed(&dir, false, &["org-c"]);
 
     let orgs = server.call("list_organisations", json!({}));
     assert_ne!(orgs["isError"], json!(true), "{orgs}");

@@ -43,9 +43,10 @@ impl AccessConfig {
             .unwrap_or_default()
     }
 
-    /// An organisation missing from `orgs` is allowed when access is on.
+    /// Only an organisation ticked in Settings is allowed: one missing from
+    /// `orgs` is refused (the app backfills the ones that existed before).
     pub fn org_allowed(&self, id: &str) -> bool {
-        self.enabled && self.orgs.get(id).copied().unwrap_or(true)
+        self.enabled && self.orgs.get(id).copied().unwrap_or(false)
     }
 }
 
@@ -258,6 +259,25 @@ mod tests {
     }
 
     #[test]
+    fn organisation_without_an_entry_is_refused() {
+        let dir = temp_data_dir();
+        write_registry(&dir, &[("org001", "Studio"), ("org002", "Annexe")]);
+        seed_app_db(&dir, "org001");
+        seed_app_db(&dir, "org002");
+        write_access(
+            &dir,
+            r#"{"enabled": true, "allowMoney": true, "orgs": {"org001": true}}"#,
+        );
+        let cfg = AccessConfig::load(&dir);
+        assert!(cfg.org_allowed("org001"));
+        assert!(!cfg.org_allowed("org002"), "a missing id fails closed");
+        assert_eq!(resolve_org(&dir, Some("org002")).unwrap_err(), OFF_THAT);
+        assert_eq!(resolve_org(&dir, None).unwrap().id, "org001");
+        write_access(&dir, r#"{"enabled": true, "allowMoney": true, "orgs": {}}"#);
+        assert_eq!(resolve_org(&dir, None).unwrap_err(), OFF_ACTIVE);
+    }
+
+    #[test]
     fn access_reread_each_time() {
         let dir = ready_dir("org001", "Studio");
         assert_eq!(resolve_org(&dir, None).unwrap().id, "org001");
@@ -271,10 +291,7 @@ mod tests {
     #[test]
     fn org_off_refused() {
         let dir = ready_dir("org001", "Studio");
-        write_access(
-            &dir,
-            r#"{"enabled": true, "allowMoney": false, "orgs": {"org001": false}}"#,
-        );
+        allow_listed(&dir, false, &["org001"]);
         assert_eq!(
             resolve_org(&dir, Some("Studio")).unwrap_err(),
             "Agent access is off for the organisation \"Studio\"."
@@ -291,10 +308,7 @@ mod tests {
     fn resolve_by_folded_name() {
         let dir = temp_data_dir();
         write_registry(&dir, &[("org001", "Studio"), ("org002", "Étude")]);
-        write_access(
-            &dir,
-            r#"{"enabled": true, "allowMoney": false, "orgs": {}}"#,
-        );
+        allow_listed(&dir, false, &[]);
         let org = resolve_org(&dir, Some("Etude")).unwrap();
         assert_eq!(org.id, "org002");
         assert_eq!(org.name, "Étude");
@@ -306,10 +320,7 @@ mod tests {
         assert_eq!(resolve_org(&dir, None).unwrap().id, "org001");
         let err = resolve_org(&dir, Some("nope")).unwrap_err();
         assert!(err.contains("Studio"), "{err}");
-        write_access(
-            &dir,
-            r#"{"enabled": true, "allowMoney": false, "orgs": {"org002": false}}"#,
-        );
+        allow_listed(&dir, false, &["org002"]);
         let err = resolve_org(&dir, Some("nope")).unwrap_err();
         assert!(
             !err.contains("Étude"),
@@ -321,10 +332,7 @@ mod tests {
     fn ambiguous_name_lists_candidates() {
         let dir = temp_data_dir();
         write_registry(&dir, &[("org001", "Étude"), ("org002", "etude")]);
-        write_access(
-            &dir,
-            r#"{"enabled": true, "allowMoney": false, "orgs": {}}"#,
-        );
+        allow_listed(&dir, false, &[]);
         let err = resolve_org(&dir, Some("ETUDE")).unwrap_err();
         assert!(err.contains("Étude") && err.contains("etude"), "{err}");
     }
@@ -340,10 +348,7 @@ mod tests {
                 ("org003", "ETUDE"),
             ],
         );
-        write_access(
-            &dir,
-            r#"{"enabled": true, "allowMoney": false, "orgs": {"org003": false}}"#,
-        );
+        allow_listed(&dir, false, &["org003"]);
         let err = resolve_org(&dir, Some("Etude")).unwrap_err();
         assert!(err.contains("org001") && err.contains("org002"), "{err}");
         assert!(
@@ -351,16 +356,10 @@ mod tests {
             "disabled organisations stay hidden: {err}"
         );
         // With only one allowed candidate left, that one is used.
-        write_access(
-            &dir,
-            r#"{"enabled": true, "allowMoney": false, "orgs": {"org002": false, "org003": false}}"#,
-        );
+        allow_listed(&dir, false, &["org002", "org003"]);
         assert_eq!(resolve_org(&dir, Some("Etude")).unwrap().id, "org001");
         // None allowed: the per-organisation refusal.
-        write_access(
-            &dir,
-            r#"{"enabled": true, "allowMoney": false, "orgs": {"org001": false, "org002": false, "org003": false}}"#,
-        );
+        allow_listed(&dir, false, &["org001", "org002", "org003"]);
         assert!(resolve_org(&dir, Some("Etude"))
             .unwrap_err()
             .starts_with("Agent access is off for the organisation"));
@@ -417,10 +416,7 @@ mod tests {
             .unwrap()
             .execute("DELETE FROM schema_migrations WHERE version = (SELECT MAX(version) FROM schema_migrations)", [])
             .unwrap();
-        write_access(
-            &dir,
-            r#"{"enabled": true, "allowMoney": false, "orgs": {}}"#,
-        );
+        allow_listed(&dir, false, &[]);
         let org = resolve_org(&dir, None).unwrap();
         assert_eq!(open_read(&org).unwrap_err(), NOT_OPENED);
         assert_eq!(open_write(&dir, &org).unwrap_err(), NOT_OPENED);
@@ -430,10 +426,7 @@ mod tests {
     fn missing_db_refused_and_not_created() {
         let dir = temp_data_dir();
         write_registry(&dir, &[("org001", "Studio")]);
-        write_access(
-            &dir,
-            r#"{"enabled": true, "allowMoney": false, "orgs": {}}"#,
-        );
+        allow_listed(&dir, false, &[]);
         let org = resolve_org(&dir, None).unwrap();
         assert_eq!(open_read(&org).unwrap_err(), NOT_OPENED);
         assert_eq!(open_write(&dir, &org).unwrap_err(), NOT_OPENED);

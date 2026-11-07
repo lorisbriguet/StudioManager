@@ -1393,7 +1393,7 @@ mod tests {
             Server::new(Ok(dir.clone())).tool_router.list_all().len(),
             35
         );
-        crate::test_support::write_access(&dir, r#"{"enabled": true, "allowMoney": true}"#);
+        crate::test_support::allow_listed(&dir, true, &[]);
         assert_eq!(Server::new(Ok(dir)).tool_router.list_all().len(), 40);
         assert_eq!(
             Server::new(Err("x".into())).tool_router.list_all().len(),

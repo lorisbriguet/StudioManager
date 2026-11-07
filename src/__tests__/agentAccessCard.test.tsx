@@ -70,8 +70,26 @@ describe("AgentAccessCard", () => {
     fireEvent.click(await screen.findByRole("switch", { name: "Allow AI agents to use StudioManager" }));
     await waitFor(() => expect(last(cmds("set_agent_access"))?.args).toEqual({ enabled: true, allowMoney: false, orgs: {} }));
     expect(await screen.findByLabelText("Studio")).toBeTruthy();
+    // No entry: closed to agents, so unticked.
+    expect((screen.getByLabelText("Label") as HTMLInputElement).checked).toBe(false);
     fireEvent.click(screen.getByLabelText("Label"));
-    await waitFor(() => expect(last(cmds("set_agent_access"))?.args.orgs).toEqual({ o2: false }));
+    await waitFor(() => expect(last(cmds("set_agent_access"))?.args.orgs).toEqual({ o2: true }));
+  });
+
+  it("a new organisation shows unticked and a later toggle keeps it withheld", async () => {
+    state = { enabled: true, allowMoney: false, orgs: { o1: true, o2: true } };
+    renderCard();
+    expect(await screen.findByLabelText("Studio")).toBeTruthy();
+    // The app creates o3 and withholds it while the card is open.
+    state = { ...state, orgs: { ...state.orgs, o3: false } };
+    act(() => {
+      useOrgStore.getState().applyRegistry({ ...reg, organisations: [...reg.organisations, { id: "o3", name: "Annexe", createdAt: "", prefs: null }] });
+    });
+    const annexe = (await screen.findByLabelText("Annexe")) as HTMLInputElement;
+    await waitFor(() => expect(cmds("get_agent_access").length).toBe(2));
+    expect(annexe.checked).toBe(false);
+    fireEvent.click(screen.getByLabelText("Label"));
+    await waitFor(() => expect(last(cmds("set_agent_access"))?.args.orgs).toEqual({ o1: true, o2: false, o3: false }));
   });
 
   it("reverts and shows the error when saving fails", async () => {
@@ -108,7 +126,8 @@ describe("AgentAccessCard", () => {
     rejectFirst("late failure");
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.getByLabelText("Label")).toBeTruthy();
-    expect((screen.getByLabelText("Label") as HTMLInputElement).checked).toBe(false);
+    // The newer save ticked it (no entry starts unticked) and stays ticked.
+    expect((screen.getByLabelText("Label") as HTMLInputElement).checked).toBe(true);
   });
 
   it("Copied clears after a while and copy errors show beside the row", async () => {

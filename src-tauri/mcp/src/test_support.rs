@@ -55,14 +55,27 @@ pub fn write_access(dir: &Path, json: &str) {
     std::fs::write(dir.join("agent-access.json"), json).unwrap();
 }
 
+/// Access on, every organisation in the registry ticked except `off`: the
+/// server refuses an organisation the file does not list.
+pub fn allow_listed(dir: &Path, allow_money: bool, off: &[&str]) {
+    let mut orgs = serde_json::Map::new();
+    if let Some(reg) = orgs::Registry::load(dir).unwrap() {
+        for o in &reg.organisations {
+            orgs.insert(o.id.clone(), serde_json::Value::Bool(true));
+        }
+    }
+    for id in off {
+        orgs.insert(id.to_string(), serde_json::Value::Bool(false));
+    }
+    let json = serde_json::json!({"enabled": true, "allowMoney": allow_money, "orgs": orgs});
+    write_access(dir, &json.to_string());
+}
+
 /// Data dir with one app-opened org and access fully on.
 pub fn ready_dir(org_id: &str, name: &str) -> PathBuf {
     let dir = temp_data_dir();
     write_registry(&dir, &[(org_id, name)]);
     seed_app_db(&dir, org_id);
-    write_access(
-        &dir,
-        r#"{"enabled": true, "allowMoney": false, "orgs": {}}"#,
-    );
+    allow_listed(&dir, false, &[]);
     dir
 }
