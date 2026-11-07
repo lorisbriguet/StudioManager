@@ -525,7 +525,10 @@ export function ArticleEditor({
       ],
       content: article?.content ?? "",
       editable: mode === "editing",
-      onUpdate: ({ editor: ed }) => {
+      onUpdate: ({ editor: ed, transaction }) => {
+        // Only a change to the text saves: Tiptap also sends "update" for
+        // things like setEditable, and opening an article must not save it.
+        if (!transaction.docChanged) return;
         const html = ed.getHTML();
         debouncedSave(html);
         onContentChangeRef.current?.(html);
@@ -563,7 +566,8 @@ export function ArticleEditor({
   );
 
   useEffect(() => {
-    editor?.setEditable(mode === "editing");
+    // false: switching mode is not an edit (Tiptap would emit an update).
+    editor?.setEditable(mode === "editing", false);
   }, [editor, mode]);
 
   const handleTitleBlur = useCallback(() => {
