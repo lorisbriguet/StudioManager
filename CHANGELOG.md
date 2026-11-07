@@ -14,6 +14,75 @@ One line for the updater: what this release is about.
 ### Under the hood
 ```
 
+## 3.5.0 (2026-11-07)
+
+Archive clients, foreign-currency expenses, per-document language, safer backups and a new updater key: install this update before the next one.
+
+### Before updating
+
+- **New updater key.** This release carries a new signing key for updates. Install 3.5.0 before the next release: an app still on 3.4.0 or older when the next version comes out can't install it and has to be replaced by hand from the `.dmg` (your data stays where it is).
+- **Back up first** (Settings › Backup › Back up now). The first start upgrades every organisation's database; a copy of each file is kept next to it as `studiomanager.db.pre-migration.db` before it changes.
+- **Apple silicon only in the updater.** The update manifest no longer lists Intel Macs, which could not run the build anyway.
+
+### Features
+
+- **Archive clients.** A client with issued invoices can't be deleted any more (invoices are kept 10 years): archive it instead, with Undo. Archived clients leave the lists, pickers and palette; Show archived brings them back. Agents don't see them either.
+- **Expenses in other currencies.** A EUR or USD receipt keeps its currency and amount and is booked in CHF at the rate of its date; the receipt reader detects the currency.
+- **Language per document.** Invoices and quotes get a FR/EN selector, defaulting to the client's language and kept on edit and on conversion.
+- **New invoice and New quote from a project.** The project's Invoices and Quotes blocks open a form with client, project, language and discount filled in, also when the form is already open for another project.
+- **Calendar:** a New task button, drag across days or a time range to create, Swiss dates and 24-hour times in the app's language.
+- **Cmd+N everywhere.** Cmd+N and the palette's New open the right form on every list page; the palette gains New task, quote, income and article.
+- **Network page:** a Tailscale card with every device, and the Time Machine backups of every Mac the NAS keeps.
+- **VAT warning.** The dashboard warns once invoiced turnover reaches 80 % of CHF 100,000.
+- **Each invoice in its own currency.** Dashboard widgets, client and project pages, the palette and the trustee invoice list show an invoice's own currency, with its CHF equivalent under a foreign one, and "Draft" instead of an internal id.
+- Draft PDFs are marked "Draft / Brouillon" on the page and named by type, client and date.
+- Notifications in the current language, French labels across Dashboard, Clients and Upkeep, units on PDFs in the document language.
+- Undo after removing a dashboard widget and after deleting a wiki article; Escape closes the menu bar panel and the side peek; a cancelled invoice shows its original amount struck through.
+- Start an agent on a finding from the review report page.
+
+### Fixes
+
+- **Invoice numbers.** Bulk "Mark as sent" gives consecutive numbers; undoing a send no longer frees its number or deletes the document. A draft marked paid or overdue now gets its number too, and a draft can no longer be set to Cancelled (delete it instead).
+- **The stored invoice PDF is the one the client received.** It is written when the invoice leaves draft and again only when its lines or total change; marking it paid or sending a reminder leaves it alone, and cancelling saves a separate `_VOID` copy. PDFs from every export path (lists, email, bulk, trustee) use the document's template; the trustee export copies the stored PDF.
+- **Trustee invoice list:** totals are in CHF like the P&L and leave out cancelled invoices, which are struck through.
+- **Foreign-currency drafts** take the exchange rate of their date until they are sent; recurring drafts take the rate of their own date.
+- **A new quote keeps its billing address, template and project link** (they were lost on the first save and on Undo after a delete).
+- **QR bill:** pays from the invoice's billing address, names the payer only for a Swiss address (otherwise the "Payable by" box stays blank), and no longer prints a draft's internal id; the PDF discount adds up to the total.
+- Rounding: half-centimes round up correctly; line items can't go negative.
+- Expense and income numbers take the year of their own date.
+- Overdue invoices are marked after midnight while the app stays open, not only at the next launch.
+- Deleted starter data (addresses, resources, presets, templates) stays deleted.
+- The app starts in the theme you chose, without a flash; light themes are readable on a Mac in Dark Mode.
+- **Dashboard:** it can be arranged at the default window size; the layout is saved only at full width and per organisation; layouts squeezed by 3.4.0 are spread back over the 12 columns; new widgets fill the first free spot.
+- **Wiki:** a title being typed is no longer reverted by the autosave, Cmd+Q saves text typed in the last seconds, and opening an article no longer saves it.
+- **Agent access:** an organisation that isn't ticked in Settings › Agents is closed to agents, and a toggle no longer reopens it. Organisations that worked before stay open; switching agent access on ticks the active organisation.
+- Agents: the chat opens at the latest message; one click answers a question; polling slows down when the window is hidden.
+- Retry on the startup error screen really reopens the database; a missing data folder is an error instead of a new empty organisation.
+- Test and presentation modes no longer touch real files, Apple Calendar or backups.
+- The Calendar side peek reopens when you click the same project again; Client Activity refreshes after every invoice or quote change.
+- Network's Upkeep card lists the same items as the Upkeep badge.
+
+### Data
+
+- The upgrade adds archived clients, expense currency and notification languages, and moves the tables the app used to add itself into the regular schema. Once a file has been opened by 3.5.0, older versions can't open it; from now on the app refuses a database saved by a newer version instead of damaging it.
+- **Backups, rebuilt.** Each backup is a consistent snapshot of every organisation; receipts and invoice PDFs go into one shared `files-<organisation>` folder, copied only when new or changed. Kept: one per day for the last 30 days with a backup, one per month for 12 months, the 5 newest and everything from the last 24 hours ("Keep last N" is gone). The safety backup taken before a restore is kept until you delete it. Auto-backup is daily unless you turned it off. Activities and Paperless links are now in backups. Older backups still restore.
+- Restoring an older snapshot upgrades it; a snapshot from a newer version is refused and the live database stays as it was.
+- The Paperless token is now bound to its server in the Keychain; the existing token is taken over at the first start.
+- Every organisation's database now uses the same journal mode (WAL), so agents and the app no longer block each other.
+
+### Under the hood
+
+- Updater key rotated: this release carries the new update key and is still signed with the old one; the next release after 3.5.0 is the first signed with the new key. Skipping 3.5.0 means reinstalling that release from the `.dmg`.
+- Database and file commands run off the main thread; old notifications are purged (200 shown); the app keeps a log in `~/Library/Logs`, startup errors included.
+- One schema for the app, the agent tools and `sm` (migrations 014 and 015); the organisations upgrade resumes after a crash.
+- Routine links open through Finder only.
+- The PDF library loads only when a PDF is made, and exports show their progress.
+- The demo build keeps off this Mac: no Apple Calendar, network checks, links, Agents or real Keychain entries.
+- Release build on GitHub: audit first, key kept away from the build, signature checked against installed apps, notes from this changelog; CI lints and tests both Rust crates.
+- Dependencies: vitest 5, TypeScript 6, react-markdown 10, swissqrbill, sha2, rcgen, vt100, base64, Rust 1.93.1. Not in this release: FullCalendar 7 and TypeScript 7 (deferred).
+
+After updating: in Claude Code, reconnect the StudioManager agent tools (`/mcp` › studiomanager › Reconnect).
+
 ## 3.4.0 (2026-11-05)
 
 Start work with agent from a task, subtask, project or calendar event; agents polish.
