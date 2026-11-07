@@ -41,9 +41,9 @@ const hooks = documentHooks<Invoice, InvoiceLineItem>({
   // on cancelling, as a separate _VOID file. Marking paid or overdue and
   // reminders leave it alone. A failed PDF doesn't fail the save: it is
   // reported on its own.
-  afterUpdate: async (id, { status, prevStatus, contentChanged }, qc) => {
+  afterUpdate: async (id, { status, prevStatus, numbered, contentChanged }, qc) => {
     if (!status || status === "draft") return;
-    const leftDraft = prevStatus === "draft";
+    const leftDraft = prevStatus === "draft" || numbered;
     const cancelled = status === "cancelled" && prevStatus !== "cancelled";
     const edited = contentChanged && status !== "cancelled";
     if (!leftDraft && !cancelled && !edited) return;

@@ -63,6 +63,8 @@ export interface DocumentChange {
   status: string | undefined;
   /** The status it had before the save. */
   prevStatus: string | undefined;
+  /** The save gave the document its number. */
+  numbered: boolean;
   /** The save changed the line items or the total: an edit of the content. */
   contentChanged: boolean;
 }
@@ -221,7 +223,7 @@ export function documentHooks<Doc extends DocumentRow, Item extends LineItemFiel
           (fields.total !== undefined && fields.total !== prevTotal);
         await config.afterUpdate?.(
           id,
-          { status: fields.status ?? prev?.status, prevStatus: prev?.status, contentChanged },
+          { status: fields.status ?? prev?.status, prevStatus: prev?.status, numbered, contentChanged },
           qc,
         );
 

@@ -385,6 +385,14 @@ describe("invoice-only hooks", () => {
     expect(useUndoStore.getState().stack).toHaveLength(0);
   });
 
+  it("numbers and stores an older sent invoice that still has a DRAFT reference when marked paid", async () => {
+    inv.get.mockResolvedValue({ id: 5, reference: "DRAFT-1", status: "sent", invoice_date: "2025-03-01" });
+    const { result } = renderHook(() => invHooks.useUpdateInvoice(), { wrapper });
+    await result.current.mutateAsync({ id: 5, data: { status: "paid" } as never });
+    expect(inv.update).toHaveBeenCalledWith(5, expect.objectContaining({ reference: "NEXT-REF" }), undefined);
+    expect(pdf).toHaveBeenCalledWith(5);
+  });
+
   it("refuses to cancel a draft: it is deleted instead", async () => {
     inv.get.mockResolvedValue({ id: 5, reference: "DRAFT-1", status: "draft", invoice_date: "2025-03-01" });
     const { result } = renderHook(() => invHooks.useUpdateInvoice(), { wrapper });
