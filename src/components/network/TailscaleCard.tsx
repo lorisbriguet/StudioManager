@@ -1,4 +1,4 @@
-import { open as openExternal } from "@tauri-apps/plugin-shell";
+import { openExternal } from "../../lib/openExternal";
 import { Card, EmptyState, ICONS, IconButton, ListSkeleton, Tooltip } from "../ui";
 import { WidgetShell, WidgetTitle } from "../dashboard/WidgetShell";
 import { useT } from "../../i18n/useT";

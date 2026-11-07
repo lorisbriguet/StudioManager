@@ -6,7 +6,7 @@ import { notify } from "../lib/notify";
 import { FlaskConical, LayoutList, Tags, Shield, Store, type LucideIcon } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { open } from "@tauri-apps/plugin-dialog";
-import { purgeAllCalendarEvents, syncAllExisting, listWritableCalendars } from "../lib/appleCalendar";
+import { purgeAllCalendarEvents, syncAllExisting, listWritableCalendars, DEMO_CALENDAR } from "../lib/appleCalendar";
 import { syncAllUpkeepEvents } from "../lib/upkeep/calendar";
 import { createBackup, listBackups, restoreFromBackup, RestoreError, validateBackupPath, isBackupRunning, setBackupRunning, isScopeDenied } from "../lib/backup";
 import { resetDb } from "../db";
@@ -46,7 +46,9 @@ export function SettingsPage() {
   const setAccentColor = useAppStore((s) => s.setAccentColor);
   const calendarSync = useAppStore((s) => s.calendarSync);
   const setCalendarSync = useAppStore((s) => s.setCalendarSync);
-  const calendarName = useAppStore((s) => s.calendarName);
+  const savedCalendarName = useAppStore((s) => s.calendarName);
+  // The demo has one simulated calendar, whatever name was saved.
+  const calendarName = isDemoBuild() ? DEMO_CALENDAR : savedCalendarName;
   const setCalendarName = useAppStore((s) => s.setCalendarName);
   const projectOpenMode = useAppStore((s) => s.projectOpenMode);
   const setProjectOpenMode = useAppStore((s) => s.setProjectOpenMode);
@@ -194,7 +196,8 @@ export function SettingsPage() {
       try {
         await purgeAllCalendarEvents();
         const count = (await syncAllExisting()) + (await syncAllUpkeepEvents());
-        if (count > 0) notify.success(t.synced_events.replace("{count}", String(count)));
+        const synced = isDemoBuild() ? t.synced_events_simulated : t.synced_events;
+        if (count > 0) notify.success(synced.replace("{count}", String(count)));
       } catch (e) {
         notify.error(t.toast_failed_sync, e);
       } finally {

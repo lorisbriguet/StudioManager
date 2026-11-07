@@ -80,6 +80,8 @@ export const qk = {
     all: ["clients"] as const,
     detail: (id: MaybeId) => ["clients", id] as const,
     activity: (clientId: MaybeId) => ["client-activity", clientId] as const,
+    /** Every client's activity (invoices, quotes and projects of each client). */
+    activityAll: ["client-activity"] as const,
     addresses: (clientId: MaybeId) => ["client-addresses", clientId] as const,
     contacts: (clientId: MaybeId) => ["client-contacts", clientId] as const,
   },

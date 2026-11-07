@@ -172,8 +172,11 @@ const PRESET_ID_KEY = () => orgKey("dashboard-preset-id");
 const PRESET_NAME_KEY = () => orgKey("dashboard-preset-name");
 // Set once the saved layout has been checked for a squeezed 3.4.0 copy (no legacy
 // un-namespaced value exists, so it isn't in NAMESPACED_KEYS). "-2": the first
-// check stretched only whole layouts, so it runs again with the per-row rule.
-const SPREAD_KEY = () => orgKey("dashboard-layout-spread-2");
+// check stretched only whole layouts, so it runs again with the per-row rule. "-3": the
+// per-row rule missed added widgets in the right half (Rerun 6), so the half rule runs
+// once more; a layout the "-2" check already saw gets only that rule.
+const SPREAD_KEY = () => orgKey("dashboard-layout-spread-3");
+const ROWS_CHECKED_KEY = () => orgKey("dashboard-layout-spread-2");
 const OLD_SPREAD_KEY = () => orgKey("dashboard-layout-spread");
 
 /** Columns of the saved layout, written into presets so old ones can be told apart. */
@@ -205,6 +208,54 @@ const rightEdge = (items: LayoutItem[]) => Math.max(0, ...items.map((l) => l.x +
  * returned as is when nothing is stretched.
  */
 export function spreadSqueezedLayout(layout: LayoutItem[]): LayoutItem[] {
+  const split = spreadSqueezedHalf(layout);
+  return split !== layout ? split : spreadSqueezedRows(layout);
+}
+
+const STAT_TILES = new Set(["w-kpi-invoiced", "w-kpi-balance", "w-kpi-expenses", "w-kpi-net"]);
+
+/**
+ * The other 3.4.0 shape (Rerun 6, the demo): the squeezed copy fills the left 4, 6 or 10
+ * columns, and widgets added since went into the empty right part at the top (findFreeSpot
+ * fills gaps), so the first row already reaches column 12. Only when every widget sits
+ * wholly on one side of that line and the default stat tiles are all on the left: the
+ * left part is stretched over the 12 columns, and the right part's widgets, in their
+ * order and size, are placed just below the stat tiles' rows; what was below moves down.
+ */
+function spreadSqueezedHalf(layout: LayoutItem[]): LayoutItem[] {
+  const tiles = layout.filter((l) => STAT_TILES.has(l.i));
+  if (tiles.length === 0) return layout;
+  for (const edge of [DASHBOARD_COLS.xs, DASHBOARD_COLS.sm, DASHBOARD_COLS.md]) {
+    const left = layout.filter((l) => l.x + l.w <= edge);
+    const rightSide = layout.filter((l) => l.x >= edge);
+    if (rightSide.length === 0 || left.length + rightSide.length !== layout.length) continue;
+    if (rightEdge(left) !== edge || !tiles.every((t) => left.includes(t))) continue;
+    const scale = (n: number) => Math.round((n * FULL_COLS) / edge);
+    const stretched = left.map((item) => {
+      const x = scale(item.x);
+      const w = Math.min(FULL_COLS - x, Math.max(scale(item.x + item.w) - x, item.minW ?? 1));
+      return { ...item, x, w };
+    });
+    // The stat tiles' rows (stacked in the squeezed copy), and whatever starts beside them.
+    const tilesBottom = Math.max(...tiles.map((l) => l.y + l.h));
+    const top = stretched.filter((l) => l.y < tilesBottom);
+    const below = stretched.filter((l) => l.y >= tilesBottom);
+    const insertY = Math.max(...top.map((l) => l.y + l.h));
+    // Nothing above the line: the right part's widgets start right below the top rows.
+    const placed: LayoutItem[] = [{ i: "", x: 0, y: 0, w: FULL_COLS, h: insertY }];
+    for (const item of [...rightSide].sort((a, b) => a.y - b.y || a.x - b.x)) {
+      const { x, y } = findFreeSpot(placed, item.w, item.h);
+      placed.push({ ...item, x, y });
+    }
+    const moved = placed.slice(1);
+    const shift = Math.max(0, ...moved.map((l) => l.y + l.h)) - insertY;
+    return [...top, ...moved, ...below.map((l) => ({ ...l, y: l.y + shift }))];
+  }
+  return layout;
+}
+
+/** The first 3.4.0 rule (flag "-2"): see spreadSqueezedLayout. */
+function spreadSqueezedRows(layout: LayoutItem[]): LayoutItem[] {
   const bands = rowBands(layout);
   const firstFull = bands.findIndex((band) => rightEdge(band) > DASHBOARD_COLS.md);
   const squeezed = (firstFull === -1 ? bands : bands.slice(0, firstFull)).flat();
@@ -237,8 +288,10 @@ function loadLayout(): LayoutItem[] {
     // Once per organisation: later layouts are saved at full width only, and one left
     // narrow on purpose must not be stretched.
     const checked = localStorage.getItem(SPREAD_KEY()) !== null;
+    const rowsChecked = localStorage.getItem(ROWS_CHECKED_KEY()) !== null;
     const markChecked = () => {
       localStorage.setItem(SPREAD_KEY(), "1");
+      localStorage.removeItem(ROWS_CHECKED_KEY());
       localStorage.removeItem(OLD_SPREAD_KEY());
     };
     if (!raw) {
@@ -247,7 +300,7 @@ function loadLayout(): LayoutItem[] {
     }
     const saved = JSON.parse(raw) as LayoutItem[];
     if (checked) return saved;
-    const spread = spreadSqueezedLayout(saved);
+    const spread = rowsChecked ? spreadSqueezedHalf(saved) : spreadSqueezedLayout(saved);
     if (spread !== saved) localStorage.setItem(STORAGE_KEY(), JSON.stringify(spread));
     markChecked();
     return spread;

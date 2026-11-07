@@ -910,9 +910,13 @@ fn startup_state(app_dir: &Path, init: Result<ActiveOrg, String>) -> (ActiveOrg,
 
 /// Open a directory in Finder, or reveal a file in its enclosing folder
 /// (macOS `open` command). See `finder::path_open_args` for how the path is
-/// resolved and what is refused.
+/// resolved and what is refused. Does nothing in the demo: its paths are made up and
+/// must never open anything of this Mac (`src/lib/openExternal.ts` skips it there too).
 #[tauri::command]
-async fn open_in_finder(path: String) -> Result<(), String> {
+async fn open_in_finder(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    if crate::host::is_demo(&app) {
+        return Ok(());
+    }
     let args = finder::path_open_args(&path)?;
     finder::run_open(&args).map_err(|e| format!("open failed for {path}: {e}"))
 }

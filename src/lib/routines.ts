@@ -3,6 +3,9 @@ import { invoke } from "@tauri-apps/api/core";
 /** Emitted when the routines or a run change (no payload). */
 export const ROUTINES_CHANGED = "routines:changed";
 
+/** Rust's error while the Agents switch is off (`agents/actions.rs`), shown as `t.agents_off`. */
+export const AGENTS_OFF = "Agents are switched off";
+
 export interface RoutineLink {
   label: string;
   /** An absolute path or an http(s) URL. */

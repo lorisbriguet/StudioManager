@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import { ICONS, ICON_SIZE, PageHeader, Button, Card, CARD_LINK, CARD_CONTROL, EmptyState, IconButton, QueryState, ListSkeleton } from "../components/ui";
 import { notify } from "../lib/notify";
 import { useNavigate } from "react-router-dom";
-import { invoke } from "@tauri-apps/api/core";
+import { revealPath } from "../lib/openExternal";
 import {
   useNotifications,
 
@@ -49,14 +49,14 @@ export function NotificationsPage() {
     if (!n.link) return;
     if (isFilePath(n.link)) {
       // File system path (e.g., backup folder) — open in Finder
-      invoke("open_in_finder", { path: n.link }).catch((err) => {
+      revealPath(n.link).catch((err) => {
         notify.error(t.could_not_open_path, err);
       });
     } else if (n.link.startsWith("/")) {
       navigate(n.link);
     } else {
       // Fallback for any other external path
-      invoke("open_in_finder", { path: n.link }).catch((err) => {
+      revealPath(n.link).catch((err) => {
         notify.error(t.could_not_open_path, err);
       });
     }

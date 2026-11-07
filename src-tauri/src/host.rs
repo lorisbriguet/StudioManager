@@ -77,7 +77,7 @@ mod tests {
             "agents_set_menu_bar",
         ];
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let mut files = vec![dir.join("apple.rs"), dir.join("network.rs")];
+        let mut files = vec![dir.join("apple.rs"), dir.join("network.rs"), dir.join("lib.rs")];
         let mut stack = vec![dir.join("agents")];
         while let Some(d) = stack.pop() {
             for e in std::fs::read_dir(&d).unwrap().flatten() {
@@ -94,10 +94,12 @@ mod tests {
         for f in &files {
             let src = std::fs::read_to_string(f).unwrap();
             let apple = f.ends_with("apple.rs");
+            let lib = f.ends_with("lib.rs");
             for (name, body) in commands(&src) {
                 // apple.rs: only the calendar touches this Mac's data; the rest acts on a
-                // file the person picked.
-                if apple && !name.starts_with("calendar_") {
+                // file the person picked. lib.rs: only the openers (Finder) leave the app;
+                // the rest works on the app's own data folder.
+                if (apple && !name.starts_with("calendar_")) || (lib && !name.starts_with("open_")) {
                     continue;
                 }
                 seen += 1;
@@ -108,5 +110,42 @@ mod tests {
         }
         assert!(seen > 30, "the scan found only {seen} commands");
         assert!(missing.is_empty(), "commands without a demo gate: {missing:?}");
+    }
+
+    /// Rerun 6: a link in the demo opened the real Tailscale login page. Besides the
+    /// front end's `openExternal`, the demo build's config switches the shell plugin's
+    /// `open` off, so no page script can open a URL or a file there.
+    #[test]
+    fn the_demo_build_cannot_open_links() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.demo.conf.json");
+        let conf: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        assert_eq!(conf["identifier"], crate::agent_access::DEMO_IDENTIFIER);
+        assert_eq!(conf["plugins"]["shell"]["open"], serde_json::Value::Bool(false));
+    }
+
+    /// Every calendar command (list, create, delete; an update is a create then a delete)
+    /// returns from its demo check before any AppleScript runs, so the demo never reads or
+    /// writes this Mac's Calendar, whatever the page sends.
+    #[test]
+    fn demo_calendar_commands_return_before_osascript() {
+        let src = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/apple.rs")).unwrap();
+        let cal: Vec<_> = commands(&src).into_iter().filter(|(n, _)| n.starts_with("calendar_")).collect();
+        let names: Vec<&str> = cal.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, ["calendar_list_writable", "calendar_create_event", "calendar_delete_event"]);
+        for (name, body) in &cal {
+            let gate = body.find("if crate::host::is_demo(&app) {").unwrap_or_else(|| panic!("{name}: no demo gate"));
+            let script = body.find("osascript").unwrap_or_else(|| panic!("{name}: no osascript"));
+            assert!(gate < script, "{name}: the demo gate must come before osascript");
+            assert!(body[gate..script].contains("return Ok("), "{name}: the demo gate must return");
+        }
+        assert!(src.contains("pub(crate) const DEMO_CALENDAR: &str = \"Studio\";"));
+    }
+
+    /// The Finder opener is one of the scanned commands, so the scan above covers it.
+    #[test]
+    fn the_scan_reaches_open_in_finder() {
+        let src = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs")).unwrap();
+        let found = commands(&src).into_iter().find(|(name, _)| name == "open_in_finder");
+        assert!(found.is_some_and(|(_, body)| body.contains("is_demo(")));
     }
 }

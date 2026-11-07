@@ -44,6 +44,8 @@ describe("AgentsCard", () => {
     expect(screen.queryByText(/Claude was not found/i)).toBeNull();
     expect(screen.getByRole("switch", { name: "Show the Agents page" })).toBeDisabled();
     expect(screen.getByRole("switch", { name: "Show the Agents page" })).not.toBeChecked();
+    // Rerun 6: it showed on (pale) while every other Agents switch was off.
+    expect(screen.getByRole("switch", { name: "Usage limit alerts" })).not.toBeChecked();
   });
 
   it("lets the user switch off when enabled but claude is gone", async () => {

@@ -1,5 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
-import { open as openUrl } from "@tauri-apps/plugin-shell";
+import { openExternal, revealPath } from "../../lib/openExternal";
 import { notify } from "../../lib/notify";
 import { useT } from "../../i18n/useT";
 import { parseWikiArticleId, parseWikiFileKey } from "../../lib/wikiLinks";
@@ -43,7 +42,7 @@ export function DocView({
     const id = parseWikiArticleId(href);
     if (id !== null) return onOpenRef(id);
     if (/^https?:\/\//i.test(href)) {
-      openUrl(href).catch((err) => {
+      openExternal(href).catch((err) => {
         notify.error(t.failed_to_open_url, err);
       });
     }
@@ -62,7 +61,7 @@ export function DocView({
           icon={ICONS.openFolder}
           label={t.wiki_show_in_finder}
           onClick={() =>
-            invoke("open_in_finder", { path }).catch((err) => {
+            revealPath(path).catch((err) => {
               notify.error(t.failed_open_folder, err);
             })
           }

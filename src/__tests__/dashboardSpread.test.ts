@@ -30,6 +30,25 @@ const SAVED_BY_340_MD: LayoutItem[] = [
   { i: "w-recent-invoices", x: 6, y: 9, w: 4, h: 5 },
 ];
 
+// The demo's dashboard in Rerun 6 (R6-D-01/02): the 6-column copy on the left, and
+// three widgets added since, which findFreeSpot put in the empty right half at the top.
+// Its first row already reaches column 12, so the per-row rule stretched nothing.
+const SQUEEZED_WITH_RIGHT_HALF: LayoutItem[] = [
+  { i: "w-kpi-invoiced", x: 0, y: 0, w: 3, h: 2 },
+  { i: "w-kpi-balance", x: 3, y: 0, w: 3, h: 2 },
+  { i: "w-kpi-monthly-1", x: 0, y: 2, w: 3, h: 2 },
+  { i: "w-kpi-expenses", x: 3, y: 2, w: 3, h: 2 },
+  { i: "w-kpi-net", x: 3, y: 4, w: 3, h: 2 },
+  { i: "w-chart-revenue", x: 0, y: 6, w: 6, h: 5 },
+  { i: "w-recent-invoices", x: 2, y: 11, w: 4, h: 5 },
+  { i: "w-today-tasks", x: 0, y: 16, w: 6, h: 4 },
+  { i: "w-overdue-tasks", x: 0, y: 20, w: 6, h: 4 },
+  { i: "w-upkeep", x: 0, y: 24, w: 4, h: 4 },
+  { i: "w-busiest-day-1", x: 6, y: 0, w: 3, h: 3 },
+  { i: "w-quick-create-1", x: 9, y: 0, w: 3, h: 3 },
+  { i: "w-project-time-1", x: 6, y: 3, w: 4, h: 4 },
+];
+
 const right = (l: LayoutItem[]) => Math.max(...l.map((i) => i.x + i.w));
 const overlap = (a: LayoutItem, b: LayoutItem) =>
   a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
@@ -73,6 +92,47 @@ describe("spreadSqueezedLayout", () => {
     expectNoOverlap(spread);
   });
 
+  it("stretches a 3.4.0 layout whose added widgets filled the right half (Rerun 6, the demo)", () => {
+    const spread = spreadSqueezedLayout(SQUEEZED_WITH_RIGHT_HALF);
+    expect(right(spread)).toBe(12);
+    expect(spread.every((i) => i.x >= 0 && i.x + i.w <= 12)).toBe(true);
+    expectNoOverlap(spread);
+    const at = (id: string) => spread.find((i) => i.i === id)!;
+    // The old 6-column part is doubled.
+    expect(at("w-kpi-balance")).toMatchObject({ x: 6, w: 6, y: 0 });
+    expect(at("w-chart-revenue")).toMatchObject({ x: 0, w: 12 });
+    expect(at("w-upkeep")).toMatchObject({ x: 0, w: 8 });
+    // The widgets of the right half come just below the stat tiles, in their order and size.
+    expect(at("w-busiest-day-1")).toMatchObject({ x: 0, y: 6, w: 3, h: 3 });
+    expect(at("w-quick-create-1")).toMatchObject({ x: 3, y: 6, w: 3, h: 3 });
+    expect(at("w-project-time-1")).toMatchObject({ x: 6, y: 6, w: 4, h: 4 });
+    // The rest moves down by what they take, in the same order.
+    expect(at("w-chart-revenue").y).toBe(10);
+    const order = (l: LayoutItem[]) => [...l].sort((a, b) => a.y - b.y || a.x - b.x).map((i) => i.i);
+    expect(order(spread).slice(-5)).toEqual(["w-chart-revenue", "w-recent-invoices", "w-today-tasks", "w-overdue-tasks", "w-upkeep"]);
+  });
+
+  it("also when a widget was dragged from the left to the right half since (Today, Rerun 6)", () => {
+    const dragged = SQUEEZED_WITH_RIGHT_HALF.map((i) =>
+      i.i === "w-today-tasks" ? { ...i, x: 6, y: 7, w: 6 } : i.i === "w-overdue-tasks" ? { ...i, y: 16 } : i,
+    );
+    const spread = spreadSqueezedLayout(dragged);
+    expect(right(spread)).toBe(12);
+    expectNoOverlap(spread);
+    expect(spread.find((i) => i.i === "w-today-tasks")!.y).toBeLessThan(spread.find((i) => i.i === "w-chart-revenue")!.y);
+    expect(spread.find((i) => i.i === "w-chart-revenue")).toMatchObject({ x: 0, w: 12 });
+  });
+
+  it("leaves a two-half layout alone when the stat tiles are not all on the left", () => {
+    const halves: LayoutItem[] = [
+      { i: "w-kpi-invoiced", x: 0, y: 0, w: 6, h: 2 },
+      { i: "w-kpi-balance", x: 6, y: 0, w: 6, h: 2 },
+      { i: "w-chart-revenue", x: 0, y: 2, w: 6, h: 5 },
+      { i: "w-recent-invoices", x: 6, y: 2, w: 6, h: 5 },
+    ];
+    expect(spreadSqueezedLayout(halves)).toBe(halves);
+  });
+
   it("leaves a full-width layout alone", () => {
     expect(spreadSqueezedLayout(DEFAULT_LAYOUT)).toBe(DEFAULT_LAYOUT);
     expect(spreadSqueezedLayout([])).toEqual([]);
@@ -98,6 +158,31 @@ describe("saved layout on load", () => {
     useOrgStore.setState({ activeId: "o1" });
     expect(useDashboardStore.getState().layout.find((i) => i.i === "w-chart-revenue")).toMatchObject({ x: 0, w: 12 });
     expect(localStorage.getItem("dashboard-layout-spread:o1")).toBeNull();
+  });
+
+  it("spreads the demo's layout once more after the '-2' check missed it (Rerun 6)", () => {
+    localStorage.setItem("dashboard-layout:o1", JSON.stringify(SQUEEZED_WITH_RIGHT_HALF));
+    localStorage.setItem("dashboard-layout-spread-2:o1", "1");
+    useOrgStore.setState({ activeId: "o1" });
+    const layout = useDashboardStore.getState().layout;
+    expect(layout.find((i) => i.i === "w-chart-revenue")).toMatchObject({ x: 0, w: 12 });
+    expect(JSON.parse(localStorage.getItem("dashboard-layout:o1") ?? "[]")).toEqual(layout);
+    expect(localStorage.getItem("dashboard-layout-spread-3:o1")).toBe("1");
+    expect(localStorage.getItem("dashboard-layout-spread-2:o1")).toBeNull();
+  });
+
+  it("keeps a layout the '-2' check already saw when it is not the right-half shape", () => {
+    // Narrow top rows above a full row: the per-row rule would stretch them, but the
+    // '-2' check left them (arranged since), so the '-3' check must too.
+    const arranged: LayoutItem[] = [
+      { i: "w-kpi-invoiced", x: 0, y: 0, w: 3, h: 2 },
+      { i: "w-kpi-balance", x: 3, y: 0, w: 3, h: 2 },
+      { i: "w-chart-revenue", x: 0, y: 2, w: 12, h: 5 },
+    ];
+    localStorage.setItem("dashboard-layout:o1", JSON.stringify(arranged));
+    localStorage.setItem("dashboard-layout-spread-2:o1", "1");
+    useOrgStore.setState({ activeId: "o1" });
+    expect(useDashboardStore.getState().layout).toEqual(arranged);
   });
 
   it("is not stretched again once checked (a layout left narrow on purpose)", () => {

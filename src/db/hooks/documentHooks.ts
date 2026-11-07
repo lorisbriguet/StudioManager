@@ -4,7 +4,7 @@ import { getLabels } from "../../lib/notify";
 import type { UIKey } from "../../i18n/ui";
 import { AppError } from "../../lib/errors";
 import type { LineItemFields } from "../../types/document";
-import { invalidateMoney } from "../queryKeys";
+import { invalidateMoney, qk } from "../queryKeys";
 import { isDraftDocument } from "../../lib/draftDocument";
 
 /** The fields every invoice or quote row has that these hooks rely on. */
@@ -115,6 +115,8 @@ export function documentHooks<Doc extends DocumentRow, Item extends LineItemFiel
   const invalidate = (qc: QueryClient, ...extra: QueryKey[]) => {
     qc.invalidateQueries({ queryKey: keys.all });
     for (const k of extra) qc.invalidateQueries({ queryKey: k });
+    // A client page lists its invoices and quotes under Client Activity.
+    qc.invalidateQueries({ queryKey: qk.clients.activityAll });
     invalidateMoney(qc);
   };
 

@@ -8,6 +8,7 @@ import { openMainWindow } from "../lib/agents";
 import { logError } from "../lib/log";
 import { routineRunTextClass } from "../lib/statusColors";
 import {
+  AGENTS_OFF,
   ROUTINES_CHANGED,
   getRoutineRuns,
   getRoutines,
@@ -21,8 +22,6 @@ import {
 } from "../lib/routines";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
-/** Rust's error while the Agents switch is off (`agents/actions.rs`). */
-const AGENTS_OFF = "Agents are switched off";
 
 /** Loads the routines and their last runs, and again whenever Rust says they changed. A failed
  *  load (e.g. "Agents are switched off", an unreadable runs file) keeps what is there and says why. */

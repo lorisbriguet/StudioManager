@@ -1,6 +1,6 @@
 import type { AnchorHTMLAttributes, MouseEvent } from "react";
 import type { ExtraProps } from "react-markdown";
-import { open as openUrl } from "@tauri-apps/plugin-shell";
+import { openExternal } from "../../lib/openExternal";
 import { useT } from "../../i18n/useT";
 import { notify } from "../../lib/notify";
 
@@ -20,7 +20,7 @@ export function ExternalLink({ href, children, node: _node, ...rest }: AnchorHTM
   const onClick = (e: MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     if (!href || !isExternalUrl(href)) return;
-    openUrl(href.trim()).catch((err) => notify.error(t.failed_to_open_url, err));
+    openExternal(href.trim()).catch((err) => notify.error(t.failed_to_open_url, err));
   };
   return (
     <a

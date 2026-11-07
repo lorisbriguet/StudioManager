@@ -33,6 +33,10 @@ A new command is registered in three lists: see "Adding a Rust command" in [the 
 
 The MCP server (`src-tauri/mcp`) never deletes and backs up before writing: see [Agent access](docs/agent-access.md) before adding a tool.
 
+## Demo build
+
+The demo build never touches this Mac: a link or a file opens through `openExternal` or `revealPath` (`src/lib/openExternal.ts`), which do nothing there; a test refuses any other opener in `src/`. A Rust command that reads or writes the Mac checks `crate::host::is_demo` first (scanned in `src-tauri/src/host.rs`).
+
 ## Public repo
 
 The repo is public: no client names, addresses, IBANs, IPs or personal paths in code, fixtures, docs or commit messages.

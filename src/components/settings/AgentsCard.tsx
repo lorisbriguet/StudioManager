@@ -157,7 +157,8 @@ export function AgentsCard() {
       </SettingRow>
       <SettingRow label={t.agents_limit_alerts} desc={t.agents_limit_alerts_desc}>
         <Toggle
-          checked={info?.limitAlerts ?? true}
+          // Off in the demo, like the other Agents switches (its saved value never applies).
+          checked={!demo && (info?.limitAlerts ?? true)}
           disabled={!info || !info.enabled || !info.menuBar}
           ariaLabel={t.agents_limit_alerts}
           onChange={(on) => void run(() => setAgentsLimitAlerts(on))}

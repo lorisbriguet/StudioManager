@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { open as openExternalUrl } from "@tauri-apps/plugin-shell";
+import { openExternal } from "../../lib/openExternal";
 import {
   useResourcesByProject,
   useLinkResourceToProject,
@@ -42,7 +42,7 @@ export function ProjectResources({ projectId }: { projectId: number }) {
             onClick={() => {
               let u = r.url;
               if (u && !u.startsWith("http://") && !u.startsWith("https://")) u = "https://" + u;
-              openExternalUrl(u);
+              openExternal(u);
             }}
             className="truncate max-w-[300px]"
           >
