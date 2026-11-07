@@ -9,7 +9,9 @@ import {
 import type { Invoice } from "../../types/invoice";
 import type { BusinessProfile } from "../../types/business-profile";
 import type { AppLanguage } from "../../i18n/ui";
-import { getExportLabels } from "../../i18n/export-labels";
+import { getExportLabels, type ExportLabels } from "../../i18n/export-labels";
+import { invoiceChfAmount } from "../../lib/chfEquivalent";
+import { isDraftDocument } from "../../lib/draftDocument";
 import { PDF } from "../pdf/pdfPalette";
 import { formatDisplayDate } from "../../utils/formatDate";
 
@@ -103,6 +105,9 @@ const s = StyleSheet.create({
   statusOverdue: { color: PDF.danger },
   statusSent: { color: PDF.warning },
   statusDraft: { color: PDF.neutral },
+  struck: { textDecoration: "line-through", color: PDF.muted },
+  chfLine: { fontSize: 7, color: PDF.muted },
+  note: { fontSize: 7, color: PDF.muted, marginTop: 8 },
   footer: {
     position: "absolute",
     bottom: 30,
@@ -121,10 +126,22 @@ const statusStyle: Record<string, object> = {
   draft: s.statusDraft,
 };
 
+const STATUS_LABEL: Record<string, keyof ExportLabels> = {
+  draft: "status_draft",
+  sent: "status_sent",
+  paid: "status_paid",
+  overdue: "status_overdue",
+  cancelled: "status_cancelled",
+};
+
 export function InvoicesListPDF({ year, invoices, clientNames, profile, lang = "FR" }: Props) {
   const t = getExportLabels(lang);
-  const total = invoices.reduce((sum, inv) => sum + inv.total, 0);
-  const totalPaid = invoices.filter((i) => i.status === "paid").reduce((sum, inv) => sum + inv.total, 0);
+  // Totals in CHF by the P&L's rule, without cancelled invoices: the same
+  // revenue figure as the P&L shipped in the same export.
+  const counted = invoices.filter((i) => i.status !== "cancelled");
+  const total = counted.reduce((sum, inv) => sum + invoiceChfAmount(inv), 0);
+  const totalPaid = counted.filter((i) => i.status === "paid").reduce((sum, inv) => sum + invoiceChfAmount(inv), 0);
+  const hasCancelled = counted.length < invoices.length;
   const dateFmt = lang === "FR" ? "fr-CH" : "en-CH";
 
   return (
@@ -152,16 +169,28 @@ export function InvoicesListPDF({ year, invoices, clientNames, profile, lang = "
           <Text style={[s.thText, s.colTotal]}>{t.amount}</Text>
         </View>
 
-        {invoices.map((inv, i) => (
-          <View key={inv.id} style={[s.row, i % 2 === 1 ? s.rowAlt : {}]}>
-            <Text style={[s.cell, s.colRef]}>{inv.reference}</Text>
-            <Text style={[s.cell, s.colClient]}>{clientNames[inv.client_id] ?? inv.client_id}</Text>
-            <Text style={[s.cell, s.colDate]}>{formatDisplayDate(inv.invoice_date)}</Text>
-            <Text style={[s.cell, s.colDue]}>{inv.due_date ? formatDisplayDate(inv.due_date) : ""}</Text>
-            <Text style={[s.cell, s.colStatus, statusStyle[inv.status]] as never}>{inv.status}</Text>
-            <Text style={[s.cell, s.colTotal]}>{formatCHF(inv.total)}</Text>
-          </View>
-        ))}
+        {invoices.map((inv, i) => {
+          const currency = inv.currency || "CHF";
+          const cancelled = inv.status === "cancelled";
+          const statusKey = STATUS_LABEL[inv.status];
+          return (
+            <View key={inv.id} style={[s.row, i % 2 === 1 ? s.rowAlt : {}]}>
+              <Text style={[s.cell, s.colRef]}>{isDraftDocument(inv) ? t.status_draft : inv.reference}</Text>
+              <Text style={[s.cell, s.colClient]}>{clientNames[inv.client_id] ?? inv.client_id}</Text>
+              <Text style={[s.cell, s.colDate]}>{formatDisplayDate(inv.invoice_date)}</Text>
+              <Text style={[s.cell, s.colDue]}>{inv.due_date ? formatDisplayDate(inv.due_date) : ""}</Text>
+              <Text style={[s.cell, s.colStatus, statusStyle[inv.status]] as never}>
+                {statusKey ? t[statusKey] : inv.status}
+              </Text>
+              <View style={s.colTotal}>
+                <Text style={[s.cell, cancelled ? s.struck : {}]}>{formatMoneyPdf(inv.total, currency)}</Text>
+                {currency !== "CHF" && (
+                  <Text style={[s.cell, s.chfLine, cancelled ? s.struck : {}]}>{formatCHF(invoiceChfAmount(inv))}</Text>
+                )}
+              </View>
+            </View>
+          );
+        })}
 
         <View style={s.totalRow}>
           <Text style={[s.boldCell, s.colRef]}></Text>
@@ -181,6 +210,7 @@ export function InvoicesListPDF({ year, invoices, clientNames, profile, lang = "
           <Text style={[s.boldCell, s.colStatus]}>{t.total}</Text>
           <Text style={[s.boldCell, s.colTotal]}>{formatCHF(total)}</Text>
         </View>
+        {hasCancelled && <Text style={s.note}>{t.cancelled_not_counted}</Text>}
 
         <Text style={s.footer}>
           {profile.owner_name} — {t.invoices_title} {year} — {t.generated_by}

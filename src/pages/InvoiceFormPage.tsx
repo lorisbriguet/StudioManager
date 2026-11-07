@@ -7,6 +7,7 @@ import { deleteWithUndo } from "../lib/undo";
 import { MENU_ITEM } from "../components/ui/Dropdown";
 import * as v from "../lib/validate";
 import { notify } from "../lib/notify";
+import { isDraftDocument } from "../lib/draftDocument";
 import { addDays, format } from "date-fns";
 import { useT } from "../i18n/useT";
 import { useInvoice, useCreateInvoice, useUpdateInvoice, useDeleteInvoice } from "../db/hooks/useInvoices";
@@ -48,11 +49,16 @@ const invoiceSchema: v.FormSchema<InvoiceField> = {
 };
 
 /** The stored money facts of a loaded invoice: editing it must never rewrite them. */
-function moneySnapshot(inv: { currency?: string | null; exchange_rate?: number | null; chf_equivalent?: number | null; total: number }) {
+function moneySnapshot(inv: {
+  reference: string; status: string;
+  currency?: string | null; exchange_rate?: number | null; chf_equivalent?: number | null; total: number;
+}) {
   return {
     currency: (inv.currency ?? "CHF") as Currency,
     exchange_rate: inv.exchange_rate ?? 1,
     chf_equivalent: inv.chf_equivalent ?? inv.total,
+    // A draft's rate is not a fact yet: it follows the date and the total.
+    draft: isDraftDocument(inv),
   };
 }
 
@@ -177,7 +183,7 @@ export function InvoiceFormPage() {
     setExchangeRate(snapshot.exchange_rate);
     setChfEquivalent(snapshot.chf_equivalent);
     setDiscountRate(existingInvoice.discount_rate ?? 0);
-    if (existingInvoice.currency && existingInvoice.currency !== "CHF") {
+    if (existingInvoice.currency && existingInvoice.currency !== "CHF" && !snapshot.draft) {
       setChfManualOverride(true); // preserve user's manually set CHF equivalent
     }
     if ("template_id" in existingInvoice) {
@@ -238,10 +244,12 @@ export function InvoiceFormPage() {
   }, [isEdit, fromQuoteId, fromProjectId]);
 
   // Pre-fill from a project (once clients are loaded, for language and discount)
-  const projectPrefilledRef = useRef(false);
+  // Keyed on the project: "New invoice" from another project while the form
+  // stays mounted pre-fills again.
+  const projectPrefilledRef = useRef<typeof fromProjectId | null>(null);
   useEffect(() => {
-    if (!fromProjectId || isEdit || !clients || projectPrefilledRef.current) return;
-    projectPrefilledRef.current = true;
+    if (!fromProjectId || isEdit || !clients || projectPrefilledRef.current === fromProjectId) return;
+    projectPrefilledRef.current = fromProjectId;
     formLoadedRef.current = false;
     getProject(fromProjectId).then((project) => {
       if (!project) return;
@@ -299,11 +307,12 @@ export function InvoiceFormPage() {
   // what save() persists, and invoices are legal documents.
   const { subtotal, discountAmount, total } = computeTotals(items, discountRate);
 
-  // When the currency or the date changes: an invoice in its stored currency
-  // re-asserts its stored exchange_rate/chf_equivalent (historical facts
-  // captured at invoice time, never today's rate); CHF needs no rate; any
-  // other currency fetches the rate of the invoice date (effect below).
-  const keepsStoredRate = !!loadedInvoice && currency === loadedInvoice.currency;
+  // When the currency or the date changes: an issued invoice in its stored
+  // currency re-asserts its stored exchange_rate/chf_equivalent (historical
+  // facts captured at invoice time, never today's rate); CHF needs no rate;
+  // any other currency, and any draft, fetches the rate of the invoice date
+  // (effect below).
+  const keepsStoredRate = !!loadedInvoice && !loadedInvoice.draft && currency === loadedInvoice.currency;
   if (useChangedOrMount(currency, invoiceDate)) {
     if (loadedInvoice && keepsStoredRate) {
       setExchangeRate(loadedInvoice.exchange_rate);
@@ -323,6 +332,15 @@ export function InvoiceFormPage() {
     let cancelled = false;
     getExchangeRate(currency, invoiceDate).then((rate) => {
       if (cancelled) return;
+      if (rate === null && loadedInvoice?.draft && currency === loadedInvoice.currency
+        && loadedInvoice.exchange_rate > 0) {
+        // Offline while editing a draft: keep its stored rate, so the CHF
+        // amount still follows the total, and say the rate may be old.
+        notify.warning(t.exchange_rate_kept);
+        setExchangeRate(loadedInvoice.exchange_rate);
+        setChfManualOverride(false);
+        return;
+      }
       if (rate === null) {
         // No trustworthy live rate (offline / API down). Never book the
         // face value as CHF: zero the equivalent so a wrong figure is
@@ -346,10 +364,10 @@ export function InvoiceFormPage() {
   }, [currency, invoiceDate]);
 
   // Auto-calc CHF equivalent when total or exchange rate changes (unless manually overridden).
-  // A loaded invoice in its stored foreign currency keeps its chf_equivalent: it is a
+  // An issued invoice in its stored foreign currency keeps its chf_equivalent: it is a
   // historical fact, re-asserted by the currency effect, never recomputed here.
   if (useChangedOrMount(total, exchangeRate, currency, chfManualOverride)
-    && !(loadedInvoice && currency === loadedInvoice.currency && currency !== "CHF")
+    && !(keepsStoredRate && currency !== "CHF")
     && !chfManualOverride) {
     setChfEquivalent(currency === "CHF" ? total : toCHF(total, exchangeRate));
   }

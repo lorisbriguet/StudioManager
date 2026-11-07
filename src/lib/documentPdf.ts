@@ -46,8 +46,15 @@ async function renderToBytes(doc: ReturnType<typeof createElement>): Promise<Uin
   return new Uint8Array(await blob.arrayBuffer());
 }
 
-/** Returns null when the invoice, its client or the business profile is missing. */
-export async function buildInvoicePdf(invoiceId: number): Promise<BuiltInvoicePdf | null> {
+/**
+ * Returns null when the invoice, its client or the business profile is missing.
+ * `withReminder: false` leaves out the reminder banner: the stored PDF and the
+ * trustee's copy are the invoice as the client first got it.
+ */
+export async function buildInvoicePdf(
+  invoiceId: number,
+  { withReminder = true }: { withReminder?: boolean } = {},
+): Promise<BuiltInvoicePdf | null> {
   const [invoice, lineItems, profile] = await Promise.all([
     getInvoice(invoiceId),
     getInvoiceLineItems(invoiceId),
@@ -75,7 +82,7 @@ export async function buildInvoicePdf(invoiceId: number): Promise<BuiltInvoicePd
       contactName,
       billingAddress,
       projectName: project?.name,
-      reminderCount: invoice.reminder_count,
+      reminderCount: withReminder ? invoice.reminder_count : 0,
       template: template ?? undefined,
     })
   );

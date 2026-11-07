@@ -12,6 +12,7 @@ import { todayLocalISO, parseLocalDate } from "../utils/localDate";
 import { advanceDate } from "../utils/recurringDates";
 import { useOrgStore } from "../stores/org-store";
 import { addDays, format } from "date-fns";
+import { getExchangeRate, toCHF, type Currency } from "../lib/exchangeRate";
 
 // Safety cap on catch-up generations per template (5 years of monthly periods)
 // so a corrupt next_due can never spin the loop unbounded. Hitting the cap
@@ -29,6 +30,23 @@ let inFlight = false;
 let lastRunDay: string | null = null;
 
 /**
+ * The exchange rate and CHF amount of a foreign-currency draft dated `date`:
+ * the rate of that date, not the base invoice's months-old one. Offline, the
+ * base invoice's rate is kept (`kept`), never 0, which the P&L would read as
+ * the amount at face value; the draft is re-rated when opened in the form.
+ */
+async function periodRate(
+  base: { currency?: string | null; total: number; exchange_rate: number; chf_equivalent: number },
+  date: string,
+): Promise<{ exchange_rate: number; chf_equivalent: number; kept: boolean }> {
+  const currency = (base.currency || "CHF") as Currency;
+  if (currency === "CHF") return { exchange_rate: base.exchange_rate, chf_equivalent: base.chf_equivalent, kept: false };
+  const rate = await getExchangeRate(currency, date).catch(() => null);
+  if (rate === null) return { exchange_rate: base.exchange_rate, chf_equivalent: base.chf_equivalent, kept: true };
+  return { exchange_rate: rate, chf_equivalent: toCHF(base.total, rate), kept: false };
+}
+
+/**
  * Generate draft invoices for every due recurring template.
  * Returns the number of drafts generated (0 if nothing due or already running).
  */
@@ -42,6 +60,7 @@ export async function runRecurringCheck(qc: QueryClient): Promise<number> {
   const org = useOrgStore.getState().activeId;
   const sameOrg = () => useOrgStore.getState().activeId === org;
   let generated = 0;
+  let rateKept = false;
   try {
     const templates = await getDueTemplates();
     if (templates.length === 0 || !sameOrg()) return 0;
@@ -82,6 +101,9 @@ export async function runRecurringCheck(qc: QueryClient): Promise<number> {
             "yyyy-MM-dd"
           );
 
+          const money = await periodRate(baseInvoice, nextDue);
+          if (money.kept) rateKept = true;
+
           await createInvoiceWithLineItems(
             {
               reference: `DRAFT-${crypto.randomUUID()}`,
@@ -104,8 +126,8 @@ export async function runRecurringCheck(qc: QueryClient): Promise<number> {
               contact_id: baseInvoice.contact_id,
               billing_address_id: baseInvoice.billing_address_id,
               currency: baseInvoice.currency,
-              exchange_rate: baseInvoice.exchange_rate,
-              chf_equivalent: baseInvoice.chf_equivalent,
+              exchange_rate: money.exchange_rate,
+              chf_equivalent: money.chf_equivalent,
               po_number: null,
               pdf_path: null,
               from_quote_id: null,
@@ -180,6 +202,7 @@ export async function runRecurringCheck(qc: QueryClient): Promise<number> {
       qc.invalidateQueries({ queryKey: qk.notifications.all });
 
       sendNativeNotification(labels.recurring_invoices, msg);
+      if (rateKept) notify.warning(labels.exchange_rate_kept);
     }
   } catch (e) {
     // notify.error logs AND toasts; no separate logError needed

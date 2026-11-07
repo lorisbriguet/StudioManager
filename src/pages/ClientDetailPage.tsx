@@ -1,4 +1,5 @@
-import { formatMoney } from "../lib/money";
+import { documentDisplayRef, statusLabel } from "../lib/documentDisplay";
+import { InvoiceAmount } from "../components/invoice/InvoiceAmount";
 import { useState, useEffect, useRef } from "react";
 import { IconButton } from "../components/ui/IconButton";
 import { useParams, Link, useNavigate } from "react-router-dom";
@@ -211,7 +212,7 @@ export function ClientDetailPage() {
                 className="block py-1.5 text-sm text-accent-text hover:underline"
               >
                 {p.name}
-                <span className="ml-2 text-xs text-muted">{p.status}</span>
+                <span className="ml-2 text-xs text-muted">{statusLabel(p.status, t)}</span>
               </Link>
             ))}
             {projects === undefined && <ListSkeleton size="sm" rows={2} />}
@@ -221,9 +222,9 @@ export function ClientDetailPage() {
           <Section title={t.invoices} count={invoices?.length ?? 0}>
             {invoices?.map((inv) => (
               <div key={inv.id} className="flex items-center justify-between py-1.5 text-sm group">
-                <span>{inv.reference}</span>
+                <span>{documentDisplayRef(inv, t)}</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-muted">{formatMoney(inv.total, "CHF")}</span>
+                  <InvoiceAmount invoice={inv} className="text-muted" />
                   <IconButton to={`/invoices/${inv.id}/preview`} icon={ICONS.preview} label={t.preview} size="xs" tone="accent" reveal />
                   <IconButton to={`/invoices/${inv.id}/edit`} icon={ICONS.edit} label={t.edit} size="xs" tone="accent" reveal />
                 </div>

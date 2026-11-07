@@ -5,6 +5,7 @@ import type { UIKey } from "../../i18n/ui";
 import { AppError } from "../../lib/errors";
 import type { LineItemFields } from "../../types/document";
 import { invalidateMoney } from "../queryKeys";
+import { isDraftDocument } from "../../lib/draftDocument";
 
 /** The fields every invoice or quote row has that these hooks rely on. */
 interface DocumentRow {
@@ -52,9 +53,24 @@ export interface DocumentHooksConfig<Doc extends DocumentRow, Item extends LineI
   };
   /** Runs before a delete; throw to refuse it. */
   beforeDelete?: (prev: Doc) => void;
-  /** Runs after a save, with the status the document now has. */
-  afterUpdate?: (id: number, status: string | undefined, qc: QueryClient) => Promise<void>;
+  /** Runs after a save: see DocumentChange. */
+  afterUpdate?: (id: number, change: DocumentChange, qc: QueryClient) => Promise<void>;
 }
+
+/** What a save changed, for afterUpdate. */
+export interface DocumentChange {
+  /** The status the document now has. */
+  status: string | undefined;
+  /** The status it had before the save. */
+  prevStatus: string | undefined;
+  /** The save gave the document its number. */
+  numbered: boolean;
+  /** The save changed the line items or the total: an edit of the content. */
+  contentChanged: boolean;
+}
+
+const lineItemsKey = (items: LineItemFields[]) =>
+  JSON.stringify(items.map((i) => [i.designation, i.rate, i.unit, i.quantity, i.amount]));
 
 /** Read and write hooks shared by invoices and quotes, all with undo/redo. */
 export function documentHooks<Doc extends DocumentRow, Item extends LineItemFields>(
@@ -160,15 +176,22 @@ export function documentHooks<Doc extends DocumentRow, Item extends LineItemFiel
         data: DocFields<Doc>;
         lineItems?: LineItemFields[];
       }) => {
-        const fields = data as DocFields<Doc> & { status?: string; reference?: string };
+        const fields = data as DocFields<Doc> & { status?: string; reference?: string; total?: number };
+        const leavesDraft = !!fields.status && fields.status !== "draft";
 
         const save = async () => {
           const prev = await q.get(id);
           const prevLineItems = lineItems ? await q.lineItems(id) : undefined;
           let numbered = false;
 
-          // Assign the real reference when a draft is sent
-          if (fields.status === "sent" && prev?.reference.startsWith("DRAFT")) {
+          // A draft has no number to keep: it is deleted, not cancelled.
+          if (fields.status === "cancelled" && prev && isDraftDocument(prev)) {
+            throw new AppError("error_cancel_draft", "Cannot cancel a draft");
+          }
+
+          // Assign the real reference on any move out of draft (sent, or
+          // straight to paid or overdue): no issued document keeps DRAFT-<uuid>.
+          if (leavesDraft && prev?.reference.startsWith("DRAFT")) {
             const date = prev[dateField] as unknown as string | null;
             const year = date ? parseInt(date.substring(0, 4)) : new Date().getFullYear();
             fields.reference = await q.nextReference(year);
@@ -183,17 +206,26 @@ export function documentHooks<Doc extends DocumentRow, Item extends LineItemFiel
           await q.updateWithLineItems(id, data, lineItems);
           return { prev, prevLineItems, numbered };
         };
-        // Sending picks the next free number: two sends at once would read the
+        // Leaving draft picks the next free number: two at once would read the
         // same one, so they take turns from reading the number to writing it.
         const { prev, prevLineItems, numbered } =
-          fields.status === "sent" ? await oneSendAtATime(save) : await save();
+          leavesDraft ? await oneSendAtATime(save) : await save();
 
         // Once numbered, no undo step may delete or revert it, and Cmd+Z must
         // not reach past the send to another document: start a fresh history.
         // To take a sent document back, the user cancels it.
         if (numbered) clearUndoHistory();
 
-        await config.afterUpdate?.(id, fields.status ?? prev?.status, qc);
+        const prevTotal = (prev as unknown as { total?: number } | null)?.total;
+        const contentChanged =
+          (!!lineItems && !!prevLineItems &&
+            lineItemsKey(prevLineItems.map(stripLineItem)) !== lineItemsKey(lineItems)) ||
+          (fields.total !== undefined && fields.total !== prevTotal);
+        await config.afterUpdate?.(
+          id,
+          { status: fields.status ?? prev?.status, prevStatus: prev?.status, numbered, contentChanged },
+          qc,
+        );
 
         // A send that gave the document its number can't be undone: undoing it
         // would free the number for the next document. Cancel it instead.

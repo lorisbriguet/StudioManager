@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { MemoryRouter, Routes, Route, Link } from "react-router-dom";
 import { InvoiceFormPage } from "../pages/InvoiceFormPage";
 import { QuoteFormPage } from "../pages/QuoteFormPage";
 import { useAppStore } from "../stores/app-store";
@@ -95,5 +95,44 @@ describe("per-document language", () => {
     fireEvent.click(await screen.findByLabelText(/client/i));
     fireEvent.click(await screen.findByRole("option", { name: "Gallery North" }));
     expect(screen.getByLabelText(/^language/i)).toHaveTextContent("English");
+  });
+});
+
+// U3: the pre-fill ran once per mounted form, so "New invoice" from a second
+// project while the form was open kept the first project's client.
+describe("pre-fill from a second project", () => {
+  const PROJECTS: Record<number, { id: number; client_id: string; name: string; status: string }> = {
+    7: { id: 7, client_id: "C-002", name: "Spring show", status: "active" },
+    8: { id: 8, client_id: "C-001", name: "Autumn book", status: "active" },
+  };
+
+  it.each([
+    ["invoice", "/invoices/new", InvoiceFormPage],
+    ["quote", "/quotes/new", QuoteFormPage],
+  ] as const)("a new %s from another project pre-fills that project's client", async (_kind, path, Form) => {
+    setSelectHandler((sql, params) => {
+      const flat = sql.replace(/\s+/g, " ");
+      if (flat.includes("FROM clients")) return CLIENTS;
+      if (flat.includes("FROM projects")) {
+        const id = Number((params as unknown[])[0]);
+        return PROJECTS[id] ? [PROJECTS[id]] : Object.values(PROJECTS);
+      }
+      if (flat.includes("FROM business_profile")) return [{ id: 1, owner_name: "Studio" }];
+      return [];
+    });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={[`${path}?project=7`]}>
+          <Link to={`${path}?project=8`}>other project</Link>
+          <Routes>
+            <Route path={path} element={<Form />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+    await waitFor(() => expect(screen.getByLabelText(/client/i)).toHaveTextContent("Gallery North"));
+    fireEvent.click(screen.getByText("other project"));
+    await waitFor(() => expect(screen.getByLabelText(/client/i)).toHaveTextContent("Atelier Noir"));
   });
 });

@@ -13,10 +13,10 @@ import * as exchangeRate from "../lib/exchangeRate";
 
 const YEAR = new Date().getFullYear();
 
-function invoiceRow(currency: string, rate: number, chf: number) {
+function invoiceRow(currency: string, rate: number, chf: number, draft = false) {
   return {
-    id: 7, reference: "2026-0007", client_id: "c1", project_id: null, contact_id: null,
-    billing_address_id: null, template_id: null, status: "draft", language: "EN",
+    id: 7, reference: draft ? "DRAFT-7" : "2026-0007", client_id: "c1", project_id: null, contact_id: null,
+    billing_address_id: null, template_id: null, status: draft ? "draft" : "sent", language: "EN",
     activity: "Design", activity_id: null, assignment: "", invoice_date: `${YEAR}-02-01`,
     due_date: `${YEAR}-03-01`, payment_terms_days: 30, subtotal: 500, discount_applied: 0,
     discount_rate: 0, discount_label: "", total: 500, po_number: null, paid_date: null,
@@ -81,6 +81,26 @@ describe("editing an invoice keeps its stored money facts", () => {
     expect(params).toContain(0.93);
     expect(params).toContain(465);
     expect(fetchRate).not.toHaveBeenCalled();
+  });
+
+  // A draft's rate is not a fact yet (2-D7): it takes the rate of its date
+  // and its CHF equivalent follows the total.
+  it("a EUR draft takes the rate of its date and recomputes its CHF equivalent", async () => {
+    const fetchRate = vi.spyOn(exchangeRate, "getExchangeRate").mockResolvedValue(0.9);
+    renderForm(invoiceRow("EUR", 0.93, 465, true));
+    await waitFor(() => expect(fetchRate).toHaveBeenCalledWith("EUR", `${YEAR}-02-01`));
+    const params = await saveAndGetUpdate();
+    expect(params).toContain(0.9);
+    expect(params).toContain(555.56); // 500 / 0.9
+    expect(params).not.toContain(465);
+  });
+
+  it("offline, a EUR draft keeps its stored rate but its CHF equivalent still follows the total", async () => {
+    vi.spyOn(exchangeRate, "getExchangeRate").mockResolvedValue(null);
+    renderForm(invoiceRow("EUR", 0.93, 465, true));
+    const params = await saveAndGetUpdate();
+    expect(params).toContain(0.93);
+    expect(params).toContain(537.63); // 500 / 0.93
   });
 
   it("a CHF invoice books its total as the CHF equivalent", async () => {

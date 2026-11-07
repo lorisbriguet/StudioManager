@@ -1,4 +1,6 @@
 import { formatMoney } from "../lib/money";
+import { documentDisplayRef, statusLabel } from "../lib/documentDisplay";
+import { InvoiceAmount } from "./invoice/InvoiceAmount";
 import { useState, useCallback, useMemo, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { notify } from "../lib/notify";
@@ -213,9 +215,9 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
                     onClick={() => navigate(`/invoices/${inv.id}/preview`)}
                     className="w-full flex items-center gap-2 py-1.5 text-left hover:bg-[var(--color-hover-row)] rounded-md px-1 transition-colors"
                   >
-                    <span className="text-sm truncate">{inv.reference}</span>
-                    <span className="text-xs text-muted">{formatMoney(inv.total, inv.currency ?? "CHF")}</span>
-                    <Badge variant={invoiceStatusVariant(inv.status)} className="ml-auto">{inv.status}</Badge>
+                    <span className="text-sm truncate">{documentDisplayRef(inv, t)}</span>
+                    <InvoiceAmount invoice={inv} className="text-xs text-muted" />
+                    <Badge variant={invoiceStatusVariant(inv.status)} className="ml-auto">{statusLabel(inv.status, t)}</Badge>
                   </button>
                 ))}
               </div>
@@ -265,9 +267,9 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
                     onClick={() => navigate(`/quotes/${qt.id}/preview`)}
                     className="w-full flex items-center gap-2 py-1.5 text-left hover:bg-[var(--color-hover-row)] rounded-md px-1 transition-colors"
                   >
-                    <span className="text-sm truncate">{qt.reference}</span>
+                    <span className="text-sm truncate">{documentDisplayRef(qt, t)}</span>
                     <span className="text-xs text-muted">{formatMoney(qt.total, "CHF")}</span>
-                    <Badge variant={quoteStatusVariant(qt.status)} className="ml-auto">{qt.status}</Badge>
+                    <Badge variant={quoteStatusVariant(qt.status)} className="ml-auto">{statusLabel(qt.status, t)}</Badge>
                   </button>
                 ))}
               </div>

@@ -3,10 +3,11 @@ import { getDb } from "../db";
 import { setSelectHandler } from "../__mocks__/tauri-sql";
 import { generateAndStoreInvoicePdf } from "../lib/invoicePdfStore";
 
-// The stored PDF is what the preview iframe shows and what "mark as sent &
-// export" downloads — it must be rendered with the same props as the live
-// preview (template, billing address, project name, reminder count), not a
-// bare default rendering.
+// The stored PDF is what the preview iframe shows, what "mark as sent &
+// export" downloads and what the trustee export copies. It is rendered with
+// the same props as the live preview (template, billing address, project
+// name), but without a reminder banner: it is the invoice the client first
+// got (2-D5).
 
 const captured = vi.hoisted(() => ({ doc: null as { props: Record<string, unknown> } | null }));
 
@@ -25,7 +26,10 @@ vi.mock("@react-pdf/renderer", () => ({
   Canvas: () => null,
 }));
 
-const invoiceRow = {
+// The VOID overlay parses real PDF bytes; the render above is a stub.
+vi.mock("../lib/pdfPostProcess", () => ({ postProcessInvoicePdf: async (bytes: Uint8Array) => bytes }));
+
+let invoiceRow: Record<string, unknown> = {
   id: 5,
   reference: "2026-0001",
   client_id: "c1",
@@ -61,7 +65,7 @@ afterEach(() => {
 });
 
 describe("generateAndStoreInvoicePdf", () => {
-  it("renders the stored PDF with template, billing address, project and reminder count", async () => {
+  it("renders the stored PDF with template, billing address and project, without the reminder banner", async () => {
     const path = await generateAndStoreInvoicePdf(5);
     expect(path).toContain("2026-0001_ACME.pdf");
     expect(captured.doc).not.toBeNull();
@@ -69,6 +73,17 @@ describe("generateAndStoreInvoicePdf", () => {
     expect(props.template).toMatchObject({ id: 3 });
     expect(props.billingAddress).toMatchObject({ id: 2 });
     expect(props.projectName).toBe("Proj");
-    expect(props.reminderCount).toBe(1);
+    expect(props.reminderCount).toBe(0);
+  });
+
+  it("stores a cancelled invoice as a separate _VOID file, so the original stays", async () => {
+    const sent = invoiceRow;
+    invoiceRow = { ...sent, status: "cancelled" };
+    try {
+      const path = await generateAndStoreInvoicePdf(5);
+      expect(path).toContain("2026-0001_ACME_VOID.pdf");
+    } finally {
+      invoiceRow = sent;
+    }
   });
 });

@@ -365,11 +365,80 @@ describe("invoice-only hooks", () => {
   });
 
   it("a failed PDF does not fail the save", async () => {
-    inv.get.mockResolvedValue({ id: 5, reference: "2025-004", status: "sent", invoice_date: "2025-03-01" });
+    inv.get.mockResolvedValue({ id: 5, reference: "2025-004", status: "sent", invoice_date: "2025-03-01", total: 100 });
     pdf.mockRejectedValueOnce(new Error("render failed"));
     const { result } = renderHook(() => invHooks.useUpdateInvoice(), { wrapper });
-    await result.current.mutateAsync({ id: 5, data: { notes: "x" } as never });
+    await result.current.mutateAsync({ id: 5, data: { total: 200 } as never });
+    expect(pdf).toHaveBeenCalled();
     expect(inv.update).toHaveBeenCalled();
     expect(useUndoStore.getState().stack).toHaveLength(1);
+  });
+
+  // 2-D4: a draft marked paid or overdue gets its number like a send.
+  it.each(["paid", "overdue"])("numbers a draft marked %s and stores its PDF", async (status) => {
+    inv.get.mockResolvedValue({ id: 5, reference: "DRAFT-1", status: "draft", invoice_date: "2025-03-01" });
+    const { result } = renderHook(() => invHooks.useUpdateInvoice(), { wrapper });
+    await result.current.mutateAsync({ id: 5, data: { status, paid_date: "2025-04-01" } as never });
+    expect(inv.nextRef).toHaveBeenCalledWith(2025);
+    expect(inv.update).toHaveBeenCalledWith(5, expect.objectContaining({ status, reference: "NEXT-REF" }), undefined);
+    expect(pdf).toHaveBeenCalledWith(5);
+    expect(useUndoStore.getState().stack).toHaveLength(0);
+  });
+
+  it("numbers and stores an older sent invoice that still has a DRAFT reference when marked paid", async () => {
+    inv.get.mockResolvedValue({ id: 5, reference: "DRAFT-1", status: "sent", invoice_date: "2025-03-01" });
+    const { result } = renderHook(() => invHooks.useUpdateInvoice(), { wrapper });
+    await result.current.mutateAsync({ id: 5, data: { status: "paid" } as never });
+    expect(inv.update).toHaveBeenCalledWith(5, expect.objectContaining({ reference: "NEXT-REF" }), undefined);
+    expect(pdf).toHaveBeenCalledWith(5);
+  });
+
+  it("refuses to cancel a draft: it is deleted instead", async () => {
+    inv.get.mockResolvedValue({ id: 5, reference: "DRAFT-1", status: "draft", invoice_date: "2025-03-01" });
+    const { result } = renderHook(() => invHooks.useUpdateInvoice(), { wrapper });
+    await expect(
+      result.current.mutateAsync({ id: 5, data: { status: "cancelled" } as never })
+    ).rejects.toThrow("Cannot cancel a draft");
+    expect(inv.update).not.toHaveBeenCalled();
+    expect(inv.nextRef).not.toHaveBeenCalled();
+  });
+
+  // 2-D5: the stored PDF is what the client got; only a content edit or a
+  // cancel writes it again.
+  const sent = { id: 5, reference: "2025-004", status: "sent", invoice_date: "2025-03-01", total: 200 };
+  it.each([
+    ["marking it paid", { status: "paid", paid_date: "2025-04-01" }],
+    ["marking it overdue", { status: "overdue" }],
+    ["a reminder", { reminder_count: 1, last_reminder_date: "2025-04-15" }],
+    ["a notes edit", { notes: "x" }],
+  ])("leaves the stored PDF of a sent invoice alone on %s", async (_name, data) => {
+    inv.get.mockResolvedValue(sent);
+    const { result } = renderHook(() => invHooks.useUpdateInvoice(), { wrapper });
+    await result.current.mutateAsync({ id: 5, data: data as never });
+    expect(inv.update).toHaveBeenCalled();
+    expect(pdf).not.toHaveBeenCalled();
+  });
+
+  it("stores the PDF again when a sent invoice's lines change", async () => {
+    inv.get.mockResolvedValue(sent);
+    inv.lineItems.mockResolvedValue([{ id: 70, invoice_id: 5, ...item }]);
+    const { result } = renderHook(() => invHooks.useUpdateInvoice(), { wrapper });
+    await result.current.mutateAsync({ id: 5, data: { notes: "x" } as never, lineItems: [{ ...item, quantity: 3, amount: 300 }] });
+    expect(pdf).toHaveBeenCalledWith(5);
+  });
+
+  it("does not store it again when the form saves the same lines", async () => {
+    inv.get.mockResolvedValue(sent);
+    inv.lineItems.mockResolvedValue([{ id: 70, invoice_id: 5, ...item }]);
+    const { result } = renderHook(() => invHooks.useUpdateInvoice(), { wrapper });
+    await result.current.mutateAsync({ id: 5, data: { notes: "x", total: 200 } as never, lineItems: [item] });
+    expect(pdf).not.toHaveBeenCalled();
+  });
+
+  it("stores the VOID PDF when a sent invoice is cancelled", async () => {
+    inv.get.mockResolvedValue(sent);
+    const { result } = renderHook(() => invHooks.useUpdateInvoice(), { wrapper });
+    await result.current.mutateAsync({ id: 5, data: { status: "cancelled" } as never });
+    expect(pdf).toHaveBeenCalledWith(5);
   });
 });

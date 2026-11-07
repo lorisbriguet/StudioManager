@@ -33,6 +33,12 @@ const exportLabels = {
     collected: "Collected",
     invoice: "invoice",
     invoices: "invoices",
+    status_draft: "Draft",
+    status_sent: "Sent",
+    status_paid: "Paid",
+    status_overdue: "Overdue",
+    status_cancelled: "Cancelled",
+    cancelled_not_counted: "Cancelled invoices are listed but not counted in the totals.",
 
     // Expenses list
     expenses_title: "Expenses",
@@ -88,6 +94,12 @@ const exportLabels = {
     collected: "Encaisse",
     invoice: "facture",
     invoices: "factures",
+    status_draft: "Brouillon",
+    status_sent: "Envoyee",
+    status_paid: "Payee",
+    status_overdue: "En retard",
+    status_cancelled: "Annulee",
+    cancelled_not_counted: "Les factures annulees sont listees mais pas comptees dans les totaux.",
 
     // Expenses list
     expenses_title: "Depenses",

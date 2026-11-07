@@ -66,7 +66,12 @@ export function buildQRBillData(
   const addr = billingAddress ?? client;
   // Older clients keep "1000 Lausanne" in address_line2.
   const cityLine = (addr.postal_city || addr.address_line2 || "").trim();
-  const hasAddress = !!(addr.address_line1?.trim() || cityLine);
+  // Addresses have no country field. The bill must name the payer's
+  // country, so it only names a payer whose address is clearly Swiss (a
+  // four-digit postcode, optionally "CH-"). Any other address is left off
+  // and the bill shows the empty box the payer fills in by hand, rather
+  // than a foreign address marked CH.
+  const swiss = cityLine.match(/^(?:CH\s*-?\s*)?(\d{4})\s+(\S.*)$/i);
   const account = qrAccount(profile);
   const needsQRRef = isQRIBAN(account);
   // A draft's message leaves out its internal reference.
@@ -93,13 +98,13 @@ export function buildQRBillData(
       ? { reference: toQRReference(invoice.reference) }
       : {}),
     message,
-    ...(hasAddress
+    ...(swiss
       ? {
           debtor: {
             name: billingAddress?.billing_name || client.billing_name || client.name,
             address: addr.address_line1 || "",
-            zip: cityLine.match(/^\d+/)?.[0] || "",
-            city: cityLine.replace(/^\d+\s*/, ""),
+            zip: swiss[1],
+            city: swiss[2].trim(),
             country: "CH",
           },
         }

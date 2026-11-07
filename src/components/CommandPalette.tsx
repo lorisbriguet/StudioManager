@@ -1,4 +1,6 @@
 import { formatMoney } from "../lib/money";
+import { isDraftDocument } from "../lib/draftDocument";
+import { statusLabel } from "../lib/documentDisplay";
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Command } from "cmdk";
@@ -140,7 +142,7 @@ export function CommandPalette() {
                   key={p.id}
                   icon={ICONS.project}
                   label={p.name}
-                  subtitle={p.status}
+                  subtitle={statusLabel(p.status, t)}
                   onSelect={() => go(`/projects/${p.id}`)}
                 />
               ))}
@@ -154,8 +156,10 @@ export function CommandPalette() {
                 <PaletteItem
                   key={inv.id}
                   icon={ICONS.invoice}
-                  label={inv.reference}
-                  subtitle={formatMoney(inv.total, "CHF")}
+                  label={isDraftDocument(inv)
+                    ? [t.draft, clients?.find((c) => c.id === inv.client_id)?.name].filter(Boolean).join(" · ")
+                    : inv.reference}
+                  subtitle={formatMoney(inv.total, inv.currency || "CHF")}
                   onSelect={() => go(`/invoices/${inv.id}/edit`)}
                 />
               ))}
