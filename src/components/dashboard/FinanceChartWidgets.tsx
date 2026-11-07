@@ -209,6 +209,7 @@ export function MonthlyComparison() {
   const { data: currentYearData } = useMonthlyData(year);
   const { data: lastYearData } = useMonthlyData(year - 1);
   const t = useT();
+  const lang = useAppStore((s) => s.language);
 
   const currentRev = currentYearData?.[month]?.revenue ?? 0;
   const lastRev = lastYearData?.[month]?.revenue ?? 0;
@@ -224,7 +225,12 @@ export function MonthlyComparison() {
           {diff >= 0 ? "+" : ""}{diff}% {t.vs_last_year}
         </span>
       ) : (
-        <span>{t.vs_last_year}: {t.no_data}</span>
+        <span>
+          {t.no_invoices_in_month.replace(
+            "{month}",
+            new Intl.DateTimeFormat(lang === "FR" ? "fr-CH" : "en-GB", { month: "long", year: "numeric" }).format(new Date(year - 1, month, 1))
+          )}
+        </span>
       )}
     />
   );
