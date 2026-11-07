@@ -168,10 +168,10 @@ describe("invoice deletion", () => {
       );
       expect(insert).toBeDefined();
       // template_id was silently dropped before: assert the column is in the
-      // statement and its value is bound as the 27th param
-      expect(insert!.sql).toContain("template_id");
-      expect(insert!.params).toHaveLength(27);
-      expect(insert!.params[26]).toBe(5);
+      // statement and its value is bound at the matching position
+      const columns = /\(([^)]*)\)/.exec(insert!.sql)![1].split(", ");
+      expect(columns).toContain("template_id");
+      expect(insert!.params[columns.indexOf("template_id")]).toBe(5);
     });
   });
 

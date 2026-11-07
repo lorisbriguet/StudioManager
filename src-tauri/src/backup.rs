@@ -1,6 +1,7 @@
 //! Backups of one organisation into a backup folder.
 //!
-//! Each run writes `backup-<org id>-<timestamp>/` holding:
+//! Each run writes `backup-<org id>-<timestamp>/` (with `-pre-restore` after
+//! the timestamp for the safety backup taken before a restore) holding:
 //! - `studiomanager.db`: a `VACUUM INTO` snapshot, the exact and consistent
 //!   copy of the database at one moment;
 //! - `data/<table>.csv`: every table, read from that snapshot (not from the

@@ -3,6 +3,13 @@ import { getDb } from "../db/index";
 import { useAppStore } from "../stores/app-store";
 import { logError, logInfo, logWarn } from "../lib/log";
 import { getLabels, notify } from "../lib/notify";
+import { modeActive } from "./activeMode";
+
+/** Test or presentation mode: the data is a copy whose rows still carry the
+ *  real event ids, so nothing here may write to the Apple Calendar. Every
+ *  write goes through createCalendarEvent, deleteCalendarEvent,
+ *  purgeAllCalendarEvents or syncAllExisting, which all check this. */
+const calendarOff = modeActive;
 
 function getCalendarName(): string {
   return useAppStore.getState().calendarName || "StudioManager";
@@ -39,6 +46,8 @@ export interface CalendarEvent {
 
 /** Create an event in Apple Calendar and return its uid */
 export async function createCalendarEvent(event: CalendarEvent): Promise<string> {
+  // Callers skip calendar sync in a mode; refuse rather than invent a uid.
+  if (calendarOff()) throw new Error("Apple Calendar is not used in test or presentation mode");
   return invokeCalendar<string>("calendar_create_event", {
     calendar: getCalendarName(),
     title: event.title,
@@ -59,6 +68,7 @@ export async function updateCalendarEvent(uid: string, event: CalendarEvent): Pr
 
 /** Delete a calendar event by uid */
 export async function deleteCalendarEvent(uid: string): Promise<void> {
+  if (calendarOff()) return;
   await invokeCalendar<void>("calendar_delete_event", {
     calendar: getCalendarName(),
     uid,
@@ -67,6 +77,7 @@ export async function deleteCalendarEvent(uid: string): Promise<void> {
 
 /** Delete all StudioManager-tracked events from the calendar and reset stored IDs */
 export async function purgeAllCalendarEvents(): Promise<void> {
+  if (calendarOff()) return;
   const db = await getDb();
 
   // Collect all tracked UIDs from DB
@@ -121,6 +132,7 @@ export async function purgeAllCalendarEvents(): Promise<void> {
 
 /** Sync all existing tasks, subtasks, and project deadlines that don't have a calendar_event_id yet */
 export async function syncAllExisting(): Promise<number> {
+  if (calendarOff()) return 0;
   logInfo("[CalendarSync] Starting sync...");
   const db = await getDb();
   let count = 0;
