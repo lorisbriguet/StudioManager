@@ -259,12 +259,81 @@ fn time_machine_running() -> bool {
         .unwrap_or(false)
 }
 
+/// Where the Time Machine and Tailscale cards get their data from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostReads {
+    /// This Mac: the production app outside test and presentation mode.
+    Real,
+    /// Fictional data: the demo build never reads the Mac it runs on.
+    Demo,
+    /// Nothing: test and presentation mode keep the Mac's state out.
+    None,
+}
+
+/// The one gate before any command that reads this Mac's Tailscale or Time
+/// Machine. Decided from the bundle identifier, so the demo frontend can't
+/// reach the real data.
+pub fn host_reads_allowed(identifier: &str, in_mode: bool) -> HostReads {
+    if identifier == crate::agent_access::DEMO_IDENTIFIER {
+        HostReads::Demo
+    } else if in_mode {
+        HostReads::None
+    } else {
+        HostReads::Real
+    }
+}
+
+fn host_reads(app: &tauri::AppHandle) -> Result<HostReads, String> {
+    Ok(host_reads_allowed(&app.config().identifier, crate::active_org(app)?.in_mode()))
+}
+
+fn iso_ago(now: chrono::DateTime<chrono::Utc>, minutes: i64) -> String {
+    (now - chrono::Duration::minutes(minutes)).to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+}
+
+/// The demo build's Time Machine: "Studio Mac", backed up three hours ago.
+pub fn demo_time_machine(now: chrono::DateTime<chrono::Utc>) -> TimeMachineStatus {
+    TimeMachineStatus {
+        enabled: true,
+        last_backup_at: Some(iso_ago(now, 3 * 60)),
+        last_result: Some(0),
+        running: false,
+        computer_name: Some("Studio Mac".into()),
+    }
+}
+
+/// The demo build's tailnet: four invented devices, the tablet offline since yesterday.
+pub fn demo_tailscale(now: chrono::DateTime<chrono::Utc>) -> TailscaleStatus {
+    let device = |name: &str, dns: &str, os: &str, ip: &str, online: bool, is_self: bool| TailscaleDevice {
+        name: name.into(),
+        dns_name: Some(format!("{dns}.studio.example")),
+        os: Some(os.into()),
+        ip: Some(ip.into()),
+        online,
+        last_seen: (!online).then(|| iso_ago(now, 26 * 60)),
+        is_self,
+    };
+    TailscaleStatus {
+        running: true,
+        tailnet: Some("studio.example".into()),
+        devices: vec![
+            device("Studio Mac", "studio-mac", "macOS", "192.0.2.1", true, true),
+            device("Studio NAS", "studio-nas", "linux", "192.0.2.2", true, false),
+            device("Studio Phone", "studio-phone", "iOS", "192.0.2.3", true, false),
+            device("Studio Tablet", "studio-tablet", "iOS", "192.0.2.4", false, false),
+        ],
+    }
+}
+
 /// This Mac's Time Machine, or None when it was never set up (no preferences
 /// file) or in test and presentation mode, where the Mac's real state stays out.
+/// The demo build gets fictional data and never runs `tmutil` or `defaults`.
 #[tauri::command]
 pub async fn time_machine_status(app: tauri::AppHandle) -> Result<Option<TimeMachineStatus>, String> {
-    if crate::active_org(&app)?.in_mode() {
-        return Ok(None);
+    match host_reads(&app)? {
+        HostReads::Real => {}
+        HostReads::Demo => return Ok(Some(demo_time_machine(chrono::Utc::now()))),
+        HostReads::None => return Ok(None),
     }
     tauri::async_runtime::spawn_blocking(|| {
         if !std::path::Path::new(TIME_MACHINE_PREFS).exists() {
@@ -362,10 +431,13 @@ pub fn parse_tailscale(v: &serde_json::Value) -> TailscaleStatus {
 
 /// The tailnet from `tailscale status --json`, or None when the CLI isn't
 /// installed, and in test and presentation mode. Answers within 5 seconds.
+/// The demo build gets a fictional tailnet and never runs the CLI.
 #[tauri::command]
 pub async fn tailscale_status(app: tauri::AppHandle) -> Result<Option<TailscaleStatus>, String> {
-    if crate::active_org(&app)?.in_mode() {
-        return Ok(None);
+    match host_reads(&app)? {
+        HostReads::Real => {}
+        HostReads::Demo => return Ok(Some(demo_tailscale(chrono::Utc::now()))),
+        HostReads::None => return Ok(None),
     }
     let Some(cli) = TAILSCALE_PATHS.iter().find(|p| std::path::Path::new(p).exists()) else {
         return Ok(None);
@@ -688,6 +760,42 @@ mod tests {
                "TailscaleIPs": ["100.1.1.4"], "Online": true, "LastSeen": "2026-11-01T00:00:00Z" }
       }
     }"#;
+
+    #[test]
+    fn demo_build_never_reads_this_mac() {
+        assert_eq!(host_reads_allowed("ch.studiomanager.demo", false), HostReads::Demo);
+        assert_eq!(host_reads_allowed("ch.studiomanager.demo", true), HostReads::Demo);
+        assert_eq!(host_reads_allowed("ch.studiomanager.app", true), HostReads::None);
+        assert_eq!(host_reads_allowed("ch.studiomanager.app", false), HostReads::Real);
+    }
+
+    fn noon() -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::parse_from_rfc3339("2026-11-07T12:00:00Z").unwrap().with_timezone(&chrono::Utc)
+    }
+
+    #[test]
+    fn demo_time_machine_is_a_recent_fictional_backup() {
+        let tm = demo_time_machine(noon());
+        assert!(tm.enabled && !tm.running);
+        assert_eq!(tm.last_backup_at.as_deref(), Some("2026-11-07T09:00:00Z"));
+        assert_eq!(tm.last_result, Some(0));
+        assert_eq!(tm.computer_name.as_deref(), Some("Studio Mac"));
+    }
+
+    #[test]
+    fn demo_tailscale_is_a_fictional_tailnet_with_one_device_offline() {
+        let ts = demo_tailscale(noon());
+        assert!(ts.running);
+        assert_eq!(ts.tailnet.as_deref(), Some("studio.example"));
+        assert_eq!(ts.devices.len(), 4);
+        assert!(ts.devices[0].is_self && ts.devices[0].online);
+        assert_eq!(ts.devices.iter().filter(|d| d.is_self).count(), 1);
+        assert!(ts.devices.iter().all(|d| d.dns_name.as_deref().is_some_and(|n| n.ends_with(".studio.example"))));
+        let offline: Vec<_> = ts.devices.iter().filter(|d| !d.online).collect();
+        assert_eq!(offline.len(), 1);
+        assert_eq!(offline[0].last_seen.as_deref(), Some("2026-11-06T10:00:00Z"));
+        assert!(ts.devices.iter().filter(|d| d.online).all(|d| d.last_seen.is_none()));
+    }
 
     #[test]
     fn parse_tailscale_lists_this_mac_first_then_online_then_by_name() {
