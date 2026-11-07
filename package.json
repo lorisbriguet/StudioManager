@@ -72,7 +72,7 @@
     "recharts": "^3.7.0",
     "remark-gfm": "4.0.1",
     "sonner": "^2.0.7",
-    "swissqrbill": "^4.4.3",
+    "swissqrbill": "^4.4.4",
     "zustand": "^5.0.16"
   },
   "knip": {
