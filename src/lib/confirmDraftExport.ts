@@ -1,5 +1,6 @@
 import { confirm } from "./confirm";
 import { getLabels } from "./notify";
+import { isDraftDocument } from "./draftDocument";
 
 export type DraftExportChoice = "cancel" | "draft" | "sent";
 
@@ -21,15 +22,15 @@ export async function confirmDraftExport(): Promise<DraftExportChoice> {
 
 /**
  * For the list pages' download and email actions: true when the export may
- * go ahead. A draft (DRAFT- reference) asks first; "Mark as sent & export"
+ * go ahead. A draft (see isDraftDocument) asks first; "Mark as sent & export"
  * runs `markSent` (the document gets its real reference) before resolving.
  * The generator then reads the document fresh from the database.
  */
 export async function settleDraftBeforeExport(
-  reference: string,
+  doc: { reference: string; status?: string | null },
   markSent: () => Promise<unknown>
 ): Promise<boolean> {
-  if (!reference.startsWith("DRAFT")) return true;
+  if (!isDraftDocument(doc)) return true;
   const choice = await confirmDraftExport();
   if (choice === "cancel") return false;
   if (choice === "sent") {

@@ -104,6 +104,35 @@ describe("runBulkPdfExport", () => {
     expect(writeFile).not.toHaveBeenCalled();
   });
 
+  it("warns for a draft-status quote that already has a real reference", async () => {
+    vi.mocked(confirm).mockResolvedValue(false);
+    await runBulkPdfExport({
+      docs: [{ id: 5, reference: "D-2026-005", status: "draft" }],
+      busyIds: new Set<number>(),
+      t: LABELS,
+      generate: async () => okResult("D-2026-005"),
+      notFoundMessage: "not found",
+      logLabel: "quote",
+      onDone: vi.fn(),
+    });
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it("does not warn for issued documents", async () => {
+    await runBulkPdfExport({
+      docs: [{ id: 1, reference: "D-2026-001", status: "sent" }],
+      busyIds: new Set<number>(),
+      t: LABELS,
+      generate: async () => okResult("D-2026-001"),
+      notFoundMessage: "not found",
+      logLabel: "quote",
+      onDone: vi.fn(),
+    });
+    expect(confirm).not.toHaveBeenCalled();
+    expect(writeFile).toHaveBeenCalledTimes(1);
+  });
+
   it("stops cleanly when the folder dialog is cancelled", async () => {
     vi.mocked(open).mockResolvedValue(null);
     const busyIds = new Set<number>();

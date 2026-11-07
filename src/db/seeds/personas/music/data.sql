@@ -272,7 +272,7 @@ INSERT INTO quotes (id, reference, client_id, project_id, status, language, acti
   (2, 'D-2026-002', 'C-005', NULL, 'accepted', 'FR', (SELECT name_fr FROM activities WHERE name_fr = 'Atelier'), (SELECT id FROM activities WHERE name_fr = 'Atelier'), 'Forfait ateliers écriture', date('now', '-165 days'), date('now', '-140 days'), 3500.00, 0, 0.00, 3500.00, 3, NULL, ''),
   (3, 'D-2026-003', 'C-004', NULL, 'sent', 'EN', (SELECT name_en FROM activities WHERE name_fr = 'Production'), (SELECT id FROM activities WHERE name_fr = 'Production'), 'Showcase acoustique — soirée corporate', date('now', '-20 days'), date('now', '+10 days'), 2500.00, 0, 0.00, 2500.00, NULL, NULL, ''),
   (4, 'D-2026-004', 'C-001', NULL, 'rejected', 'FR', (SELECT name_fr FROM activities WHERE name_fr = 'Concert'), (SELECT id FROM activities WHERE name_fr = 'Concert'), 'Prestation mariage — salle annexe', date('now', '-100 days'), date('now', '-70 days'), 1800.00, 0, 0.00, 1800.00, NULL, NULL, 'Demande transmise par Nadia (La Fonderie loue aussi sa salle annexe pour des événements privés). Refusé — date trop proche d''une date de tournée.'),
-  (5, 'D-2026-005', 'C-001', NULL, 'draft', 'FR', (SELECT name_fr FROM activities WHERE name_fr = 'Concert'), (SELECT id FROM activities WHERE name_fr = 'Concert'), 'Deuxième date à La Fonderie — proposition', date('now', '-5 days'), date('now', '+25 days'), 1000.00, 0, 0.00, 1000.00, NULL, NULL, 'En attente de confirmation de la salle.');
+  (5, 'DRAFT-quote-5', 'C-001', NULL, 'draft', 'FR', (SELECT name_fr FROM activities WHERE name_fr = 'Concert'), (SELECT id FROM activities WHERE name_fr = 'Concert'), 'Deuxième date à La Fonderie — proposition', date('now', '-5 days'), date('now', '+25 days'), 1000.00, 0, 0.00, 1000.00, NULL, NULL, 'En attente de confirmation de la salle.');
 INSERT INTO quote_line_items (quote_id, designation, quantity, rate, amount, unit, sort_order) VALUES
   (1, 'Cachet tête d''affiche', 1, 1200.00, 1200.00, 'flat', 0),
   (1, 'Frais techniques et backline', 4, 75.00, 300.00, 'hours', 1),
@@ -475,7 +475,7 @@ INSERT INTO machine_disks (machine_id, slot, model, serial, size_bytes, power_on
 -- row, so renumbering in place fails when a new number is still held by a
 -- row not renumbered yet (rows inserted out of date order).
 UPDATE invoices SET reference = '#' || id WHERE reference NOT LIKE 'DRAFT-%';
-UPDATE quotes SET reference = '#' || id;
+UPDATE quotes SET reference = '#' || id WHERE reference NOT LIKE 'DRAFT-%';
 UPDATE expenses SET reference = '#' || id;
 UPDATE income SET reference = '#' || id;
 UPDATE invoices SET reference = '' || strftime('%Y', invoice_date) || '-' || printf('%03d', (
@@ -486,8 +486,8 @@ UPDATE invoices SET reference = '' || strftime('%Y', invoice_date) || '-' || pri
 UPDATE quotes SET reference = 'D-' || strftime('%Y', quote_date) || '-' || printf('%03d', (
   SELECT COUNT(*) FROM quotes i2
   WHERE strftime('%Y', i2.quote_date) = strftime('%Y', quotes.quote_date)
-    AND (i2.quote_date < quotes.quote_date OR (i2.quote_date = quotes.quote_date AND i2.id <= quotes.id))
-));
+    AND (i2.quote_date < quotes.quote_date OR (i2.quote_date = quotes.quote_date AND i2.id <= quotes.id)) AND i2.reference NOT LIKE 'DRAFT-%'
+)) WHERE reference NOT LIKE 'DRAFT-%';
 UPDATE expenses SET reference = 'F-' || substr(strftime('%Y', invoice_date), 3, 2) || '-' || printf('%03d', (
   SELECT COUNT(*) FROM expenses i2
   WHERE strftime('%Y', i2.invoice_date) = strftime('%Y', expenses.invoice_date)

@@ -260,7 +260,7 @@ INSERT INTO quotes (id, reference, client_id, project_id, status, language, acti
   (2, 'D-2026-002', 'C-004', 5, 'accepted', 'FR', (SELECT name_fr FROM activities ORDER BY sort_order DESC LIMIT 1), (SELECT id FROM activities ORDER BY sort_order DESC LIMIT 1), 'Site portfolio', date('now', '-60 days'), date('now', '-30 days'), 7000.00, 0, 0.00, 7000.00, 5, ''),
   (3, 'D-2026-003', 'C-002', 2, 'accepted', 'FR', (SELECT name_fr FROM activities ORDER BY sort_order LIMIT 1), (SELECT id FROM activities ORDER BY sort_order LIMIT 1), 'Rapport annuel', date('now', '-50 days'), date('now', '-20 days'), 7200.00, 1, 0.10, 6480.00, 2, ''),
   (4, 'D-2026-004', 'C-003', 7, 'sent', 'EN', (SELECT name_en FROM activities ORDER BY sort_order DESC LIMIT 1), (SELECT id FROM activities ORDER BY sort_order DESC LIMIT 1), 'Mobile app UI kit', date('now', '-20 days'), date('now', '+10 days'), 17760.00, 0, 0.00, 17760.00, NULL, ''),
-  (5, 'D-2026-005', 'C-001', 1, 'draft', 'FR', (SELECT name_fr FROM activities ORDER BY sort_order LIMIT 1), (SELECT id FROM activities ORDER BY sort_order LIMIT 1), 'Extension charte — templates réseaux sociaux', date('now', '-3 days'), date('now', '+27 days'), 3080.00, 0, 0.00, 3080.00, NULL, '');
+  (5, 'DRAFT-quote-5', 'C-001', 1, 'draft', 'FR', (SELECT name_fr FROM activities ORDER BY sort_order LIMIT 1), (SELECT id FROM activities ORDER BY sort_order LIMIT 1), 'Extension charte — templates réseaux sociaux', date('now', '-3 days'), date('now', '+27 days'), 3080.00, 0, 0.00, 3080.00, NULL, '');
 INSERT INTO quote_line_items (quote_id, designation, quantity, rate, amount, unit, sort_order) VALUES
   (1, 'Calendar concept', 6, 120.00, 720.00, 'hours', 0),
   (1, 'Monthly illustrations', 12, 200.00, 2400.00, 'units', 1),
@@ -466,7 +466,7 @@ INSERT INTO machine_disks (machine_id, slot, model, serial, size_bytes, power_on
 -- row, so renumbering in place fails when a new number is still held by a
 -- row not renumbered yet (rows inserted out of date order).
 UPDATE invoices SET reference = '#' || id WHERE reference NOT LIKE 'DRAFT-%';
-UPDATE quotes SET reference = '#' || id;
+UPDATE quotes SET reference = '#' || id WHERE reference NOT LIKE 'DRAFT-%';
 UPDATE expenses SET reference = '#' || id;
 UPDATE income SET reference = '#' || id;
 UPDATE invoices SET reference = '' || strftime('%Y', invoice_date) || '-' || printf('%03d', (
@@ -477,8 +477,8 @@ UPDATE invoices SET reference = '' || strftime('%Y', invoice_date) || '-' || pri
 UPDATE quotes SET reference = 'D-' || strftime('%Y', quote_date) || '-' || printf('%03d', (
   SELECT COUNT(*) FROM quotes i2
   WHERE strftime('%Y', i2.quote_date) = strftime('%Y', quotes.quote_date)
-    AND (i2.quote_date < quotes.quote_date OR (i2.quote_date = quotes.quote_date AND i2.id <= quotes.id))
-));
+    AND (i2.quote_date < quotes.quote_date OR (i2.quote_date = quotes.quote_date AND i2.id <= quotes.id)) AND i2.reference NOT LIKE 'DRAFT-%'
+)) WHERE reference NOT LIKE 'DRAFT-%';
 UPDATE expenses SET reference = 'F-' || substr(strftime('%Y', invoice_date), 3, 2) || '-' || printf('%03d', (
   SELECT COUNT(*) FROM expenses i2
   WHERE strftime('%Y', i2.invoice_date) = strftime('%Y', expenses.invoice_date)

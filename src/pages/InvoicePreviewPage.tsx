@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ICONS, Button, PageHeader, EmptyState, QueryError, DetailSkeleton } from "../components/ui";
 import { confirmDraftExport } from "../lib/confirmDraftExport";
+import { isDraftDocument } from "../lib/draftDocument";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useInvoice, useInvoiceLineItems, useUpdateInvoice } from "../db/hooks/useInvoices";
@@ -192,7 +193,7 @@ export function InvoicePreviewPage() {
   };
 
   const downloadPdf = async () => {
-    if (invoice.status !== "draft") return doDownload();
+    if (!isDraftDocument(invoice)) return doDownload();
     const choice = await confirmDraftExport();
     if (choice === "draft") await doDownload();
     if (choice === "sent") handleMarkSentAndExport();

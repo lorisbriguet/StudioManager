@@ -40,6 +40,7 @@ function seededDb(): DatabaseSync {
     db.prepare("INSERT INTO income VALUES (?, ?, ?)").run(i + 1, `R-26-${n}`, d);
   });
   db.prepare("INSERT INTO invoices VALUES (?, ?, ?)").run(6, "DRAFT-abc", "2026-01-15");
+  db.prepare("INSERT INTO quotes VALUES (?, ?, ?)").run(6, "DRAFT-q", "2026-01-15");
   return db;
 }
 
@@ -51,7 +52,7 @@ describe.each(Object.entries(DATA_SEEDS))("reference renumbering in %s", (_path,
     const db = seededDb();
     for (const stmt of renumberingStatements(sql)) db.exec(stmt + ";");
     expect(refs(db, "invoices")).toEqual(["2026-003", "2026-001", "2026-004", "2026-002", "2026-005", "DRAFT-abc"]);
-    expect(refs(db, "quotes")).toEqual(["D-2026-003", "D-2026-001", "D-2026-004", "D-2026-002", "D-2026-005"]);
+    expect(refs(db, "quotes")).toEqual(["D-2026-003", "D-2026-001", "D-2026-004", "D-2026-002", "D-2026-005", "DRAFT-q"]);
     expect(refs(db, "expenses")).toEqual(["F-26-003", "F-26-001", "F-26-004", "F-26-002", "F-26-005"]);
     expect(refs(db, "income")).toEqual(["R-26-003", "R-26-001", "R-26-004", "R-26-002", "R-26-005"]);
   });
