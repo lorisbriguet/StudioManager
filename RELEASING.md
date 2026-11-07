@@ -2,7 +2,7 @@
 
 Step-by-step guidelines for publishing a new release on GitHub. Follow in order; every gate must pass before moving on. (Claude Code users: the `GitPublisher` skill automates this process — these are the same rules in human-readable form.)
 
-**Building on GitHub instead of this Mac:** after the version bump, the [CHANGELOG.md](CHANGELOG.md) section and the tag (steps 3, 5, 7 up to `git push origin main --tags`), start the **Release build** workflow on the tag (`gh workflow run release.yml --ref vX.Y.Z -f version=X.Y.Z`, or Actions › Release build › Run workflow with "Use workflow from" set to the tag) and approve it when it asks (the `release` environment). It runs the gates of steps 1 and 2, builds without the key, then signs on a separate runner (step 4), writes `latest.json` (step 6) with the changelog summary line as its notes, and creates a **draft** release with the three assets and the changelog section as its description. It stops before building when CHANGELOG.md has no section for the version. A version with a suffix (`3.4.1-rc.1`) becomes a prerelease draft: once published it is never "latest", so installed apps don't update to it. Download the `.dmg` from the draft, smoke-test it, then publish the draft and do step 8. One-time setup: the updater key and its password as secrets of the `release` environment (`gh secret set TAURI_SIGNING_PRIVATE_KEY --env release < ~/.tauri/studiomanager-2026.key`, then `gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD --env release`, which asks for the password). The workflow refuses a key without a password, except in a [key rotation](#rotate-the-key) release, the one that ships a new pubkey. The workflow is [.github/workflows/release.yml](.github/workflows/release.yml).
+**Building on GitHub instead of this Mac:** after the version bump, the [CHANGELOG.md](CHANGELOG.md) section and the tag (steps 3, 5, 7 up to `git push origin main --tags`), start the **Release build** workflow on the tag (`gh workflow run release.yml --ref vX.Y.Z -f version=X.Y.Z`, or Actions › Release build › Run workflow with "Use workflow from" set to the tag) and approve it when it asks (the `release` environment). It runs the gates of steps 1 and 2, builds without the key, then signs on a separate runner (step 4), writes `latest.json` (step 6) with the changelog summary line as its notes, and creates a **draft** release with the three assets and the changelog section as its description. It stops before building when CHANGELOG.md has no section for the version. A version with a suffix (`3.4.1-rc.1`) becomes a prerelease draft: once published it is never "latest", so installed apps don't update to it. Download the `.dmg` from the draft, smoke-test it, then publish the draft and do step 8. Setup: the updater key and its password are secrets of the `release` environment (`gh secret set TAURI_SIGNING_PRIVATE_KEY --env release < ~/.tauri/studiomanager-2026.key`, then `gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD --env release`, which asks for the password). **During a key rotation, keep the old key there, with no password secret, until the rotation release is published** ([Rotate the key](#rotate-the-key), steps 3 and 4): for 3.5.0, that is the original key, and the switch comes after 3.5.0 is out. The workflow refuses a key without a password, except in a key rotation release, the one that ships a new pubkey. The workflow is [.github/workflows/release.yml](.github/workflows/release.yml).
 
 ---
 
@@ -11,7 +11,7 @@ Step-by-step guidelines for publishing a new release on GitHub. Follow in order;
 - `gh` CLI authenticated against `lorisbriguet/StudioManager`.
 - Tauri updater signing key at `~/.tauri/studiomanager-2026.key`, protected by a password kept in the login Keychain (service `StudioManager-updater-key`). **Never commit it.** Its public key is pinned in `src-tauri/tauri.conf.json`: installed apps only accept updates signed with this key. Keep a backup of the key file and its password outside this Mac (password manager). For a new key, a lost one or a leaked one, see [Updater key: rotation, loss, leak](#updater-key-rotation-loss-leak). (Until 3.5.0 is published, its password sits under `StudioManager-updater-key-new`. 3.5.0 itself is signed with the original key, `~/.tauri/StudioManager.key`, which has no password: see [Rotate the key](#rotate-the-key).)
 - Node **20.19+ or 22.12+** (Vite 8 requirement) and Rust 1.93.1, pinned in [rust-toolchain.toml](rust-toolchain.toml) (rustup installs it on the first build).
-- Use **npm 11** for installs and lockfile changes (`npx -y npm@11 install`): npm 10.9 crashes with `Cannot read properties of null (reading 'edgesOut')` on Vitest 4's peer set.
+- Use **npm 11** for installs and lockfile changes (`npx -y npm@11 install`): npm 10.9 crashes with `Cannot read properties of null (reading 'edgesOut')` on Vitest's peer set.
 - Keep the repo out of synced folders (Synology Drive, iCloud): sync corrupts `node_modules` and `src-tauri/target`. Cargo builds into `src-tauri/target` unless `CARGO_TARGET_DIR` says otherwise (step 4 sets one). Run `npm ci` if node_modules acts up.
 
 ## 1. Pre-release validation (all must pass)
@@ -20,8 +20,8 @@ Step-by-step guidelines for publishing a new release on GitHub. Follow in order;
 npx tsc --noEmit        # zero errors
 npx vitest run          # all tests green
 npm run lint            # exit 0, zero findings
-(cd src-tauri/mcp && CARGO_TARGET_DIR=~/cargo-target-studiomanager-mcp cargo test && CARGO_TARGET_DIR=~/cargo-target-studiomanager-mcp cargo clippy --all-targets -- -D warnings)
-(cd src-tauri && cargo test && cargo clippy --all-targets -- -D warnings)
+(cd src-tauri/mcp && CARGO_TARGET_DIR=~/cargo-target-studiomanager-mcp cargo test --locked && CARGO_TARGET_DIR=~/cargo-target-studiomanager-mcp cargo clippy --locked --all-targets -- -D warnings)
+(cd src-tauri && cargo test --locked && cargo clippy --locked --all-targets -- -D warnings)
 ```
 
 Run `bash scripts/build-mcp.sh` and `npx vite build` once on a fresh clone before any `cargo` command in `src-tauri` (they create the git-ignored `src-tauri/binaries/studiomanager-mcp-<triple>` that Tauri's externalBin requires and the `dist/` folder the app crate embeds). CI runs the app checks on every push (the `rust` job in [.github/workflows/ci.yml](.github/workflows/ci.yml)) with the Rust version pinned in [rust-toolchain.toml](rust-toolchain.toml), the same one rustup picks here, so local lints match CI. The `studiomanager-mcp` crate (`src-tauri/mcp`) needs Rust 1.88+. Never run `cargo fmt` there: it reformats the files it shares with the app through `#[path]` includes.
@@ -43,15 +43,16 @@ grep -rn 'dark:' src --include='*.tsx' | grep -v '// ' | grep -vE 'dark: boolean
 grep -rnE '>[✕←→✓▸↑↓]<' src --include='*.tsx' | wc -l
 ```
 
-Plus the checklist: badges/tags `rounded-full`, inputs/selects `rounded-lg`, small buttons `rounded-md`, lucide icons at standard sizes, all user-visible strings through `useT()`/`getLabels()`, status colors from `statusColors.ts`. EN/FR key parity in `src/i18n/labels/` must be exact (equal counts, FR accent-free).
+Plus the checklist: badges/tags `rounded-full`, inputs/selects `rounded-lg`, small buttons `rounded-md`, lucide icons at standard sizes, all user-visible strings through `useT()`/`getLabels()`, status colors from `statusColors.ts`. EN/FR key parity in `src/i18n/labels/` must be exact (equal counts). French UI labels there use accents; only the PDF export labels (`src/i18n/export-labels.ts`) are accent-free.
 
 ## 3. Version bump (SemVer)
 
-Decide the bump from the actual changes: MAJOR = breaking, MINOR = features, PATCH = fixes only. Then update the version in **all three places** — they must match exactly (the Release build workflow checks them against the tag):
+Decide the bump from the actual changes: MAJOR = breaking, MINOR = features, PATCH = fixes only. Then update the version in **all of these places**, in one commit. The Release build workflow checks the first three against the tag, and the `--locked` cargo checks fail on a stale `Cargo.lock`:
 
-1. `package.json` → `"version"`
+1. `package.json` → `"version"`, and the two `"version"` lines at the top of `package-lock.json`
 2. `src-tauri/tauri.conf.json` → `"version"`
-3. `src-tauri/Cargo.toml` → `version` (then run a build/`cargo check` so `Cargo.lock` updates)
+3. `src-tauri/Cargo.toml` → `version`
+4. `src-tauri/Cargo.lock` → `version` of the `studiomanager` package block (or run `cargo check` in `src-tauri` without `--locked` once)
 
 The version badge in [README.md](README.md) reads the latest GitHub release by itself: nothing to change there.
 
@@ -63,10 +64,13 @@ bash scripts/build-unsigned.sh
 b=$CARGO_TARGET_DIR/release/bundle/macos/StudioManager.app.tar.gz
 TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(security find-generic-password -a "$USER" -s StudioManager-updater-key -w)" \
   npx tauri signer sign -f ~/.tauri/studiomanager-2026.key --app-version X.Y.Z "$b"
-node scripts/verify-update-signature.mjs "$b" "$b.sig"
+# Check against the pubkey of the latest published release: the one installed apps have.
+git show "$(gh release view --json tagName -q .tagName):src-tauri/tauri.conf.json" \
+  | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).plugins.updater.pubkey' > "$TMPDIR/installed.pub"
+node scripts/verify-update-signature.mjs "$b" "$b.sig" "@$TMPDIR/installed.pub"
 ```
 
-The build never sees the key: [scripts/build-unsigned.sh](scripts/build-unsigned.sh) clears the signing variables, runs `npm run tauri build`, and accepts its one expected error ("A public key has been found, but no private key"), which comes after every bundle is written. Only the Tauri signer, run on its own afterwards, reads the key and the password. The last line checks the signature against the pubkey in `tauri.conf.json`, the way the installed app will. During a key rotation, check against the previous release's pubkey instead (see [Rotate the key](#rotate-the-key)).
+The build never sees the key: [scripts/build-unsigned.sh](scripts/build-unsigned.sh) clears the signing variables, runs `npm run tauri build`, and accepts its one expected error ("A public key has been found, but no private key"), which comes after every bundle is written. Only the Tauri signer, run on its own afterwards, reads the key and the password. The last lines check the signature against the pubkey of the latest published release, the way the installed apps will (the Release build workflow does the same). Outside a key rotation it is the pubkey in `tauri.conf.json`. In a rotation release it is the old one, so sign with the old key ([Rotate the key](#rotate-the-key), step 3): a signature with the new key passes `node scripts/verify-update-signature.mjs "$b" "$b.sig"` (the `tauri.conf.json` pubkey) but every installed app rejects it.
 
 `scripts/build-mcp.sh` runs automatically as part of `beforeBuildCommand` (and `beforeDevCommand`), before the frontend build. It builds the `studiomanager-mcp` server in release mode into `~/cargo-target-studiomanager-mcp` and copies it to `src-tauri/binaries/studiomanager-mcp-<target-triple>` (git-ignored), which Tauri bundles as `Contents/MacOS/studiomanager-mcp`. Check it is there after the build, and that `StudioManager.app/Contents/MacOS/studiomanager-mcp --print-data-dir` ends in `ch.studiomanager.app`. A `universal-apple-darwin` target builds both architectures and joins them with `lipo`; it needs both rustup targets installed (`rustup target add aarch64-apple-darwin x86_64-apple-darwin`). See [docs/agent-access.md](docs/agent-access.md) for the feature itself.
 
@@ -83,7 +87,7 @@ Smoke-test the built .dmg app (launch, open a few pages, create+delete a draft i
 - Add a section for the version at the top of [CHANGELOG.md](CHANGELOG.md), written from the real commits and merged PRs: `## X.Y.Z (YYYY-MM-DD)`, then **one summary line** (what the in-app updater shows under "Release notes"), then `### Features` / `### Fixes` / `### Under the hood` (and `### Data` or `### Breaking` when they apply). Concise, user-facing wording; no noise. Relative links to repo files are fine: they are pointed at the tag on the release page.
 - Check it: `node scripts/changelog-notes.mjs X.Y.Z summary` prints the summary line, `... body` the release description. Both fail when the section or its summary line is missing.
 - Update [README.md](README.md): feature list if features shipped, remove anything now inaccurate.
-- Keep [IDEAS.md](IDEAS.md) in sync (move shipped items to the Done section).
+- Keep [IDEAS.md](IDEAS.md) in sync: add a `## VX.Y.Z — Done` section listing what shipped, with links to the PRs, and tick the items it fixed.
 
 ## 6. latest.json (the auto-updater manifest)
 
@@ -126,7 +130,7 @@ gh release create vX.Y.Z \
 
 ## 8. Post-release validation
 
-- `git status` clean; tag, `package.json`, `tauri.conf.json`, `Cargo.toml` all agree; the [README](README.md) badge shows the new version.
+- `git status` clean; tag, `package.json`, `tauri.conf.json`, `Cargo.toml` and `Cargo.lock` all agree; the [README](README.md) badge shows the new version.
 - `curl -sL https://github.com/lorisbriguet/StudioManager/releases/latest/download/latest.json` returns the new version with a non-empty signature.
 - On an installed previous version: Settings → check for updates → the update downloads AND installs (this is the real signature test).
 - Menu bar, by hand on the installed build (no test covers macOS windows, Spaces or focus): see [Menu bar checks](#menu-bar-checks) below.
@@ -173,27 +177,29 @@ Where the key lives: `~/.tauri/studiomanager-2026.key` on the MacBook, the `TAUR
 
 A rotation takes two releases: the first ships the new pubkey and is signed with the old key (installed apps only know the old pubkey), the next is the first signed with the new key.
 
-The current rotation: 3.5.0 ships the pubkey of `~/.tauri/studiomanager-2026.key` (with a password) and is signed with the original key `~/.tauri/StudioManager.key` (no password); 3.6.0 is the first release signed with the new key.
+The current rotation: 3.5.0 ships the pubkey of `~/.tauri/studiomanager-2026.key` (with a password) and is signed with the original key `~/.tauri/StudioManager.key` (no password); the next release after 3.5.0, whatever its number, is the first signed with the new key. A 3.5.1 hotfix counts too: it cuts off every 3.4.0 install that has not updated to 3.5.0 yet (those apps have to be reinstalled from the `.dmg`). Leave 3.5.0 as the latest release long enough for every Mac to update before anything else goes out.
 
 1. Make the new key, with a password: `npx tauri signer generate -w ~/.tauri/studiomanager-2026.key` (it asks for the password twice). Save the password in the Keychain under a separate name, so the old key's entry stays for step 3: `security add-generic-password -a "$USER" -s StudioManager-updater-key-new -w` (it asks for it). Back up the key file and the password. (Done for 3.5.0.)
-2. In the rotation release, replace `plugins.updater.pubkey` in `src-tauri/tauri.conf.json` with the contents of `~/.tauri/studiomanager-2026.key.pub`. [src/__tests__/updaterPubkey.test.ts](src/__tests__/updaterPubkey.test.ts) checks it is a minisign public key.
-3. Sign that release with the **old** key. On GitHub, leave the `release` environment as it is (the old key, no password secret): the Release build workflow accepts an empty password only in a release whose pubkey differs from the latest published one, and checks the signature against that published pubkey. On this Mac, use step 4 with `-f ~/.tauri/StudioManager.key` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""`, then check against the previous release's pubkey:
+2. In the rotation release, replace `plugins.updater.pubkey` in `src-tauri/tauri.conf.json` with the contents of `~/.tauri/studiomanager-2026.key.pub`. [src/__tests__/updaterPubkey.test.ts](src/__tests__/updaterPubkey.test.ts) checks it is a minisign public key. Before tagging, check that the key file matches the pubkey you pasted: sign a test file with the new key and verify it against `tauri.conf.json` (no tests or workflow step do this, and a wrong pubkey would only show when the next release is refused by every installed app):
    ```bash
-   git show vPREVIOUS:src-tauri/tauri.conf.json \
-     | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).plugins.updater.pubkey' > /tmp/old.pub
-   node scripts/verify-update-signature.mjs "$b" "$b.sig" @/tmp/old.pub
+   echo test > "$TMPDIR/k.txt"
+   TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(security find-generic-password -a "$USER" -s StudioManager-updater-key-new -w)" \
+     npx tauri signer sign -f ~/.tauri/studiomanager-2026.key --app-version 0.0.0 "$TMPDIR/k.txt"
+   node scripts/verify-update-signature.mjs "$TMPDIR/k.txt" "$TMPDIR/k.txt.sig"
+   rm "$TMPDIR/k.txt" "$TMPDIR/k.txt.sig"
    ```
-   (Step 4's own check fails here, because it uses the new pubkey: that is expected.) Publish the release as usual (steps 5 to 8).
+   It must say `signature OK` with the key id of the pubkey's comment line.
+3. Sign that release with the **old** key. On GitHub, leave the `release` environment as it is (the old key, no password secret): the Release build workflow accepts an empty password only in a release whose pubkey differs from the latest published one, and checks the signature against that published pubkey. On this Mac, use step 4 with `-f ~/.tauri/StudioManager.key` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""`: its check uses the latest published release's pubkey, which is the old one here, and must say `signature OK`. Publish the release as usual (steps 5 to 8).
 4. Once it is published, switch to the new key. In the `release` environment: `gh secret set TAURI_SIGNING_PRIVATE_KEY --env release < ~/.tauri/studiomanager-2026.key` (replaces the old key with the new key file's content) and `gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD --env release` (adds the password; it asks for it). In the Keychain, move the password to the usual name: `security add-generic-password -a "$USER" -s StudioManager-updater-key -U -w` (it asks for the new password), then `security delete-generic-password -a "$USER" -s StudioManager-updater-key-new`. From the next release on, the workflow refuses an empty password again and checks against the new pubkey.
-5. Retire the old key: move `~/.tauri/StudioManager.key` and its backup offline (off this Mac and out of the secrets) and keep it there until the next release (3.6.0) has shipped and installed apps update to it. Wait a few weeks before that release: an app that skips the rotation release can't accept updates signed with the new key and has to be reinstalled from the `.dmg`. Then delete the old key and its backup.
+5. Retire the old key: move `~/.tauri/StudioManager.key` and its backup offline (off this Mac and out of the secrets) and keep it there until the next release (the first signed with the new key) has shipped and installed apps update to it. Wait a few weeks before that release, a hotfix included: an app that skips the rotation release can't accept updates signed with the new key and has to be reinstalled from the `.dmg`. Then delete the old key and its backup.
 
 ### Lost key or password
 
-No update can be signed that installed apps accept. Make a new key (rotation step 1), put its pubkey in `tauri.conf.json`, switch to it (rotation step 4), then build and sign the release on this Mac (step 4: its check uses the new pubkey). The workflow can't ship this release, since it checks against the lost key's pubkey; it works again from the release after. Every installed app then has to be updated by hand once: download the `.dmg` from the release and replace the app in Applications. The data stays where it is (`~/Library/Application Support/ch.studiomanager.app/`). Say so at the top of the release notes: apps on an old version see the update fail at 100%.
+No update can be signed that installed apps accept. Make a new key (rotation step 1), put its pubkey in `tauri.conf.json`, switch to it (rotation step 4), then build and sign the release on this Mac with the new key (step 4, but check with `node scripts/verify-update-signature.mjs "$b" "$b.sig"`, the new pubkey: step 4's own check uses the lost key's pubkey and fails). The workflow can't ship this release, since it checks against the lost key's pubkey; it works again from the release after. Every installed app then has to be updated by hand once: download the `.dmg` from the release and replace the app in Applications. The data stays where it is (`~/Library/Application Support/ch.studiomanager.app/`). Say so at the top of the release notes: apps on an old version see the update fail at 100%.
 
 ### Leaked key, or a runner, a dependency or this Mac may be compromised
 
 1. Delete both secrets from the `release` environment (Settings › Environments › release, or `gh secret delete TAURI_SIGNING_PRIVATE_KEY --env release` and the same for the password).
 2. Check every published release and its `latest.json`: each should be one you made. Delete any you didn't. If GitHub access may be compromised too, sign out other sessions, revoke tokens and check deploy keys first.
-3. Rotate the key at once (the steps above, without the wait in step 5). Installed apps still only accept the old key, so the rotation release is signed with it one last time; then delete it.
+3. Rotate the key at once (the steps above, without the wait in step 5). Installed apps still only accept the old key, so the rotation release is signed with it one last time, **on this Mac** (rotation step 3, the local path): the Release build workflow can't sign it, since its secrets are gone. Only after it is published, put the new key and its password in the `release` environment (rotation step 4), then delete the old key. If this Mac itself may be compromised, sign on a clean Mac from the key's backup. If the old key is no longer available, follow [Lost key or password](#lost-key-or-password) instead.
 4. If a forged update may have been installed, tell users to reinstall from the `.dmg` of the rotation release.
