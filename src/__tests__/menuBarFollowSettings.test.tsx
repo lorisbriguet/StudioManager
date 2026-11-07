@@ -28,9 +28,9 @@ describe("menu bar panel follows the main window's settings", () => {
     expect(useAppStore.getState().language).toBe("FR");
   });
 
-  it("picks up dark mode", () => {
+  it("picks up a dark theme", () => {
     renderHook(() => useFollowAppSettings());
-    act(() => fromMainWindow("darkMode", "true"));
+    act(() => fromMainWindow("themeId", "default-dark"));
     expect(useAppStore.getState().darkMode).toBe(true);
     expect(document.documentElement.classList.contains("dark")).toBe(true);
   });
