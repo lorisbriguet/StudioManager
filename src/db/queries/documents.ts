@@ -4,8 +4,9 @@ import type { DocumentKind, LineItemFields } from "../../types/document";
 /**
  * Queries shared by invoices and quotes. Table and column names come from
  * this fixed map only, never from callers, so they are safe to interpolate.
- * What differs between the two (insert columns, delete rules, aging,
- * overdue) stays in invoices.ts and quotes.ts.
+ * Column names in the data given to create and update are checked by
+ * validateFields. What differs between the two (insert defaults, delete
+ * rules, aging, overdue) stays in invoices.ts and quotes.ts.
  */
 const TABLES = {
   invoice: {
@@ -35,6 +36,16 @@ export function documentQueries<Doc, Item extends LineItemFields>(kind: Document
     return { sets, values };
   }
 
+  function addNewLineItems(batch: TransactionBatch, lineItems: LineItemFields[]): void {
+    for (const item of lineItems) {
+      batch.add(
+        `INSERT INTO ${lineItemTable} (${foreignKey}, designation, rate, unit, quantity, amount, sort_order)
+         VALUES ($LAST_INSERT_ID, $1, $2, $3, $4, $5, $6)`,
+        [item.designation, item.rate, item.unit, item.quantity, item.amount, item.sort_order]
+      );
+    }
+  }
+
   return {
     async list(): Promise<Doc[]> {
       const db = await getDb();
@@ -55,16 +66,27 @@ export function documentQueries<Doc, Item extends LineItemFields>(kind: Document
       );
     },
 
-    /** Queue the line items of a document inserted earlier in the same batch. */
-    addNewLineItems(batch: TransactionBatch, lineItems: LineItemFields[]): void {
-      for (const item of lineItems) {
-        batch.add(
-          `INSERT INTO ${lineItemTable} (${foreignKey}, designation, rate, unit, quantity, amount, sort_order)
-           VALUES ($LAST_INSERT_ID, $1, $2, $3, $4, $5, $6)`,
-          [item.designation, item.rate, item.unit, item.quantity, item.amount, item.sort_order]
-        );
-      }
+    /** Insert a document and its line items in one transaction; returns the new id.
+     *  The columns are the keys of `data`, so every field the caller sets is
+     *  saved (undefined values are left out and take the column default). */
+    async create(data: Writable<Doc>, lineItems: LineItemFields[]): Promise<number> {
+      const record = data as Record<string, unknown>;
+      const fields = Object.keys(record).filter((f) => record[f] !== undefined);
+      if (fields.length === 0) throw new Error(`create ${table}: no fields`);
+      validateFields(fields);
+      const placeholders = fields.map((_, i) => `$${i + 1}`).join(", ");
+      const batch = new TransactionBatch();
+      batch.add(
+        `INSERT INTO ${table} (${fields.join(", ")}) VALUES (${placeholders})`,
+        fields.map((f) => record[f])
+      );
+      addNewLineItems(batch, lineItems);
+      const result = await batch.commit();
+      return result.lastInsertId;
     },
+
+    /** Queue the line items of a document inserted earlier in the same batch. */
+    addNewLineItems,
 
     /** Update the document's fields only (no line items). */
     async update(id: number, data: Writable<Doc>): Promise<void> {

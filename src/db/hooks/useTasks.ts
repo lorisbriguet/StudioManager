@@ -37,10 +37,15 @@ function chainSync(
 const notifyCalendarSyncFailure = (e: unknown) =>
   notify.error(getLabels().calendar_sync_failed, e);
 
+/** Calendar sync is on and the data is real. Test and presentation data is a
+ *  copy whose event ids are the real ones, so a mode never touches them. */
+function calendarLive(): boolean {
+  return useAppStore.getState().calendarSync && !modeActive();
+}
+
 /** Fire-and-forget calendar sync — never blocks the UI */
 export function syncTaskCalendar(id: number): Promise<void> {
-  // Test and presentation data is a copy: its event ids are the real ones.
-  if (!useAppStore.getState().calendarSync || modeActive()) return Promise.resolve();
+  if (!calendarLive()) return Promise.resolve();
   return chainSync(pendingTaskSyncs, id, async () => {
     try {
       const task = await q.getTaskById(id);
@@ -79,7 +84,7 @@ export function syncTaskCalendar(id: number): Promise<void> {
 
 export function syncSubtaskCalendar(id: number): Promise<void> {
   // Test and presentation data is a copy: its event ids are the real ones.
-  if (!useAppStore.getState().calendarSync || modeActive()) return Promise.resolve();
+  if (!calendarLive()) return Promise.resolve();
   return chainSync(pendingSubtaskSyncs, id, async () => {
     try {
       const sub = await q.getSubtaskById(id);
@@ -161,7 +166,7 @@ export function useCreateTask() {
           await pendingTaskSyncs.get(id);
           snap = await snapshotRows([{ table: "tasks", where: "id = $1", params: [id] }, { table: "subtasks", where: "task_id = $1", params: [id] }]);
           const cur = await q.getTaskById(id);
-          const calId = useAppStore.getState().calendarSync ? cur?.calendar_event_id : null;
+          const calId = calendarLive() ? cur?.calendar_event_id : null;
           await q.deleteTask(id);
           if (calId) deleteCalendarEvent(calId).catch(notifyCalendarSyncFailure);
           for (const t of snap) for (const r of t.rows) if ("calendar_event_id" in r) r.calendar_event_id = null;
@@ -240,7 +245,7 @@ export function useDeleteTask() {
       // Snapshot subtasks before delete — the schema cascade removes them
       // with the task, and undo must bring them back too.
       const subtasks = prev ? await q.getSubtasksByTask(id) : [];
-      const calId = useAppStore.getState().calendarSync ? prev?.calendar_event_id : null;
+      const calId = calendarLive() ? prev?.calendar_event_id : null;
       await q.deleteTask(id);
       if (calId) {
         deleteCalendarEvent(calId).catch(notifyCalendarSyncFailure);
@@ -304,7 +309,7 @@ export function useCreateSubtask() {
           await pendingSubtaskSyncs.get(id);
           snap = await snapshotRows([{ table: "subtasks", where: "id = $1", params: [id] }]);
           const cur = await q.getSubtaskById(id);
-          const calId = useAppStore.getState().calendarSync ? cur?.calendar_event_id : null;
+          const calId = calendarLive() ? cur?.calendar_event_id : null;
           await q.deleteSubtask(id);
           if (calId) deleteCalendarEvent(calId).catch(notifyCalendarSyncFailure);
           for (const t of snap) for (const r of t.rows) if ("calendar_event_id" in r) r.calendar_event_id = null;
@@ -378,7 +383,7 @@ export function useDeleteSubtask() {
     meta: { errorLabel: "error_delete_subtask" },
     mutationFn: async (id: number) => {
       const prev = await q.getSubtaskById(id);
-      const calId = useAppStore.getState().calendarSync ? prev?.calendar_event_id : null;
+      const calId = calendarLive() ? prev?.calendar_event_id : null;
       await q.deleteSubtask(id);
       if (calId) {
         deleteCalendarEvent(calId).catch(notifyCalendarSyncFailure);
