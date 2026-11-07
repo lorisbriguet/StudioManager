@@ -226,15 +226,15 @@ Four independent reading passes (correctness/data, security/platform, UI/a11y/pe
 ### P2
 - [ ] Golden PDF snapshots record the runner's ICU number formatting (the Swiss U+2019 separator), so they are environment-dependent; CI runs on macOS to match, but injecting a fixed formatter in the tests would make them portable
 - [x] `db/index.ts:245-264` re-creates a deleted client address on every startup and org switch — the copy into `client_addresses` now runs once (d65db56)
-- [ ] QR slip debtor can differ from the invoice header when a client has several addresses
+- [x] QR slip debtor can differ from the invoice header when a client has several addresses — the slip now pays from the invoice's own address (84284c8); the debtor country is still CH for every address (task 128)
 - [x] Personal data purged from the public git history (2026-09-28): `scripts/migrate-data.mjs` and the two `attach-*.mjs` scripts dropped from every commit, the eight pre-28-September `docs/screenshots/*.png` blobs stripped, and the street address in the expense-parser fixture replaced — git-filter-repo, then a force-push of `main` and all 36 tags. HEAD's tree is byte-identical; one commit that only touched the stripped images was pruned. GitHub still serves the old objects by direct SHA until it garbage-collects: request drafted in the backup mirror at `~/Documents/GitHub/StudioManager-history-backup-20260928.git/GITHUB-SUPPORT-REQUEST.md`
-- [ ] No test varies quantities/rates/discount against the computed total; trustee PDFs and the exchange-rate freeze are untested
+- [x] No test varies quantities/rates/discount against the computed total; trustee PDFs and the exchange-rate freeze are untested — now `computeTotals.test.ts` (855cc18), `invoiceStoredRate.test.tsx` (stored rate kept on edit) and `trusteeExportFailures.test.tsx` (export, stored PDFs, receipts)
 - [x] `SavedFilterBar.tsx:277-278` AND/OR has no i18n key; two screens leak English into French — now `filter_and` / `filter_or` (FR « ET » / « OU »)
 - [x] Dashboard widget layout is not organisation-namespaced — layout, widgets, pinned notes and active preset are now `<key>:<organisation id>`; a global copy left by an older build moves to the open organisation on launch
 - [x] Dashboard layout is destroyed by a narrow window — now saved only after a drag or resize at full width; narrower windows show a squeezed, view-only copy (no drag or resize) that is never saved. `DashboardPage.tsx:343-348` stores one layout under `lg` but persists whatever `onLayoutChange` reports, so at any smaller breakpoint react-grid-layout's bounds-corrected layout (clamped to 10, 6 or 4 columns) is written back over it. Seen in the demo build: picking a preset at a 1200 pt window left every widget stacked in one column, with `w:6` saved. Keep a layout per breakpoint, or only persist changes the user actually made
 - [ ] Three bespoke modals lose Escape and focus trap; workload column menus are mouse-only
 - [ ] Receipt filename extension is not sanitised
-- [ ] CHF formatting duplicated in seven places
+- [x] CHF formatting duplicated in seven places — every amount now goes through `formatMoney` / `formatMoneyPdf` in `src/lib/money.ts` (8a2e1ac, U1)
 
 ## Audit — round 3 (2026-08-31)
 
@@ -307,7 +307,7 @@ Full-coverage pass: deterministic tooling (npm/cargo audit, knip, jscpd, clippy,
 ### Deferred — revisit later
 - [ ] TypeScript 5.9 → 7.x (Go-native compiler, ~10x builds) — BLOCKED until TS 7.1 ships its stable API and typescript-eslint supports it
 - [ ] FullCalendar 6 → 7 — new temporal-polyfill peer dep, package restructure, custom CSS breaks; upgrade only when v7 features are wanted
-- [ ] TanStack Table 8 → 9 — real API migration (`useTable`, opt-in features, readonly data); benefit is bundle size, no current pain
+- [x] TanStack Table 8 → 9 — no longer applies: `@tanstack/react-table` was removed as unused (see Dead weight above)
 
 ## Bug fixes — reported (2026-08-12) — Done (2026-08-14)
 
