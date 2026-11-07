@@ -1,3 +1,6 @@
+import { isDraftDocument } from "./draftDocument";
+import { invoiceLabels } from "../i18n/invoice-labels";
+
 /**
  * Make one file name safe to write inside a chosen folder. Path separators
  * become "_" so a name like "A/B GmbH" cannot escape (or fail inside) the
@@ -14,13 +17,13 @@ export function safeFileName(name: string): string {
 }
 
 /**
- * Build the "<Reference>_<Client>.pdf" filename used when writing a generated
- * PDF to disk. Path separators are replaced so a client name like "A/B GmbH"
- * cannot escape (or fail inside) the target directory — mirrors the temp-file
- * sanitization of the email-PDF path.
+ * Build the "<stem>.pdf" filename (stem from documentPdfStem) used when
+ * writing a generated PDF to disk. Path separators are replaced so a client
+ * name like "A/B GmbH" cannot escape (or fail inside) the target directory —
+ * mirrors the temp-file sanitization of the email-PDF path.
  */
-export function pdfFileName(reference: string, clientName: string): string {
-  return `${reference}_${clientName}.pdf`.replace(/[/\\]/g, "_");
+export function pdfFileName(stem: string): string {
+  return `${stem}.pdf`.replace(/[/\\]/g, "_");
 }
 
 /**
@@ -44,11 +47,24 @@ export function uniqueFileName(stem: string, ext: string, used: Set<string>): st
   return candidate;
 }
 
+export type PdfDocumentKind = "invoice" | "quote";
+
 /**
- * Reserve a collision-free "<Reference>_<Client>.pdf" within one bulk-export
- * batch — e.g. two draft quotes for one client both collapse to
- * "DRAFT_Client.pdf", so the second becomes "DRAFT_Client_2.pdf".
+ * The file name (without ".pdf") of an exported invoice or quote. An issued
+ * document is "<Reference>_<Client>". A draft only has an internal
+ * DRAFT-<uuid> placeholder, so it gets "<Brouillon-facture|Draft-invoice|
+ * Brouillon-offre|Draft-quote>_<Client>_<document date>" in the document's
+ * language. The document date keeps re-exports of one draft on one name;
+ * bulk export adds _2, _3 when two drafts share it (see uniqueFileName).
  */
-export function uniquePdfFileName(reference: string, clientName: string, used: Set<string>): string {
-  return uniqueFileName(`${reference}_${clientName}`, "pdf", used);
+export function documentPdfStem(
+  kind: PdfDocumentKind,
+  doc: { reference: string; status?: string | null; language?: string | null; date?: string | null },
+  clientName: string,
+): string {
+  if (!isDraftDocument(doc)) return `${doc.reference}_${clientName}`;
+  const t = invoiceLabels[doc.language === "EN" ? "EN" : "FR"];
+  const prefix = kind === "invoice" ? t.draft_invoice_file : t.draft_quote_file;
+  const date = doc.date?.slice(0, 10);
+  return [prefix, clientName, date].filter(Boolean).join("_");
 }

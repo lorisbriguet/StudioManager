@@ -6,7 +6,7 @@ import { isDraftDocument } from "../lib/draftDocument";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { useQuote, useUpdateQuote } from "../db/hooks/useQuotes";
 import { getQuote } from "../db/queries/quotes";
-import { pdfFileName } from "../lib/pdfFilename";
+import { documentPdfStem, pdfFileName } from "../lib/pdfFilename";
 import type { Quote } from "../types/quote";
 import { useQuoteLineItems } from "../db/hooks/useQuoteLineItems";
 import { useClient, useClientAddresses } from "../db/hooks/useClients";
@@ -98,8 +98,11 @@ export function QuotePreviewPage() {
       const a = document.createElement("a");
       a.href = url;
       a.download = pdfFileName(
-        qt.reference.startsWith("DRAFT") ? "DRAFT" : qt.reference,
-        client.name
+        documentPdfStem(
+          "quote",
+          { reference: qt.reference, status: qt.status, language: qt.language, date: qt.quote_date },
+          client.name
+        )
       );
       a.click();
       URL.revokeObjectURL(url);

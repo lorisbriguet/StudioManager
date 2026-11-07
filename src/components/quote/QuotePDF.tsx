@@ -6,6 +6,7 @@ import type { Client, ClientAddress } from "../../types/client";
 import type { BusinessProfile } from "../../types/business-profile";
 import type { InvoiceTemplate } from "../../types/invoice-template";
 import { formatDisplayDate } from "../../utils/formatDate";
+import { isDraftDocument } from "../../lib/draftDocument";
 import { createDocumentStyles } from "../pdf/documentStyles";
 import { PdfDocumentLayout } from "../pdf/PdfDocumentLayout";
 
@@ -41,7 +42,7 @@ export function QuotePDF({
   const metaRows = [
     { label: t.quote_date, value: formatDisplayDate(quote.quote_date) },
     ...(quote.valid_until ? [{ label: t.valid_until, value: formatDisplayDate(quote.valid_until) }] : []),
-    { label: t.reference, value: quote.reference.startsWith("DRAFT") ? "DRAFT" : quote.reference },
+    { label: t.reference, value: quote.reference.startsWith("DRAFT") ? t.draft : quote.reference },
   ];
 
   const footerBlock = (
@@ -54,6 +55,7 @@ export function QuotePDF({
   return (
     <PdfDocumentLayout
       title={t.quote_title.toUpperCase()}
+      draftLabel={isDraftDocument(quote) ? t.draft.toUpperCase() : undefined}
       lang={lang}
       labels={t}
       template={template}

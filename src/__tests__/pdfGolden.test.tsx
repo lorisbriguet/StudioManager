@@ -234,3 +234,41 @@ describe("discount line adds up to the total", () => {
     expect(container.textContent).toContain("CHF 461.29");
   });
 });
+
+// R4P: a draft must not look like a final document. The title carries a small
+// draft label in the document's language; issued documents carry none.
+describe("draft marking on the page", () => {
+  const titleText = (container: HTMLElement) =>
+    container.querySelector('[data-pdf="Page"] [data-pdf="View"] > [data-pdf="Text"]')?.textContent ?? "";
+
+  it("marks a French draft invoice FACTURE · BROUILLON and shows Brouillon as reference", () => {
+    const draft = { ...invoiceFixture, reference: "DRAFT-0b6f1c2e", status: "draft" as const };
+    const { container } = render(
+      <InvoicePDF invoice={draft} lineItems={lineItemsFixture} client={clientFixture} profile={profileFixture} template={templateFixture} />
+    );
+    expect(titleText(container)).toBe("FACTURE  ·  BROUILLON");
+    expect(container.textContent).toContain("RéférenceBrouillon");
+    expect(container.textContent).not.toContain("DRAFT");
+  });
+
+  it("marks a draft-status quote that already has a real reference", () => {
+    const draft = { ...quoteFixture, status: "draft" as const };
+    const { container } = render(
+      <QuotePDF quote={draft} lineItems={lineItemsFixture} client={clientFixture} profile={profileFixture} template={templateFixture} />
+    );
+    expect(titleText(container)).toBe("OFFRE  ·  BROUILLON");
+    expect(container.textContent).toContain(quoteFixture.reference);
+  });
+
+  it("leaves issued invoices and quotes unmarked", () => {
+    const inv = render(
+      <InvoicePDF invoice={invoiceFixture} lineItems={lineItemsFixture} client={clientFixture} profile={profileFixture} template={templateFixture} />
+    );
+    expect(titleText(inv.container)).toBe("FACTURE");
+    cleanup();
+    const qt = render(
+      <QuotePDF quote={quoteFixture} lineItems={lineItemsFixture} client={clientFixture} profile={profileFixture} template={templateFixture} />
+    );
+    expect(titleText(qt.container)).toBe("OFFRE");
+  });
+});
