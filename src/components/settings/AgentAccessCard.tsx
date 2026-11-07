@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { open as openUrl } from "@tauri-apps/plugin-shell";
+import { openExternal } from "../../lib/openExternal";
 import { SettingRow, SettingsCard } from "../ui/Settings";
 import { Toggle } from "../ui/Toggle";
 import { Button } from "../ui/Button";
@@ -228,7 +228,7 @@ export function AgentAccessCard() {
       )}
 
       <div className="py-2.5">
-        <Button type="button" variant="link" onClick={() => void openUrl(HELP_URL)}>
+        <Button type="button" variant="link" onClick={() => void openExternal(HELP_URL)}>
           {t.agent_access_help}
         </Button>
       </div>

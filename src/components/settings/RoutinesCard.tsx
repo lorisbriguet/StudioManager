@@ -6,7 +6,7 @@ import { ModelMenu } from "../agents/ModelMenu";
 import { slugifyName, typedName } from "../agents/StartAgentForm";
 import { useT } from "../../i18n/useT";
 import { startFolders, type StartFolder } from "../../lib/agents";
-import { getRoutines, saveRoutines, type Routine, type Routines, type Section } from "../../lib/routines";
+import { AGENTS_OFF, getRoutines, saveRoutines, type Routine, type Routines, type Section } from "../../lib/routines";
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -431,7 +431,8 @@ export function RoutinesCard() {
       <SettingsCard title={t.routines_title} desc={t.routines_desc}>
         {error && (
           <p role="alert" className="text-xs text-danger-text pb-2">
-            {error}
+            {/* Rust's switched-off error is English: shown in the app's language. */}
+            {error === AGENTS_OFF ? t.agents_off : error}
           </p>
         )}
       </SettingsCard>

@@ -246,7 +246,7 @@ export const agents = {
     routines_section_required: "Indiquez un nom de section.",
     agents_claude_path: "Commande Claude",
     agents_claude_missing: "Claude est introuvable. Installez Claude Code, puis rouvrez cette page.",
-    agents_demo_unavailable: "Non disponible dans la demo.",
+    agents_demo_unavailable: "Non disponible dans la démo.",
     agents_trust_hint: "Un dossier apparaît une fois que vous y avez ouvert Claude et que vous l'avez approuvé.",
     agents_new: "Nouvel agent",
     agents_off: "Les agents sont désactivés — activez-les dans Réglages › Agents",

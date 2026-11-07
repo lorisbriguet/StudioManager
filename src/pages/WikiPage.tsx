@@ -4,7 +4,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
 import { useSearchParams } from "react-router-dom";
-import { open as openUrl } from "@tauri-apps/plugin-shell";
+import { openExternal } from "../lib/openExternal";
 import { isAllowedWikiLink, parseWikiArticleId, parseWikiFileKey, slashCommandQuery, wikiFileHref } from "../lib/wikiLinks";
 import {
   Heading1,
@@ -789,7 +789,7 @@ export function ArticleEditor({
         return;
       }
       if (/^https?:\/\//i.test(href)) {
-        openUrl(href).catch((err) => {
+        openExternal(href).catch((err) => {
           notify.error(t.failed_to_open_url, err);
         });
       }

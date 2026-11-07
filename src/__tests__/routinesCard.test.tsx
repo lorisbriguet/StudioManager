@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { RoutinesCard } from "../components/settings/RoutinesCard";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 import type { Routines } from "../lib/routines";
+import { useAppStore } from "../stores/app-store";
 
 const ask = vi.fn<(...args: unknown[]) => Promise<boolean>>(async () => false);
 // The app's ConfirmDialog (useConfirm), answered by the test: `ask` gets its options.
@@ -46,6 +47,18 @@ describe("RoutinesCard", () => {
   beforeEach(() => {
     clearInvokedCommands();
     ask.mockReset().mockResolvedValue(false);
+    useAppStore.setState({ language: "EN" });
+  });
+
+  it("says Agents are off in French, not Rust's English (Rerun 6)", async () => {
+    useAppStore.setState({ language: "FR" });
+    setInvokeHandler((cmd) => {
+      if (cmd === "routines_get") throw "Agents are switched off";
+      return null;
+    });
+    render(<RoutinesCard />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Les agents sont désactivés");
+    expect(screen.queryByText("Agents are switched off")).toBeNull();
   });
 
   it("adds a command routine and saves the exact structure", async () => {

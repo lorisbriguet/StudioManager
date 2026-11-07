@@ -4,6 +4,7 @@ import { EmptyState, ICONS, ICON_SIZE, ListSkeleton, QueryState } from "./ui";
 import { useClientActivity } from "../db/hooks/useClients";
 import { formatDisplayDate } from "../utils/formatDate";
 import { useT } from "../i18n/useT";
+import { isDraftDocument } from "../lib/draftDocument";
 import type { ClientActivityEvent } from "../db/queries/clients";
 
 const typeConfig: Record<string, { icon: LucideIcon; color: string; path: (id: number) => string }> = {
@@ -18,6 +19,9 @@ function EventRow({ event }: { event: ClientActivityEvent }) {
   const Icon = cfg.icon;
 
   const actionLabel = (t as Record<string, string>)[event.action] ?? event.action;
+  // A draft's reference is a DRAFT-<uuid> placeholder: shown as "Draft", like the lists.
+  const document = event.type === "invoice" || event.type === "quote";
+  const label = document && isDraftDocument({ reference: event.label, status: event.action }) ? t.draft : event.label;
 
   return (
     <div className="flex items-start gap-3 py-1.5">
@@ -29,7 +33,7 @@ function EventRow({ event }: { event: ClientActivityEvent }) {
           to={cfg.path(event.entity_id)}
           className="text-sm hover:text-accent-text transition-colors truncate block"
         >
-          {event.label}
+          {label}
         </Link>
         <span className="text-xs text-muted">
           {actionLabel} — {formatDisplayDate(event.date)}

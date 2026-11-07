@@ -5,7 +5,7 @@ import { TagInput } from "../components/shared/TagInput";
 import * as v from "../lib/validate";
 import { SavedFilterBar } from "../components/shared/SavedFilterBar";
 import { notify } from "../lib/notify";
-import { open as openUrl } from "@tauri-apps/plugin-shell";
+import { openExternal } from "../lib/openExternal";
 import {
   useResources,
   useAllTags,
@@ -120,7 +120,7 @@ export function ResourcesPage() {
     if (u && !u.startsWith("http://") && !u.startsWith("https://")) {
       u = "https://" + u;
     }
-    openUrl(u).catch((err) => {
+    openExternal(u).catch((err) => {
       notify.error(t.failed_to_open_url, err);
     });
   };

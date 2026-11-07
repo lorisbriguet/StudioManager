@@ -26,7 +26,7 @@ import { ProgressBar } from "./ui/Feedback";
 import { invoiceStatusVariant, quoteStatusVariant } from "../lib/statusColors";
 import { useTabStore } from "../stores/tab-store";
 import { open as openDirectory } from "@tauri-apps/plugin-dialog";
-import { invoke } from "@tauri-apps/api/core";
+import { revealPath } from "../lib/openExternal";
 import { useT } from "../i18n/useT";
 import { undoableFromStore, undoTop } from "../lib/undo";
 import { ProjectResources } from "./project/ProjectResources";
@@ -382,7 +382,7 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
             <Button
               variant="link"
               icon={ICONS.openFolder}
-              onClick={() => invoke("open_in_finder", { path: project.folder_path! }).catch((e) => notify.error(t.failed_open_folder, e))}
+              onClick={() => revealPath(project.folder_path!).catch((e) => notify.error(t.failed_open_folder, e))}
               className="text-muted hover:text-[var(--color-text-secondary)] cursor-pointer"
             >
               {t.folder}

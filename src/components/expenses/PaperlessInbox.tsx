@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { open as openUrl } from "@tauri-apps/plugin-shell";
+import { openExternal } from "../../lib/openExternal";
 import { ICONS, Button, IconButton, FilterChip, Callout, EmptyState } from "../ui";
 import { useT } from "../../i18n/useT";
 import { notify } from "../../lib/notify";
@@ -140,7 +140,7 @@ export function PaperlessInbox({
                   label={t.paperless_open}
                   onClick={() => {
                     const { host, port } = inbox.connection!;
-                    openUrl(paperlessDocUrl(host, port, item.docId)).catch((e) => notify.error(t.failed_to_open_url, e));
+                    openExternal(paperlessDocUrl(host, port, item.docId)).catch((e) => notify.error(t.failed_to_open_url, e));
                   }}
                 />
               )}

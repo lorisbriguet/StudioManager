@@ -78,9 +78,10 @@ beforeEach(() => {
   useUndoStore.setState({ stack: [], redoStack: [] });
 });
 
-// What every write refreshes besides its own list: finance and the dashboard
-// money widgets (invalidateMoney in src/db/queryKeys.ts).
-const MONEY = [["finance"], ["invoice-aging"], ["expense-categories-all"]];
+// What every write refreshes besides its own list: the client pages' Client Activity
+// (Rerun 6: a new EUR draft was missing there), then finance and the dashboard money
+// widgets (invalidateMoney in src/db/queryKeys.ts).
+const MONEY = [["client-activity"], ["finance"], ["invoice-aging"], ["expense-categories-all"]];
 
 const item = { designation: "Logo", rate: 100, unit: "h", quantity: 2, amount: 200, sort_order: 0 };
 

@@ -4,6 +4,8 @@ import { useAppStore } from "../stores/app-store";
 import { logError, logInfo, logWarn } from "../lib/log";
 import { getLabels, notify } from "../lib/notify";
 import { modeActive } from "./activeMode";
+import { isDemoBuild } from "./demoBuild";
+import { nowMs } from "./clock";
 
 /** Test or presentation mode: the data is a copy whose rows still carry the
  *  real event ids, so nothing here may write to the Apple Calendar. Every
@@ -11,7 +13,17 @@ import { modeActive } from "./activeMode";
  *  purgeAllCalendarEvents or syncAllExisting, which all check this. */
 const calendarOff = modeActive;
 
+/** The demo build's only calendar, simulated (same name as `DEMO_CALENDAR` in apple.rs).
+ *  In the demo nothing here calls Rust: listing returns this name, creating returns a
+ *  made-up uid, deleting does nothing (Rust refuses on its side too). Every list,
+ *  create, update and delete of the app goes through this file. */
+export const DEMO_CALENDAR = "Studio";
+
+let demoSeq = 0;
+const demoUid = () => `demo-${nowMs()}-${++demoSeq}`;
+
 function getCalendarName(): string {
+  if (isDemoBuild()) return DEMO_CALENDAR;
   return useAppStore.getState().calendarName || "StudioManager";
 }
 
@@ -30,6 +42,7 @@ async function invokeCalendar<T>(cmd: string, args: Record<string, unknown> = {}
 
 /** List writable calendars from Apple Calendar */
 export async function listWritableCalendars(): Promise<string[]> {
+  if (isDemoBuild()) return [DEMO_CALENDAR];
   return invokeCalendar<string[]>("calendar_list_writable");
 }
 
@@ -48,6 +61,7 @@ export interface CalendarEvent {
 export async function createCalendarEvent(event: CalendarEvent): Promise<string> {
   // Callers skip calendar sync in a mode; refuse rather than invent a uid.
   if (calendarOff()) throw new Error("Apple Calendar is not used in test or presentation mode");
+  if (isDemoBuild()) return demoUid();
   return invokeCalendar<string>("calendar_create_event", {
     calendar: getCalendarName(),
     title: event.title,
@@ -68,7 +82,7 @@ export async function updateCalendarEvent(uid: string, event: CalendarEvent): Pr
 
 /** Delete a calendar event by uid */
 export async function deleteCalendarEvent(uid: string): Promise<void> {
-  if (calendarOff()) return;
+  if (calendarOff() || isDemoBuild()) return;
   await invokeCalendar<void>("calendar_delete_event", {
     calendar: getCalendarName(),
     uid,
