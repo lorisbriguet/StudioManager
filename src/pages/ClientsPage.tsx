@@ -74,10 +74,10 @@ export function ClientsPage() {
   const clientFields = useMemo<FilterableField[]>(() => [
     { key: "name", label: t.display_name, type: "string" },
     { key: "language", label: t.language, type: "select", options: [
-      { value: "FR", label: "French" },
-      { value: "EN", label: "English" },
+      { value: "FR", label: t.french },
+      { value: "EN", label: t.english },
     ]},
-    { key: "status", label: "Status", type: "select", options: [
+    { key: "status", label: t.status, type: "select", options: [
       { value: "active", label: t.active },
       { value: "inactive", label: t.inactive },
       { value: "archived", label: t.client_archived },
@@ -196,7 +196,7 @@ export function ClientsPage() {
           <SortHeader label={t.display_name} sortKey="name" current={sort} onSort={setSort} />
           <SortHeader label={t.language} sortKey="language" current={sort} onSort={setSort} />
           <SortHeader label={t.cultural_discount} sortKey="discount_rate" current={sort} onSort={setSort} align="right" />
-          <SortHeader label="Status" sortKey="status" current={sort} onSort={setSort} />
+          <SortHeader label={t.status} sortKey="status" current={sort} onSort={setSort} />
         </Table.Head>
         <Table.Body>
           {filtered.map((c, ci) => (

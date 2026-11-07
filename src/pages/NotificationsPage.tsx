@@ -13,6 +13,9 @@ import {
 } from "../db/hooks/useNotifications";
 import { formatDisplayDateTime } from "../utils/formatDate";
 import { useT } from "../i18n/useT";
+import { plural } from "../i18n/plural";
+import { notificationText } from "../lib/notificationText";
+import { useAppStore } from "../stores/app-store";
 import { deleteWithUndo } from "../lib/undo";
 import type { AppNotification } from "../types/notification";
 
@@ -25,6 +28,7 @@ const typeConfig: Record<string, { icon: LucideIcon; color: string }> = {
 
 export function NotificationsPage() {
   const t = useT();
+  const language = useAppStore((s) => s.language);
   const notificationsQuery = useNotifications();
   const notifications = notificationsQuery.data ?? [];
   const markRead = useMarkNotificationRead();
@@ -60,7 +64,7 @@ export function NotificationsPage() {
 
   return (
     <div>
-      <PageHeader title={t.notifications} meta={unreadCount > 0 && `${unreadCount} ${t.unread}`}>
+      <PageHeader title={t.notifications} meta={unreadCount > 0 && plural(unreadCount, t.unread_one, t.unread_other)}>
         {unreadCount > 0 && (
           <Button variant="secondary" icon={ICONS.markAllRead} onClick={() => markAllRead.mutate()}>
             {t.mark_all_read}
@@ -84,6 +88,7 @@ export function NotificationsPage() {
           {notifications.map((n) => {
             const cfg = typeConfig[n.type] ?? typeConfig.info;
             const Icon = cfg.icon;
+            const { title, message } = notificationText(n, language);
             return (
               <Card
                 key={n.id}
@@ -104,14 +109,14 @@ export function NotificationsPage() {
                       className={`${CARD_LINK} text-sm ${n.read ? "text-muted" : "font-medium"}`}
                       onClick={() => handleClick(n)}
                     >
-                      {n.title}
+                      {title}
                     </button>
                     {!n.read && (
                       <span className="dot bg-accent" />
                     )}
                   </div>
-                  {n.message && (
-                    <p className="text-xs text-muted mt-0.5 truncate">{n.message}</p>
+                  {message && (
+                    <p className="text-xs text-muted mt-0.5 truncate">{message}</p>
                   )}
                   <p className="text-[10px] text-muted mt-1">
                     {formatDisplayDateTime(n.created_at)}
@@ -123,7 +128,7 @@ export function NotificationsPage() {
                     label={t.copy}
                     onClick={(e) => {
                       e.stopPropagation();
-                      const text = `${n.title}${n.message ? ` — ${n.message}` : ""}`;
+                      const text = `${title}${message ? ` — ${message}` : ""}`;
                       navigator.clipboard.writeText(text).then(
                         () => notify.success(t.copied),
                         (err) => notify.error(t.error_copy, err)

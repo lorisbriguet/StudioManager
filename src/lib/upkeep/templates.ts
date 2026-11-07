@@ -1,6 +1,6 @@
 import { Image, Laptop, Monitor, Printer, Wrench, type LucideIcon } from "lucide-react";
 import { ICONS } from "../../components/ui/icons";
-import type { UIKey } from "../../i18n/ui";
+import { uiLabels, type AppLanguage, type UIKey } from "../../i18n/ui";
 import type { IntervalUnit } from "../../types/upkeep";
 
 export type MachineTemplateKey =
@@ -76,4 +76,19 @@ export const MACHINE_TEMPLATES: MachineTemplate[] = [
 
 export function templateByKey(key: string | null | undefined): MachineTemplate | undefined {
   return MACHINE_TEMPLATES.find((t) => t.key === key);
+}
+
+/**
+ * A machine's type for display, in the UI language. `kind` is free text: the
+ * form saves a template's name in the language of the day, while seeds and
+ * agents may save the template key itself ("printer_3d"). Both show as the
+ * template's name in `lang`; any other text shows as saved.
+ */
+export function machineKindLabel(kind: string | null | undefined, lang: AppLanguage): string {
+  if (!kind) return "";
+  const k = kind.trim();
+  const tpl = MACHINE_TEMPLATES.find(
+    (t) => t.key === k || Object.values(uiLabels).some((l) => l[t.nameKey] === k)
+  );
+  return tpl ? uiLabels[lang][tpl.nameKey] : kind;
 }

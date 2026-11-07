@@ -31,8 +31,7 @@ import { ListSkeleton } from "../ui/Skeleton";
 import { formatMoney } from "../../lib/money";
 import { qk } from "../../db/queryKeys";
 import { KPI_TILE, formatCHF } from "./widgetParts";
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+import { shortMonthNames } from "../../lib/monthNames";
 
 // ── Chart widget ──
 
@@ -41,9 +40,10 @@ export function ChartRevenue() {
   const { data: monthly } = useMonthlyData(year);
   const chart = useChartTheme();
   const t = useT();
+  const months = shortMonthNames(useAppStore((s) => s.language));
 
   const chartData = monthly?.map((m, i) => ({
-    name: MONTHS[i],
+    name: months[i],
     revenue: m.revenue,
     expenses: m.expenses,
   })) ?? [];

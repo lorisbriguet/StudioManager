@@ -9,10 +9,13 @@ import { useActiveUpkeepItems, useMachines } from "../../db/hooks/useUpkeep";
 import { machineStatusVariant } from "../../lib/statusColors";
 import { effectiveDue } from "../../lib/upkeep/schedule";
 import { formatDisplayDate } from "../../utils/formatDate";
+import { useAppStore } from "../../stores/app-store";
+import { machineKindLabel } from "../../lib/upkeep/templates";
 
 /** Machines table; a row opens the detail in a half-width peek panel, Maximize2 opens the full page. */
 export function MachinesTab() {
   const t = useT();
+  const lang = useAppStore((s) => s.language);
   const navigate = useNavigate();
   const machinesQuery = useMachines();
   const machines = machinesQuery.data ?? [];
@@ -58,7 +61,7 @@ export function MachinesTab() {
                   onOpen={() => setPeekId(m.id)}
                 >
                   <Table.Td className="font-medium">{m.name}</Table.Td>
-                  <Table.Td muted>{m.kind}</Table.Td>
+                  <Table.Td muted>{machineKindLabel(m.kind, lang)}</Table.Td>
                   <Table.Td muted>{m.location}</Table.Td>
                   <Table.Td>
                     <Badge variant={machineStatusVariant(m.status)}>{t[`machine_status_${m.status}` as const]}</Badge>

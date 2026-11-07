@@ -10,7 +10,8 @@ pub struct SqlMigration {
     pub sql: &'static str,
     /// Run statement by statement, skipping each `ALTER TABLE t ADD COLUMN c`
     /// whose column the file already has (SQLite has no ADD COLUMN IF NOT
-    /// EXISTS). For 014, which takes over columns the app used to add itself.
+    /// EXISTS). For 014, which takes over columns the app used to add itself,
+    /// and for later files that only add columns, so a re-run is harmless.
     pub columns_if_missing: bool,
 }
 
@@ -29,13 +30,14 @@ pub const MIGRATIONS: &[SqlMigration] = &[
     SqlMigration { version: 12, sql: include_str!("../migrations/012_meta.sql"), columns_if_missing: false },
     SqlMigration { version: 13, sql: include_str!("../migrations/013_expense_currency.sql"), columns_if_missing: false },
     SqlMigration { version: 14, sql: include_str!("../migrations/014_app_schema.sql"), columns_if_missing: true },
+    SqlMigration { version: 15, sql: include_str!("../migrations/015_notification_keys.sql"), columns_if_missing: true },
 ];
 
 // Only referenced from this module's own tests (as the expected "fully
 // migrated" version); nothing in the production path needs it, since
 // `migrate_db` derives what to apply from `MIGRATIONS` itself.
 #[allow(dead_code)]
-pub const LATEST_VERSION: i64 = 14;
+pub const LATEST_VERSION: i64 = 15;
 
 pub(crate) fn table_exists(conn: &rusqlite::Connection, name: &str) -> Result<bool, String> {
     conn.query_row(
@@ -504,7 +506,7 @@ mod tests {
         )
         .unwrap();
         drop(conn);
-        // The plugin knew up to 013: only 014 runs, on a file that has its schema.
+        // The plugin knew up to 013: 014 and later run, on a file that has their schema.
         assert_eq!(migrate_db(&db).unwrap() as i64, LATEST_VERSION - 13);
         let conn = Connection::open(&db).unwrap();
         let max: i64 = conn.query_row("SELECT MAX(version) FROM schema_migrations", [], |r| r.get(0)).unwrap();
@@ -650,6 +652,18 @@ mod tests {
         out
     }
 
+    /// The columns migrations after 014 add, which a v3.4.0 file lacks.
+    const AFTER_014: [&str; 3] = [
+        "notifications.message_key TEXT 0 NULL",
+        "notifications.params TEXT 0 NULL",
+        "notifications.title_key TEXT 0 NULL",
+    ];
+
+    /// The shape without what migrations after 014 add.
+    fn shape_014(db: &std::path::Path) -> Vec<String> {
+        shape(db).into_iter().filter(|c| !AFTER_014.contains(&c.as_str())).collect()
+    }
+
     /// A file as v3.4.0 left it: migrations up to 013 plus what its
     /// ensureSchema() created.
     fn v3_4_app_file(name: &str) -> std::path::PathBuf {
@@ -669,7 +683,7 @@ mod tests {
         let fresh = temp_db("m014-fresh");
         migrate_db(&fresh).unwrap();
         let old = v3_4_app_file("m014-shape");
-        assert_eq!(shape(&fresh), shape(&old));
+        assert_eq!(shape_014(&fresh), shape(&old));
         cleanup(&fresh);
         cleanup(&old);
     }
@@ -678,8 +692,8 @@ mod tests {
     fn file_the_app_already_shaped_migrates_to_014() {
         let db = v3_4_app_file("m014-old");
         let before = shape(&db);
-        assert_eq!(migrate_db(&db).unwrap(), 1);
-        assert_eq!(shape(&db), before, "nothing to add to a file the app shaped");
+        assert_eq!(migrate_db(&db).unwrap() as i64, LATEST_VERSION - 13);
+        assert_eq!(shape_014(&db), before, "014 adds nothing to a file the app shaped");
         // It had the seeded tables: their starter rows were dealt with already.
         for t in ["client_addresses", "resources", "dashboard_presets", "wiki_folders", "invoice_templates"] {
             assert_eq!(meta(&db, &format!("before_014:{t}")), Some("1".into()), "{t}");
@@ -702,7 +716,28 @@ mod tests {
         .unwrap();
         drop(conn);
         migrate_db(&db).unwrap();
-        assert_eq!(shape(&db), expected);
+        assert_eq!(shape_014(&db), expected);
+        cleanup(&db);
+    }
+
+    #[test]
+    fn notifications_get_their_label_keys() {
+        let db = v3_4_app_file("m015");
+        Connection::open(&db)
+            .unwrap()
+            .execute("INSERT INTO notifications (type, title, message, read) VALUES ('info', 'Old', '', 0)", [])
+            .unwrap();
+        migrate_db(&db).unwrap();
+        let s = shape(&db);
+        for c in AFTER_014 {
+            assert!(s.contains(&c.to_string()), "{c}");
+        }
+        // Rows from before keep their text and get no keys.
+        let (title, key): (String, Option<String>) = Connection::open(&db)
+            .unwrap()
+            .query_row("SELECT title, title_key FROM notifications", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert_eq!((title.as_str(), key), ("Old", None));
         cleanup(&db);
     }
 

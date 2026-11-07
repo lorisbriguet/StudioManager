@@ -4,6 +4,7 @@ import { getDb } from "../db";
 import { createNotification } from "../db/queries/notifications";
 import { isUserGuideOutdated, USER_GUIDE_VERSION } from "../db/seeds/user-guide";
 import { getLabels } from "../lib/notify";
+import { noticeKeys } from "../lib/notificationText";
 import { logError } from "../lib/log";
 import { useOrgStore } from "../stores/org-store";
 import { qk } from "../db/queryKeys";
@@ -44,6 +45,7 @@ export function useGuideUpdateCheck() {
           message: t.guide_updated_message,
           read: 0,
           link: "/settings?category=general",
+          ...noticeKeys("guide_updated_title", "guide_updated_message"),
         });
         qc.invalidateQueries({ queryKey: qk.notifications.all });
       }

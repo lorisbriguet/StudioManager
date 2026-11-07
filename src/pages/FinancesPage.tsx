@@ -32,6 +32,7 @@ import { safeFileName, uniqueFileName } from "../lib/pdfFilename";
 import { getMonthlyData } from "../db/queries/finance";
 import { missingChfEquivalent } from "../lib/chfEquivalent";
 import { logError } from "../lib/log";
+import { shortMonthNames } from "../lib/monthNames";
 
 /** The export's PDF code, loaded on first use so @react-pdf stays out of the main chunk. */
 async function loadExportPdfs() {
@@ -50,7 +51,6 @@ async function loadExportPdfs() {
 /** Let the window repaint (progress toast, spinner) between CPU-bound renders. */
 const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 /** Pie-chart fill for a category: its tag colour, a CSS variable (Recharts passes it to SVG fill). */
 function getPieColor(categoryName: string): string {
   return getTagColor(categoryName).text;
@@ -70,6 +70,7 @@ export function FinancesPage() {
   const { data: profile } = useBusinessProfile();
   const chart = useChartTheme();
   const exportLang = useAppStore((s) => s.exportLanguage);
+  const months = shortMonthNames(useAppStore((s) => s.language));
   const [exporting, setExporting] = useState(false);
 
   const exportForTrustee = async () => {
@@ -251,7 +252,7 @@ export function FinancesPage() {
   }
 
   const chartData = monthly?.map((m, i) => ({
-    name: MONTHS[i],
+    name: months[i],
     revenue: m.revenue,
     expenses: m.expenses,
   })) ?? [];

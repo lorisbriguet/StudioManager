@@ -6,6 +6,7 @@ import { createNotification } from "../db/queries/notifications";
 import { qk, invalidateMoney } from "../db/queryKeys";
 import { sendNativeNotification } from "../lib/nativeNotification";
 import { getLabels, notify } from "../lib/notify";
+import { noticeKeys } from "../lib/notificationText";
 import { logWarn } from "../lib/log";
 import { todayLocalISO, parseLocalDate } from "../utils/localDate";
 import { advanceDate } from "../utils/recurringDates";
@@ -150,6 +151,7 @@ export async function runRecurringCheck(qc: QueryClient): Promise<number> {
             message: capMsg,
             read: 0,
             link: "/invoices",
+            ...noticeKeys("recurring_invoices", "recurring_catchup_cap_hit", { count: MAX_CATCHUP_PER_TEMPLATE }),
           });
           qc.invalidateQueries({ queryKey: qk.notifications.all });
         }
@@ -173,6 +175,7 @@ export async function runRecurringCheck(qc: QueryClient): Promise<number> {
         message: msg,
         read: 0,
         link: "/invoices",
+        ...noticeKeys("recurring_invoices", "recurring_drafts_generated", { count: generated }),
       });
       qc.invalidateQueries({ queryKey: qk.notifications.all });
 

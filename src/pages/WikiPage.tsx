@@ -598,9 +598,10 @@ export function ArticleEditor({
   );
 
   // No question: Undo brings the article back (with its content and tags).
+  // Go back only once the delete is done: leaving first unmounts this view,
+  // and TanStack Query then drops the callback that shows the Undo toast.
   const handleDeleteArticle = useCallback(() => {
-    deleteWithUndo(deleteArticle, articleId, t.article_deleted);
-    onBack?.();
+    deleteWithUndo(deleteArticle, articleId, t.article_deleted, onBack);
   }, [articleId, deleteArticle, onBack, t.article_deleted]);
 
   // Keep a ref for unmount cleanup to avoid a stale closure over `editor`

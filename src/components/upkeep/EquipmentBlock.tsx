@@ -3,6 +3,8 @@ import { EmptyState, SectionLabel } from "../ui";
 import { useMachinesByProject, useProjectMaterialCost } from "../../db/hooks/useUpkeep";
 import { useT } from "../../i18n/useT";
 import { formatMoney } from "../../lib/money";
+import { useAppStore } from "../../stores/app-store";
+import { machineKindLabel } from "../../lib/upkeep/templates";
 import type { ProjectMaterialCostRow } from "../../db/queries/consumables";
 
 /** Material cost summed per currency, in order of first appearance; never mixes currencies. */
@@ -18,6 +20,7 @@ export function sumByCurrency(rows: Pick<ProjectMaterialCostRow, "cost" | "curre
 /** Project block: machines linked to the project and the materials used on it. */
 export function EquipmentBlock({ projectId }: { projectId: number }) {
   const t = useT();
+  const lang = useAppStore((s) => s.language);
   const { data: machines = [] } = useMachinesByProject(projectId);
   const { data: costs = [] } = useProjectMaterialCost(projectId);
 
@@ -40,7 +43,7 @@ export function EquipmentBlock({ projectId }: { projectId: number }) {
                   className="flex items-center gap-2 text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1 -mx-2"
                 >
                   <span className="truncate">{m.name}</span>
-                  {m.kind && <span className="text-xs text-muted ml-auto shrink-0">{m.kind}</span>}
+                  {m.kind && <span className="text-xs text-muted ml-auto shrink-0">{machineKindLabel(m.kind, lang)}</span>}
                 </Link>
               </li>
             ))}

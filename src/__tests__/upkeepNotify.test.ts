@@ -10,7 +10,7 @@ vi.mock("../lib/notify", async (orig) => {
 });
 
 import { planNotifications, type PlanInput } from "../lib/upkeep/notify";
-import { getLabels } from "../lib/notify";
+import { useAppStore } from "../stores/app-store";
 import { updateMachine } from "../db/queries/machines";
 import { executedStatements, clearExecutedStatements } from "../__mocks__/tauri-sql";
 import type {
@@ -171,11 +171,18 @@ describe("planNotifications", () => {
     const { uiLabels } = await vi.importActual<typeof import("../i18n/ui")>("../i18n/ui");
     const [en] = planNotifications(input({ items: [item()] }));
     expect(en.title).toBe(uiLabels.EN.notice_overdue_title);
-    vi.mocked(getLabels).mockReturnValue(uiLabels.FR);
+    useAppStore.setState({ language: "FR" });
     const [fr] = planNotifications(input({ items: [item()] }));
     expect(fr.title).toBe(uiLabels.FR.notice_overdue_title);
     expect(fr.title).not.toBe(en.title);
-    vi.mocked(getLabels).mockReturnValue(uiLabels.EN);
+    useAppStore.setState({ language: "EN" });
+  });
+
+  it("every notice keeps its label keys and values, so the list can translate it later", () => {
+    const [n] = planNotifications(input({ items: [item()] }));
+    expect(n.keys.title_key).toBe("notice_overdue_title");
+    expect(n.keys.message_key).toBe("notice_overdue_msg");
+    expect(JSON.parse(n.keys.params!)).toMatchObject({ machine: "Bambu X1", date: "2026-10-20" });
   });
 });
 

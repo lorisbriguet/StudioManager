@@ -318,7 +318,7 @@ export const settings = {
     backup_created: "Sauvegarde créée : {name}",
     backup_failed: "Impossible de créer la sauvegarde",
     // Dashboard preset update
-    update_preset: "Mettre à jour le preset actuel",
+    update_preset: "Mettre à jour le préréglage actuel",
 
     // Custom Lists
     custom_lists: "Listes personnalisées",
