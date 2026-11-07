@@ -458,17 +458,20 @@ fn snapshot_db_now(app: tauri::AppHandle) -> Result<String, String> {
 /// Back up organisations: each target names an organisation and the folder
 /// its backup goes to (see backup.rs). Runs every target even when one fails
 /// and reports each outcome, so the caller rotates only the ones that worked.
+/// `pre_restore` marks the safety backup taken before a restore: its folder
+/// name ends in `-pre-restore`, which retention (src/lib/backup.ts) never drops.
 #[tauri::command]
 async fn create_backups(
     app: tauri::AppHandle,
     targets: Vec<backup::BackupTarget>,
     tables: Vec<String>,
+    pre_restore: Option<bool>,
 ) -> Result<Vec<backup::BackupOutcome>, String> {
     run_blocking(move || {
         // Shared: batches keep running, but no organisation is switched,
         // removed or swapped into a mode while its files are read.
         let _guard = org_shared();
-        create_backups_now(app, targets, tables)
+        create_backups_now(app, targets, tables, pre_restore.unwrap_or(false))
     })
     .await
 }
@@ -477,10 +480,14 @@ fn create_backups_now(
     app: tauri::AppHandle,
     targets: Vec<backup::BackupTarget>,
     tables: Vec<String>,
+    pre_restore: bool,
 ) -> Result<Vec<backup::BackupOutcome>, String> {
     let app_dir = app_data_dir(&app)?;
     let reg = load_registry(&app)?;
-    let stamp = chrono::Local::now().format("%Y-%m-%d-%H-%M-%S").to_string();
+    let mut stamp = chrono::Local::now().format("%Y-%m-%d-%H-%M-%S").to_string();
+    if pre_restore {
+        stamp.push_str("-pre-restore");
+    }
     Ok(targets
         .into_iter()
         .map(|t| {

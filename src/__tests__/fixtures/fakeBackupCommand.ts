@@ -40,8 +40,8 @@ function filesUnder(fs: MemFs, dir: string): string[] {
 
 export function fakeCreateBackups(fs: MemFs, opts: FakeBackupOptions) {
   const appData = opts.appData ?? "/appdata";
-  return async (args: { targets: Target[]; tables: string[] }) => {
-    const stamp = nextStamp();
+  return async (args: { targets: Target[]; tables: string[]; preRestore?: boolean }) => {
+    const stamp = nextStamp() + (args.preRestore ? "-pre-restore" : "");
     const outcomes = [];
     for (const { orgId, dir } of args.targets) {
       if (opts.failOrgs?.has(orgId)) {

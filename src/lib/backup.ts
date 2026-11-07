@@ -12,6 +12,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { logWarn, logInfo } from "./log";
 import { orgPaths } from "./orgPaths";
 import { useOrgStore } from "../stores/org-store";
+import { nowMs } from "./clock";
 
 /** Shared lock to prevent concurrent backup operations (auto + manual) */
 let _backupRunning = false;
@@ -184,6 +185,10 @@ export interface BackupOptions {
   ownFolders?: boolean;
   /** false skips rotation (the safety backup taken before a restore). */
   rotate?: boolean;
+  /** The safety backup taken before a restore: its folder name ends in
+   *  `-pre-restore`, which retention never matches, so it is kept until the
+   *  user deletes it. */
+  preRestore?: boolean;
 }
 
 /** Back up organisations through Rust: a `VACUUM INTO` snapshot, CSVs read
@@ -207,7 +212,11 @@ export async function createBackup(
       dir: (options.ownFolders && o.prefs?.backupPath) || backupDir,
     })),
   ];
-  const outcomes = await invoke<BackupOutcome[]>("create_backups", { targets, tables: TABLES });
+  const outcomes = await invoke<BackupOutcome[]>("create_backups", {
+    targets,
+    tables: TABLES,
+    preRestore: options.preRestore === true,
+  });
 
   if (options.rotate !== false) {
     for (const o of outcomes) {
@@ -249,27 +258,41 @@ async function removeBackupDir(path: string): Promise<void> {
   }
 }
 
-/** Backups kept per organisation: the newest of each of the last 30 days
- *  that have a backup, plus the newest of each of the last 12 months. Days
- *  without a backup don't count, so a long break never rotates every copy
- *  away. */
+/** Backups kept per organisation: the 5 newest, every backup of the last
+ *  24 hours, the newest of each of the last 30 days that have a backup, and
+ *  the newest of each of the last 12 months. Days without a backup don't
+ *  count, so a long break never rotates every copy away. The safety backup
+ *  taken before a restore (`-pre-restore`) is never dropped. */
+export const KEEP_RECENT = 5;
+export const KEEP_HOURS = 24;
 export const KEEP_DAILY = 30;
 export const KEEP_MONTHLY = 12;
 
-const BACKUP_STAMP = /^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}$/;
+const BACKUP_STAMP = /^(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})$/;
+
+/** A backup timestamp (local time, as Rust writes it) in ms. */
+function stampMs(stamp: string): number {
+  const m = BACKUP_STAMP.exec(stamp);
+  if (!m) return NaN;
+  const [y, mo, d, h, mi, s] = m.slice(1).map(Number);
+  return new Date(y, mo - 1, d, h, mi, s).getTime();
+}
 
 /** The backup folders under `prefix` that retention drops, oldest first.
- *  Names that don't end in a timestamp are never dropped. */
-export function backupsToRemove(names: string[], prefix: string): string[] {
+ *  Names that don't end in a timestamp (pre-restore copies included) are
+ *  never dropped. `now` is in ms. */
+export function backupsToRemove(names: string[], prefix: string, now: number = nowMs()): string[] {
   const dated = names
     .filter((n) => n.startsWith(prefix) && BACKUP_STAMP.test(n.slice(prefix.length)))
     .sort()
     .reverse(); // newest first
-  const keep = new Set<string>();
+  const keep = new Set<string>(dated.slice(0, KEEP_RECENT));
   const days = new Set<string>();
   const months = new Set<string>();
+  const since = now - KEEP_HOURS * 3600 * 1000;
   for (const name of dated) {
     const stamp = name.slice(prefix.length);
+    if (stampMs(stamp) >= since) keep.add(name);
     const day = stamp.slice(0, 10);
     const month = stamp.slice(0, 7);
     if (!days.has(day) && days.size < KEEP_DAILY) {
@@ -571,13 +594,13 @@ export async function restoreFromBackup(
   const manifest = await readManifest(backupPath);
 
   // Safety net: back up the active organisation into the normal backup
-  // location (normal timestamped naming) before wiping anything, so even
-  // restoring the wrong backup can be undone. No rotation, so this backup
-  // can never rotate away the very backup being restored; the next regular
-  // backup rotates as usual. Abort if the safety backup fails.
+  // location before wiping anything, so even restoring the wrong backup can
+  // be undone. Its name ends in `-pre-restore`, which retention never drops,
+  // and it doesn't rotate, so it can't remove the backup being restored.
+  // Abort if the safety backup fails.
   const slash = backupPath.lastIndexOf("/");
   const backupDir = slash > 0 ? backupPath.slice(0, slash) : backupPath;
-  const safetyBackupPath = await createBackup(backupDir, { orgs: "active", rotate: false }).catch((e) => {
+  const safetyBackupPath = await createBackup(backupDir, { orgs: "active", rotate: false, preRestore: true }).catch((e) => {
     throw new RestoreError("safety_backup_failed", String(e));
   });
 

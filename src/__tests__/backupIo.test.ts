@@ -6,6 +6,8 @@ import {
   RestoreError,
   listBackups,
   backupsToRemove,
+  KEEP_RECENT,
+  KEEP_HOURS,
   KEEP_DAILY,
   KEEP_MONTHLY,
   TABLES,
@@ -158,16 +160,40 @@ describe("backupsToRemove", () => {
   const day = (d: Date, time = "10-00-00") =>
     `${P}${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}-${time}`;
   const daysBack = (n: number) => new Date(Date.UTC(2026, 10, 6) - n * 86400000);
+  /** Long after every backup in these tests, so the last-24-hours rule keeps none of them. */
+  const LATER = new Date(2027, 0, 1).getTime();
+  /** A local time, as the backup stamps are. */
+  const at = (h: number, m = 0) => new Date(2026, 10, 6, h, m).getTime();
+  const hours = (...hs: number[]) => hs.map((h) => `${P}2026-11-06-${String(h).padStart(2, "0")}-00-00`);
 
-  it("keeps the newest backup of each day and drops the others", () => {
-    const names = [day(daysBack(0), "09-00-00"), day(daysBack(0), "18-00-00"), day(daysBack(1))];
-    expect(backupsToRemove(names, P)).toEqual([day(daysBack(0), "09-00-00")]);
+  it(`keeps the ${KEEP_RECENT} newest, then the newest of each day`, () => {
+    // Seven runs on one day, one the day before
+    const names = [...hours(1, 2, 3, 4, 5, 6, 7), `${P}2026-11-05-10-00-00`];
+    expect(backupsToRemove(names, P, LATER)).toEqual(hours(1, 2));
+  });
+
+  it(`keeps every backup of the last ${KEEP_HOURS} hours`, () => {
+    const names = hours(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+    expect(backupsToRemove(names, P, at(12))).toEqual([]);
+    // A day later the oldest ones fall out (01:00 and 02:00 are more than 24 h before 02:30)
+    expect(backupsToRemove(names, P, new Date(2026, 10, 7, 2, 30).getTime())).toEqual(hours(1, 2));
+  });
+
+  it("keeps the backup restored from and the safety copy after the next hourly backup", () => {
+    // Restored from 09:00; the restore took a safety copy at 10:00; the next auto backup ran at 11:00
+    const names = [`${P}2026-11-06-09-00-00`, `${P}2026-11-06-10-00-00-pre-restore`, `${P}2026-11-06-11-00-00`];
+    expect(backupsToRemove(names, P, at(11, 1))).toEqual([]);
+    // Even once the restored-from backup ages out, the safety copy stays
+    const later = [...names, ...hours(12, 13, 14, 15, 16, 17)];
+    const removed = backupsToRemove(later, P, LATER);
+    expect(removed).toContain(`${P}2026-11-06-09-00-00`);
+    expect(removed).not.toContain(`${P}2026-11-06-10-00-00-pre-restore`);
   });
 
   it(`keeps ${KEEP_DAILY} daily and ${KEEP_MONTHLY} monthly backups`, () => {
     // One backup a day for two years
     const names = Array.from({ length: 730 }, (_, i) => day(daysBack(i)));
-    const removed = new Set(backupsToRemove(names, P));
+    const removed = new Set(backupsToRemove(names, P, LATER));
     const kept = names.filter((n) => !removed.has(n));
     // The 30 newest days are all kept
     for (let i = 0; i < KEEP_DAILY; i++) expect(kept).toContain(day(daysBack(i)));
@@ -184,23 +210,26 @@ describe("backupsToRemove", () => {
     const names = ["2026-11-06", "2026-06-01", "2026-01-15", "2025-08-01", "2025-02-01"].map(
       (d) => `${P}${d}-10-00-00`
     );
-    expect(backupsToRemove(names, P)).toEqual([]);
+    expect(backupsToRemove(names, P, LATER)).toEqual([]);
   });
 
   it("never drops other organisations', pre-upgrade or unknown folders", () => {
     const names = [
-      `${P}2026-11-06-10-00-00`,
-      `${P}2026-11-06-09-00-00`,
+      ...hours(10, 11, 12, 13, 14, 9),
       "backup-zzz999-2026-11-06-08-00-00",
       "backup-2026-11-06-07-00-00",
       "files-k3f9a2",
       `${P}notes`,
     ];
-    expect(backupsToRemove(names, P)).toEqual([`${P}2026-11-06-09-00-00`]);
+    expect(backupsToRemove(names, P, LATER)).toEqual(hours(9));
   });
 });
 
 describe("createBackup", () => {
+  /** Six old runs on one day: with the new backup, the oldest (00:00) falls
+   *  outside the newest five and rotates. */
+  const SAME_DAY = [0, 1, 2, 3, 4, 5].map((h) => `backup-k3f9a2-2020-01-01-0${h}-00-00`);
+
   it("asks Rust to back up every organisation with every table", async () => {
     useOrgStore.setState({
       organisations: [org("k3f9a2", "Studio"), org("aaa111", "Client A", "/elsewhere"), org("bbb222", "Client B")],
@@ -217,7 +246,13 @@ describe("createBackup", () => {
         { orgId: "bbb222", dir: "/backups" },
       ],
       tables: TABLES,
+      preRestore: false,
     });
+  });
+
+  it("names the safety backup before a restore -pre-restore", async () => {
+    const path = await createBackup("/backups", { rotate: false, orgs: "active", preRestore: true });
+    expect(path).toMatch(/^\/backups\/backup-k3f9a2-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-pre-restore$/);
   });
 
   it("sends every organisation to the given folder without ownFolders (the second copy)", async () => {
@@ -244,8 +279,8 @@ describe("createBackup", () => {
   it("fails when any organisation's backup fails, after rotating the ones that worked", async () => {
     useOrgStore.setState({ organisations: [org("k3f9a2", "Studio"), org("aaa111", "Client A")] });
     memfs.failOrgs.add("aaa111");
-    // Two same-day backups of the active organisation: the older one rotates
-    setReadDirEntries("/backups", ["backup-k3f9a2-2020-01-01-00-00-00", "backup-k3f9a2-2020-01-01-01-00-00"]);
+    // Six same-day backups of the active organisation: the oldest rotates
+    setReadDirEntries("/backups", SAME_DAY);
     memfs.dirs.add("/backups/backup-aaa111-2020-01-01-00-00-00");
     memfs.dirs.add("/backups/backup-aaa111-2020-01-01-01-00-00");
 
@@ -266,7 +301,7 @@ describe("createBackup", () => {
   });
 
   it("skips rotation when asked (the safety backup before a restore)", async () => {
-    setReadDirEntries("/backups", ["backup-k3f9a2-2020-01-01-00-00-00", "backup-k3f9a2-2020-01-01-01-00-00"]);
+    setReadDirEntries("/backups", SAME_DAY);
     await createBackup("/backups", { rotate: false, orgs: "active" });
     expect(memfs.removed).toEqual([]);
   });
@@ -274,7 +309,7 @@ describe("createBackup", () => {
   it("retries a rotation delete that fails transiently (synced-folder ENOTEMPTY)", async () => {
     vi.useFakeTimers();
     try {
-      setReadDirEntries("/backups", ["backup-k3f9a2-2020-01-01-00-00-00", "backup-k3f9a2-2020-01-01-01-00-00"]);
+      setReadDirEntries("/backups", SAME_DAY);
       const fs = await import("@tauri-apps/plugin-fs");
       const realRemove = vi.mocked(fs.remove).getMockImplementation()!;
       let failures = 0;
@@ -303,7 +338,7 @@ describe("createBackup", () => {
   it("gives up with a warning when a rotation delete keeps failing", async () => {
     vi.useFakeTimers();
     try {
-      setReadDirEntries("/backups", ["backup-k3f9a2-2020-01-01-00-00-00", "backup-k3f9a2-2020-01-01-01-00-00"]);
+      setReadDirEntries("/backups", SAME_DAY);
       const fs = await import("@tauri-apps/plugin-fs");
       const realRemove = vi.mocked(fs.remove).getMockImplementation()!;
       let attempts = 0;
@@ -384,6 +419,8 @@ describe("restoreFromBackup", () => {
     // Safety backup of the PRE-restore data exists next to the backup
     // (returned as the folder name only), for the active organisation only
     expect(result.safetyBackup.startsWith("backup-k3f9a2-")).toBe(true);
+    // Named so retention never drops it
+    expect(result.safetyBackup.endsWith("-pre-restore")).toBe(true);
     expect(fileText(`/bk/${result.safetyBackup}/data/clients.csv`)).toContain("Old Client");
     const call = (await invokeCalls()).find(([cmd]) => cmd === "create_backups");
     expect((call?.[1] as { targets: unknown[] }).targets).toEqual([{ orgId: "k3f9a2", dir: "/bk" }]);
