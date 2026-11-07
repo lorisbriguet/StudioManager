@@ -45,3 +45,25 @@ jobs:
         working-directory: src-tauri
       - run: cargo audit
         working-directory: src-tauri/mcp
+
+  # Weekly only (not on release or push): tests run in a random order, so a
+  # test that passes only after another one shows up. The seed is printed;
+  # re-run locally with `npx vitest run --sequence.shuffle --sequence.seed=<seed>`.
+  vitest-shuffled:
+    name: vitest (shuffled order)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      # Same install as ci.yml: the lockfile needs npm 11, and no install scripts run.
+      - run: npm install -g npm@11.21.1 --ignore-scripts
+      - run: npm ci --ignore-scripts
+      - run: |
+          seed=$(date +%s)
+          echo "shuffle seed: $seed"
+          npx vitest run --sequence.shuffle --sequence.seed="$seed"

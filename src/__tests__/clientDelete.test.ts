@@ -38,12 +38,13 @@ const CASCADE_SQL = [
   "DELETE FROM clients WHERE id = $1",
 ];
 
-describe("deleteClient cascade", () => {
-  beforeAll(async () => {
-    // Warm the DB singleton so ensureSchema noise doesn't pollute the SQL log
-    await getDb();
-  });
+// Warm the DB singleton once for every block, so ensureSchema statements never
+// land in a test's SQL log whichever block runs first.
+beforeAll(async () => {
+  await getDb();
+});
 
+describe("deleteClient cascade", () => {
   beforeEach(() => {
     setSelectHandler(null);
     clearExecutedStatements();
@@ -106,10 +107,6 @@ describe("client graph snapshot -> restore round trip", () => {
   const projectTables = [{ id: 121, project_id: 31, name: "Assets" }];
   const projectTableRows = [{ id: 131, table_id: 121, data: "{}" }];
   const resourceProjects = [{ resource_id: 141, project_id: 31 }];
-
-  beforeAll(async () => {
-    await getDb();
-  });
 
   beforeEach(() => {
     setSelectHandler((sql) => {

@@ -53,8 +53,20 @@ export function AgentAccessCard() {
     invoke<LogEntry[]>("recent_agent_changes", { limit: 20 }).then((l) => setLog(l ?? [])).catch(() => {});
   }, []);
 
+  // Re-read when the organisations change: a new one is saved as withheld
+  // (false) and must show unticked. Entries the card already holds win, so an
+  // optimistic toggle in flight is kept.
+  const orgIds = organisations.map((o) => o.id).join(",");
   useEffect(() => {
-    invoke<AgentAccess>("get_agent_access").then((i) => { confirmed.current = i; setInfo(i); }).catch((e) => setError(msg(e)));
+    invoke<AgentAccess>("get_agent_access")
+      .then((i) => {
+        confirmed.current = confirmed.current ? { ...i, orgs: { ...i.orgs, ...confirmed.current.orgs } } : i;
+        setInfo((prev) => (prev ? { ...prev, orgs: { ...i.orgs, ...prev.orgs } } : i));
+      })
+      .catch((e) => setError(msg(e)));
+  }, [orgIds]);
+
+  useEffect(() => {
     loadLog();
     let unlisten: (() => void) | undefined;
     let cancelled = false;
@@ -136,7 +148,7 @@ export function AgentAccessCard() {
                 <li key={o.id}>
                   <Checkbox
                     label={o.name}
-                    checked={info.orgs[o.id] !== false}
+                    checked={info.orgs[o.id] === true}
                     onChange={(e) => void save({ enabled: info.enabled, allowMoney: info.allowMoney, orgs: { ...info.orgs, [o.id]: e.target.checked } })}
                   />
                 </li>

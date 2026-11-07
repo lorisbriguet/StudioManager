@@ -69,7 +69,9 @@ const invalidated = () =>
   );
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  // Reset, not clear: clearAllMocks keeps an earlier test's mockResolvedValue
+  // and mockImplementation, so tests passed only in file order.
+  vi.resetAllMocks();
   qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   vi.spyOn(qc, "invalidateQueries");
   useAppStore.setState({ language: "EN" });

@@ -1586,10 +1586,7 @@ mod tests {
         };
         reg.set_prefs("org-b", prefs).unwrap();
         reg.save(&dir).unwrap();
-        write_access(
-            &dir,
-            r#"{"enabled": true, "allowMoney": false, "orgs": {}}"#,
-        );
+        allow_listed(&dir, false, &[]);
         let side = guard::resolve_org(&dir, None).unwrap();
         assert_eq!(side.id, "org-b");
         let fields = MachineFields {
@@ -1623,10 +1620,7 @@ mod tests {
             1
         );
 
-        write_access(
-            &dir,
-            r#"{"enabled": true, "allowMoney": false, "orgs": {"org-a": false}}"#,
-        );
+        allow_listed(&dir, false, &["org-a"]);
         assert_eq!(equipment_org(&dir, &side).unwrap_err(), EQUIPMENT_OFF);
     }
 }

@@ -34,6 +34,9 @@ pub struct AccessSettings {
     pub enabled: bool,
     pub allow_money: bool,
     pub orgs: HashMap<String, bool>,
+    /// Set once the organisations that existed before the server failed
+    /// closed have been given an entry (`backfill_orgs`).
+    pub orgs_backfilled: bool,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -94,11 +97,47 @@ pub fn write_access(dir: &Path, settings: &AccessSettings) -> Result<(), String>
 }
 
 /// A new organisation starts unticked: agents may use it only once the owner
-/// ticks it in Settings. The server allows an organisation missing from
-/// `orgs`, so the new id is written as `false`. Every other setting is kept.
+/// ticks it in Settings. The server already refuses an organisation missing
+/// from `orgs`; the explicit `false` keeps the card and the file in step.
+/// Every other setting is kept.
 pub fn withhold_new_org(dir: &Path, id: &str) -> Result<(), String> {
     let mut settings = read_access(dir);
     settings.orgs.insert(id.to_string(), false);
+    write_access(dir, &settings)
+}
+
+/// Once per install: give every listed organisation without an entry the
+/// value it had while the server allowed missing ids (`true`, only when
+/// access is on), so failing closed locks nobody out. Later organisations
+/// without an entry stay closed. Returns whether it wrote anything.
+pub fn backfill_orgs(dir: &Path, ids: &[String]) -> Result<bool, String> {
+    let mut settings = read_access(dir);
+    if settings.orgs_backfilled {
+        return Ok(false);
+    }
+    if settings.enabled {
+        for id in ids {
+            settings.orgs.entry(id.clone()).or_insert(true);
+        }
+    }
+    settings.orgs_backfilled = true;
+    write_access(dir, &settings)?;
+    Ok(true)
+}
+
+/// The owner's save from Settings: `orgs` is merged over the stored entries,
+/// so an entry the card did not know about (a new organisation's `false`)
+/// is kept.
+pub fn save_access(
+    dir: &Path,
+    enabled: bool,
+    allow_money: bool,
+    orgs: HashMap<String, bool>,
+) -> Result<(), String> {
+    let mut settings = read_access(dir);
+    settings.enabled = enabled;
+    settings.allow_money = allow_money;
+    settings.orgs.extend(orgs);
     write_access(dir, &settings)
 }
 
@@ -342,14 +381,7 @@ fn set_agent_access_now(
     orgs: HashMap<String, bool>,
 ) -> Result<(), String> {
     let dir = crate::app_data_dir(&app)?;
-    write_access(
-        &dir,
-        &AccessSettings {
-            enabled,
-            allow_money,
-            orgs,
-        },
-    )
+    save_access(&dir, enabled, allow_money, orgs)
 }
 
 #[tauri::command]
@@ -886,6 +918,7 @@ mod tests {
             enabled: true,
             allow_money: true,
             orgs: HashMap::from([("old001".to_string(), true)]),
+            orgs_backfilled: false,
         };
         write_access(&dir, &settings).unwrap();
         withhold_new_org(&dir, "new002").unwrap();
@@ -897,6 +930,61 @@ mod tests {
     }
 
     #[test]
+    fn save_merges_orgs_over_the_stored_ones() {
+        let dir = tmp_dir("save-merge");
+        // A new organisation was withheld after the card loaded its orgs.
+        let stored = AccessSettings {
+            enabled: true,
+            allow_money: false,
+            orgs: HashMap::from([("o1".to_string(), true), ("o2".to_string(), true)]),
+            orgs_backfilled: true,
+        };
+        write_access(&dir, &stored).unwrap();
+        withhold_new_org(&dir, "o3").unwrap();
+        // The card saves what it knew, with o2 unticked.
+        let from_card = HashMap::from([("o1".to_string(), true), ("o2".to_string(), false)]);
+        save_access(&dir, true, true, from_card).unwrap();
+        let after = read_access(&dir);
+        assert!(after.enabled && after.allow_money && after.orgs_backfilled);
+        assert_eq!(after.orgs.get("o1"), Some(&true));
+        assert_eq!(after.orgs.get("o2"), Some(&false));
+        assert_eq!(after.orgs.get("o3"), Some(&false), "the withheld org stays closed");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn backfill_opens_existing_orgs_once() {
+        let dir = tmp_dir("backfill");
+        let stored = AccessSettings {
+            enabled: true,
+            allow_money: false,
+            orgs: HashMap::from([("old".to_string(), false)]),
+            orgs_backfilled: false,
+        };
+        write_access(&dir, &stored).unwrap();
+        let ids = ["old".to_string(), "main".to_string()];
+        assert!(backfill_orgs(&dir, &ids).unwrap());
+        let after = read_access(&dir);
+        assert_eq!(after.orgs.get("main"), Some(&true), "allowed before, allowed now");
+        assert_eq!(after.orgs.get("old"), Some(&false), "an unticked org stays unticked");
+        assert!(after.orgs_backfilled);
+        // A later organisation without an entry is not opened.
+        let later = ["old".to_string(), "main".to_string(), "restored".to_string()];
+        assert!(!backfill_orgs(&dir, &later).unwrap());
+        assert_eq!(read_access(&dir).orgs.get("restored"), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn backfill_with_access_off_only_sets_the_marker() {
+        let dir = tmp_dir("backfill-off");
+        assert!(backfill_orgs(&dir, &["main".to_string()]).unwrap());
+        let after = read_access(&dir);
+        assert!(!after.enabled && after.orgs.is_empty() && after.orgs_backfilled);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn access_roundtrip() {
         let dir = tmp_dir("access");
         assert_eq!(read_access(&dir), AccessSettings::default());
@@ -904,6 +992,7 @@ mod tests {
             enabled: true,
             allow_money: false,
             orgs: HashMap::from([("aaa111".to_string(), false), ("unknown".to_string(), true)]),
+            orgs_backfilled: true,
         };
         write_access(&dir, &settings).unwrap();
         assert_eq!(read_access(&dir), settings);

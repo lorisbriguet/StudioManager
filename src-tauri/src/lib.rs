@@ -1091,6 +1091,14 @@ pub fn run() {
             }
             handle.manage(ActiveOrgState(Mutex::new(active)));
             handle.manage(InitError(Mutex::new(init_error)));
+            // Once: the organisations that existed while the MCP server
+            // allowed missing ids keep their access now that it refuses them.
+            if let Ok(Some(reg)) = Registry::load(&app_dir) {
+                let ids: Vec<String> = reg.organisations.iter().map(|o| o.id.clone()).collect();
+                if let Err(e) = agent_access::backfill_orgs(&app_dir, &ids) {
+                    log::warn!("agent access backfill failed: {e}");
+                }
+            }
             agent_access::start_poller(handle);
             agents::init(handle);
             // The main window is created hidden (no flash at login). Started at login with
