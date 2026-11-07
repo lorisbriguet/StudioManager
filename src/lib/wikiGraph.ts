@@ -94,35 +94,64 @@ function snippetAround(target: Node, markText?: { node: Text; start: number; end
 }
 
 /** Outgoing links and backlinks for every article. */
+type ParsedLink =
+  | { kind: "file"; key: string; snippet: Snippet }
+  | { kind: "article"; id: number; snippet: Snippet };
+
+// The links found in each article's HTML, by article id. An autosave changes
+// one article, so rebuilding the index parses only that one again.
+const parsedLinks = new Map<number, { content: string; links: ParsedLink[] }>();
+
+function linksOf(id: number, content: string): ParsedLink[] {
+  const cached = parsedLinks.get(id);
+  if (cached && cached.content === content) return cached.links;
+  const links: ParsedLink[] = [];
+  const doc = parse(content);
+  for (const anchor of Array.from(doc.querySelectorAll("a[href]"))) {
+    const href = anchor.getAttribute("href") ?? "";
+    const fileKey = parseWikiFileKey(href);
+    if (fileKey) {
+      links.push({ kind: "file", key: fileKey, snippet: snippetAround(anchor) });
+      continue;
+    }
+    const target = parseWikiArticleId(href);
+    if (target !== null) links.push({ kind: "article", id: target, snippet: snippetAround(anchor) });
+  }
+  parsedLinks.set(id, { content, links });
+  return links;
+}
+
 export function buildLinkIndex(articles: WikiArticleLike[]): LinkIndex {
   const outgoing = new Map<number, Map<number, number>>();
   const backlinks = new Map<number, Backlink[]>();
   const fileOutgoing = new Map<number, Map<string, number>>();
   const fileBacklinks = new Map<string, Backlink[]>();
   const known = new Set(articles.map((a) => a.id));
+  // Forget deleted articles, so the cache never outgrows the wiki.
+  for (const id of Array.from(parsedLinks.keys())) if (!known.has(id)) parsedLinks.delete(id);
 
   for (const a of articles) {
-    if (!a.content || !a.content.includes("/wiki?")) continue;
-    const doc = parse(a.content);
+    if (!a.content || !a.content.includes("/wiki?")) {
+      parsedLinks.delete(a.id);
+      continue;
+    }
     const targets = new Map<number, number>();
     const snippets = new Map<number, Snippet[]>();
     const fileTargets = new Map<string, number>();
     const fileSnippets = new Map<string, Snippet[]>();
-    for (const anchor of Array.from(doc.querySelectorAll("a[href]"))) {
-      const href = anchor.getAttribute("href") ?? "";
-      const fileKey = parseWikiFileKey(href);
-      if (fileKey) {
-        fileTargets.set(fileKey, (fileTargets.get(fileKey) ?? 0) + 1);
-        const list = fileSnippets.get(fileKey) ?? [];
-        list.push(snippetAround(anchor));
-        fileSnippets.set(fileKey, list);
+    for (const link of linksOf(a.id, a.content)) {
+      if (link.kind === "file") {
+        fileTargets.set(link.key, (fileTargets.get(link.key) ?? 0) + 1);
+        const list = fileSnippets.get(link.key) ?? [];
+        list.push(link.snippet);
+        fileSnippets.set(link.key, list);
         continue;
       }
-      const id = parseWikiArticleId(href);
-      if (id === null || id === a.id || !known.has(id)) continue;
+      const id = link.id;
+      if (id === a.id || !known.has(id)) continue;
       targets.set(id, (targets.get(id) ?? 0) + 1);
       const list = snippets.get(id) ?? [];
-      list.push(snippetAround(anchor));
+      list.push(link.snippet);
       snippets.set(id, list);
     }
     if (fileTargets.size > 0) {

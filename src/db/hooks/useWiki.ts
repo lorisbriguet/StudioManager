@@ -17,6 +17,8 @@ import {
 import { snapshotRows, pushRestore } from "../undoRestore";
 import { getLabels } from "../../lib/notify";
 import { qk } from "../queryKeys";
+import { nowMs } from "../../lib/clock";
+import type { WikiArticleWithTags } from "../../types/wiki";
 
 // ── Folders ──────────────────────────────────────────────────
 
@@ -104,12 +106,32 @@ export function useUpdateWikiArticle() {
         sort_order?: number;
       };
     }) => updateWikiArticle(id, data),
-    onSuccess: (_result, variables) => {
-      qc.invalidateQueries({ queryKey: qk.wiki.allArticles });
-      qc.invalidateQueries({ queryKey: qk.wiki.article(variables.id) });
-      qc.invalidateQueries({ queryKey: qk.wiki.allByProject });
+    onSuccess: (_result, { id, data }) => {
+      // A move (folder, project, order) changes which lists hold the article
+      // and its project name: read them again.
+      if (data.folder_id !== undefined || data.project_id !== undefined || data.sort_order !== undefined) {
+        qc.invalidateQueries({ queryKey: qk.wiki.allArticles });
+        qc.invalidateQueries({ queryKey: qk.wiki.article(id) });
+        qc.invalidateQueries({ queryKey: qk.wiki.allByProject });
+        return;
+      }
+      // A title or text save: patch the article where it is cached, without
+      // reading the whole wiki again on every autosave.
+      const patch: Partial<WikiArticleWithTags> = { updated_at: sqliteNow() };
+      if (data.title !== undefined) patch.title = data.title;
+      if (data.content !== undefined) patch.content = data.content;
+      const patchList = (list: WikiArticleWithTags[] | undefined) =>
+        list?.map((a) => (a.id === id ? { ...a, ...patch } : a));
+      qc.setQueriesData<WikiArticleWithTags[]>({ queryKey: qk.wiki.allArticles }, patchList);
+      qc.setQueriesData<WikiArticleWithTags[]>({ queryKey: qk.wiki.allByProject }, patchList);
+      qc.setQueryData<WikiArticleWithTags | null>(qk.wiki.article(id), (a) => (a ? { ...a, ...patch } : a));
     },
   });
+}
+
+/** `datetime('now')` as SQLite writes it: UTC, "YYYY-MM-DD HH:MM:SS". */
+function sqliteNow(): string {
+  return new Date(nowMs()).toISOString().slice(0, 19).replace("T", " ");
 }
 
 export function useDeleteWikiArticle() {

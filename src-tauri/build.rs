@@ -88,6 +88,7 @@ const COMMANDS: &[&str] = &[
     "menubar_open_main",
     "menubar_hide",
     "main_ready",
+    "quit_ready",
 ];
 
 fn main() {

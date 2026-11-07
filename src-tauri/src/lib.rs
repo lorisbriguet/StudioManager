@@ -10,6 +10,7 @@ mod menubar;
 mod network;
 mod migrate;
 mod project_docs;
+mod quit;
 pub mod orgs;
 mod seed;
 pub mod upgrade;
@@ -1078,7 +1079,15 @@ pub fn run() {
             menubar::menubar_open_main,
             menubar::menubar_hide,
             menubar::main_ready,
+            quit::quit_ready,
         ])
+        // Tauri's default menu, with a Quit (Cmd+Q) that lets the window save first.
+        .menu(quit::app_menu)
+        .on_menu_event(|app, event| {
+            if event.id() == quit::MENU_ID {
+                quit::begin(app);
+            }
+        })
         .setup(|app| {
             let handle = app.handle();
             // app_data_dir() failing is itself an init error; default to an
@@ -1130,6 +1139,14 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
+            // The app is about to exit on its own (no code): let the main window
+            // write its pending saves first; quit::begin exits once it has.
+            if let tauri::RunEvent::ExitRequested { code, api, .. } = &event {
+                if quit::should_hold_exit(app, *code) {
+                    api.prevent_exit();
+                    quit::begin(app);
+                }
+            }
             // Cmd+Q: stop the command routines still running, so none outlives the app.
             if let tauri::RunEvent::Exit = event {
                 let stopped = agents::routines::run::stop_all();
