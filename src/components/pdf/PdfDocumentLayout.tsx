@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Document, Page, Text, View } from "@react-pdf/renderer";
-import type { invoiceLabels, InvoiceLanguage } from "../../i18n/invoice-labels";
+import { pdfUnitLabel, type invoiceLabels, type InvoiceLanguage } from "../../i18n/invoice-labels";
 import type { Client, ClientAddress } from "../../types/client";
 import type { BusinessProfile } from "../../types/business-profile";
 import type { InvoiceTemplate } from "../../types/invoice-template";
@@ -211,7 +211,7 @@ export function PdfDocumentLayout({
                 {columnOrder.map((col) => {
                   if (col === "designation") return <Text key={col} style={styles.colDesignation}>{item.designation}</Text>;
                   if (col === "rate" && hasRate) return <Text key={col} style={styles.colRate}>{item.rate != null ? formatAmount(item.rate) : ""}</Text>;
-                  if (col === "unit" && hasUnit) return <Text key={col} style={styles.colUnit}>{item.unit || ""}</Text>;
+                  if (col === "unit" && hasUnit) return <Text key={col} style={styles.colUnit}>{pdfUnitLabel(lang, item.unit)}</Text>;
                   if (col === "qty") return <Text key={col} style={styles.colQty}>{item.quantity}</Text>;
                   if (col === "amount") return <Text key={col} style={styles.colAmount}>{formatAmount(item.amount)}</Text>;
                   return null;
@@ -223,7 +223,7 @@ export function PdfDocumentLayout({
           {/* Global rate label */}
           {isGlobalRate && (
             <Text style={{ fontSize: 8, color: PDF.muted, marginTop: 4, marginBottom: 4 }}>
-              {t.all_items_at} {formatAmount(lineItems[0].rate!)} / {(t as Record<string, string>)[`unit_${lineItems[0].unit}`] ?? lineItems[0].unit}
+              {t.all_items_at} {formatAmount(lineItems[0].rate!)} / {pdfUnitLabel(lang, lineItems[0].unit)}
             </Text>
           )}
 

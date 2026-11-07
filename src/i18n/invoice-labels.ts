@@ -30,10 +30,10 @@ export const invoiceLabels = {
     bank: "Banque",
     bic: "BIC/SWIFT",
     notes: "Notes",
-    all_items_at: "Tous les articles a",
+    all_items_at: "Tous les articles à",
     unit_hours: "heure",
     unit_days: "jour",
-    unit_units: "unite",
+    unit_units: "unité",
     unit_flat: "forfait",
     net_days: "Net {days} jours",
     reminder: "Rappel",
@@ -90,3 +90,11 @@ export const invoiceLabels = {
 } as const;
 
 export type InvoiceLanguage = keyof typeof invoiceLabels;
+
+/** A line item's unit ("hours", "days"...) in the document's language. A unit
+ *  with no label (typed by hand in older data) is printed as stored. */
+export function pdfUnitLabel(lang: InvoiceLanguage, unit: string | null | undefined): string {
+  if (!unit) return "";
+  const labels: Record<string, string> = invoiceLabels[lang] ?? invoiceLabels.EN;
+  return labels[`unit_${unit}`] ?? unit;
+}
