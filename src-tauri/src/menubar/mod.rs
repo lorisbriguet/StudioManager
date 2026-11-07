@@ -135,7 +135,7 @@ pub fn set_autostart(app: &AppHandle, on: bool) -> Result<(), String> {
         return launcher.enable().map_err(|e| format!("Could not start StudioManager at login: {e}"));
     }
     if let Err(e) = launcher.disable() {
-        eprintln!("[menubar] start at login disable: {e}");
+        log::warn!("[menubar] start at login disable: {e}");
     }
     Ok(())
 }
@@ -157,7 +157,7 @@ fn icon(needs_you: bool) -> Option<Image<'static>> {
 pub fn sync_tray(app: &AppHandle, enabled: bool, _held: &SettingsGuard) {
     let handle = app.clone();
     if let Err(e) = app.run_on_main_thread(move || apply_tray(&handle, enabled)) {
-        eprintln!("[menubar] could not update the menu bar icon: {e}");
+        log::warn!("[menubar] could not update the menu bar icon: {e}");
     }
 }
 
@@ -195,12 +195,12 @@ fn apply_tray(app: &AppHandle, enabled: bool) {
         builder = builder.icon(img);
     }
     if let Err(e) = builder.build(app) {
-        eprintln!("[menubar] could not add the menu bar icon: {e}");
+        log::error!("[menubar] could not add the menu bar icon: {e}");
         return;
     }
     // Load the panel now so the first click opens it with its content ready.
     if let Err(e) = ensure_panel(app) {
-        eprintln!("[menubar] could not create the panel: {e}");
+        log::error!("[menubar] could not create the panel: {e}");
     }
 }
 
@@ -242,7 +242,7 @@ fn ensure_panel(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
     // the app and can bring the main window forward.
     #[cfg(target_os = "macos")]
     if let Err(e) = nspanel::convert(&w) {
-        eprintln!("[menubar] the panel is a plain window: {e}");
+        log::warn!("[menubar] the panel is a plain window: {e}");
         nspanel::release(app, PANEL_LABEL);
     }
     let panel = w.clone();

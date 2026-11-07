@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { ReactNode } from "react";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -79,6 +79,69 @@ describe("useOverdueCheck", () => {
     expect(h.warning).not.toHaveBeenCalled();
     expect(h.createNotification).not.toHaveBeenCalled();
     expect(h.sendNativeNotification).not.toHaveBeenCalled();
+  });
+
+  describe("when the app stays open across days", () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      vi.setSystemTime(new Date(2026, 10, 7, 22, 0, 0)); // 22:00 local
+      h.markOverdueInvoices.mockResolvedValue([]);
+    });
+    afterEach(() => vi.useRealTimers());
+
+    function setVisibility(state: DocumentVisibilityState) {
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => state });
+    }
+
+    it("runs again just after local midnight, and not before", () => {
+      const { unmount } = render();
+      expect(h.markOverdueInvoices).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(1.5 * 3600_000); // 23:30
+      expect(h.markOverdueInvoices).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(3600_000); // 00:30 the next day
+      expect(h.markOverdueInvoices).toHaveBeenCalledTimes(2);
+
+      vi.advanceTimersByTime(24 * 3600_000); // and the night after
+      expect(h.markOverdueInvoices).toHaveBeenCalledTimes(3);
+      unmount();
+    });
+
+    it("runs when the window shows again on a new day, not on the same day", () => {
+      const { unmount } = render();
+      setVisibility("visible");
+
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("focus"));
+      expect(h.markOverdueInvoices).toHaveBeenCalledTimes(1);
+
+      // The Mac slept through midnight: the clock moved, the timer has not fired.
+      vi.setSystemTime(new Date(2026, 10, 8, 9, 0, 0));
+      document.dispatchEvent(new Event("visibilitychange"));
+      expect(h.markOverdueInvoices).toHaveBeenCalledTimes(2);
+
+      window.dispatchEvent(new Event("focus"));
+      expect(h.markOverdueInvoices).toHaveBeenCalledTimes(2);
+      unmount();
+    });
+
+    it("runs on focus on a new day", () => {
+      const { unmount } = render();
+      vi.setSystemTime(new Date(2026, 10, 8, 9, 0, 0));
+      window.dispatchEvent(new Event("focus"));
+      expect(h.markOverdueInvoices).toHaveBeenCalledTimes(2);
+      unmount();
+    });
+
+    it("stops after unmount", () => {
+      const { unmount } = render();
+      unmount();
+      vi.setSystemTime(new Date(2026, 10, 8, 9, 0, 0));
+      window.dispatchEvent(new Event("focus"));
+      vi.advanceTimersByTime(48 * 3600_000);
+      expect(h.markOverdueInvoices).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("logs a failed check instead of throwing", async () => {
