@@ -137,8 +137,11 @@ describe("create with line items", () => {
       [item]
     );
     const [doc, line] = executed();
-    expect(doc.sql).toMatch(/^INSERT INTO invoices \(reference, client_id/);
-    expect(doc.params).toHaveLength(27);
+    // The columns are the fields given, plus the currency defaults
+    expect(doc).toEqual({
+      sql: "INSERT INTO invoices (reference, total, currency, exchange_rate, chf_equivalent) VALUES ($1, $2, $3, $4, $5)",
+      params: ["DRAFT-1", 200, "CHF", 1, 200],
+    });
     expect(line).toEqual({
       sql: "INSERT INTO invoice_line_items (invoice_id, designation, rate, unit, quantity, amount, sort_order) VALUES ($LAST_INSERT_ID, $1, $2, $3, $4, $5, $6)",
       params: ["Logo", 100, "h", 2, 200, 0],
@@ -146,13 +149,25 @@ describe("create with line items", () => {
   });
 
   it("inserts the quote, then its line items against the new id", async () => {
-    await quo.createQuoteWithLineItems({ reference: "D-2026-001" } as never, [item]);
+    await quo.createQuoteWithLineItems(
+      { reference: "D-2026-001", billing_address_id: 7, template_id: 3, notes: undefined } as never,
+      [item]
+    );
     const [doc, line] = executed();
-    expect(doc.sql).toMatch(/^INSERT INTO quotes \(reference, client_id/);
-    expect(doc.params).toHaveLength(16);
+    // Every field given is saved; undefined ones are left to the column default
+    expect(doc).toEqual({
+      sql: "INSERT INTO quotes (reference, billing_address_id, template_id) VALUES ($1, $2, $3)",
+      params: ["D-2026-001", 7, 3],
+    });
     expect(line).toEqual({
       sql: "INSERT INTO quote_line_items (quote_id, designation, rate, unit, quantity, amount, sort_order) VALUES ($LAST_INSERT_ID, $1, $2, $3, $4, $5, $6)",
       params: ["Logo", 100, "h", 2, 200, 0],
     });
+  });
+
+  it("refuses a field name that isn't a plain column name", async () => {
+    await expect(
+      quo.createQuoteWithLineItems({ reference: "D-2026-002", "notes) VALUES (1); --": "x" } as never, [])
+    ).rejects.toThrow("Invalid field name");
   });
 });
