@@ -23,7 +23,7 @@ vi.mock("../db/hooks/useDashboardPresets", () => {
   return { useDashboardPresets: () => ({ data: [] }), useCreateDashboardPreset: mut, useUpdateDashboardPreset: mut, useDeleteDashboardPreset: mut };
 });
 
-import { useDashboardStore, isFullWidthLayout } from "../stores/dashboard-store";
+import { useDashboardStore, isFullWidthLayout, spreadSqueezedLayout } from "../stores/dashboard-store";
 import { useOrgStore } from "../stores/org-store";
 import { DashboardPage } from "../pages/DashboardPage";
 import { setInvokeHandler } from "../__mocks__/tauri-api";
@@ -142,7 +142,8 @@ describe("dashboard per organisation", () => {
 
     expect(localStorage.getItem("dashboard-layout")).toBeNull();
     expect(localStorage.getItem("dashboard-pinned-notes:o3")).toBe("old notes");
-    expect(useDashboardStore.getState().layout).toEqual(squeezed);
+    // Moved, then spread over the 12 columns (an old build saved the squeezed copy).
+    expect(useDashboardStore.getState().layout).toEqual(spreadSqueezedLayout(squeezed));
     expect(useDashboardStore.getState().pinnedNotes).toBe("old notes");
     // Only the dashboard keys move on an already-upgraded organisation.
     expect(localStorage.getItem("open-tabs")).toBe("untouched");

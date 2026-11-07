@@ -2,7 +2,7 @@
 //! start hidden at login), the menu bar icon and its panel window.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use tauri::image::Image;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -39,6 +39,12 @@ static ATTENTION: AtomicBool = AtomicBool::new(false);
 /// would open the panel again instead of closing it.
 static PANEL_BLURRED_AT: AtomicU64 = AtomicU64::new(0);
 const REOPEN_GUARD_MS: u64 = 300;
+/// Set at launch when the main window is to open: the page shows it once it has painted
+/// (`main_ready`), so it never appears as an empty native window in the Mac's appearance.
+/// Cleared as soon as the window is shown, whatever shows it.
+static SHOW_PENDING: AtomicBool = AtomicBool::new(false);
+/// Shown anyway after this, should the page never call `main_ready` (a load error).
+const SHOW_FALLBACK: Duration = Duration::from_secs(2);
 
 /// Whether a click on the icon this soon after the panel hid on losing the focus is that same
 /// click (it closes the panel), not a new one to open it.
@@ -60,11 +66,35 @@ pub fn started_hidden() -> bool {
 
 /// Show and focus the main window (Dock click, panel "open app").
 pub fn show_main(app: &AppHandle) {
+    SHOW_PENDING.store(false, Ordering::SeqCst);
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
         let _ = w.unminimize();
         let _ = w.set_focus();
     }
+}
+
+/// Launch: show the main window when its page has painted, or after `SHOW_FALLBACK`.
+pub fn show_main_when_ready(app: &AppHandle) {
+    SHOW_PENDING.store(true, Ordering::SeqCst);
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(SHOW_FALLBACK);
+        show_if_pending(&app);
+    });
+}
+
+fn show_if_pending(app: &AppHandle) {
+    if SHOW_PENDING.swap(false, Ordering::SeqCst) {
+        show_main(app);
+    }
+}
+
+/// The main window's page has painted: show the window if launch left it to the page.
+/// Does nothing otherwise (started hidden at login, already shown, a page reload).
+#[tauri::command]
+pub fn main_ready(app: AppHandle) {
+    show_if_pending(&app);
 }
 
 /// Start the app at login (with `--menubar`) or stop doing so. Enabling reports its failure

@@ -50,6 +50,7 @@ import { QuickTimerModal } from "./components/QuickTimerModal";
 import { NewTaskModal } from "./components/NewTaskModal";
 import { OrgGate } from "./components/OrgGate";
 import { MenuBarApp } from "./menubar/MenuBarApp";
+import { showMainWindowWhenPainted } from "./lib/showMainWindow";
 import { useFollowAppSettings } from "./menubar/useFollowAppSettings";
 import { PageSpinner, Toaster } from "./components/ui";
 import { useOverdueCheck } from "./hooks/useOverdueCheck";
@@ -222,6 +223,10 @@ export default function App() {
 
 function MainApp() {
   const activeId = useOrgStore((s) => s.activeId);
+  // Rust opens the window once the page has painted (no empty dark window at launch).
+  useEffect(() => {
+    showMainWindowWhenPainted();
+  }, []);
   return (
     <QueryClientProvider client={queryClient}>
       {/* Outer boundary: catches what the page boundary below can't reach

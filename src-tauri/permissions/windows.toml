@@ -91,6 +91,7 @@ permissions = [
   "allow-routines-open-folder",
   "allow-menubar-open-main",
   "allow-menubar-hide",
+  "allow-main-ready",
 ]
 
 [[set]]
