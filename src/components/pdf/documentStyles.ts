@@ -35,6 +35,14 @@ const pdfStyles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 10,
   },
+  // Draft marking after the title: small, regular weight, muted (never the
+  // template accent), so a draft is clear without shouting.
+  titleDraft: {
+    fontFamily: "Helvetica",
+    fontSize: 10,
+    letterSpacing: 1,
+    color: PDF.muted,
+  },
   // ── Header: business left, client right ──
   header: {
     flexDirection: "row",

@@ -7,7 +7,7 @@ import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useInvoice, useInvoiceLineItems, useUpdateInvoice } from "../db/hooks/useInvoices";
 import { getInvoice } from "../db/queries/invoices";
-import { pdfFileName } from "../lib/pdfFilename";
+import { documentPdfStem, pdfFileName } from "../lib/pdfFilename";
 import type { Invoice } from "../types/invoice";
 import { useClient, useClientContacts, useClientAddresses } from "../db/hooks/useClients";
 import { useBusinessProfile } from "../db/hooks/useBusinessProfile";
@@ -167,7 +167,13 @@ export function InvoicePreviewPage() {
     if (exporting) return;
     setExporting(true);
     try {
-      const filename = pdfFileName(inv.reference, client.name);
+      const filename = pdfFileName(
+        documentPdfStem(
+          "invoice",
+          { reference: inv.reference, status: inv.status, language: inv.language, date: inv.invoice_date },
+          client.name
+        )
+      );
       if (inv.pdf_path) {
         try {
           const bytes = await readFile(inv.pdf_path);

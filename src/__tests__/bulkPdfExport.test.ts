@@ -39,7 +39,7 @@ const LABELS = {
 };
 
 const bytes = new Uint8Array([1]);
-const okResult = (reference: string) => ({ bytes, reference, client: { name: "ACME" } });
+const okResult = (reference: string) => ({ bytes, fileStem: `${reference}_ACME` });
 
 beforeEach(() => {
   vi.mocked(confirm).mockReset().mockResolvedValue(true);
