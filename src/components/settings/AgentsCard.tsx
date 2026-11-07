@@ -6,6 +6,7 @@ import { FormActions } from "../ui/Form";
 import { useConfirm } from "../../lib/confirm";
 import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
+import { isDemoBuild } from "../../lib/demoBuild";
 import {
   getAgentsSettings,
   installStatusLine,
@@ -127,6 +128,8 @@ export function AgentsCard() {
     await offerRemoval();
   };
 
+  // The demo build never runs Agents (Rust keeps it off): the usual off state, no lookup.
+  const demo = isDemoBuild();
   const missing = info !== null && !info.claudePath;
   // Shown whenever a StudioManager status line is in place (any path, Agents on or off) so it
   // can always be removed; setting one up needs the menu bar.
@@ -139,7 +142,7 @@ export function AgentsCard() {
       <SettingRow label={t.agents_enable}>
         <Toggle
           checked={info?.enabled ?? false}
-          disabled={!info || (missing && !info.enabled)}
+          disabled={!info || demo || (missing && !info.enabled)}
           ariaLabel={t.agents_enable}
           onChange={(enabled) => void toggle(enabled)}
         />
@@ -192,7 +195,9 @@ export function AgentsCard() {
       {error && <p role="alert" className="text-xs text-danger-text py-2">{error}</p>}
       {info && (
         <SettingRow label={t.agents_claude_path}>
-          {info.claudePath ? (
+          {demo ? (
+            <span className="text-xs text-muted">{t.agents_demo_unavailable}</span>
+          ) : info.claudePath ? (
             <span className="text-xs text-muted font-mono truncate max-w-[24rem]">{info.claudePath}</span>
           ) : (
             <span className="text-xs text-danger-text">{t.agents_claude_missing}</span>
