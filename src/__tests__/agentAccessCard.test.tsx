@@ -68,12 +68,21 @@ describe("AgentAccessCard", () => {
   it("turning on saves immediately and shows organisations", async () => {
     renderCard();
     fireEvent.click(await screen.findByRole("switch", { name: "Allow AI agents to use StudioManager" }));
-    await waitFor(() => expect(last(cmds("set_agent_access"))?.args).toEqual({ enabled: true, allowMoney: false, orgs: {} }));
-    expect(await screen.findByLabelText("Studio")).toBeTruthy();
+    // First time on: the active organisation (o1) is ticked, the others stay closed.
+    await waitFor(() => expect(last(cmds("set_agent_access"))?.args).toEqual({ enabled: true, allowMoney: false, orgs: { o1: true } }));
+    expect(((await screen.findByLabelText("Studio")) as HTMLInputElement).checked).toBe(true);
     // No entry: closed to agents, so unticked.
     expect((screen.getByLabelText("Label") as HTMLInputElement).checked).toBe(false);
     fireEvent.click(screen.getByLabelText("Label"));
-    await waitFor(() => expect(last(cmds("set_agent_access"))?.args.orgs).toEqual({ o2: true }));
+    await waitFor(() => expect(last(cmds("set_agent_access"))?.args.orgs).toEqual({ o1: true, o2: true }));
+  });
+
+  it("switching on again keeps an active organisation the owner unticked", async () => {
+    state = { enabled: false, allowMoney: false, orgs: { o1: false } };
+    renderCard();
+    fireEvent.click(await screen.findByRole("switch", { name: "Allow AI agents to use StudioManager" }));
+    await waitFor(() => expect(last(cmds("set_agent_access"))?.args).toEqual({ enabled: true, allowMoney: false, orgs: { o1: false } }));
+    expect(((await screen.findByLabelText("Studio")) as HTMLInputElement).checked).toBe(false);
   });
 
   it("a new organisation shows unticked and a later toggle keeps it withheld", async () => {

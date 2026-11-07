@@ -34,9 +34,18 @@ function formatAt(at: string): string {
   return d.toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
 }
 
+// The first time access is switched on, the active organisation has no entry
+// yet: tick it so agents work right away. The others stay closed until
+// ticked, and an organisation the owner unticked before stays unticked.
+function withActiveOnFirstEnable(orgs: Record<string, boolean>, enabled: boolean, activeId: string): Record<string, boolean> {
+  if (!enabled || !activeId || activeId in orgs) return orgs;
+  return { ...orgs, [activeId]: true };
+}
+
 export function AgentAccessCard() {
   const t = useT();
   const organisations = useOrgStore((s) => s.organisations);
+  const activeId = useOrgStore((s) => s.activeId);
   const [info, setInfo] = useState<AgentAccess | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [log, setLog] = useState<LogEntry[]>([]);
@@ -134,7 +143,7 @@ export function AgentAccessCard() {
           checked={info?.enabled ?? false}
           disabled={!info}
           ariaLabel={t.agent_access_enable}
-          onChange={(enabled) => info && void save({ enabled, allowMoney: info.allowMoney, orgs: info.orgs })}
+          onChange={(enabled) => info && void save({ enabled, allowMoney: info.allowMoney, orgs: withActiveOnFirstEnable(info.orgs, enabled, activeId) })}
         />
       </SettingRow>
       {error && <p role="alert" className="text-xs text-danger-text py-2">{error}</p>}
