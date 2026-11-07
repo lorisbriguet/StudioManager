@@ -149,12 +149,15 @@ export const DEFAULT_LAYOUT: LayoutItem[] = [
   { i: "w-upkeep", x: 0, y: 11, w: 4, h: 4, minW: 3, minH: 3 },
 ];
 
-export const DASHBOARD_BREAKPOINTS = { lg: 1200, md: 996, sm: 768, xs: 480 };
+// Widths of the dashboard itself, not the window: with the sidebar open and the
+// page padding, the 12-column layout starts at a window of about 1170px, so the
+// default 1280px window can be arranged.
+export const DASHBOARD_BREAKPOINTS = { lg: 880, md: 700, sm: 520, xs: 0 };
 export const DASHBOARD_COLS = { lg: 12, md: 10, sm: 6, xs: 4 };
 
 /** The saved layout is the 12-column one. Narrower windows show a copy the
  *  grid squeezes to fewer columns, which must never be saved over it.
- *  Same rule as react-grid-layout: `lg` once the width is above 1200. */
+ *  Same rule as react-grid-layout: `lg` once the width is above its breakpoint. */
 export function isFullWidthLayout(width: number): boolean {
   return width > DASHBOARD_BREAKPOINTS.lg;
 }
@@ -168,23 +171,50 @@ const NOTES_KEY = () => orgKey("dashboard-pinned-notes");
 const PRESET_ID_KEY = () => orgKey("dashboard-preset-id");
 const PRESET_NAME_KEY = () => orgKey("dashboard-preset-name");
 // Set once the saved layout has been checked for a squeezed 3.4.0 copy (no legacy
-// un-namespaced value exists, so it isn't in NAMESPACED_KEYS).
-const SPREAD_KEY = () => orgKey("dashboard-layout-spread");
+// un-namespaced value exists, so it isn't in NAMESPACED_KEYS). "-2": the first
+// check stretched only whole layouts, so it runs again with the per-row rule.
+const SPREAD_KEY = () => orgKey("dashboard-layout-spread-2");
+const OLD_SPREAD_KEY = () => orgKey("dashboard-layout-spread");
 
 /** Columns of the saved layout, written into presets so old ones can be told apart. */
 const FULL_COLS = DASHBOARD_COLS.lg;
 
+/** Groups of widgets whose rows overlap, top to bottom. */
+function rowBands(layout: LayoutItem[]): LayoutItem[][] {
+  const sorted = [...layout].sort((a, b) => a.y - b.y);
+  const bands: LayoutItem[][] = [];
+  let bottom = -Infinity;
+  for (const item of sorted) {
+    if (item.y >= bottom) bands.push([]);
+    bands[bands.length - 1].push(item);
+    bottom = Math.max(bottom, item.y + item.h);
+  }
+  return bands;
+}
+
+const rightEdge = (items: LayoutItem[]) => Math.max(0, ...items.map((l) => l.x + l.w));
+
 /**
  * v3.4.0 saved the copy the grid squeezed into a narrower window (10, 6 or 4
  * columns) as the 12-column layout, which then filled only the left part of the
- * dashboard. Stretches such a layout over the 12 columns, keeping each widget's
- * order and proportion; a layout that reaches column 11 or 12 is returned as is.
+ * dashboard. Stretches the squeezed rows over the 12 columns, keeping each widget's
+ * order and proportion. The squeezed copy is the top of the layout (3.4.0 added new
+ * widgets at the bottom), so only the narrow rows above the first row reaching
+ * column 11 or 12 are stretched: widgets added at full width since, and a narrow
+ * row below them (left that way on purpose), are kept as they are. The layout is
+ * returned as is when nothing is stretched.
  */
 export function spreadSqueezedLayout(layout: LayoutItem[]): LayoutItem[] {
-  const edge = Math.max(0, ...layout.map((l) => l.x + l.w));
-  if (edge === 0 || edge > DASHBOARD_COLS.md) return layout;
+  const bands = rowBands(layout);
+  const firstFull = bands.findIndex((band) => rightEdge(band) > DASHBOARD_COLS.md);
+  const squeezed = (firstFull === -1 ? bands : bands.slice(0, firstFull)).flat();
+  // All squeezed rows come from the same narrow copy: one scale for all of them.
+  const edge = rightEdge(squeezed);
+  if (edge === 0) return layout;
+  const stretch = new Set(squeezed);
   const scale = (n: number) => Math.round((n * FULL_COLS) / edge);
   return layout.map((item) => {
+    if (!stretch.has(item)) return item;
     const x = scale(item.x);
     const w = Math.min(FULL_COLS - x, Math.max(scale(item.x + item.w) - x, item.minW ?? 1));
     return { ...item, x, w };
@@ -207,15 +237,19 @@ function loadLayout(): LayoutItem[] {
     // Once per organisation: later layouts are saved at full width only, and one left
     // narrow on purpose must not be stretched.
     const checked = localStorage.getItem(SPREAD_KEY()) !== null;
+    const markChecked = () => {
+      localStorage.setItem(SPREAD_KEY(), "1");
+      localStorage.removeItem(OLD_SPREAD_KEY());
+    };
     if (!raw) {
-      if (!checked) localStorage.setItem(SPREAD_KEY(), "1");
+      if (!checked) markChecked();
       return DEFAULT_LAYOUT;
     }
     const saved = JSON.parse(raw) as LayoutItem[];
     if (checked) return saved;
     const spread = spreadSqueezedLayout(saved);
     if (spread !== saved) localStorage.setItem(STORAGE_KEY(), JSON.stringify(spread));
-    localStorage.setItem(SPREAD_KEY(), "1");
+    markChecked();
     return spread;
   } catch {
     return DEFAULT_LAYOUT;

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+import { render, cleanup, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { LayoutItem } from "react-grid-layout";
 
@@ -26,6 +26,7 @@ vi.mock("../db/hooks/useDashboardPresets", () => {
 import { useDashboardStore, isFullWidthLayout, spreadSqueezedLayout } from "../stores/dashboard-store";
 import { useOrgStore } from "../stores/org-store";
 import { DashboardPage } from "../pages/DashboardPage";
+import { uiLabels } from "../i18n/ui";
 import { setInvokeHandler } from "../__mocks__/tauri-api";
 import type { Registry } from "../lib/orgs";
 
@@ -61,8 +62,21 @@ function renderPage(width: number) {
 
 describe("dashboard layout saving", () => {
   it("uses react-grid-layout's rule for the full-width layout", () => {
-    expect(isFullWidthLayout(1201)).toBe(true);
-    expect(isFullWidthLayout(1200)).toBe(false);
+    expect(isFullWidthLayout(881)).toBe(true);
+    expect(isFullWidthLayout(880)).toBe(false);
+  });
+
+  it("can be arranged at the default 1280px window with the sidebar open", () => {
+    // 1280 - 224 (sidebar) - 64 (page padding)
+    expect(isFullWidthLayout(992)).toBe(true);
+    const props = renderPage(992) as unknown as { dragConfig: { enabled: boolean } };
+    expect(props.dragConfig.enabled).toBe(true);
+    expect(screen.queryByText(uiLabels.EN.dashboard_widen_to_edit)).toBeNull();
+  });
+
+  it("says why it can't be arranged in a narrow window", () => {
+    renderPage(800);
+    expect(screen.getByText(uiLabels.EN.dashboard_widen_to_edit)).toBeTruthy();
   });
 
   it("never saves the layout the grid squeezes for a narrow window", () => {
@@ -76,7 +90,7 @@ describe("dashboard layout saving", () => {
 
   it("is view-only below full width and editable at full width", () => {
     type Config = { enabled: boolean };
-    const narrow = renderPage(1000) as unknown as { dragConfig: Config; resizeConfig: Config };
+    const narrow = renderPage(800) as unknown as { dragConfig: Config; resizeConfig: Config };
     expect(narrow.dragConfig.enabled).toBe(false);
     expect(narrow.resizeConfig.enabled).toBe(false);
     cleanup();

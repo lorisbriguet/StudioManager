@@ -6,7 +6,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use tauri::image::Image;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder};
+use tauri::window::Color;
+use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, Theme, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_autostart::ManagerExt;
 
 use crate::agents::cli::{read_settings, SettingsGuard};
@@ -90,10 +91,39 @@ fn show_if_pending(app: &AppHandle) {
     }
 }
 
+/// A theme background (`#rgb` or `#rrggbb`) as a window colour; `None` for anything else.
+pub fn parse_hex_color(value: &str) -> Option<Color> {
+    let hex = value.trim().strip_prefix('#')?;
+    if !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    let channel = |s: &str| u8::from_str_radix(s, 16).ok();
+    let (r, g, b) = match hex.len() {
+        3 => {
+            let double = |i: usize| channel(&hex[i..i + 1]).map(|v| v * 17);
+            (double(0)?, double(1)?, double(2)?)
+        }
+        6 => (channel(&hex[0..2])?, channel(&hex[2..4])?, channel(&hex[4..6])?),
+        _ => return None,
+    };
+    Some(Color(r, g, b, 255))
+}
+
 /// The main window's page has painted: show the window if launch left it to the page.
+/// Before showing it, gives the native window the chosen theme's appearance and background,
+/// so the moment before the web view has drawn is not coloured by the Mac's appearance.
 /// Does nothing otherwise (started hidden at login, already shown, a page reload).
 #[tauri::command]
-pub fn main_ready(app: AppHandle) {
+pub fn main_ready(app: AppHandle, dark: bool, background: Option<String>) {
+    if !SHOW_PENDING.load(Ordering::SeqCst) {
+        return;
+    }
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.set_theme(Some(if dark { Theme::Dark } else { Theme::Light }));
+        if let Some(color) = background.as_deref().and_then(parse_hex_color) {
+            let _ = w.set_background_color(Some(color));
+        }
+    }
     show_if_pending(&app);
 }
 
@@ -370,6 +400,19 @@ mod tests {
         let screen = Area { x: 100.0, ..screen };
         let icon = Area { x: 50.0, ..icon };
         assert_eq!(panel_origin(icon, screen, 680.0, 2.0).0, 116.0);
+    }
+
+    #[test]
+    fn theme_background_becomes_the_window_colour() {
+        assert_eq!(parse_hex_color("#111111"), Some(Color(17, 17, 17, 255)));
+        assert_eq!(parse_hex_color(" #F7f2E8 "), Some(Color(0xf7, 0xf2, 0xe8, 255)));
+        assert_eq!(parse_hex_color("#fff"), Some(Color(255, 255, 255, 255)));
+        // Anything else leaves the window colour alone.
+        assert_eq!(parse_hex_color("111111"), None);
+        assert_eq!(parse_hex_color("#11111"), None);
+        assert_eq!(parse_hex_color("#gggggg"), None);
+        assert_eq!(parse_hex_color("#ééé"), None);
+        assert_eq!(parse_hex_color("rgb(1, 2, 3)"), None);
     }
 
     #[test]

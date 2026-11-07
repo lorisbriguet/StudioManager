@@ -257,6 +257,10 @@ export function DashboardPage() {
         </Button>
       </PageHeader>
 
+      {!isFirstRun && mounted && width > 0 && !editable && (
+        <p className="text-xs text-muted mb-3">{t.dashboard_widen_to_edit}</p>
+      )}
+
       <VatThresholdCallout />
 
       {/* Widget store panel */}
