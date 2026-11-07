@@ -1,4 +1,6 @@
 import { formatMoney } from "../lib/money";
+import { isDraftDocument } from "../lib/draftDocument";
+import { InvoiceAmount } from "../components/invoice/InvoiceAmount";
 import React, { useState, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { notify } from "../lib/notify";
@@ -128,13 +130,15 @@ export function InvoicesPage() {
 
   const bulkMarkPaid = useCallback(() => {
     const ids = [...bulk.selected] as number[];
-    const prevStates = ids.map((id) => {
+    // A draft marked paid gets its number (see documentHooks): it can't be
+    // undone back to draft, so the undo only restores the others.
+    const prevStates = ids.flatMap((id) => {
       const inv = enriched.find((i) => i.id === id);
-      return { id, status: inv?.status, paid_date: inv?.paid_date };
+      return inv?.status === "draft" ? [] : [{ id, status: inv?.status, paid_date: inv?.paid_date }];
     });
     const today = todayLocalISO();
     ids.forEach((id) => updateInvoice.mutate({ id, data: { status: "paid" as InvoiceStatus, paid_date: today } }));
-    undoable(t.bulk_updated, async () => {
+    if (prevStates.length > 0) undoable(t.bulk_updated, async () => {
       await Promise.all(
         prevStates.map((prev) =>
           updateInvoice.mutateAsync({ id: prev.id, data: { status: prev.status as InvoiceStatus, paid_date: prev.paid_date } })
@@ -572,13 +576,16 @@ export function InvoicesPage() {
                               updateInvoice.mutate(
                                 { id: inv.id, data },
                                 {
-                                  onSuccess: () =>
+                                  // Leaving draft numbers the invoice: no undo back to draft.
+                                  onSuccess: () => {
+                                    if (prevStatus === "draft") return;
                                     undoable(t.status_updated, () =>
                                       updateInvoice.mutateAsync({
                                         id: inv.id,
                                         data: { status: prevStatus, paid_date: prevPaidDate },
                                       })
-                                    ),
+                                    );
+                                  },
                                 }
                               );
                             }}
@@ -590,21 +597,12 @@ export function InvoicesPage() {
                             <option value="sent">{t.sent}</option>
                             <option value="paid">{t.paid}</option>
                             <option value="overdue">{t.overdue}</option>
-                            <option value="cancelled">{t.cancelled}</option>
+                            {/* A draft is deleted, not cancelled: it has no number yet. */}
+                            {!isDraftDocument(inv) && <option value="cancelled">{t.cancelled}</option>}
                           </Select>
                         </Table.Td>
                         <Table.Td numeric className="font-medium">
-                          {inv.status === "cancelled" ? (
-                            <span className="text-muted line-through">{formatMoney(inv.total, inv.currency || "CHF")}</span>
-                          ) : inv.currency && inv.currency !== "CHF" ? (
-                            <span>
-                              <span className="text-muted text-xs">{formatMoney(inv.total, inv.currency)}</span>
-                              {" "}
-                              <span>{formatMoney(inv.chf_equivalent ?? inv.total, "CHF")}</span>
-                            </span>
-                          ) : (
-                            <span>{formatMoney(inv.total, "CHF")}</span>
-                          )}
+                          <InvoiceAmount invoice={inv} />
                         </Table.Td>
                         <Table.Actions>
                           <IconButton

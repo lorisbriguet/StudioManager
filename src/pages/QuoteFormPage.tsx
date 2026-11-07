@@ -172,10 +172,12 @@ export function QuoteFormPage() {
   }
 
   // Pre-fill from a project (once clients are loaded, for language and discount)
-  const projectPrefilledRef = useRef(false);
+  // Keyed on the project: "New quote" from another project while the form
+  // stays mounted pre-fills again.
+  const projectPrefilledRef = useRef<number | null>(null);
   useEffect(() => {
-    if (!fromProjectId || !clients || projectPrefilledRef.current) return;
-    projectPrefilledRef.current = true;
+    if (!fromProjectId || !clients || projectPrefilledRef.current === fromProjectId) return;
+    projectPrefilledRef.current = fromProjectId;
     formLoadedRef.current = false;
     getProject(fromProjectId).then((project) => {
       if (!project) return;

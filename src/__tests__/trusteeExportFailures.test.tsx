@@ -214,7 +214,7 @@ describe("exportForTrustee", () => {
     vi.mocked(copyFile).mockRejectedValueOnce(new Error("not found"));
     await runExport();
 
-    expect(buildInvoicePdf).toHaveBeenCalledWith(goodInvoice.id);
+    expect(buildInvoicePdf).toHaveBeenCalledWith(goodInvoice.id, { withReminder: false });
     expect(written()).toContain("/export/path/factures/justificatifs/2026-0001_ACME.pdf");
     expect(notify.warning).not.toHaveBeenCalled();
   });

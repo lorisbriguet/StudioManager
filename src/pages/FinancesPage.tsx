@@ -28,7 +28,8 @@ import { useNavigate } from "react-router-dom";
 import { useChartTheme } from "../hooks/useChartTheme";
 import { getTagColor } from "../lib/tagColors";
 import { useIncomes } from "../db/hooks/useIncome";
-import { safeFileName, uniqueFileName } from "../lib/pdfFilename";
+import { documentPdfStem, safeFileName, uniqueFileName } from "../lib/pdfFilename";
+import type { Invoice } from "../types/invoice";
 import { getMonthlyData } from "../db/queries/finance";
 import { missingChfEquivalent } from "../lib/chfEquivalent";
 import { logError } from "../lib/log";
@@ -47,6 +48,15 @@ async function loadExportPdfs() {
     ]);
   return { pdf, buildInvoicePdf, PLPDF, InvoicesListPDF, ExpensesListPDF, IncomeListPDF };
 }
+
+/** An invoice's file name in the export, the same as every other export's (an
+ * invoice paid before it was numbered gets the draft name, not DRAFT-<uuid>). */
+const invoiceStem = (inv: Invoice, clientName: string) =>
+  documentPdfStem(
+    "invoice",
+    { reference: inv.reference, status: inv.status, language: inv.language, date: inv.invoice_date },
+    clientName,
+  ).replace(/_$/, "");
 
 /** Let the window repaint (progress toast, spinner) between CPU-bound renders. */
 const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -137,9 +147,7 @@ export function FinancesPage() {
           await yieldToUi();
           try {
             if (inv.pdf_path) {
-              const clientName = clientNames[inv.client_id];
-              const stem = clientName ? `${inv.reference}_${clientName}` : inv.reference;
-              const name = uniqueFileName(stem, "pdf", invoiceNames);
+              const name = uniqueFileName(invoiceStem(inv, clientNames[inv.client_id] ?? ""), "pdf", invoiceNames);
               try {
                 await copyFile(inv.pdf_path, `${basePath}/factures/justificatifs/${name}`);
                 continue;
@@ -149,9 +157,9 @@ export function FinancesPage() {
                 invoiceNames.delete(name.toLowerCase());
               }
             }
-            const built = await buildInvoicePdf(inv.id);
+            const built = await buildInvoicePdf(inv.id, { withReminder: false });
             if (!built) throw new Error(t.invoice_not_found);
-            const name = uniqueFileName(`${inv.reference}_${built.client.name}`, "pdf", invoiceNames);
+            const name = uniqueFileName(invoiceStem(inv, built.client.name), "pdf", invoiceNames);
             await writeFile(`${basePath}/factures/justificatifs/${name}`, built.bytes);
           } catch (e) {
             // One bad invoice must not abort the export, but a silent omission

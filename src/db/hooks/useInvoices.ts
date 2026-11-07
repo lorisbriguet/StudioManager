@@ -35,10 +35,18 @@ const hooks = documentHooks<Invoice, InvoiceLineItem>({
       throw new Error("Only draft invoices can be deleted");
     }
   },
-  // Store the PDF once the invoice is no longer a draft. A failed PDF
-  // doesn't fail the save: it is reported on its own.
-  afterUpdate: async (id, status, qc) => {
+  // The stored PDF is the document the client got, and the trustee export
+  // copies it. So it is written when the invoice leaves draft, again when its
+  // lines or total are edited (the corrected invoice goes out), and once more
+  // on cancelling, as a separate _VOID file. Marking paid or overdue and
+  // reminders leave it alone. A failed PDF doesn't fail the save: it is
+  // reported on its own.
+  afterUpdate: async (id, { status, prevStatus, contentChanged }, qc) => {
     if (!status || status === "draft") return;
+    const leftDraft = prevStatus === "draft";
+    const cancelled = status === "cancelled" && prevStatus !== "cancelled";
+    const edited = contentChanged && status !== "cancelled";
+    if (!leftDraft && !cancelled && !edited) return;
     const t = getLabels();
     const generated = await notify.progress(
       t.generating_pdf,

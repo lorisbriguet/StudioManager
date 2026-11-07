@@ -15,6 +15,8 @@ import { EmptyState } from "../ui/EmptyState";
 import { ListSkeleton } from "../ui/Skeleton";
 import { invoiceStatusTextClass } from "../../lib/statusColors";
 import { formatMoney } from "../../lib/money";
+import { documentDisplayRef } from "../../lib/documentDisplay";
+import { InvoiceAmount } from "../invoice/InvoiceAmount";
 import { qk } from "../../db/queryKeys";
 
 const STATUS_ICON = {
@@ -71,13 +73,13 @@ export function RecentInvoices() {
             className="flex justify-between items-center text-sm hover:bg-[var(--color-hover-row)] rounded-md px-2 py-1.5 -mx-2"
           >
             <div className="min-w-0 flex-1">
-              <span className="font-medium">{inv.reference.startsWith("DRAFT") ? t.draft : inv.reference}</span>
+              <span className="font-medium">{documentDisplayRef(inv, t)}</span>
               <InvoiceStatusIcon status={inv.status} />
               {clientName(inv.client_id) && (
                 <span className="text-xs text-muted ml-2 truncate">{clientName(inv.client_id)}</span>
               )}
             </div>
-            <span className="text-muted shrink-0 ml-2">{formatMoney(inv.total, "CHF")}</span>
+            <InvoiceAmount invoice={inv} className="text-muted shrink-0 ml-2" />
           </Link>
         ))}
         {invoices === undefined ? <ListSkeleton size="sm" rows={3} /> : recentInvoices.length === 0 && (
@@ -123,7 +125,7 @@ export function UnpaidInvoices() {
             </div>
             <div className="text-right shrink-0 ml-2">
               <div className="text-muted text-xs">{inv.daysOut} {t.days_outstanding}</div>
-              <div className="text-sm">{formatMoney(inv.total, "CHF")}</div>
+              <InvoiceAmount invoice={inv} className="block text-sm" />
             </div>
           </Link>
         ))}

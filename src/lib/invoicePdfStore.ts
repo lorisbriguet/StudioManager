@@ -25,7 +25,7 @@ export async function generateAndStoreInvoicePdf(
   invoiceId: number
 ): Promise<string | null> {
   try {
-    const built = await buildInvoicePdf(invoiceId);
+    const built = await buildInvoicePdf(invoiceId, { withReminder: false });
     if (!built) return null;
     const { bytes, invoice, client } = built;
 
@@ -37,7 +37,10 @@ export async function generateAndStoreInvoicePdf(
     // Sanitize reference to prevent path traversal
     const safeRef = sanitizeFilename(invoice.reference);
     const safeName = sanitizeFilename(client.name);
-    const filePath = `${invoicesDir}/${safeRef}_${safeName || `invoice-${invoiceId}`}.pdf`;
+    // A cancelled invoice gets its own _VOID file: the one the client got
+    // stays on disk next to it.
+    const voidSuffix = invoice.status === "cancelled" ? "_VOID" : "";
+    const filePath = `${invoicesDir}/${safeRef}_${safeName || `invoice-${invoiceId}`}${voidSuffix}.pdf`;
     await writeFile(filePath, bytes);
 
     // Update invoice record with stored path

@@ -107,6 +107,24 @@ describe("buildQRBillData", () => {
     expect(buildQRBillData(baseInvoice, none, baseProfile).debtor).toBeUndefined();
   });
 
+  // D10: addresses have no country, so only a clearly Swiss one is marked CH.
+  it.each([
+    ["a French address", "75001 Paris"],
+    ["a German address", "D-10115 Berlin"],
+    ["a UK address", "London SW1A 1AA"],
+    ["a street with no postcode line", ""],
+  ])("leaves the debtor out for %s rather than marking it CH", (_name, postalCity) => {
+    const abroad = { ...baseClient, address_line1: "Rue de Rivoli 1", address_line2: "", postal_city: postalCity };
+    expect(buildQRBillData(baseInvoice, abroad, baseProfile).debtor).toBeUndefined();
+  });
+
+  it("reads a CH- prefixed Swiss postcode", () => {
+    const prefixed = { ...baseClient, postal_city: "CH-1003 Lausanne" };
+    expect(buildQRBillData(baseInvoice, prefixed, baseProfile).debtor).toMatchObject({
+      zip: "1003", city: "Lausanne", country: "CH",
+    });
+  });
+
   it("sets amount and currency", () => {
     const data = buildQRBillData(baseInvoice, baseClient, baseProfile);
     expect(data.amount).toBe(1500);

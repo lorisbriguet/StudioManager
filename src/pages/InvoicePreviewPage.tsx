@@ -18,6 +18,11 @@ import { postProcessInvoicePdf } from "../lib/pdfPostProcess";
 import { notify } from "../lib/notify";
 import { useT } from "../i18n/useT";
 
+// The stored PDF is the invoice as the client first got it, with no reminder
+// banner. Once a reminder is generated, the preview and the download render
+// the invoice live so the banner shows; the stored file stays untouched.
+const hasReminder = (inv: Invoice) => (inv.reminder_count ?? 0) > 0;
+
 export function InvoicePreviewPage() {
   const { id } = useParams<{ id: string }>();
   const invoiceId = Number(id);
@@ -174,7 +179,7 @@ export function InvoicePreviewPage() {
           client.name
         )
       );
-      if (inv.pdf_path) {
+      if (inv.pdf_path && !hasReminder(inv)) {
         try {
           const bytes = await readFile(inv.pdf_path);
           triggerDownload(new Blob([bytes], { type: "application/pdf" }), filename);
@@ -230,7 +235,7 @@ export function InvoicePreviewPage() {
         }
       />
       <div className="flex-1 bg-[var(--color-bg)]">
-        {storedPdfUrl ? (
+        {storedPdfUrl && !hasReminder(invoice) ? (
           <iframe
             src={storedPdfUrl}
             title={invoice.reference}

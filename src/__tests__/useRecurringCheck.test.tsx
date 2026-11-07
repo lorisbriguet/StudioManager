@@ -9,6 +9,7 @@ import { getDueTemplates, updateRecurringTemplate } from "../db/queries/recurrin
 import { getInvoice, getInvoiceLineItems, createInvoiceWithLineItems } from "../db/queries/invoices";
 import { todayLocalISO } from "../utils/localDate";
 import { notify } from "../lib/notify";
+import * as exchangeRate from "../lib/exchangeRate";
 
 // Controllable clock: the focus re-check compares "today" against the last
 // run day, so tests must be able to move the calendar forward.
@@ -231,5 +232,34 @@ describe("useRecurringCheck", () => {
     expect(createInvoiceWithLineItems).not.toHaveBeenCalled();
     expect(updateRecurringTemplate).not.toHaveBeenCalled();
     useOrgStore.setState({ activeId: "" });
+  });
+});
+
+// 2-D7: a foreign-currency draft takes the rate of its own date, not the base
+// invoice's old one. Offline it keeps the base rate (never 0) and says so.
+describe("recurring drafts in a foreign currency", () => {
+  const eurBase = { ...baseInvoice, currency: "EUR", total: 1000, exchange_rate: 0.8, chf_equivalent: 1250 };
+  const today = new Date().toISOString().slice(0, 10);
+  const due = [{ id: 1, base_invoice_id: 5, client_id: "c1", frequency: "monthly", next_due: today, active: 1 }];
+  const created = () => vi.mocked(createInvoiceWithLineItems).mock.calls[0][0] as unknown as Record<string, unknown>;
+
+  it("takes the rate of the draft's date", async () => {
+    vi.mocked(getInvoice).mockResolvedValue(eurBase as never);
+    vi.mocked(getDueTemplates).mockResolvedValue(due as never);
+    const fetchRate = vi.spyOn(exchangeRate, "getExchangeRate").mockResolvedValue(0.95);
+    await runRecurringCheck(new QueryClient());
+    expect(fetchRate).toHaveBeenCalledWith("EUR", today);
+    expect(created()).toMatchObject({ exchange_rate: 0.95, chf_equivalent: 1052.63 });
+    fetchRate.mockRestore();
+  });
+
+  it("offline, keeps the base invoice's rate and warns", async () => {
+    vi.mocked(getInvoice).mockResolvedValue(eurBase as never);
+    vi.mocked(getDueTemplates).mockResolvedValue(due as never);
+    const fetchRate = vi.spyOn(exchangeRate, "getExchangeRate").mockResolvedValue(null);
+    await runRecurringCheck(new QueryClient());
+    expect(created()).toMatchObject({ exchange_rate: 0.8, chf_equivalent: 1250 });
+    expect(notify.warning).toHaveBeenCalledWith(expect.stringMatching(/previous rate is kept/));
+    fetchRate.mockRestore();
   });
 });
