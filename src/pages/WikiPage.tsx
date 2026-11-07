@@ -56,6 +56,7 @@ import { useProjectDocs, type ProjectDoc } from "../db/hooks/useProjectDocs";
 import { DocView } from "../components/wiki/DocView";
 import { useNewItem } from "../hooks/useNewItem";
 import { useKeepCurrent } from "../hooks/useKeepCurrent";
+import { registerFlush } from "../lib/quitFlush";
 
 // ─── Slash Command Menu ───────────────────────────────────────────
 interface SlashMenuItem {
@@ -472,11 +473,73 @@ export function ArticleEditor({
   const articleIdRef = useRef(articleId);
   useEffect(() => { articleIdRef.current = articleId; }, [articleId]);
 
-  // Sync state when article loads
-  if (useChangedOrMount(article) && article) {
+  // The title the input last took from the article. While the input differs
+  // from it, the title is being typed and a refetch must not overwrite it.
+  const [syncedTitle, setSyncedTitle] = useState("");
+  const openedArticle = useChangedOrMount(article?.id);
+  const articleTitleChanged = useChanged(article?.title);
+  const articleProjectChanged = useChanged(article?.project_id);
+  if (article && openedArticle) {
     setTitle(article.title);
+    setSyncedTitle(article.title);
     setProjectId(article.project_id);
+  } else if (article) {
+    // Renamed elsewhere, or our own save landing: follow it unless typing.
+    if (articleTitleChanged && (title === syncedTitle || title === article.title)) {
+      setTitle(article.title);
+      setSyncedTitle(article.title);
+    }
+    if (articleProjectChanged) setProjectId(article.project_id);
   }
+
+  // Live values for the saves below, which run from timers and on quit.
+  const titleRef = useRef(title);
+  useKeepCurrent(titleRef, title);
+  const savedTitleRef = useRef(article?.title);
+  useKeepCurrent(savedTitleRef, article?.title);
+  const untitledRef = useRef(t.untitled);
+  useKeepCurrent(untitledRef, t.untitled);
+  const updateRef = useRef(updateArticle);
+  useKeepCurrent(updateRef, updateArticle);
+
+  // The one save path: the title (when it was edited) and the text go
+  // together, so saving one can never undo the other. Callers make sure `id`
+  // is the article open now (the title and text belong to it).
+  const saveArticle = useCallback((id: number, content?: string): Promise<void> => {
+    const data: { title?: string; content?: string } = {};
+    if (content !== undefined) data.content = content;
+    const typed = titleRef.current || untitledRef.current;
+    if (savedTitleRef.current !== undefined && typed !== savedTitleRef.current) data.title = typed;
+    if (data.title === undefined && data.content === undefined) return Promise.resolve();
+    return updateRef.current.mutateAsync({ id, data }).then(() => {});
+  }, []);
+
+  const editorRef = useRef<ReturnType<typeof useEditor>>(null);
+
+  // Writes now what is waiting for the autosave (and an edited title). Runs on
+  // title blur, on unmount, when the window is hidden and before the app quits.
+  const flushSave = useCallback((): Promise<void> => {
+    const id = articleIdRef.current;
+    let content: string | undefined;
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+      const pendingId = pendingSaveArticleIdRef.current;
+      pendingSaveArticleIdRef.current = null;
+      // Same id check as the debounce: the editor's HTML belongs to the
+      // article open when the edit happened only if it is still open.
+      const ed = editorRef.current;
+      if (ed && pendingId === id) content = ed.getHTML();
+    }
+    const saving = saveArticle(id, content);
+    if (content === undefined) return saving.catch(() => {});
+    return saving.then(
+      () => {
+        if (articleIdRef.current === id && !saveTimeoutRef.current) onSaveStateRef.current?.("saved");
+      },
+      () => onSaveStateRef.current?.("idle")
+    );
+  }, [saveArticle]);
 
   const debouncedSave = useCallback(
     (content: string) => {
@@ -491,20 +554,17 @@ export function ArticleEditor({
         saveTimeoutRef.current = null;
         pendingSaveArticleIdRef.current = null;
         if (articleIdRef.current !== scheduledFor) return;
-        updateArticle.mutate(
-          { id: scheduledFor, data: { content } },
-          {
-            onSuccess: () => {
-              // Not if more typing is already waiting for the next save.
-              if (articleIdRef.current === scheduledFor && !saveTimeoutRef.current) onSaveStateRef.current?.("saved");
-            },
-            // The mutation's own error toast (error_save_article) says it.
-            onError: () => onSaveStateRef.current?.("idle"),
-          }
+        saveArticle(scheduledFor, content).then(
+          () => {
+            // Not if more typing is already waiting for the next save.
+            if (articleIdRef.current === scheduledFor && !saveTimeoutRef.current) onSaveStateRef.current?.("saved");
+          },
+          // The mutation's own error toast (error_save_article) says it.
+          () => onSaveStateRef.current?.("idle")
         );
       }, 2000);
     },
-    [articleId, updateArticle]
+    [articleId, saveArticle]
   );
 
   const editor = useEditor(
@@ -571,10 +631,10 @@ export function ArticleEditor({
   }, [editor, mode]);
 
   const handleTitleBlur = useCallback(() => {
-    if (article && title !== article.title) {
-      updateArticle.mutate({ id: articleId, data: { title: title || t.untitled } });
-    }
-  }, [article, title, articleId, updateArticle, t.untitled]);
+    // An empty title is saved (and shown) as "Untitled".
+    if (!title) setTitle(t.untitled);
+    void flushSave();
+  }, [title, flushSave, t.untitled]);
 
   const handleTitleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -608,33 +668,20 @@ export function ArticleEditor({
     deleteWithUndo(deleteArticle, articleId, t.article_deleted, onBack);
   }, [articleId, deleteArticle, onBack, t.article_deleted]);
 
-  // Keep a ref for unmount cleanup to avoid a stale closure over `editor`
-  // (articleIdRef is declared above, next to the debounce it also guards)
-  const editorRef = useRef(editor);
+  // The flushes above read the editor from this ref (declared next to them).
   useLayoutEffect(() => {
     editorRef.current = editor;
   });
 
-  // Flush pending debounced save on unmount
+  // Write what is pending on unmount, when the window is hidden and before
+  // the app quits (see lib/quitFlush). flushSave reads live values via refs.
   useEffect(() => {
+    const unregister = registerFlush(flushSave);
     return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-        const ed = editorRef.current;
-        const pendingId = pendingSaveArticleIdRef.current;
-        // Same id check as the debounce itself: only flush if the article
-        // open when the edit happened is still the one open now, so the
-        // editor's current HTML is guaranteed to belong to it. A flush that
-        // writes the wrong article would be the same bug by another path.
-        if (ed && pendingId !== null && pendingId === articleIdRef.current) {
-          updateArticle.mutate(
-            { id: pendingId, data: { content: ed.getHTML() } },
-          );
-        }
-      }
+      unregister();
+      void flushSave();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount-only flush; reads live values via refs on purpose (see comment above)
-  }, []);
+  }, [flushSave]);
 
   const handleSlashSelect = useCallback(
     (item: SlashMenuItem) => {

@@ -69,6 +69,7 @@ import { requestNotificationPermission } from "./lib/nativeNotification";
 import { getAgentsEnabled } from "./lib/agents";
 import { purgeOldNotifications } from "./db/queries/notifications";
 import { logError } from "./lib/log";
+import { installQuitFlush } from "./lib/quitFlush";
 
 import { queryClient } from "./lib/queryClient";
 import { qk } from "./db/queryKeys";
@@ -227,6 +228,8 @@ function MainApp() {
   useEffect(() => {
     showMainWindowWhenPainted();
   }, []);
+  // Pending autosaves are written before the app quits or the window unloads.
+  useEffect(() => installQuitFlush(), []);
   return (
     <QueryClientProvider client={queryClient}>
       {/* Outer boundary: catches what the page boundary below can't reach
