@@ -8,7 +8,8 @@ use crate::connectors::keychain::SecretStore;
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 
-/// Keychain account (service `connectors::keychain::SERVICE`). Connection accounts are always
+/// Keychain account (service `connectors::keychain::service_for`, the bundle identifier, so
+/// the demo keeps its own approvals). Connection accounts are always
 /// `<org>:<id>`, so this one, without a colon, never meets them.
 pub const ACCOUNT: &str = "routine-commands";
 

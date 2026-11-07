@@ -4,8 +4,16 @@
 //! Everything goes through [`SecretStore`] so tests use an in-memory store
 //! and never touch the real Keychain.
 
-/// Keychain service shared by every connection.
-pub const SERVICE: &str = "ch.studiomanager.app";
+/// Keychain service shared by every connection and the routine approvals: the bundle
+/// identifier, so the demo build (`ch.studiomanager.demo`) never reads or writes the real
+/// app's entries (`ch.studiomanager.app`, as before).
+pub fn service_for(identifier: &str) -> &str {
+    identifier
+}
+
+fn service() -> &'static str {
+    service_for(crate::host::identifier())
+}
 
 /// Keychain account of a connection: `<org id>:<connection id>`. Connection
 /// ids repeat across organisations, so the org is part of the key.
@@ -31,7 +39,7 @@ pub struct Keychain;
 
 impl Keychain {
     fn entry(account: &str) -> Result<keyring::Entry, String> {
-        keyring::Entry::new(SERVICE, account).map_err(|e| format!("Keychain error: {e}"))
+        keyring::Entry::new(service(), account).map_err(|e| format!("Keychain error: {e}"))
     }
 }
 
@@ -75,5 +83,18 @@ impl SecretStore for MemoryStore {
     fn delete(&self, account: &str) -> Result<(), String> {
         self.0.lock().unwrap().remove(account);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_demo_has_its_own_keychain_service() {
+        assert_eq!(service_for(crate::host::APP_IDENTIFIER), "ch.studiomanager.app");
+        assert_eq!(service_for(crate::agent_access::DEMO_IDENTIFIER), "ch.studiomanager.demo");
+        // Tests never run `host::init`: the real app's service, as before this change.
+        assert_eq!(service(), "ch.studiomanager.app");
     }
 }

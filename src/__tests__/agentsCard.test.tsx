@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { AgentsCard } from "../components/settings/AgentsCard";
 import { useAppStore } from "../stores/app-store";
@@ -24,6 +24,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  vi.unstubAllEnvs();
   setInvokeHandler(null);
 });
 
@@ -33,6 +34,16 @@ describe("AgentsCard", () => {
     render(<AgentsCard />);
     await screen.findByText(/Claude was not found/i);
     expect(screen.getByRole("switch", { name: "Show the Agents page" })).toBeDisabled();
+  });
+
+  it("demo build: the usual off state, not a missing claude", async () => {
+    vi.stubEnv("VITE_DEMO_BUILD", "1");
+    info = { enabled: false, claudePath: null, menuBar: false, limitAlerts: true };
+    render(<AgentsCard />);
+    await screen.findByText("Not available in the demo.");
+    expect(screen.queryByText(/Claude was not found/i)).toBeNull();
+    expect(screen.getByRole("switch", { name: "Show the Agents page" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "Show the Agents page" })).not.toBeChecked();
   });
 
   it("lets the user switch off when enabled but claude is gone", async () => {

@@ -436,9 +436,27 @@ pub(crate) async fn ocr_image_text(path: String) -> Result<String, String> {
     .await
 }
 
+/// The demo build's one calendar. The demo never touches this Mac's Calendar: events it
+/// "creates" there get a made-up uid and deleting them does nothing.
+pub(crate) const DEMO_CALENDAR: &str = "Studio";
+
+/// A uid for an event the demo pretends to create.
+fn demo_event_uid() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or_default();
+    format!("demo-{nanos}-{}", NEXT.fetch_add(1, Ordering::Relaxed))
+}
+
 /// List writable Apple Calendar calendars.
 #[tauri::command]
-pub(crate) async fn calendar_list_writable() -> Result<Vec<String>, String> {
+pub(crate) async fn calendar_list_writable(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    if crate::host::is_demo(&app) {
+        return Ok(vec![DEMO_CALENDAR.to_string()]);
+    }
     spawn_osascript(move || {
         let raw = run_osascript(&[], CAL_LIST_WRITABLE, &[], CAL_TIMEOUT)?;
         Ok(raw
@@ -454,7 +472,9 @@ pub(crate) async fn calendar_list_writable() -> Result<Vec<String>, String> {
 /// `alert_minutes` adds a display alarm that many minutes relative to the
 /// event start (negative = before); `None` = no alarm.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn calendar_create_event(
+    app: tauri::AppHandle,
     calendar: String,
     title: String,
     notes: String,
@@ -463,6 +483,9 @@ pub(crate) async fn calendar_create_event(
     end_time: Option<String>,
     alert_minutes: Option<i64>,
 ) -> Result<String, String> {
+    if crate::host::is_demo(&app) {
+        return Ok(demo_event_uid());
+    }
     spawn_osascript(move || {
         let ymd = parse_date(&date)?;
         let start = start_time.as_deref().filter(|s| !s.is_empty());
@@ -492,7 +515,14 @@ pub(crate) async fn calendar_create_event(
 
 /// Delete every Apple Calendar event with the given uid.
 #[tauri::command]
-pub(crate) async fn calendar_delete_event(calendar: String, uid: String) -> Result<(), String> {
+pub(crate) async fn calendar_delete_event(
+    app: tauri::AppHandle,
+    calendar: String,
+    uid: String,
+) -> Result<(), String> {
+    if crate::host::is_demo(&app) {
+        return Ok(());
+    }
     spawn_osascript(move || {
         run_osascript(&[], CAL_DELETE_EVENT, &[&calendar, &uid], CAL_TIMEOUT)?;
         Ok(())
@@ -534,6 +564,13 @@ async fn spawn_osascript<T: Send + 'static>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn demo_event_uids_are_made_up_and_distinct() {
+        let (a, b) = (demo_event_uid(), demo_event_uid());
+        assert!(a.starts_with("demo-") && b.starts_with("demo-"));
+        assert_ne!(a, b);
+    }
 
     #[test]
     fn parse_date_accepts_iso_dates() {
