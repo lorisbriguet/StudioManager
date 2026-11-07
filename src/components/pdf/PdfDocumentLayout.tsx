@@ -28,6 +28,8 @@ type InvoiceLabels = Record<keyof (typeof invoiceLabels)["FR"], string>;
 
 export interface PdfDocumentLayoutProps {
   title: string;
+  /** Set on drafts: a small muted label after the title ("FACTURE · BROUILLON"). */
+  draftLabel?: string;
   /** Drives the "A l'att. de X" (FR) vs "att: X" (EN) contact line. */
   lang: InvoiceLanguage;
   labels: InvoiceLabels;
@@ -70,6 +72,7 @@ export interface PdfDocumentLayoutProps {
  */
 export function PdfDocumentLayout({
   title,
+  draftLabel,
   lang,
   labels: t,
   template,
@@ -128,7 +131,10 @@ export function PdfDocumentLayout({
           {banner}
 
           {/* Title */}
-          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.title}>
+            {title}
+            {draftLabel ? <Text style={styles.titleDraft}>{`  ·  ${draftLabel}`}</Text> : null}
+          </Text>
 
           {/* Header: business info left, client right */}
           <View style={styles.header}>

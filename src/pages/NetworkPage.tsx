@@ -26,6 +26,7 @@ export function NetworkPage() {
   const machines = useMachines();
   const links = useMachineLinks();
   const connections = useEquipmentConnections();
+  // Every overdue and soon-due item, as on the Upkeep page and its sidebar badge.
   const { due } = useUpkeepOverview();
   const tm = useTimeMachine();
   const tailscale = useTailscale();
@@ -77,9 +78,6 @@ export function NetworkPage() {
     void tailscale.refetch();
   };
 
-  const ids = new Set((cards ?? []).map((c) => c.machine.id));
-  const dueRows = due.filter((r) => ids.has(r.machine.id));
-
   return (
     <div>
       <PageHeader
@@ -122,7 +120,7 @@ export function NetworkPage() {
             <div className={CARD_STACK}>
               <TailscaleCard now={now} />
               <BackupsCard cards={list} now={now} />
-              <UpkeepDueCard rows={dueRows} />
+              <UpkeepDueCard rows={due} />
             </div>
           </div>
         )}

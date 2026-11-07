@@ -9,6 +9,7 @@ import { getBusinessProfile } from "../db/queries/business-profile";
 import { getInvoiceTemplate } from "../db/queries/invoiceTemplates";
 import { getProject } from "../db/queries/projects";
 import { postProcessInvoicePdf } from "./pdfPostProcess";
+import { documentPdfStem } from "./pdfFilename";
 import type { Invoice } from "../types/invoice";
 import type { Quote } from "../types/quote";
 import type { Client } from "../types/client";
@@ -26,14 +27,18 @@ export interface BuiltInvoicePdf {
   invoice: Invoice;
   client: Client;
   reference: string;
+  /** File name without ".pdf" (see documentPdfStem). */
+  fileStem: string;
 }
 
 export interface BuiltQuotePdf {
   bytes: Uint8Array<ArrayBuffer>;
   quote: Quote;
   client: Client;
-  /** Filename-safe reference: drafts collapse to "DRAFT". */
+  /** Drafts collapse to "DRAFT" (used as the email subject). */
   reference: string;
+  /** File name without ".pdf" (see documentPdfStem). */
+  fileStem: string;
 }
 
 async function renderToBytes(doc: ReturnType<typeof createElement>): Promise<Uint8Array<ArrayBuffer>> {
@@ -77,7 +82,12 @@ export async function buildInvoicePdf(invoiceId: number): Promise<BuiltInvoicePd
   const bytes = new Uint8Array(
     await postProcessInvoicePdf(raw, { isCancelled: invoice.status === "cancelled" })
   );
-  return { bytes, invoice, client, reference: invoice.reference };
+  const fileStem = documentPdfStem(
+    "invoice",
+    { reference: invoice.reference, status: invoice.status, language: invoice.language, date: invoice.invoice_date },
+    client.name,
+  );
+  return { bytes, invoice, client, reference: invoice.reference, fileStem };
 }
 
 /** Returns null when the quote, its client or the business profile is missing. */
@@ -110,5 +120,10 @@ export async function buildQuotePdf(quoteId: number): Promise<BuiltQuotePdf | nu
     })
   );
   const reference = quote.reference.startsWith("DRAFT") ? "DRAFT" : quote.reference;
-  return { bytes, quote, client, reference };
+  const fileStem = documentPdfStem(
+    "quote",
+    { reference: quote.reference, status: quote.status, language: quote.language, date: quote.quote_date },
+    client.name,
+  );
+  return { bytes, quote, client, reference, fileStem };
 }

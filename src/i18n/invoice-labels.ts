@@ -42,6 +42,9 @@ export const invoiceLabels = {
     valid_until: "Valable jusqu'au",
     validity: "Validité",
     valid_30_days: "30 jours dès la date de l'offre",
+    draft: "Brouillon",
+    draft_invoice_file: "Brouillon-facture",
+    draft_quote_file: "Brouillon-offre",
   },
   EN: {
     invoice_title: "Invoice",
@@ -86,6 +89,9 @@ export const invoiceLabels = {
     valid_until: "Valid Until",
     validity: "Validity",
     valid_30_days: "30 days from quote date",
+    draft: "Draft",
+    draft_invoice_file: "Draft-invoice",
+    draft_quote_file: "Draft-quote",
   },
 } as const;
 

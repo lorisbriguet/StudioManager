@@ -115,6 +115,21 @@ describe("buildInvoicePdf", () => {
     expect(postProcess).toHaveBeenCalledWith(expect.any(Uint8Array), { isCancelled: true });
   });
 
+  it("names an issued invoice <Reference>_<Client>", async () => {
+    expect((await buildInvoicePdf(1))?.fileStem).toBe("2026-0001_ACME");
+  });
+
+  it("names a draft invoice by type, client and date, never by its internal id (R4P)", async () => {
+    getInvoice.mockResolvedValue({
+      ...invoice,
+      reference: "DRAFT-0b6f1c2e-uuid",
+      status: "draft",
+      language: "FR",
+      invoice_date: "2026-11-03",
+    });
+    expect((await buildInvoicePdf(1))?.fileStem).toBe("Brouillon-facture_ACME_2026-11-03");
+  });
+
   it("returns null for a missing invoice", async () => {
     getInvoice.mockResolvedValue(null);
     expect(await buildInvoicePdf(1)).toBeNull();
@@ -132,6 +147,11 @@ describe("buildQuotePdf", () => {
       billingAddress: address,
       projectName: "Rebrand",
     });
+  });
+
+  it("names a draft quote in the document language (R4P)", async () => {
+    getQuote.mockResolvedValue({ ...quote, status: "draft", language: "EN", quote_date: "2026-11-04" });
+    expect((await buildQuotePdf(2))?.fileStem).toBe("Draft-quote_ACME_2026-11-04");
   });
 });
 

@@ -106,7 +106,7 @@ export function QuotesPage() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = pdfFileName(result.reference, result.client.name);
+        a.download = pdfFileName(result.fileStem);
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       })(),
@@ -132,7 +132,7 @@ export function QuotesPage() {
         const result = await buildQuotePdf(q.id);
         if (!result) throw new Error(t.quote_not_found);
         const { root } = await orgPaths();
-        const tempPath = `${root}/temp_${pdfFileName(result.reference, result.client.name)}`;
+        const tempPath = `${root}/temp_${pdfFileName(result.fileStem)}`;
         await writeFile(tempPath, result.bytes);
 
         await invoke("share_pdf_via_mail", {

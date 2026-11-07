@@ -3,7 +3,7 @@ import { confirm } from "./confirm";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { notify } from "./notify";
 import { logError } from "./log";
-import { uniquePdfFileName } from "./pdfFilename";
+import { uniqueFileName } from "./pdfFilename";
 import { isDraftDocument } from "./draftDocument";
 
 interface BulkPdfDoc {
@@ -37,7 +37,7 @@ export async function runBulkPdfExport<D extends BulkPdfDoc>(opts: {
   t: BulkPdfLabels;
   generate: (
     doc: D
-  ) => Promise<{ bytes: Uint8Array; reference: string; client: { name: string } } | null>;
+  ) => Promise<{ bytes: Uint8Array; fileStem: string } | null>;
   notFoundMessage: string;
   /** Document kind for the error log, e.g. "invoice" / "quote". */
   logLabel: string;
@@ -82,7 +82,7 @@ export async function runBulkPdfExport<D extends BulkPdfDoc>(opts: {
             const result = await generate(docs[i]);
             if (!result) throw new Error(notFoundMessage);
             await writeFile(
-              `${dir}/${uniquePdfFileName(result.reference, result.client.name, usedNames)}`,
+              `${dir}/${uniqueFileName(result.fileStem, "pdf", usedNames)}`,
               result.bytes
             );
             exported++;

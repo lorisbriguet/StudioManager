@@ -6,6 +6,7 @@ import type { Client, ClientAddress } from "../../types/client";
 import type { BusinessProfile } from "../../types/business-profile";
 import type { InvoiceTemplate } from "../../types/invoice-template";
 import { formatDisplayDate } from "../../utils/formatDate";
+import { isDraftDocument } from "../../lib/draftDocument";
 import { createDocumentStyles } from "../pdf/documentStyles";
 import { PdfDocumentLayout } from "../pdf/PdfDocumentLayout";
 import { QRBillCanvas } from "./QRBillSvgRenderer";
@@ -54,7 +55,7 @@ export function InvoicePDF({
   const metaRows = [
     { label: t.invoice_date, value: formatDisplayDate(invoice.invoice_date) },
     { label: t.due_date, value: invoice.due_date ? formatDisplayDate(invoice.due_date) : "" },
-    { label: t.reference, value: invoice.reference.startsWith("DRAFT") ? "Draft" : invoice.reference },
+    { label: t.reference, value: invoice.reference.startsWith("DRAFT") ? t.draft : invoice.reference },
   ];
 
   const extraMetaRows = showPoNumber && invoice.po_number ? (
@@ -91,6 +92,7 @@ export function InvoicePDF({
   return (
     <PdfDocumentLayout
       title={t.invoice_title.toUpperCase()}
+      draftLabel={isDraftDocument(invoice) ? t.draft.toUpperCase() : undefined}
       lang={lang}
       labels={t}
       template={template}
